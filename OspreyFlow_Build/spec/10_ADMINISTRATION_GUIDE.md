@@ -751,16 +751,17 @@ decisions are ADR-148's.
 
 **Not yet installable end to end.** What is built is the render, the chart, its policy check, the
 backups and, for the proof-of-concept shape, the install and decommission runbooks. Nothing here
-has run in the platform's own namespace. On a local kind cluster set to the platform's rules, the Conduit and the workers were not yet
-shown running as user 10001, and of the egress policies only the deny was shown holding, for
-ClickHouse's pod; each workload's own rows are not yet shown enforced. They are to be shown at the
-first install on the platform. People sign in
-through the organisation's own Entra ID (section 6a.7); Keycloak is not rendered on this profile.
-No token from a real tenant has yet been tried (section 6a.7 lists what one is to settle). The
-commands that need the platform, a cluster or Docker (`helm install`, `tofu`, the push itself, the
-policy check on your own settings) have not been run against the platform. The unpinned render and
-the push's dry run below have been run as written, from `OspreyFlow_Core`, on this example; the
-pinned render needs the images in the registry first.
+has run in the platform's own namespace. On a local test cluster set to the platform's rules, the
+Conduit and the workers were not yet shown running as user 10001, and of the egress policies only
+the deny was shown holding, for ClickHouse's pod; each workload's own rows are not yet shown
+enforced. They are to be shown at the first install on the platform. People sign in through the
+organisation's own Entra ID (section 6a.7); Keycloak is not rendered on this profile. No token from
+a real tenant has yet been tried (section 6a.7 lists what one is to settle). The commands that need
+the platform, a cluster or Docker (`helm install`, `tofu`, the push itself, the policy check on your
+own settings) have not been run against the platform. The unpinned render below has been run as
+written, from `OspreyFlow_Core`, on this example, and the push's dry run with the same arguments
+through the checkout's own command line (`PYTHONPATH=cli python -m ospreyflow.main images push …`),
+not an installed `ospreyflow`; the pinned render needs the images in the registry first.
 
 ### 6a.1 What is rendered
 
@@ -945,9 +946,9 @@ From renders of the repository's synthetic deployments, counting each running co
 | Production, Laurium and a Bedrock engine | about 8.8 (8.75) | about 66 GiB | 79 GiB |
 
 These count each running copy alone: a set-up job, the nightly backup's and a restore's Jobs (above)
-and the extra copy a rolling update starts need room above them, so a ResourceQuota on requests and memory limits must be
-larger, or pods are left unscheduled; in the standard shape one on `limits.cpu` refuses them whatever
-its size.
+and the extra copy a rolling update starts need room above them, so a ResourceQuota on requests and
+memory limits must be larger, or pods are left unscheduled; in the standard shape one on
+`limits.cpu` refuses them whatever its size.
 
 ### 6a.3 The namespace's Terraform, and the secrets each component reads
 
@@ -1060,10 +1061,11 @@ single ports, never a range:
 
 **An engine's way out is made at render.** With no engine declared, no engine's host is allowed. An
 engine disabled in *Admin › Models* keeps its host open until the next render is installed, and one
-first added there is refused until it is declared, rendered again, the Terraform applied and the new
-values installed (section 10.1). No pod reaches a mail server: Keycloak, which sent sign-in mail, is
-not rendered. A `mail:` section therefore does nothing here, yet the render still asks for its
-host's networks and the Terraform for its password (a known issue).
+first added there is refused until it is declared, rendered again, the new values installed and
+the Terraform applied (section 10.1). No pod reaches a mail server: Keycloak, which sent sign-in mail, is
+not rendered. A `mail:` section therefore does nothing here, yet whenever it is present the render
+still asks for its host's networks, and with `mail.username` set the Terraform asks for its password
+(a known issue).
 
 Calico's open-source policy matches networks, not names, so each of those hosts names its networks
 in `cloud_platform.egress_nets`, and a host without them is refused at render ("egress is denied by
@@ -1099,7 +1101,8 @@ cloud_platform:
 The render writes `connector_sources.tf`: read-only statements on the namespace's role, scoped to each
 bucket and folder, each workgroup, its Glue databases and its tables' folders, and writes on each
 `results_location` alone. A statement wider than that, or a policy past IAM's 6,144 characters, is
-refused at render. Then re-render, run `helm upgrade` and have the platform team apply the Terraform;
+refused at render. Then render again, install the new values (`helm upgrade`) and have the platform
+team apply the Terraform;
 *Admin › Connections* accepts an S3 or Athena connection within what is declared, and refuses any
 other, at save, at **Test the connection** and before every read ("The render made no way out or read
 for … Declare it in osprey.yaml's cloud_platform.connector_sources, re-render, run helm upgrade and
@@ -1269,9 +1272,12 @@ assigned in *Admin › People*, which keeps them in the deployment's own Postgre
   manage people** (no enabled person who has signed in holds the right), each one named is given
   Admin again, added to what they hold, and the audit log records it
   (`grant_first_administrator`). That is the way back in: name a person who is not disabled here,
-  render again, install the new values (`helm upgrade`: the list is in the ConfigMap, so a restart
-alone reads the old one) and restart the Conduit. In the poc shape `INSTALL.md`'s step 6 gives
-these commands but leaves out installing the values (a known issue).
+  render again, pinned (section 6a.4), install the new values (the list is in the ConfigMap, so a
+  restart alone reads the old one) and restart the Conduit. With the settings `INSTALL.md`'s step 1
+  exports (the poc shape's), the values are installed by
+  `helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m`.
+  In the poc shape `INSTALL.md`'s step 6 gives the render and the restart but leaves out installing
+  the values (a known issue).
 - **Locking everyone out is refused.** A change that would leave nobody who can manage people is
   refused; only an enabled person who has **signed in at least once** counts, so a person added by
   object id who has never signed in is no proof anyone can administer.
@@ -1341,13 +1347,17 @@ refusing service's own words. **No alert is raised on it yet: look each morning*
 **A backup now**, before an upgrade or a decommission, is a Job made from each CronJob for one slot.
 The nightly run does not stop the Conduit, so its parts are taken minutes apart and a load running
 across 02:15 can be in one part and not another: take the backup before an upgrade with the Conduit
-and the workers stopped (the runbook shows how).
+and the workers stopped (the runbook shows how). Note each one's copy count first. The runbook's
+commands also scale `deployment/report-sync`, which is not rendered on this profile, so its "not
+found" is expected, and they scale the Conduit and the workers back to 1: start them again at the
+copy counts noted instead (a known issue).
 
 **The restore** replaces what ArcadeDB, ClickHouse and the claims hold with one set, **for one copy of
 each store only**: development, and the poc shape. The production shape's restore is not supported
-yet, and the render refuses it ("backups.restore: the restore is supported for one ArcadeDB and one
-ClickHouse copy; this deployment runs more, and its restore is not supported yet (ADR-148 Amendment
-7)"). In order:
+yet, and the chart refuses it when the restore's Jobs are made (`helm template … --set
+backups.restore.set=…`), in these words: "backups.restore: the restore is supported for one
+ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is not supported yet
+(ADR-148 Amendment 7)". In order:
 
 1. **Room for a second copy.** Each store's restored copy is written beside the live one, so
    ArcadeDB's and ClickHouse's claims need free space for a second copy of their database; grow a
@@ -1356,10 +1366,11 @@ ClickHouse copy; this deployment runs more, and its restore is not supported yet
    withdrawn or deleted since the set comes back under today's grants. The platform team restores RDS
    to the set's finish time by its own point-in-time procedure; the deployment is pointed at it only
    once nothing that writes runs (step 4).
-3. **No backup during the restore**: both CronJobs suspended.
-4. **Everything that writes stopped**: the render's own list, `backups.writers` in `values.yaml`,
-   scaled to nothing and its pods gone; then the platform team points the namespace at the restored
-   RDS instance.
+3. **No backup during the restore**: both CronJobs suspended, and any backup still running left to
+   finish.
+4. **Everything that writes stopped**: the render's own list, `backups.writers` in `values.yaml`, each
+   one's copy count noted, then scaled to nothing and its pods gone; then the platform team points
+   the namespace at the restored RDS instance.
 5. **The restore's Jobs**, rendered for the set by its own name (never `latest`, never by
    `helm upgrade`) and applied, then each waited on.
 6. **Everything started again**, ArcadeDB first, at the copy counts noted, and the CronJobs resumed.
@@ -2115,9 +2126,9 @@ render has made its way out of the namespace, and for Amazon Bedrock the gateway
 whose service account the platform's settings name as `secrets.irsa.gateway_service_account`
 (ADR-135 Amendment 8). Admin → **Models** therefore refuses, in words, to add an engine, or to move
 one to an address, that the render did not make: declare it in `osprey.yaml`, render the deployment
-again, have the platform team apply the Terraform, and install the new values (`helm upgrade`, which
-restarts the pods that read them), then add it here. The refusal's own words leave out installing
-the values (a known issue). An engine a restored models
+again, install the new values (`helm upgrade`, which restarts the pods that read them) and have the
+platform team apply the Terraform, then add it here: the order *Admin › Connections*' own refusal
+gives. This refusal's own words leave out installing the values (a known issue). An engine a restored models
 file names but the render did not make is marked *not made by the render* and is neither offered to
 analysts nor given to the gateway.
 
@@ -2128,8 +2139,9 @@ Deep read*); no screen reaches Laurium yet (section 6a.1). Laurium is a service 
 so nothing in Admin changes it: set `models.extraction_engine` (`deep_read` or `laurium`; left unset,
 `laurium` on this profile), then follow section 6a.4 in its order (the unpinned render, `ecr.tf`'s
 pull request applied for Laurium's repository when it is newly chosen, the push, the pinned
-render), and install the new values (`helm upgrade`). As with the engines' refusal, the row's words
-leave out installing the values. Switching back to `deep_read` leaves Laurium's repository holding
+render), and install the new values (`helm upgrade`). Here the Terraform comes before the values,
+unlike the engines' and connections' order above, since Laurium's repository must exist before its
+image is pushed. As with the engines' refusal, the row's words leave out installing the values. Switching back to `deep_read` leaves Laurium's repository holding
 its images, and the Terraform cannot remove a repository until it is emptied.
 
 ## 10a. Maps
