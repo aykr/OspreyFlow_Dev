@@ -1612,6 +1612,13 @@ Under the GOV.UK theme the list is a GOV.UK side navigation.
 | Audit | **Audit** | `read_audit` | The audit log, filtered by who, what and when (section 9.11) |
 | Demo packs | **Demo packs** | `administer_system` | Which packs are loaded, and the command that adds one |
 
+**The guides from Home.** Home links this guide under Admin's card (**Read the administration guide
+(PDF)**), the user guide under the Glass's and the developer guide under the Ingest Studio's, each only
+for someone whose roles open that place. The Conduit sends a guide only to such a person and refuses
+anyone else in words (`GET /v1/guides/{user|developer|administration}`). Home shows the guides the
+Conduit's image was built with, so a new guide comes with a new image: on Small and `cloud-platform`,
+when a release's new images are installed; on Lite, with `ospreyflow start --build`.
+
 **System → Acting for people** says "The Conduit cannot act for people: run `ospreyflow
 repair-sign-in`" when the identity provider refuses the Conduit's own credential.
 
