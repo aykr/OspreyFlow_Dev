@@ -29,8 +29,6 @@ the Workers. What is true, to correct it:
 5. It is the `cloud-platform` profile's preset, and that profile's alone.
 6. It has read a real model's answer only outside the rendered route; it is to be shown on the client's own engine at
    the install.
-ADR-135 Amendment 5's Consequences say the page shows "Laurium beside the model gateway", which contradicts ADR-142
-Amendment 8 decision 9: one of the two records needs correcting.
 
 **For other lanes (code, not docs):**
 - Platform/admin: `INSTALL.md` step 6 (`runbooks.py` 180–190) renders and restarts without `helm upgrade`, so a new
@@ -40,6 +38,10 @@ Amendment 8 decision 9: one of the two records needs correcting.
 - Case: RUNBOOK.md 219 and 234 scale `deployment/report-sync`, not rendered on this profile, and scale back to 1 even in
   production. `harness/laurium.py` 19–22's docstring says the egress is not yet held; P7b's row is in.
 - Orchestrator: `progress.tsv` 86 says P7b's runbooks were "each run on kind"; ADR-148 Am 5 says no block has run on a cluster.
+- Platform/admin: the reporting refusal's words name a build step, "P10" (`harness/cloud_platform/__init__.py` 178), in a
+  message an operator reads.
+- The orchestrator's review (relayed on sol): three should-fixes and eight notes, each applied in the 1.86 text; the
+  orchestrator records the seven items above in CARRIES.
 
 **Waits:** P9b (the backups' alert, volume expansion, the upgrade runbook, the production restore), P8 (the shared folders),
 reporting and owner resolution on Entra, a screen for Laurium, one real Entra token.
