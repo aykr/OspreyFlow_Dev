@@ -26,18 +26,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import threading
 import time
+import urllib.request
 from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Protocol, runtime_checkable
 from urllib.parse import quote
 
 import httpx
 import jwt
-from jwt import PyJWKClient
+from jwt import PyJWKSet
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from schemas.domain import Principal
@@ -99,21 +103,21 @@ class OidcResolverSettings:
 # codes the principal may receive."
 #
 # **The JWKS source is a config point, not a hardcoded key.** `ApiConfig.
-# oidc_jwks_url` names the endpoint `PyJWKClient` fetches and caches keys
-# from — a Keycloak realm's `.../protocol/openid-connect/certs` in a real
-# deployment, a loopback HTTP fixture in tests
-# (`tests/services/api/test_auth.py`) — `PyJWKClient` deliberately rejects
-# any scheme but `http`/`https` (closing exactly the local-file-read risk a
-# `jku` header or a misconfigured URL could otherwise open), so the fixture
-# is a real, if ephemeral, HTTP server rather than a `file://` URL. Key
-# rotation is the thing that breaks first in a real deployment, and
-# `PyJWKClient` already does the two things that matter for it: a
-# TTL-bounded cache (`cache_keys=True, lifespan=...`) and one refresh-and-
-# retry when a token's `kid` isn't in the cached set (`PyJWKClient.
-# get_signing_key`) — nothing here reimplements either, and nothing here
-# special-cases the fixture path, so the exact same code runs against the
-# test fixture's URL as against a real IdP later; only the config value
-# changes.
+# oidc_jwks_url` names the endpoint `SigningKeys` fetches and keeps keys
+# from — a Keycloak realm's `.../protocol/openid-connect/certs` or Entra ID's
+# `.../discovery/v2.0/keys` in a real deployment, a loopback HTTP fixture in
+# tests (`tests/services/api/test_auth.py`). `SigningKeys` refuses any scheme
+# but `http`/`https` (closing the local-file-read risk a misconfigured URL
+# could otherwise open), so the fixture is a real, if ephemeral, HTTP server
+# rather than a `file://` URL. Key rotation is the thing that breaks first in
+# a real deployment: `SigningKeys` keeps the set for its configured time,
+# fetches again for a key id it does not hold (at most once per five
+# minutes), and keeps the last good set through a short outage (ADR-148
+# Amendment 8; it replaced `PyJWKClient`, whose cache could not be told to
+# fetch in one thread while others go on, nor to tell an unreachable
+# identity provider from a body that is not JSON). Nothing here special-cases
+# the fixture path, so the same code runs against the fixture's URL as
+# against a real IdP; only the config value changes.
 #
 # **Claim names are this deployment's mapping, not a standard.** OIDC has no
 # standard claim for `clearance`, `org_unit` or `receivable_handling_codes`
@@ -472,59 +476,157 @@ class SigningKeysUnavailable(PrincipalLookupUnavailable):
 #: How long a session waits for the identity provider's keys before it is a 503.
 KEYS_TIMEOUT_SECONDS = 5.0
 #: At most one fetch of the keys for a key id not held, per this long (ADR-148 Amendment 8): a
-#: token naming an unknown key cannot make every request fetch them again.
+#: token naming an unknown key cannot make every request fetch them again. A key published within
+#: this long after such a fetch is refused until the next one (or the keys' own time is up).
 UNKNOWN_KID_REFETCH_SECONDS = 300.0
+#: Past the keys' own time, a fetch that fails leaves the last good set in use for this long
+#: (logged), so a short outage at the identity provider signs nobody out; after it, a 503.
+KEYS_GRACE_SECONDS = 3600.0
 #: Leeway on a token's times, for clocks a little apart.
 LEEWAY_SECONDS = 60
 #: The one algorithm an Entra ID token is signed with, whatever `OIDC_ALGORITHMS` says.
 ENTRA_ALGORITHMS = ("RS256",)
+#: The keys' own threads: a slow identity provider holds these, never `asyncio.to_thread`'s pool
+#: that the rest of the Conduit shares.
+KEYS_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="signing-keys")
+
+_log = logging.getLogger(__name__)
+
+
+async def in_keys_thread[T](call: Callable[..., T], *args: Any) -> T:
+    """`call(*args)` in the keys' own threads, bounded: a slow identity provider never holds the
+    event loop, and is `SigningKeysUnavailable` once `KEYS_TIMEOUT_SECONDS` (and a second) pass."""
+    loop = asyncio.get_running_loop()
+    try:
+        return await asyncio.wait_for(
+            loop.run_in_executor(KEYS_EXECUTOR, partial(call, *args)),
+            timeout=KEYS_TIMEOUT_SECONDS + 1,
+        )
+    except TimeoutError as exc:
+        raise SigningKeysUnavailable(
+            "sign-in is unavailable: the identity provider's signing keys did not answer"
+        ) from exc
+
+
+_UNREADABLE = "sign-in is unavailable: the identity provider's signing keys could not be read"
 
 
 class SigningKeys:
     """The identity provider's signing keys, as the resolver and the service identity's verifier
-    read them (ADR-148 Amendment 8): kept for the configured time, fetched again for a key id not
-    held at most once per `UNKNOWN_KID_REFETCH_SECONDS`, each fetch bounded by
-    `KEYS_TIMEOUT_SECONDS`. A fetch that fails is `SigningKeysUnavailable`; a token naming a key
-    not published is `PrincipalResolutionError`. Synchronous: the resolver calls it in a thread."""
+    read them (ADR-148 Amendment 8; the orchestrator's second review of P10 part 2):
+
+    - **kept** for the configured time, and fetched by **one thread at a time**: while one fetches,
+      the others go on with the last good set rather than wait;
+    - past their time, a fetch that fails leaves the last good set in use for
+      `KEYS_GRACE_SECONDS` (logged), then `SigningKeysUnavailable`;
+    - for a key id not held, fetched again at most once per `UNKNOWN_KID_REFETCH_SECONDS`; a key
+      not published is `PrincipalResolutionError` (401);
+    - each fetch bounded by `KEYS_TIMEOUT_SECONDS`. Every way the identity provider can fail to
+      give keys (unreachable, a refusal, a body that is not JSON, a set with no usable key) is
+      `SigningKeysUnavailable`, a 503 in words, never "token rejected", which signs people out.
+
+    Synchronous: callers on the event loop use `in_keys_thread`."""
 
     def __init__(
         self, url: str, ttl_seconds: float, *, clock: Callable[[], float] = time.monotonic
     ) -> None:
-        self._client = PyJWKClient(
-            url, cache_jwk_set=True, lifespan=ttl_seconds, timeout=KEYS_TIMEOUT_SECONDS
-        )
+        if not url.lower().startswith(("http://", "https://")):
+            raise ValueError("the signing keys' URL (OIDC_JWKS_URL) must be http or https")
+        self._url = url
+        self._ttl = ttl_seconds
         self._clock = clock
+        self._held: dict[str, Any] | None = None
+        self._fetched_at = float("-inf")
         self._last_unknown_fetch = float("-inf")
-        self._lock = threading.Lock()
+        self._fetching = threading.Lock()
+        self._stamp = threading.Lock()
+        #: Fetches made (each a request to the identity provider), for the record.
         self.fetches = 0
 
-    def _keys(self, refresh: bool) -> dict[str, Any]:
+    def _fetch(self) -> dict[str, Any]:
+        self.fetches += 1
         try:
-            jwk_set = self._client.get_jwk_set(refresh=refresh)
-        except jwt.PyJWKClientError as exc:
-            raise SigningKeysUnavailable(
-                "sign-in is unavailable: the identity provider's signing keys could not be read"
-            ) from exc
-        return {k.key_id: k for k in jwk_set.keys if k.key_id and k.public_key_use in ("sig", None)}
+            request = urllib.request.Request(self._url, headers={"User-Agent": "ospreyflow"})
+            with urllib.request.urlopen(request, timeout=KEYS_TIMEOUT_SECONDS) as response:  # noqa: S310 - the configured JWKS URL
+                data = json.load(response)
+            jwk_set = PyJWKSet.from_dict(data)
+        except (OSError, ValueError, TypeError, AttributeError, jwt.PyJWTError) as exc:
+            # OSError: unreachable, refused or timed out (URLError, HTTPError, TimeoutError);
+            # ValueError: not JSON; the rest: not a key set, or none of its keys usable.
+            raise SigningKeysUnavailable(_UNREADABLE) from exc
+        keys = {k.key_id: k for k in jwk_set.keys if k.key_id and k.public_key_use in ("sig", None)}
+        if not keys:
+            raise SigningKeysUnavailable(_UNREADABLE)
+        return keys
+
+    def _refresh(self, *, wait: bool) -> None:
+        """One fetch at a time. With `wait`, wait for a fetch under way (bounded) and use what it
+        got; without, go on with the last good set while another thread fetches."""
+        seen = self._fetched_at
+        if wait:
+            if not self._fetching.acquire(timeout=KEYS_TIMEOUT_SECONDS + 1):
+                raise SigningKeysUnavailable(_UNREADABLE)
+        elif not self._fetching.acquire(blocking=False):
+            return
+        try:
+            if self._fetched_at != seen and self._held is not None:
+                return  # another thread fetched while this one waited
+            keys = self._fetch()
+            self._held, self._fetched_at = keys, self._clock()
+        finally:
+            self._fetching.release()
+
+    def _current(self) -> dict[str, Any]:
+        age = self._clock() - self._fetched_at
+        if age >= self._ttl:
+            past_grace = self._held is None or age >= self._ttl + KEYS_GRACE_SECONDS
+            try:
+                self._refresh(wait=past_grace)
+            except SigningKeysUnavailable:
+                if past_grace:
+                    raise
+                _log.warning(
+                    "the identity provider's signing keys could not be read; the last good set, "
+                    "%.0f s old, is used for at most %.0f s more",
+                    age, self._ttl + KEYS_GRACE_SECONDS - age,
+                )  # fmt: skip
+        assert self._held is not None
+        return self._held
 
     def key_for(self, token: str) -> Any:
         try:
             kid = jwt.get_unverified_header(token).get("kid")
         except jwt.PyJWTError as exc:
             raise PrincipalResolutionError(f"token rejected: {exc}") from exc
-        with self._lock:
-            keys = self._keys(refresh=False)
-            if kid not in keys and self._clock() - self._last_unknown_fetch >= (
-                UNKNOWN_KID_REFETCH_SECONDS
-            ):
-                self._last_unknown_fetch = self._clock()
-                self.fetches += 1
-                keys = self._keys(refresh=True)
+        before = self._fetched_at
+        keys = self._current()
+        if kid not in keys:
+            with self._stamp:
+                now = self._clock()
+                # A set fetched in this very call is already fresh: it opens the window.
+                due = self._fetched_at == before and (
+                    now - self._last_unknown_fetch >= UNKNOWN_KID_REFETCH_SECONDS
+                )
+                if due or self._fetched_at != before:
+                    self._last_unknown_fetch = now
+            if due:
+                self._refresh_now()
+                keys = self._held or {}
         if kid not in keys:
             raise PrincipalResolutionError(
                 "token rejected: it names a signing key the identity provider does not publish"
             )
         return keys[kid].key
+
+    def _refresh_now(self) -> None:
+        """A fetch for a key id not held: waits for its turn (bounded); failing is a 503."""
+        if not self._fetching.acquire(timeout=KEYS_TIMEOUT_SECONDS + 1):
+            raise SigningKeysUnavailable(_UNREADABLE)
+        try:
+            keys = self._fetch()
+            self._held, self._fetched_at = keys, self._clock()
+        finally:
+            self._fetching.release()
 
 
 @dataclass(frozen=True)
@@ -692,10 +794,10 @@ def _access_token_of(response: httpx.Response, what: str) -> str:
 
 
 class PrincipalResolver:
-    """One `PyJWKClient` per configured JWKS URL, built once at process
+    """One `SigningKeys` per configured JWKS URL, built once at process
     start and reused for the process lifetime — `resolve()` itself makes
-    no state-carrying assumption between calls beyond that client's own
-    internal TTL cache, so this class carries nothing that would break
+    no state-carrying assumption between calls beyond that set's own
+    TTL cache, so this class carries nothing that would break
     `services/api`'s statelessness if two instances of it exist behind a
     load balancer with different local caches: both ask the same JWKS URL
     and converge on the same keys. `resolve_for_owner`'s own `httpx.
@@ -745,6 +847,12 @@ class PrincipalResolver:
             list(ENTRA_ALGORITHMS) if mapping.is_entra else list(config.oidc_algorithms)
         )
         self._exchange_http = httpx.AsyncClient(timeout=10.0)
+
+    @property
+    def signing_keys(self) -> SigningKeys:
+        """The keys this resolver reads, which the run API's service identity verifier shares
+        (one cache, one fetch limit; the orchestrator's second review, item 8)."""
+        return self._keys
 
     @property
     def claim_mapping(self) -> ClaimMapping:
@@ -953,7 +1061,14 @@ class PrincipalResolver:
             )
         exchanged_token = _access_token_of(response, f"the exchange for owner {owner_id!r}")
         try:
-            return self.resolve(exchanged_token)
+            # In the keys' own threads: a fetch of the keys never holds the event loop, and the
+            # keys unreadable is the exchange unavailable (ADR-044's path: the run marked stopped),
+            # never an exception the scheduler, a monitor or a screening run does not expect.
+            return await in_keys_thread(self.resolve, exchanged_token)
+        except SigningKeysUnavailable as exc:
+            raise PrincipalExchangeUnavailable(
+                f"the exchanged token for owner {owner_id!r} could not be checked: {exc}"
+            ) from exc
         except PrincipalResolutionError as exc:
             raise PrincipalExchangeRefused(
                 f"exchanged token for owner {owner_id!r} failed verification: {exc}"
@@ -975,14 +1090,7 @@ class PrincipalResolver:
         503), never a principal with no roles. Nothing is kept between calls."""
         # In a thread, bounded: a slow or unreachable identity provider never holds the event loop,
         # and is a 503 in words, never "token rejected" (ADR-148 Amendment 8).
-        try:
-            claims = await asyncio.wait_for(
-                asyncio.to_thread(self._verified_claims, token), timeout=KEYS_TIMEOUT_SECONDS + 1
-            )
-        except TimeoutError as exc:
-            raise SigningKeysUnavailable(
-                "sign-in is unavailable: the identity provider's signing keys did not answer"
-            ) from exc
+        claims = await in_keys_thread(self._verified_claims, token)
         if not self._claim_mapping.is_entra:
             return principal_from_claims(claims, self._claim_mapping)
         verified = _verified_parts(claims, self._claim_mapping)

@@ -1116,27 +1116,6 @@ def _publish(directory: Path, *keys: tuple[object, str]) -> None:
     (directory / "jwks.json").write_text(json.dumps({"keys": jwks}))
 
 
-def test_an_unknown_kid_is_fetched_for_at_most_once_in_five_minutes(jwks_dir, keypair) -> None:
-    """A token naming a key not published cannot make every request fetch the keys again: one
-    fetch for an unknown kid, then none for five minutes, then one more."""
-    from principal_auth import PrincipalResolutionError as Refused
-    from principal_auth import SigningKeys
-
-    directory, url = jwks_dir
-    _publish(directory, (keypair[0], "k1"))
-    now = [1000.0]
-    keys = SigningKeys(url, 300.0, clock=lambda: now[0])
-    keys.key_for(sign_token(keypair[0], {"sub": "s"}, kid="k1"))
-    for _ in range(3):
-        with pytest.raises(Refused, match="does not publish"):
-            keys.key_for(sign_token(keypair[0], {"sub": "s"}, kid="unknown"))
-    assert keys.fetches == 1
-    now[0] += 301
-    with pytest.raises(Refused):
-        keys.key_for(sign_token(keypair[0], {"sub": "s"}, kid="unknown"))
-    assert keys.fetches == 2
-
-
 def test_an_unreachable_identity_provider_is_a_503_in_words_not_a_rejected_token(
     keypair,
 ) -> None:
@@ -1166,37 +1145,6 @@ def test_an_unreachable_identity_provider_is_a_503_in_words_not_a_rejected_token
     assert response.status_code == 503
     assert response.json()["detail"]["error"] == "identity_provider_unavailable"
     assert resolver.people.calls == []
-
-
-async def test_a_slow_identity_provider_never_holds_the_event_loop(
-    jwks_url, keypair, monkeypatch
-) -> None:
-    """The keys are read in a thread, bounded: while a fetch hangs, other requests go on, and the
-    hung one is a 503 (`SigningKeysUnavailable`) once the timeout passes."""
-    import principal_auth
-    from principal_auth import SigningKeysUnavailable
-
-    monkeypatch.setattr(principal_auth, "KEYS_TIMEOUT_SECONDS", 0.2)
-    resolver = PrincipalResolver(
-        _entra_config(jwks_url), claim_mapping=BY_EXTENSION, role_source=FakePeople()
-    )
-    monkeypatch.setattr(resolver._keys, "key_for", lambda token: time.sleep(3))
-    ticks = 0
-
-    async def other_requests() -> None:
-        nonlocal ticks
-        for _ in range(5):
-            await asyncio.sleep(0.05)
-            ticks += 1
-
-    started = time.monotonic()
-    results = await asyncio.gather(
-        resolver.resolve_principal(sign_token(_key(keypair), entra_claims(**_GOOD))),
-        other_requests(),
-        return_exceptions=True,
-    )
-    assert isinstance(results[0], SigningKeysUnavailable)
-    assert ticks == 5 and time.monotonic() - started < 2.5
 
 
 def test_an_entra_mapping_takes_rs256_alone_whatever_oidc_algorithms_says(jwks_dir) -> None:
@@ -1238,3 +1186,254 @@ def test_a_token_a_little_past_its_expiry_is_given_sixty_seconds(keypair, jwks_u
     else:
         with pytest.raises(PrincipalResolutionError, match="expired"):
             _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
+# --- the orchestrator's second review of P10 part 2: the keys' cache, measured at the server ---
+
+
+class _CountingKeys:
+    """A JWKS endpoint that counts the GETs it answers (what the identity provider sees), serving
+    `jwks.json` from its folder afresh each time, as the shared `jwks_dir` does, and able to answer
+    slowly (`delay`) or with any body (`body`)."""
+
+    def __init__(self, directory: Path) -> None:
+        import threading
+        from functools import partial
+        from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+        owner = self
+        self.gets = 0
+        self.delay = 0.0
+        self.directory = directory
+
+        class Handler(SimpleHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802 - http.server's own name
+                owner.gets += 1
+                if owner.delay:
+                    time.sleep(owner.delay)
+                super().do_GET()
+
+            def log_message(self, *args: object) -> None:
+                return None
+
+        self.server = ThreadingHTTPServer(
+            ("127.0.0.1", 0), partial(Handler, directory=str(directory))
+        )
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        host, port = self.server.server_address[0], self.server.server_address[1]
+        self.url = f"http://{host}:{port}/jwks.json"
+
+    def body(self, text: str) -> None:
+        (self.directory / "jwks.json").write_text(text)
+
+    def close(self) -> None:
+        self.server.shutdown()
+        self.thread.join()
+
+
+@pytest.fixture
+def counting(tmp_path: Path):  # type: ignore[no-untyped-def]
+    keys = _CountingKeys(tmp_path)
+    try:
+        yield keys
+    finally:
+        keys.close()
+
+
+def _token(keypair, kid: str = "k1") -> str:  # type: ignore[no-untyped-def]
+    return sign_token(keypair[0], {"sub": "s"}, kid=kid)
+
+
+def test_many_sign_ins_fetch_the_keys_once_and_an_unknown_kid_once_per_window(
+    counting, keypair
+) -> None:
+    """Must-fix 1: counted at the server, ten sign-ins with a held key are one fetch; tokens
+    naming a key not published add one more fetch per five minutes, however many there are."""
+    from principal_auth import PrincipalResolutionError as Refused
+    from principal_auth import SigningKeys
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 3600.0, clock=lambda: now[0])
+    for _ in range(10):
+        keys.key_for(_token(keypair))
+    assert counting.gets == 1
+    for _ in range(5):
+        with pytest.raises(Refused, match="does not publish"):
+            keys.key_for(_token(keypair, "unknown"))
+    assert counting.gets == 2
+    now[0] += 299
+    with pytest.raises(Refused):
+        keys.key_for(_token(keypair, "unknown"))
+    assert counting.gets == 2
+    now[0] += 2
+    with pytest.raises(Refused):
+        keys.key_for(_token(keypair, "unknown"))
+    assert counting.gets == 3
+
+
+def test_the_keys_are_fetched_again_once_their_time_is_up(counting, keypair) -> None:
+    from principal_auth import SigningKeys
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 600.0, clock=lambda: now[0])
+    keys.key_for(_token(keypair))
+    now[0] += 599
+    keys.key_for(_token(keypair))
+    assert counting.gets == 1
+    now[0] += 2
+    keys.key_for(_token(keypair))
+    assert counting.gets == 2
+
+
+def test_a_key_published_inside_the_window_is_refused_until_the_next_fetch(
+    counting, keypair
+) -> None:
+    """The documented edge (Amendment 8 point 9): a key the identity provider publishes within five
+    minutes of a fetch for an unknown key is refused (401) until the next fetch is due."""
+    from principal_auth import PrincipalResolutionError as Refused
+    from principal_auth import SigningKeys
+
+    rotated = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 3600.0, clock=lambda: now[0])
+    with pytest.raises(Refused):
+        keys.key_for(_token((rotated,), "k2"))
+    _publish(counting.directory, (keypair[0], "k1"), (rotated, "k2"))
+    now[0] += 100
+    with pytest.raises(Refused, match="does not publish"):
+        keys.key_for(_token((rotated,), "k2"))
+    assert counting.gets == 1
+    now[0] += 201
+    assert keys.key_for(_token((rotated,), "k2")) is not None
+    assert counting.gets == 2
+
+
+def test_a_failed_fetch_keeps_the_last_good_set_for_an_hour_then_is_a_503(
+    counting, keypair
+) -> None:
+    """Should-fix 5: past the keys' time, the identity provider not answering leaves the last good
+    set in use for an hour (nobody signed out by a short outage); after that, a 503."""
+    from principal_auth import KEYS_GRACE_SECONDS, SigningKeys, SigningKeysUnavailable
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 600.0, clock=lambda: now[0])
+    keys.key_for(_token(keypair))
+    (counting.directory / "jwks.json").unlink()
+    now[0] += 601
+    assert keys.key_for(_token(keypair)) is not None
+    assert counting.gets == 2
+    now[0] += KEYS_GRACE_SECONDS
+    with pytest.raises(SigningKeysUnavailable):
+        keys.key_for(_token(keypair))
+
+
+def test_while_one_thread_fetches_the_others_use_the_last_good_set(counting, keypair) -> None:
+    """Should-fix 5: the fetch is one thread's; the rest go on with the set they have rather than
+    wait for a slow identity provider."""
+    import threading
+
+    from principal_auth import SigningKeys
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 600.0, clock=lambda: now[0])
+    keys.key_for(_token(keypair))
+    now[0] += 601
+    counting.delay = 1.5
+    fetcher = threading.Thread(target=keys.key_for, args=(_token(keypair),))
+    fetcher.start()
+    time.sleep(0.3)
+    started = time.monotonic()
+    assert keys.key_for(_token(keypair)) is not None
+    assert time.monotonic() - started < 0.5
+    fetcher.join()
+    assert counting.gets == 2
+
+
+async def test_a_slow_identity_provider_holds_only_the_keys_own_threads(
+    counting, keypair, monkeypatch
+) -> None:
+    """Item 8 and should-fix 5, with the real `SigningKeys`: while the first fetch hangs, the event
+    loop goes on, the fetch runs in the keys' own threads (never `asyncio.to_thread`'s pool), and
+    the hung sign-in is a 503 once the timeout passes."""
+    import threading
+
+    import principal_auth
+    from principal_auth import SigningKeysUnavailable
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    counting.delay = 2.0
+    monkeypatch.setattr(principal_auth, "KEYS_TIMEOUT_SECONDS", 0.5)
+    resolver = PrincipalResolver(
+        _entra_config(counting.url), claim_mapping=BY_EXTENSION, role_source=FakePeople()
+    )
+    seen: list[str] = []
+    ticks = 0
+
+    async def other_requests() -> None:
+        nonlocal ticks
+        for _ in range(5):
+            await asyncio.sleep(0.05)
+            seen.extend(t.name for t in threading.enumerate())
+            ticks += 1
+
+    started = time.monotonic()
+    results = await asyncio.gather(
+        resolver.resolve_principal(sign_token(_key(keypair), entra_claims(**_GOOD))),
+        other_requests(),
+        return_exceptions=True,
+    )
+    assert isinstance(results[0], SigningKeysUnavailable)
+    assert ticks == 5 and time.monotonic() - started < 2.0
+    assert any(name.startswith("signing-keys") for name in seen)
+    assert not any(name.startswith("asyncio_") for name in seen)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    ["unreachable", "refused", "not-json", "no-keys", "no-usable-key"],
+)
+def test_every_way_the_identity_provider_fails_to_give_keys_is_a_503(
+    counting, keypair, answer
+) -> None:
+    """Should-fix 7 (rule 15: the fake refuses as the real one can): unreachable, a refusal (404), a
+    200 whose body is not JSON, a set with no keys and one with no key this code can use are each
+    `identity_provider_unavailable`, a 503, never a 500 or a 401 that signs people out."""
+    from fastapi.testclient import TestClient
+    from services.api.app import app
+
+    url = counting.url
+    if answer == "unreachable":
+        url = "http://127.0.0.1:9/jwks.json"
+    elif answer == "not-json":
+        counting.body("<html>Service Unavailable</html>")
+    elif answer == "no-keys":
+        counting.body('{"keys": []}')
+    elif answer == "no-usable-key":
+        counting.body('{"keys": [{"kty": "unknown-kind", "kid": "k1"}]}')
+    resolver = PrincipalResolver(
+        _config(url, oidc_issuer=ISSUER, oidc_audience=CLIENT_ID),
+        claim_mapping=BY_EXTENSION,
+        role_source=FakePeople(),
+    )
+    token = sign_token(_key(keypair), entra_claims(**_GOOD))
+    held = getattr(app.state, "principal_resolver", None)
+    app.state.principal_resolver = resolver
+    try:
+        response = TestClient(app).get("/v1/me", headers={"Authorization": f"Bearer {token}"})
+    finally:
+        app.state.principal_resolver = held
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"]["error"] == "identity_provider_unavailable"
+
+
+def test_the_keys_url_must_be_http_or_https() -> None:
+    from principal_auth import SigningKeys
+
+    with pytest.raises(ValueError, match="http or https"):
+        SigningKeys("file:///etc/passwd", 60.0)

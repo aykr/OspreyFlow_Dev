@@ -490,8 +490,9 @@ def markings_hold(
             continue
         to = chosen[key]
         account = who.people.get(to)
-        # A clearance read from Entra ID over a day ago is not trusted (ADR-148 Amendment 8).
-        clearance = account.clearance if account and to not in who.stale else None
+        # A recipient whose clearance was read from Entra ID over a day ago never reaches here:
+        # `check_transfers`, run first, refuses them (ADR-148 Amendment 8).
+        clearance = account.clearance if account else None
         if (
             clearance is None
             or clearance not in scheme.classification

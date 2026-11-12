@@ -177,3 +177,72 @@ def test_a_service_identitys_token_without_an_expiry_is_refused(jwks_url, keypai
     with pytest.raises(ServiceIdentityRefused) as refused:
         _verifier(jwks_url).client_of(_app_token(keypair, exp=_ABSENT))
     assert refused.value.status == 401
+
+
+# --- the orchestrator's second review of P10 part 2, item 8: the run API's keys ---
+
+
+def test_the_identity_provider_unreachable_is_a_503_on_the_run_api(keypair) -> None:
+    """Its keys unreadable is said so (503), never "could not be verified" (401)."""
+    with pytest.raises(ServiceIdentityRefused) as refused:
+        _verifier("http://127.0.0.1:9/jwks.json").client_of(_app_token(keypair))
+    assert refused.value.status == 503
+    assert "signing keys could not be read" in str(refused.value)
+
+
+def test_an_entra_service_identity_takes_rs256_alone_whatever_oidc_algorithms_says(
+    jwks_dir,
+) -> None:
+    """With ES256 allowed by OIDC_ALGORITHMS and an EC key published, an ES256 app-only token is
+    refused on the run API too."""
+    import json
+
+    import jwt as pyjwt
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from jwt.algorithms import ECAlgorithm
+
+    directory, url = jwks_dir
+    ec_key = ec.generate_private_key(ec.SECP256R1())
+    jwk = ECAlgorithm.to_jwk(ec_key.public_key(), as_dict=True)
+    jwk.update(kid="ec", use="sig")
+    (directory / "jwks.json").write_text(json.dumps({"keys": [jwk]}))
+    now = int(time.time())
+    claims = {
+        "aud": API, "iss": ISSUER, "iat": now, "nbf": now, "exp": now + 3600, "ver": "2.0",
+        "tid": TENANT, "oid": SP_OID, "sub": SP_OID, "azp": AIRFLOW, "idtyp": "app",
+    }  # fmt: skip
+    token = pyjwt.encode(claims, ec_key, algorithm="ES256", headers={"kid": "ec"})
+    verifier = ServiceIdentityVerifier(
+        _settings(url, oidc_algorithms=("RS256", "ES256")), claim_mapping=MAPPING
+    )
+    with pytest.raises(ServiceIdentityRefused) as refused:
+        verifier.client_of(token)
+    assert refused.value.status == 401
+
+
+@pytest.mark.parametrize(("ago", "admitted"), [(30, True), (120, False)], ids=["30s", "120s"])
+def test_a_service_identitys_token_a_little_past_its_expiry_is_given_sixty_seconds(
+    jwks_url, keypair, ago, admitted
+) -> None:
+    now = int(time.time())
+    token = _app_token(keypair, iat=now - 3600, nbf=now - 3600, exp=now - ago)
+    if admitted:
+        assert _verifier(jwks_url).client_of(token) == AIRFLOW
+    else:
+        with pytest.raises(ServiceIdentityRefused) as refused:
+            _verifier(jwks_url).client_of(token)
+        assert refused.value.status == 401
+
+
+def test_the_run_api_shares_the_person_paths_keys(jwks_url, keypair) -> None:
+    """One set of keys for both paths when the Conduit passes it: what one fetched, the other uses
+    (one cache and one fetch limit for one OIDC_JWKS_URL)."""
+    from principal_auth import SigningKeys
+
+    keys = SigningKeys(jwks_url, 3600.0)
+    verifier = ServiceIdentityVerifier(
+        _settings(jwks_url), claim_mapping=MAPPING, signing_keys=keys
+    )
+    assert verifier.client_of(_app_token(keypair)) == AIRFLOW
+    assert verifier.client_of(_app_token(keypair)) == AIRFLOW
+    assert keys.fetches == 1

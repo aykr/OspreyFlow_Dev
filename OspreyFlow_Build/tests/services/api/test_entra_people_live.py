@@ -15,6 +15,7 @@ Synthetic values only (rule 9).
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -162,10 +163,22 @@ async def test_a_store_that_cannot_answer_is_unavailable_never_no_roles(
         world.store.pool = await asyncpg.create_pool(dsn=world.dsn, min_size=1, max_size=1)
 
 
+OTHER_ADMIN = "50000000-0000-4000-8000-000000000003"
+
+
+async def _a_signed_in_administrator(world) -> None:  # type: ignore[no-untyped-def]
+    """Someone else who can manage people: Admin, enabled, and signed in at least once."""
+    await world.store.person(TENANT, OTHER_ADMIN, SEEN)
+    await world.store.update(OTHER_ADMIN, "roles", [ADMIN_ROLE])
+
+
 async def test_first_administrators_are_seeded_once_and_a_removal_stands(world) -> None:
-    await world.store.seed_first_administrators([OID])
+    """While someone else can manage people, a named first administrator's Admin taken away stands
+    at the next start, and the start gives nothing."""
+    assert await world.store.seed_first_administrators([OID]) == [OID]
+    await _a_signed_in_administrator(world)
     await world.store.update(OID, "roles", ["analyst"])
-    await world.store.seed_first_administrators([OID])
+    assert await world.store.seed_first_administrators([OID]) == []
     assert (await world.store.one(OID)).roles == ["analyst"]
 
 
@@ -198,17 +211,81 @@ async def test_the_sockets_read_is_this_tenants_and_records_nobody(world) -> Non
     assert stored is not None and (stored.roles, stored.disabled) == ((ADMIN_ROLE,), True)
 
 
-async def test_a_named_first_administrator_holding_no_role_is_given_admin_again(world) -> None:
-    """The way back in when nobody can administer (the orchestrator's ruling, 12 November 2026; the
-    install runbook's recovery step): naming a person who holds no role and restarting the Conduit
-    gives them Admin again. A person who holds any role keeps it (the removal stands)."""
+async def test_when_nobody_can_manage_people_the_named_first_administrators_get_admin_again(
+    world,
+) -> None:
+    """The way back in (the orchestrator's ruling, amended 12 November 2026): only when nobody can
+    manage people does a start give each named first administrator Admin again, added to what they
+    hold. While someone else can, a named person's roles cleared on purpose stand."""
     await world.store.seed_first_administrators([OID])
+    await _a_signed_in_administrator(world)
     await world.store.update(OID, "roles", [])
-    await world.store.seed_first_administrators([OID])
-    assert (await world.store.one(OID)).roles == [ADMIN_ROLE]
+    assert await world.store.seed_first_administrators([OID]) == []
+    assert (await world.store.one(OID)).roles == []
+    await world.store.update(OTHER_ADMIN, "roles", ["analyst"])  # now nobody can
     await world.store.update(OID, "roles", ["analyst"])
-    await world.store.seed_first_administrators([OID])
-    assert (await world.store.one(OID)).roles == ["analyst"]
+    assert await world.store.seed_first_administrators([OID]) == [OID]
+    assert (await world.store.one(OID)).roles == ["analyst", ADMIN_ROLE]
+    assert await world.store.seed_first_administrators([OID]) == []
+
+
+async def test_each_admin_role_a_start_gives_is_audited(world, monkeypatch) -> None:
+    """`open_people_store` at start: the install's grant and a way back in each write an audit row
+    (`grant_first_administrator`), naming the person; a start that gives nothing writes none."""
+    from services.api.audit import AuditWriter
+    from services.api.entra_people import open_people_store
+
+    monkeypatch.setenv("OSPREY_FIRST_ADMINISTRATORS", OID)
+    audit = await AuditWriter.connect(world.dsn)
+    try:
+        for _ in range(2):
+            store = await open_people_store(world.dsn, MAPPING, audit)
+            assert store is not None
+            await store.close()
+        await world.store.update(OID, "roles", [])
+        store = await open_people_store(world.dsn, MAPPING, audit)
+        assert store is not None
+        await store.close()
+        conn = await asyncpg.connect(dsn=world.dsn)
+        try:
+            rows = await conn.fetch(
+                "SELECT principal_id, resolved_query FROM audit_log "
+                "WHERE action = 'grant_first_administrator' ORDER BY id"
+            )
+        finally:
+            await conn.close()
+    finally:
+        await audit.close()
+    assert [(r["principal_id"], json.loads(r["resolved_query"])["person"]) for r in rows] == [
+        ("first-administrators", OID),
+        ("first-administrators", OID),
+    ]
+
+
+async def _read_back(world, hours: float) -> object:  # type: ignore[no-untyped-def]
+    conn = await asyncpg.connect(dsn=world.dsn)
+    try:
+        await conn.execute(
+            "UPDATE entra_people SET access_read_at = now() - make_interval(secs => $2) "
+            "WHERE tenant_id = $1",
+            TENANT,
+            hours * 3600,
+        )
+        before = await conn.fetchval("SELECT access_read_at FROM entra_people WHERE oid = $1", OID)
+        await world.store.person(TENANT, OID, SEEN)
+        after = await conn.fetchval("SELECT access_read_at FROM entra_people WHERE oid = $1", OID)
+    finally:
+        await conn.close()
+    return before, after
+
+
+@pytest.mark.parametrize(("hours", "refreshed"), [(2.0, True), (0.5, False)], ids=["2h", "30min"])
+async def test_access_read_at_is_refreshed_at_most_hourly(world, hours, refreshed) -> None:
+    """The second review's must-fix 2: a sign-in with the same access records when it was read
+    again once the last record is over an hour old, and writes nothing inside the hour."""
+    await world.store.person(TENANT, OID, SEEN)
+    before, after = await _read_back(world, hours)
+    assert (after != before) is refreshed
 
 
 async def test_one_person_is_read_by_this_tenant_alone(world) -> None:
@@ -231,12 +308,23 @@ async def test_a_sign_in_records_when_access_was_read_and_an_added_person_has_no
     assert seen.access_read_at > added.access_read_at
 
 
-async def test_two_conduits_starting_together_make_the_table_once(world) -> None:
-    """`BOOTSTRAP_SQL` under a transaction-scoped advisory lock: two replicas' starts together."""
+async def test_a_conduit_starting_waits_for_the_bootstrap_lock(world) -> None:
+    """`BOOTSTRAP_SQL` runs under a transaction-scoped advisory lock, so two Conduits starting
+    together make the table once. Shown deterministically (note 9 of the second review): while
+    another session holds the lock, `connect` does not finish; once it is let go, it does. Two
+    connects racing would show nothing reliably: the race the lock prevents may simply not happen."""
     import asyncio
 
-    first, second = await asyncio.gather(
-        EntraPeopleStore.connect(world.dsn, TENANT), EntraPeopleStore.connect(world.dsn, TENANT)
-    )
-    await first.close()
-    await second.close()
+    from services.api.entra_people import BOOTSTRAP_LOCK
+
+    holder = await asyncpg.connect(dsn=world.dsn)
+    try:
+        await holder.execute("SELECT pg_advisory_lock($1)", BOOTSTRAP_LOCK)
+        starting = asyncio.create_task(EntraPeopleStore.connect(world.dsn, TENANT))
+        await asyncio.sleep(1.0)
+        assert not starting.done(), "connect ran its bootstrap while another held the lock"
+        await holder.execute("SELECT pg_advisory_unlock($1)", BOOTSTRAP_LOCK)
+        store = await asyncio.wait_for(starting, timeout=10)
+        await store.close()
+    finally:
+        await holder.close()

@@ -163,6 +163,7 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
     "people_and_roles": (
         "invite_person",
         "add_person_by_object_id",
+        "grant_first_administrator",
         "set_person_roles",
         "set_person_access",
         "disable_person",

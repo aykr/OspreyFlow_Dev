@@ -698,7 +698,7 @@ from .entity_pictures import (
     PictureNotFoundError,
     PictureSetResponse,
 )
-from .entra_people import EntraPeopleAdmin
+from .entra_people import STALE_ACCESS_WORDS, EntraPeopleAdmin, access_current
 from .event_scope import own_events_only
 from .explore import (
     ExploreService,
@@ -1337,7 +1337,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.run_quotas = run_quotas
     # ADR-141 decision 10: a service identity's sign-in, for the run API alone.
     app.state.service_identities = ServiceIdentityVerifier(
-        config, claim_mapping=resources.principal_resolver.claim_mapping
+        config,
+        claim_mapping=resources.principal_resolver.claim_mapping,
+        # One set of keys for both paths: the same OIDC_JWKS_URL (ADR-148 Amendment 8).
+        # A resolver double without keys of its own leaves the verifier its own set.
+        signing_keys=getattr(resources.principal_resolver, "signing_keys", None),
     )
     # The external runs going on in the background, held so none is collected mid-run.
     app.state.external_runs = set()
@@ -16630,6 +16634,16 @@ async def name_an_author_route(
     grantee = _grantee(account_id)
     await _may_hold_a_level(request, grantee, AccessLevel.AUTHOR, principal_names)
     named = people.get(grantee)
+    if named is not None and not access_current(named):
+        # ADR-148 Amendment 8: a unit read from Entra ID over a day ago is not trusted to place
+        # them in the case's unit (the orchestrator's second review, note 13; as a transfer).
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "access_out_of_date",
+                "message": f"{named.name}: {STALE_ACCESS_WORDS}",
+            },
+        )
     if named is not None and named.org_unit != case.owning_unit:
         raise HTTPException(
             status_code=409,
@@ -20186,23 +20200,25 @@ async def _socket_standing(app_: Any, raw: Principal) -> int | None:
 
 def _admission(
     app_: Any, raw: Principal, investigation_id: str
-) -> Callable[[], Awaitable[Principal | None]]:
+) -> Callable[[], Awaitable[Principal | int]]:
     """ADR-145 Amendment 5 ("never cached"): an open socket's principal, read afresh at each
     message: its custom roles' rights as they are now (`with_custom_roles`, the bearer and the
-    ticket alike), and its case level as it is now (a grant or a team's grant taken away). `None`
-    once the reader no longer holds a level, and the socket is closed."""
+    ticket alike), and its case level as it is now (a grant or a team's grant taken away). Once it
+    no longer stands, the code the socket is closed with: 1013 when the people store cannot answer
+    (try again later), 1008 otherwise (ADR-148 Amendment 8 point 1)."""
 
-    async def admitted() -> Principal | None:
-        # ADR-148 Amendment 8: a person disabled, or whose roles changed, since the socket opened.
-        if await _socket_standing(app_, raw) is not None:
-            return None
+    async def admitted() -> Principal | int:
+        # ADR-148 Amendment 8: a person disabled, or whose roles changed, since the socket opened;
+        # or the store not answering, which is 1013, never 1008.
+        if (refused := await _socket_standing(app_, raw)) is not None:
+            return refused
         principal = await with_custom_roles(app_, raw)
         try:
             await app_.state.investigations.get_authorized(
                 investigation_id, principal, need=AccessLevel.VIEWER
             )
         except (InvestigationNotFoundError, InsufficientAccessError):
-            return None
+            return status.WS_1008_POLICY_VIOLATION
         return principal
 
     return admitted
@@ -20225,8 +20241,8 @@ class _SocketState:
     buffering: bool = False
     buffer: list[str] = field(default_factory=list)
     overflowed: bool = False
-    #: ADR-145 Amendment 5: asked before each message is acted on; `None` closes the socket.
-    admitted: Callable[[], Awaitable[Principal | None]] | None = None
+    #: ADR-145 Amendment 5: asked before each message is acted on; a close code closes the socket.
+    admitted: Callable[[], Awaitable[Principal | int]] | None = None
 
 
 async def _send_all(
@@ -20281,8 +20297,8 @@ async def _forward_notifications(
     async for message in pubsub.listen():
         if message["type"] != "message":
             continue
-        if state.admitted is not None and await state.admitted() is None:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        if state.admitted is not None and isinstance(refused := await state.admitted(), int):
+            await websocket.close(code=refused)
             return
         if state.stuck:
             # The reader was told their view is over the cap and is sent nothing more until a
@@ -20385,8 +20401,8 @@ async def _handle_resync_requests(
     state = state or _SocketState()
     while True:
         payload = await websocket.receive_json()
-        if state.admitted is not None and await state.admitted() is None:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        if state.admitted is not None and isinstance(refused := await state.admitted(), int):
+            await websocket.close(code=refused)
             return
         last_ack = payload.get("last_acknowledged_seq")
         if last_ack is None:

@@ -13,10 +13,12 @@ its `RoleSource`), never cached: a role taken away holds from the next request. 
 the resolver's 503, never a principal with no roles.
 
 **Who appears.** A person is recorded, with no roles, at their first sign-in; an administrator may
-also add one by object id ahead of it, which Graph gives (`add_person`). The first administrators
-are named by object id at install (`OSPREY_FIRST_ADMINISTRATORS`, rendered from
-`cloud_platform.claims.first_administrators`) and given the Admin role once, if not already
-recorded: removing it later is not undone at the next start.
+also add one by object id ahead of it, which the Entra admin centre shows (`add_person`). The
+first administrators are named by object id at install (`OSPREY_FIRST_ADMINISTRATORS`, rendered
+from `cloud_platform.claims.first_administrators`) and given the Admin role when first recorded.
+Taking it away later stands at every start, **unless nobody can manage people** (no enabled person
+who has signed in holds `manage_people`): then each one named is given Admin again, audited, which
+is the way back in (the orchestrator's ruling, amended 12 November 2026; the runbook's step 6).
 
 **What Admin › People cannot do here, said in words** (`PersonActionRefused`): invite or reset a
 sign-in (Entra holds the accounts), change a person's clearance, unit or handling codes (Entra's
@@ -48,8 +50,11 @@ from schemas.admin import (
     RegisteredDashboard,
     SignInDelivery,
 )
+from schemas.domain import Principal
 from schemas.rights import Right
 
+from .audit import AuditWriter
+from .custom_roles import PEOPLE_LOCK, CustomRoleStore, people_managers
 from .identity_admin import (
     CredentialCheck,
     IdentityAdminRefused,
@@ -258,24 +263,51 @@ class EntraPeopleStore:
 
     # --- the install's first administrators ---------------------------------------------------
 
-    async def seed_first_administrators(self, oids: Iterable[str]) -> None:
-        """Each named object id given the Admin role: once for a person already recorded with roles
-        (taking the role away, for another, is not undone at the next start), and again for one
-        recorded with **no role at all**, so naming such a person and restarting the Conduit is the
-        way back in when nobody can administer (the orchestrator's ruling, 12 November 2026; the
-        install runbook's recovery step)."""
-        async with self.pool.acquire() as conn:
+    async def seed_first_administrators(
+        self, oids: Iterable[str], custom: Mapping[str, Iterable[Right]] | None = None
+    ) -> list[str]:
+        """The named object ids given the Admin role at this start, which the caller audits:
+
+        - one **not yet recorded**, with Admin (the install);
+        - one already recorded, **only when nobody can manage people** (`people_managers` empty:
+          no enabled person who has signed in holds `manage_people`, by their roles and `custom`),
+          Admin added to what they hold. Otherwise what an administrator set stands, a named
+          person's roles cleared on purpose included.
+
+        Under `PEOPLE_LOCK`, the lock every change that could leave nobody able to manage people
+        takes, so a start and such a change are never interleaved (the orchestrator's ruling,
+        amended 12 November 2026)."""
+        oids = list(oids)
+        for oid in oids:
+            if not is_object_id(oid):
+                raise ValueError(f"not an Entra object id: {oid!r}")
+        given: list[str] = []
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.execute("SELECT pg_advisory_xact_lock($1)", PEOPLE_LOCK)
+            rows = await conn.fetch(
+                "SELECT * FROM entra_people WHERE tenant_id = $1", self.tenant_id
+            )
+            nobody_administers = not people_managers([_person(r) for r in rows], custom or {})
             for oid in oids:
-                if not is_object_id(oid):
-                    raise ValueError(f"not an Entra object id: {oid!r}")
-                await conn.execute(
+                added = await conn.fetchval(
                     "INSERT INTO entra_people (tenant_id, oid, roles, added_by) "
-                    "VALUES ($1, $2, $3, 'install') ON CONFLICT (tenant_id, oid) DO UPDATE "
-                    "SET roles = EXCLUDED.roles WHERE cardinality(entra_people.roles) = 0",
+                    "VALUES ($1, $2, $3, 'install') ON CONFLICT (tenant_id, oid) DO NOTHING "
+                    "RETURNING oid",
                     self.tenant_id,
                     oid,
                     [ADMIN_ROLE],
                 )
+                if added is None and nobody_administers:
+                    added = await conn.fetchval(
+                        "UPDATE entra_people SET roles = array_append(roles, $3) "
+                        "WHERE tenant_id = $1 AND oid = $2 AND NOT ($3 = ANY(roles)) RETURNING oid",
+                        self.tenant_id,
+                        oid,
+                        ADMIN_ROLE,
+                    )
+                if added is not None:
+                    given.append(oid)
+        return given
 
     # --- Admin › People -----------------------------------------------------------------------
 
@@ -412,16 +444,37 @@ class EntraPeopleAdmin:
         raise _refused("Dashboard identities are not registered on this deployment yet.")
 
 
-async def open_people_store(dsn: str, mapping: ClaimMapping) -> EntraPeopleStore | None:
+#: Who an audit row of the start's own grant names: no person did it.
+FIRST_ADMINISTRATORS_PRINCIPAL = Principal(
+    id="first-administrators", clearance="", org_unit="system"
+)
+GRANT_ACTION = "grant_first_administrator"
+
+
+async def open_people_store(
+    dsn: str, mapping: ClaimMapping, audit: AuditWriter
+) -> EntraPeopleStore | None:
     """The people store, its first administrators seeded, for an Entra mapping; None otherwise.
-    Refuses to start an Entra deployment that names no first administrator."""
+    Refuses to start an Entra deployment that names no first administrator. Each Admin role the
+    start gives is audited (`grant_first_administrator`), the install's and a way back in alike."""
     if not mapping.is_entra:
         return None
     assert mapping.tenant_id is not None
     first = first_administrators_from_env()
     store = await EntraPeopleStore.connect(dsn, mapping.tenant_id)
     try:
-        await store.seed_first_administrators(first)
+        roles = await CustomRoleStore.connect(dsn)
+        try:
+            custom = await roles.current_rights()
+        finally:
+            await roles.close()
+        for oid in await store.seed_first_administrators(first, custom):
+            await audit.record(
+                principal=FIRST_ADMINISTRATORS_PRINCIPAL,
+                action=GRANT_ACTION,
+                resolved_query={"person": oid, "roles": [ADMIN_ROLE]},
+                result_cardinality=1,
+            )
     except BaseException:
         await store.close()
         raise

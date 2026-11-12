@@ -288,3 +288,21 @@ async def test_an_unconfigured_deployment_is_unavailable_not_refused(jwks_url: s
     with pytest.raises(PrincipalExchangeUnavailable):
         await resolver.resolve_for_owner_detailed("analyst-narrow")
     assert await resolver.resolve_for_owner("analyst-narrow") is None
+
+
+async def test_owner_resolution_with_the_keys_unreadable_is_unavailable_never_an_exception(
+    token_exchange_url: str,
+    token_exchange_registry: TokenExchangeRegistry,
+) -> None:
+    """The orchestrator's second review of P10 part 2, item 6, on the Keycloak mapping: the
+    exchange answers, but the realm's keys cannot be read to check the exchanged token. That is
+    `PrincipalExchangeUnavailable` (ADR-044's path: the run marked stopped), and the caller-facing
+    form is None, as on main, never a `SigningKeysUnavailable` the scheduler, a monitor, a
+    screening run or a recipe run does not expect."""
+    token_exchange_registry.register("analyst-narrow", default_claims(sub="analyst-narrow"))
+    resolver = PrincipalResolver(
+        _config_with_exchange("http://127.0.0.1:9/jwks.json", token_exchange_url)
+    )
+    with pytest.raises(PrincipalExchangeUnavailable, match="could not be checked"):
+        await resolver.resolve_for_owner_detailed("analyst-narrow")
+    assert await resolver.resolve_for_owner("analyst-narrow") is None

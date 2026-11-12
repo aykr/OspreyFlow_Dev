@@ -14,7 +14,7 @@ Every value is synthetic (rule 9).
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -356,14 +356,15 @@ def test_first_administrators_are_read_once_each(monkeypatch) -> None:
 
 async def test_a_keycloak_mapping_opens_no_people_store(monkeypatch) -> None:
     monkeypatch.delenv("OSPREY_FIRST_ADMINISTRATORS", raising=False)
-    assert await open_people_store("postgresql://unused", ClaimMapping()) is None
+    unused: Any = None  # never opened: a Keycloak mapping has no people store
+    assert await open_people_store("postgresql://unused", ClaimMapping(), unused) is None
 
 
 async def test_an_entra_mapping_with_no_first_administrator_does_not_start(monkeypatch) -> None:
     """Refused before any connection is opened."""
     monkeypatch.delenv("OSPREY_FIRST_ADMINISTRATORS", raising=False)
     with pytest.raises(ValueError, match="OSPREY_FIRST_ADMINISTRATORS"):
-        await open_people_store("postgresql://unused", MAPPING)
+        await open_people_store("postgresql://unused", MAPPING, cast(Any, None))
 
 
 async def test_admin_system_says_unreachable_when_the_store_is_down() -> None:
@@ -423,22 +424,50 @@ async def test_a_socket_stands_only_while_the_store_says_so(people, code) -> Non
 
 
 @pytest.mark.parametrize(
-    ("people", "admitted"),
+    ("people", "closed"),
     [
-        (_Standing(StoredPerson(roles=("osprey-admin",), disabled=False)), True),
-        (_Standing(StoredPerson(roles=("osprey-admin",), disabled=True)), False),
-        (_Standing(StoredPerson(roles=(), disabled=False)), False),
-        (_Standing(None, fail=True), False),
+        (_Standing(StoredPerson(roles=("osprey-admin",), disabled=False)), None),
+        (_Standing(StoredPerson(roles=("osprey-admin",), disabled=True)), 1008),
+        (_Standing(StoredPerson(roles=(), disabled=False)), 1008),
+        (_Standing(None, fail=True), 1013),
     ],
     ids=["stands", "disabled-mid-socket", "roles-taken-away", "store-down"],
 )
 async def test_an_open_socket_is_closed_at_its_next_message_once_the_person_no_longer_stands(
-    people, admitted
+    people, closed
 ) -> None:
-    from services.api.app import _admission
+    """Before each message: 1008 for a person disabled or whose roles changed, 1013 when the store
+    cannot answer (Amendment 8 point 1; the second review's note 12), and both loops close with
+    the code the admission gives."""
+    from types import SimpleNamespace
 
-    principal = await _admission(_socket_app(people), ADMIN, "case-1")()
-    assert (principal is not None) is admitted
+    from services.api.app import _admission, _handle_resync_requests, _SocketState
+
+    admitted = _admission(_socket_app(people), ADMIN, "case-1")
+    answer = await admitted()
+    assert (answer if isinstance(answer, int) else None) == closed
+    if closed is None:
+        return
+
+    class _Socket:
+        def __init__(self) -> None:
+            self.closed: list[int] = []
+
+        async def receive_json(self) -> dict[str, object]:
+            return {"last_acknowledged_seq": 0}
+
+        async def close(self, code: int = 1000) -> None:
+            self.closed.append(code)
+
+    socket = _Socket()
+    await _handle_resync_requests(
+        socket,  # type: ignore[arg-type]
+        SimpleNamespace(),  # type: ignore[arg-type]
+        "case-1",
+        ADMIN,
+        _SocketState(admitted=admitted),
+    )
+    assert socket.closed == [closed]
 
 
 def _stream_asks_before_its_first_send(source: str) -> bool:

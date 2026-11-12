@@ -72,7 +72,11 @@ class ServiceIdentityVerifier:
     Keycloak**, a token carrying `tid` (Entra's) is refused, as `principal_auth` refuses one."""
 
     def __init__(
-        self, config: OidcSettings, *, claim_mapping: ClaimMapping = DEFAULT_CLAIM_MAPPING
+        self,
+        config: OidcSettings,
+        *,
+        claim_mapping: ClaimMapping = DEFAULT_CLAIM_MAPPING,
+        signing_keys: SigningKeys | None = None,
     ) -> None:
         mapping = ClaimMapping.model_validate(claim_mapping.model_dump(mode="python"))
         if mapping.is_entra and not (config.oidc_issuer and config.oidc_audience):
@@ -83,8 +87,11 @@ class ServiceIdentityVerifier:
         self._mapping = mapping
         self._config = config
         # The keys as `principal_auth` reads them: kept, an unknown key id fetched again at most
-        # once per five minutes, each fetch bounded (ADR-148 Amendment 8).
-        self._keys = SigningKeys(config.oidc_jwks_url, config.oidc_jwks_ttl_seconds)
+        # once per five minutes, each fetch bounded (ADR-148 Amendment 8). The Conduit passes the
+        # person path's own set (the same URL), so the two share one cache and one fetch limit.
+        self._keys = signing_keys or SigningKeys(
+            config.oidc_jwks_url, config.oidc_jwks_ttl_seconds
+        )
         self._algorithms = (
             list(ENTRA_ALGORITHMS) if mapping.is_entra else list(config.oidc_algorithms)
         )
