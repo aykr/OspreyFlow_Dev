@@ -604,6 +604,18 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - the restore's default is a dry run.
 
         Schedule: the backup now, the install after studio's gates (about 17:15), the checks by about 20:00.
+      - **Part 1.1 done (about 16:20):**
+        - backup `/srv/ospreyflow/backups/small/20261112T160910Z-small-unknown`, verified by the restore's dry run
+          (no changes);
+        - the v0.5.0 code kept at `/opt/ospreyflow-v0.5.0` for a fall-back (about 1½ h);
+        - the log is in `/root/rebuild-2026-11-12/`.
+
+        **Your terms:**
+        - keep the two model volumes;
+        - `[P]` set after the install, with one apply;
+        - the result by 20:00 with main's commit;
+        - any failure reported at once;
+        - nothing changed after the checks pass.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
