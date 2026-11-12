@@ -1,0 +1,7 @@
+# D2c part 4, the model route (ADR-135 Am 4, 7, 8): admin guide 1.88, new §6a.9 mirrored into spec 10 word for word. On the Mac on closed ports (no stack, no lease), 2026-11-12T16:31:23Z. test_docs_pdf's one failure is the administration PDF alone, made by the orchestrator at merge.
+E       AssertionError: administration-guide.md changed since administration-guide.pdf was made: run `python -m tools.docs_pdf --write`
+E         Left contains one more item: 'administration-guide.md changed since administration-guide.pdf was made: run `python -m tools.docs_pdf --write`'
+FAILED tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step - A...
+1 failed, 79 passed in 0.45s
+spec 10 §6a mirror: identical
+spec 10 §10.1 mirror: identical
