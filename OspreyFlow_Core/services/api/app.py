@@ -530,6 +530,7 @@ from . import compute_routes as compute_routes_module
 from . import connections as connections_module
 from . import dossier as dossier_module
 from . import drawn_merge as drawn_merge_module
+from . import guides as guide_files
 from . import kyc as kyc_module
 from . import map_admin as map_admin_module
 from . import model_admin as model_admin_module
@@ -19123,6 +19124,40 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
     """ADR-112: what the signed-in person may do, so the Glass and the Studio leave out what they
     would only refuse. Not a gate — every route still checks its own right."""
     return RightsResponse(rights=sorted(rights_for(principal.roles)))
+
+
+@app.get("/v1/guides/{guide}", response_class=FileResponse)
+async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
+    the place it belongs to (`guides.py`): the user guide with the Glass, the developer guide with
+    the Ingest Studio, the administration guide with Admin. It names no single right because a
+    place opens on any one of several; the place's check is made here, before the file is touched,
+    and refuses in words (403 `place_required`). Home's link is a convenience, never the gate."""
+    known = guide_files.GUIDES.get(guide)
+    if known is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=guide_files.unknown(guide)
+        )
+    if not guide_files.opens_place(known.place, principal.roles):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=guide_files.refusal(known)
+        )
+    folder = guide_files.guides_dir()
+    path = folder / known.pdf
+    if not path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=guide_files.not_carried(known)
+        )
+    headers = {"Cache-Control": "private, no-store"}
+    if (version := guide_files.version(known, folder)) is not None:
+        headers["X-Guide-Version"] = version
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=f"ospreyflow-{known.pdf}",
+        content_disposition_type="inline",
+        headers=headers,
+    )
 
 
 @app.get("/v1/me/needs-you")
