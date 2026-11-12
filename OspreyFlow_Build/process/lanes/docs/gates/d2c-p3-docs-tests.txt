@@ -1,0 +1,8 @@
+# D2c part 3 at its final guide head 99d0835, after the orchestrator's review: the docs tests and gates, on the Mac on closed ports (no stack, no lease), 2026-11-12T09:21:49Z. test_docs_pdf's one failure is the admin PDF out of step with 1.86, made by the orchestrator at merge.
+FAILED tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step - A...
+1 failed, 158 passed in 1.13s
+administration-guide.md changed since administration-guide.pdf was made: run `python -m tools.docs_pdf --write`
+doc-citations-check: 2613 file(s) scanned, every cited path exists.
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+demo-guide-check: 12 registered demo(s), all documented.

@@ -1,0 +1,55 @@
+
+$ PYTHONPATH=.:packages python -m harness.render --config osprey.yaml --allow-unpinned
+render: cloud-platform, 12 artefact(s), 2026-11-12T08:30:04Z
+  deploy/generated/cloud-platform/images.yaml
+  deploy/generated/cloud-platform/terraform/backups.tf
+  deploy/generated/cloud-platform/terraform/ecr.tf
+  deploy/generated/cloud-platform/terraform/elasticache.tf
+  deploy/generated/cloud-platform/terraform/irsa.tf
+  deploy/generated/cloud-platform/terraform/opensearch.tf
+  deploy/generated/cloud-platform/terraform/rds.tf
+  deploy/generated/cloud-platform/terraform/s3.tf
+  deploy/generated/cloud-platform/terraform/secrets.tf
+  deploy/generated/cloud-platform/terraform/variables.tf
+  deploy/generated/cloud-platform/values.yaml
+  deploy/generated/cloud-platform/versions.lock
+(exit 0)
+
+$ ls -A deploy/generated/cloud-platform deploy/generated/cloud-platform/terraform
+deploy/generated/cloud-platform:
+.rendered
+images.yaml
+osprey.yaml
+terraform
+values.yaml
+versions.lock
+
+deploy/generated/cloud-platform/terraform:
+backups.tf
+ecr.tf
+elasticache.tf
+irsa.tf
+opensearch.tf
+rds.tf
+s3.tf
+secrets.tf
+variables.tf
+(exit 0)
+
+$ PYTHONPATH=cli python -m ospreyflow.main images push --registry 123456789012.dkr.ecr.eu-west-2.amazonaws.com --from deploy/generated/cloud-platform --dry-run
+would copy arcadedata/arcadedb:26.10.1@sha256:01506549bcb4a6d16af678ee43718850eba605430a3720a6b0398cb0470c710d to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/arcadedata/arcadedb:26.10.1
+would copy ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/berriai/litellm:sha256-d295634e09c6
+would copy clickhouse/clickhouse-keeper:25.8.33.6@sha256:86ef98ab9c41998c562806a062ef1079af07755f6bcec0a46e9caa9b7a4b4253 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/clickhouse/clickhouse-keeper:25.8.33.6
+would copy clickhouse/clickhouse-server:25.8.33.6@sha256:0152dd511befe6a2c2ef53e930726179669b08116da78500b37c51c96ff5ee77 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/clickhouse/clickhouse-server:25.8.33.6
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/api:5e2f1ca6c74f68da7707c59751c604b7fc9fe24a
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/api:5e2f1ca6c74f68da7707c59751c604b7fc9fe24a
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/laurium:5e2f1ca6c74f68da7707c59751c604b7fc9fe24a
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/laurium:5e2f1ca6c74f68da7707c59751c604b7fc9fe24a
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/ner:5e2f1ca6c74f68da7707c59751c604b7fc9fe24a
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/ner:5e2f1ca6c74f68da7707c59751c604b7fc9fe24a
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/worker:5e2f1ca6c74f68da7707c59751c604b7fc9fe24a
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/worker:5e2f1ca6c74f68da7707c59751c604b7fc9fe24a
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:5e2f1ca6c74f68da7707c59751c604b7fc9fe24a
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:5e2f1ca6c74f68da7707c59751c604b7fc9fe24a
+would copy postgres:16.4@sha256:e62fbf9d3e2b49816a32c400ed2dba83e3b361e6833e624024309c35d334b412 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/postgres:16.4
+(exit 0)

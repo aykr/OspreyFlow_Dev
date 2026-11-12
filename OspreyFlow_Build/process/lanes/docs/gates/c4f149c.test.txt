@@ -1,0 +1,2885 @@
+# make test at c4f149c, the same run: 4 failed, 12761 passed, 33 skipped, 19 errors. Known on main, waiting on the owner's patches: the GPU case (test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass), test_release_local_matrix, test_test_file_coverage_check, and test_entra_people_live's 19 errors. One expected: test_docs_pdf (the admin PDF out of step with 1.86, made by the orchestrator at merge).
+=== MAKE TEST ===
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/docs/OspreyFlow_Build/pytest.ini -p tests.worker_isolation -n auto --dist loadgroup --ignore=../OspreyFlow_Build/tests/conformance/graph_port --ignore=../OspreyFlow_Build/tests/test_worker_isolation_live.py --ignore=../OspreyFlow_Build/tests/conformance/analytics_port --ignore=../OspreyFlow_Build/tests/test_analytics_clickhouse.py --ignore=../OspreyFlow_Build/tests/test_media_blob.py --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness_clickhouse.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_runs.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_schedule_executor.py --ignore=../OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_pins_lifespan.py --ignore=../OspreyFlow_Build/tests/services/api/test_schedule_notice.py --ignore=../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py --ignore=../OspreyFlow_Build/tests/conformance/model_port --ignore=../OspreyFlow_Build/tests/golden --ignore=../OspreyFlow_Build/tests/ingest --ignore=../OspreyFlow_Build/tests/scenarios/test_hmp_graph.py --ignore=../OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py --ignore=../OspreyFlow_Build/tests/services/api/test_sites_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_tile_cache.py --ignore=../OspreyFlow_Build/tests/services/api/test_prefetch.py --ignore=../OspreyFlow_Build/tests/geocoder/test_match_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_assessments.py --ignore=../OspreyFlow_Build/tests/test_case_seed.py --ignore=../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_disable_l38_transfers.py --ignore=../OspreyFlow_Build/tests/services/api/test_admin_converted_views.py --ignore=../OspreyFlow_Build/tests/services/api/test_audit_section_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_notes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_brief_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_entity_pictures.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_type_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_suppression.py --ignore=../OspreyFlow_Build/tests/services/api/test_assessment_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_export.py --ignore=../OspreyFlow_Build/tests/services/api/test_export_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_valkey_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_ws_ticket.py --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py --ignore=../OspreyFlow_Build/tests/services/api/test_change_stream.py --ignore=../OspreyFlow_Build/tests/services/api/test_alerts.py --ignore=../OspreyFlow_Build/tests/services/api/test_pattern_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_hotlists.py --ignore=../OspreyFlow_Build/tests/services/api/test_history_relabel.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitors.py --ignore=../OspreyFlow_Build/tests/services/api/test_evaluation.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py --ignore=../OspreyFlow_Build/tests/resolve/test_projection_access_control.py --ignore=../OspreyFlow_Build/tests/resolve/test_trigger.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6a_glass_surfaces.py --ignore=../OspreyFlow_Build/tests/services/api/test_access.py --ignore=../OspreyFlow_Build/tests/services/api/test_pid_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_dossier_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_review.py --ignore=../OspreyFlow_Build/tests/services/api/test_review_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_compute_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_no_corpus_count_reveals_a_secret_link.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_seed_against_the_vault.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_link_weight_on_the_wire.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_explain_cluster_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_manual_resolution_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_resolution_threshold_access_control.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py --ignore=../OspreyFlow_Build/tests/scenarios/test_fixture_corp_shape.py --ignore=../OspreyFlow_Build/tests/services/api/test_worker.py --ignore=../OspreyFlow_Build/tests/services/api/test_worker_replicas.py --ignore=../OspreyFlow_Build/tests/services/api/test_revoked_principal_precheck.py --ignore=../OspreyFlow_Build/tests/harness/test_restore_exit_test.py --ignore=../OspreyFlow_Build/tests/harness/test_workspace_bundle.py --ignore=../OspreyFlow_Build/tests/harness/test_sustained_load.py --ignore=../OspreyFlow_Build/tests/harness/test_bundle_exit_test.py --ignore=../OspreyFlow_Build/tests/harness/test_harness_image.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py --ignore=../OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_client_row_limit.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py --ignore=../OspreyFlow_Build/tests/harness/test_identity.py --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_graph.py --ignore=../OspreyFlow_Build/tests/services/api/test_dataset_names_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_dataset_egress_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_explore_whats_new.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_export.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_packs.py --ignore=../OspreyFlow_Build/tests/services/api/test_questions_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_report_freshness.py --ignore=../OspreyFlow_Build/tests/services/api/test_reports.py --ignore=../OspreyFlow_Build/tests/services/api/test_route_rights.py --ignore=../OspreyFlow_Build/tests/services/api/test_add_by_identifiers_live.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_sources_withheld_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_sources_withheld_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_address_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_pid_scale_seed_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_starter_run.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_trend_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_facts.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_store_query.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py --ignore=../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_list_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_refresh.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_strength_influencer_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_connection_strength_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_schedule.py --ignore=../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py --ignore=../OspreyFlow_Build/tests/services/api/test_load_checks.py --ignore=../OspreyFlow_Build/tests/services/api/test_pin_calls_refresh_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_row_key_withdrawal_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_refresh_incremental_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_watermark_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_writes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_composite_writes_live.py --ignore=../OspreyFlow_Build/tests/test_migrate_cases_to_one_dataset_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_target_models_store.py --ignore=../OspreyFlow_Build/tests/test_seed_target_models_store.py --ignore=../OspreyFlow_Build/tests/test_make_home_cases_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_views_store.py --ignore=../OspreyFlow_Build/tests/test_migrate_branches_to_views_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_unconverted_case_merge_live.py --ignore=../OspreyFlow_Build/tests/resolve/test_trigger_layers.py --ignore=../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py --ignore=../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py --ignore=../OspreyFlow_Build/tests/test_seed_links_replace.py --ignore=../OspreyFlow_Build/tests/test_stamp_datasets.py --ignore=../OspreyFlow_Build/tests/test_stamp_records.py --ignore=../OspreyFlow_Build/tests/test_seed_ledger_screening_rule.py --ignore=../OspreyFlow_Build/tests/harness/test_apply_env.py --ignore=../OspreyFlow_Build/tests/services/api/test_object_transfer.py --ignore=../OspreyFlow_Build/tests/harness/test_first_admin.py --ignore=../OspreyFlow_Build/tests/services/api/test_postgres_dsn.py --ignore=../OspreyFlow_Build/tests/conformance/media_store/test_suite.py --ignore=../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py --ignore=../OspreyFlow_Build/tests/services/api/test_board_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py --ignore=../OspreyFlow_Build/tests/test_migrate_rules_to_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_grading_change_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_grading_registry.py --ignore=../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py --ignore=../OspreyFlow_Build/tests/services/api/test_list_connector_store.py --ignore=../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_live.py ../OspreyFlow_Build/tests --ignore=../OspreyFlow_Build/tests/services/api/test_promotion_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_external_runs_live.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+worker_isolation: 15 workers, Valkey databases 1 to 15, no stores made (offline)
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/docs/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+created: 15/15 workers
+15 workers [12817 items]
+
+........................................................................ [  0%]
+........................................................................ [  1%]
+........................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  2%]
+........................................................................ [  3%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+........................................................................ [  5%]
+........................................................................ [  5%]
+.....s.................................................................. [  6%]
+........................................................................ [  6%]
+........................................................................ [  7%]
+........................................................................ [  7%]
+........................................................................ [  8%]
+........................................................................ [  8%]
+........................................................................ [  9%]
+........................................................................ [ 10%]
+........................................................................ [ 10%]
+................................................ss.s.s.................. [ 11%]
+........................................sssssss......................... [ 11%]
+....................................ss........ss........ss.............. [ 12%]
+........................................................................ [ 12%]
+........................................................................ [ 13%]
+........................................................................ [ 14%]
+........................................................................ [ 14%]
+......................................................................ss [ 15%]
+s....................................................................... [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 16%]
+........................................................................ [ 17%]
+........................................................................ [ 17%]
+........................................................................ [ 18%]
+........................................................................ [ 19%]
+........................................................................ [ 19%]
+........................................................................ [ 20%]
+........................................................................ [ 20%]
+........................................................................ [ 21%]
+........................................................................ [ 21%]
+........................................................................ [ 22%]
+........................................................................ [ 23%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+........................................................................ [ 24%]
+........................................................................ [ 25%]
+........................................................................ [ 25%]
+........................................................................ [ 26%]
+........................................................................ [ 26%]
+........................................................................ [ 27%]
+........................................................................ [ 28%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 29%]
+........................................................................ [ 30%]
+........................................................................ [ 30%]
+........................................................................ [ 31%]
+........................................................................ [ 32%]
+........................................................................ [ 32%]
+............s........................................................... [ 33%]
+F....................................................................... [ 33%]
+........................................................................ [ 34%]
+........................................................................ [ 34%]
+........................................................................ [ 35%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 37%]
+........................................................................ [ 37%]
+........................................................................ [ 38%]
+........................................................................ [ 38%]
+........................................................................ [ 39%]
+........................................................................ [ 39%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 43%]
+........................................................................ [ 44%]
+........................................................................ [ 44%]
+........................................................................ [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 46%]
+........................................................................ [ 47%]
+........................................................................ [ 47%]
+........................................................................ [ 48%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 51%]
+......EEEE.EEEE.E.EEEE....E.........E..............E...E.........E...... [ 51%]
+.....E.................................................................. [ 52%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+........................................................................ [ 53%]
+..............................................................s......... [ 54%]
+........................................................................ [ 55%]
+........................................................................ [ 55%]
+........................................................................ [ 56%]
+........................................................................ [ 56%]
+........................................................................ [ 57%]
+........................................................................ [ 57%]
+..s....s...................s............................................ [ 58%]
+........................................................................ [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+...............................................sss...................... [ 60%]
+........................................................................ [ 61%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 65%]
+........................................................................ [ 66%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 69%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+........................................................................ [ 70%]
+........................................................................ [ 71%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 74%]
+........................................................................ [ 75%]
+........................................................................ [ 75%]
+........................................................................ [ 76%]
+........................................................................ [ 76%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+........................................................................ [ 78%]
+........................................................................ [ 79%]
+........................................................................ [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 80%]
+........................................................................ [ 81%]
+........................................................................ [ 82%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 83%]
+........................................................................ [ 84%]
+........................................................................ [ 84%]
+........................................................................ [ 85%]
+........................................................................ [ 85%]
+........................................................................ [ 86%]
+........................................................................ [ 87%]
+........................................................................ [ 87%]
+........................................................................ [ 88%]
+........................................................................ [ 88%]
+...........................................................F............ [ 89%]
+........................................................................ [ 89%]
+........................................................................ [ 90%]
+........................................................................ [ 91%]
+........................................................................ [ 91%]
+........................................................................ [ 92%]
+........s............................................................... [ 92%]
+........................................................................ [ 93%]
+.......................................................................s [ 93%]
+...............................................................s........ [ 94%]
+.............F.................s........................................ [ 94%]
+........................................................................ [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 96%]
+........................................................................ [ 97%]
+........................................................................ [ 97%]
+........................................................................ [ 98%]
+........................................................................ [ 98%]
+........................................................................ [ 99%]
+...............................................................F........ [ 99%]
+.                                                                        [100%]
+==================================== ERRORS ====================================
+_ ERROR at setup of test_a_first_sign_in_is_recorded_with_no_roles_and_listed __
+[gw10] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x73475a0af880>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+_ ERROR at setup of test_the_tokens_access_is_brought_up_to_date_but_never_its_roles _
+[gw6] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+/usr/lib/python3.12/asyncio/base_events.py:1122: in create_connection
+    raise exceptions[0]
+/usr/lib/python3.12/asyncio/base_events.py:1104: in create_connection
+    sock = await self._connect_sock(
+/usr/lib/python3.12/asyncio/base_events.py:1007: in _connect_sock
+    await self.sock_connect(sock, address)
+/usr/lib/python3.12/asyncio/selector_events.py:651: in sock_connect
+    return await fut
+           ^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+fut = None, sock = <socket.socket [closed] fd=-1, family=2, type=1, proto=0>
+address = ('127.0.0.1', 59992)
+
+    def _sock_connect_cb(self, fut, sock, address):
+        if fut.done():
+            return
+    
+        try:
+            err = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            if err != 0:
+                # Jump to any except clause below.
+>               raise OSError(err, f'Connect call failed {address}')
+E               ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/selector_events.py:691: ConnectionRefusedError
+__ ERROR at setup of test_another_tenants_row_for_the_same_oid_grants_nothing __
+[gw9] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x771f1564c220>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+_ ERROR at setup of test_the_resolver_reads_the_stored_roles_with_a_real_token _
+[gw10] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x734768e1ccc0>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+_ ERROR at setup of test_a_store_that_cannot_answer_is_unavailable_never_no_roles _
+[gw9] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x771f1567e0c0>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+_ ERROR at setup of test_adding_by_object_id_once_and_the_refusals_the_fakes_model _
+[gw14] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x716343403b00>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+_ ERROR at setup of test_first_administrators_are_seeded_once_and_a_removal_stands _
+[gw6] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+/usr/lib/python3.12/asyncio/base_events.py:1122: in create_connection
+    raise exceptions[0]
+/usr/lib/python3.12/asyncio/base_events.py:1104: in create_connection
+    sock = await self._connect_sock(
+/usr/lib/python3.12/asyncio/base_events.py:1007: in _connect_sock
+    await self.sock_connect(sock, address)
+/usr/lib/python3.12/asyncio/selector_events.py:651: in sock_connect
+    return await fut
+           ^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+fut = None, sock = <socket.socket [closed] fd=-1, family=2, type=1, proto=0>
+address = ('127.0.0.1', 59992)
+
+    def _sock_connect_cb(self, fut, sock, address):
+        if fut.done():
+            return
+    
+        try:
+            err = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            if err != 0:
+                # Jump to any except clause below.
+>               raise OSError(err, f'Connect call failed {address}')
+E               ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/selector_events.py:691: ConnectionRefusedError
+__ ERROR at setup of test_the_sockets_read_is_this_tenants_and_records_nobody __
+[gw10] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x734768e1cfe0>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+_______ ERROR at setup of test_each_admin_role_a_start_gives_is_audited ________
+[gw9] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x771f1567df80>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+______ ERROR at setup of test_the_store_refuses_a_read_for_another_tenant ______
+[gw14] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x716342144c20>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+______ ERROR at setup of test_a_grant_is_never_kept_without_its_audit_row ______
+[gw10] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x734768e1d6c0>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+_ ERROR at setup of test_when_nobody_can_manage_people_the_named_first_administrators_get_admin_again _
+[gw6] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+/usr/lib/python3.12/asyncio/base_events.py:1122: in create_connection
+    raise exceptions[0]
+/usr/lib/python3.12/asyncio/base_events.py:1104: in create_connection
+    sock = await self._connect_sock(
+/usr/lib/python3.12/asyncio/base_events.py:1007: in _connect_sock
+    await self.sock_connect(sock, address)
+/usr/lib/python3.12/asyncio/selector_events.py:651: in sock_connect
+    return await fut
+           ^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+fut = None, sock = <socket.socket [closed] fd=-1, family=2, type=1, proto=0>
+address = ('127.0.0.1', 59992)
+
+    def _sock_connect_cb(self, fut, sock, address):
+        if fut.done():
+            return
+    
+        try:
+            err = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            if err != 0:
+                # Jump to any except clause below.
+>               raise OSError(err, f'Connect call failed {address}')
+E               ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/selector_events.py:691: ConnectionRefusedError
+_ ERROR at setup of test_a_custom_role_that_manages_people_counts_at_the_start _
+[gw9] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x771f1567ec00>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+____ ERROR at setup of test_access_read_at_is_refreshed_at_most_hourly[2h] _____
+[gw14] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x716342144fe0>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+_ ERROR at setup of test_a_sign_in_records_when_access_was_read_and_an_added_person_has_not_signed_in _
+[gw10] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x734768e1dd00>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+________ ERROR at setup of test_one_person_is_read_by_this_tenant_alone ________
+[gw12] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x75f236ede7a0>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+___ ERROR at setup of test_access_read_at_is_refreshed_at_most_hourly[30min] ___
+[gw6] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+/usr/lib/python3.12/asyncio/base_events.py:1122: in create_connection
+    raise exceptions[0]
+/usr/lib/python3.12/asyncio/base_events.py:1104: in create_connection
+    sock = await self._connect_sock(
+/usr/lib/python3.12/asyncio/base_events.py:1007: in _connect_sock
+    await self.sock_connect(sock, address)
+/usr/lib/python3.12/asyncio/selector_events.py:651: in sock_connect
+    return await fut
+           ^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+fut = None, sock = <socket.socket [closed] fd=-1, family=2, type=1, proto=0>
+address = ('127.0.0.1', 59992)
+
+    def _sock_connect_cb(self, fut, sock, address):
+        if fut.done():
+            return
+    
+        try:
+            err = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            if err != 0:
+                # Jump to any except clause below.
+>               raise OSError(err, f'Connect call failed {address}')
+E               ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/selector_events.py:691: ConnectionRefusedError
+___________ ERROR at setup of test_a_start_waits_for_the_people_lock ___________
+[gw3] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x72d5bcda8c20>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+____ ERROR at setup of test_a_conduit_starting_waits_for_the_bootstrap_lock ____
+[gw12] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    @pytest.fixture
+    async def world() -> AsyncIterator[SimpleNamespace]:
+        name = "entra_" + uuid.uuid4().hex[:10]
+        base = PostgresConfig.from_env().dsn
+>       conn = await asyncpg.connect(dsn=base)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x75f236ede520>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock, _, _ = await staggered.staggered_race(
+                    (functools.partial(self._connect_sock,
+                                       exceptions, addrinfo, laddr_infos)
+                     for addrinfo in infos),
+                    happy_eyeballs_delay, loop=self)
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 111] Connect call failed ('::1', 59992, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 59992)
+
+/usr/lib/python3.12/asyncio/base_events.py:1130: OSError
+=================================== FAILURES ===================================
+__________ test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass __________
+[gw7] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-5690/popen-gw7/test_gpu_is_skipped_on_this_pl0')
+
+    def test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass(tmp_path: Path) -> None:
+        """`05_DEPLOYMENT.md` §2.1's own "skipped-with-reason (never a pass)" — the brief's named
+        skipped case, on the real platform this suite actually runs on."""
+        config_path = tmp_path / "osprey.yaml"
+        out_root = tmp_path / "generated"
+        client = _client(config_path, out_root)
+        client.put("/api/config", json={"profile": "local-lite"})
+        _generate(client)
+    
+        events = {e["check"]: e for e in _events(client.get("/api/preflight/stream").text)}
+>       assert events["gpu"]["status"] == "skip"
+E       AssertionError: assert 'pass' == 'skip'
+E         
+E         - skip
+E         + pass
+
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py:110: AssertionError
+__________________ test_the_guides_and_their_pdfs_are_in_step __________________
+[gw3] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    def test_the_guides_and_their_pdfs_are_in_step() -> None:
+>       assert docs_pdf.check() == [], "\n".join(docs_pdf.check())
+E       AssertionError: administration-guide.md changed since administration-guide.pdf was made: run `python -m tools.docs_pdf --write`
+E       assert ['administrat...pdf --write`'] == []
+E         
+E         Left contains one more item: 'administration-guide.md changed since administration-guide.pdf was made: run `python -m tools.docs_pdf --write`'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_docs_pdf.py:141: AssertionError
+______________ test_release_local_builds_what_the_release_builds _______________
+[gw14] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    def test_release_local_builds_what_the_release_builds() -> None:
+        wanted = []
+        for entry in _matrix():
+            arg = (entry.get("build_args") or "").split("=", 1)[0] or None
+            wanted.append((entry["service"], entry["dockerfile"], arg, entry.get("context") or "."))
+>       assert list(SERVICES) == wanted
+E       AssertionError: assert [('api', 'ser...ces/laurium')] == [('api', 'ser...OM_SHA', '.')]
+E         
+E         Left contains one more item: ('laurium', 'services/laurium/Dockerfile', None, 'services/laurium')
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_release_local_matrix.py:28: AssertionError
+____________________ test_no_new_drift_beyond_the_allowlist ____________________
+[gw11] linux -- Python 3.12.3 /root/osprey-runs/docs/OspreyFlow_Core/.venv/bin/python
+
+    def test_no_new_drift_beyond_the_allowlist() -> None:
+        test_job_ignored, live_job_tokens = _load()
+        test_files_abs = list_test_files()
+        test_files = [str(p.relative_to(REPO_ROOT)) for p in test_files_abs]
+        allowlist = load_allowlist()
+    
+        orphaned = find_orphaned(test_files, test_job_ignored, live_job_tokens)
+        new_orphans = sorted(set(orphaned) - allowlist)
+        misclassified = find_misclassified(test_files_abs, test_job_ignored, live_job_tokens)
+    
+        assert new_orphans == [], (
+            f"test file(s) reachable by no CI job and not in the allowlist: {new_orphans}"
+        )
+>       assert misclassified == [], f"live-service test file(s) not correctly wired: {misclassified}"
+E       AssertionError: live-service test file(s) not correctly wired: ["tests/services/api/test_entra_people_live.py: in neither the `test` job's ignore list nor any live-service job"]
+E       assert ['tests/servi...-service job'] == []
+E         
+E         Left contains one more item: "tests/services/api/test_entra_people_live.py: in neither the `test` job's ignore list nor any live-service job"
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_test_file_coverage_check.py:43: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: 15 warnings
+  /root/osprey-runs/docs/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/cli/test_no_make_for_operators.py: 1 warning
+tests/harness/test_env_writers_whole.py: 2 warnings
+tests/test_live_select.py: 3 warnings
+tests/test_seed_recipe_methods_confined.py: 9 warnings
+  <unknown>:468: SyntaxWarning: invalid escape sequence '\.'
+
+tests/services/api/test_analyst_layer.py: 4 warnings
+tests/services/api/test_datasets.py: 4 warnings
+tests/services/api/test_drawn_datasets.py: 3 warnings
+tests/services/api/test_link_change_routes.py: 3 warnings
+tests/services/api/test_pattern_ask.py: 3 warnings
+tests/services/api/test_pattern_conditions_routes.py: 9 warnings
+tests/services/api/test_resolution_routes.py: 1 warning
+tests/services/api/test_rule_sentence_routes.py: 3 warnings
+tests/services/api/test_rule_standards_routes.py: 1 warning
+tests/services/api/test_schedule_admin_routes.py: 1 warning
+tests/services/api/test_sites_routes.py: 1 warning
+tests/services/api/test_studio_map_routes.py: 1 warning
+tests/services/api/test_studio_publish_routes.py: 4 warnings
+tests/services/api/test_studio_recipe_routes.py: 2 warnings
+tests/services/api/test_studio_schedule_routes.py: 4 warnings
+tests/services/api/test_studio_staging_routes.py: 2 warnings
+  /root/osprey-runs/docs/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+tests/services/api/test_cloud_connector_access.py::test_a_host_off_the_egress_allow_list_is_never_reached[athena]
+tests/services/api/test_cloud_connector_access.py::test_a_read_past_the_byte_cap_is_refused_with_its_typed_error_and_writes_nothing[s3]
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[s3]
+tests/services/api/test_cloud_connector_access.py::test_a_host_off_the_egress_allow_list_is_never_reached[s3]
+tests/services/api/test_cloud_connector_access.py::test_a_read_past_the_byte_cap_is_refused_with_its_typed_error_and_writes_nothing[athena]
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[athena]
+tests/services/api/test_connector_routes.py::test_a_source_whose_first_read_is_refused_is_not_registered
+  /root/osprey-runs/docs/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:11756: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise _connector_refused(refused, principal) from refused
+
+tests/services/api/test_cloud_sources_declared.py: 20 warnings
+tests/services/api/test_connector_private_hosts.py: 1 warning
+tests/services/api/test_connector_routes.py: 1 warning
+  /root/osprey-runs/docs/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:10013: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise _connector_refused(refused, principal) from refused
+
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[s3]
+tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[s3]
+tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[athena]
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[athena]
+tests/services/api/test_connector_routes.py::test_refresh_now_tells_a_source_author_fixed_words_and_audits_why
+  /root/osprey-runs/docs/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:11813: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise _connector_refused(refused, principal) from refused
+
+tests/services/api/test_connection_binding.py::test_a_secret_belongs_to_one_connection
+tests/services/api/test_connector_routes.py::test_a_connector_source_lands_as_its_one_file
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+tests/services/api/test_list_connector_routes.py::test_a_location_outside_the_ingest_folder_is_refused_on_naming
+tests/services/api/test_list_connector_routes.py::test_the_deployment_lists_are_for_whoever_may_load_screening_lists
+tests/services/api/test_list_connector_routes.py::test_a_dataset_s_own_list_is_imported_from_its_own_files
+tests/services/api/test_sites_routes.py::test_grid_cannot_be_set_before_control_points
+  /root/osprey-runs/docs/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_connector_routes.py::test_only_an_administrator_is_given_a_refusal_s_own_words
+  /root/osprey-runs/docs/OspreyFlow_Build/tests/services/api/test_connector_routes.py:459: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    admin = _connector_refused(refused, PEOPLE["admin"])
+
+tests/services/api/test_connector_routes.py::test_only_an_administrator_is_given_a_refusal_s_own_words
+  /root/osprey-runs/docs/OspreyFlow_Build/tests/services/api/test_connector_routes.py:462: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    author = _connector_refused(refused, PEOPLE[person])
+
+tests/services/api/test_connector_routes.py::test_a_source_whose_first_read_is_refused_is_not_registered
+  /root/osprey-runs/docs/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:11601: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    made = await _register_through_connection(
+
+tests/services/api/test_connector_routes.py::test_a_registration_never_overwrites_a_file_and_leaves_none_when_refused
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+  /root/osprey-runs/docs/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9899: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+tests/services/api/test_drawn_datasets.py::test_its_highest_marking_is_within_the_makers_clearance
+  /root/osprey-runs/docs/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:10384: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await _make_drawn(
+
+tests/services/api/test_investigation_access_routes.py::test_a_grantee_name_must_be_a_plain_non_empty_account_name
+tests/services/api/test_investigation_access_routes.py::test_a_grantee_name_must_be_a_plain_non_empty_account_name
+  /root/osprey-runs/docs/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:4315: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    grantee = _grantee(account_id)
+
+tests/services/api/test_model_engines.py::test_a_request_naming_a_refused_engine_is_answered_in_words_with_a_4xx
+  /usr/lib/python3.12/asyncio/events.py:88: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    self._context.run(self._callback, *self._args)
+
+tests/services/api/test_no_corpus_counts_on_the_wire.py::test_a_delta_the_stream_sends_never_carries_corpus_counts[DeltaViewOverCap]
+  /root/osprey-runs/docs/OspreyFlow_Core/.venv/lib/python3.12/site-packages/pydantic/main.py:587: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Unexpected too few items present in tuple)
+    return self.__pydantic_serializer__.to_json(
+
+tests/services/api/test_studio_recipe_routes.py::test_deploy_refuses_a_keyless_pipeline_over_a_watched_source_in_words
+  /root/osprey-runs/docs/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:13079: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key([recipe.label])
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /root/osprey-runs/docs/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12240: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /root/osprey-runs/docs/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12174: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+161.10s call     tests/schemas/test_drift_gate.py::test_committed_generated_types_match_current_models
+139.86s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_restore_failing_before_the_swap_leaves_the_live_database_as_it_was[truncated-zip-ArcadeDB's restore of the set's zip failed]
+139.57s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_restore_failing_before_the_swap_leaves_the_live_database_as_it_was[check-refuses-the restored database is not the set's]
+139.38s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_deployment_whose_database_was_lost_gets_the_set
+139.00s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_restore_stopped_between_its_renames_is_never_overwritten
+138.73s setup    tests/cloud_platform_backup/test_restore_graph.py::test_the_set_replaces_the_live_database_and_the_old_one_goes
+138.58s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_killed_runs_restoring_folder_is_cleared_and_the_restore_goes_on
+137.75s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_restore_failing_before_the_swap_leaves_the_live_database_as_it_was[no-zip-no set's zip at]
+136.56s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_failed_put_in_puts_the_live_database_back_and_says_where_the_restored_one_is
+135.87s setup    tests/cloud_platform_backup/test_restore_graph.py::test_an_old_copy_that_cannot_be_removed_is_said_plainly
+106.92s call     tests/schemas/test_drift_gate.py::test_drift_gate_detects_a_changed_model
+95.22s setup    tests/harness/test_organisation_sign_in.py::test_the_printed_redirect_uri_is_the_one_keycloak_sends@serial
+54.12s call     tests/conduit_common/test_s3_settings.py::test_on_an_instance_role_no_client_sends_a_key
+49.37s setup    tests/scenarios/test_pid_files.py::test_every_distinct_written_number_normalises_to_the_plans_through_the_real_msisdn
+47.95s setup    tests/scenarios/test_pid_files.py::test_the_call_file_carries_a_seeded_duration_direction_and_running_sequence
+44.96s setup    tests/scenarios/test_pid_files.py::test_the_round_trip_goes_red_for_one_call_row_dropped
+44.51s setup    tests/scenarios/test_pid_files.py::test_reading_every_file_reconstructs_the_demo_plan_at_each_moment
+43.43s setup    tests/scenarios/test_pid_files.py::test_the_first_row_of_every_number_in_each_file_is_the_plans_own_form
+42.73s call     tests/cloud_platform_backup/test_restore_graph.py::test_the_check_refuses_every_damage_arcadedb_itself_opens_with_a_warning
+41.96s call     tests/services/api/test_deployment_ceiling.py::test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing
+41.16s call     tests/test_seed_pid.py::test_the_seed_and_check_warn_while_resolution_is_on_and_say_nothing_when_off
+39.55s call     tests/services/api/test_deployment_ceiling.py::test_with_no_ceiling_set_a_secret_row_loads_as_before
+38.89s call     tests/services/api/test_deployment_ceiling.py::test_a_load_at_the_ceiling_passes
+37.18s setup    tests/scenarios/test_pid_files.py::test_the_call_file_has_exactly_the_planted_mess_at_the_recorded_positions
+36.31s setup    tests/scenarios/test_pid_files.py::test_the_mess_counts_go_red_for_one_duplicate_fewer
+35.25s call     tests/scenarios/test_pid_plan.py::test_the_rows_dates_are_the_shared_instants_spans_and_constants
+33.10s call     tests/scenarios/test_pid_files.py::test_the_round_trip_goes_red_for_one_call_row_dropped
+27.82s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[poc]
+27.40s call     tests/test_seed_pid.py::test_a_failed_demo_number_makes_the_seed_exit_non_zero
+26.79s call     tests/test_seed_pid.py::test_a_second_seed_over_a_case_that_has_them_writes_none
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step
+FAILED ../OspreyFlow_Build/tests/test_release_local_matrix.py::test_release_local_builds_what_the_release_builds
+FAILED ../OspreyFlow_Build/tests/test_test_file_coverage_check.py::test_no_new_drift_beyond_the_allowlist
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_first_sign_in_is_recorded_with_no_roles_and_listed
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_the_tokens_access_is_brought_up_to_date_but_never_its_roles
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_another_tenants_row_for_the_same_oid_grants_nothing
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_the_resolver_reads_the_stored_roles_with_a_real_token
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_store_that_cannot_answer_is_unavailable_never_no_roles
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_adding_by_object_id_once_and_the_refusals_the_fakes_model
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_first_administrators_are_seeded_once_and_a_removal_stands
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_the_sockets_read_is_this_tenants_and_records_nobody
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_each_admin_role_a_start_gives_is_audited
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_the_store_refuses_a_read_for_another_tenant
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_grant_is_never_kept_without_its_audit_row
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_when_nobody_can_manage_people_the_named_first_administrators_get_admin_again
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_custom_role_that_manages_people_counts_at_the_start
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_access_read_at_is_refreshed_at_most_hourly[2h]
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_sign_in_records_when_access_was_read_and_an_added_person_has_not_signed_in
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_one_person_is_read_by_this_tenant_alone
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_access_read_at_is_refreshed_at_most_hourly[30min]
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_start_waits_for_the_people_lock
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_conduit_starting_waits_for_the_bootstrap_lock
+= 4 failed, 12761 passed, 33 skipped, 131 warnings, 19 errors in 557.63s (0:09:17) =
+make: *** [Makefile:166: test] Error 1
