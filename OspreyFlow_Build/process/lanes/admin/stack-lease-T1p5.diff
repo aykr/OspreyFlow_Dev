@@ -2,7 +2,16 @@ diff --git a/OspreyFlow_Build/scripts/stack_lease.sh b/OspreyFlow_Build/scripts/
 index f98173e..8569036 100755
 --- a/OspreyFlow_Build/scripts/stack_lease.sh
 +++ b/OspreyFlow_Build/scripts/stack_lease.sh
-@@ -20,6 +20,10 @@
+@@ -11,24 +11,28 @@
+ #   OspreyFlow_Build/scripts/stack_lease.sh up <lane>                     start the holder's own stack
+ #   OspreyFlow_Build/scripts/stack_lease.sh down <lane>                   stop it again, before release
+ #   OspreyFlow_Build/scripts/stack_lease.sh ports <lane>                  the export line for the holder's stack
+ #   OspreyFlow_Build/scripts/stack_lease.sh remote <lane> -- <command…>   run a command on a remote stack's own host,
+ #                                                                          beside its containers (9 November 2026)
+ #   OspreyFlow_Build/scripts/stack_lease.sh offline <lane> -- <command…>  the same on the server with no stack: the closed
+ #                                                                          ports and no lane, e.g. make -k test SKIP_JS=1
+ #   OspreyFlow_Build/scripts/stack_lease.sh live <lane> [--all | --base <ref>] [-- <pytest args…>]   the live test files the
+ #                                                                          lane's change against main (or <ref>) can reach (tools/live_select.py, admin's
  #                                                                          T1 part 3), run with remote on its stack; --all, every one
  #   OspreyFlow_Build/scripts/stack_lease.sh remote-log <lane>             follow the lane's last remote run again (after
  #                                                                          a dropped ssh session), exiting with its code
@@ -13,7 +22,25 @@ index f98173e..8569036 100755
  #
  # `remote` copies the caller's worktree to <host>:~/osprey-runs/<lane>, sending only what git tracks or would
  # track (`git ls-files -co --exclude-standard`), so nothing gitignored ever leaves this machine (rule 9: the
-@@ -141,7 +145,9 @@ for d,ds,fs in os.walk(\".\"):
+ # real-data exceptions and their datasets are gitignored); osprey.yaml goes as committed, never the local
+ # copy. It makes OspreyFlow_Core's venv there (uv sync --frozen), mirrors the lease's info file into a lease
+ # directory there for tests/port_guard.py, then runs the command in the same folder relative to the worktree,
+ # with the stack's ports pinned (its containers listen on 127.0.0.1 there, as the tunnel does here). Over the
+ # tunnel each database call crosses the internet (about 0.3 to 0.7 s); there it is local.
+ #   OspreyFlow_Build/scripts/stack_lease.sh status                        each stack: who holds it, since when, for what
+ #
+ # A lane holds at most one stack. The leased stacks are the throwaway ones (SESSIONS_RUNBOOK.md §4), never
+ # `make dev-up`: dev.yaml publishes ArcadeDB on 2480, the owner's own deployment's port (8 November 2026, a
+@@ -132,56 +136,88 @@ for d,ds,fs in os.walk(\".\"):
+   else
+     rssh "$h" "rm -rf $rmeta/lease && mkdir -p $rmeta/lease"
+   fi
+   rssh "$h" "cd $rroot/OspreyFlow_Core && ~/.local/bin/uv sync --frozen -q" || { echo "uv sync on $h failed." >&2; return 1; }
+   # The copy as a repository of its own, committed afresh each run, so a test reading HEAD or git ls-files sees
+   # what was sent (osprey.yaml as committed); and the Glass's packages, installed again only when the lock changes.
+   rssh "$h" "cd $rroot && { [ -d .git ] || git init -q; } && git add -A && git -c user.name='OspreyFlow test runner' -c user.email=test-runner@ospreyflow.invalid commit -q --allow-empty -m 'the copy sent for this run'" \
+     || { echo "The git snapshot on $h failed." >&2; return 1; }
+   rssh "$h" "export PATH=\$HOME/.local/node/bin:\$PATH; cd $rroot/OspreyFlow_Core && l=\$(sha256sum package-lock.json | cut -c1-64); [ \"\$l\" = \"\$(cat $rmeta/npm.lock 2>/dev/null)\" ] || { npm ci --no-audit --no-fund --loglevel=error >/dev/null && mkdir -p $rmeta && echo \$l > $rmeta/npm.lock; }" \
      || { echo "npm ci on $h failed." >&2; return 1; }
    # The run is started detached on the host and logged there, so a dropped ssh session loses nothing:
    # `remote-log <lane>` follows it again. A lane runs one remote command at a time.
@@ -24,7 +51,15 @@ index f98173e..8569036 100755
    # The log ends with its wall time, naming the stack and lease it ran under (rule 14), and keeps the seconds in
    # <run>/wall; pytest names its 30 slowest tests, whatever the command (admin's T1 part 1, 10 November 2026).
    # The lease is named by its holder and since (its lock directory is the same for every lease on a stack); both
-@@ -157,13 +163,24 @@ for d,ds,fs in os.walk(\".\"):
+   # are kept to safe characters, since they go inside the single-quoted bash -c below. <run>/lease keeps its info.
+   if [ -n "$lockname" ]; then
+     holder="$(sed -n 's/^holder=//p' "$(lock_of "$s")/info" | tr -cd 'A-Za-z0-9_.-')"
+     since="$(sed -n 's/^since=//p' "$(lock_of "$s")/info" | tr -cd 'A-Za-z0-9:_.-')"
+     where="stack $s, the lease $holder took at $since"
+   else
+     where="no stack, no lease"
+   fi
+   { printf 'cd %q || exit 1\n' "$rroot/$rel"
      # OSPREY_PORTS_LANE and OSPREY_PORTS_SLOT: the lane and its own Playwright ports (OspreyFlow_Core/apps/lanePorts.ts),
      # as lanes' copies run side by side here; not OSPREY_LANE, which an offline run must not name (the port guard's).
      printf 'export %s PYTEST_ADDOPTS=--durations=30 OSPREY_LEASE_DIR=$HOME/%s/lease OSPREY_PORTS_LANE=%s OSPREY_PORTS_SLOT=%s PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH\n' "$exports" "$rmeta" "$who" "$(ports_slot "$who")"
@@ -52,7 +87,9 @@ index f98173e..8569036 100755
      exit 0" < "$list.cmd" || rc=$?
    case $rc in
      0) ;;
-@@ -173,6 +190,25 @@ for d,ds,fs in os.walk(\".\"):
+     3) echo "$who's last remote run is still running on $h: follow it with remote-log $who, or wait for it." >&2; return 1 ;;
+     *) echo "Could not start the run on $h." >&2; return 1 ;;
+   esac
    echo "Running on $h (stack $s, $rroot/$rel), logged at $run/log: $*" >&2
    follow "$h" "$rmeta"
  }
@@ -78,7 +115,25 @@ index f98173e..8569036 100755
  # The host offline runs go to: $OSPREY_OFFLINE_HOST, or the first host lane_stack_hosts.tsv names.
  offline_host() {
    if [ -n "${OSPREY_OFFLINE_HOST:-}" ]; then echo "$OSPREY_OFFLINE_HOST"; return; fi
-@@ -264,7 +300,28 @@ stack_state() {
+   [ -f "$HOSTS" ] && grep -v '^#' "$HOSTS" | awk -F'\t' 'NF >= 2 { print $2; exit }'
+ }
+ tunnel_sock() { echo "$DIR/tunnel-$1.sock"; }
+ # One ssh connection carrying each of a remote stack's ports to this machine's 127.0.0.1.
+ tunnel_open() {
+   local s="$1" h fwd="" p
+   h="$(host_of "$s")"
+   for p in $(grep -v '^#' "$TABLE" | awk -F'\t' -v s="$s" '$1 == s && $4 != "-" { print $4 }'); do
+     fwd="$fwd -L 127.0.0.1:$p:127.0.0.1:$p"
+@@ -255,25 +291,46 @@ stack_state() {
+       return 1
+     fi
+   fi
+   for c in $(containers_of "$stack"); do filters="$filters --filter name=^/?$c\$"; done
+   # shellcheck disable=SC2086
+   if ! more="$(docker_for "$stack" ps -q $filters 2>&1)"; then
+     echo "docker could not say whether test stack $stack is up: $more" >&2
+     return 1
+   fi
    if [ -n "$out" ] || [ -n "$more" ]; then echo up; else echo down; fi
  }
  
@@ -107,7 +162,25 @@ index f98173e..8569036 100755
  case "$cmd" in
    acquire)
      who="${2:?usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b]}"
-@@ -349,6 +406,7 @@ case "$cmd" in
+     why="${3:-}"
+     want="${4:-}"
+     mine="$(held_by "$who")"
+     if [ -n "$mine" ]; then
+       echo "$who already holds stack $mine: a lane holds one stack at a time." >&2
+       exit 1
+     fi
+     if [ -n "$want" ]; then
+       case " $STACKS " in *" $want "*) ;; *) echo "No stack '$want' (one of: $STACKS)." >&2; exit 2;; esac
+@@ -340,24 +397,25 @@ case "$cmd" in
+     fi
+     echo "Test stack $s ${cmd} for $who: ${these[*]}${remote:+ (on $remote, tunnelled to 127.0.0.1 here)}"
+     ;;
+   remote)
+     who="${2:?usage: stack_lease.sh remote <lane> -- <command…>}"
+     shift 2
+     [ "${1:-}" = "--" ] && shift
+     [ "$#" -gt 0 ] || { echo "usage: stack_lease.sh remote <lane> -- <command…>" >&2; exit 2; }
+     s="$(held_by "$who")"
      [ -n "$s" ] || { echo "$who holds no stack: take one first (acquire)." >&2; exit 1; }
      h="$(host_of "$s")"
      [ -n "$h" ] || { echo "Stack $s runs on this machine: run the command here, not with remote." >&2; exit 1; }
@@ -115,7 +188,25 @@ index f98173e..8569036 100755
      run_on_host "$who" "$h" "$(ports_line "$s" "$who")" "$(basename "$(lock_of "$s")")" "$s" "$@"
      ;;
    offline)
-@@ -374,6 +432,7 @@ case "$cmd" in
+     who="${2:?usage: stack_lease.sh offline <lane> -- <command…>}"
+     shift 2
+     [ "${1:-}" = "--" ] && shift
+     [ "$#" -gt 0 ] || { echo "usage: stack_lease.sh offline <lane> -- <command…>" >&2; exit 2; }
+     h="$(offline_host)"
+     [ -n "$h" ] || { echo "No host for offline runs: lane_stack_hosts.tsv names none (or set OSPREY_OFFLINE_HOST)." >&2; exit 1; }
+     # The closed ports, no lane and no lease: the port guard refuses every live port, as for an offline run here.
+     run_on_host "$who" "$h" "ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994" "" "offline" "$@"
+     ;;
+@@ -365,56 +423,78 @@ case "$cmd" in
+     who="${2:?usage: stack_lease.sh live <lane> [--all | --base <ref>] [-- <pytest args…>]}"
+     shift 2
+     all=""
+     case "${1:-}" in
+       --all) all="--all"; shift ;;
+       --base) all="--base ${2:?usage: stack_lease.sh live <lane> --base <ref>}"; shift 2 ;;
+     esac
+     [ "${1:-}" = "--" ] && shift
+     s="$(held_by "$who")"
      [ -n "$s" ] || { echo "$who holds no stack: take one first (acquire)." >&2; exit 1; }
      h="$(host_of "$s")"
      [ -n "$h" ] || { echo "Stack $s runs on this machine: run the selection here, not with live." >&2; exit 1; }
@@ -123,7 +214,21 @@ index f98173e..8569036 100755
      top="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Not inside a git worktree: run live from your lane's checkout." >&2; exit 1; }
      cd "$top/OspreyFlow_Build"
      # The selection is made here, from the lane's own diff; OSPREY_LIVE_SELECT stands in for it in the tests.
-@@ -395,6 +454,27 @@ case "$cmd" in
+     # shellcheck disable=SC2086
+     picks="$(${OSPREY_LIVE_SELECT:-../OspreyFlow_Core/.venv/bin/python -m tools.live_select} $all --why)" \
+       || { echo "The selection failed: nothing was run." >&2; exit 1; }
+     files=()
+     while IFS= read -r f; do [ -n "$f" ] && files+=("../OspreyFlow_Build/$f"); done <<< "$picks"
+     [ "${#files[@]}" -gt 0 ] || { echo "The selection came out empty, which it never should (route rights is its floor): nothing was run." >&2; exit 1; }
+     echo "live: ${#files[@]} live test files${all:+ ($all)}." >&2
+     run_on_host "$who" "$h" "$(ports_line "$s" "$who")" "$(basename "$(lock_of "$s")")" "$s" \
+       sh -c 'cd ../OspreyFlow_Core && exec .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE "$@"' sh "${files[@]}" "$@"
+     ;;
+   remote-log)
+     who="${2:?usage: stack_lease.sh remote-log <lane>}"
+     s="$(held_by "$who")"
+     h=""; [ -n "$s" ] && h="$(host_of "$s")"
+     [ -n "$h" ] || h="$(offline_host)"   # no remote stack held: the lane's offline run
      [ -n "$h" ] || { echo "No host to follow a run on." >&2; exit 1; }
      follow "$h" "${OSPREY_REMOTE_ROOT:-osprey-runs}/$who.meta"
      ;;
@@ -151,7 +256,19 @@ index f98173e..8569036 100755
    ports)
      who="${2:?usage: stack_lease.sh ports <lane>}"
      s="$(held_by "$who")"
-@@ -414,7 +494,7 @@ case "$cmd" in
+     [ -n "$s" ] || { echo "$who holds no stack." >&2; exit 1; }
+     echo "export $(ports_line "$s" "$who")"
+     ;;
+   status)
+     for s in $STACKS; do
+       lock="$(lock_of "$s")"
+       if ! offered "$s"; then
+         echo "$s: off (local stacks are off on this machine)"
+       elif [ -d "$lock" ]; then
+         printf '%s: %s\n' "$s" "$(tr '\n' ' ' < "$lock/info" 2>/dev/null | sed 's/ $//' || echo "held (no details recorded yet)")"
+       else
+         echo "$s: free"
+       fi
      done
      ;;
    *)
@@ -164,7 +281,16 @@ diff --git a/OspreyFlow_Build/tests/test_stack_lease.py b/OspreyFlow_Build/tests
 index 0ed1f03..22289ad 100644
 --- a/OspreyFlow_Build/tests/test_stack_lease.py
 +++ b/OspreyFlow_Build/tests/test_stack_lease.py
-@@ -10,6 +10,7 @@ down, and when it cannot answer (the refusal the draft let through).
+@@ -1,67 +1,84 @@
+ """`scripts/stack_lease.sh` (ADR-142 decision 4): one holder of the dev stack at a time.
+ 
+ Rule 12's invariant, "one holder of the stack at a time", is
+ `test_a_second_acquire_while_one_is_held_is_refused_and_names_the_holder`. Rule 15: every case runs
+ the real script, as a lane does, against a lease directory of the shape the script itself writes;
+ `docker` is a stand-in on `PATH` that answers as the real one does when the stack is up, when it is
+ down, and when it cannot answer (the refusal the draft let through).
+ """
+ 
  from __future__ import annotations
  
  import os
@@ -172,7 +298,22 @@ index 0ed1f03..22289ad 100644
  import subprocess
  import time
  from pathlib import Path
-@@ -32,6 +33,22 @@ _DOCKER = {
+ 
+ import pytest
+ 
+ BUILD = Path(__file__).resolve().parents[1]
+ REPO = BUILD.parent
+ SCRIPT = BUILD / "scripts" / "stack_lease.sh"
+ 
+ _DOCKER = {
+     "up": "#!/bin/sh\necho 3f1c0a9b2d7e\necho 9a8b7c6d5e4f\n",
+     "down": "#!/bin/sh\nexit 0\n",
+     "broken": "#!/bin/sh\necho 'Cannot connect to the Docker daemon' >&2\nexit 1\n",
+     # The handover's throwaway test stack (osprey-test-*, osprey-probe-*) up, dev.yaml's down: the real
+     # `docker ps --filter name=...` answers with ids only for the named containers.
+     "throwaway-up": (
+         '#!/bin/sh\nif [ "$1" = ps ]; then case "$*" in *osprey-*) echo 7e7e7e7e7e7e;; esac; fi\nexit 0\n'
+     ),
  }
  
  
@@ -195,7 +336,20 @@ index 0ed1f03..22289ad 100644
  @pytest.fixture
  def lease(tmp_path: Path):
      bin_dir = tmp_path / "bin"
-@@ -52,7 +69,7 @@ def lease(tmp_path: Path):
+     bin_dir.mkdir()
+     # Stacks b to e are on the owner's test server: a no-op ssh, so no case ever reaches the real one (the
+     # remote cases replace it with a recording one).
+     (bin_dir / "ssh").write_text("#!/bin/sh\nexit 0\n")
+     (bin_dir / "ssh").chmod(0o755)
+     lease_dir = tmp_path / "lease"
+ 
+     def run(*args: str, docker: str = "down") -> subprocess.CompletedProcess[str]:
+         fake = bin_dir / "docker"
+         fake.write_text(_DOCKER[docker])
+         fake.chmod(0o755)
+         env = {
+             **os.environ,
+             "OSPREY_LEASE_DIR": str(lease_dir),
              "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
          }
          return subprocess.run(
@@ -204,7 +358,25 @@ index 0ed1f03..22289ad 100644
          )
  
      run.lock = lease_dir / "stack.lease"  # type: ignore[attr-defined]
-@@ -418,10 +435,10 @@ def _lane_worktree(tmp_path: Path) -> Path:
+     return run
+ 
+ 
+ def test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder(lease) -> None:
+     """ADR-142 Amendments 3 and 4: throwaway stacks, one holder each, a, b and c on this machine and d and e on
+     the owner's test server (9 November 2026; b and c moved there the same day). The first five lanes get a to e in order; the sixth is refused
+     and told who holds each."""
+     lanes = ["studio", "rules", "case", "admin", "platform", "studio-b", "rules-b"]
+     for lane, stack in zip(lanes, "abcdefg"):
+@@ -409,28 +426,28 @@ def _lane_worktree(tmp_path: Path) -> Path:
+     git = ["git", "-C", str(wt), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+     subprocess.run([*git, "init", "-q"], check=True)
+     subprocess.run([*git, "add", "-A"], check=True)
+     subprocess.run([*git, "commit", "-qm", "init"], check=True)
+     (wt / "OspreyFlow_Core" / "osprey.yaml").write_text("owner_local: secret\n")
+     (wt / "OspreyFlow_Build" / "tests" / "test_new.py").write_text("")
+     (wt / "OspreyFlow_Core" / "data").mkdir()
+     (wt / "OspreyFlow_Core" / "data" / "real_dataset.csv").write_text("real,data\n")
+     return wt
  
  
  def _remote(lease, tmp_path: Path, cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -217,7 +389,25 @@ index 0ed1f03..22289ad 100644
  
  
  def test_remote_sends_only_what_git_tracks_and_never_the_local_osprey_yaml(lease, tmp_path: Path) -> None:
-@@ -451,7 +468,9 @@ def test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease(le
+     """Rule 9: a gitignored dataset never leaves this machine, and osprey.yaml goes as committed."""
+     lease("acquire", "studio", "a run")  # stack a: local
+     lease("acquire", "case", "a run")    # stack b: on the server
+     log = _remote_tools(tmp_path)
+     wt = _lane_worktree(tmp_path)
+     ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "pytest", "-q", "tests")
+     assert ran.returncode == 0, ran.stderr
+     sent = {l[len("sent "):] for l in log.read_text().splitlines() if l.startswith("sent ")}
+     assert "OspreyFlow_Build/tests/test_x.py" in sent and "OspreyFlow_Build/tests/test_new.py" in sent
+@@ -442,25 +459,27 @@ def test_remote_sends_only_what_git_tracks_and_never_the_local_osprey_yaml(lease
+ def test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease(lease, tmp_path: Path) -> None:
+     lease("acquire", "studio", "a run")
+     lease("acquire", "case", "a run")
+     log = _remote_tools(tmp_path)
+     wt = _lane_worktree(tmp_path)
+     assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "pytest", "-q", "tests").returncode == 0
+     text = log.read_text()
+     script = [l[len("stdin "):] for l in text.splitlines() if l.startswith("stdin ")]
+     assert "cd osprey-runs/case/OspreyFlow_Build/ || exit 1" in script, script
      export = next(l for l in script if l.startswith("export "))
      assert "ARCADEDB_HTTP_PORT=2492" in export and "POSTGRES_PORT=55434" in export and "OSPREY_LANE=case" in export
      assert "OSPREY_LEASE_DIR=$HOME/osprey-runs/case.meta/lease" in export
@@ -228,7 +418,25 @@ index 0ed1f03..22289ad 100644
      # A call's command spans lines in the log; the start is the one call holding nohup setsid.
      assert text.count("nohup setsid") == 1, text
      mirrored = [l for l in log.read_text().splitlines() if "case.meta/lease/stack-b.lease/info" in l]
-@@ -544,7 +563,7 @@ def test_remote_log_follows_the_lane_s_last_run_on_its_host(lease, tmp_path: Pat
+     assert mirrored, log.read_text()
+ 
+ 
+ def test_remote_is_refused_for_a_local_stack_and_for_a_lane_holding_none(lease, tmp_path: Path) -> None:
+     log = _remote_tools(tmp_path)
+     wt = _lane_worktree(tmp_path)
+     none = _remote(lease, tmp_path, wt, "case", "--", "true")
+     assert none.returncode == 1 and "holds no stack" in none.stderr
+     lease("acquire", "studio", "a run")  # stack a: local
+@@ -535,45 +554,45 @@ def test_a_second_remote_run_is_refused_while_the_last_is_alive(lease, tmp_path:
+     # refused before the copy that run is reading is touched (rules' finding, 9 November 2026)
+     text = log.read_text()
+     assert "rsync" not in text and "uv sync" not in text and "npm ci" not in text and "git add -A" not in text, text
+ 
+ 
+ def test_remote_log_follows_the_lane_s_last_run_on_its_host(lease, tmp_path: Path) -> None:
+     lease("acquire", "studio", "a run")
+     lease("acquire", "case", "a run")
+     log = _remote_tools(tmp_path)
      lease("status")
      env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
@@ -237,7 +445,19 @@ index 0ed1f03..22289ad 100644
      assert ran.returncode == 0, ran.stderr
      text = log.read_text()  # a call's command spans lines in the log
      assert text.count("tail -n +1 -F") == 1, text
-@@ -564,7 +583,7 @@ def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(l
+     assert "ospreyflow-test l=osprey-runs/case.meta/runs/last" in text, text
+ 
+ 
+ # --- offline: a lane's offline tests on the server, with no stack (the owner, 9 November 2026) ----------------
+ # The closed ports and no lane, as an offline run here; this machine keeps only what needs Node (test-js).
+ 
+ 
+ def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(lease, tmp_path: Path) -> None:
+     log = _remote_tools(tmp_path)
+     wt = _lane_worktree(tmp_path)
+     ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "make", "-k", "test", "SKIP_JS=1")
+     assert ran.returncode == 1 and "holds no stack" in ran.stderr  # remote still needs a lease
+     env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
      log.write_text("")
      off = subprocess.run(["bash", str(SCRIPT), "offline", "case", "--", "make", "-k", "test", "SKIP_JS=1"],
@@ -246,7 +466,25 @@ index 0ed1f03..22289ad 100644
      assert off.returncode == 0, off.stderr
      text = log.read_text()
      assert "ospreyflow-test" in text
-@@ -590,7 +609,7 @@ def test_a_lane_with_no_row_of_its_own_gets_no_slot_but_a_refusal(lease, tmp_pat
+     export = next(l for l in text.splitlines() if l.startswith("stdin export "))
+     for pin in ("ARCADEDB_HTTP_PORT=59991", "POSTGRES_PORT=59992", "VALKEY_PORT=59993", "CLICKHOUSE_HTTP_PORT=59994"):
+         assert pin in export, export
+     assert "OSPREY_LANE" not in export
+     # The lane's own Playwright ports on the server too, where lanes' copies run side by side (T2).
+     assert "OSPREY_PORTS_LANE=case" in export, export
+     assert "OSPREY_PORTS_SLOT=2" in export, export  # case's row in scripts/lane_ports.tsv
+     assert "mkdir -p osprey-runs/case.meta/lease" in text and "/info" not in text  # an empty lease directory
+     assert "stdin make -k test SKIP_JS=1 " in text
+@@ -581,37 +600,37 @@ def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(l
+ 
+ @pytest.mark.parametrize("lane", ["admin-ddl", "admin-b"])
+ def test_a_lane_with_no_row_of_its_own_gets_no_slot_but_a_refusal(lease, tmp_path: Path, lane: str) -> None:
+     """A sub-lane or a sister lane never takes its parent's Playwright ports by its name's prefix: two
+     `who`s run on the server side by side (`admin` and `admin-ddl` did on 10 November). It is exported as
+     unlisted, which `apps/lanePorts.ts` refuses in words, and nothing but a Playwright run reads it."""
+     log = _remote_tools(tmp_path)
+     wt = _lane_worktree(tmp_path)
+     env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
      log.write_text("")
      off = subprocess.run(["bash", str(SCRIPT), "offline", lane, "--", "make", "test"],
@@ -255,7 +493,11 @@ index 0ed1f03..22289ad 100644
      assert off.returncode == 0, off.stderr
      export = next(l for l in log.read_text().splitlines() if l.startswith("stdin export "))
      assert f"OSPREY_PORTS_SLOT=unlisted-{lane}" in export, export
-@@ -602,7 +621,7 @@ def test_remote_log_follows_an_offline_run_when_no_stack_is_held(lease, tmp_path
+     assert "OSPREY_PORTS_SLOT=1" not in export, export  # admin's
+ 
+ 
+ def test_remote_log_follows_an_offline_run_when_no_stack_is_held(lease, tmp_path: Path) -> None:
+     log = _remote_tools(tmp_path)
      lease("status")
      env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
@@ -264,7 +506,25 @@ index 0ed1f03..22289ad 100644
      assert ran.returncode == 0, ran.stderr
      assert "ospreyflow-test l=osprey-runs/case.meta/runs/last" in log.read_text()
  
-@@ -631,7 +650,7 @@ def test_the_server_copy_is_a_repository_has_the_glass_packages_and_keeps_its_ru
+ 
+ def test_make_test_leaves_out_test_js_only_when_asked() -> None:
+     # A clean environment: run inside `make test SKIP_JS=1` (as on the server), SKIP_JS reaches this make through
+     # MAKEFLAGS and the plain dry run would leave test-js out too (found at case-b's merge, 9 November 2026).
+     env = {k: v for k, v in os.environ.items() if k not in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL", "SKIP_JS")}
+ 
+     def dry(*extra: str) -> str:
+         return subprocess.run(["make", "-n", "-C", str(BUILD), "test", *extra],
+                               capture_output=True, text=True, env=env).stdout
+@@ -622,25 +641,25 @@ def test_make_test_leaves_out_test_js_only_when_asked() -> None:
+ 
+ 
+ # --- The server copy behaves as a checkout (9 November 2026: the first offline run failed 66 cases for want of git,
+ # Node and a clean root) -------------------------------------------------------------------------------------
+ 
+ 
+ def test_the_server_copy_is_a_repository_has_the_glass_packages_and_keeps_its_runs_beside_it(lease, tmp_path: Path) -> None:
+     log = _remote_tools(tmp_path)
+     wt = _lane_worktree(tmp_path)
      env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
      off = subprocess.run(["bash", str(SCRIPT), "offline", "case", "--", "true"],
@@ -273,7 +533,25 @@ index 0ed1f03..22289ad 100644
      assert off.returncode == 0, off.stderr
      text = log.read_text()
      assert "git init -q" in text and "git add -A" in text and "commit -q --allow-empty" in text
-@@ -691,7 +710,7 @@ def test_an_offline_run_lists_its_30_slowest_tests_and_logs_its_wall_time(lease,
+     assert "npm ci" in text and "package-lock.json" in text
+     assert "$HOME/.local/node/bin" in next(l for l in text.splitlines() if l.startswith("stdin export "))
+     assert "osprey-runs/case.meta/runs/" in text
+     # nothing of the runs or the lease is written inside the copy's root (the old place is only asked about)
+     for written in ("mkdir -p osprey-runs/case/.runs", "> osprey-runs/case/.runs", "osprey-runs/case/.osprey-lease"):
+         assert written not in text, written
+ 
+ 
+ 
+@@ -682,25 +701,25 @@ def test_a_remote_run_lists_its_30_slowest_tests_and_logs_its_wall_time_with_its
+     assert "Wall time:" in start and "stack b, the lease case took at 20" in start, start
+     assert "/wall" in start and "set-up before it" in start, start  # the seconds kept beside the log, for a table
+     assert "cp osprey-runs/case.meta/lease/stack-b.lease/info osprey-runs/case.meta/runs/" in text, text  # kept with the run
+ 
+ 
+ def test_an_offline_run_lists_its_30_slowest_tests_and_logs_its_wall_time(lease, tmp_path: Path) -> None:
+     log = _remote_tools(tmp_path)
+     wt = _lane_worktree(tmp_path)
+     lease("status")
      env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
      off = subprocess.run(["bash", str(SCRIPT), "offline", "case", "--", "make", "-k", "test", "SKIP_JS=1"],
@@ -282,7 +560,25 @@ index 0ed1f03..22289ad 100644
      assert off.returncode == 0, off.stderr
      text = log.read_text()
      assert "PYTEST_ADDOPTS=--durations=30" in next(l for l in text.splitlines() if l.startswith("stdin export "))
-@@ -753,13 +772,359 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
+     start = _started(text)
+     assert "Wall time:" in start and "no stack, no lease" in start, start
+ 
+ 
+ # `ps -o ppid=` right-aligns the pid on Linux ("runner  192907" on the owner's server, 10 November 2026)
+ # and not on macOS, so the case is run both ways: as ps prints it here, and padded as the server prints it.
+ _RUNNER = {
+     "as ps prints it": 'echo "runner $(ps -o ppid= -p $PPID)"',
+     "padded, as on the server": 'printf "runner %10s\\n" "$(ps -o ppid= -p $PPID)"',
+@@ -744,57 +763,403 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
+     assert (run / "wall").read_text().strip().isdigit()
+     lines = (run / "log").read_text().splitlines()
+     # The pid file holds the host's own shell, the one running cmd.sh (what follow's tail --pid waits on).
+     # By field, not by the exact line: how wide ps prints a pid is the platform's, not the script's.
+     assert lines[1].split() == ["runner", (run / "pid").read_text().strip()], lines
+     assert lines[0] == "hello", lines
+     assert lines[-1].startswith("Wall time: ") and "exit 7 (stack b, the lease case took at 20" in lines[-1], lines
+     assert "set-up before it" in lines[-1], lines
+     assert (run / "lease").read_text() == "holder=case\n"
  
  
  
@@ -643,7 +939,8 @@ index 0ed1f03..22289ad 100644
      selector = tmp_path / "select.sh"
      if fails:
          selector.write_text("#!/bin/sh\necho 'live_map.tsv line 3: names no live test file' >&2\nexit 1\n")
-@@ -768,7 +1133,7 @@ def _live(lease, tmp_path: Path, cwd: Path, picks: str, *args: str, fails: bool
+     else:
+         selector.write_text(f"#!/bin/sh\necho \"selector $*\" >> \"{tmp_path}/selector.log\"\nprintf '%s' '{picks}'\n")
      selector.chmod(0o755)
      env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"), "OSPREY_LIVE_SELECT": str(selector),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
@@ -652,7 +949,16 @@ index 0ed1f03..22289ad 100644
  
  
  def _executing_host(tmp_path: Path) -> Path:
-@@ -785,7 +1150,7 @@ def _executing_host(tmp_path: Path) -> Path:
+     """The recording ssh, running the start call as the host would (HOME a folder here), with a stand-in pytest in
+     the copy's venv that writes the arguments it was given, one a line."""
+     log = _remote_tools(tmp_path)
+     home = tmp_path / "home"
+     (home / "osprey-runs" / "case" / "OspreyFlow_Build").mkdir(parents=True)
+     venv = home / "osprey-runs" / "case" / "OspreyFlow_Core" / ".venv" / "bin"
+     venv.mkdir(parents=True)
+     (venv / "pytest").write_text(f'#!/bin/sh\npwd > "{tmp_path}/pytest.cwd"\nprintf "%s\\n" "$@" > "{tmp_path}/pytest.argv"\n')
+     (venv / "pytest").chmod(0o755)
+     bin_dir = tmp_path / "bin"
      (bin_dir / "ssh").write_text(
          f'#!/bin/bash\necho "ssh $*" >> "{log}"\nin="$(cat)"\nprintf "%s\\n" "$in" | sed "s/^/stdin /" >> "{log}"\n'
          f'for a; do last="$a"; done\n'
@@ -661,7 +967,25 @@ index 0ed1f03..22289ad 100644
      )
      (bin_dir / "setsid").write_text('#!/bin/sh\nexec "$@"\n')
      for tool in ("ssh", "setsid"):
-@@ -848,6 +1213,86 @@ def test_live_refuses_a_failed_or_empty_selection_and_a_lane_holding_no_stack(le
+         (bin_dir / tool).chmod(0o755)
+     return home
+ 
+ 
+ def _wait_for(path: Path) -> None:
+     for _ in range(100):
+         if path.exists():
+             return
+         time.sleep(0.05)
+@@ -839,24 +1204,104 @@ def test_live_refuses_a_failed_or_empty_selection_and_a_lane_holding_no_stack(le
+     none = _live(lease, tmp_path, wt, "tests/services/api/test_route_rights.py\n", "case")
+     assert none.returncode == 1 and "holds no stack" in none.stderr
+     lease("acquire", "studio", "a run")
+     lease("acquire", "case", "a run")
+     empty = _live(lease, tmp_path, wt, "", "case")
+     assert empty.returncode == 1 and "empty" in empty.stderr, empty.stderr
+     failed = _live(lease, tmp_path, wt, "", "case", fails=True)
+     assert failed.returncode == 1 and "names no live test file" in failed.stderr
+     assert "The selection failed" in failed.stderr, failed.stderr  # not the empty-selection refusal
      assert not log.exists() or "rsync" not in log.read_text()  # nothing sent
  
  
@@ -748,3 +1072,12 @@ index 0ed1f03..22289ad 100644
  # --- The test stacks' Postgres allows 400 connections (T1 part 4, 10 November 2026) ----------------------------
  # One Conduit opens 46 asyncpg pools whose minimums add up to 47 connections; Postgres's default
  # `max_connections` of 100 refused rule 3's live access set at four pytest-xdist workers on stack b
+ # (`TooManyConnectionsError`, process/lanes/admin/T1_P4_RED_RECORD.md). `up` makes each test stack's Postgres
+ # allow 400. The fake models what the real one refuses: `ALTER SYSTEM` alone changes nothing that `SHOW` reads
+ # until the server restarts, and `psql` fails while the server is still starting.
+ 
+ 
+ def _postgres_docker(tmp_path: Path, live: int, *, starting: int = 0, ignores_alter: bool = False) -> tuple[str, Path]:
+     st = tmp_path / "pg"
+     st.mkdir()
+     (st / "live").write_text(f"{live}\n")
