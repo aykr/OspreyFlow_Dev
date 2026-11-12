@@ -1,29 +1,13 @@
-# admin · P10 part 2 · report (12 November 2026)
+# admin · P10 part 2 · report (12 November 2026): Entra ID's claims wired into the cloud-platform profile
 
-Entra ID's claims wired into the cloud-platform profile (BRIEF_P10p2.md), as built in ADR-148 Amendment 8. An access
-step: the lane's own review is done; the orchestrator's two rounds follow.
+1. Sign-in on cloud-platform uses Entra's claims through the one construction path, Keycloak not rendered: **met** (render.diff). `test_cloud_platform_entra.py` (the rendered environment through `ClaimMapping.from_env` to the resolver, red without `client_id`; nothing rendered names Keycloak or `id.`).
+2. Every reader of a role or principal goes through `principal_auth`, each refusal red first: **met**. Roles from the people store, never the token (`test_auth_entra_claims.py`, `test_entra_people*.py`, rule 3 live); the delta socket at connect and each message; the service identity (`test_service_identity_entra.py`); the realm's readers and Superset (readers.diff); the Glass from `GET /v1/me`, failing closed, with the disabled words (glass-sign-in.diff).
+3. cp-policy-check green with no Keycloak: **met**, 0 violations on all five fixtures on L1.9 part 2's merged render (`gates/2516c4b.cp-policy.txt`).
+4. Gates once through `stack_lease.sh offline admin` at 2516c4b on main 816ccf7, ten diffs applied: make -k ci green; make test 12,364 passed, failing only the server's GPU case and the guide's PDF (made at merge).
+5. Live: the full run at 302cf3e (35 failed, each in other lanes' records: `gates/p10p2_live_302cf3e_baseline.txt`; 3,401 passed); the targeted list at 2516c4b, 74 + 7 passed (`gates/p10p2_live_targeted_2516c4b.txt`); leases named in each.
+6. Plants: 52, 71 case runs red (68 offline at cc684ec, 3 live under the lease), `P10_P2_RED_RECORD.md`.
 
-| Exit criterion | Met | Proof |
-| --- | --- | --- |
-| Sign-in on cloud-platform uses Entra's claims through the one construction path; Keycloak not rendered | yes (render as a diff) | `test_cloud_platform_entra.py` (the rendered environment through `ClaimMapping.from_env` to the resolver, red without `client_id`); `test_no_pod_takes_group_0_and_keycloak_is_not_rendered`; no rendered value names Keycloak or the `id.` host |
-| Every reader of a role or principal on the profile through `principal_auth`, each refusal red first | yes | roles from the people store, never the token (`test_auth_entra_claims.py`, `test_entra_people*.py`); the delta socket at connect and each message; the service identity (`test_service_identity_entra.py`); the realm's readers and Superset (`readers.diff`); the Glass from `GET /v1/me`, failing closed, no token claim read (`glass-sign-in.diff`) |
-| cp-policy-check green with no Keycloak | yes | P7b's merged render: 0 violations on all four fixtures, its tests and helm's (`gates/017350d.ci.txt`) |
-| Gates once through `stack_lease.sh offline admin` | yes | `gates/017350d.{test,ci}.txt` on main e726239 with the ten diffs applied: make -k ci green but a citation (fixed, green on the server at the fixed tree); make test 12,286 passed, the server's GPU, OpenSearch and lanes-launch cases (as other lanes' gates) and that citation |
-
-**Plants:** 52 plants, 71 case runs, all red at the head 641c403 (68 offline; 3 live under the lease at 302cf3e). A plant missed on
-its first run found a second guard behind the synchronous path, now its own case.
-
-**Live:** the final check at 302cf3e on P7b's main, stack b, with the ten diffs: 35 failed, each the stack's own as T1 part 4's gate records them; 3,401 passed, the people store's file among them (`gates/p10p2_live_302cf3e.txt`).
-
-**Diffs for the orchestrator** (`p10p2/`): render, runbook, readers, glass-sign-in, actionRegistry, every-harness,
-makefile, ci-yml, resolver-doubles, admin-guide (its row 1.83, renumbered at merge).
-
-**Carried (CARRIES):** owner resolution on Entra; Superset and report sync on Entra (refused on the profile until
-then); ADR-106 names from the people store; one real token from the client's tenant (Amendment 6's assumptions).
-
-**Decisions taken:** none beyond the orchestrator's rulings (roles in the deployment's store; reporting refused on
-cloud-platform; the runbook mine; the disabled message), each recorded in Amendment 8.
-
-Nothing of mine is running; stack b is released.
-
-**Commits:** 33 on `lane/admin-p10p2` over main e726239, the schemas change its own commit at the head.
+**Diffs** (`p10p2/`): render, runbook (INSTALL.md step 6 Entra's; P7b's identity.py removed), readers, glass-sign-in, actionRegistry, every-harness, makefile, ci-yml, resolver-doubles (25 test files), admin-guide (1.84; the PDF at merge).
+**Carried** (CARRIES): owner resolution, Superset and report sync on Entra (refused on the profile until then), ADR-106 names from the people store, one real token from the client's tenant (Amendment 6's assumptions).
+**Decisions:** the orchestrator's rulings only (roles in the deployment's store; reporting refused; the runbook mine; the disabled words), each in ADR-148 Amendment 8.
+**Commits:** on `lane/admin-p10p2` over main 816ccf7, `packages/schemas` its own commit at the head. Nothing of mine is running; stack b released.

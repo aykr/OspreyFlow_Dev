@@ -12,7 +12,8 @@ What counts as red is as in part 1's harness:
 
 | Head | Plants | Case runs | Result | Output |
 | --- | --- | --- | --- | --- |
-| `641c403` (the head) | 52: 49 offline, 3 live | 68 offline + 3 live | 71 red, 0 missed, 0 harness faults | `gates/p10p2_plants_641c403.txt`; the live three under the lease at 302cf3e, `gates/p10p2_live_plants_302cf3e.txt` |
+| `cc684ec` (the head, on L1.9 part 2's main) | 52: 49 offline, 3 live | 68 offline + 3 live | 71 red, 0 missed, 0 harness faults | `gates/p10p2_plants_cc684ec.txt`; the live three under the lease at 2516c4b, `gates/p10p2_live_targeted_2516c4b.txt` |
+| `641c403` | 52: 49 offline, 3 live | 68 offline + 3 live | 71 red, 0 missed, 0 harness faults | `gates/p10p2_plants_641c403.txt`; the live three under the lease at 302cf3e, `gates/p10p2_live_plants_302cf3e.txt` |
 | `19126d8` | 51 (after the lane review's fixes) | 68 offline | 68 red | `gates/p10p2_plants_19126d8.txt` |
 | `96d0513` | 39 (2 live, **not run**) | 52 offline | 52 red; the two live plants were not run here, though this table first said they were (the lane-reviewer's finding 2) | `gates/p10p2_plants_96d0513.txt` |
 | `cbe0da5` (the harness uncommitted) | 38 | 51 | 50 red, **1 missed** (below) | — |
