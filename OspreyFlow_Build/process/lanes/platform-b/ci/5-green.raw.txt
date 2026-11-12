@@ -1,0 +1,10 @@
+# 5 with the diff; only the basemap case (:367) is this fix's. The suite's :477 (preflight, this Mac's own host checks) and the registry case after it stay red on this Mac, with or without the diff; both passed on GitHub, where only :367 and the registry failed
+  ✓   8 keyboard/setup-screens.spec.ts:367:1 › Tab reaches Build local basemap and Verify, each a real keyboard-triggered call (169ms)
+  ✘   9 keyboard/setup-screens.spec.ts:423:1 › a real keyboard walkthrough generates, downloads and confirms the artefacts (16.1s)
+  ✘  10 keyboard/setup-screens.spec.ts:483:1 › a real keyboard-triggered preflight run streams every check and enables Launch (1.0m)
+  ✘  20 keyboard/setup-screens.spec.ts:1025:1 › every registered setup-screen action has its own proving test case above (3ms)
+  3 failed
+  17 passed (1.4m)
+# :423 (Generate answered not-OK, line 444) fails here alone with main's own spec too (1 failed), so not this
+# diff's; it passed in this Mac's two earlier runs tonight (5-red, and the first green: 17 and 18 passed) and on
+# GitHub. Left as found.
