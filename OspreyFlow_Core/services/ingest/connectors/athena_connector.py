@@ -467,6 +467,26 @@ def without_identities(words: str) -> str:
     return _KEY_ID.sub("(an access key)", _ARN.sub("(a cloud identity)", words))
 
 
+#: The parser's own reason for a statement that does not parse: its line and column first.
+_PARSER = re.compile(r"^line [0-9]+:[0-9]+: ")
+#: Athena's reason for a table's objects the role may not read (AWS's troubleshooting guide).
+#: Only this shape: an S3 denial on the results location ("Access denied when writing output …")
+#: is the results', never the tables' (the lane review).
+_DATA_DENIED = re.compile(r"^Permission denied on S3 path: ")
+TABLE_DATA_DENIED = (
+    "Athena could not read the table's data (access denied): the deployment's cloud role may read "
+    "only the table locations osprey.yaml declares (cloud_platform.connector_sources.athena's "
+    "table_locations); nothing was read"
+)
+
+
+def _could_not_run(reason: str) -> ConnectorRefused:
+    """Athena's reason for a query it could not run, in the one form an author is given."""
+    return ConnectorRefused(
+        f"Athena could not run the query: {without_identities(reason)}; nothing was read"
+    )
+
+
 def _code(error: ClientError) -> str:
     return str(error.response.get("Error", {}).get("Code", ""))
 
@@ -493,6 +513,10 @@ def refused_request(error: ClientError | BotoCoreError) -> ConnectorRefused:
             "Athena did not recognise the deployment's cloud identity (its credentials are "
             "missing, wrong or expired); nothing was read"
         )
+    if code == "InvalidRequestException" and _PARSER.match(_message(error)):
+        # A statement that does not parse, refused at StartQueryExecution: the same words as the
+        # same reason given as a FAILED execution (`_wait`), whichever Athena does (L1.9 part 2).
+        return _could_not_run(_message(error))
     if code == "InvalidRequestException":
         return ConnectorRefused(
             f"Athena refused the request: {without_identities(_message(error))}; nothing was read"
@@ -550,8 +574,10 @@ def _wait(
         if state == "SUCCEEDED":
             return
         if state in _FINISHED:
-            reason = without_identities(status["Status"].get("StateChangeReason") or state.lower())
-            raise ConnectorRefused(f"Athena could not run the query: {reason}; nothing was read")
+            reason = status["Status"].get("StateChangeReason") or state.lower()
+            if _DATA_DENIED.match(reason):
+                raise ConnectorRefused(TABLE_DATA_DENIED)
+            raise _could_not_run(reason)
         if clock() - started > DEADLINE_SECONDS:
             try:
                 client.stop_query_execution(QueryExecutionId=execution_id)

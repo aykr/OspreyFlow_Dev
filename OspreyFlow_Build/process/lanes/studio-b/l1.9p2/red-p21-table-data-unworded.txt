@@ -1,0 +1,156 @@
+# head d144bfa; plant: Athena's refusal of a table location not declared left in Athena's own words
+# command: pytest -q -rA ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py ../OspreyFlow_Build/tests/connectors/test_athena_connector.py
+# must fail: test_a_table_location_not_declared_is_athena_s_refusal_in_typed_words, test_a_table_whose_data_the_role_may_not_read_is_refused_in_typed_words; all failed: yes
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_each_declared_source_is_the_conduit_s_own_egress_row_on_443
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_conduit_s_allow_list_and_what_admin_is_told_are_the_declaration
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declared_source_s_host_needs_its_networks
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_no_results_or_table_location_is_an_egress_host
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_worker_reaches_no_connector_host
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_role_s_statements_are_read_only_and_scoped
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_listing_condition_never_holds_an_action_that_carries_no_prefix
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted0-names a wildcard resource]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted1-names a wildcard resource]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted2-names a wildcard resource]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted3-writes outside a declared results_location]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted4-gives s3:DeleteObject]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted5-names the bucket synthetic-other, which is not declared]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted6-reads synthetic-exports outside its declared folders]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted7-lists synthetic-exports beyond its declared folders]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted8-names the database payroll, which is not declared]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted9-lists synthetic-exports under '*', beyond its declared folders]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted10-lists synthetic-exports under a StringNotLike condition, not StringLike]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted11-names the workgroup primary in eu-west-2, which is not declared]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted12-names the workgroup analysts in eu-west-1, which is not declared]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted13-names Glue in eu-west-1, where no workgroup is declared]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted14-names arn:aws:s3:eu-west-2:000000000000:accesspoint/synthetic-exports, a resource of a shape this check does not recognise]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted15-names arn:aws-cn:s3:::synthetic-exports/client-a/a, a resource of a shape this check does not recognise]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted16-names arn:aws:dynamodb:eu-west-2:${data.aws_caller_identity.osprey_connector_sources.account_id}:table/visits, a resource of a shape this check does not recognise]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted17-names a wildcard resource]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_nothing_is_rendered_with_no_source_declared
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_policy_past_iam_s_size_limit_is_refused_at_render
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_deployment_s_listing_asks_only_within_the_role_s_rendered_grants
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declaration_the_role_s_statements_cannot_serve_is_refused_in_words[change0-cn-north-1 is outside AWS's standard partition]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declaration_the_role_s_statements_cannot_serve_is_refused_in_words[change1-us-gov-west-1 is outside AWS's standard partition]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declaration_the_role_s_statements_cannot_serve_is_refused_in_words[change2-table_locations names at least one s3://bucket/folder/]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_table_lands_as_the_golden_file
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_every_page_is_read_at_1000_rows_a_page
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_lands_as_the_golden_file
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM "finance"."ledger"]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM "othercatalog"."visits"."many"]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN finance.ledger l ON true]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m LEFT OUTER JOIN finance.ledger l ON true]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many AS m, finance.ledger AS l]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (SELECT * FROM finance.ledger) t]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[WITH x AS (SELECT * FROM finance.ledger) SELECT * FROM x]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many WHERE booking_id IN (SELECT entry FROM finance.ledger)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT coalesce((SELECT max(entry) FROM finance.ledger), 'x') FROM visits.many]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM information_schema.tables]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM TABLE(system.query(query => 'SELECT 1'))]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many UNION ALL SELECT * FROM finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM -- a comment\n finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (SELECT 1) t, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many CROSS JOIN visits.visit_bookings, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON true, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many CROSS JOIN UNNEST(ARRAY[1]) AS t(n), finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many TABLESAMPLE BERNOULLI (50), finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m, LATERAL (SELECT * FROM finance.ledger) l]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many, LATERAL (SELECT 1) l, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN LATERAL (SELECT * FROM finance.ledger) l ON true]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (visits.many m JOIN visits.visit_bookings b ON true), finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (visits.many m JOIN finance.ledger l ON true)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[WITH x AS (SELECT 1), y AS (SELECT * FROM finance.ledger) SELECT * FROM x, y]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[WITH x AS (SELECT 1) SELECT * FROM x, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (WITH z AS (SELECT * FROM finance.ledger) SELECT * FROM z) t]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (VALUES (1), (2)) AS v(n), finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many UNION SELECT * FROM visits.many, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many INTERSECT SELECT * FROM (SELECT 1) t, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b USING (booking_id), finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON (m.notes = b.notes), finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON m.booking_id IN (SELECT entry FROM finance.ledger)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m CROSS JOIN UNNEST(ARRAY[1]) WITH ORDINALITY AS t(n, o), finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m, UNNEST((SELECT array_agg(entry) FROM finance.ledger)) AS t(e)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many ORDER BY (SELECT max(entry) FROM finance.ledger)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many FOR TIMESTAMP AS OF current_timestamp, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many "where", finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT '--', booking_id FROM finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT '/*' AS a FROM finance.ledger WHERE '*/' = '*/']
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many --\rUNION ALL SELECT * FROM finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many --\r, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many --\rCROSS JOIN finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many m foo, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many MATCH_RECOGNIZE (MEASURES 1 AS x PATTERN (a) DEFINE a AS true), finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many m JOIN visits.visit_bookings b, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many WHERE true, finance.ledger]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_the_checker_cannot_follow_is_refused[SELECT FROM WHERE visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many, (finance.ledger)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many, system.query(query => 'SELECT 1')]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM "AwsDataCatalog"."visits"."many"]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT extract(year FROM b.booked_for) AS y FROM visits.visit_bookings b]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT 'FROM finance.ledger' AS words FROM visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many CROSS JOIN UNNEST(ARRAY[1, 2]) AS t(n)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[WITH x AS (SELECT * FROM visits.many) SELECT * FROM x JOIN visits.visit_bookings b ON true]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON m.booking_id = b.booking_id, visits.many n]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many TABLESAMPLE BERNOULLI (50)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many AS m TABLESAMPLE SYSTEM (10) JOIN visits.visit_bookings b USING (booking_id)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM (SELECT 1) t, visits.many]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many m, LATERAL (SELECT * FROM visits.visit_bookings) l]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM (VALUES (1), (2)) AS v(n)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM (visits.many m JOIN visits.visit_bookings b ON true)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many m CROSS JOIN UNNEST(ARRAY[1]) WITH ORDINALITY AS t(n, o)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT booking_id IS DISTINCT FROM notes FROM visits.many]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT substring(notes FROM 1 FOR 3), trim(BOTH ' ' FROM visitor) FROM visits.many]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT count(*) FILTER (WHERE notes IS NULL) FROM visits.many]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT row_number() OVER (PARTITION BY prisoner_ref ORDER BY booked_for) FROM visits.many]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many ORDER BY booking_id LIMIT 10]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many ORDER BY booking_id FETCH FIRST 5 ROWS WITH TIES]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many UNION ALL SELECT * FROM visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many WHERE booking_id IN (SELECT booking_id FROM visits.many) GROUP BY 1 HAVING count(*) > 1]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many FOR TIMESTAMP AS OF TIMESTAMP '2026-10-01 00:00:00 UTC']
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT * FROM visits.many "from"]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT 1 FROM visits.many;]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_reading_only_the_connection_s_databases_is_allowed[SELECT 1]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_athena_s_own_words_never_carry_an_arn
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_athena_s_refusals_are_refused_in_words[syntax-Athena could not run the query: line 1:51: mismatched input '<EOF>']
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_athena_s_refusals_are_refused_in_words[missing_table-Athena could not run the query: TABLE_NOT_FOUND]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_athena_s_refusals_are_refused_in_words[unauthorised-Athena refused the deployment's cloud role (access denied)]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_athena_s_refusals_are_refused_in_words[unknown_key-Athena did not recognise the deployment's cloud identity]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_athena_s_refusals_are_refused_in_words[no_results_location-Athena refused the request: No output location provided]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_athena_s_refusals_are_refused_in_words[results_unwritable-Athena could not run the query: Access denied when writing]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[DROP TABLE visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[CREATE TABLE visits.copy AS SELECT * FROM visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[INSERT INTO visits.visit_bookings SELECT * FROM visits.many]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[UNLOAD (SELECT * FROM visits.visit_bookings) TO 's3://elsewhere/' WITH (format = 'CSV')]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[-- a comment first\nDROP TABLE visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[/* a comment */ DELETE FROM visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[SELECT 1 FROM visits.many; DROP TABLE visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[MSCK REPAIR TABLE visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[WITH x AS (SELECT 1) INSERT INTO visits.visit_bookings SELECT * FROM x]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[SELECT '--' AS a FROM visits.many; DROP TABLE visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[SELECT '/*' AS a FROM visits.many; DROP TABLE visits.visit_bookings; SELECT '*/']
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[SELECT 1 FROM visits.many --\r; DROP TABLE visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_or_table_outside_the_connection_is_never_sent
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_rows_past_the_cap_are_refused_whole_and_paging_stops
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_bytes_past_the_cap_are_refused_whole
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_pages_past_the_cap_are_refused_whole
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_query_that_never_finishes_is_stopped_and_refused
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_result_naming_a_column_twice_is_refused_never_one_value_written_in_both
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_row_with_more_values_than_columns_is_refused_never_cut
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_catalog_athena_does_not_hold_is_refused_in_words
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_join_to_a_table_athena_does_not_hold_is_refused_in_words
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_table_athena_does_not_hold_after_a_comma_is_refused_in_words
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_the_fixture_reads_what_athena_reads[SELECT extract(year FROM booked_for) AS y FROM visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_the_fixture_reads_what_athena_reads[SELECT booking_id IS DISTINCT FROM notes AS d FROM visits.visit_bookings]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_the_fixture_reads_what_athena_reads[SELECT * FROM visits.visit_bookings b, visits.many m WHERE b.booking_id = m.booking_id]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_an_unqualified_table_is_read_from_the_query_s_own_database
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_the_fixture_refuses_what_athena_refuses
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_query_that_does_not_parse_is_refused_in_the_same_words_either_way[failed_execution]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_query_that_does_not_parse_is_refused_in_the_same_words_either_way[refused_at_start]
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_another_invalid_request_is_not_taken_for_a_parse_error
+PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_results_location_refusal_is_never_blamed_on_the_table_locations
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_table_location_not_declared_is_athena_s_refusal_in_typed_words - AssertionError: assert 'Athena could...hing was read' == 'Athena could...hing was read'
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_table_whose_data_the_role_may_not_read_is_refused_in_typed_words - AssertionError: assert 'Athena could...hing was read' == 'Athena could...hing was read'
+2 failed, 150 passed in 8.66s

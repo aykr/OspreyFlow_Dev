@@ -31,7 +31,7 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 import yaml
@@ -48,7 +48,16 @@ from pydantic import (
 
 from schemas.domain import BUILT_IN_GRADING_SCHEMES, GradingSchemeAnswer
 from schemas.mapconfig import MapConfig
-from schemas.sources import SECRET_NAME, private_host_entry
+from schemas.sources import (
+    ATHENA_NAME,
+    AWS_REGION,
+    S3_BUCKET,
+    S3_FOLDER,
+    S3_LOCATION,
+    SECRET_NAME,
+    no_climbing,
+    private_host_entry,
+)
 
 #: The Lite address (`06_DECISIONS.md` ADR-114 Amendment 4): the front proxy on port 80 of this
 #: machine, the Glass at this name, the identity provider at `id.` and the dashboards at `bi.`.
@@ -944,6 +953,129 @@ def too_wide_for_egress(net: str) -> str | None:
     return None
 
 
+def s3_location(location: str) -> tuple[str, str]:
+    """An `s3://` location's bucket and folder (the folder empty for the bucket's top)."""
+    bucket, _, folder = location.removeprefix("s3://").partition("/")
+    return bucket, folder
+
+
+def standard_partition(region: str) -> str:
+    """A declared source's region in AWS's standard partition: the role's statements are written for
+    `arn:aws:`, so a China (`cn-`) or GovCloud (`-gov-`) region is refused in words, never rendered
+    into ARNs that name another partition's resources wrongly."""
+    if region.startswith("cn-") or "-gov-" in region:
+        raise ValueError(
+            f"{region} is outside AWS's standard partition: a declared source's region is a "
+            "standard one (eu-west-2), since the role's statements name arn:aws: resources"
+        )
+    return region
+
+
+class DeclaredS3Source(BaseModel):
+    """A bucket an S3 connection may read, under a folder (ADR-140 Amendment 21): a connection on it
+    names this region and a folder at or under this one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    bucket: str = Field(pattern=S3_BUCKET, description="The bucket's own name (no dot)")
+    region: str = Field(pattern=AWS_REGION, description="The bucket's region (eu-west-2)")
+    prefix: str = Field(
+        default="",
+        max_length=1024,
+        pattern=S3_FOLDER,
+        description="Default: the bucket's top. The folder a connection may read at or under, "
+        "each name ending in / (exports/client-a/)",
+    )
+
+    @field_validator("prefix")
+    @classmethod
+    def _inside(cls, value: str) -> str:
+        return no_climbing(value)
+
+    @field_validator("region")
+    @classmethod
+    def _standard(cls, value: str) -> str:
+        return standard_partition(value)
+
+    def host(self) -> str:
+        return f"{self.bucket}.s3.{self.region}.amazonaws.com"
+
+
+class DeclaredAthenaSource(BaseModel):
+    """An Athena workgroup an Athena connection may use (ADR-140 Amendment 21), with the databases
+    it may read, where Athena writes its results, and where the tables' objects are (Athena reads
+    them as the namespace's role, so the role is given read there; the Conduit never reaches
+    them)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    workgroup: str = Field(pattern=ATHENA_NAME, description="The workgroup's name")
+    region: str = Field(pattern=AWS_REGION, description="The workgroup's region (eu-west-2)")
+    databases: list[Annotated[str, Field(pattern=r"^[a-z0-9_]{1,128}$")]] = Field(
+        min_length=1, description="The Glue databases a connection may read"
+    )
+    results_location: str = Field(
+        max_length=1024,
+        pattern=S3_LOCATION,
+        description="Where Athena writes each query's results (s3://bucket/folder/): the only "
+        "place a declared source gives the role a write. A folder, never a bucket's top",
+    )
+    table_locations: list[Annotated[str, Field(max_length=1024, pattern=S3_LOCATION)]] = Field(
+        description="Where the databases' tables keep their objects (s3://bucket/folder/), at "
+        "least one, read by Athena as the namespace's role: read-only, and never reached by the "
+        "Conduit",
+    )
+
+    @field_validator("results_location")
+    @classmethod
+    def _a_folder(cls, value: str) -> str:
+        if not s3_location(value)[1]:
+            raise ValueError(
+                "results_location names a folder (s3://bucket/athena-results/), never a bucket's "
+                "top: the role may write there alone"
+            )
+        no_climbing(s3_location(value)[1])
+        return value
+
+    @field_validator("table_locations")
+    @classmethod
+    def _tables_inside(cls, values: list[str]) -> list[str]:
+        if not values:
+            raise ValueError(
+                "table_locations names at least one s3://bucket/folder/: Athena reads a table's "
+                "objects as the namespace's role, so with none the role could read no table"
+            )
+        for value in values:
+            no_climbing(s3_location(value)[1])
+        return values
+
+    @field_validator("region")
+    @classmethod
+    def _standard(cls, value: str) -> str:
+        return standard_partition(value)
+
+    def host(self) -> str:
+        return f"athena.{self.region}.amazonaws.com"
+
+
+class ConnectorSources(BaseModel):
+    """The cloud sources a cloud-platform deployment may read (ADR-140 Amendment 21)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    s3: list[DeclaredS3Source] = Field(default_factory=list, description="The S3 buckets")
+    athena: list[DeclaredAthenaSource] = Field(
+        default_factory=list, description="The Athena workgroups"
+    )
+
+    def declared(self) -> bool:
+        return bool(self.s3 or self.athena)
+
+    def hosts(self) -> list[str]:
+        """Each declared source's one host, as a connection on it reaches it."""
+        return sorted({s.host() for s in self.s3} | {a.host() for a in self.athena})
+
+
 class CloudPlatformConfig(BaseModel):
     """ADR-148: only meaningful at `profile: cloud-platform`. What is this deployment's own (its
     namespace, its environment, its registry, who may reach it, where its enabled hosts are); what
@@ -1009,6 +1141,15 @@ class CloudPlatformConfig(BaseModel):
         "port not listed here passes the Conduit and times out at the egress. A bare host is "
         "reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port "
         "here (db.example.org:5432). A host given twice with two ports is reached on both",
+    )
+
+    connector_sources: ConnectorSources = Field(
+        default_factory=lambda: ConnectorSources(),
+        description="The S3 buckets and Athena workgroups an S3 or Athena connection may read "
+        "(ADR-140 Amendment 21). Each becomes the Conduit's own egress row on 443 and an entry on "
+        "its allow-list, and the namespace's IAM role gains read-only statements scoped to it. "
+        "Admin › Connections refuses an S3 or Athena connection not declared here; declare it, "
+        "re-render and run helm upgrade (and apply the Terraform)",
     )
 
     @field_validator("connector_hosts")

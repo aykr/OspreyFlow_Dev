@@ -1,0 +1,33 @@
+# Taken before item 2's code, on 489cc4b with the new tests and the schema in the worktree (the check then committed as 1e20175).
+# command: pytest -q -rf --tb=line tests/services/api/test_cloud_sources_declared.py (closed offline ports)
+# Every refused case fails for one reason, the absence of any check: each saved, tested or read (the E lines below). Each branch's own
+# reason is shown by the plants, red-p*.txt.
+E   AssertionError: {"id":"01M76B1P5DYFG3N3X61YZ4DWFA","kind":"s3","name":"Synthetic s3","created_by":"adm-1","created_at":"2026-11-11T22:18:24.301354Z","settings":{"kind":"s3","region":"eu-west-2","bucket":"synthetic-exports","prefix":"client-a/"},"datasets":["ds-a"]}
+E   AssertionError: {"id":"01M76B1P5MGJQMTWRXH0NFYST6","kind":"athena","name":"Synthetic athena","created_by":"adm-1","created_at":"2026-11-11T22:18:24.308218Z","settings":{"kind":"athena","region":"eu-west-2","workgroup":"primary","catalog":"AwsDataCatalog","databases":["visits"],"results_location":null},"datasets":["ds-a"]}
+E   assert True is False
+E   assert True is False
+E   AssertionError: {"id":"01M76B1PCJRFWCDJCJ66MAXRK1","kind":"s3","name":"Synthetic s3","created_by":"adm-1","created_at":"2026-11-11T22:18:24.530905Z","settings":{"kind":"s3","region":"eu-west-2","bucket":"synthetic-other","prefix":"client-a/"},"datasets":["ds-a"]}
+E   AssertionError: {"id":"01M76B1PCRH1949EKF38JYFJEE","kind":"s3","name":"Synthetic s3","created_by":"adm-1","created_at":"2026-11-11T22:18:24.536920Z","settings":{"kind":"s3","region":"eu-west-1","bucket":"synthetic-exports","prefix":"client-a/"},"datasets":["ds-a"]}
+E   AssertionError: {"id":"01M76B1PCYV374NWDYG90QM84G","kind":"s3","name":"Synthetic s3","created_by":"adm-1","created_at":"2026-11-11T22:18:24.542792Z","settings":{"kind":"s3","region":"eu-west-2","bucket":"synthetic-exports","prefix":""},"datasets":["ds-a"]}
+E   AssertionError: {"id":"01M76B1PD5DQ4YB8JWPTAWNHQP","kind":"s3","name":"Synthetic s3","created_by":"adm-1","created_at":"2026-11-11T22:18:24.549815Z","settings":{"kind":"s3","region":"eu-west-2","bucket":"synthetic-exports","prefix":"client-b/"},"datasets":["ds-a"]}
+E   AssertionError: {"id":"01M76B1PDB65C5NWBDMCPFF9TQ","kind":"s3","name":"Synthetic s3","created_by":"adm-1","created_at":"2026-11-11T22:18:24.555789Z","settings":{"kind":"s3","region":"eu-west-2","bucket":"synthetic-exports","prefix":"client-ab/"},"datasets":["ds-a"]}
+E   AssertionError: {"id":"01M76B1PDJWAZT0AGVY2ZK80Q3","kind":"athena","name":"Synthetic athena","created_by":"adm-1","created_at":"2026-11-11T22:18:24.562207Z","settings":{"kind":"athena","region":"eu-west-2","workgroup":"analysts","catalog":"AwsDataCatalog","databases":["visits"],"results_location":null},"datasets":["ds-a"]}
+E   AssertionError: {"id":"01M76B1PDRQN36J5YJVARTJ1AJ","kind":"athena","name":"Synthetic athena","created_by":"adm-1","created_at":"2026-11-11T22:18:24.568631Z","settings":{"kind":"athena","region":"eu-west-1","workgroup":"primary","catalog":"AwsDataCatalog","databases":["visits"],"results_location":null},"datasets":["ds-a"]}
+E   AssertionError: {"id":"01M76B1PDZQEAHAJ35D2EEC7ZV","kind":"athena","name":"Synthetic athena","created_by":"adm-1","created_at":"2026-11-11T22:18:24.575279Z","settings":{"kind":"athena","region":"eu-west-2","workgroup":"primary","catalog":"AwsDataCatalog","databases":["visits","payroll"],"results_location":null},"datasets":["ds-a"]}
+E   AssertionError: {"id":"01M76B1PE5BBWWBWYR2XV194VM","kind":"athena","name":"Synthetic athena","created_by":"adm-1","created_at":"2026-11-11T22:18:24.581372Z","settings":{"kind":"athena","region":"eu-west-2","workgroup":"primary","catalog":"other_catalog","databases":["visits"],"results_location":null},"datasets":["ds-a"]}
+E   AssertionError: {"id":"01M76B1PEBJ2W9MXDES33YW1RW","kind":"athena","name":"Synthetic athena","created_by":"adm-1","created_at":"2026-11-11T22:18:24.587808Z","settings":{"kind":"athena","region":"eu-west-2","workgroup":"primary","catalog":"AwsDataCatalog","databases":["visits"],"results_location":"s3://synthetic-athena-results/elsewhere/"},"datasets":["ds-a"]}
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_undeclared_connection_is_refused_when_it_is_saved[s3]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_undeclared_connection_is_refused_when_it_is_saved[athena]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[s3]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[athena]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change0]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change1]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change2]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change3]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change4]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change5]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change6]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change7]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change8]
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change9]
+14 failed, 4 passed in 3.08s

@@ -551,7 +551,302 @@ def render_terraform(
 
     if bedrock_enabled(config):
         files["gateway.tf"] = _gateway_role(config, platform)
+    if cp.connector_sources.declared():
+        files["connector_sources.tf"] = _connector_sources_file(config)
     return files
+
+
+# --- ADR-140 Amendment 21: the declared S3 and Athena sources' read statements -------------------
+
+_ACCOUNT = "${data.aws_caller_identity.osprey_connector_sources.account_id}"
+#: The actions a declared source may give the role: reads, and Athena's results' own writes.
+#: Athena's own list for a query's caller (AWS's Athena user guide, "Access to Amazon S3");
+#: modelled, not measured against a real account (ADR-140 Amendment 21 point 5).
+SOURCE_READS = frozenset({
+    "s3:ListBucket", "s3:GetBucketLocation", "s3:GetObject", "s3:ListMultipartUploadParts",
+    "s3:ListBucketMultipartUploads",
+    "athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults",
+    "athena:StopQueryExecution", "athena:GetNamedQuery", "athena:GetWorkGroup",
+    "glue:GetDatabase", "glue:GetTable", "glue:GetTables", "glue:GetPartition",
+    "glue:GetPartitions", "glue:BatchGetPartition",
+})  # fmt: skip
+#: Writes, each only on a declared results location's objects.
+RESULTS_WRITES = frozenset({"s3:PutObject", "s3:AbortMultipartUpload"})
+#: A resource may end in `*` only as a bucket's objects under a folder, or a database's tables (each
+#: then checked to be declared); anything else holding a `*`, and any `?`, is refused.
+_NARROW_STAR = (
+    re.compile(r"^arn:aws:s3:::[a-z0-9][a-z0-9-]{1,61}[a-z0-9]/[A-Za-z0-9_.=/-]*\*$"),
+    re.compile(r"^arn:aws:glue:[a-z0-9-]+:" + re.escape(_ACCOUNT) + r":table/[a-z0-9_]+/\*$"),
+)
+
+
+def _listed_under(bucket: str, folder: str, sid: str) -> dict[str, Any]:
+    """`s3:ListBucket` on the bucket, held to the folder by `s3:prefix` (none at the bucket's top,
+    which is the declared folder then). Nothing else in it: a request with no `s3:prefix` (the
+    bucket's location, its uploads) would never match the condition (the lane review)."""
+    statement: dict[str, Any] = {
+        "sid": sid, "actions": ["s3:ListBucket"], "resources": [f"arn:aws:s3:::{bucket}"]
+    }  # fmt: skip
+    if folder:
+        statement["condition"] = {
+            "test": "StringLike", "variable": "s3:prefix", "values": [folder, f"{folder}*"]
+        }  # fmt: skip
+    return statement
+
+
+def connector_source_statements(config: OspreyConfig) -> list[dict[str, Any]]:
+    """The namespace role's statements for `cloud_platform.connector_sources` (ADR-140 Amendment
+    21), each a declared bucket's, workgroup's, database's or location's: an S3 source listed under
+    its folder and read under it; an Athena workgroup's queries run, read and stopped, its named
+    queries read and the workgroup asked for (*Test connection*); its databases' Glue entries read;
+    its tables' locations listed and read, and their buckets' location asked (Athena reads them as
+    the role); its results location written, and read back, there alone, and its bucket's location
+    and uploads asked. None with nothing declared."""
+    from schemas.deployment import s3_location
+
+    assert config.cloud_platform is not None
+    sources = config.cloud_platform.connector_sources
+    out: list[dict[str, Any]] = []
+    for n, s3 in enumerate(sources.s3):
+        out.append(_listed_under(s3.bucket, s3.prefix, f"S3SourceList{n}"))
+        out.append({"sid": f"S3SourceRead{n}", "actions": ["s3:GetObject"],
+                    "resources": [f"arn:aws:s3:::{s3.bucket}/{s3.prefix}*"]})  # fmt: skip
+    for n, athena in enumerate(sources.athena):
+        region = athena.region
+        out.append({
+            "sid": f"AthenaWorkgroup{n}",
+            "actions": ["athena:StartQueryExecution", "athena:GetQueryExecution",
+                        "athena:GetQueryResults", "athena:StopQueryExecution",
+                        "athena:GetNamedQuery", "athena:GetWorkGroup"],
+            "resources": [f"arn:aws:athena:{region}:{_ACCOUNT}:workgroup/{athena.workgroup}"],
+        })  # fmt: skip
+        glue = [f"arn:aws:glue:{region}:{_ACCOUNT}:catalog"]
+        for database in athena.databases:
+            glue += [f"arn:aws:glue:{region}:{_ACCOUNT}:database/{database}",
+                     f"arn:aws:glue:{region}:{_ACCOUNT}:table/{database}/*"]  # fmt: skip
+        out.append({"sid": f"AthenaGlue{n}",
+                    "actions": ["glue:GetDatabase", "glue:GetTable", "glue:GetTables",
+                                "glue:GetPartition", "glue:GetPartitions",
+                                "glue:BatchGetPartition"],
+                    "resources": glue})  # fmt: skip
+        for m, location in enumerate(athena.table_locations):
+            bucket, folder = s3_location(location)
+            out.append(_listed_under(bucket, folder, f"AthenaTablesList{n}x{m}"))
+            out.append({"sid": f"AthenaTablesBucket{n}x{m}", "actions": ["s3:GetBucketLocation"],
+                        "resources": [f"arn:aws:s3:::{bucket}"]})  # fmt: skip
+            out.append({"sid": f"AthenaTablesRead{n}x{m}", "actions": ["s3:GetObject"],
+                        "resources": [f"arn:aws:s3:::{bucket}/{folder}*"]})  # fmt: skip
+        bucket, folder = s3_location(athena.results_location)
+        out.append(_listed_under(bucket, folder, f"AthenaResultsList{n}"))
+        out.append({"sid": f"AthenaResultsBucket{n}",
+                    "actions": ["s3:GetBucketLocation", "s3:ListBucketMultipartUploads"],
+                    "resources": [f"arn:aws:s3:::{bucket}"]})  # fmt: skip
+        out.append({"sid": f"AthenaResultsRead{n}",
+                    "actions": ["s3:GetObject", "s3:ListMultipartUploadParts"],
+                    "resources": [f"arn:aws:s3:::{bucket}/{folder}*"]})  # fmt: skip
+        out.append({"sid": f"AthenaResultsWrite{n}", "actions": sorted(RESULTS_WRITES),
+                    "resources": [f"arn:aws:s3:::{bucket}/{folder}*"]})  # fmt: skip
+    return out
+
+
+def _declared_s3(config: OspreyConfig) -> dict[str, set[str]]:
+    """Each bucket the declaration names, with its declared folders ('' for its top)."""
+    from schemas.deployment import s3_location
+
+    assert config.cloud_platform is not None
+    sources = config.cloud_platform.connector_sources
+    found: dict[str, set[str]] = {}
+    for s3 in sources.s3:
+        found.setdefault(s3.bucket, set()).add(s3.prefix)
+    for athena in sources.athena:
+        for location in [*athena.table_locations, athena.results_location]:
+            bucket, folder = s3_location(location)
+            found.setdefault(bucket, set()).add(folder)
+    return found
+
+
+def _declared_databases(config: OspreyConfig) -> set[str]:
+    assert config.cloud_platform is not None
+    return {d for a in config.cloud_platform.connector_sources.athena for d in a.databases}
+
+
+def _declared_workgroups(config: OspreyConfig) -> set[tuple[str, str]]:
+    """Each declared workgroup by (region, name)."""
+    assert config.cloud_platform is not None
+    return {(a.region, a.workgroup) for a in config.cloud_platform.connector_sources.athena}
+
+
+_ARN_ATHENA = re.compile(
+    r"^arn:aws:athena:(?P<region>[a-z0-9-]+):"
+    + re.escape(_ACCOUNT)
+    + r":workgroup/(?P<name>[^/]+)$"
+)
+_ARN_GLUE = re.compile(
+    r"^arn:aws:glue:(?P<region>[a-z0-9-]+):" + re.escape(_ACCOUNT)
+    + r":(?:catalog|database/(?P<database>[^/]+)|table/(?P<tdatabase>[^/]+)/\*)$"
+)  # fmt: skip
+_ARN_S3 = re.compile(r"^arn:aws:s3:::(?P<bucket>[^/]+)(?:/(?P<key>.*))?$")
+
+
+def _resource_why(resource: str, config: OspreyConfig) -> str:
+    """Why `resource` is not one the declaration names, or ''. **Default-deny**: an ARN of a shape
+    not recognised here (an access point, another partition, another service, another account) is
+    refused (the orchestrator's review of L1.9 part 2)."""
+    declared_s3 = _declared_s3(config)
+    if found := _ARN_S3.match(resource):
+        bucket, key = found["bucket"], found["key"]
+        if bucket not in declared_s3:
+            return f"names the bucket {bucket}, which is not declared"
+        if key is not None and not any(key.startswith(f) for f in declared_s3.get(bucket, set())):
+            return f"reads {bucket} outside its declared folders"
+        return ""
+    if found := _ARN_ATHENA.match(resource):
+        if (found["region"], found["name"]) not in _declared_workgroups(config):
+            name, region = found["name"], found["region"]
+            return f"names the workgroup {name} in {region}, which is not declared"
+        return ""
+    if found := _ARN_GLUE.match(resource):
+        regions = {region for region, _name in _declared_workgroups(config)}
+        if found["region"] not in regions:
+            return f"names Glue in {found['region']}, where no workgroup is declared"
+        database = found["database"] or found["tdatabase"]
+        if database is not None and database not in _declared_databases(config):
+            return f"names the database {database}, which is not declared"
+        return ""
+    return f"names {resource}, a resource of a shape this check does not recognise"
+
+
+def _listing_why(statement: dict[str, Any], config: OspreyConfig) -> str:
+    """A listing under its declared folders alone: `s3:ListBucket` on a bucket declared at its top,
+    or held by `StringLike` on `s3:prefix` to values each inside a declared folder (`["*"]`, or a
+    folder beside the declared one, is refused)."""
+    declared = _declared_s3(config)
+    condition = statement.get("condition") or {}
+    for resource in statement["resources"]:
+        bucket = resource.removeprefix("arn:aws:s3:::")
+        if "" in declared.get(bucket, set()):
+            continue  # declared at its top: the whole listing is declared
+        if condition.get("variable") != "s3:prefix" or not condition.get("values"):
+            return f"lists {bucket} beyond its declared folders (no s3:prefix condition)"
+        if condition.get("test") != "StringLike":
+            return f"lists {bucket} under a {condition.get('test')} condition, not StringLike"
+        for value in condition["values"]:
+            if not any(value.removesuffix("*").startswith(f) and f for f in declared[bucket]):
+                return f"lists {bucket} under {value!r}, beyond its declared folders"
+    return ""
+
+
+def _wide(statement: dict[str, Any], config: OspreyConfig, results: set[str]) -> str:
+    """Why `statement` is not read-only and scoped to the declaration, or ''."""
+    actions, resources = set(statement["actions"]), list(statement["resources"])
+    if actions - SOURCE_READS - RESULTS_WRITES:
+        return f"gives {', '.join(sorted(actions - SOURCE_READS - RESULTS_WRITES))}"
+    if actions & RESULTS_WRITES and not set(resources) <= results:
+        return "writes outside a declared results_location"
+    if any("?" in r or r == "*" or ("*" in r and not any(p.match(r) for p in _NARROW_STAR))
+           for r in resources):  # fmt: skip
+        return "names a wildcard resource"
+    for resource in resources:
+        if why := _resource_why(resource, config):
+            return why
+    if "s3:ListBucket" in actions:
+        return _listing_why(statement, config)
+    return ""
+
+
+#: IAM's limit on a customer managed policy's document, in characters with whitespace removed.
+POLICY_LIMIT = 6_144
+
+
+def policy_characters(statements: list[dict[str, Any]]) -> int:
+    """The policy document's size as IAM counts it (whitespace removed), with the account id
+    written as its twelve digits."""
+    document = {"Version": "2012-10-17", "Statement": [
+        {"Sid": st["sid"], "Effect": "Allow", "Action": st["actions"],
+         "Resource": [r.replace(_ACCOUNT, "000000000000") for r in st["resources"]],
+         **({"Condition": {st["condition"]["test"]: {st["condition"]["variable"]:
+                                                      st["condition"]["values"]}}}
+            if "condition" in st else {})}
+        for st in statements
+    ]}  # fmt: skip
+    return len(json.dumps(document, separators=(",", ":")))
+
+
+def refuse_wide_statements(config: OspreyConfig, statements: list[dict[str, Any]]) -> None:
+    """The render refuses, in words, a statement that is not read-only and scoped (ADR-140 Amendment
+    21): an action outside `SOURCE_READS` and `RESULTS_WRITES`; a write on anything but a declared
+    results location's objects; a `*` resource, a `?` anywhere, or a `*` anywhere but a folder's
+    objects or a database's tables; a bucket, folder or database the declaration does not name; a
+    bucket listed with no `s3:prefix` condition beyond a folder declared at its top."""
+    from harness.cloud_platform import CloudPlatformNotRenderable
+    from schemas.deployment import s3_location
+
+    assert config.cloud_platform is not None
+    results = set()
+    for athena in config.cloud_platform.connector_sources.athena:
+        bucket, folder = s3_location(athena.results_location)
+        results.add(f"arn:aws:s3:::{bucket}/{folder}*")
+    if (size := policy_characters(statements)) > POLICY_LIMIT:
+        raise CloudPlatformNotRenderable(
+            "cloud_platform.connector_sources: the role's policy for the declared sources comes "
+            f"to {size} characters, past IAM's limit of {POLICY_LIMIT:,} for one managed policy: "
+            "declare fewer buckets, folders or databases"
+        )
+    for statement in statements:
+        if why := _wide(statement, config, results):
+            raise CloudPlatformNotRenderable(
+                f"cloud_platform.connector_sources: the role's statement {statement['sid']} {why}; "
+                "a declared source is given read-only statements scoped to it, and writes on its "
+                "results location alone"
+            )
+
+
+def _connector_sources_file(config: OspreyConfig) -> str:
+    """`connector_sources.tf`: the statements, as one policy attached to the namespace's own role
+    (P7b's IRSA, which the Conduit runs as); no new account, no key."""
+    from harness.cloud_platform import terraform as this
+
+    statements = this.connector_source_statements(config)  # by the module, so a test can plant
+    refuse_wide_statements(config, statements)
+    blocks: list[Any] = []
+    for statement in statements:
+        body: list[Any] = [
+            ("sid", _q(statement["sid"])),
+            ("actions", "[" + ", ".join(_q(a) for a in statement["actions"]) + "]"),
+            ("resources", "[" + ", ".join(_q(r) for r in statement["resources"]) + "]"),
+        ]
+        if "condition" in statement:
+            condition = statement["condition"]
+            body.append(("condition", [
+                ("test", _q(condition["test"])), ("variable", _q(condition["variable"])),
+                ("values", "[" + ", ".join(_q(v) for v in condition["values"]) + "]"),
+            ]))  # fmt: skip
+        blocks.append(("statement", body))
+    return _file(
+        "ADR-140 Amendment 21: the S3 buckets and Athena workgroups osprey.yaml declares\n"
+        "(cloud_platform.connector_sources), read by the Conduit as the namespace's own role\n"
+        "(irsa.tf), read-only and scoped to each declared bucket, folder, workgroup and database;\n"
+        "Athena's results written to the declared results location alone. No key exists anywhere.",
+        [
+            # Named for this file: the namespace folder's own files may already hold a `current`.
+            ('data "aws_caller_identity" "osprey_connector_sources"', []),
+            ('data "aws_iam_policy_document" "connector_sources"', blocks),
+            (
+                'resource "aws_iam_policy" "connector_sources"',
+                [
+                    ("name", '"${var.namespace}-connector-sources"'),
+                    ("policy", "data.aws_iam_policy_document.connector_sources.json"),
+                ],
+            ),
+            (
+                'resource "aws_iam_role_policy_attachment" "connector_sources"',
+                [
+                    ("role", "aws_iam_role.service.name"),
+                    ("policy_arn", "aws_iam_policy.connector_sources.arn"),
+                ],
+            ),
+        ],
+    )
 
 
 def _gateway_role(config: OspreyConfig, platform: PlatformSettings) -> str:

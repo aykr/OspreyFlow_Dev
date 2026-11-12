@@ -512,6 +512,9 @@ def _egress_addresses_by_kind(
         "always": [(host.format(region=region), 443) for host in profile.egress.always],
         "identity": [(host.format(region=region), 443) for host in profile.egress.identity],
         "engines": _engine_addresses(config, profile), "maps": [], "mail": [], "connectors": [],
+        # ADR-140 Amendment 21: each declared S3 bucket and Athena workgroup by its own host, on
+        # 443. Never a results or table location's bucket: Athena reaches those itself.
+        "sources": [(host, 443) for host in _cp(config).connector_sources.hosts()],
     }  # fmt: skip
     for map_provider in config.map.providers if config.map is not None else []:
         if map_provider.proxy == "none":
@@ -994,11 +997,18 @@ def render_cloud_platform(
     # What the cluster's install writes into our Secret, and this profile has no install to write.
     install = _what_the_install_writes(config, as_cluster, set(variables))
     environment.update(install.settings)
-    if _cp(config).connector_hosts:
-        # The Conduit's own allow-list, from the list the egress policy allows (one list, both).
+    sources = _cp(config).connector_sources
+    if _cp(config).connector_hosts or sources.declared():
+        # The Conduit's own allow-list, from the lists the egress policy allows (one list, both).
         # Hosts alone: the Conduit's allow-list matches a host; the port is the egress policy's.
         hosts = {connector_address(e)[0] for e in _cp(config).connector_hosts}
-        environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(hosts))
+        environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(hosts | set(sources.hosts())))
+    if sources.declared():
+        # ADR-140 Amendment 21: what Admin › Connections is told the render made, so it refuses an
+        # S3 or Athena connection not declared, as Admin › Models refuses an engine (ADR-135 Am 8).
+        environment["OSPREY_CONNECTOR_SOURCES"] = json.dumps(
+            sources.model_dump(mode="json"), sort_keys=True
+        )
     secrets = values["secrets"]
     secrets["keys"] = sorted({k for k in secrets["keys"] if k not in variables} | set(install.keys))
     secrets["defaults"] = {

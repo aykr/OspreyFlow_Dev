@@ -1,0 +1,9 @@
+# Taken before item 4's code, on f298deb (the plan not yet committed) with the new tests in the worktree (the fix then committed as 489cc4b).
+# command: pytest -q -rf tests/connectors/test_cloud_clients.py tests/connectors/test_s3_connector.py (closed offline ports)
+# Each fails for its own reason: pyarrow's 301 and 400 worded generically; an empty listing in another region read as an empty folder.
+FAILED ../OspreyFlow_Build/tests/connectors/test_cloud_clients.py::test_pyarrow_s_answer_for_another_region_is_worded_and_never_followed[moved]
+FAILED ../OspreyFlow_Build/tests/connectors/test_cloud_clients.py::test_an_empty_listing_in_another_region_is_told_so_not_read_as_an_empty_folder[moved]
+FAILED ../OspreyFlow_Build/tests/connectors/test_cloud_clients.py::test_an_empty_listing_in_another_region_is_told_so_not_read_as_an_empty_folder[wrong_region]
+FAILED ../OspreyFlow_Build/tests/connectors/test_s3_connector.py::test_a_store_s_refusal_is_judged_by_its_code_not_by_a_key_s_words[When reading information for key 'AWS Error ACCESS_DENIED/a.csv' in bucket 'b': AWS Error UNKNOWN (HTTP status 301) during HeadObject operation: No response body.-the bucket is in another region than the connection names: correct its Region in Admin \u203a Connections; nothing was read]
+FAILED ../OspreyFlow_Build/tests/connectors/test_s3_connector.py::test_a_store_s_refusal_is_judged_by_its_code_not_by_a_key_s_words[When getting information for bucket 'b': AWS Error UNKNOWN (HTTP status 400) during HeadBucket operation: No response body. Looks like the configured region is 'eu-west-2' while the bucket is located in 'eu-west-1'.-the bucket is in another region than the connection names: correct its Region in Admin \u203a Connections; nothing was read]
+5 failed, 43 passed in 3.54s

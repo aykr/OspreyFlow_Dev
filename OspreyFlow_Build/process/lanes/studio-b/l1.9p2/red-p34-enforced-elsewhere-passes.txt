@@ -1,0 +1,32 @@
+# head d144bfa; plant: Test passes a workgroup enforcing another results location
+# command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py
+# must fail: test_test_refuses_a_workgroup_enforcing_another_results_location; all failed: yes
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_undeclared_connection_is_refused_when_it_is_saved[s3]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_undeclared_connection_is_refused_when_it_is_saved[athena]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_declared_connection_is_saved_and_tested[s3]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_declared_connection_is_saved_and_tested[athena]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[s3]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[athena]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change0]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change1]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change2]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change3]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change4]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change5]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change6]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change7]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change8]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change9]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_another_profile_is_not_held_to_a_declaration[s3]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_another_profile_is_not_held_to_a_declaration[athena]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[s3]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[athena]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://synthetic-exports.s3.eu-west-2.amazonaws.com/]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://athena.eu-west-2.amazonaws.com/]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://SYNTHETIC-EXPORTS.s3.eu-west-2.amazonaws.com./]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_sql_connection_to_a_declared_source_s_host_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_is_never_blamed_on_s3_or_athena_for_another_kind[sql]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_is_never_blamed_on_s3_or_athena_for_another_kind[api]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_leaving_results_to_its_workgroup_sends_the_declared_location
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_test_refuses_a_workgroup_enforcing_another_results_location - assert True is False
+1 failed, 27 passed, 26 warnings in 1.97s

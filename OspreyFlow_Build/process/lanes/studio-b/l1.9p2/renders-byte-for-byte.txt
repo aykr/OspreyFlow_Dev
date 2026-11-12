@@ -1,0 +1,46 @@
+# L1.9 part 2: every profile's render, main (586769e) against this branch (d144bfa, with the head's schema and both shared
+# diffs applied), each archived without .git, so the image tag is 'unknown' in both. Script: render_all.py beside this file
+# (local-lite and Small from tests/fixtures/deployment_v0_4_12, cluster as test_cluster_render's cluster_config, the
+# four cloud-platform fixtures; the new development-sources fixture is not on main). diff -rq, then each changed line:
+Files r-before/cloud-platform-development/values.yaml and r-after/cloud-platform-development/values.yaml differ
+Files r-before/cloud-platform-poc/values.yaml and r-after/cloud-platform-poc/values.yaml differ
+Files r-before/cloud-platform-production/values.yaml and r-after/cloud-platform-production/values.yaml differ
+Files r-before/cloud-platform-production-bedrock/values.yaml and r-after/cloud-platform-production-bedrock/values.yaml differ
+## r-before/cloud-platform-development/values.yaml
+--- 
++++ 
+@@ -42,2 +42,5 @@
+   connector_hosts: []
++  connector_sources:
++    s3: []
++    athena: []
+ network:
+## r-before/cloud-platform-poc/values.yaml
+--- 
++++ 
+@@ -43,2 +43,5 @@
+   connector_hosts: []
++  connector_sources:
++    s3: []
++    athena: []
+ network:
+## r-before/cloud-platform-production/values.yaml
+--- 
++++ 
+@@ -53,2 +53,5 @@
+   connector_hosts: []
++  connector_sources:
++    s3: []
++    athena: []
+ network:
+## r-before/cloud-platform-production-bedrock/values.yaml
+--- 
++++ 
+@@ -62,2 +62,5 @@
+   connector_hosts: []
++  connector_sources:
++    s3: []
++    athena: []
+ network:
+# Identical: local-lite (6 files), small (6), cluster (2). The cloud-platform fixtures, none declaring a source,
+# differ only in the deployment's own osprey.yaml copy, which now holds connector_sources' empty default.

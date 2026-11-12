@@ -52,6 +52,8 @@ def _type_name(annotation: Any) -> str:
         return annotation.__name__
     origin = typing.get_origin(annotation)
     arguments = typing.get_args(annotation)
+    if origin is typing.Annotated:
+        return _type_name(arguments[0])  # its constraints are the schema's, not the reader's
     if origin is typing.Literal:
         return " \\| ".join(f"`{value}`" for value in arguments)
     if origin in (typing.Union, types.UnionType):
@@ -95,6 +97,14 @@ SECTIONS = {
     "cluster.hosts": "One machine.",
     "cloud_platform": "A namespace on a shared Kubernetes platform (profile cloud-platform only): "
     "the platform's settings file, the namespace, its registry, and what its egress may reach.",
+    "cloud_platform.connector_sources": "The S3 buckets and Athena workgroups an S3 or Athena "
+    "connection may read: each the Conduit's own egress row and the namespace role's read "
+    "(ADR-140 Amendment 21).",
+    "cloud_platform.connector_sources.s3": "One bucket, its region, and the folder a connection "
+    "may read at or under.",
+    "cloud_platform.connector_sources.athena": "One workgroup, its region, its databases, its "
+    "results location (the only place a declared source gives the role a write) and its tables' "
+    "locations.",
     "network": "The address the deployment answers at, and what it publishes.",
     "network.tls": "Small on a server of your own: the organisation's certificate (ADR-114 Amendment 33).",
     "governance.organisation_provider": "Small on a server of your own: the organisation's identity "

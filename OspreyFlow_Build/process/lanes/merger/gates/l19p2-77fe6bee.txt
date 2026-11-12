@@ -1,0 +1,14 @@
+Running on ospreyflow-test (stack offline, osprey-runs/merge/OspreyFlow_Build/), logged at osprey-runs/merge.meta/runs/20261112T003313Z/log: bash -c cd ../OspreyFlow_Build && ../OspreyFlow_Core/.venv/bin/python -m pytest -q -p no:cacheprovider -n auto tests/cp_policy_check tests/harness/test_cloud_platform_egress.py tests/harness/test_cloud_platform_render.py tests/harness/test_cloud_platform_poc.py tests/harness/test_cloud_platform_identity.py tests/harness/test_cloud_sources_render.py tests/services/api/test_cloud_sources_declared.py tests/services/api/test_cloud_connector_access.py tests/connectors tests/test_admin_guide.py tests/test_docs_pdf.py tests/test_lanes_heartbeat.py tests/test_lanes_launch.py 2>&1 | tail -2; make cp-policy-check 2>&1 | grep -i "violation"; make schemas-check 2>&1 | tail -2; make lanes-check 2>&1 | tail -2
+ERROR tests/connectors/test_sql_connector_live.py::test_verify_full_refuses_a_certificate_from_a_ca_it_does_not_trust
+863 passed, 17 skipped, 46 warnings, 16 errors in 162.14s (0:02:42)
+development-sources.yaml: 57 manifests, 0 violation(s)
+development.yaml: 57 manifests, 0 violation(s)
+poc.yaml: 49 manifests, 0 violation(s)
+production-bedrock.yaml: 64 manifests, 0 violation(s)
+production.yaml: 64 manifests, 0 violation(s)
+cp-policy-check: 0 violation(s)
+cd ../OspreyFlow_Core && PYTHONPATH=/root/osprey-runs/merge/OspreyFlow_Build .venv/bin/python -m tools.schemas_check
+schemas-check: 598 generated types match committed output.
+cd ../OspreyFlow_Core && PYTHONPATH=/root/osprey-runs/merge/OspreyFlow_Build .venv/bin/python -m tools.adr_reservations_check
+adr-reservations-check: every heading above the baseline is reserved.
+Wall time: 679 s, exit 0 (no stack, no lease; set-up before it 16 s)

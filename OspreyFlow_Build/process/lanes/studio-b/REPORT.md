@@ -1,20 +1,34 @@
-# studio-b · brief L1.10b, the ceiling's carries (ADR-148 Amendment 3) · code a3e3ea3, rebased on main 77200db
+# studio-b · brief L1.9 part 2, S3 and Athena on the cloud-platform profile (ADR-140 Amendment 21) · code 77fe6be, rebased on main 586769e (the orchestrator's review round 1 fixed)
 
-1. **Packs** (`seed_internal.py`):
-   - hmp and fixture-corp declare SECRET. Each writes one SECRET link by design, and the proof shows it is reached.
-   - ledger, both prison-intelligence packs and enron declare OFFICIAL. Each is proved through its real builders, or by the ceiling's own row check over its files.
-   - **public** declares nothing: its staged recipe and rows are judged on the host before the seed starts.
-2. **Staged tables:** a run the ceiling's row check refuses removes its own step tables (`staged_run.remove_step_tables_on`), both in the pipeline's branch and in the staged engine. A removal error is logged, and the refusal is still told. Measured live against MinIO (`tests/ingest/test_deployment_ceiling_staged_live.py`: its own bucket, a lease guard, teardown). After the rebase, L1.7's join guard refuses rows of differing markings, so each owner is marked as the bookings it joins (`marked_inputs`), and the controls show the Join met them.
-3. **Test judges the ceiling:** the dry run judges its rows as the load does. Verify then judges the rest of an unstaged file, after the dry run, off the loop, in the load's words. The withheld guards come first on both paths.
-4. **Decisions taken:**
-   - **The strict option** (rules 3 and 4; the orchestrator's finding 1): Verify judges past its sample only for an author cleared to read every row of the file. So an uncleared author's file that is above the ceiling past the sample passes Test and is refused only at Load, short of brief point 3 for that author.
-   - **public** is judged by what it stages, not declared (finding 2). **Only the row check's refusals** ("load", "unreadable") remove step tables.
-5. **Plants:** 27 in `l1.10b/red_plants.py`, each red for its reason at 5e8736b, none by the join guard; green 32.
-6. **Reviews:** my lane-reviewer's (twice, the second after the rebase), the orchestrator's and the merger's; every finding is fixed or carried.
-7. **Gates:** make test and make -k ci on the server; the live set on stack d. Files and explanation in `gates/` (named in the ready-to-merge).
-8. **Ratified:** `tests/ingest/recipe_test_support.py`'s `LocalStore.delete_file` (studio's file). The studio lane was told of it, and of the `engine.dry_run_recipe` and `studio_verify` edits.
-9. **Carries:**
-   - Am 3's own: a staged Test judges only its sample; a backstop refusal after raw staging, or a refusal other than the ceiling's, keeps the staged rows and tables.
-   - The merger's 5, 6, 9 and 11, which the merger carries.
-   - Still from Am 2: the drawn item (case-b), and cloud-platform's default (P7).
-10. **Left:** L1.9, after P7.
+1. **Hosts declared at install:** `cloud_platform.connector_sources`, set beside `connector_hosts` (s3: bucket, region, folder; athena: workgroup, region, databases, results_location, table_locations).
+   - Each declared host is the Conduit's own egress row on 443 and is on its allow-list. Nothing declared renders nothing.
+   - Proved by `tests/harness/test_cloud_sources_render.py`.
+2. **Admin refuses what was not rendered**, at save, at Test and before every read, in words naming the setting, the re-render, `helm upgrade` and the Terraform.
+   - Ten wider connections are refused.
+   - An unreadable declaration is refused in words.
+   - An SQL or API connection to a declared host is refused.
+   - The declared results location is always sent; Test refuses a workgroup enforcing another.
+   - Proved by `tests/services/api/test_cloud_sources_declared.py` (28 cases).
+3. **IAM:** `terraform/connector_sources.tf` attaches read-only statements to P7b's namespace role. No new account is made.
+   - The render refuses, default-deny: any action outside the read set, a write outside the results location, `*`/`?`, an undeclared bucket, folder, workgroup, database or region, a listing not held by StringLike to declared folders, an unrecognised ARN shape, and a policy past 6,144 characters (eighteen planted statements).
+   - The recorded S3 is given the rendered grants and refuses as IAM would; the deployment's listing asks within them.
+4. **Region and parse refusals:**
+   - pyarrow 26.0.0 was measured against AWS's documented answers: it follows neither and raises `HTTP status 301|400`, now in typed words.
+   - Athena's two parse answers get one set of words. A table location left out of the declaration is refused by the recorded Athena from the rendered grants.
+   - Real S3 and Athena are not measured (CARRIES).
+5. **cp-policy-check:** 0 violation(s) on all five fixtures, the new `development-sources.yaml` among them (`gates/17c243a9.ci.txt`).
+   - Every other profile renders as on main; the only difference is the empty default in the embedded osprey.yaml copy (`l1.9p2/renders-byte-for-byte.txt`).
+6. **Decisions taken:**
+   - The orchestrator's rulings: Q1 schemas at head, the rest as diffs; Q2 no results-bucket row; Q3 table_locations are IAM-only; (a) connector_hosts reach api alone; (b) the shared IRSA role is logged, with a CARRIES row; (c) pyarrow measured.
+   - Mine, confirmed by the orchestrator:
+     - athena:GetWorkGroup, because Test asks it;
+     - results_location required, and a folder;
+     - the default catalog only;
+     - nothing declared refuses everything.
+7. **Plants:** 34 in `l1.9p2/red_plants.py`, each red for its stated reason at d144bfa; green is 60. The first reds are `red-1-3`, `red-2` and `red-4a`/`4b`.
+8. **Reviews:** my lane-reviewer's 13 items (4 must-fix) and the orchestrator's round 1 (7 items and 7 smaller ones), all fixed or recorded; China and GovCloud regions refused, as the orchestrator recommended.
+9. **Shared diffs for merge** (`l1.9p2/`):
+   - `cloud-platform-L19p2.diff`: harness/cloud_platform, profile.yaml, the fifth fixture.
+   - `docs-admin-guide-L19p2.diff`: the guide tool, both guides, `test_admin_guide.py`.
+10. **Gates at 77fe6bee** (both diffs applied, the guide's PDF made): make -k ci exit 0, cp-policy-check 0 on all five; make test 12,250 passed, 2 failed, both main's known (`gates/77fe6bee.explained.md`). Nothing of mine is running.
+11. **Carries:** a fourth account for the Conduit (platform team). The live checks on the client's platform: Athena's parse answer, real region refusals, KMS, VPC endpoints.

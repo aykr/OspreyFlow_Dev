@@ -47,8 +47,9 @@ egress:
   # ADR-148 Amendment 5 point 21: egress is each workload's own, one Calico policy a workload; DNS
   # is every pod's, and anything not named here is denied. Who reaches each kind of host: S3 and STS
   # (`always`) the bucket role's pods (IRSA), a model engine the gateway alone, a proxied map source
-  # the Conduit, the mail server Keycloak (its sign-in mail), a connector host the Conduit and the
-  # workers.
+  # the Conduit, the mail server Keycloak (its sign-in mail), a connector host and a declared S3 or
+  # Athena source (`connector_sources`) the Conduit alone: no other pod reads a connection
+  # (ADR-140 Amendment 21; the worker's jobs read none).
   # STS alone: the gateway signs Bedrock's calls by its own role (P11 part 2) and never reaches S3.
   identity: ["sts.{region}.amazonaws.com"]
   # No KMS: S3 calls it on the backups' behalf (SSE-KMS), so none of P9's pods reaches it.
@@ -63,7 +64,8 @@ egress:
     engines: [litellm]
     maps: [api]
     mail: [keycloak]
-    connectors: [api, worker]
+    connectors: [api]
+    sources: [api]
   # The managed stores' networks (RDS, ElastiCache): the pods that read a store's details.
   managed: [api, worker, report-sync, superset, keycloak, litellm]
   # Their ports: RDS's PostgreSQL and ElastiCache's (the Terraform's own); the OpenSearch domain's

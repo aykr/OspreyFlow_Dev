@@ -22,7 +22,7 @@ import re
 import socket
 import threading
 import time
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -56,6 +56,7 @@ from services.ingest.connectors.sql_connector import (
     tcp_reaches,
 )
 
+from schemas.deployment import ConnectorSources, DeclaredAthenaSource
 from schemas.sources import (
     ApiConnectionSettings,
     ApiRead,
@@ -441,10 +442,126 @@ def connection_host(settings: object) -> tuple[str, str] | None:
 
 def refuse_connection_hosts(settings: object) -> None:
     """At save: the host refused if it is, or resolves, inside the deployment. The allow-list is
-    not asked yet: an operator may add the host after the administrator names it."""
+    not asked yet: an operator may add the host after the administrator names it. On the
+    cloud-platform profile an S3 or Athena connection is refused unless the render made its way
+    out (`refuse_undeclared`)."""
+    refuse_undeclared(settings)
     found = connection_host(settings)
     if found is not None:
         refuse_host(found[0], found[1], allowed_hosts=None)
+
+
+#: ADR-140 Amendment 21: the words for an S3 or Athena connection the cloud-platform render made no
+#: way out (nor IAM read) for, as Admin › Models words an engine the render did not make (ADR-135
+#: Amendment 8).
+NOT_DECLARED = (
+    "The render made no way out or read for {what}. Declare it in osprey.yaml's "
+    "cloud_platform.connector_sources, re-render, run helm upgrade and have the platform team "
+    "apply the Terraform."
+)
+
+
+UNREADABLE_DECLARATION = (
+    "This deployment's rendered connector settings (OSPREY_CONNECTOR_SOURCES) cannot be read, so "
+    "no connection reaches out until they are: re-render from osprey.yaml and run helm upgrade; "
+    "nothing was read"
+)
+#: Test's refusal when the workgroup enforces its own results location, not the declared one.
+WORKGROUP_ELSEWHERE = (
+    "The workgroup {workgroup} enforces its own results location, not the declared one "
+    "({declared}), so every query would be refused writing its results: declare the "
+    "workgroup's location in osprey.yaml's cloud_platform.connector_sources, re-render, run "
+    "helm upgrade and have the platform team apply the Terraform; nothing was read"
+)
+#: A SQL or API connection to a declared S3 or Athena host, which would pass the allow-list and the
+#: egress row while skipping the declaration's bucket and folder rule (the lane review).
+SOURCE_HOST_BY_ANOTHER_KIND = (
+    "{host} is a declared S3 or Athena source's host: it is read through an S3 or Athena "
+    "connection, held to its declared bucket, folder and databases, never through a {kind} "
+    "connection; nothing was read"
+)
+
+
+def declared_sources(environ: Mapping[str, str] | None = None) -> ConnectorSources | None:
+    """What the cloud-platform render declared (`OSPREY_CONNECTOR_SOURCES`), none declared when it
+    is not set; `None` on every other profile, which renders no namespace egress (part 1's
+    allow-list alone holds there)."""
+    environ = os.environ if environ is None else environ
+    if environ.get("OSPREY_PROFILE", "") != "cloud-platform":
+        return None
+    text = environ.get("OSPREY_CONNECTOR_SOURCES", "").strip()
+    if not text:
+        return ConnectorSources()
+    try:
+        return ConnectorSources.model_validate_json(text)
+    except ValueError as unreadable:  # pydantic's ValidationError is one
+        # Fails closed, in words, never a 500 (the lane review): the render writes it, so an
+        # unreadable one is a hand edit; nothing is read until it is rendered again.
+        raise ConnectorRefused(UNREADABLE_DECLARATION) from unreadable
+
+
+def _s3_declared(settings: S3ConnectionSettings, made: ConnectorSources) -> bool:
+    return any(
+        d.bucket == settings.bucket and d.region == settings.region
+        and settings.prefix.startswith(d.prefix)  # each ends in `/`, so a sibling never matches
+        for d in made.s3
+    )  # fmt: skip
+
+
+def _athena_declaration(
+    settings: AthenaConnectionSettings, made: ConnectorSources
+) -> DeclaredAthenaSource | None:
+    """The declaration covering it: its workgroup and region, every database among the declared
+    ones, the default catalog (the one whose Glue entries the role may read), and its results
+    location the declared one or left empty (the declared one is then sent: `as_declared`)."""
+    return next(
+        (d for d in made.athena
+         if d.workgroup == settings.workgroup and d.region == settings.region
+         and set(settings.databases) <= set(d.databases)
+         and settings.catalog == "AwsDataCatalog"
+         and settings.results_location in (None, d.results_location)),
+        None,
+    )  # fmt: skip
+
+
+def as_declared(settings: AthenaConnectionSettings) -> AthenaConnectionSettings:
+    """On the cloud-platform profile, an Athena connection that leaves its results location to the
+    workgroup sends the declared one, the only one the role may write (the orchestrator's review:
+    left empty, Test passed while every read failed on the workgroup's own location)."""
+    made = declared_sources()
+    declaration = None if made is None else _athena_declaration(settings, made)
+    if declaration is None or settings.results_location is not None:
+        return settings
+    return settings.model_copy(update={"results_location": declaration.results_location})
+
+
+def refuse_undeclared(settings: object, environ: Mapping[str, str] | None = None) -> None:
+    """An S3 or Athena connection the cloud-platform render did not declare refused in words, at
+    save, at *Test connection* and before every read (ADR-140 Amendment 21). Fails closed: nothing
+    declared refuses every one."""
+    if not isinstance(settings, S3ConnectionSettings | AthenaConnectionSettings):
+        found = connection_host(settings)
+        if found is None:
+            return
+        made = declared_sources(environ)
+        bare = found[1].strip().strip("[]").rstrip(".").lower()
+        if made is not None and bare in made.hosts():
+            raise ConnectorRefused(SOURCE_HOST_BY_ANOTHER_KIND.format(host=bare, kind=found[0]))
+        return
+    made = declared_sources(environ)
+    if made is None:
+        return
+    if isinstance(settings, S3ConnectionSettings):
+        if _s3_declared(settings, made):
+            return
+        what = (f"the bucket {settings.bucket} in {settings.region}"
+                + (f" under {settings.prefix}" if settings.prefix else ""))  # fmt: skip
+        raise ConnectorRefused(NOT_DECLARED.format(kind="S3", what=what))
+    if _athena_declaration(settings, made) is not None:
+        return
+    what = (f"the workgroup {settings.workgroup} in {settings.region} with the databases "
+            f"{', '.join(settings.databases)}")  # fmt: skip
+    raise ConnectorRefused(NOT_DECLARED.format(kind="Athena", what=what))
 
 
 def source_file(dataset_id: str, name: str, root: Path | None = None) -> Path:
@@ -527,6 +644,9 @@ async def read_rows(
 ) -> ReadRows:
     """The rows one read of `source` finds, through its connection."""
     settings, read = connection.settings, source.read
+    # Before anything is asked of anyone: an S3 or Athena source the render declared, and no other
+    # kind to a declared source's host (ADR-140 Amendment 21).
+    refuse_undeclared(settings)
     if isinstance(settings, SqlConnectionSettings) and isinstance(read, SqlRead):
         # Off the event loop: getaddrinfo blocks (the independent review of L1.6, in L1.8).
         addresses = await asyncio.to_thread(readers.sql_addresses, settings.host)
@@ -561,6 +681,7 @@ async def read_rows(
         store = await asyncio.to_thread(_s3_store, readers, settings)
         return await asyncio.to_thread(read_s3, store, settings, read)
     if isinstance(settings, AthenaConnectionSettings) and isinstance(read, AthenaRead):
+        settings = as_declared(settings)
         await asyncio.to_thread(readers.check, "athena", settings.host())
         client = await asyncio.to_thread(readers.athena_client, settings)  # loads its model
         return await asyncio.to_thread(read_athena, client, settings, read)
@@ -619,6 +740,12 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
     """*Test connection*: a SQL login signed in over TLS and found read-only; an API's host on the
     allow-list and its secret set. Nothing is read."""
     settings = connection.settings
+    try:
+        # First: on the cloud-platform profile its allow-list is rendered from the same
+        # declaration, so this is the refusal whose words say what to do (ADR-140 Amendment 21).
+        refuse_undeclared(settings)
+    except ConnectorRefused as refused:
+        return ConnectionTest(ok=False, words=str(refused))
     found = connection_host(settings)
     addresses: list[str] | None = None
     if found is not None:
@@ -677,7 +804,15 @@ def _check_cloud(
         list_folder(_s3_store(readers, settings), settings.bucket, base, recursive=False, limit=1)
         return ConnectionTest(ok=True, words="The bucket answered, and its folder can be listed.")
     try:
-        readers.athena_client(settings).get_work_group(WorkGroup=settings.workgroup)
+        found = readers.athena_client(settings).get_work_group(WorkGroup=settings.workgroup)
     except (ClientError, BotoCoreError) as error:
         raise athena_refused(error) from error
+    declared = as_declared(settings).results_location
+    if declared is not None and declared_sources() is not None:
+        configuration = found.get("WorkGroup", {}).get("Configuration", {})
+        own = (configuration.get("ResultConfiguration") or {}).get("OutputLocation")
+        if configuration.get("EnforceWorkGroupConfiguration") and own != declared:
+            raise ConnectorRefused(
+                WORKGROUP_ELSEWHERE.format(workgroup=settings.workgroup, declared=declared)
+            )
     return ConnectionTest(ok=True, words="Athena answered, and the workgroup is there.")

@@ -1,0 +1,3 @@
+# The three lane-tool tests that failed in 17c243a9.test.txt's -n auto run, alone on the server (offline, no lease), twice
+3 passed in 2.23s
+3 passed in 1.87s

@@ -206,6 +206,48 @@ export type TlsSecret = string | null;
  */
 export type ConnectorHosts = string[];
 /**
+ * The bucket's own name (no dot)
+ */
+export type Bucket = string;
+/**
+ * The bucket's region (eu-west-2)
+ */
+export type Region1 = string;
+/**
+ * Default: the bucket's top. The folder a connection may read at or under, each name ending in / (exports/client-a/)
+ */
+export type Prefix = string;
+/**
+ * The S3 buckets
+ */
+export type S3 = DeclaredS3Source[];
+/**
+ * The workgroup's name
+ */
+export type Workgroup = string;
+/**
+ * The workgroup's region (eu-west-2)
+ */
+export type Region2 = string;
+/**
+ * The Glue databases a connection may read
+ *
+ * @minItems 1
+ */
+export type Databases = [string, ...string[]];
+/**
+ * Where Athena writes each query's results (s3://bucket/folder/): the only place a declared source gives the role a write. A folder, never a bucket's top
+ */
+export type ResultsLocation = string;
+/**
+ * Where the databases' tables keep their objects (s3://bucket/folder/), at least one, read by Athena as the namespace's role: read-only, and never reached by the Conduit
+ */
+export type TableLocations = string[];
+/**
+ * The Athena workgroups
+ */
+export type Athena = DeclaredAthenaSource[];
+/**
  * Default: false. Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass.
  */
 export type ExposeConduit = boolean;
@@ -475,7 +517,7 @@ export type Endpoint1 = string;
 /**
  * The region the buckets live in
  */
-export type Region1 = string;
+export type Region3 = string;
 /**
  * Default: instance — the server's own cloud identity, no key anywhere; `keys` reads OSPREY_S3_ACCESS_KEY and OSPREY_S3_SECRET_KEY at apply.
  */
@@ -717,12 +759,42 @@ export interface CloudPlatformConfig {
   egress_nets?: EgressNets;
   tls_secret?: TlsSecret;
   connector_hosts?: ConnectorHosts;
+  connector_sources?: ConnectorSources;
 }
 /**
  * For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 (IPv6), and never a default route
  */
 export interface EgressNets {
   [k: string]: string[];
+}
+/**
+ * The S3 buckets and Athena workgroups an S3 or Athena connection may read (ADR-140 Amendment 21). Each becomes the Conduit's own egress row on 443 and an entry on its allow-list, and the namespace's IAM role gains read-only statements scoped to it. Admin › Connections refuses an S3 or Athena connection not declared here; declare it, re-render and run helm upgrade (and apply the Terraform)
+ */
+export interface ConnectorSources {
+  s3?: S3;
+  athena?: Athena;
+}
+/**
+ * A bucket an S3 connection may read, under a folder (ADR-140 Amendment 21): a connection on it
+ * names this region and a folder at or under this one.
+ */
+export interface DeclaredS3Source {
+  bucket: Bucket;
+  region: Region1;
+  prefix?: Prefix;
+}
+/**
+ * An Athena workgroup an Athena connection may use (ADR-140 Amendment 21), with the databases
+ * it may read, where Athena writes its results, and where the tables' objects are (Athena reads
+ * them as the namespace's role, so the role is given read there; the Conduit never reaches
+ * them).
+ */
+export interface DeclaredAthenaSource {
+  workgroup: Workgroup;
+  region: Region2;
+  databases: Databases;
+  results_location: ResultsLocation;
+  table_locations: TableLocations;
 }
 /**
  * What this deployment publishes to its host.
@@ -926,7 +998,7 @@ export interface ExternalPostgres {
  */
 export interface ExternalObjectStore {
   endpoint: Endpoint1;
-  region: Region1;
+  region: Region3;
   credentials?: Credentials;
   bucket_prefix?: BucketPrefix;
 }

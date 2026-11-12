@@ -39,6 +39,11 @@
     "execution_not_found": {
       "status": 400,
       "body": {"__type": "InvalidRequestException", "AthenaErrorCode": "INVALID_INPUT", "Message": "QueryExecution {id} was not found"}
+    },
+    "malformed_query": {
+      "_about": "L1.9 part 2 (CARRIES row 150): the other answer Athena may give a statement that does not parse, refused at StartQueryExecution rather than run and FAILED. Modelled from the API reference (StartQueryExecution's InvalidRequestException, with its AthenaErrorCode and Message), not measured: no Athena is reachable from this build. The message is the parser's own, as a FAILED execution's reason gives it. test_athena_connector_live.py says which of the two Athena does, on the client's platform.",
+      "status": 400,
+      "body": {"__type": "InvalidRequestException", "AthenaErrorCode": "INVALID_INPUT", "Message": "{message}"}
     }
   },
   "failures": {
@@ -47,7 +52,7 @@
       "AthenaError": {"ErrorCategory": 2, "ErrorType": 1300, "Retryable": false, "ErrorMessage": "line 1:8: mismatched input 'FROM'. Expecting: '*', 'ALL', 'DISTINCT', <expression>"}
     },
     "syntax_eof": {
-      "_about": "A statement that ends where Athena expects more (a dangling WHERE). The column is the statement's length plus one. Whether Athena reports a syntax error as a FAILED execution (modelled here) or as an InvalidRequestException at StartQueryExecution is unconfirmed until part 2 (test_athena_connector_live.py's unparseable-query case).",
+      "_about": "A statement that ends where Athena expects more (a dangling WHERE). The column is the statement's length plus one. Athena may report a syntax error as this FAILED execution or as an InvalidRequestException at StartQueryExecution (malformed_query); both are modelled since L1.9 part 2, and which one Athena gives is recorded by test_athena_connector_live.py on the client's platform.",
       "StateChangeReason": "line 1:{column}: mismatched input '<EOF>'. Expecting: <expression>",
       "AthenaError": {"ErrorCategory": 2, "ErrorType": 1300, "Retryable": false, "ErrorMessage": "line 1:{column}: mismatched input '<EOF>'. Expecting: <expression>"}
     },
@@ -71,6 +76,11 @@
     "s3_access_denied": {
       "StateChangeReason": "Access denied when writing output to url: s3://synthetic-athena-results/out/{id}.csv . Please ensure you are allowed to access the S3 bucket.",
       "AthenaError": {"ErrorCategory": 2, "ErrorType": 1201, "Retryable": false, "ErrorMessage": "Access denied when writing output to url: s3://synthetic-athena-results/out/{id}.csv"}
+    },
+    "table_data_denied": {
+      "_about": "L1.9 part 2: a table whose objects the role may not read (its location not among the declaration's table_locations, so not in the role's policy). Athena reads a table's objects as the caller and fails the execution. Modelled from AWS's Athena troubleshooting guide, not measured.",
+      "StateChangeReason": "Permission denied on S3 path: s3://synthetic-lake/{database}/{table}/part-00000.parquet. Please check that your IAM user or role has the s3:GetObject permission.",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1201, "Retryable": false, "ErrorMessage": "Permission denied on S3 path: s3://synthetic-lake/{database}/{table}/part-00000.parquet"}
     }
   }
 }

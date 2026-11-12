@@ -9,16 +9,17 @@ own role (no key: ADR-148). It reads a synthetic table the client's team creates
 never a table holding real data), and asks Athena to refuse what the fixture refuses: a query that
 does not parse, a table that does not exist, and a catalog that does not exist.
 
-**Unconfirmed until part 2** (the orchestrator's review of L1.9, round 1, item 7): whether Athena
-reports a query that does not parse as a FAILED execution (the fixture's model) or refuses it at
-`StartQueryExecution` with an `InvalidRequestException`; and the same for a catalog it does not hold.
-The reader words both ways, so a read is refused either way; these cases say which one Athena does,
-and fail, naming it, if it is not the one modelled.
+**Unconfirmed until run there** (the orchestrator's review of L1.9, round 1, item 7): whether Athena
+reports a query that does not parse as a FAILED execution or refuses it at `StartQueryExecution` with
+an `InvalidRequestException`. Since part 2 both are modelled and the reader gives the same words for
+each; the parse case records which one Athena gave. A catalog it does not hold is modelled as FAILED
+alone, and that case fails, naming the answer, if Athena gives the other.
 """
 
 from __future__ import annotations
 
 import os
+import re
 import time
 
 import pytest
@@ -56,24 +57,33 @@ def test_athena_fails_a_table_that_does_not_exist_as_the_fixture_does() -> None:
                     AthenaRead(table=f"{database}.osprey_no_such_table"))  # fmt: skip
 
 
-def test_athena_fails_a_query_that_does_not_parse_as_the_fixture_does() -> None:
-    """The fixture's model: accepted at StartQueryExecution, then FAILED with Athena's reason (a
-    dangling WHERE, as `test_athena_connector`'s syntax case). A named query cannot be saved here,
-    so the statement is started as the reader starts one, and waited on by the reader's own wait."""
+def test_athena_refuses_a_query_that_does_not_parse_in_the_reader_s_words_either_way(
+    record_property: pytest.RecordProperty,
+) -> None:
+    """Either of Athena's two answers (L1.9 part 2, both modelled in `athena_fixture.py`): accepted
+    at StartQueryExecution and then FAILED with the parser's reason, or refused at the request with
+    an `InvalidRequestException` carrying it. The reader's words are the same for both; which one
+    Athena gave is recorded (`answer`) for ADR-140 Amendment 21, so the model can be corrected. A
+    named query cannot be saved here, so the statement is started as the reader starts one."""
     settings, database, table = _settings()
     client = cloud_athena_client(settings)
-    try:
-        started = client.start_query_execution(
-            QueryString=f'SELECT * FROM "{database}"."{table}" WHERE',
-            QueryExecutionContext={"Database": database, "Catalog": settings.catalog},
-            WorkGroup=settings.workgroup,
-        )
-    except ClientError as error:  # the other answer: refused at the request, not as an execution
-        pytest.fail(f"Athena refused the query at the request ({error}), not as a FAILED "
-                    "execution: correct athena_fixture.py's syntax model")  # fmt: skip
-    with pytest.raises(ConnectorRefused, match=r"Athena could not run the query: line 1:\d+"):
+    with pytest.raises(ConnectorRefused) as refused:
+        try:
+            started = client.start_query_execution(
+                QueryString=f'SELECT * FROM "{database}"."{table}" WHERE',
+                QueryExecutionContext={"Database": database, "Catalog": settings.catalog},
+                WorkGroup=settings.workgroup,
+            )
+        except ClientError as error:
+            record_property("answer", "refused_at_start")
+            raise athena_connector.refused_request(error) from error
+        record_property("answer", "failed_execution")
         athena_connector._wait(client, started["QueryExecutionId"], sleep=time.sleep,
                                clock=time.monotonic)  # fmt: skip
+    assert re.match(r"^Athena could not run the query: line 1:\d+: ", str(refused.value)), (
+        f"Athena answered an unparseable query otherwise ({refused.value}): correct "
+        "athena_fixture.py's syntax model"
+    )
 
 
 def test_athena_fails_a_catalog_it_does_not_hold_as_the_fixture_does() -> None:

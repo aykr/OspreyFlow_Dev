@@ -23,8 +23,9 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 from xml.sax.saxutils import escape
 
 from botocore.awsrequest import AWSPreparedRequest, AWSResponse
@@ -69,6 +70,12 @@ class RecordedS3:
     no_token: bool = False
     #: Every request: its host, its query and the access key it was signed with.
     requests: list[dict[str, Any]] = field(default_factory=list)
+    #: The role's own statements, as the render makes them from the declaration
+    #: (`harness.cloud_platform.terraform.connector_source_statements`), or None to grant everything.
+    #: Given, S3 refuses as IAM would (403, `AccessDenied`): a listing whose `prefix` no `StringLike`
+    #: value on `s3:prefix` matches, a listing with no prefix under a conditioned grant, and a key
+    #: outside every `s3:GetObject` resource (L1.9 part 2, the orchestrator's review; rule 15).
+    granted: list[dict[str, Any]] | None = None
 
     def attach(self, client: Any) -> Any:
         """`client` (botocore's S3 client) answered by this recording in place of the network."""
@@ -100,12 +107,39 @@ class RecordedS3:
             )
             headers = {"x-amz-bucket-region": "eu-west-1"} if status in (301, 400) else {}
             return _answer(request.url, status, body, headers)
+        if self.granted is not None and not self._allowed(bucket, url.path, query):
+            status, code, message, _extra = REFUSALS["denied"]
+            return _answer(request.url, status, f"<Error><Code>{code}</Code><Message>{message}"
+                                                "</Message></Error>")  # fmt: skip
         if bucket not in self.buckets:
             status, code, message, _extra = REFUSALS["missing"]
             return _answer(request.url, status, f"<Error><Code>{code}</Code><Message>{message}"
                                                 "</Message></Error>")  # fmt: skip
         assert query.get("list-type") == "2", "only ListObjectsV2 is recorded"
         return self._list(request.url, bucket, query, record)
+
+    def _allowed(self, bucket: str, path: str, query: dict[str, str]) -> bool:
+        """Whether IAM grants the request, from `granted` alone (deny by default, as IAM does)."""
+        assert self.granted is not None
+        listing = query.get("list-type") == "2"
+        key = unquote(path.lstrip("/"))
+        for statement in self.granted:
+            if listing and "s3:ListBucket" in statement["actions"]:
+                if f"arn:aws:s3:::{bucket}" not in statement["resources"]:
+                    continue
+                condition = statement.get("condition")
+                if condition is None:
+                    return True
+                assert condition["test"] == "StringLike" and condition["variable"] == "s3:prefix"
+                if "prefix" in query and any(
+                    fnmatchcase(query["prefix"], value) for value in condition["values"]
+                ):
+                    return True
+            elif not listing and "s3:GetObject" in statement["actions"]:
+                if any(fnmatchcase(f"arn:aws:s3:::{bucket}/{key}", r)
+                       for r in statement["resources"]):  # fmt: skip
+                    return True
+        return False
 
     def _list(self, url: str, bucket: str, query: dict[str, str], record: dict[str, Any]) -> Any:
         prefix = query.get("prefix", "")
@@ -143,3 +177,61 @@ class RecordedS3:
             parts.append(f"<NextContinuationToken>{at}</NextContinuationToken>")
         parts.append("</ListBucketResult>")
         return _answer(url, 200, "".join(parts))
+
+
+class RefusingS3Server:
+    """A local HTTP server answering every request with one of S3's documented refusals, for
+    pyarrow's own S3 filesystem (its C++ SDK, which no `before-send` handler reaches). Used as a
+    context manager; `endpoint` is what `S3FileSystem(endpoint_override=…, scheme="http")` takes.
+
+    **Modelled, not measured against S3** (rule 15): the answers are AWS's documented ones for a
+    bucket in another region than the client signs for: `PermanentRedirect` (301, with the bucket's
+    region in `x-amz-bucket-region`) and `AuthorizationHeaderMalformed` (400, likewise); a HEAD's
+    answer has no body, as S3's has none. What pyarrow does with them **is** measured here, on the
+    pinned pyarrow (11 November 2026, 26.0.0): it follows neither, sending one request to one host,
+    and raises `OSError` naming `AWS Error UNKNOWN (HTTP status 301|400)`. Every request's host and
+    path is recorded, so a test proves nothing was sent elsewhere."""
+
+    def __init__(self, refusal: str) -> None:
+        import http.server
+        import threading
+
+        status, code, message, extra = REFUSALS[refusal]
+        body = (
+            f'<?xml version="1.0" encoding="UTF-8"?>\n<Error><Code>{code}</Code>'
+            f"<Message>{escape(message)}</Message>"
+            f"{extra.format(bucket='synthetic-exports')}<RequestId>SYNTHETIC</RequestId></Error>"
+        ).encode()
+        requests: list[tuple[str, str, str]] = []
+        self.requests = requests
+
+        class _Handler(http.server.BaseHTTPRequestHandler):
+            def _answer(self) -> None:
+                requests.append((self.command, self.headers.get("Host", ""), self.path))
+                self.send_response(status)
+                self.send_header("x-amz-bucket-region", "eu-west-1")
+                self.send_header("Content-Type", "application/xml")
+                self.send_header("Content-Length", "0" if self.command == "HEAD" else str(len(body)))
+                self.end_headers()
+                if self.command != "HEAD":
+                    self.wfile.write(body)
+
+            do_GET = do_HEAD = _answer
+
+            def log_message(self, *_: Any) -> None:
+                return None
+
+        self._server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    @property
+    def endpoint(self) -> str:
+        return f"127.0.0.1:{self._server.server_address[1]}"
+
+    def __enter__(self) -> RefusingS3Server:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self._server.shutdown()
+        self._server.server_close()

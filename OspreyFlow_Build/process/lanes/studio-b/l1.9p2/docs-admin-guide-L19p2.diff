@@ -1,0 +1,105 @@
+# Applied at merge, after cloud-platform-L19p2.diff. Then make the admin guide's PDF and its manifest entry, as P7b's guide diff did:
+#   cd OspreyFlow_Build && python -m tools.docs_pdf --write   (headless Chromium; keep only administration-guide.pdf and its manifest.json entry)
+diff --git a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
+index 4786779..b9666af 100644
+--- a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
++++ b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
+@@ -2301,6 +2301,17 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+ | `cloud_platform.egress_nets` | mapping | — | For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 (IPv6), and never a default route |
+ | `cloud_platform.tls_secret` | str or none | none | The platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's names (its id. and bi. names among them), where the platform's wildcard does not cover them |
+ | `cloud_platform.connector_hosts` | list of str | — | The hosts a SQL or API connection may reach, each as host or host:port (a name, not an IPv6 literal), with its networks in egress_nets under the host alone. The namespace's egress allows each host on its ports; the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a port not listed here passes the Conduit and times out at the egress. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432). A host given twice with two ports is reached on both |
++| `cloud_platform.connector_sources` | section | — | The S3 buckets and Athena workgroups an S3 or Athena connection may read: each the Conduit's own egress row and the namespace role's read (ADR-140 Amendment 21). |
++| `cloud_platform.connector_sources.s3` | list of section | — | One bucket, its region, and the folder a connection may read at or under. |
++| `cloud_platform.connector_sources.s3.bucket` | str | required | The bucket's own name (no dot) |
++| `cloud_platform.connector_sources.s3.region` | str | required | The bucket's region (eu-west-2) |
++| `cloud_platform.connector_sources.s3.prefix` | str | "" | The folder a connection may read at or under, each name ending in / (exports/client-a/) |
++| `cloud_platform.connector_sources.athena` | list of section | — | One workgroup, its region, its databases, its results location (the only place a declared source gives the role a write) and its tables' locations. |
++| `cloud_platform.connector_sources.athena.workgroup` | str | required | The workgroup's name |
++| `cloud_platform.connector_sources.athena.region` | str | required | The workgroup's region (eu-west-2) |
++| `cloud_platform.connector_sources.athena.databases` | list of str | required | The Glue databases a connection may read |
++| `cloud_platform.connector_sources.athena.results_location` | str | required | Where Athena writes each query's results (s3://bucket/folder/): the only place a declared source gives the role a write. A folder, never a bucket's top |
++| `cloud_platform.connector_sources.athena.table_locations` | list of str | required | Where the databases' tables keep their objects (s3://bucket/folder/), at least one, read by Athena as the namespace's role: read-only, and never reached by the Conduit |
+ | `network` | section | — | The address the deployment answers at, and what it publishes. |
+ | `network.expose_conduit` | bool | false | Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass. |
+ | `network.public_origin` | str | `http://ospreyflow.localhost` | The origin a browser uses to reach the Glass; the identity provider is `id.` and the dashboards `bi.` in front of the same host, with the same scheme and port, and the front proxy publishes that port. `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Change this to move the deployment to another name or port; nothing else needs to agree with it. |
+diff --git a/OspreyFlow_Build/tests/test_admin_guide.py b/OspreyFlow_Build/tests/test_admin_guide.py
+index b50b75f..53c8a0a 100644
+--- a/OspreyFlow_Build/tests/test_admin_guide.py
++++ b/OspreyFlow_Build/tests/test_admin_guide.py
+@@ -72,3 +72,13 @@ def test_every_answers_file_setting_is_in_the_guide(name: str, key: str) -> None
+ def test_every_server_setting_is_in_the_guide(name: str, key: str) -> None:
+     """ADR-114 Amendment 33's `server:` is checked by its own list, not `_SECTIONS`."""
+     assert f"`server.{key}`" in GUIDES[name], f"server.{key} is not in {name}"
++
++
++def test_a_constrained_list_item_is_named_by_its_type_never_by_pydantic_s_internals() -> None:
++    """`list[Annotated[str, Field(pattern=…)]]` reads "list of str" (L1.9 part 2's lane review: the
++    guide printed `Annotated[str, FieldInfo(…)]` for `connector_sources.athena.databases`)."""
++    from tools.admin_guide_options import reference
++
++    printed = reference()
++    assert "FieldInfo" not in printed and "Annotated[" not in printed
++    assert "| `cloud_platform.connector_sources.athena.databases` | list of str |" in printed
+diff --git a/OspreyFlow_Build/tools/admin_guide_options.py b/OspreyFlow_Build/tools/admin_guide_options.py
+index a314134..659bb03 100644
+--- a/OspreyFlow_Build/tools/admin_guide_options.py
++++ b/OspreyFlow_Build/tools/admin_guide_options.py
+@@ -52,6 +52,8 @@ def _type_name(annotation: Any) -> str:
+         return annotation.__name__
+     origin = typing.get_origin(annotation)
+     arguments = typing.get_args(annotation)
++    if origin is typing.Annotated:
++        return _type_name(arguments[0])  # its constraints are the schema's, not the reader's
+     if origin is typing.Literal:
+         return " \\| ".join(f"`{value}`" for value in arguments)
+     if origin in (typing.Union, types.UnionType):
+@@ -95,6 +97,14 @@ SECTIONS = {
+     "cluster.hosts": "One machine.",
+     "cloud_platform": "A namespace on a shared Kubernetes platform (profile cloud-platform only): "
+     "the platform's settings file, the namespace, its registry, and what its egress may reach.",
++    "cloud_platform.connector_sources": "The S3 buckets and Athena workgroups an S3 or Athena "
++    "connection may read: each the Conduit's own egress row and the namespace role's read "
++    "(ADR-140 Amendment 21).",
++    "cloud_platform.connector_sources.s3": "One bucket, its region, and the folder a connection "
++    "may read at or under.",
++    "cloud_platform.connector_sources.athena": "One workgroup, its region, its databases, its "
++    "results location (the only place a declared source gives the role a write) and its tables' "
++    "locations.",
+     "network": "The address the deployment answers at, and what it publishes.",
+     "network.tls": "Small on a server of your own: the organisation's certificate (ADR-114 Amendment 33).",
+     "governance.organisation_provider": "Small on a server of your own: the organisation's identity "
+diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
+index da310d7..c7900d4 100644
+--- a/OspreyFlow_Core/docs/administration-guide.md
++++ b/OspreyFlow_Core/docs/administration-guide.md
+@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
+ <!-- document-control:begin -->
+ ## Document control
+ 
+-**Version 1.82** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
++**Version 1.83** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+ 
+ | Version | Date | What changed |
+ | --- | --- | --- |
++| 1.83 | 2026-11-11 | Appendix A from L1.9 part 2 (ADR-140 Amendment 21): `cloud_platform.connector_sources`, the S3 buckets and Athena workgroups a cloud-platform deployment declares; a constrained list's items named by their type. |
+ | 1.82 | 2026-11-11 | Appendix A from P7b as merged (ADR-148 Amendment 5): `cloud_platform.shape` (standard or poc, poc a development namespace's only); `cloud_platform.connector_hosts` as host or host:port, a bare host meaning 443, so a SQL connection names its port here; and `deployment.highest_marking`'s cloud-platform default, OFFICIAL-SENSITIVE. |
+ | 1.81 | 2026-11-11 | §6a after its review. §6a.7: the token check, not the Conduit, is what is built, since neither the Conduit's settings nor the profile pass it a mapping yet; the mapping's shape said not to be an `osprey.yaml` block; what fails to load in full (a GUID in lower case, a list in a clearance or unit table, an empty table, scope or `groups_claim`); `sub` required too; a group overage refused only where a group table is used, and its remedy; `acct` optional; guests among the shapes untried against a real tenant. §6a.8: the first administrator named in the settings, refused at render when there is none; Entra's egress line struck (no record yet decides it). §6a.2: room above the totals for set-up jobs and rolling updates. §6a.3: `gateway.tf` makes the gateway's service account too. §6a.5 and §10.1: an engine's way out also needs the new values installed (`helm upgrade`). §6a.6: three synthetic deployments. |
+ | 1.80 | 2026-11-11 | §6a brought into line with P11 part 2 as merged (76980f2, ADR-135 Amendment 8): the model gateway rendered by default on the `cloud-platform` profile, not only while an engine is enabled, so development's requests come to about 4 CPU (3.95, from a render of the synthetic development deployment) and its memory limits to about 34 GiB; `gateway.tf`, the gateway's own IAM role for Bedrock in eu-west-2 alone, while a Bedrock engine is declared; the gateway's service account (`default`, or `ospreyflow-gateway` under that role); an engine's host allowed out only while it is declared at render; struck from *Coming*. |
+@@ -2574,6 +2575,17 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+ | `cloud_platform.egress_nets` | mapping | — | For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 (IPv6), and never a default route |
+ | `cloud_platform.tls_secret` | str or none | none | The platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's names (its id. and bi. names among them), where the platform's wildcard does not cover them |
+ | `cloud_platform.connector_hosts` | list of str | — | The hosts a SQL or API connection may reach, each as host or host:port (a name, not an IPv6 literal), with its networks in egress_nets under the host alone. The namespace's egress allows each host on its ports; the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a port not listed here passes the Conduit and times out at the egress. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432). A host given twice with two ports is reached on both |
++| `cloud_platform.connector_sources` | section | — | The S3 buckets and Athena workgroups an S3 or Athena connection may read: each the Conduit's own egress row and the namespace role's read (ADR-140 Amendment 21). |
++| `cloud_platform.connector_sources.s3` | list of section | — | One bucket, its region, and the folder a connection may read at or under. |
++| `cloud_platform.connector_sources.s3.bucket` | str | required | The bucket's own name (no dot) |
++| `cloud_platform.connector_sources.s3.region` | str | required | The bucket's region (eu-west-2) |
++| `cloud_platform.connector_sources.s3.prefix` | str | "" | The folder a connection may read at or under, each name ending in / (exports/client-a/) |
++| `cloud_platform.connector_sources.athena` | list of section | — | One workgroup, its region, its databases, its results location (the only place a declared source gives the role a write) and its tables' locations. |
++| `cloud_platform.connector_sources.athena.workgroup` | str | required | The workgroup's name |
++| `cloud_platform.connector_sources.athena.region` | str | required | The workgroup's region (eu-west-2) |
++| `cloud_platform.connector_sources.athena.databases` | list of str | required | The Glue databases a connection may read |
++| `cloud_platform.connector_sources.athena.results_location` | str | required | Where Athena writes each query's results (s3://bucket/folder/): the only place a declared source gives the role a write. A folder, never a bucket's top |
++| `cloud_platform.connector_sources.athena.table_locations` | list of str | required | Where the databases' tables keep their objects (s3://bucket/folder/), at least one, read by Athena as the namespace's role: read-only, and never reached by the Conduit |
+ | `network` | section | — | The address the deployment answers at, and what it publishes. |
+ | `network.expose_conduit` | bool | false | Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass. |
+ | `network.public_origin` | str | `http://ospreyflow.localhost` | The origin a browser uses to reach the Glass; the identity provider is `id.` and the dashboards `bi.` in front of the same host, with the same scheme and port, and the front proxy publishes that port. `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Change this to move the deployment to another name or port; nothing else needs to agree with it. |

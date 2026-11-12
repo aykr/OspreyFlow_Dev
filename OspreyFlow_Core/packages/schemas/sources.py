@@ -345,11 +345,14 @@ S3_FOLDER = r"^([A-Za-z0-9_][A-Za-z0-9_.=-]{0,199}/){0,20}$"
 #: An Athena workgroup, catalog, database or table name.
 ATHENA_NAME = r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
 ATHENA_TABLE = r"^[a-z0-9_]{1,128}\.[a-z0-9_]{1,128}$"
+#: An `s3://bucket/folder/` location: a bucket's own name and a folder of names, never a pattern.
+S3_LOCATION = r"^s3://" + S3_BUCKET[1:-1] + "/" + S3_FOLDER[1:]
 #: A named query's id, as Athena makes them.
 ATHENA_NAMED_QUERY = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
 
-def _no_climbing(folder: str) -> str:
+def no_climbing(folder: str) -> str:
+    """A folder refused if any of its names is `.` or `..`."""
     if any(part in {".", ".."} for part in folder.split("/")):
         raise ValueError("a folder may not climb out of the bucket")
     return folder
@@ -372,7 +375,7 @@ class S3ConnectionSettings(BaseModel):
     @field_validator("prefix")
     @classmethod
     def _inside(cls, value: str) -> str:
-        return _no_climbing(value)
+        return no_climbing(value)
 
     @field_validator("bucket")
     @classmethod
@@ -399,7 +402,7 @@ class AthenaConnectionSettings(BaseModel):
     catalog: str = Field(default="AwsDataCatalog", pattern=ATHENA_NAME)
     databases: list[Annotated[str, Field(pattern=r"^[a-z0-9_]{1,128}$")]] = Field(min_length=1)
     results_location: str | None = Field(
-        default=None, max_length=1024, pattern=r"^s3://" + S3_BUCKET[1:-1] + "/" + S3_FOLDER[1:]
+        default=None, max_length=1024, pattern=S3_LOCATION
     )
 
     def host(self) -> str:
@@ -522,7 +525,7 @@ class S3Read(BaseModel):
     @field_validator("folder")
     @classmethod
     def _inside(cls, value: str) -> str:
-        return _no_climbing(value)
+        return no_climbing(value)
 
 
 class AthenaRead(BaseModel):

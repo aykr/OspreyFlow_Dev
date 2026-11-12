@@ -183,7 +183,7 @@ class ImageOfOurs(_Strict):
 
 #: The kinds of host the namespace reaches (`harness.cloud_platform._egress_hosts_by_kind`), each
 #: reached only by the workloads `egress.reach` names for it.
-HOST_KINDS = ("always", "identity", "engines", "maps", "mail", "connectors")
+HOST_KINDS = ("always", "identity", "engines", "maps", "mail", "connectors", "sources")
 #: A path's target that is not a workload: the cluster's API server, by the `kubernetes` Service.
 KUBE_API = "kube-api"
 

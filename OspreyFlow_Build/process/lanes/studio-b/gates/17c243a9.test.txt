@@ -1,0 +1,466 @@
+# make test at 17c243a9, tree fdb83f0bdbf45b630c75abedbaa1f6d7c0f8e126; both shared diffs applied, and the admin guide's PDF made (tools.docs_pdf --write) as at merge; offline on the test server (no lease)
+Running on ospreyflow-test (stack offline, osprey-runs/studio-b/OspreyFlow_Build/), logged at osprey-runs/studio-b.meta/runs/20261111T232158Z/log: make test
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/studio-b/OspreyFlow_Build/pytest.ini -p tests.worker_isolation -n auto --dist loadgroup --ignore=../OspreyFlow_Build/tests/conformance/graph_port --ignore=../OspreyFlow_Build/tests/test_worker_isolation_live.py --ignore=../OspreyFlow_Build/tests/conformance/analytics_port --ignore=../OspreyFlow_Build/tests/test_analytics_clickhouse.py --ignore=../OspreyFlow_Build/tests/test_media_blob.py --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness_clickhouse.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_runs.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_schedule_executor.py --ignore=../OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_pins_lifespan.py --ignore=../OspreyFlow_Build/tests/services/api/test_schedule_notice.py --ignore=../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py --ignore=../OspreyFlow_Build/tests/conformance/model_port --ignore=../OspreyFlow_Build/tests/golden --ignore=../OspreyFlow_Build/tests/ingest --ignore=../OspreyFlow_Build/tests/scenarios/test_hmp_graph.py --ignore=../OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py --ignore=../OspreyFlow_Build/tests/services/api/test_sites_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_tile_cache.py --ignore=../OspreyFlow_Build/tests/services/api/test_prefetch.py --ignore=../OspreyFlow_Build/tests/geocoder/test_match_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_assessments.py --ignore=../OspreyFlow_Build/tests/test_case_seed.py --ignore=../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_disable_l38_transfers.py --ignore=../OspreyFlow_Build/tests/services/api/test_admin_converted_views.py --ignore=../OspreyFlow_Build/tests/services/api/test_audit_section_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_notes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_brief_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_entity_pictures.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_type_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_suppression.py --ignore=../OspreyFlow_Build/tests/services/api/test_assessment_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_export.py --ignore=../OspreyFlow_Build/tests/services/api/test_export_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_valkey_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_ws_ticket.py --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py --ignore=../OspreyFlow_Build/tests/services/api/test_change_stream.py --ignore=../OspreyFlow_Build/tests/services/api/test_alerts.py --ignore=../OspreyFlow_Build/tests/services/api/test_pattern_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_hotlists.py --ignore=../OspreyFlow_Build/tests/services/api/test_history_relabel.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitors.py --ignore=../OspreyFlow_Build/tests/services/api/test_evaluation.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py --ignore=../OspreyFlow_Build/tests/resolve/test_projection_access_control.py --ignore=../OspreyFlow_Build/tests/resolve/test_trigger.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6a_glass_surfaces.py --ignore=../OspreyFlow_Build/tests/services/api/test_access.py --ignore=../OspreyFlow_Build/tests/services/api/test_pid_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_dossier_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_review.py --ignore=../OspreyFlow_Build/tests/services/api/test_review_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_compute_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_no_corpus_count_reveals_a_secret_link.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_seed_against_the_vault.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_link_weight_on_the_wire.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_explain_cluster_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_manual_resolution_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_resolution_threshold_access_control.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py --ignore=../OspreyFlow_Build/tests/scenarios/test_fixture_corp_shape.py --ignore=../OspreyFlow_Build/tests/services/api/test_worker.py --ignore=../OspreyFlow_Build/tests/services/api/test_worker_replicas.py --ignore=../OspreyFlow_Build/tests/services/api/test_revoked_principal_precheck.py --ignore=../OspreyFlow_Build/tests/harness/test_restore_exit_test.py --ignore=../OspreyFlow_Build/tests/harness/test_workspace_bundle.py --ignore=../OspreyFlow_Build/tests/harness/test_sustained_load.py --ignore=../OspreyFlow_Build/tests/harness/test_bundle_exit_test.py --ignore=../OspreyFlow_Build/tests/harness/test_harness_image.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py --ignore=../OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_client_row_limit.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py --ignore=../OspreyFlow_Build/tests/harness/test_identity.py --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_graph.py --ignore=../OspreyFlow_Build/tests/services/api/test_dataset_names_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_dataset_egress_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_explore_whats_new.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_export.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_packs.py --ignore=../OspreyFlow_Build/tests/services/api/test_questions_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_report_freshness.py --ignore=../OspreyFlow_Build/tests/services/api/test_reports.py --ignore=../OspreyFlow_Build/tests/services/api/test_route_rights.py --ignore=../OspreyFlow_Build/tests/services/api/test_add_by_identifiers_live.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_sources_withheld_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_sources_withheld_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_address_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_pid_scale_seed_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_starter_run.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_trend_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_facts.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_store_query.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py --ignore=../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_list_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_refresh.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_strength_influencer_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_connection_strength_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_schedule.py --ignore=../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py --ignore=../OspreyFlow_Build/tests/services/api/test_load_checks.py --ignore=../OspreyFlow_Build/tests/services/api/test_pin_calls_refresh_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_row_key_withdrawal_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_refresh_incremental_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_watermark_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_writes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_composite_writes_live.py --ignore=../OspreyFlow_Build/tests/test_migrate_cases_to_one_dataset_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_target_models_store.py --ignore=../OspreyFlow_Build/tests/test_seed_target_models_store.py --ignore=../OspreyFlow_Build/tests/test_make_home_cases_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_views_store.py --ignore=../OspreyFlow_Build/tests/test_migrate_branches_to_views_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_unconverted_case_merge_live.py --ignore=../OspreyFlow_Build/tests/resolve/test_trigger_layers.py --ignore=../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py --ignore=../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py --ignore=../OspreyFlow_Build/tests/test_seed_links_replace.py --ignore=../OspreyFlow_Build/tests/test_stamp_datasets.py --ignore=../OspreyFlow_Build/tests/test_stamp_records.py --ignore=../OspreyFlow_Build/tests/test_seed_ledger_screening_rule.py --ignore=../OspreyFlow_Build/tests/harness/test_apply_env.py --ignore=../OspreyFlow_Build/tests/services/api/test_object_transfer.py --ignore=../OspreyFlow_Build/tests/harness/test_first_admin.py --ignore=../OspreyFlow_Build/tests/services/api/test_postgres_dsn.py --ignore=../OspreyFlow_Build/tests/conformance/media_store/test_suite.py --ignore=../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py --ignore=../OspreyFlow_Build/tests/services/api/test_board_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py --ignore=../OspreyFlow_Build/tests/test_migrate_rules_to_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_grading_change_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_grading_registry.py --ignore=../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py --ignore=../OspreyFlow_Build/tests/services/api/test_list_connector_store.py --ignore=../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_live.py ../OspreyFlow_Build/tests --ignore=../OspreyFlow_Build/tests/services/api/test_promotion_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_external_runs_live.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+worker_isolation: 15 workers, Valkey databases 1 to 15, no stores made (offline)
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/studio-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+created: 15/15 workers
+15 workers [12263 items]
+
+........................................................................ [  0%]
+........................................................................ [  1%]
+........................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  2%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+........................................................................ [  4%]
+........................................................................ [  5%]
+......................................s................................. [  5%]
+........................................................................ [  6%]
+........................................................................ [  7%]
+........................................................................ [  7%]
+........................................................................ [  8%]
+........................................................................ [  8%]
+.....................................................................s.. [  9%]
+..s....s..................................................s..ssss.ss.... [  9%]
+s.......................................................s....s.......... [ 10%]
+........ss.........s..................................s................. [ 11%]
+........................................................................ [ 11%]
+........................................................................ [ 12%]
+........................................................................ [ 12%]
+........................................................................ [ 13%]
+....................................s.ss................................ [ 14%]
+........................................................................ [ 14%]
+........................................................................ [ 15%]
+........................................................................ [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 17%]
+........................................................................ [ 17%]
+........................................................................ [ 18%]
+........................................................................ [ 18%]
+........................................................................ [ 19%]
+........................................................................ [ 19%]
+........................................................................ [ 20%]
+........................................................................ [ 21%]
+........................................................................ [ 21%]
+........................................................................ [ 22%]
+........................................................................ [ 22%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+........................................................................ [ 24%]
+........................................................................ [ 25%]
+........................................................................ [ 25%]
+........................................................................ [ 26%]
+........................................................................ [ 27%]
+........................................................................ [ 27%]
+........................................................................ [ 28%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 29%]
+........................................................................ [ 30%]
+....................................................s................... [ 31%]
+........................................................................ [ 31%]
+.....F.................................................................. [ 32%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 34%]
+........................................................................ [ 34%]
+........................................................................ [ 35%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 36%]
+........................................................................ [ 37%]
+........................................................................ [ 38%]
+........................................................................ [ 38%]
+........................................................................ [ 39%]
+........................................................................ [ 39%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 44%]
+........................................................................ [ 44%]
+........................................................................ [ 45%]
+........................................................................ [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 46%]
+........................................................................ [ 47%]
+........................................................................ [ 48%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 51%]
+........................................................................ [ 51%]
+...........................s............................................ [ 52%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+........................................................................ [ 54%]
+........................................................................ [ 54%]
+........................................................................ [ 55%]
+.......................s.........s.................s.................... [ 55%]
+........................................................................ [ 56%]
+........................................................................ [ 56%]
+........................................................................ [ 57%]
+....................................................................s.ss [ 58%]
+........................................................................ [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+........................................................................ [ 61%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 65%]
+........................................................................ [ 66%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 68%]
+........................................................................ [ 69%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+...............................................F........................ [ 71%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 75%]
+........................................................................ [ 75%]
+........................................................................ [ 76%]
+........................................................................ [ 76%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+........................................................................ [ 78%]
+........................................................................ [ 79%]
+........................................................................ [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 81%]
+........................................................................ [ 81%]
+........................................................................ [ 82%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 83%]
+........................................................................ [ 84%]
+........................................................................ [ 85%]
+........................................................................ [ 85%]
+........................................................................ [ 86%]
+........................................................................ [ 86%]
+........................................................................ [ 87%]
+........................................................................ [ 88%]
+........................................................................ [ 88%]
+........................................................................ [ 89%]
+..............................................F...........F............. [ 89%]
+........................................................................ [ 90%]
+........................................F............................... [ 91%]
+........................................................................ [ 91%]
+.........s.............................................................. [ 92%]
+........................................................................ [ 92%]
+........................................................................ [ 93%]
+...s....................s............................................... [ 93%]
+................................................................s....... [ 94%]
+........................................................................ [ 95%]
+........................................................................ [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 96%]
+........................................................................ [ 97%]
+........................................................................ [ 98%]
+........................................................................ [ 98%]
+........................................................................ [ 99%]
+........................................................................ [ 99%]
+.......................                                                  [100%]
+=================================== FAILURES ===================================
+__________ test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass __________
+[gw13] linux -- Python 3.12.3 /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/bin/python
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-4457/popen-gw13/test_gpu_is_skipped_on_this_pl0')
+
+    def test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass(tmp_path: Path) -> None:
+        """`05_DEPLOYMENT.md` §2.1's own "skipped-with-reason (never a pass)" — the brief's named
+        skipped case, on the real platform this suite actually runs on."""
+        config_path = tmp_path / "osprey.yaml"
+        out_root = tmp_path / "generated"
+        client = _client(config_path, out_root)
+        client.put("/api/config", json={"profile": "local-lite"})
+        _generate(client)
+    
+        events = {e["check"]: e for e in _events(client.get("/api/preflight/stream").text)}
+>       assert events["gpu"]["status"] == "skip"
+E       AssertionError: assert 'pass' == 'skip'
+E         
+E         - skip
+E         + pass
+
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py:110: AssertionError
+_ test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory _
+[gw0] linux -- Python 3.12.3 /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/bin/python
+
+    def test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory() -> None:
+        services, _env = _rendered(_own_server(32))
+        environment = services["opensearch"]["environment"]
+        port = _free_port()
+        name = _name("opensearch")
+        argv = ["run", "-d", "--name", name, "--memory", "3g", "-p", f"127.0.0.1:{port}:9200"]
+        for key, value in environment.items():
+            argv += ["-e", f"{key}={value}"]
+        docker(*argv, OPENSEARCH_IMAGE)
+        try:
+            assert _wait(name, lambda: _opensearch_heap(port) is not None, seconds=180), docker(
+                "logs", name, check=False
+            ).stdout[-1500:]
+            assert _opensearch_heap(port) == 2 * 1024**3
+        finally:
+            docker("rm", "-f", "-v", name, check=False)
+        beyond = _name("opensearch")
+        docker("run", "-d", "--name", beyond, "--memory", "1g", "-e", "discovery.type=single-node",
+               "-e", "DISABLE_SECURITY_PLUGIN=true", "-e", "OPENSEARCH_JAVA_OPTS=-Xms4096m -Xmx4096m",
+               OPENSEARCH_IMAGE)  # fmt: skip
+        try:
+            deadline = time.monotonic() + 90
+            while time.monotonic() < deadline:
+                state = docker("inspect", "-f", "{{.State.Running}} {{.State.OOMKilled}}", beyond).stdout
+                if state.split()[0] == "false":
+                    break
+                time.sleep(2)
+>           assert state.split() == ["false", "true"], state
+E           AssertionError: false false
+E             
+E           assert ['false', 'false'] == ['false', 'true']
+E             
+E             At index 1 diff: 'false' != 'true'
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_render_memory.py:178: AssertionError
+______________ test_a_needs_line_reads_the_same_ten_minutes_later ______________
+[gw14] linux -- Python 3.12.3 /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/bin/python
+
+hb = <function hb.<locals>.run at 0x7d7e52de71a0>
+
+    def test_a_needs_line_reads_the_same_ten_minutes_later(hb) -> None:
+        """What watch compares from pass to pass: a line that carried its own age would be new on every
+        pass and notify every time."""
+        _all_beat(hb)
+        hb.age("glass", 46)
+        hb("beat", "case", "ready-to-merge", "L3.1 done")
+        hb("beat", "studio", "waiting-for-owner", "the owner's answer on open question 1")
+        hb.age("studio", 46)
+        now = int(datetime.now(UTC).timestamp())
+        first = _needs(hb("show", OSPREY_NOW=str(now)))
+        later = _needs(hb("show", OSPREY_NOW=str(now + 600)))
+>       assert len(first) == 1  # the quiet and ready-to-merge lines are the orchestrator's, not under NEEDS YOU
+        ^^^^^^^^^^^^^^^^^^^^^^
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:162: AssertionError
+________ test_summary_is_short_and_splits_the_remaining_steps_by_track _________
+[gw9] linux -- Python 3.12.3 /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/bin/python
+
+hb = <function hb.<locals>.run at 0x7c59a5907f60>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-4457/popen-gw9/test_summary_is_short_and_spli0')
+
+    def test_summary_is_short_and_splits_the_remaining_steps_by_track(hb, tmp_path) -> None:
+        table = _summary_fixture(tmp_path)
+        out = hb("summary", OSPREY_LANES="studio platform", OSPREY_PROGRESS_FILE=str(table)).stdout
+        lines = out.splitlines()
+>       assert lines[0].startswith("OSPREYFLOW · 1 of 2 steps done · stacks in use: 0")
+               ^^^^^^^^
+E       IndexError: list index out of range
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:430: IndexError
+______ test_watch_never_switches_a_lane_without_the_owners_fallback_line _______
+[gw13] linux -- Python 3.12.3 /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/bin/python
+
+launcher = <function launcher.<locals>.run at 0x7a0e77133420>
+
+    def test_watch_never_switches_a_lane_without_the_owners_fallback_line(launcher) -> None:
+        """Amendment 1 decision 6. The watch's own pass runs the real launcher; with no fallback line a
+        lane at its usage limit is listed for the owner and no window opens; with one, it is switched once."""
+        _accounts(launcher)
+        launcher("setup", "case")
+        hb_env = {**launcher.env, "OSPREY_LANES": "case", "OSPREY_WATCH_PASSES": "1",
+                  "OSPREY_LAUNCHER": str(SCRIPT), "TERM": "dumb"}
+    
+        def watch() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(["bash", str(HEARTBEAT), "watch", "0"], cwd=launcher.repo,
+                                  env=hb_env, capture_output=True, text=True)
+    
+        subprocess.run(["bash", str(HEARTBEAT), "beat", "case", "blocked", "usage limit"],
+                       env=hb_env, check=True, capture_output=True)
+        shown = watch()
+        assert "case stopped at its usage limit on account" in shown.stdout
+        assert _windows(launcher) == []
+        assert not (launcher.state / "case.fallback-used").exists()
+    
+        conf = launcher.base / "accounts.conf"
+        conf.write_text(conf.read_text() + "fallback case = client\n")
+        watch()
+>       assert (launcher.state / "case.fallback-used").exists()
+E       AssertionError: assert False
+E        +  where False = exists()
+E        +    where exists = (PosixPath('/tmp/pytest-of-root/pytest-4457/popen-gw13/test_watch_never_switches_a_la0/state') / 'case.fallback-used').exists
+E        +      where PosixPath('/tmp/pytest-of-root/pytest-4457/popen-gw13/test_watch_never_switches_a_la0/state') = <function launcher.<locals>.run at 0x7a0e77133420>.state
+
+../OspreyFlow_Build/tests/test_lanes_launch.py:377: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: 15 warnings
+  /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_analyst_layer.py: 4 warnings
+tests/services/api/test_datasets.py: 4 warnings
+tests/services/api/test_drawn_datasets.py: 3 warnings
+tests/services/api/test_link_change_routes.py: 3 warnings
+tests/services/api/test_pattern_ask.py: 3 warnings
+tests/services/api/test_pattern_conditions_routes.py: 9 warnings
+tests/services/api/test_resolution_routes.py: 1 warning
+tests/services/api/test_rule_sentence_routes.py: 3 warnings
+tests/services/api/test_rule_standards_routes.py: 1 warning
+tests/services/api/test_schedule_admin_routes.py: 1 warning
+tests/services/api/test_sites_routes.py: 1 warning
+tests/services/api/test_studio_map_routes.py: 1 warning
+tests/services/api/test_studio_publish_routes.py: 4 warnings
+tests/services/api/test_studio_recipe_routes.py: 2 warnings
+tests/services/api/test_studio_schedule_routes.py: 4 warnings
+tests/services/api/test_studio_staging_routes.py: 2 warnings
+  /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+tests/services/api/test_cloud_connector_access.py::test_a_host_off_the_egress_allow_list_is_never_reached[s3]
+tests/services/api/test_cloud_connector_access.py::test_a_read_past_the_byte_cap_is_refused_with_its_typed_error_and_writes_nothing[s3]
+tests/services/api/test_cloud_connector_access.py::test_a_host_off_the_egress_allow_list_is_never_reached[athena]
+tests/services/api/test_cloud_connector_access.py::test_a_read_past_the_byte_cap_is_refused_with_its_typed_error_and_writes_nothing[athena]
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[s3]
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[athena]
+tests/services/api/test_connector_routes.py::test_a_source_whose_first_read_is_refused_is_not_registered
+  /root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:11688: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise _connector_refused(refused, principal) from refused
+
+tests/services/api/test_cloud_sources_declared.py: 17 warnings
+tests/services/api/test_connector_private_hosts.py: 1 warning
+tests/services/api/test_connector_routes.py: 1 warning
+  /root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9945: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise _connector_refused(refused, principal) from refused
+
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[s3]
+tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[s3]
+tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[athena]
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[athena]
+tests/services/api/test_connector_routes.py::test_refresh_now_tells_a_source_author_fixed_words_and_audits_why
+  /root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:11745: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise _connector_refused(refused, principal) from refused
+
+tests/services/api/test_connector_routes.py::test_only_an_administrator_is_given_a_refusal_s_own_words
+  /root/osprey-runs/studio-b/OspreyFlow_Build/tests/services/api/test_connector_routes.py:456: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    admin = _connector_refused(refused, PEOPLE["admin"])
+
+tests/services/api/test_connector_routes.py::test_only_an_administrator_is_given_a_refusal_s_own_words
+  /root/osprey-runs/studio-b/OspreyFlow_Build/tests/services/api/test_connector_routes.py:459: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    author = _connector_refused(refused, PEOPLE[person])
+
+tests/services/api/test_connector_routes.py::test_a_registration_never_overwrites_a_file_and_leaves_none_when_refused
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+  /root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9831: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+tests/services/api/test_connector_routes.py::test_a_source_whose_first_read_is_refused_is_not_registered
+  /root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:11533: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    made = await _register_through_connection(
+
+tests/services/api/test_connector_routes.py::test_a_connector_source_lands_as_its_one_file
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+tests/services/api/test_list_connector_routes.py::test_a_location_outside_the_ingest_folder_is_refused_on_naming
+tests/services/api/test_list_connector_routes.py::test_the_deployment_lists_are_for_whoever_may_load_screening_lists
+tests/services/api/test_list_connector_routes.py::test_a_dataset_s_own_list_is_imported_from_its_own_files
+tests/services/api/test_connection_binding.py::test_a_secret_belongs_to_one_connection
+tests/services/api/test_sites_routes.py::test_grid_cannot_be_set_before_control_points
+  /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_drawn_datasets.py::test_its_highest_marking_is_within_the_makers_clearance
+  /root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:10316: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await _make_drawn(
+
+tests/services/api/test_investigation_access_routes.py::test_a_grantee_name_must_be_a_plain_non_empty_account_name
+tests/services/api/test_investigation_access_routes.py::test_a_grantee_name_must_be_a_plain_non_empty_account_name
+  /root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:4249: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    grantee = _grantee(account_id)
+
+tests/services/api/test_model_engines.py::test_a_request_naming_a_refused_engine_is_answered_in_words_with_a_4xx
+  /usr/lib/python3.12/asyncio/events.py:88: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    self._context.run(self._callback, *self._args)
+
+tests/services/api/test_no_corpus_counts_on_the_wire.py::test_a_delta_the_stream_sends_never_carries_corpus_counts[DeltaViewOverCap]
+  /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/pydantic/main.py:587: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Unexpected too few items present in tuple)
+    return self.__pydantic_serializer__.to_json(
+
+tests/services/api/test_studio_recipe_routes.py::test_deploy_refuses_a_keyless_pipeline_over_a_watched_source_in_words
+  /root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:13011: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key([recipe.label])
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12172: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12106: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+202.50s call     tests/schemas/test_drift_gate.py::test_committed_generated_types_match_current_models
+111.37s call     tests/schemas/test_drift_gate.py::test_drift_gate_detects_a_changed_model
+70.68s setup    tests/scenarios/test_pid_files.py::test_every_distinct_written_number_normalises_to_the_plans_through_the_real_msisdn
+69.97s setup    tests/scenarios/test_pid_files.py::test_the_call_file_has_exactly_the_planted_mess_at_the_recorded_positions
+68.33s setup    tests/scenarios/test_pid_files.py::test_the_call_file_carries_a_seeded_duration_direction_and_running_sequence
+64.30s setup    tests/scenarios/test_pid_files.py::test_the_first_row_of_every_number_in_each_file_is_the_plans_own_form
+61.40s setup    tests/scenarios/test_pid_files.py::test_reading_every_file_reconstructs_the_demo_plan_at_each_moment
+58.30s setup    tests/scenarios/test_pid_files.py::test_the_round_trip_goes_red_for_one_call_row_dropped
+56.23s call     tests/services/api/test_deployment_ceiling.py::test_with_no_ceiling_set_a_secret_row_loads_as_before
+56.05s call     tests/services/api/test_deployment_ceiling.py::test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing
+55.61s call     tests/services/api/test_deployment_ceiling.py::test_a_load_at_the_ceiling_passes
+54.60s setup    tests/harness/test_organisation_sign_in.py::test_the_printed_redirect_uri_is_the_one_keycloak_sends@serial
+54.18s call     tests/conduit_common/test_s3_settings.py::test_on_an_instance_role_no_client_sends_a_key
+51.15s call     tests/scenarios/test_pid_plan.py::test_the_rows_dates_are_the_shared_instants_spans_and_constants
+49.77s call     tests/test_seed_pid.py::test_the_seed_and_check_warn_while_resolution_is_on_and_say_nothing_when_off
+48.79s call     tests/scenarios/test_pid_files.py::test_the_round_trip_goes_red_for_one_call_row_dropped
+38.09s call     tests/test_seed_pid.py::test_a_second_seed_over_a_case_that_has_them_writes_none
+34.02s call     tests/test_seed_pid.py::test_a_seed_over_loaded_stages_still_writes_the_missing_inferred_links
+30.26s call     tests/test_seed_pid.py::test_the_seed_runs_end_to_end_over_fakes_and_prints_its_checks
+29.16s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production-bedrock]
+28.77s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production]
+28.76s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[development]
+28.69s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[poc]
+27.77s setup    tests/scenarios/test_pid_files.py::test_the_manifest_holds_rows_bytes_and_sha256_for_every_file_and_no_timestamp
+27.46s call     tests/test_seed_pid.py::test_a_failed_demo_number_makes_the_seed_exit_non_zero
+27.44s call     tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory@serial
+27.25s call     tests/test_seed_pid.py::test_every_write_of_the_seed_carries_the_id_it_was_told_to_run_as
+27.12s call     tests/test_seed_pid.py::test_a_brief_that_is_not_there_makes_the_seed_exit_non_zero
+26.48s call     tests/scenarios/test_pid_files.py::test_reading_every_file_reconstructs_the_demo_plan_at_each_moment
+25.67s call     tests/test_seed_pid.py::test_a_reseed_reports_each_standing_load_and_runs_nothing_again
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory@serial
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_needs_line_reads_the_same_ten_minutes_later
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_summary_is_short_and_splits_the_remaining_steps_by_track
+FAILED ../OspreyFlow_Build/tests/test_lanes_launch.py::test_watch_never_switches_a_lane_without_the_owners_fallback_line
+==== 5 failed, 12225 passed, 33 skipped, 113 warnings in 496.79s (0:08:16) =====
+make: *** [Makefile:166: test] Error 1
+Wall time: 497 s, exit 2 (no stack, no lease; set-up before it 15 s)
+# exit 2

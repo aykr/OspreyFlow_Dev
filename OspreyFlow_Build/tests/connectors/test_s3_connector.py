@@ -232,6 +232,18 @@ def test_the_bucket_is_asked_for_only_when_the_folder_is_empty(bucket: pa_fs.Fil
          "ListObjectsV2 operation: Access Denied.", "the bucket refused the read (access denied)"),
         ("When reading information for key '' in bucket 'b': AWS Error NO_SUCH_BUCKET during "
          "HeadBucket operation", "the bucket does not exist"),
+        # L1.9 part 2: pyarrow's own shape for a bucket in another region (measured on 26.0.0
+        # against S3's documented answers, `s3_fixture.RefusingS3Server`): the code is UNKNOWN, the
+        # HTTP status says it. A key naming another code is the key's, never the store's: the last
+        # `AWS Error` is pyarrow's own.
+        ("When reading information for key 'AWS Error ACCESS_DENIED/a.csv' in bucket 'b': AWS "
+         "Error UNKNOWN (HTTP status 301) during HeadObject operation: No response body.",
+         s3_connector.OTHER_REGION),
+        ("When getting information for bucket 'b': AWS Error UNKNOWN (HTTP status 400) during "
+         "HeadBucket operation: No response body. Looks like the configured region is "
+         "'eu-west-2' while the bucket is located in 'eu-west-1'.", s3_connector.OTHER_REGION),
+        ("When reading information for key 'a.csv' in bucket 'b': AWS Error UNKNOWN (HTTP status "
+         "400) during HeadObject operation: No response body.", "the bucket could not be read"),
     ],
 )  # fmt: skip
 def test_a_store_s_refusal_is_judged_by_its_code_not_by_a_key_s_words(

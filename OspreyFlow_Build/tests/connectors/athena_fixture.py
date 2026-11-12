@@ -129,6 +129,22 @@ class RecordedAthena:
         default_factory=lambda: {"primary": "s3://synthetic-athena-results/out/", "bare": None}
     )
     polls: int = 1
+    #: L1.9 part 2: a statement that does not parse is refused at StartQueryExecution
+    #: (`InvalidRequestException`), the other answer Athena may give, rather than run and FAILED.
+    syntax_refused_at_start: bool = False
+    #: Tables whose objects the role may not read (their location not in its policy): each read
+    #: fails as an execution, as Athena reads a table's objects as the caller.
+    unreadable_data: set[str] = field(default_factory=set)
+    #: The role's own `s3:GetObject` resources (`arn:aws:s3:::bucket/folder/*`), as the render makes
+    #: them from the declaration: when given, a table is kept at `s3://synthetic-lake/<db>/<table>/`
+    #: and fails as an execution unless one of them covers it, as Athena reads it as the role.
+    granted_objects: list[str] | None = None
+    #: Workgroups that enforce their own configuration (`EnforceWorkGroupConfiguration`): a query's
+    #: results go to the workgroup's own location, whatever the request names (AWS's API reference).
+    enforced: set[str] = field(default_factory=set)
+    #: Where each started query's results went, in order (the request's, or an enforcing
+    #: workgroup's own).
+    outputs: list[str | None] = field(default_factory=list)
     #: Every QueryString sent to StartQueryExecution, in order.
     sent: list[str] = field(default_factory=list)
     #: Every operation asked, in order.
@@ -182,7 +198,11 @@ class RecordedAthena:
         if name not in self.workgroups:
             return _error("workgroup_not_found", workgroup=name)
         output = self.workgroups[name]
-        configuration = {"ResultConfiguration": {"OutputLocation": output}} if output else {}
+        configuration: dict[str, Any] = (
+            {"ResultConfiguration": {"OutputLocation": output}} if output else {}
+        )
+        if name in self.enforced:
+            configuration["EnforceWorkGroupConfiguration"] = True
         return _answer(200, {"WorkGroup": {"Name": name, "State": "ENABLED",
                                            "Configuration": configuration}})  # fmt: skip
 
@@ -197,6 +217,9 @@ class RecordedAthena:
         if workgroup not in self.workgroups:
             return _error("workgroup_not_found", workgroup=workgroup)
         output = (body.get("ResultConfiguration") or {}).get("OutputLocation")
+        if workgroup in self.enforced and self.workgroups[workgroup] is not None:
+            output = self.workgroups[workgroup]  # the workgroup's own, whatever the request says
+        self.outputs.append(output or self.workgroups[workgroup])
         if output is None and self.workgroups[workgroup] is None:
             return _error("no_output_location")
         query = body["QueryString"]
@@ -216,6 +239,9 @@ class RecordedAthena:
             execution.fill = {"catalog": catalog}
         else:
             self._resolve(execution, query, catalog, database)
+        if self.syntax_refused_at_start and execution.outcome in {"syntax", "syntax_eof"}:
+            reason = RECORDED["failures"][execution.outcome]["StateChangeReason"]
+            return _error("malformed_query", message=reason.format(**execution.fill))
         if output and "forbidden" in output:
             execution.outcome = "s3_access_denied"
             execution.fill = {"id": execution_id}
@@ -244,6 +270,14 @@ class RecordedAthena:
             if table not in self.tables[db]:
                 execution.outcome = "table_not_found"
                 execution.fill = {"table": f"{in_catalog}.{db}.{table}"}
+                return
+            location = f"arn:aws:s3:::synthetic-lake/{db}/{table}/"
+            ungranted = self.granted_objects is not None and not any(
+                location.startswith(g.removesuffix("*")) for g in self.granted_objects
+            )
+            if table in self.unreadable_data or ungranted:
+                execution.outcome = "table_data_denied"
+                execution.fill = {"database": db, "table": table}
                 return
             if execution.table is None:
                 execution.table = (db, table)

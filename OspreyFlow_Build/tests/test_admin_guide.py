@@ -72,3 +72,13 @@ def test_every_answers_file_setting_is_in_the_guide(name: str, key: str) -> None
 def test_every_server_setting_is_in_the_guide(name: str, key: str) -> None:
     """ADR-114 Amendment 33's `server:` is checked by its own list, not `_SECTIONS`."""
     assert f"`server.{key}`" in GUIDES[name], f"server.{key} is not in {name}"
+
+
+def test_a_constrained_list_item_is_named_by_its_type_never_by_pydantic_s_internals() -> None:
+    """`list[Annotated[str, Field(pattern=…)]]` reads "list of str" (L1.9 part 2's lane review: the
+    guide printed `Annotated[str, FieldInfo(…)]` for `connector_sources.athena.databases`)."""
+    from tools.admin_guide_options import reference
+
+    printed = reference()
+    assert "FieldInfo" not in printed and "Annotated[" not in printed
+    assert "| `cloud_platform.connector_sources.athena.databases` | list of str |" in printed
