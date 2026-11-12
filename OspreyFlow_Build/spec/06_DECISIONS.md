@@ -33920,8 +33920,10 @@ them hidden from a reader, would have been withheld from that reader whole. This
 
 **Tests that would fail (rule 12).** The offline ones are shown red by plants at their real call sites
 (`process/lanes/rules/lists/AM7_RED_RECORD.txt`: P1 to P24, and P3b). The live ones, and CARRIES row 113's
-cross-file red, by `process/lanes/rules/lists/am7_live_plants.py` under the rules lane's lease (its record
-beside it).
+cross-file red, by `process/lanes/rules/lists/am7_live_plants.py` under the rules lane's lease on stack c
+(`AM7_LIVE_RECORD.txt` beside it: L0 to L7, L0b and L2b each red, built and restored green). The live files
+the change reaches, with `test_route_rights.py`, ran on the same lease (`process/lanes/rules/gates/
+0eae072.live.txt`, each of its failures outside those files and triaged beside it).
 - A list's marking ignored, outside the scheme, or a re-marking not a change (1):
   `test_a_lists_marking_is_carried_by_each_entry_and_an_unmarked_list_is_official_p`;
   `test_a_marking_the_scheme_does_not_define_is_refused_in_words`; `test_a_change_of_marking_is_a_change_of_the_entry`.
