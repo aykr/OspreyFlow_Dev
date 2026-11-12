@@ -495,7 +495,8 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     night goes. For you in the morning:
     - the push (none since 10:20);
     - **Your five patches, in this order, from the repository root** (each checked to apply after the one before):
-      1. `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_CI.diff` — ci.yml and release.yml: Laurium's image.
+      1. ~~`P12p2_CI.diff`~~ **applied at your request, about 08:45 (see the commit after e59da4f):**
+         test_release_local_matrix passes again.
       2. `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_core_makefile.diff` — Core's Makefile: Laurium's scan.
       3. `git apply OspreyFlow_Build/process/lanes/admin/p10p2/ci-yml.diff` — ci.yml: P10 part 2's live file.
       4. `git apply OspreyFlow_Build/process/lanes/admin/p10p2/makefile.diff` — the Makefile: the same file ignored in make test.
