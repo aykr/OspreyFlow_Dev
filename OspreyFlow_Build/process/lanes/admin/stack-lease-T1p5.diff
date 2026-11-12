@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Build/scripts/stack_lease.sh b/OspreyFlow_Build/scripts/stack_lease.sh
-index f98173e..9082a1e 100755
+index f98173e..8569036 100755
 --- a/OspreyFlow_Build/scripts/stack_lease.sh
 +++ b/OspreyFlow_Build/scripts/stack_lease.sh
 @@ -20,6 +20,10 @@
@@ -24,20 +24,23 @@ index f98173e..9082a1e 100755
    # The log ends with its wall time, naming the stack and lease it ran under (rule 14), and keeps the seconds in
    # <run>/wall; pytest names its 30 slowest tests, whatever the command (admin's T1 part 1, 10 November 2026).
    # The lease is named by its holder and since (its lock directory is the same for every lease on a stack); both
-@@ -157,13 +163,22 @@ for d,ds,fs in os.walk(\".\"):
+@@ -157,13 +163,24 @@ for d,ds,fs in os.walk(\".\"):
      # OSPREY_PORTS_LANE and OSPREY_PORTS_SLOT: the lane and its own Playwright ports (OspreyFlow_Core/apps/lanePorts.ts),
      # as lanes' copies run side by side here; not OSPREY_LANE, which an offline run must not name (the port guard's).
      printf 'export %s PYTEST_ADDOPTS=--durations=30 OSPREY_LEASE_DIR=$HOME/%s/lease OSPREY_PORTS_LANE=%s OSPREY_PORTS_SLOT=%s PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH\n' "$exports" "$rmeta" "$who" "$(ports_slot "$who")"
+-    printf '%q ' "$@"; echo; } > "$list.cmd"
 +    # The run's tag (T1 part 5): every process the run starts inherits it, through setsid and double forks, which a
 +    # process group is not (platform-b, 10 November 2026: harness-a11y's vite and harness.webapp outlived a stopped
-+    # run and held the lane's slot ports). When cmd.sh exits, every process still carrying it is ended. A signal that
-+    # ends cmd.sh (INT or TERM) runs the EXIT trap at once, without waiting for the command: shown by plants, a TERM
-+    # trap and a backgrounded, waited-on command were each taken out and the stop cases stayed green, so neither is
-+    # kept. (HUP is not one: the run is started under nohup.)
++    # run and held the lane's slot ports). When cmd.sh exits, every process still carrying it is ended. TERM ends bash
++    # at once and runs the EXIT trap. INT does not: bash defers it while it waits on a foreground command, so the
++    # command runs in the background and is waited on (`wait` returns at once on a trapped signal), and INT is trapped
++    # to exit 130, which runs the EXIT trap (shown on the server: without it, INT left the run's server alive). HUP is
++    # not one: the run is started under nohup.
 +    printf 'export OSPREY_RUN_TAG=$HOME/%s\n' "$run"
 +    printf '%s\n' "$REAPER"
 +    printf 'trap osprey_reap EXIT\n'
-     printf '%q ' "$@"; echo; } > "$list.cmd"
++    printf 'trap "exit 130" INT\n'
++    printf '%q ' "$@"; printf '&\nwait $!\n'; } > "$list.cmd"
    rc=0
    setup=$(( $(date +%s) - t_setup ))
    keep=""; [ -n "$lockname" ] && keep="cp $rmeta/lease/$lockname/info $run/lease &&"
@@ -49,7 +52,7 @@ index f98173e..9082a1e 100755
      exit 0" < "$list.cmd" || rc=$?
    case $rc in
      0) ;;
-@@ -173,6 +188,25 @@ for d,ds,fs in os.walk(\".\"):
+@@ -173,6 +190,25 @@ for d,ds,fs in os.walk(\".\"):
    echo "Running on $h (stack $s, $rroot/$rel), logged at $run/log: $*" >&2
    follow "$h" "$rmeta"
  }
@@ -75,7 +78,7 @@ index f98173e..9082a1e 100755
  # The host offline runs go to: $OSPREY_OFFLINE_HOST, or the first host lane_stack_hosts.tsv names.
  offline_host() {
    if [ -n "${OSPREY_OFFLINE_HOST:-}" ]; then echo "$OSPREY_OFFLINE_HOST"; return; fi
-@@ -264,7 +298,28 @@ stack_state() {
+@@ -264,7 +300,28 @@ stack_state() {
    if [ -n "$out" ] || [ -n "$more" ]; then echo up; else echo down; fi
  }
  
@@ -104,7 +107,7 @@ index f98173e..9082a1e 100755
  case "$cmd" in
    acquire)
      who="${2:?usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b]}"
-@@ -349,6 +404,7 @@ case "$cmd" in
+@@ -349,6 +406,7 @@ case "$cmd" in
      [ -n "$s" ] || { echo "$who holds no stack: take one first (acquire)." >&2; exit 1; }
      h="$(host_of "$s")"
      [ -n "$h" ] || { echo "Stack $s runs on this machine: run the command here, not with remote." >&2; exit 1; }
@@ -112,7 +115,7 @@ index f98173e..9082a1e 100755
      run_on_host "$who" "$h" "$(ports_line "$s" "$who")" "$(basename "$(lock_of "$s")")" "$s" "$@"
      ;;
    offline)
-@@ -374,6 +430,7 @@ case "$cmd" in
+@@ -374,6 +432,7 @@ case "$cmd" in
      [ -n "$s" ] || { echo "$who holds no stack: take one first (acquire)." >&2; exit 1; }
      h="$(host_of "$s")"
      [ -n "$h" ] || { echo "Stack $s runs on this machine: run the selection here, not with live." >&2; exit 1; }
@@ -120,7 +123,7 @@ index f98173e..9082a1e 100755
      top="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Not inside a git worktree: run live from your lane's checkout." >&2; exit 1; }
      cd "$top/OspreyFlow_Build"
      # The selection is made here, from the lane's own diff; OSPREY_LIVE_SELECT stands in for it in the tests.
-@@ -395,6 +452,27 @@ case "$cmd" in
+@@ -395,6 +454,27 @@ case "$cmd" in
      [ -n "$h" ] || { echo "No host to follow a run on." >&2; exit 1; }
      follow "$h" "${OSPREY_REMOTE_ROOT:-osprey-runs}/$who.meta"
      ;;
@@ -148,7 +151,7 @@ index f98173e..9082a1e 100755
    ports)
      who="${2:?usage: stack_lease.sh ports <lane>}"
      s="$(held_by "$who")"
-@@ -414,7 +492,7 @@ case "$cmd" in
+@@ -414,7 +494,7 @@ case "$cmd" in
      done
      ;;
    *)
@@ -158,7 +161,7 @@ index f98173e..9082a1e 100755
      ;;
  esac
 diff --git a/OspreyFlow_Build/tests/test_stack_lease.py b/OspreyFlow_Build/tests/test_stack_lease.py
-index 0ed1f03..942d87f 100644
+index 0ed1f03..22289ad 100644
 --- a/OspreyFlow_Build/tests/test_stack_lease.py
 +++ b/OspreyFlow_Build/tests/test_stack_lease.py
 @@ -10,6 +10,7 @@ down, and when it cannot answer (the refusal the draft let through).
@@ -214,15 +217,18 @@ index 0ed1f03..942d87f 100644
  
  
  def test_remote_sends_only_what_git_tracks_and_never_the_local_osprey_yaml(lease, tmp_path: Path) -> None:
-@@ -452,6 +469,7 @@ def test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease(le
+@@ -451,7 +468,9 @@ def test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease(le
+     export = next(l for l in script if l.startswith("export "))
      assert "ARCADEDB_HTTP_PORT=2492" in export and "POSTGRES_PORT=55434" in export and "OSPREY_LANE=case" in export
      assert "OSPREY_LEASE_DIR=$HOME/osprey-runs/case.meta/lease" in export
-     assert "pytest -q tests " in script
+-    assert "pytest -q tests " in script
++    # Run in the background and waited on, so a trapped INT ends the run at once (T1 part 5).
++    assert "pytest -q tests &" in script and "wait $!" in script
 +    assert any(l.startswith("export OSPREY_RUN_TAG=$HOME/osprey-runs/case.meta/runs/") for l in script), script
      # A call's command spans lines in the log; the start is the one call holding nohup setsid.
      assert text.count("nohup setsid") == 1, text
      mirrored = [l for l in log.read_text().splitlines() if "case.meta/lease/stack-b.lease/info" in l]
-@@ -544,7 +562,7 @@ def test_remote_log_follows_the_lane_s_last_run_on_its_host(lease, tmp_path: Pat
+@@ -544,7 +563,7 @@ def test_remote_log_follows_the_lane_s_last_run_on_its_host(lease, tmp_path: Pat
      lease("status")
      env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
@@ -231,7 +237,7 @@ index 0ed1f03..942d87f 100644
      assert ran.returncode == 0, ran.stderr
      text = log.read_text()  # a call's command spans lines in the log
      assert text.count("tail -n +1 -F") == 1, text
-@@ -564,7 +582,7 @@ def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(l
+@@ -564,7 +583,7 @@ def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(l
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
      log.write_text("")
      off = subprocess.run(["bash", str(SCRIPT), "offline", "case", "--", "make", "-k", "test", "SKIP_JS=1"],
@@ -240,7 +246,7 @@ index 0ed1f03..942d87f 100644
      assert off.returncode == 0, off.stderr
      text = log.read_text()
      assert "ospreyflow-test" in text
-@@ -590,7 +608,7 @@ def test_a_lane_with_no_row_of_its_own_gets_no_slot_but_a_refusal(lease, tmp_pat
+@@ -590,7 +609,7 @@ def test_a_lane_with_no_row_of_its_own_gets_no_slot_but_a_refusal(lease, tmp_pat
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
      log.write_text("")
      off = subprocess.run(["bash", str(SCRIPT), "offline", lane, "--", "make", "test"],
@@ -249,7 +255,7 @@ index 0ed1f03..942d87f 100644
      assert off.returncode == 0, off.stderr
      export = next(l for l in log.read_text().splitlines() if l.startswith("stdin export "))
      assert f"OSPREY_PORTS_SLOT=unlisted-{lane}" in export, export
-@@ -602,7 +620,7 @@ def test_remote_log_follows_an_offline_run_when_no_stack_is_held(lease, tmp_path
+@@ -602,7 +621,7 @@ def test_remote_log_follows_an_offline_run_when_no_stack_is_held(lease, tmp_path
      lease("status")
      env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
@@ -258,7 +264,7 @@ index 0ed1f03..942d87f 100644
      assert ran.returncode == 0, ran.stderr
      assert "ospreyflow-test l=osprey-runs/case.meta/runs/last" in log.read_text()
  
-@@ -631,7 +649,7 @@ def test_the_server_copy_is_a_repository_has_the_glass_packages_and_keeps_its_ru
+@@ -631,7 +650,7 @@ def test_the_server_copy_is_a_repository_has_the_glass_packages_and_keeps_its_ru
      env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
      off = subprocess.run(["bash", str(SCRIPT), "offline", "case", "--", "true"],
@@ -267,7 +273,7 @@ index 0ed1f03..942d87f 100644
      assert off.returncode == 0, off.stderr
      text = log.read_text()
      assert "git init -q" in text and "git add -A" in text and "commit -q --allow-empty" in text
-@@ -691,7 +709,7 @@ def test_an_offline_run_lists_its_30_slowest_tests_and_logs_its_wall_time(lease,
+@@ -691,7 +710,7 @@ def test_an_offline_run_lists_its_30_slowest_tests_and_logs_its_wall_time(lease,
      env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
      off = subprocess.run(["bash", str(SCRIPT), "offline", "case", "--", "make", "-k", "test", "SKIP_JS=1"],
@@ -276,7 +282,7 @@ index 0ed1f03..942d87f 100644
      assert off.returncode == 0, off.stderr
      text = log.read_text()
      assert "PYTEST_ADDOPTS=--durations=30" in next(l for l in text.splitlines() if l.startswith("stdin export "))
-@@ -753,13 +771,358 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
+@@ -753,13 +772,359 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
  
  
  
@@ -354,7 +360,8 @@ index 0ed1f03..942d87f 100644
 +    (tmp_path / "bin" / "ssh").write_text(
 +        f'#!/bin/bash\necho "ssh $*" >> "{log}"\nin="$(cat)"\n'
 +        f'for a; do last="$a"; done\n'
-+        f'case "$last" in *"nohup setsid"*|"bash -s -- "*) cd "{home}" && printf "%s\\n" "$in" | HOME="{home}" bash -c "$last";; esac\nexit 0\n'
++        # The remote command's own exit code, as a real ssh returns it (rule 15: `reap`'s refusal is an exit code).
++        f'case "$last" in *"nohup setsid"*|"bash -s -- "*) cd "{home}" && printf "%s\\n" "$in" | HOME="{home}" bash -c "$last"; exit $?;; esac\nexit 0\n'
 +    )
 +    (tmp_path / "bin" / "ssh").chmod(0o755)
 +    return home
@@ -636,7 +643,7 @@ index 0ed1f03..942d87f 100644
      selector = tmp_path / "select.sh"
      if fails:
          selector.write_text("#!/bin/sh\necho 'live_map.tsv line 3: names no live test file' >&2\nexit 1\n")
-@@ -768,7 +1131,7 @@ def _live(lease, tmp_path: Path, cwd: Path, picks: str, *args: str, fails: bool
+@@ -768,7 +1133,7 @@ def _live(lease, tmp_path: Path, cwd: Path, picks: str, *args: str, fails: bool
      selector.chmod(0o755)
      env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"), "OSPREY_LIVE_SELECT": str(selector),
             "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
@@ -645,7 +652,16 @@ index 0ed1f03..942d87f 100644
  
  
  def _executing_host(tmp_path: Path) -> Path:
-@@ -848,6 +1211,86 @@ def test_live_refuses_a_failed_or_empty_selection_and_a_lane_holding_no_stack(le
+@@ -785,7 +1150,7 @@ def _executing_host(tmp_path: Path) -> Path:
+     (bin_dir / "ssh").write_text(
+         f'#!/bin/bash\necho "ssh $*" >> "{log}"\nin="$(cat)"\nprintf "%s\\n" "$in" | sed "s/^/stdin /" >> "{log}"\n'
+         f'for a; do last="$a"; done\n'
+-        f'case "$last" in *"nohup setsid"*) cd "{home}" && printf "%s\\n" "$in" | HOME="{home}" bash -c "$last";; esac\nexit 0\n'
++        f'case "$last" in *"nohup setsid"*) cd "{home}" && printf "%s\\n" "$in" | HOME="{home}" bash -c "$last"; exit $?;; esac\nexit 0\n'
+     )
+     (bin_dir / "setsid").write_text('#!/bin/sh\nexec "$@"\n')
+     for tool in ("ssh", "setsid"):
+@@ -848,6 +1213,86 @@ def test_live_refuses_a_failed_or_empty_selection_and_a_lane_holding_no_stack(le
      assert not log.exists() or "rsync" not in log.read_text()  # nothing sent
  
  
