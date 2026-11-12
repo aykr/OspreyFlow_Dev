@@ -1,3 +1,49 @@
+# rules lane · report · rules-lists, second pass: the orchestrator's review and the owner's ruling on every close (12 November 2026, evening)
+
+The review of 97826d0 found four rule-3 leaks and the owner ruled at about 15:30 that a close decides only the
+citations its closer may read, for every disposition. All built in one pass, each red first
+(`lists/AM7_RED_RECORD.txt` P20 to P40 at their call sites; `lists/REVIEW2_RED_BEFORE.txt`, the new cases
+against the code before the pass; live, `lists/am7_live_plants.py` L8 to L19), Am 7 rewritten as built.
+
+| Review item | State | Proving test |
+| --- | --- | --- |
+| 1. Lists screened by clearance in the store's `WHERE`, for every caller; sentence words name no list | done | `test_screening_clearance.py` (equivalence with `handling_readable`, the KYC gate, a sentence rule, the preview, the words; P25 to P29); live `test_a_lists_entries_are_read_only_for_a_clearance_admitting_its_marking` (L8) |
+| 2. A refresh's audit names and counts only cleared lists, shown only to cleared readers | done | `test_the_rule_audit_names_a_lists_re_screening_only_to_a_reader_cleared_for_the_list` (P30); the two marked refresh cases, live (L15) |
+| 3. The Lists routes filtered, an access test each way; refresh, schedule and subscribe by a hidden name | done | live `test_a_list_is_shown_only_to_a_reader_cleared_for_its_marking`, `test_a_list_a_reader_is_not_cleared_for_is_answered_as_one_never_subscribed`, the store's case (L9 to L11, L14) |
+| 4. The rule audit reads a cited firing as the queue does; Am 7's "Not changed" corrected; the test and P21 flipped | done | `test_the_rule_audit_reads_a_firing_citing_two_lists_as_the_queue_reads_its_alert` (P21) |
+| The owner's ruling: a close decides only readable citations, every disposition, proposal and approval | done | `test_alert_citations_closing.py` (P31 to P35); live `test_a_close_decides_only_the_matches_its_closer_may_read`, `test_an_approval_by_a_reader_cleared_for_both_confirms_only_the_proposed_match` (L17, L18) |
+| 6. Trends count a cited alert once per reader as the queue shows it | done | `test_the_trends_count_a_cited_alert_once_for_each_reader_as_the_queue_shows_it`; conformance `test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader` (both adapters; P36 to P38, L19) |
+| 7. A load's report counts only what its loader may read | done | `test_a_loads_report_counts_only_the_alerts_its_loader_may_read`, offline (P39) and live (L16) |
+| 8. A reload never lowers a list's marking | done | `test_a_reload_that_would_lower_a_lists_marking_is_refused` (P40), live `…_is_refused_and_changes_nothing` (L13) |
+| 9. The listed party keyed by its entry id | done | `test_a_match_reuses_its_own_entrys_party_never_another_entry_of_the_same_name`, `test_a_match_on_a_name_many_parties_share_still_finds_its_own` (P24) |
+| 10. Point 6 with a differing approver; Home's counts, Reports figures, the address; risk with a hidden factor | done | `test_an_approver_cleared_for_one_list_approves_only_that_lists_proposal`; `test_homes_counts_…`, `test_the_reports_figures_…`, `test_the_alerts_address_…`; live `test_a_reader_not_cleared_for_a_list_is_given_a_risk_its_hidden_match_takes_no_part_in` |
+| 11. Out-of-map files listed for ratification | done | below |
+| Notes: removal before close; the plants' code identity; collection error apart from red | done | the five fixtures; each record's header; the runners' BROKEN |
+| Gates (`make test`, `make -k ci`, live) at the head | **waiting: the server's heavy slot, and nothing on the server from 12:00 UK on 13 November until the demo is over** | — |
+
+**Out of the rules lane's map, for ratification (item 11).** `services/api/packs.py` (a pack item read by the
+citations it shows); `services/api/screening_refresh.py` and `scripts/load_screening_list.py`, with
+`scripts/seed_ledger_fixture.py` and `scripts/refresh_screening_list.py` (the store's new signatures);
+`services/api/app.py` (the preview, *Test* and the four Lists routes); `services/api/rule_holds.py` (the rule
+audit); `services/api/sentence_rules.py` and `rule_sentences.py` (a sentence's lists and words);
+`packages/adapters/analytics_duckdb/{alert_facts,adapter,schema}.py`, `packages/adapters/analytics_clickhouse/{adapter,schema}.py`
+and `packages/schemas/analytics.py` (`AlertFact.fact_id`, `hidden_from`); `spec/01_DOMAIN_MODEL.md`. Tests of
+other areas changed for the new signatures: `test_rule_editor_routes.py`, `test_rule_sentence_routes.py` (the
+scheme's dependency), `test_alert_evidence_withheld.py` (`TriageStore.triage_citations`, the real decision),
+`test_alert_node_marking.py` (`save`'s `cited_handlings`), the analytics conformance suite (one case).
+
+## Decisions taken (second pass)
+- A list's marking is kept apart from its entries (`screening_list_markings`), so an emptied list keeps it.
+- A code change at the same classification counts as lowering (codes are not ranked): strict.
+- A hidden list's name, offered for a new subscription, is refused before anything is written; the refusal says
+  a name is taken, as any unique name does. Logged.
+- A close that leaves a citation open hands the alert back open and unassigned; a proposal leaves it claimed by
+  its proposer. A claim and a suppression stay the alert's, shown to every reader (no list, match or count);
+  a suppression's free-text reason is the lead's to word. Logged.
+- Trends: one row per set of citations, at most six citations (else counted for no one, said in Am 7).
+- A party written before entry ids is not found by id: a later match on its entry writes it once more.
+- A list's refresh is recorded only for rules whose deployer is cleared for it.
+
 # rules lane · report · rules-lists: CARRIES rows 113 and 114 (ADR-146 Amendment 7), 12 November 2026
 
 Resumed from HANDOFF.md (stale: removed, never committed; no `wip(rules)` commit was on the branch).

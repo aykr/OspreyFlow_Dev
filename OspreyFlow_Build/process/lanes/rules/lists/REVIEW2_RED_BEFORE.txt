@@ -1,0 +1,28 @@
+The orchestrator's review of 12 November 2026 and the owner's ruling of ~15:30: the new and changed offline tests, run against the code before this pass (the branch's head 97826d0, its tests replaced by the pass's), 2026-11-12T16:27:51Z, stack-free, closed ports pinned. Each new case red, for the reason it names.
+== test_alert_citations_closing.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.50s
+== test_screening_clearance.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.90s
+== test_alert_citations_per_list.py
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_citations_per_list.py::test_each_triage_returns_to_a_reader_cleared_for_one_list_that_list_alone[approve_close]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_citations_per_list.py::test_each_triage_returns_to_a_reader_cleared_for_one_list_that_list_alone[send_back]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_citations_per_list.py::test_the_rule_audit_reads_a_firing_citing_two_lists_as_the_queue_reads_its_alert
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_citations_per_list.py::test_the_rule_audit_names_a_lists_re_screening_only_to_a_reader_cleared_for_the_list
+4 failed, 25 passed in 1.12s
+== test_alert_citations_written.py
+        list: the bound was reached before the entry's own party, and the rule failed."""
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_citations_written.py::test_what_the_trends_count_it_by_keeps_each_lists_marking_apart
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_citations_written.py::test_a_match_reuses_its_own_entrys_party_never_another_entry_of_the_same_name
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_citations_written.py::test_a_match_on_a_name_many_parties_share_still_finds_its_own
+3 failed, 8 passed in 0.90s
+== conformance (DuckDB)
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader[analytics_duckdb]
+1 failed, 271 deselected in 1.01s
+
+Read with the plants (AM7_RED_RECORD.txt, P20 to P40): test_alert_citations_closing.py and
+test_screening_clearance.py cannot be collected against the code before the pass (they import
+`_row_to_facts`, `ListClearance`, `counted_for`, which it does not have), so this run shows no
+red for their cases; each of their cases is shown red, at its own call site, by a plant at the
+head. Every other new or flipped case above failed for the reason it names.
