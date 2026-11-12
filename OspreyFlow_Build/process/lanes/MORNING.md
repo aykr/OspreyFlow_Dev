@@ -525,6 +525,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 
         The server ran the tests in parallel eight times with no failures; before the fix, four of five runs
         failed. Restart your `watch` to pick this up.
+      - **About 00:50, L1.9 part 2 landed** (184b798; admin guide 1.83). My review round found nothing that had to
+        be fixed, but studio-b fixed seven items before merge:
+        - the render's check on the role's statements now refuses any resource it does not recognise;
+        - the S3 test fake now refuses what IAM would refuse;
+        - Athena reads always send the declared results location.
+
+        On the merged tree, cp-policy-check found 0 violations on all five fixtures.
+      - **P9 built** (7916044). My independent review is running. After it, case rebases onto L1.9 part 2 and
+        refreshes its diffs, because both change the cloud-platform profile's files.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
