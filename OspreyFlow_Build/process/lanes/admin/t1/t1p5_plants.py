@@ -8,7 +8,9 @@ green before and after. The reaper's cases need /proc and setsid, so this runs o
     stack_lease.sh offline admin -- .venv/bin/python ../OspreyFlow_Build/process/lanes/admin/t1/t1p5_plants.py
 
 A case is red only on exit 1 with "failed" and no "error" in its summary; a case that only skips is MISSED (the plant
-proved nothing), anything else a harness fault. It refuses a dirty tree, and restores every file in a `finally`. Nothing
+proved nothing), anything else a harness fault. The server's copy is no git checkout, so the diff is applied with
+`t1/apply_diff.py`, which refuses (writing nothing) unless every hunk's old lines are there exactly once: a script that
+already holds the change, or any other, stops the run before a plant. Every file is restored in a `finally`. Nothing
 here touches docker: every case runs the script against the suite's fake docker and ssh. (`reset` is its own step
 now, the orchestrator's split ruling: its plants went with it.)
 """
@@ -175,10 +177,15 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
 ]
 
 
-def git(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout
+APPLY = ROOT / "OspreyFlow_Build/process/lanes/admin/t1/apply_diff.py"
+
+
+def apply(*flags: str) -> bool:
+    done = subprocess.run(
+        [sys.executable, str(APPLY), *flags, str(DIFF)], capture_output=True, text=True, check=False
+    )
+    print(done.stdout.strip() or done.stderr.strip())
+    return done.returncode == 0
 
 
 def run(nodeids: list[str]) -> tuple[int, str]:
@@ -201,12 +208,11 @@ def verdict(rc: int, tail: str) -> str:
 
 
 def main() -> int:
-    if git(
-        "status", "--porcelain", "--", "OspreyFlow_Build/scripts", "OspreyFlow_Build/tests"
-    ).strip():
-        print("refused: the scripts or tests have uncommitted changes")
+    if not apply():
+        print(
+            "refused: stack-lease-T1p5.diff does not apply to this copy (already applied, or moved)"
+        )
         return 2
-    git("apply", str(DIFF))
     reds = missed = faults = runs = 0
     try:
         original = TARGET.read_text()
@@ -240,7 +246,7 @@ def main() -> int:
                 finally:
                     TARGET.write_text(original)
     finally:
-        git("apply", "-R", str(DIFF))
+        apply("--reverse")
     rc, tail = run([TESTS])
     print(
         f"control (restored, main's script): {'green' if rc == 0 else 'RED'} (exit {rc}) — {tail}"
