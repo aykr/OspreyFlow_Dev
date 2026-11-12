@@ -31823,15 +31823,20 @@ is the right default (fail closed), but nothing let a person say what such a tab
    source, what reading the source needs too (Add ingest files and the source author's Edit pipelines), and the
    dataset's own gate (404 to a person none of whose cases loads into it); it is refused for a composite. It is refused in words (422
    `default_marking_refused`) outside the scheme, above the approver's clearance (they would mark rows they could
-   not read) or above the deployment's highest marking (ADR-148 decision 10). Clearing it is always allowed: the
-   table is then unmarked again.
-5. **Audited, a new version.** Each change records who, when, from and to (`set_dataset_source_default_marking`),
+   not read) or above the deployment's highest marking (ADR-148 decision 10). A default already above the
+   approver's clearance is theirs neither to change nor to clear (either changes how rows they may not read are
+   marked), refused in words naming the clearance needed. Otherwise clearing it is allowed: the table is then
+   unmarked again. Refusals are answered in words and not audited, as a refused governance edit is not.
+5. **Audited, a new version.** A request naming the default it already has writes nothing: no version, audit
+   entry, flag or draft following; the answer is the source as it is. Each change records who, when, from and to
+   (`set_dataset_source_default_marking`; *from* as the store's update replaced it, under the row's lock),
    is a new version of the source holding who set it and when (the version taken in the store's own update), flags
    each deployed pipeline reading the source as needing attention and makes each draft reading it follow, its Test
    no longer standing, as a governance edit does (Amendment 4).
 6. **Read where the source is read.** The default travels on the source, so it is read only by those who may read
    the source (Add ingest files, Edit pipelines and the dataset's own gate): the source's list and page, the
-   governance edit's answer and the setting's own answer, each behind those gates.
+   governance edit's answer (which now needs Add ingest files beside Edit pipelines) and the setting's own answer,
+   each behind those gates.
 7. **Every path that runs the steps reads it**: the load (manual, scheduled and watched runs, through
    `RecipeRunDeps.sources` and `run_published_pipeline(source_store=)`), Test, Load Preview and a step's preview,
    each from the
@@ -31868,15 +31873,18 @@ marking cell reads as one the person may not view), so its words are the withhel
 - **Decision 4:** `test_the_default_is_set_only_by_a_source_approver_reaching_the_dataset` (rule 4 on the write: a
   source author 403; another dataset's route, another unit, a case that only reads the dataset 404),
   `test_an_approver_who_may_not_read_the_source_cannot_set_its_default` (Deploy pipelines without Edit pipelines:
-  403, as the read is) and
+  403, as the read is), `test_a_default_above_the_approver_is_neither_changed_nor_cleared_by_them` (`lowered`,
+  `cleared`) and
   `test_a_default_marking_is_refused_in_words_and_nothing_is_set` (`not-in-the-scheme`, `above-the-approver`,
   `above-the-ceiling`); the composite refusal by `test_composite_schedules.py`'s route census; the right by
   `test_route_rights.py`'s table.
 - **Decision 5:** `test_a_source_approver_declares_changes_and_clears_a_default_marking_audited` (who, when, from, to,
-  the version, the flagged pipelines, the drafts following; declared, changed and cleared); on Postgres and the
+  the version, the flagged pipelines, the drafts following; declared, changed and cleared),
+  `test_a_default_set_to_what_it_already_is_writes_nothing`; on Postgres and the
   in-memory store alike, `tests/services/api/test_studio_recipes_store.py::test_a_sources_default_marking_is_kept_read_back_and_refused_elsewhere_on_both_stores`
   (live).
-- **Decision 6:** `test_the_default_is_read_with_the_source_and_only_where_the_source_is_read` (rule 4 on the read).
+- **Decision 6:** `test_the_default_is_read_with_the_source_and_only_where_the_source_is_read` (rule 4 on the read)
+  and `test_a_governance_edit_is_refused_to_someone_the_source_read_refuses`.
 - **Decision 7:** at the load, the decision 2 cases (red with the run passing no declaration);
   `tests/services/api/test_recipe_run_path.py::test_a_recipe_run_hands_the_pipeline_runner_its_source_store` and
   `test_the_scheduler_reads_every_run_dependency_from_where_the_route_does`; `test_run_resources.py` (the builder
