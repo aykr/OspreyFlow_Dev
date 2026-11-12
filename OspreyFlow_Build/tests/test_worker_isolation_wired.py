@@ -29,3 +29,26 @@ def test_the_worker_isolation_plugin_is_registered(pytestconfig: pytest.Config) 
     assert pytestconfig.pluginmanager.has_plugin("tests.worker_isolation"), (
         "tests.worker_isolation is not registered"
     )
+
+
+def test_make_tests_own_arguments_without_the_flag_load_the_plugin_under_xdist() -> None:
+    """The orchestrator's review of part 5, should-fix 8: pytest as `make test` runs it (its own `-c` and pytest.ini),
+    with no `-p tests.worker_isolation`, at `-n 2 --dist loadgroup`, on one case under `tests/` (so the root conftest
+    is read, as it is for every file of the suite): the controller prints the plugin's own header. Red with the
+    conftest diff missed, whatever is on the command line."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    build = Path(__file__).resolve().parents[1]
+    core = build.parent / "OspreyFlow_Core"
+    target = f"{Path(__file__).resolve()}::test_the_root_conftest_names_the_worker_isolation_plugin"
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTEST_ADDOPTS", "PYTEST_XDIST_WORKER")}
+    ran = subprocess.run(
+        [sys.executable, "-m", "pytest", "-c", str(build / "pytest.ini"), "-p", "no:cacheprovider",
+         "-n", "2", "--dist", "loadgroup", target],
+        cwd=core, env=env, capture_output=True, text=True, timeout=300,
+    )  # fmt: skip
+    headers = [line for line in ran.stdout.splitlines() if line.startswith("worker_isolation: ")]
+    assert headers and headers[0].startswith("worker_isolation: 2 workers"), ran.stdout[-2000:]
