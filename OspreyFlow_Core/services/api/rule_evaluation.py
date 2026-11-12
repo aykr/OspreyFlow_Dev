@@ -343,6 +343,11 @@ class Finding:
     #: ADR-146 Amendment 7: what it cites that a reader is cleared for one by one (a screening
     #: match on each list). Each citation's ids are among `node_ids` and `edge_ids` too.
     citations: tuple[AlertCitation, ...] = ()
+    #: Of `refs`, those naming a citation's source (a screening match's list entry, `<list>:<id>`):
+    #: in the finding's signature, so a match on a new entry alerts again, but never on the `Alert`
+    #: node, which a reader cleared for one list reads (ADR-146 Amendment 7; the lane review's
+    #: item 1: the node's sources named every list's entry, a hidden one's too).
+    cited_refs: tuple[str, ...] = ()
 
     @classmethod
     def from_hit(
@@ -646,7 +651,10 @@ async def write_alert_node(
                 subject=renamed.get(finding.subject, finding.subject),
                 node_ids=[renamed.get(i, i) for i in finding.node_ids],
                 edge_ids=[renamed.get(i, i) for i in finding.edge_ids],
-                pending=(),
+                # Only the writes the store merged are gone; one written new keeps its marking as
+                # written for the node's and its citation's markings (the lane review's item 5: an
+                # owner's match on one list merged, on another new, lost the new one's).
+                pending=tuple(w for w in finding.pending if w.id not in renamed),
                 citations=tuple(
                     c.model_copy(update={"node_ids": [renamed.get(i, i) for i in c.node_ids],
                                          "edge_ids": [renamed.get(i, i) for i in c.edge_ids]})
@@ -667,7 +675,7 @@ async def write_alert_node(
         state=ProvenanceState.INFERRED,
         sources=[
             SourceRef(document_id=f"rule:{finding.rule.id}", locator=ref, excerpt_hash="")
-            for ref in finding.refs
+            for ref in alert_node_refs(finding)
         ],
         extracted_by=f"rule:{finding.rule.id}",
         first_seen=now,
@@ -711,6 +719,12 @@ async def write_alert_node(
     ]
     record.edges(alerted, await graph.upsert_edges(alerted, tx))
     return node_id, finding
+
+
+def alert_node_refs(finding: Finding) -> list[str]:
+    """What the `Alert` node's sources name: the finding's refs outside its citations' (ADR-146
+    Amendment 7)."""
+    return [r for r in finding.refs if r not in set(finding.cited_refs)]
 
 
 def core_of(finding: Finding) -> Finding:

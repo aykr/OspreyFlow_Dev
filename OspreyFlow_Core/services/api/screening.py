@@ -39,7 +39,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from typing import Literal
 
@@ -396,6 +396,18 @@ class ScreeningListStore:
                 "WHERE list_name = $1",
                 list_name,
             )
+            # ADR-146 Amendment 7 (the lane review's item 10): a refresh's file carries no marking,
+            # so a marked list keeps the one it was loaded with, never dropped to OFFICIAL by an
+            # update of the same name.
+            marked = next((r for r in rows if r["classification"] is not None), None)
+            if marked is not None:
+                entries = [
+                    e if e.classification is not None else replace(
+                        e, classification=marked["classification"],
+                        handling_code=marked["handling_code"],
+                    )
+                    for e in entries
+                ]  # fmt: skip
             diff = diff_entries(
                 list_name, [_entry(r) for r in rows], entries,
                 previous_version=previous, version=version,

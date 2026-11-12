@@ -228,9 +228,12 @@ async def _listed_party(
     it, else a new one to write with the alert."""
     candidate = _listed_write(hit, deployer, now)
     key = "family_name" if hit.entry.entity_type == "Person" else "name"
+    # The node of this list's entry, never another list's of the same name (`also`: a check made
+    # after a lookup that returns one node would be a coin toss; the lane review's item 6).
     found = await ctx.graph.find_node(
-        hit.entry.entity_type, key, str(candidate.properties[key]), deployer
-    )
+        hit.entry.entity_type, key, str(candidate.properties[key]), deployer,
+        also={"list_name": hit.entry.list_name},
+    )  # fmt: skip
     if found is not None and found.properties.get("list_name") == hit.entry.list_name:
         return found.id, None, found.handling
     return candidate.id, candidate, candidate.handling
@@ -309,6 +312,7 @@ async def screening_finding(
         typology="kyc_screening",
         subject=customer.id,
         refs=(screened.id, *sorted(h.entry.id for h in hits)),
+        cited_refs=tuple(sorted(h.entry.id for h in hits)),
         words=words,
         node_ids=sorted({customer.id, screened.id, *cited_nodes, *chain_nodes}),
         edge_ids=sorted({*cited_edges, *chain_edges}),

@@ -30,6 +30,7 @@ from scripts.real_data_exceptions import APPROVED_USES, is_permitted
 from services.api.config import PostgresConfig
 from services.api.screening import ScreeningEntry, ScreeningListStore
 from services.api.screening_refresh import LICENCE_NOT_CONFIRMED
+from services.ingest.ceiling import DeploymentCeiling
 
 from ontology.handling import HandlingScheme, load_uk_le_scheme
 
@@ -41,9 +42,15 @@ class ListRefused(Exception):
     """The list may not be loaded, in words."""
 
 
-def _marking(raw: dict[str, Any], scheme: HandlingScheme) -> tuple[str | None, str | None]:
+def _marking(
+    raw: dict[str, Any], scheme: HandlingScheme, ceiling: DeploymentCeiling | None = None
+) -> tuple[str | None, str | None]:
     """The list's `marking` (ADR-146 Amendment 7): a classification and a handling code the
-    scheme defines, refused in words otherwise; left out, `(None, None)`, OFFICIAL and P."""
+    scheme defines, refused in words otherwise; left out, `(None, None)`, OFFICIAL and P. Refused
+    too, after the lane review (item 11): a classification above the deployment's ceiling
+    (`OSPREY_HIGHEST_MARKING`, ADR-148), which it may not hold, and a handling code restricted to a
+    unit, since a list's match is written in the deployer's unit and the code would name the wrong
+    one."""
     marking = raw.get("marking")
     if marking is None:
         return None, None
@@ -54,6 +61,16 @@ def _marking(raw: dict[str, Any], scheme: HandlingScheme) -> tuple[str | None, s
         raise ListRefused(f"`marking`: {classification!r} is not a classification of this scheme")
     if code not in scheme.handling_codes:
         raise ListRefused(f"`marking`: {code!r} is not a handling code of this scheme")
+    if scheme.handling_codes[code].dissemination == "restricted":
+        raise ListRefused(
+            f"`marking`: {code!r} restricts a list to one unit, which a list's matches cannot "
+            "name; use a handling code every unit may receive"
+        )
+    if (ceiling or DeploymentCeiling.from_env(scheme)).above(classification):
+        raise ListRefused(
+            f"`marking`: {classification!r} is above this deployment's highest marking; nothing "
+            "was loaded"
+        )
     return classification, code
 
 
@@ -63,6 +80,7 @@ def parse_list(
     use: str,
     config_path: Path | None = None,
     scheme: HandlingScheme | None = None,
+    ceiling: DeploymentCeiling | None = None,
 ) -> tuple[str, list[ScreeningEntry]]:
     synthetic = raw.get("synthetic") is True
     if not synthetic:
@@ -90,7 +108,7 @@ def parse_list(
     list_name = str(raw.get("list_name") or "").strip()
     if not list_name:
         raise ListRefused("the list has no `list_name`")
-    classification, handling_code = _marking(raw, scheme or load_uk_le_scheme())
+    classification, handling_code = _marking(raw, scheme or load_uk_le_scheme(), ceiling)
     entries: list[ScreeningEntry] = []
     for item in raw.get("entries") or []:
         if item.get("listing") not in _LISTINGS or item.get("entity_type") not in _TYPES:
