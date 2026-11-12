@@ -379,7 +379,8 @@ def add_backups(
         # Each pod under its own account (P7b's rule): the backups' accounts never the namespace's
         # IRSA account or the gateway's, or one name would be trusted by two roles.
         raise ValueError(
-            f"secrets.irsa names {sorted(taken)[0]!r}, the backups' own account: name another"
+            f"secrets.irsa names {min(str(n) for n in taken)!r}, the backups' own account: "
+            "name another"
         )
     values["backups"] = found
     deployment_user = str(values["environment"].get("CLICKHOUSE_USER", "default"))
