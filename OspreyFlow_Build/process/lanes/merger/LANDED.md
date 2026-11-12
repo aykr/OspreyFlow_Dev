@@ -26,3 +26,5 @@ d507f9c 5585b4e platform P7b
 eec25d1 d84bbe8 case-b P12p2
 91a029c b061903 admin P10p2
 62cfdbe 21fd158 docs D2c-p3
+8f95d5a 69ef543 rules-b guides
+5675103 7af3fc6 admin T1p5
