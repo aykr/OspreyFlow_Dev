@@ -160,6 +160,10 @@ class ReleaseImportPlan(BaseModel):
     #: they confirm it (`replace_own_draft`), then written. Another person's draft is never
     #: offered to confirm: it is refused in words naming them (CARRIES row 90).
     replaces_own_draft: bool = False
+    #: The version of the importer's own open draft the plan saw: the confirmation names it
+    #: (`replace_own_draft=<version>`), so a draft discarded and opened again since is not replaced
+    #: on a confirmation given for another (the orchestrator's review of the carries step, item 5).
+    own_draft_version: int | None = Field(default=None, ge=1)
 
 
 class ReleaseBundleInput(BaseModel):
