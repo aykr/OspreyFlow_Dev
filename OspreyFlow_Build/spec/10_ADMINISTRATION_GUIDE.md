@@ -875,7 +875,8 @@ for ArcadeDB to close its databases. Postgres is RDS PostgreSQL 16 and Valkey is
 address yet, so it is unused. Caddy is not rendered: the platform's NGINX ingress is the front door,
 with ModSecurity on and the IP allow-list from `allow_from`. Local models and Whisper are not
 rendered, since the platform has no GPU. The model gateway (LiteLLM) is rendered always, with or
-without an engine (section 6a.3 says which identity it runs as; section 6a.9 is the model route). **Reporting is not rendered**:
+without an engine (section 6a.3 says which identity it runs as; section 6a.9 is the model
+route). **Reporting is not rendered**:
 Superset and the report sync signed in through Keycloak, and a render setting `reporting.sync` or
 `reporting.superset` is refused ("report sync and Superset are not on this profile yet: they signed
 in through Keycloak, and people sign in with Entra ID here; their own step after P10 (reporting on
@@ -1060,7 +1061,7 @@ single ports, never a range:
 | Named-entity extraction | Nothing beyond DNS |
 
 **An engine's way out is made at render.** With no engine declared, no engine's host is allowed. An
-engine disabled in *Admin › Models* keeps its host open until the next render is installed, and one
+engine removed in *Admin › Models* keeps its host open while `osprey.yaml` declares it, and one
 first added there is refused until it is declared, rendered again, the new values installed and
 the Terraform applied (section 10.1). No pod reaches a mail server: Keycloak, which sent sign-in mail, is
 not rendered. A `mail:` section therefore does nothing here, yet whenever it is present the render
@@ -1414,7 +1415,7 @@ profile an engine is one of three kinds (ADR-135 Amendments 4 and 7):
 - A hosted provider LiteLLM knows by its name (`kind: provider`, the default), by its key, as on every
   other profile.
 
-The two first kinds are this profile's alone; on every other profile they are refused in words naming
+The first two kinds are this profile's alone; on every other profile they are refused in words naming
 the profile. Each engine is declared under `models.providers` (or the single `models.provider`), with
 the settings Appendix A lists:
 
@@ -1429,11 +1430,16 @@ models:
       label: Organisation AI gateway
       roles: {extraction: gpt-4o-mini}
       privacy_contract: true
-      contract_reference: DPA 2026 07
+      contract_reference: DPA 2026/07
     - name: bedrock                          # Amazon Bedrock in London
       kind: bedrock                          # auth: iam_role and region: eu-west-2 by default
-      roles: {extraction: anthropic.claude-3-haiku-20240307-v1:0}   # a model's own id, offered on demand in London
+      # a model's own id: check your account is offered it on demand in London
+      roles: {extraction: anthropic.claude-3-haiku-20240307-v1:0}
   defaults: {extraction: orggateway}
+cloud_platform:
+  egress_nets:                               # each engine's host, by its networks
+    ai-gateway.example.internal: ["198.18.4.0/24"]
+    bedrock-runtime.eu-west-2.amazonaws.com: ["198.18.5.0/24"]
 ```
 
 **The region answer is London, and only London.** `region` is Bedrock's alone and takes only
@@ -1443,13 +1449,14 @@ provider's) and an ARN are refused, since either may send the call outside Londo
 offers in London only through an inference profile cannot therefore be used here.
 
 **Refused in words**, each naming the field and never its value, wherever an engine is read
-(`osprey.yaml` at render, the Conduit's start, the models file and *Admin › Models*): Bedrock by a key,
-with an address, or in any region but London; a region on any other kind; your gateway with no
+(`osprey.yaml` at render, the Conduit's start, the models file and *Admin › Models*): Bedrock by a
+key, with an address, or in any region but London; a region on any other kind; your gateway with no
 address, or by the IAM role (it signs in by a token for now, until its owners say how it accepts the
 namespace's identity); a provider by the IAM role; an engine named `bedrock` of any other kind; an
-address carrying a key (before its host, in a query or fragment, or as a path segment shaped like
-one); and a label or contract reference shaped like a key, or holding one among its words. Write a
-reference with spaces: one long word mixing letters and digits is taken for a key.
+address with anything before its host (`https://…@…`), a query or a fragment, key or not, or a path
+segment shaped like a key; and a label or contract reference shaped like a key, or holding one among
+its words. Write a reference with spaces: one long word mixing letters and digits is taken for a
+key.
 
 **What the render makes for Bedrock, and what the platform team applies.** Only while a Bedrock engine
 is declared, the namespace's Terraform includes `gateway.tf` (section 6a.3). It makes:
@@ -1469,34 +1476,50 @@ declared, `gateway.tf` is not rendered and the gateway runs under no role, with 
 The platform team applies `gateway.tf` with the rest of the namespace's Terraform, by pull request.
 IAM role names are account-wide, as `irsa.tf`'s are.
 
-**The way out.** The gateway's pod reaches each declared engine's host on its port: your gateway's
-host from its address (its own port, or 443), Bedrock's runtime, `bedrock-runtime.eu-west-2.amazonaws.com`,
-on 443, and a provider's own host. It also reaches STS (`sts.eu-west-2.amazonaws.com`), for the role,
-and the managed stores' networks, for its database; never S3 (section 6a.5). Name each engine host's
-networks under `cloud_platform.egress_nets`, as for any host; a host without them is refused at render
-with section 6a.5's words. With no engine declared, no engine's host is allowed out. The egress
-policy selects every pod, so these hosts are the namespace's, and only the gateway's row uses them.
+**The way out.** The gateway's pod alone reaches each declared engine's host, on its port: your
+gateway's host from its address (its own port, or 443); Bedrock's runtime in London,
+`bedrock-runtime.eu-west-2.amazonaws.com`, on 443; or a provider's own host, which the profile knows
+only for `openai`, `anthropic` and `gemini` (any other provider names its `api_base`, or the render
+is refused: "names no api_base, so its traffic's host is not known and cannot be allowed"). The
+gateway also reaches STS in the platform's region, whatever engine is declared, and the managed
+stores' networks, for its database; never S3 (section 6a.5). These hosts are in the gateway's own
+egress policy, `default.ospreyflow-egress-litellm`, and no other pod's. Name each engine host's
+networks under `cloud_platform.egress_nets`, as for any host; a host without them is refused at
+render with section 6a.5's words. With no engine declared, no engine's host is allowed out.
 
-**What Admin › Models allows and refuses here** (section 10.1). It offers the three kinds. An engine is
-enabled only where the render made its way out (and, for Bedrock, the gateway's own role). Adding
-one the render did not make, or moving an engine to a host it did not make, is refused: "On this
-deployment an engine is reached only once the render has made its way out of the namespace (and, for
-Bedrock, the gateway's own IAM role), and it made none for this engine. Declare it in osprey.yaml,
-re-render, and have the platform team apply the Terraform; then it can be enabled here." The order is
-section 10.1's: declare it, render again, install the new values (`helm upgrade`), have the platform
-team apply the Terraform, then add it in *Admin › Models*. An engine disabled there keeps its host open
-until the next render is installed. A key is never asked for a Bedrock engine: its key state reads
-*IAM role: no key kept*, and **Enter key** and **Remove key** are refused for it. Your gateway's token
-is a key like any other: entered write-only with **Enter key**, or, for an engine declared in
-`osprey.yaml`, given to the Terraform as a sensitive variable (section 6a.3). **Test the connection**
-names what refused a call in words of its own for each kind: for Bedrock, the gateway's role
-(pointing at `terraform/gateway.tf`, not the bucket role), the model's access not enabled for the
-account, the role's credentials expired, or the model not offered on demand in London; for your
-gateway, its token or its own policy (the answer cannot tell them apart), a model not offered to the
-token, its rate limit, or a refusal in a form that is not OpenAI's (something in front of it).
+**What Admin › Models allows and refuses here** (section 10.1). It offers the three kinds. An engine
+is enabled only where the render made its way out (and, for Bedrock, the gateway's own role). Adding
+one the render did not make, or moving an engine to a host it did not make, is refused, the engine's
+name in brackets: "On this deployment an engine is reached only once the render has made its way out
+of the namespace, and it made none for this engine (bedrock). Declare it in osprey.yaml, re-render,
+and have the platform team apply the Terraform; then it can be enabled here." For a Bedrock engine
+without the gateway's role, "(and, for Bedrock, the gateway's own IAM role)" follows "namespace".
+Such an engine is also refused a key and limits, and one a restored models file names is marked *not
+made by the render*.
 
-**Laurium's key.** Laurium reaches the model gateway alone, with a key of its own scoped to its
-models, held on the gateway; section 6a.1 says what it does until the key is held.
+**The order.** For your gateway or a provider it is section 10.1's: declare it in `osprey.yaml`,
+render again, install the new values (`helm upgrade`), have the platform team apply the Terraform,
+then add it in *Admin › Models*. **For a newly declared Bedrock engine the Terraform comes first**:
+the new values run the gateway as its own service account, which only `gateway.tf` makes, so the
+gateway's new pod cannot start until it is applied (as with `backups.tf`, section 6a.8). Render
+again, have the platform team apply the Terraform, install the new values, then add it. An engine
+removed in *Admin › Models* keeps its host open for as long as `osprey.yaml` declares it; the host
+closes once the engine is taken out there, the deployment rendered again and the new values
+installed.
+
+**Keys.** No key is asked for a Bedrock engine: its key state reads *IAM role: no key kept*, the
+screen offers no **Enter key** or **Remove key** for it, and the Conduit refuses setting or removing
+one. Your gateway's token is a key like any other: entered write-only with **Enter key**, or, for an
+engine declared in `osprey.yaml`, given to the Terraform as a sensitive variable (section 6a.3).
+**Test the connection** names what refused a call in words of its own for each kind: for Bedrock,
+the gateway's role (pointing at `terraform/gateway.tf`, not the bucket role), the model's access not
+enabled for the account, the role's credentials expired, or the model not offered on demand in
+London; for your gateway, its token or its own policy (the answer cannot tell them apart), a model
+not offered to the token, its rate limit, or a refusal in a form that is not OpenAI's (something in
+front of it).
+
+**Laurium's key.** Laurium's own key on the gateway, and what it does until the key is held, are
+section 6a.1's.
 
 **Not yet tried.** The route is checked as rendered, against a stand-in gateway, and not against AWS
 or your organisation's gateway: no account was reachable from the build. Still to be shown at the
@@ -2252,7 +2275,9 @@ whose service account the platform's settings name as `secrets.irsa.gateway_serv
 one to an address, that the render did not make: declare it in `osprey.yaml`, render the deployment
 again, install the new values (`helm upgrade`, which restarts the pods that read them) and have the
 platform team apply the Terraform, then add it here: the order *Admin › Connections*' own refusal
-gives (section 6a.9 has the whole route). This refusal's own words leave out installing the values (a known issue). An engine a restored models
+gives (section 6a.9 has the whole route). For a newly declared Bedrock engine the Terraform comes
+first, since only it makes the gateway's service account (section 6a.9). This refusal's own words
+leave out installing the values (a known issue). An engine a restored models
 file names but the render did not make is marked *not made by the render* and is neither offered to
 analysts nor given to the gateway.
 
