@@ -311,6 +311,14 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     SOURCES = [{ ...SOURCES[0], refresh }, ...SOURCES.slice(1)];
     return reply(SOURCES[0]);
   }
+  // ADR-140 Amendment 19: a source's declared default marking, a new version naming who and when.
+  if (/\/v1\/datasets\/harbour-extract\/sources\/[^/]+\/default-marking$/.test(path) && method === "PUT") {
+    const body = JSON.parse(String(init?.body)) as { default_marking: string | null };
+    const edited = { ...SOURCES[0], default_marking: body.default_marking, default_marking_set_by: "engineer-1",
+      default_marking_set_at: day(0), version: Number(SOURCES[0].version ?? 1) + 1 }; // prettier-ignore
+    SOURCES = [edited, ...SOURCES.slice(1)];
+    return reply({ source: edited, needs_attention: ["Wing phone calls"] });
+  }
   if (/\/v1\/datasets\/harbour-extract\/sources\/[^/]+\/governance$/.test(path)) {
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     const edited = { ...SOURCES[0], ...body, version: 2 };

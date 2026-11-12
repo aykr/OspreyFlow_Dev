@@ -12,6 +12,7 @@ import { statusWords } from "../studio/vocabulary";
 import {
   editGovernance,
   pauseRefresh,
+  setDefaultMarking,
   readConnectorSource,
   resumeRefresh,
   sourceLineage,
@@ -32,6 +33,19 @@ export interface SourcePageProps {
   onOpenInPipeline: () => void;
 }
 
+// ADR-140 Amendment 19: a source's declared default marking, in words.
+export const SOURCE_WORDS = {
+  defaultIntro:
+    "A table with no marking column of its own is unmarked, and a Join never joins its rows to a marked table's. A source approver can declare the marking this source's rows carry when its table has none; they then carry it before any step runs. It is never below the source's own marking, and never replaces a marking a column gives.",
+  noDefault:
+    "None declared: this source's table, when it has no marking column, is unmarked and is never joined to a marked one.",
+  none: "None",
+} as const;
+
+function declaredOn(at: string): string {
+  return new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
 function markingOf(handling: Record<string, unknown>): string {
   return [handling.classification, handling.handling_code].filter((v) => typeof v === "string" && v).join(" · ") || "not marked";
 }
@@ -45,6 +59,9 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
   const [busy, setBusy] = useState(false);
   // ADR-110 Amendment 13: why the refresh is being paused, said before it is.
   const [pauseReason, setPauseReason] = useState("");
+  // ADR-140 Amendment 19: the default marking chosen here, saved by a source approver.
+  const [chosenDefault, setChosenDefault] = useState(source.default_marking ?? "");
+  useEffect(() => setChosenDefault(source.default_marking ?? ""), [source.default_marking]);
 
   const reprofile = useCallback(() => {
     setProfile(null);
@@ -80,6 +97,25 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
       onChanged(edited.source);
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "The governance could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveDefault() {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const edited = await setDefaultMarking(api, datasetId, source.id, chosenDefault || null);
+      const flagged = edited.needs_attention ?? [];
+      setSaid(
+        flagged.length > 0
+          ? `Saved as version ${edited.source.version}. These deployed pipelines now need attention until deployed again: ${flagged.join(", ")}.`
+          : `Saved as version ${edited.source.version}.`,
+      );
+      onChanged(edited.source);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "The default marking could not be saved.");
     } finally {
       setBusy(false);
     }
@@ -196,6 +232,36 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
             </div>
           </>
         )}
+      </section>
+
+      <section aria-label="Default marking" style={{ display: "grid", gap: "var(--sp-8)" }}>
+        <h3 style={{ margin: 0, fontSize: "var(--fs-14)" }}>Default marking</h3>
+        <p className="label" style={{ margin: 0 }}>{SOURCE_WORDS.defaultIntro}</p>
+        <p style={{ margin: 0 }}>
+          {source.default_marking
+            ? `${source.default_marking}, declared by ${source.default_marking_set_by ?? "someone"}${source.default_marking_set_at ? ` on ${declaredOn(source.default_marking_set_at)}` : ""}.`
+            : SOURCE_WORDS.noDefault}
+        </p>
+        <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "end", flexWrap: "wrap" }}>
+          <label style={{ display: "grid", gap: "var(--sp-4)" }}>
+            <span>Default marking</span>
+            <select value={chosenDefault} onChange={(e) => setChosenDefault(e.target.value)} disabled={busy}>
+              <option value="">{SOURCE_WORDS.none}</option>
+              {(scheme?.classification ?? []).map((level) => (
+                <option key={level} value={level}>
+                  {level}
+                </option>
+              ))}
+            </select>
+          </label>
+          <RightButton
+            right="publish_pipelines"
+            disabled={busy || chosenDefault === (source.default_marking ?? "")}
+            onClick={() => void saveDefault()}
+          >
+            Save the default marking
+          </RightButton>
+        </div>
       </section>
 
       <section aria-label="Profile" style={{ display: "grid", gap: "var(--sp-8)" }}>

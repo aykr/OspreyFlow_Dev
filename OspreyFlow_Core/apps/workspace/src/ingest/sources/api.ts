@@ -14,6 +14,7 @@ import type {
   ListScheduleInput,
   OfferedList,
   RegisterSourceInput,
+  SourceDefaultMarkingInput,
   SourceGovernanceInput,
   SourceLineage,
   SourceProfile,
@@ -41,10 +42,12 @@ async function call<T>(api: SourcesApi, url: string, what: string, init: Request
   if (!response.ok) {
     let words = `${what} failed (${response.status}).`;
     try {
-      const body = (await response.json()) as { detail?: unknown };
+      const body = (await response.json()) as { detail?: unknown; problems?: unknown };
       const detail = body.detail as { detail?: string } | string | undefined;
       if (typeof detail === "string" && detail !== "not_found") words = detail;
       else if (detail && typeof detail === "object" && typeof detail.detail === "string") words = detail.detail;
+      // A refusal in words (ADR-140 Amendment 19's default marking, among others): each problem said.
+      else if (Array.isArray(body.problems) && body.problems.length > 0) words = body.problems.map(String).join("; ");
     } catch {
       // Not a JSON body: the status says it.
     }
@@ -87,6 +90,14 @@ export const editGovernance = (api: SourcesApi, datasetId: string, sourceId: str
   call<GovernanceEdited>(api, `${dataset(api, datasetId)}/sources/${encodeURIComponent(sourceId)}/governance`, "Editing the governance", {
     method: "PATCH",
     body: JSON.stringify(body),
+  });
+
+/** ADR-140 Amendment 19: a source approver declares, changes or clears (`null`) the source's default
+ * marking, which its table's rows carry before a join when the table has no marking column. */
+export const setDefaultMarking = (api: SourcesApi, datasetId: string, sourceId: string, marking: string | null) =>
+  call<GovernanceEdited>(api, `${dataset(api, datasetId)}/sources/${encodeURIComponent(sourceId)}/default-marking`, "Saving the default marking", {
+    method: "PUT",
+    body: JSON.stringify({ default_marking: marking } satisfies SourceDefaultMarkingInput),
   });
 
 /** ADR-110 Amendment 13: pausing a source's refresh is not an edit (no new version, the owner kept). */

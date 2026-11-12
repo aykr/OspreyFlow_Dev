@@ -52,6 +52,7 @@ from services.api.review import (
 from services.api.rule_evaluation import RuleGate
 from services.api.run_source import branch_location as _branch_location
 from services.api.run_source import pipeline_of, topological
+from services.api.sources import SourceStore
 from services.api.studio_publish import (
     LoadSink,
     after_the_load,
@@ -61,6 +62,7 @@ from services.api.studio_publish import (
 )
 from services.api.studio_staging import (
     dataset_reference_lists,
+    declared_markings,
     row_reader,
     source_tables,
     subscribed_in,
@@ -529,6 +531,7 @@ async def _run_staged_branch(
     storage: ObjectStorageConfig,
     meter: StagingMeter | None,
     list_store: ListStore | None = None,
+    source_store: SourceStore | None = None,
 ) -> BranchRunReport:
     """A staged pipeline's one load (ADR-140 Amendment 12): every source node's whole file read
     by a load of its own (`<load_id>:<node id>`), new for each run, so no two runs share a raw
@@ -545,10 +548,13 @@ async def _run_staged_branch(
     # before the step tables are written; `run_recipe` judges every row again before its own writes.
     refuse_fixed_markings_above_the_ceiling(recipe, DeploymentCeiling.from_env())
     references = await dataset_reference_lists(models, draft.dataset_id, storage, lists=list_store)
+    # ADR-140 Amendment 19: each source's declared default marking, read for this run.
+    declared = await declared_markings(source_store, draft.dataset_id)
     try:
         read = await asyncio.to_thread(
-            source_tables, draft, pipeline, load_id=load_id, location=source_location
-        )
+            source_tables, draft, pipeline, load_id=load_id, location=source_location,
+            declared=declared,
+        )  # fmt: skip
         lists = await asyncio.to_thread(
             lists_for_run,
             recipe.staging,
@@ -638,6 +644,7 @@ async def run_published_pipeline(
     staging_storage: ObjectStorageConfig | None = None,
     staging_meter: StagingMeter | None = None,
     list_store: ListStore | None = None,
+    source_store: SourceStore | None = None,
 ) -> PipelineRunReport:
     """The whole pipeline, in topological order: branches, then extracts, then enriches.
 
@@ -656,6 +663,10 @@ async def run_published_pipeline(
     carry its own — the same "today's fresh export" override `run_published_recipe` has, applied
     to the sources that read the draft's own recorded location. A source node carrying its own
     `source_location` in its config keeps it.
+
+    `source_store`: the dataset's registered sources, whose declared default markings an unmarked
+    table's rows carry before a join (ADR-140 Amendment 19). None: none is carried, so a Join of
+    an unmarked table to a marked one is refused (fail closed).
 
     `alerts`: the alerts' repoint journal, which each enrich stage's supersedes go through (ADR-109
     Amendment 11), whether or not the run has a rule gate."""
@@ -719,6 +730,7 @@ async def run_published_pipeline(
                 storage=staging_storage or ObjectStorageConfig.from_env(),
                 meter=staging_meter,
                 list_store=list_store,
+                source_store=source_store,
             )
         )
     for node in ordered:

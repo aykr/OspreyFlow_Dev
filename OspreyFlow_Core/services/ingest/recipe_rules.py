@@ -115,6 +115,20 @@ def marked_columns(
     return frozenset(found)
 
 
+def classification_columns(
+    template: RowTemplate | None, handling_columns: Mapping[str, str] | None
+) -> frozenset[str]:
+    """The columns a classification is bound to: `marked_columns`' for the `classification` part
+    alone, where a source's declared default marking is carried (ADR-140 Amendment 19)."""
+    found = {c for part, c in (handling_columns or {}).items() if part == "classification"}
+    if template is not None:
+        for element in template_elements(template):
+            bound = handling_bindings(element.handling).get("classification")
+            if bound is not None:
+                found.add(bound)
+    return frozenset(found)
+
+
 def literal_handling(override: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """`override` without its column bindings: what is fixed for every row."""
     if override is None:

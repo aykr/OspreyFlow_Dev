@@ -160,3 +160,108 @@ def test_a_run_s_metering_carries_what_its_steps_staged_and_none_for_an_unstaged
     meter.add(16, 2048)
     staged = metering_of(report, wall_seconds=0.1, object_store_bytes=0, staging=meter)
     assert (staged.rows_staged, staged.parquet_bytes) == (16, 2048)
+
+
+# --- ADR-140 Amendment 19 at the load's own call site -------------------------------------------
+#
+# The bookings carry a `classification` column the source declares as its marking column; the
+# owners carry none, so they are unmarked. The Join `with_owner` is refused, fail closed, unless the
+# owners' source declares a default marking the bookings' rows share, read by the run from the
+# dataset's registered sources.
+
+
+async def _published_marked(tmp_path: Path) -> tuple[StudioRecipeDraft, Path, str]:
+    import csv
+    import subprocess
+    from datetime import UTC, datetime
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    bookings = tmp_path / "visit_bookings.csv"
+    with (FIXTURES / "visit_bookings.csv").open(newline="") as given:
+        rows = list(csv.DictReader(given))
+    with bookings.open("w", newline="") as out:
+        writer = csv.DictWriter(out, [*rows[0], "classification"])
+        writer.writeheader()
+        writer.writerows(r | {"classification": "OFFICIAL"} for r in rows)
+    pipeline = _pipeline(tmp_path)
+    columns = {"classification": "classification"}
+    defaults = RECIPE.defaults.model_copy(update={"handling_columns": columns})
+    # Each element binds its classification from the declared column, as a marked source's must.
+    assert RECIPE.row_template is not None
+    bound = {"classification": {"field": "classification"}}
+    given = RECIPE.row_template
+    template = given.model_copy(
+        update={
+            "entities": [e.model_copy(update={"handling": bound}) for e in given.entities],
+            "edges": [e.model_copy(update={"handling": bound}) for e in given.edges],
+        }
+    )
+    recipe = RECIPE.model_copy(
+        update={"id": "recipe-1", "pipeline": pipeline, "defaults": defaults,
+                "row_template": template}
+    )  # fmt: skip
+    git_path = await write_and_commit_recipe(recipe, repo_root=repo)
+    draft = StudioRecipeDraft(
+        recipe_id="recipe-1", version=1, status=StudioRecipeStatus.PUBLISHED, label="Visits",
+        connector_profile="generic-csv", source_location=str(bookings),
+        handling=HANDLING | {"handling_columns": columns},
+        legal_basis="Synthetic demonstration data", owning_unit="unit-1", created_by="author-1",
+        created_at=datetime(2026, 11, 8, tzinfo=UTC), ready_for_profile=True,
+        row_template=template, pipeline=pipeline, git_path=git_path,
+        dataset_id="pid", pack_versions={},
+    )  # fmt: skip
+    return draft, repo, str(tmp_path / "number_owners.csv")
+
+
+async def _owners_declared(location: str, marking: str | None) -> Any:
+    from services.api.sources import InMemorySourceStore
+
+    from schemas.sources import RegisterSourceInput
+
+    sources = InMemorySourceStore()
+    approver = Principal(id="approver-1", clearance="SECRET", org_unit="unit-1")
+    owners = await sources.register(
+        "pid",
+        RegisterSourceInput(connection_id="files", name="Owners", location=location,
+                            handling=HANDLING, legal_basis="Synthetic"),  # fmt: skip
+        approver,
+    )
+    if marking is not None:
+        await sources.set_default_marking("pid", owners.id, marking, approver)
+    return sources
+
+
+@pytest.mark.parametrize("given", [False, True], ids=["no-store", "store-without-a-default"])
+async def test_a_load_joining_an_unmarked_source_is_refused_naming_its_default_marking(
+    tmp_path: Path, store: Path, given: bool
+) -> None:
+    draft, repo, owners = await _published_marked(tmp_path)
+    sources = await _owners_declared(owners, None) if given else None
+    with pytest.raises(RecipeRuleError) as refused:
+        await _run(draft, repo, "run-u", source_store=sources)
+    words = str(refused.value)
+    assert "whose marking differs" in words and "default marking" in words
+    assert "Studio › Sources" in words
+
+
+async def test_a_load_joins_an_unmarked_source_carrying_its_declared_default(
+    tmp_path: Path, store: Path
+) -> None:
+    draft, repo, owners = await _published_marked(tmp_path)
+    sources = await _owners_declared(owners, "OFFICIAL")
+    report, graph = await _run(draft, repo, "run-d", source_store=sources)
+    [branch] = report.branches
+    with_owner = next(s for s in branch.report.staging_steps if s.step == "with_owner")
+    assert with_owner.rows_out > 0
+    assert graph.committed_nodes
+
+
+async def test_a_load_whose_unmarked_source_declares_another_marking_is_refused(
+    tmp_path: Path, store: Path
+) -> None:
+    draft, repo, owners = await _published_marked(tmp_path)
+    sources = await _owners_declared(owners, "SECRET")
+    with pytest.raises(RecipeRuleError, match="whose marking differs"):
+        await _run(draft, repo, "run-s", source_store=sources)

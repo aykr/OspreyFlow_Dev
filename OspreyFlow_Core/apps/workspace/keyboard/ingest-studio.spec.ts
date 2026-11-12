@@ -153,6 +153,23 @@ test("a source's governance is edited by keyboard, and says which pipelines need
   registerCovered(REGISTRY, "edit-a-sources-governance-by-keyboard");
 });
 
+// ADR-140 Amendment 19: a source approver declares the default marking an unmarked table carries.
+test("a source's default marking is declared by keyboard, and says who declared it", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "2 Sources");
+  await press(page, "Open source Wing phone calls file");
+  await expect(page.getByText(/None declared: this source's table/)).toBeVisible();
+  const choice = page.getByRole("combobox", { name: "Default marking" });
+  await choice.focus();
+  await choice.selectOption("OFFICIAL");
+  await press(page, "Save the default marking");
+  await expect(page.getByRole("status").filter({ hasText: "need attention" })).toContainText("Wing phone calls");
+  await expect(page.getByText(/^OFFICIAL, declared by engineer-1 on /)).toBeVisible();
+  const put = (await asked(page)).find((a) => a.method === "PUT" && a.path.endsWith("/default-marking"));
+  expect(JSON.parse(put?.body ?? "{}")).toEqual({ default_marking: "OFFICIAL" });
+  registerCovered(REGISTRY, "declare-a-sources-default-marking-by-keyboard");
+});
+
 test("a source's refresh is set to read only rows past a watermark, by keyboard", async ({ page }) => {
   await page.goto(HARNESS);
   await tab(page, "2 Sources");

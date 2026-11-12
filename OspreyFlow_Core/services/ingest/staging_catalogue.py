@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 from urllib.parse import quote
 
@@ -503,20 +503,59 @@ def marking_of(cells: Mapping[str, Cell], marked: Collection[str]) -> tuple[Cell
     return tuple((cells.get(c) or "").strip() or None for c in sorted(marked))
 
 
+#: Said beside a Join's refusal when a row has no marking at all (ADR-140 Amendment 19).
+UNMARKED_WORDS = (
+    "One of the rows is unmarked: its table has no marking column, and its source declares no "
+    "default marking. A source approver can declare one in Studio › Sources (Default marking); "
+    "that table's rows then carry it before the join"
+)
+
+
 def refuse_a_differing_marking(
     step_id: str, row: StagedTableRow, other: StagedTableRow, marked: Collection[str]
 ) -> None:
     """Rule 3 at the run (CARRIES row 48): an output row drawing on two rows is written under the
     first's marking cells, so the second's must be the same; otherwise the step is refused whole,
-    in words naming neither row's values nor their markings."""
-    if marked and marking_of(row.cells, marked) != marking_of(other.cells, marked):
-        raise StagingError(
-            [
-                f"step {step_id!r} joins a row to one whose marking differs: a joined row is "
-                "written under one marking, so rows of different markings are never joined. Split "
-                "them by their marking first, or join only rows marked alike"
-            ]
-        )
+    in words naming neither row's values nor their markings. An unmarked row (no marking cell at
+    all) differs from a marked one, fail closed; the words then name the source's declared default
+    marking, the setting that marks such a table (ADR-140 Amendment 19)."""
+    if not marked:
+        return
+    mine, theirs = marking_of(row.cells, marked), marking_of(other.cells, marked)
+    if mine == theirs:
+        return
+    words = (
+        f"step {step_id!r} joins a row to one whose marking differs: a joined row is "
+        "written under one marking, so rows of different markings are never joined. Split "
+        "them by their marking first, or join only rows marked alike"
+    )
+    unmarked = all(c is None for c in mine) or all(c is None for c in theirs)
+    raise StagingError([f"{words}. {UNMARKED_WORDS}" if unmarked else words])
+
+
+def carry_declared_marking(
+    table: StagedTable,
+    declared: str | None,
+    *,
+    marked: Collection[str],
+    classification: Collection[str],
+) -> StagedTable:
+    """ADR-140 Amendment 19: a source table with no marking column of its own is unmarked; when its
+    source declares a default marking (Studio › Sources, set by a source approver, audited), its
+    rows carry it, in each column the pipeline binds a classification from, before any step runs.
+    A table holding any column a marking is bound to is marked, even where a cell is empty, and is
+    returned as it is: the default never lowers, or fills, a bound marking. No marking column in
+    the pipeline, or no default declared: the table as it is."""
+    if declared is None or not marked or not classification:
+        return table
+    if any(column in table.columns for column in marked):
+        return table
+    added = sorted(classification)
+    rows = [
+        StagedTableRow(dict(row.cells) | dict.fromkeys(added, declared), row.refs)
+        for row in table.rows
+    ]
+    return replace(table, columns=[*table.columns, *added], rows=rows)
 
 
 # --- The steps ----------------------------------------------------------------

@@ -209,8 +209,9 @@ async def run_verify(
             raise RecipeRuleError([DATASET_WITHHELD])
         try:
             read = source_tables(
-                draft, draft.pipeline, load_id="test", limit=DEFAULT_SAMPLE_SIZE + 1
-            )
+                draft, draft.pipeline, load_id="test", limit=DEFAULT_SAMPLE_SIZE + 1,
+                declared=staging.declared,
+            )  # fmt: skip
             lists = lists_for_run(
                 steps,
                 staging.references,

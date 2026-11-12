@@ -10,7 +10,8 @@ import type { SourceTable, StudioRecipeDraft } from "../../../../../packages/sch
 import { EMPTY_GOVERNANCE, GovernanceFields } from "./GovernanceFields";
 import { RegisterSourceWizard } from "./RegisterSourceWizard";
 import { SourceChooser } from "./SourceChooser";
-import { SourcePage } from "./SourcePage";
+import { SOURCE_WORDS, SourcePage } from "./SourcePage";
+import { StudioRights } from "../studio/rightsGate";
 
 afterEach(() => {
   cleanup();
@@ -177,6 +178,84 @@ describe("the source page's refresh", () => {
     render(<SourcePage api={API} datasetId="ds-a" source={SOURCE} scheme={SCHEME} onBack={() => undefined} onChanged={() => undefined} onOpenInPipeline={() => undefined} />);
     expect(await screen.findByText("by hand")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Pause the refresh" })).toBeNull();
+  });
+});
+
+// ADR-140 Amendment 19: a source's declared default marking, which an unmarked table's rows carry
+// before a join. What would fail: the page not saying none is declared and what that means; the
+// choice not reaching its route; who declared it and when not said; a person without Deploy
+// pipelines offered the save; a refusal shown as a status code.
+describe("the source page's default marking", () => {
+  const PAGE_ROUTES = {
+    "GET /v1/datasets/ds-a/sources/s1/profile": { rows_sampled: 0, sample_is_whole_source: true, values_masked: false, columns: [] },
+    "GET /v1/datasets/ds-a/sources/s1/lineage": [],
+  };  // prettier-ignore
+  const page = (source: SourceTable, rights: ReadonlySet<string> | null = null) =>
+    render(
+      <StudioRights.Provider value={rights}>
+        <SourcePage api={API} datasetId="ds-a" source={source} scheme={SCHEME} onBack={() => undefined} onChanged={() => undefined} onOpenInPipeline={() => undefined} />
+      </StudioRights.Provider>,
+    );
+
+  it("says none is declared, and that the table is then never joined to a marked one", async () => {
+    serve(PAGE_ROUTES);
+    page(SOURCE);
+    expect(await screen.findByText(SOURCE_WORDS.noDefault)).toBeTruthy();
+  });
+
+  it("sends the chosen marking, then says who declared it and when, and which pipelines need attention", async () => {
+    const declared = { ...SOURCE, version: 2, default_marking: "OFFICIAL", default_marking_set_by: "eng-1", default_marking_set_at: "2026-11-12T10:00:00Z" };
+    const calls = serve({ ...PAGE_ROUTES, "PUT /v1/datasets/ds-a/sources/s1/default-marking": { source: declared, needs_attention: ["Cell stays pipeline"] } });  // prettier-ignore
+    const onChanged = vi.fn();
+    render(<SourcePage api={API} datasetId="ds-a" source={SOURCE} scheme={SCHEME} onBack={() => undefined} onChanged={onChanged} onOpenInPipeline={() => undefined} />);
+    fireEvent.change(await screen.findByRole("combobox", { name: "Default marking" }), { target: { value: "OFFICIAL" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the default marking" }));
+    expect(await screen.findByText(/Saved as version 2\. These deployed pipelines now need attention until deployed again: Cell stays pipeline\./)).toBeTruthy();
+    const put = calls.find((c) => c.method === "PUT");
+    expect(put?.body).toEqual({ default_marking: "OFFICIAL" });
+    expect(onChanged).toHaveBeenCalledWith(declared);
+    cleanup();
+    serve(PAGE_ROUTES);
+    page(declared);
+    expect(await screen.findByText("OFFICIAL, declared by eng-1 on 12 November 2026.")).toBeTruthy();
+  });
+
+  it("clears a declared default by choosing None", async () => {
+    const declared = { ...SOURCE, default_marking: "OFFICIAL", default_marking_set_by: "eng-1", default_marking_set_at: "2026-11-12T10:00:00Z" };
+    const calls = serve({ ...PAGE_ROUTES, "PUT /v1/datasets/ds-a/sources/s1/default-marking": { source: { ...SOURCE, version: 3 }, needs_attention: [] } });  // prettier-ignore
+    page(declared);
+    const choice = (await screen.findByRole("combobox", { name: "Default marking" })) as HTMLSelectElement;
+    expect(choice.value).toBe("OFFICIAL");
+    fireEvent.change(choice, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the default marking" }));
+    expect(await screen.findByText("Saved as version 3.")).toBeTruthy();
+    expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ default_marking: null });
+  });
+
+  it("offers the save only with Deploy pipelines, saying who can", async () => {
+    const calls = serve(PAGE_ROUTES);
+    page(SOURCE, new Set(["add_ingest_files", "edit_pipelines"]));
+    const save = await screen.findByRole("button", { name: "Save the default marking" });
+    expect(save.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(save);
+    expect(calls.some((c) => c.method === "PUT")).toBe(false);
+  });
+
+  it("shows a refusal in its own words", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const path = new URL(String(url)).pathname;
+        if (init?.method === "PUT")
+          return { ok: false, status: 422, json: async () => ({ error: "default_marking_refused", problems: ["the default marking is above your clearance"] }) } as Response;  // prettier-ignore
+        const found = (PAGE_ROUTES as Record<string, unknown>)[`GET ${path}`];
+        return { ok: true, status: 200, json: async () => found } as Response;
+      }),
+    );
+    page(SOURCE);
+    fireEvent.change(await screen.findByRole("combobox", { name: "Default marking" }), { target: { value: "SECRET" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the default marking" }));
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("above your clearance"));
   });
 });
 

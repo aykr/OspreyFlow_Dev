@@ -179,3 +179,93 @@ def test_a_fuzzy_match_comparing_a_marking_column_is_refused() -> None:
     assert any(
         "compares 'classification', a column a marking is bound to" in p for p in _gate([fuzzy])
     )
+
+
+# --- ADR-140 Amendment 19 (CARRIES row 123): a source's declared default marking ---------------
+#
+# The guard stays fail closed: a table with no marking column of its own is unmarked, and its rows
+# never join a marked table's. A source may declare a default marking (Studio › Sources, by a
+# source approver, audited); an unmarked table's rows then carry it, in the column Map binds the
+# classification from, before any step runs. It never touches a table that has a marking column,
+# so it never lowers a bound marking.
+
+CLASSIFICATION = frozenset({"classification"})
+
+
+def _carried(right_class: str | None, declared: str | None) -> dict[str, object]:
+    from services.ingest.staging_catalogue import carry_declared_marking
+
+    tables = _tables(right_class)
+    tables["people"] = carry_declared_marking(
+        tables["people"], declared, marked=MARKED, classification=CLASSIFICATION  # type: ignore[arg-type]
+    )
+    return tables
+
+
+def _run(tables: dict[str, object]) -> object:
+    return run_staging(
+        STEPS.validate_python([_join()]), sources=tables, lists={}, dataset_id="pid",  # type: ignore[arg-type]
+        marked=MARKED, subscribed=(),
+    )  # fmt: skip
+
+
+def test_an_unmarked_table_carrying_its_sources_default_joins_rows_marked_alike() -> None:
+    result = _run(_carried(None, "OFFICIAL"))
+    (row,) = result.output.rows  # type: ignore[attr-defined]
+    assert row.cells["name"] == "Ann Example" and row.cells["classification"] == "OFFICIAL"
+
+
+def test_an_unmarked_tables_rows_carry_the_default_in_the_classification_column() -> None:
+    people = _carried(None, "OFFICIAL")["people"]
+    assert "classification" in people.columns  # type: ignore[attr-defined]
+    assert [r.cells["classification"] for r in people.rows] == ["OFFICIAL"]  # type: ignore[attr-defined]
+
+
+def test_a_default_marked_differently_from_the_other_table_is_still_refused() -> None:
+    with pytest.raises(StagingError, match="whose marking differs"):
+        _run(_carried(None, "SECRET"))
+
+
+def test_the_default_never_touches_a_table_that_has_a_marking_column() -> None:
+    """Never lowers a bound marking: a SECRET row stays SECRET, so the join is still refused."""
+    tables = _carried("SECRET", "OFFICIAL")
+    assert [r.cells["classification"] for r in tables["people"].rows] == ["SECRET"]  # type: ignore[attr-defined]
+    with pytest.raises(StagingError, match="whose marking differs"):
+        _run(tables)
+
+
+def test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default() -> None:
+    """The table has the marking column, so it is marked: an empty cell is not an unmarked table
+    (the strict option); the join is refused as before."""
+    tables = _carried("", "OFFICIAL")
+    people = tables["people"]
+    assert "classification" in people.columns  # type: ignore[attr-defined]
+    assert [r.cells["classification"] for r in people.rows] == [None]  # type: ignore[attr-defined]
+    with pytest.raises(StagingError, match="whose marking differs"):
+        _run(tables)
+
+
+def test_no_default_declared_keeps_the_guard_fail_closed_and_names_the_setting() -> None:
+    with pytest.raises(StagingError) as refused:
+        _run(_carried(None, None))
+    words = str(refused.value)
+    assert "whose marking differs" in words
+    assert "unmarked" in words and "default marking" in words and "Studio › Sources" in words
+    assert "Ann Example" not in words and "OFFICIAL" not in words
+
+
+def test_a_refusal_of_two_marked_rows_does_not_point_at_the_default() -> None:
+    """The setting is named only where it could help: a row with no marking at all."""
+    with pytest.raises(StagingError) as refused:
+        _run(_carried("SECRET", None))
+    assert "default marking" not in str(refused.value)
+
+
+def test_a_pipeline_with_no_marking_column_is_left_as_it_is() -> None:
+    from services.ingest.staging_catalogue import carry_declared_marking
+
+    people = _tables(None)["people"]
+    kept = carry_declared_marking(
+        people, "OFFICIAL", marked=frozenset(), classification=frozenset()  # type: ignore[arg-type]
+    )
+    assert kept is people

@@ -561,3 +561,94 @@ def test_the_same_ten_rows_all_readable_are_shown(staged: TestClient, tmp_path: 
     assert len(_preview(staged, "titled").json()["rows"]) == 5
     for route in ("verify", "preview-graph"):
         assert staged.post(f"{RECIPE_URL}/{route}").status_code == 200, route
+
+
+# --- ADR-140 Amendment 19 at a step's preview and at Test -----------------------------------------
+
+
+def _marked(client: TestClient, tmp_path: Path, default: str | None) -> None:
+    """The bookings get a `classification` column the source declares as its marking column, each
+    element binding its classification from it; the owners have none, so their table is unmarked.
+    The owners' source is registered on the dataset, declaring `default` (or nothing)."""
+    import asyncio
+    import csv
+
+    from services.api.app import get_sources
+    from services.api.sources import InMemorySourceStore
+
+    from schemas.domain import Principal
+    from schemas.sources import RegisterSourceInput
+
+    draft = _draft(client)
+    bookings = Path(draft.source_location)
+    with bookings.open(newline="") as given:
+        rows = list(csv.DictReader(given))
+    with bookings.open("w", newline="") as out:
+        writer = csv.DictWriter(out, [*rows[0], "classification"])
+        writer.writeheader()
+        writer.writerows(r | {"classification": "OFFICIAL"} for r in rows)
+    bound = {"classification": {"field": "classification"}}
+    given = draft.row_template
+    template = given.model_copy(
+        update={
+            "entities": [e.model_copy(update={"handling": bound}) for e in given.entities],
+            "edges": [e.model_copy(update={"handling": bound}) for e in given.edges],
+        }
+    )
+    columns = {"classification": "classification"}
+    _update(client, handling={**draft.handling, "handling_columns": columns}, row_template=template)
+    sources = InMemorySourceStore()
+    approver = Principal(id="approver-1", clearance="SECRET", org_unit="unit-1")
+
+    async def register() -> None:
+        owners = await sources.register(
+            "pid",
+            RegisterSourceInput(connection_id="files", name="Owners",
+                                location=str(tmp_path / "number_owners.csv"),
+                                handling={"classification": "OFFICIAL", "handling_code": "P",
+                                          "originator": "unit-1", "owning_unit": "unit-1"},
+                                legal_basis="Synthetic"),  # fmt: skip
+            approver,
+        )
+        if default is not None:
+            await sources.set_default_marking("pid", owners.id, default, approver)
+
+    asyncio.run(register())
+    app.dependency_overrides[get_sources] = lambda: sources
+
+
+def test_a_preview_of_a_join_to_an_unmarked_source_without_a_default_is_refused(
+    staged: TestClient, tmp_path: Path
+) -> None:
+    """Refused before the Join is reached: an unmarked row's empty marking cell reads as one the
+    person may not view (fail closed), so the sample is withheld whole. The default, once
+    declared, marks those rows, and the same preview runs (the next case)."""
+    _marked(staged, tmp_path, None)
+    body = _preview(staged, "with_owner").json()
+    assert any("The sample is withheld" in p for p in body["problems"]), body["problems"]
+    assert body["rows"] == [] and body["values_masked"] is True
+
+
+def test_a_preview_joins_an_unmarked_source_carrying_its_declared_default(
+    staged: TestClient, tmp_path: Path
+) -> None:
+    _marked(staged, tmp_path, "OFFICIAL")
+    body = _preview(staged, "with_owner").json()
+    assert body["problems"] == [], body["problems"]
+    assert len(body["rows"]) == 5
+    assert {r["classification"] for r in body["rows"]} == {"OFFICIAL"}
+
+
+@pytest.mark.parametrize("default", [None, "OFFICIAL"], ids=["none-declared", "declared"])
+def test_test_reads_the_sources_declared_default_as_the_run_does(
+    staged: TestClient, tmp_path: Path, default: str | None
+) -> None:
+    _marked(staged, tmp_path, default)
+    response = staged.post(f"{RECIPE_URL}/verify")
+    if default is None:
+        # Withheld before the Join, as the preview is (fail closed).
+        assert response.status_code == 422, response.text
+        assert "The sample is withheld" in response.text
+    else:
+        assert response.status_code == 200, response.text
+        assert response.json()["rows_read"] == 10
