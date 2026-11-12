@@ -33874,11 +33874,16 @@ them hidden from a reader, would have been withheld from that reader whole. This
 2. **One alert per screened party.** A screening finding cites every entry one party matches, on whichever lists,
    at onboarding (`judge_screening`) and in a refresh's re-screening (`Rescreener`). Each match is an
    `AlertCitation`: its words, its listed party and its `SAME_AS`. Every citation's ids are among the alert's
-   referents and links as stored. A match reuses its own entry's listed party, looked up by the entry's id
-   (`list_entry_id`, the review's item 9), never by a name: two entries sharing a family name, on one list or
-   two, are two parties, and no number of people sharing a name reaches `find_node`'s bound. A party written
-   before this has no entry id, and a later match writes its entry's party once more. Two owners are still
-   two alerts. A refresh raises, for one list, one alert
+   referents and links as stored. A match reuses its own entry's listed party (the review's item 9), found by
+   its indexed name and every other property the party is written with (`find_node`'s `also`: its list,
+   listing, given names and date of birth, or an organisation's country), so two entries sharing a family
+   name, on one list or two, are two parties. Past the lookup's bound (more people sharing the name in reach
+   than it reads, none of them this entry's), a party of its own is written, never a failed rule: a second
+   node for one entry, which resolution may later link (rule 6). Two entries of one list with the same name
+   and date of birth share a party. *Keyed by the entry's own id* (the review's ask) it would need that id
+   declared and indexed on Person and Organisation, an ontology version and every pinned recipe with it,
+   which is not this lane's to change: written undeclared, ArcadeDB refused it (the lane review of the second
+   pass, defect 1). Logged for the orchestrator. Two owners are still two alerts. A refresh raises, for one list, one alert
    per party citing that list's changed entries.
 3. **What is stored names no list.** The alert's stored words, its `Alert` node's words and its `rule_fired`
    audit entry say "*… matches an entry on a screening list — a suggestion to confirm, not a finding*"
@@ -33886,15 +33891,22 @@ them hidden from a reader, would have been withheld from that reader whole. This
    screened party alone, never a list's entry (`rule_evaluation.alert_node_refs`): an entry's id names its list.
    The entries are kept in the finding's signature, so a match on a new entry still raises a new alert. A
    sentence rule's words name no list either (the review's item 1: "… a 0.97 match to an entry on a screening
-   list"): its alert cites no list, so a reader of its subject is told no list's name.
+   list"): its alert cites no list, so a reader of its subject is told no list's name. Nor is it shown the
+   alert unless cleared for the list: the alert rests on the list without citing it, so its own node is
+   marked at least as the list is and its stored handlings include the list's (`Finding.floor_handlings`;
+   the lane review of the second pass, defect 6), and the queue, reading the node, withholds it whole. A
+   Studio list a sentence names (ADR-146 decision 3) is read within the rule's dataset and carries no list
+   marking; it is unchanged.
    **The rule audit reads an entry about a cited alert as the queue reads the alert** (the review's item 4,
    correcting this point's earlier strict reading, which was an oracle: a firing withheld, with its rule's
    `findings_withheld`, beside an alert the queue showed, said a hidden list had matched). The entry is given to
    a reader shown the alert, with its stored words and without a hidden citation's ids
    (`rule_holds.readable_rule_audit`). **A list's refresh is recorded only for a rule whose deployer is
    cleared for the list** (the review's item 2): it names the list and counts the changed entries the deployer
-   was cleared for, with the list's marking, and the rule audit gives it only to a reader cleared for that
-   marking, any other given no entry and no total that counts it. A deployer not cleared for the list screens
+   was cleared for, with the list's marking, and the rule audit gives it only to a reader cleared both for that
+   marking and for the list's marking as it stands now (a list raised since is named to no reader below its
+   new one; the lane review of the second pass, defect 10), any other given no entry and no total that
+   counts it. A deployer not cleared for the list screens
    nothing and records nothing about it.
 4. **Each list's match shown only to a reader cleared for that list (rule 3).** A reader is shown the alert when
    they may read everything it rests on outside its citations (all or nothing, as before) and at least one
@@ -33910,8 +33922,14 @@ them hidden from a reader, would have been withheld from that reader whole. This
    `monitoring_queue` filters what it serves. **The Lists screen and its routes** (the review's item 3): each list,
    its refreshes and one refresh are shown only to a reader cleared for the list, and a list's refresh and
    schedule are answered, for a reader not cleared for it, as for a list no one subscribed (404, the same
-   body). Its name, offered for a new subscription, is refused before anything is written; the refusal says a
-   name is taken, as any unique name in the deployment does (*logged*). It holds for a pack's alert item
+   body). A list held with no marking is OFFICIAL, P, for this as for every read (the lane review of the
+   second pass, defect 9). Its name, offered for a new subscription, is refused before anything is written.
+   **That refusal tells the administrator a list they may not see holds the name** (a name, never its
+   contents): a visible list's name is not refused, its subscription is changed (the lane review of the second
+   pass, defect 7, correcting this point's earlier "as any unique name does"). *Logged for the owner:* list
+   names are one namespace across markings, and no answer to that request both writes nothing and says
+   nothing. The check and the write are two statements; a list marked between them is the race logged with
+   it. It holds for a pack's alert item
    too, which is frozen as its adder was shown the alert: it is read back by the citations it shows
    (`alerts.edges_shown_with`), so its own adder reads it, and an item showing a list is withheld from a reader
    not cleared for it.
@@ -33945,8 +33963,14 @@ them hidden from a reader, would have been withheld from that reader whole. This
    **For a high-severity alert** (ADR-133 decision 7) the proposal is of the citations its proposer was shown,
    each, and an approval decides the proposed citations its approver may read, whatever the proposer could: a
    proposal its approver cannot read waits for a second person cleared for it, and an open citation the approver
-   can read is not decided by approving another's proposal. A sending back reopens the proposals its member was
-   shown. The finding's signature names every entry (point 3), so neither one list's decision nor its signature
+   can read is not decided by approving another's proposal. **No one approves a proposal of their own**, beside
+   another's or alone (the lane review of the second pass, defect 3). Each approved proposal is decided by its
+   own disposition: a true match proposed beside a false positive confirms its own match (defect 4). A member
+   with an open citation decides it while another's proposal waits. A sending back reopens the proposals its
+   member was shown. **A claim is the claimer's:** a decision that leaves a citation open lets go only of the
+   member's own claim, or a proposer's whose proposals it decided; anyone else's stays, so a claim on a
+   citation the member cannot read is never seen to change (defect 5). Closed whole, the alert is given to its
+   last decider, its proposer kept beside it, as a reader cleared for every citation is shown. The finding's signature names every entry (point 3), so neither one list's decision nor its signature
    stops another list's match being raised or decided. Closed by the system (a load reverted) with citations
    still open, the alert is closed for every reader, as stored. A reader cleared for the hidden list still
    opens the alert with both matches, the confirmed one followed to its new revision. Repoints and renames rewrite each citation's ids in the same statement as the alert's own
@@ -33963,6 +33987,9 @@ them hidden from a reader, would have been withheld from that reader whole. This
    the strict option, logged for the owner to overrule; confirmed by the orchestrator as general.
    **A load's report counts only the alerts its loader may read** (the review's item 7): an alert with
    citations is counted for them when they are cleared for one of its lists (`rule_evaluation.counted_for`).
+   A rule set to hold says its rows were held only of such a match (the lane review of the second pass,
+   defect 8); the rows are held all the same. *Logged:* a held row's reason names its rule, so a reader of
+   the case's held rows not cleared for the list learns that rule matched; the rows are the loader's own.
 9. **Live files remove the lists they load (CARRIES row 113).** Each live file that loads a screening list into
    the shared store removes its own lists by name in its fixture's teardown, after the `yield`, so on a failure
    too (`tests/services/api/screening_cleanup.remove_screening_lists`: entries, subscription, updates and each
@@ -33977,10 +34004,12 @@ them hidden from a reader, would have been withheld from that reader whole. This
    unchanged: their tests count the store's subscriptions. *Logged.*
 
 **Tests that would fail (rule 12).** The offline ones are shown red by plants at their real call sites
-(`process/lanes/rules/lists/AM7_RED_RECORD.txt`: P1 to P40, and P3b; a plant that breaks collection is
-recorded BROKEN, never red). The live ones, and CARRIES row 113's cross-file red, by
-`process/lanes/rules/lists/am7_live_plants.py` under the rules lane's lease (`AM7_LIVE_RECORD.txt` beside it:
-L0 to L19, L0b and L2b). Each record is headed by the code's identity with the branch's head. The live files
+(`process/lanes/rules/lists/AM7_RED_RECORD.txt`: P1 to P48, and P3b; a plant that breaks collection is
+recorded BROKEN, never red), headed by the commit it ran at and the code's identity with it. The new cases
+were also run against the code before the second pass (`REVIEW2_RED_BEFORE.txt`). The live ones, and CARRIES
+row 113's cross-file red, by `process/lanes/rules/lists/am7_live_plants.py` under the rules lane's lease
+(`AM7_LIVE_RECORD.txt` beside it: L0 to L7, L0b and L2b recorded at 0eae072; L8 to L23 recorded when that
+record says so, and not before). The live files
 the change reaches, with `test_route_rights.py`, ran on the same lease (`process/lanes/rules/gates/`, each
 failure outside those files triaged beside it).
 - A list's marking ignored, outside the scheme, or a re-marking not a change (1):
@@ -34014,6 +34043,10 @@ failure outside those files triaged beside it).
   `test_an_approver_cleared_for_one_list_approves_only_that_lists_proposal` (item 10, point 6);
   `test_a_proposer_cleared_for_one_list_proposes_only_that_one`;
   `test_a_proposal_is_sent_back_on_the_citations_its_member_was_shown`;
+  `test_no_one_approves_a_proposal_of_their_own_beside_anothers`;
+  `test_a_close_on_one_list_leaves_a_claim_on_the_other_as_it_was`;
+  `test_a_proposal_on_one_list_leaves_the_other_list_to_its_team`;
+  `test_each_proposal_confirms_by_its_own_disposition` (live);
   `test_a_close_decides_only_the_matches_its_closer_may_read` (live).
 - Each read path not as the reader is shown it (4, 6; item 10): `test_the_queues_filters_follow_what_each_reader_is_shown`;
   `test_homes_counts_follow_what_each_reader_is_shown`; `test_the_reports_figures_follow_what_each_reader_is_shown`;
@@ -34036,19 +34069,26 @@ failure outside those files triaged beside it).
 - Another list's, or another entry's, party reused (2, item 9):
   `test_a_match_reuses_its_own_lists_party_never_another_lists_of_the_same_name`;
   `test_a_match_reuses_its_own_entrys_party_never_another_entry_of_the_same_name`;
-  `test_a_match_on_a_name_many_parties_share_still_finds_its_own`.
+  `test_a_match_on_a_name_more_parties_share_than_the_lookup_reads_never_fails_the_rule`;
+  `test_a_written_party_is_one_the_ontology_declares` (its fake refusing what ArcadeDB refuses).
 - `owner_listed`, or the risk score and band, taking in a list the reader may not read (7, item 10): the live
   reader-cleared case above, by count, and
   `test_a_reader_not_cleared_for_a_list_is_given_a_risk_its_hidden_match_takes_no_part_in` (live).
 - A list, its refreshes or its name shown to a reader not cleared for it (1, 4; item 3, rule 4 each way):
   `test_a_lists_subscription_and_refreshes_are_read_only_for_a_clearance_admitting_it` (live, the store);
   `test_a_list_is_shown_only_to_a_reader_cleared_for_its_marking`;
-  `test_a_list_a_reader_is_not_cleared_for_is_answered_as_one_never_subscribed` (live, the routes).
+  `test_a_list_a_reader_is_not_cleared_for_is_answered_as_one_never_subscribed`;
+  `test_a_reader_cleared_for_a_list_refreshes_and_schedules_it` (live, the routes);
+  `test_a_list_held_with_no_marking_is_hidden_from_a_reader_below_official` (live, the store).
 - What an audit or a load's report tells of a list the reader may not read (3, 8; items 2, 4, 7):
   `test_the_rule_audit_reads_a_firing_citing_two_lists_as_the_queue_reads_its_alert`;
   `test_the_rule_audit_names_a_lists_re_screening_only_to_a_reader_cleared_for_the_list`; the two marked
-  refresh cases of `test_screening_refresh` (live); `test_a_loads_report_counts_only_the_alerts_its_loader_may_read`
-  (offline and live).
+  refresh cases of `test_screening_refresh` (live);
+  `test_the_rule_audit_reads_a_lists_re_screening_by_its_marking_as_it_stands_now`;
+  `test_a_loads_report_counts_only_the_alerts_its_loader_may_read` (offline and live);
+  `test_a_held_loads_note_counts_only_the_matches_its_loader_may_read` (live).
+- A sentence's alert shown to a reader not cleared for the list it rests on (3):
+  `test_a_sentence_alert_resting_on_a_marked_list_is_marked_as_the_list_is`.
 - A load's rule writes (a SECRET list's party and match) answered to its loader: no route answers the id lists
   (`LoadReportView`), `test_no_route_answers_the_ids_a_loads_rules_wrote`.
 - A list screened that the deployer, or the previewer, may not read (8, item 1):
