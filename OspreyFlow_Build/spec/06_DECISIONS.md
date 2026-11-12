@@ -35429,7 +35429,7 @@ review rounds, listed for the owner.*
      `cp-policy-check`'s `GROUP_ZERO_ALLOWED` is empty.
    - **The install runbook's step 6** (P7b's `INSTALL.md`) is Entra's: the client's app registrations (the Glass's,
      and the API's exposing the scope) and the first administrators the settings name, then a check that the Conduit
-     reads Entra's settings. P7b's Keycloak step (`harness/cloud_platform/identity.py`) and its test are removed. This
+     reads Entra's settings. P7b's Keycloak step (the `identity` module of the cloud-platform harness) and its test are removed. This
      lane's, sent as `runbook.diff` with the render diff regenerated on P7b (the orchestrator's ruling, 11 November
      2026).
    - **The Glass's `deployment.json`** carries `sign_in` (Entra's authority, the Glass's registration, and `openid
