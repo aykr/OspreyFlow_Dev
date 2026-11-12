@@ -70,6 +70,7 @@ ROUTE_CASES = [f"{ROUTES}::{n}" for n in (
     "test_a_reader_cleared_for_a_list_refreshes_and_schedules_it",
 )]  # fmt: skip
 REFRESH_SECRET = f"{REFRESH}::test_a_marked_lists_match_found_by_a_cleared_deployer_carries_the_lists_marking"
+DISABLE = f"{B}/services/api/test_disable_list_schedules.py"
 TRENDS = f"{B}/conformance/analytics_port/test_suite.py::test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader"
 
 #: (name, file under the worktree, built text, planted text, the tests, in order)
@@ -286,6 +287,36 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         ' "list_entry_id": entry.id})',
         [AM7[0]],
     ),
+    # --- after the orchestrator's verification of e911b90 (item 2; item 5's live red) ---------------
+    (
+        "L24 a disable plan naming every list's schedule, its reader cleared or not (verification item 2)",
+        "OspreyFlow_Core/services/api/admin_people.py",
+        '        if row["admitted"]:\n',
+        "        if True:\n",
+        [f"{DISABLE}::test_the_plan_names_only_the_lists_its_administrator_is_cleared_for"],
+    ),
+    (
+        "L25 a list's schedule given whatever the recipient's clearance (verification item 2)",
+        "OspreyFlow_Core/services/api/admin_people.py",
+        '        if item.kind == "list_schedule" and list_markings is not None:\n',
+        "        if False:\n",
+        [f"{DISABLE}::test_a_hidden_lists_schedule_goes_only_to_someone_cleared_for_it",
+         f"{DISABLE}::test_a_lists_schedule_a_cleared_administrator_sees_still_goes_only_to_someone_cleared"],
+    ),
+    (
+        "L26 a scheduled refresh run as an owner not cleared for the list (verification item 2)",
+        "OspreyFlow_Core/services/api/list_schedule.py",
+        "        if await self.lists.hidden(\n",
+        "        if False and await self.lists.hidden(\n",
+        [f"{B}/services/api/test_list_refresh_schedule.py::test_an_owner_not_cleared_for_the_list_is_refused_in_words_and_nothing_is_read"],
+    ),
+    (
+        "L27 a ClickHouse store made before the alert facts' sets left without them (verification item 5)",
+        "OspreyFlow_Core/packages/adapters/analytics_clickhouse/schema.py",
+        "        if not await _has_column(client, table, column):\n            await client.command(statement)",
+        "        pass",
+        [f"{B}/test_analytics_clickhouse.py::test_a_store_made_before_the_alert_facts_sets_is_brought_forward_and_keeps_its_rows"],
+    ),
 ]
 
 
@@ -310,7 +341,9 @@ def _run(tests: list[str]) -> tuple[str, str]:
 
 
 def main() -> int:
-    every = [CROSS, *AM7, *REVIEW, STORE, ALERTS, ROUTES, TRENDS]
+    every = [CROSS, *AM7, *REVIEW, STORE, ALERTS, ROUTES, TRENDS, DISABLE,
+             f"{B}/services/api/test_list_refresh_schedule.py", f"{B}/test_analytics_clickhouse.py",
+             f"{B}/services/api/test_custom_roles_store.py"]
     state, line = _run([REFRESH, *every])
     print(f"built: {state} - {line}")
     if state != "GREEN":

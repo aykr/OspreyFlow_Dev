@@ -23,7 +23,10 @@ SCREENING = "../OspreyFlow_Build/tests/services/api/test_screening.py"
 WRITTEN = "../OspreyFlow_Build/tests/services/api/test_alert_citations_written.py"
 CLOSING = "../OspreyFlow_Build/tests/services/api/test_alert_citations_closing.py"
 CLEARANCE = "../OspreyFlow_Build/tests/services/api/test_screening_clearance.py"
-FILES = (TESTS, SCREENING, WRITTEN, CLOSING, CLEARANCE)
+#: After the orchestrator's verification of e911b90 (items 1, 3 and 5).
+CH_MIGRATION = "../OspreyFlow_Build/tests/test_analytics_clickhouse_migration.py"
+DUCK_MIGRATION = "../OspreyFlow_Build/tests/adapters/analytics_duckdb/test_alert_fact_sets_migration.py"
+FILES = (TESTS, SCREENING, WRITTEN, CLOSING, CLEARANCE, CH_MIGRATION, DUCK_MIGRATION)
 
 #: (name, file under Core, the text as built, the text planted, the tests that must go red[, file])
 PLANTS: list[tuple[str, ...]] = [
@@ -263,7 +266,7 @@ PLANTS: list[tuple[str, ...]] = [
     (
         "P29 a list clearance admits a restricted code the reader may not receive (item 1)",
         "services/api/screening.py",
-        'if d.dissemination != "restricted" or k in principal.receivable_handling_codes',
+        'if d.dissemination != "restricted" or k in receivable',  # `of_clearance`, since e911b90
         "if True",
         "test_a_list_clearance_admits_exactly",
         CLEARANCE,
@@ -420,6 +423,39 @@ PLANTS: list[tuple[str, ...]] = [
         "    return False",
         "test_a_reload_that_would_lower",
         CLEARANCE,
+    ),
+    # --- after the orchestrator's verification of e911b90 -----------------------------------------
+    (
+        "P49 a listed party reused whatever its marking (verification item 1)",
+        "services/api/kyc_rules.py",
+        "        and _holds(ctx.scheme, found.handling, candidate.handling)\n",
+        "",
+        "test_a_party_held_below_its_lists_marking_now_is_not_reused",
+        WRITTEN,
+    ),
+    (
+        "P50 the alert facts' ALTERs issued at every start (verification item 5, its own red)",
+        "packages/adapters/analytics_clickhouse/schema.py",
+        "        if not await _has_column(client, table, column):\n            await client.command(statement)",
+        "        await client.command(statement)",
+        "test_a_store_made_before_the_alert_facts_sets or test_a_store_that_has_the_column",
+        CH_MIGRATION,
+    ),
+    (
+        "P51 a DuckDB file made before the sets left without them (verification item 3)",
+        "packages/adapters/analytics_duckdb/schema.py",
+        "    for statement in ADD_ALERT_FACT_SETS:\n        con.execute(statement)\n",
+        "",
+        "test_an_old_file_gains_the_sets",
+        DUCK_MIGRATION,
+    ),
+    (
+        "P51b a DuckDB file's old rows left without their set (verification item 3)",
+        "packages/adapters/analytics_duckdb/schema.py",
+        '    "UPDATE alert_fact_handlings SET fact_id = alert_id WHERE fact_id IS NULL",\n',
+        "",
+        "test_an_old_file_gains_the_sets",
+        DUCK_MIGRATION,
     ),
 ]
 
