@@ -4,8 +4,29 @@ The review of 97826d0 found four rule-3 leaks and the owner ruled at about 15:30
 citations its closer may read, for every disposition. All built in one pass; my lane-reviewer then found 15
 defects, fixed below. Red first: `lists/AM7_RED_RECORD.txt` (offline P1 to P48 at their call sites, headed
 by the commit and the code's identity) and `lists/REVIEW2_RED_BEFORE.txt` (the new cases against the code
-before the pass). The live plants L8 to L23 (`lists/am7_live_plants.py`) are **not yet run**: they wait for
-the orchestrator's word on a lease tonight. Am 7 rewritten as built.
+before the pass). Am 7 rewritten as built.
+
+**Gated on the orchestrator's go (12 November, 19:00 to 22:00 UTC), stack b under the rules lane's lease,
+then offline.** Final head 5203481 (schemas last) on main 524b96a.
+- Offline plants re-run after the rebase (`lists/AM7_RED_RECORD.txt`): 49 red, none broken.
+- Live plants (`lists/AM7_LIVE_RECORD.txt`): L0 to L23, L0b and L2b, 26 red, built and restored green.
+  The first runs found L0 broken (the fixture's rewrap left an empty `try:`), L4 and L12 green, and L6 not
+  applied, all four because the second pass moved the invariant (the judge asks the store with its
+  clearance; the kept marking lives in its own table; the refresh filters once). Each was retargeted to
+  where the invariant now lives, with the earlier runs kept raw.
+- Broad live run at 00b24cc (`gates/00b24cc.live.txt`, with test_route_rights.py; 310 files): 37 failed.
+  - Two were this branch's (`test_kyc_rules.py`'s close-refusal cases): stale expectations of the stored
+    status, and a refusal injected at a write a cited approval no longer makes. Both fixed and shown red for
+    their own reasons; the file is green at the final head (`gates/3511480.live-kyc.txt`).
+  - 35 were environmental, triaged in `gates/00b24cc.live.triage.txt`.
+- `make test` at 3511480 (`gates/3511480.test.txt`): found two more of this branch's.
+  - The ClickHouse fact-set `ALTER`s ran at every start. ADR-127 decision 6 asks `system.columns` first,
+    since a no-op `ALTER` still goes through a Replicated DDL queue. Fixed: a new store is made with the
+    columns, an old one is altered once. Proved by the fake and live (`gates/185960d.live-analytics.txt`:
+    302 passed, the new case red).
+  - Two sentence-rule fakes no longer matched the real contract (`_context`, `_findings`). Fixed.
+- Final head: `make test` (`gates/5203481.test.txt`) fails only the GPU preflight, which fails at main too.
+  `make -k ci` (`gates/5203481.ci.txt`) exits 0, schemas-check included.
 
 | Review item | State | Proving test |
 | --- | --- | --- |

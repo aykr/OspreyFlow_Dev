@@ -34008,8 +34008,9 @@ them hidden from a reader, would have been withheld from that reader whole. This
 recorded BROKEN, never red), headed by the commit it ran at and the code's identity with it. The new cases
 were also run against the code before the second pass (`REVIEW2_RED_BEFORE.txt`). The live ones, and CARRIES
 row 113's cross-file red, by `process/lanes/rules/lists/am7_live_plants.py` under the rules lane's lease
-(`AM7_LIVE_RECORD.txt` beside it: L0 to L7, L0b and L2b recorded at 0eae072; L8 to L23 recorded when that
-record says so, and not before). The live files
+(`AM7_LIVE_RECORD.txt` beside it: L0 to L23, L0b and L2b each red on 12 November 2026 evening, headed by
+the code's identity; L0, L4, L6 and L12 retargeted where the second pass moved their invariant, the runs
+before that kept raw beside it). The live files
 the change reaches, with `test_route_rights.py`, ran on the same lease (`process/lanes/rules/gates/`, each
 failure outside those files triaged beside it).
 - A list's marking ignored, outside the scheme, or a re-marking not a change (1):

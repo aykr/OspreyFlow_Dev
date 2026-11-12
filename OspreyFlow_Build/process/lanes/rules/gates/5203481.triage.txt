@@ -1,0 +1,6 @@
+Triage of the final head's offline gates, 5203481 (lane/rules-lists on main 524b96a), 12 Nov 2026.
+- 5203481.test.txt: exit 2, one failure: test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+  ('pass' == 'skip': the server has a GPU). Not this change: it failed alike at main (086ed55.triage.txt).
+- 5203481.ci.txt: make -k ci exit 0; schemas-check: 603 generated types match committed output.
+The 3511480.test.txt failures are accounted for in REPORT.md (this branch's four ClickHouse cases and two
+sentence-rule fakes, fixed; the lane-ports demo row and the docs lane's citation, main's, gone at 524b96a).
