@@ -1,0 +1,7 @@
+# R1: the stand-in tenant's tokens (r1_kind.token) through principal_auth's real PrincipalResolver, the render's own claim mapping, issuer and audience, keys served on loopback (2026-11-12T21:58:53Z, on the Mac, no cluster)
+admin ACCEPTED 50000000-0000-4000-8000-000000000001 OFFICIAL-SENSITIVE unit-1 ['osprey-admin'] ['P']
+other tenant refused: PrincipalResolutionError token rejected: Invalid issuer
+other audience refused: PrincipalResolutionError token rejected: Audience doesn't match
+expired refused: PrincipalResolutionError token rejected: Signature has expired
+app-only refused: PrincipalResolutionError token is app-only (no delegated scp): a service principal is no person
+guest refused: PrincipalResolutionError token is a guest account's: guests are not admitted

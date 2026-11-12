@@ -1,0 +1,54 @@
+diff -ru a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
+--- a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md	2026-11-12 21:59:09
++++ b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md	2026-11-12 21:59:09
+@@ -856,7 +856,11 @@
+ last backup, `helm uninstall`, the claims and our Secret, the buckets and repositories emptied, the
+ backups kept for their retention, then `python -m harness.cloud_platform.decommission_check`, which
+ names anything left behind and exits 1 while anything is. A block fenced `bash platform` runs only
+-with the platform's access; the rest runs anywhere. **Neither has yet run against a cluster or an
++with the platform's access; the rest runs anywhere. A block fenced `bash later` is in neither
++runbook's sequence and is run only when its words say: the way back in when nobody can manage people,
++and the kept backups' removal when their retention ends (run with the decommission, it would delete
++the last backup it keeps). The install asks for the Entra app registrations before its first block,
++and its step 2 checks the certificate Secret `cloud_platform.tls_secret` names, when it names one. **Neither has yet run against a cluster or an
+ account**: the tests check their blocks' syntax, order and rights only. The standard shape has no
+ rendered runbook yet.
+ 
+@@ -1277,8 +1281,8 @@
+   restart alone reads the old one) and restart the Conduit. With the settings `INSTALL.md`'s step 1
+   exports (the poc shape's), the values are installed by
+   `helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m`.
+-  In the poc shape `INSTALL.md`'s step 6 gives the render and the restart but leaves out installing
+-  the values (a known issue).
++  In the poc shape `INSTALL.md`'s step 6 gives the render and the install as one block, fenced
++  `bash later`.
+ - **Locking everyone out is refused.** A change that would leave nobody who can manage people is
+   refused; only an enabled person who has **signed in at least once** counts, so a person added by
+   object id who has never signed in is no proof anyone can administer.
+diff -ru a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
+--- a/OspreyFlow_Core/docs/administration-guide.md	2026-11-12 21:59:09
++++ b/OspreyFlow_Core/docs/administration-guide.md	2026-11-12 21:59:09
+@@ -1088,7 +1088,11 @@
+ last backup, `helm uninstall`, the claims and our Secret, the buckets and repositories emptied, the
+ backups kept for their retention, then `python -m harness.cloud_platform.decommission_check`, which
+ names anything left behind and exits 1 while anything is. A block fenced `bash platform` runs only
+-with the platform's access; the rest runs anywhere. **Neither has yet run against a cluster or an
++with the platform's access; the rest runs anywhere. A block fenced `bash later` is in neither
++runbook's sequence and is run only when its words say: the way back in when nobody can manage people,
++and the kept backups' removal when their retention ends (run with the decommission, it would delete
++the last backup it keeps). The install asks for the Entra app registrations before its first block,
++and its step 2 checks the certificate Secret `cloud_platform.tls_secret` names, when it names one. **Neither has yet run against a cluster or an
+ account**: the tests check their blocks' syntax, order and rights only. The standard shape has no
+ rendered runbook yet.
+ 
+@@ -1509,8 +1513,8 @@
+   restart alone reads the old one) and restart the Conduit. With the settings `INSTALL.md`'s step 1
+   exports (the poc shape's), the values are installed by
+   `helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m`.
+-  In the poc shape `INSTALL.md`'s step 6 gives the render and the restart but leaves out installing
+-  the values (a known issue).
++  In the poc shape `INSTALL.md`'s step 6 gives the render and the install as one block, fenced
++  `bash later`.
+ - **Locking everyone out is refused.** A change that would leave nobody who can manage people is
+   refused; only an enabled person who has **signed in at least once** counts, so a person added by
+   object id who has never signed in is no proof anyone can administer.
