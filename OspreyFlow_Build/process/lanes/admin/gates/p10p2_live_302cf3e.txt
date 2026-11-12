@@ -1,0 +1,74 @@
+head 302cf3e on main 586769e with the ten p10p2 diffs applied, stack b, admin's lease taken 2026-11-12T00:15Z
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+E           ports.recognise.RecogniserUnavailableError: All connection attempts failed
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+E           ports.recognise.RecogniserUnavailableError: All connection attempts failed
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+E           ports.recognise.RecogniserUnavailableError: All connection attempts failed
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+E           ports.recognise.RecogniserUnavailableError: All connection attempts failed
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+        `yield`-based fixture's teardown runs whether the test it wraps passed or not, exercised
+                "apply failed before reaching a running deployment for a reason other than preflight "
+        when `--demo-analyst` is passed.
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+__________ test_a_failing_handler_rolls_back_and_marks_the_job_failed __________
+    async def test_a_failing_handler_rolls_back_and_marks_the_job_failed(client: Valkey) -> None:
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_extract_returns_data_conforming_to_the_requested_schema[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_embed_returns_one_equal_length_vector_per_text_in_order[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_transcribe_returns_correctly_shaped_segments_and_words[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite_vision.py::test_describe_image_returns_data_conforming_to_the_requested_schema[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_a_person_an_organisation_and_a_place_are_found_with_their_spans[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_spans_count_characters_not_bytes[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_an_empty_text_has_no_entities_and_the_recogniser_names_itself[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_a_text_past_the_limit_is_refused_not_read_in_part[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/golden/test_golden_set.py::test_golden_set_recall_has_not_regressed
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_ARCADEDB_PASSWORD-ARCADEDB_ROOT_PASSWORD]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_POSTGRES_USER-POSTGRES_USER]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_POSTGRES_DB-POSTGRES_DB]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_MINIO_USER-MINIO_ACCESS_KEY]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_MINIO_PASSWORD-MINIO_SECRET_KEY]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_a_generated_secret_is_not_empty_and_is_not_a_placeholder
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_demo_analyst_password_is_absent_without_the_flag
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the_flag
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_the_deployment_this_file_starts_is_a_real_one_and_the_teardown_removes_it
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_the_demo_analyst_holds_the_studio_roles_the_ingest_flow_needs
+FAILED ../OspreyFlow_Build/tests/resolve/test_trigger.py::test_overlap_guard_skips_a_second_run_while_the_first_holds_the_lock
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py::test_phase6_exit_criterion_end_to_end
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+FAILED ../OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py::test_extract_returns_nonempty_persons_from_the_witness_statement
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_run_once_dispatches_a_submitted_job_to_its_registered_handler
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_run_once_with_nothing_pending_returns_zero
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_a_failing_handler_rolls_back_and_marks_the_job_failed
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_a_minted_ticket_redeems_to_the_same_principal
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_a_reused_ticket_is_refused
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_an_unknown_ticket_is_refused
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_two_mints_for_the_same_principal_produce_different_tickets
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_a_ticket_carries_no_more_than_the_principals_own_resolved_claims
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_the_blob_adapter_is_in_the_media_store_suite_wherever_this_file_runs
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_a_wrong_key_is_refused_by_the_service_not_read_as_missing
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_a_blob_held_under_a_name_the_store_does_not_make_is_refused[other/a.png]
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_a_blob_held_under_a_name_the_store_does_not_make_is_refused[media/ABC.png]
+35 failed, 3401 passed, 91 skipped, 9 warnings in 4775.52s (1:19:35)
+Wall time: 4778 s, exit 1 (stack b, the lease admin took at 2026-11-12T00:15:20Z; set-up before it 10 s)
+
+Read (admin, 12 November 2026, 01:40Z): 35 failed, 3,401 passed. Every failure is in the stack-environment set T1 part
+4's live gate recorded (no model, recogniser, Whisper or blob service on a test stack, apply's Docker-started
+deployment, the worker's and the ws-ticket's Valkey db, the golden set); none is this change's. The three live plants
+are red beside it (p10p2_live_plants_302cf3e.txt).
