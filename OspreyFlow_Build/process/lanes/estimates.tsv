@@ -9,4 +9,4 @@ platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 5: the fixes (T1P5_FINDINGS.md) start now P10 part 2 is in	12 Nov, evening	A
 rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
-orchestrator	demo	osprey-demo, v0.5.0 in the GOV.UK look with the synthetic demo packs, beside osprey-small: built and backed up today; frozen until you say; checked Thursday 12 Nov by 12:00 UK; the server quiet from 12:00 UK on Fri 13 Nov	12 Nov, 12:00 (the check)	A
+orchestrator	demo	the demo deployment is osprey-small itself (v0.5.0, profile small, the GOV.UK look, /opt/ospreyflow on the server); there is no separate osprey-demo (corrected 12 Nov ~10:30). Its own model, qwen2.5:14b-instruct, answers through its gateway (9.4 s); local_only true, no sendable codes, the demo sources handled P. Frozen until you say; the server quiet from 12:00 UK on Fri 13 Nov	12 Nov, 12:00 (the check)	A
