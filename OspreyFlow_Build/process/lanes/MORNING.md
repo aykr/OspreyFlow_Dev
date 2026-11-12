@@ -542,6 +542,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
           - the re-grant and the 24 h clearance rule;
           - the ClickHouse token;
           - the RDS restore step.
+        - **The load split (about 11:40):** measured at about 50/50 by session logs. You chose to keep the
+          orchestrator on ayan. Every lane and the review relay are on sol, and the orchestrator keeps to merges,
+          rulings and quick checks.
         - **The osprey-small rebuild waits** until "guides" has landed.
       I also swept your uncommitted `osprey.yaml` into a commit once (`git commit -a`, c9abc3f). It is undone:
       the history no longer has it, the file in your tree is byte for byte as it was, and nothing was pushed.
