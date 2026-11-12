@@ -33906,8 +33906,12 @@ own ClickHouse user read and overwrite every set, measured on kind (point 4).
    read-only, every record and edge read; only then the live one is renamed to `<database>.before`, the restored one
    into its place, and the old removed last. Any failure before the swap removes the restored copy and leaves the
    live one untouched, refused in words; a `<database>.before` left by a restore stopped between its renames refuses
-   the next until an operator has looked (the runbook says how). Shown in ArcadeDB's image against real databases and
-   a real set's zip (`test_restore_graph.py`), every case and the check's every damage. **ClickHouse restored into a database of its own** (its
+   the next until an operator has looked (the runbook says how, decided by whether `<database>.restoring` is still
+   there). Its words say only what happened: "put back" only when the rename back succeeded, "not touched" only
+   before the live database moved, no live database said so, the old copy's removal checked (round 5). Shown in
+   ArcadeDB's image against real databases and a real set's zip (`test_restore_graph.py`), every case, a failed
+   put-in, a failed put-back and an old copy left, and each of the check's branches reached by a damage of its own
+   (a short or missing file, an empty schema, a stray file not whole pages, a zip holding no file). **ClickHouse restored into a database of its own** (its
    own Keeper path), then the two swapped by rename and the old one dropped only after, so a refused restore leaves
    the live database as it was (the live one set aside only if it is there: after its loss, the case the restore is
    for, it is not, and kind's round-3 restore was refused renaming what was gone, Code 81); if the second rename is
@@ -33921,7 +33925,13 @@ own ClickHouse user read and overwrite every set, measured on kind (point 4).
    a truncated zip its manifest matched failed in restore-graph ("ArcadeDB's restore of the set's zip failed; the
    live database … was not touched"), ArcadeDB and ClickHouse as they were; ClickHouse's role refused its reads
    failed at RESTORE ("Access Denied: while reading key …/.backup"), ClickHouse's live database kept, ArcadeDB's
-   swap finished; each claim unpacked beside itself by tarfile's `data` filter before its contents are
+   swap finished; **a restore stopped part-way leaves the parts mixed** (round 5): the two Jobs run side by side
+   and the stores' replaces ArcadeDB, then ClickHouse, so a refusal in restore-graph can leave the claims at the
+   set and both stores as they were, and one in restore-analytics ArcadeDB at the set and ClickHouse as it was
+   (as kind showed, `p9_kind_live_restore.r4.json`). The runbook's *If it fails* says which parts are at the set
+   for each refusal; **running the same set's restore again is the way out**, every step replacing its part from
+   the set again (another set's restored ClickHouse copy, kept by a refused swap, is dropped and said; the
+   set-aside RENAME's refusal names the restored copy it leaves); each claim unpacked beside itself by tarfile's `data` filter before its contents are
    replaced. **The restore is proven for the single-replica shapes (development, and the poc shape the client
    installs).** The production shape (three ArcadeDB copies, ON CLUSTER with two ClickHouse replicas) is P9b's.
 9. **The decommission** (the orchestrator's ruling): the backups bucket and its key are its one named exception, kept,
@@ -34019,6 +34029,13 @@ average 10 to 15), so each time is what that cluster did then, not a service lev
   the backup user's grant; the CronJobs run in UTC; the escape-path and outside-the-set plants each reach their own
   check (rule 15's second paragraph). P9_rows.diff no longer edits Amendment 5 point 21 (ruling 10: accepted text is
   not rewritten; this amendment's consequences record the correction).
+- **The orchestrator's second review of afc1a5f** (12 November; `P9_ROUND5.md`): the runbook's step 2 waited
+  for every pod named a writer's, the finished backup Jobs' kept pods among them, so it timed out on any
+  deployment that had run a backup; it waits for the stopped workloads' pods alone, and the runbook's restore
+  was walked as written on kind (`gates/p9_kind_runbook_walk.r5.json`; rule 15: the operator's procedure itself
+  had never run). The runbook also names the room a second copy needs, re-points the deployment at RDS only once
+  the writers are stopped, and warns that the Conduit and the workers make an empty ArcadeDB database where they
+  find none (`create_database_if_absent`). The render's Jobs are read for writers as its workloads are.
 - The parts are taken minutes apart with the Conduit running; a backup before an upgrade is taken with it stopped
   (the recovery runbook says how in the poc shape, where the claims run needs the shared pods' node).
 - **Left, to P9b:** the alert on a failed or missing run; object lock or a write-only role; the drain test and the
@@ -34031,7 +34048,9 @@ average 10 to 15), so each time is what that cluster did then, not a service lev
   of platform's private `_file`, `_q` and `_secret` (asked to be made public); the managed database's point-in-time
   restore automated (point 10); a writer started between the writers check and ArcadeDB's swap (the runbook's
   suspended CronJobs and stopped workloads narrow it, nothing closes it); IAM's `*` matching `/` in the roles'
-  resource patterns; `harness/cloud_platform_backups.py` to the platform lane once P9 lands.
+  resource patterns; `harness/cloud_platform_backups.py` to the platform lane once P9 lands; whether ClickHouse
+  frees a Replicated database's Keeper path on `DROP … SYNC` (each attempt's path is its own meanwhile; CARRIES'
+  live-checks row); the check's time and memory on a real-sized graph (measured on the client's install).
 
 **Tests.** `tests/cloud_platform_backup/` (the stand-in, the runner, the claims, the render, the chart on the server's
 Helm); `process/lanes/case/gates/p9_reds.py` (the plants, each at its real call site, red); `gates/p9_kind.{sh,py}`

@@ -28,8 +28,8 @@ platform's tests now written after P9 follow it (below).
 **Platform's tests that follow the hook** (each failed with the hook in and passes with these hunks):
 - `test_with_bedrock_enabled_the_gateway_runs_as_its_own_account` (P11): ClickHouse as its backup role's account, as
   the older test's hunk already says.
-- `test_only_the_readers_are_given_the_managed_stores_details`: a store's details, not P9's Secret of its own
-  (ClickHouse's backup user's password, `ospreyflow-clickhouse-backup`).
+- `test_only_the_readers_are_given_the_managed_stores_details`: a store's details, and ClickHouse's own pod alone
+  excepted for P9's Secret of its own (its backup user's password, `ospreyflow-clickhouse-backup`).
 - `test_only_a_pod_with_an_account_of_its_own_mounts_its_token` (Amendment 5 point 24): ClickHouse the one stated
   exception, an account of its own and its token not mounted. **Ruled by the orchestrator (11 November):** keep
   `automountToken: false` and `TOKEN_ALLOWED` as it is. ClickHouse calls no Kubernetes API, and EKS's pod identity
@@ -62,10 +62,10 @@ index 0ef233a..b2e6125 100644
      mounted = {p["name"] for p in pods if p["automountToken"]}
      gateway = {"litellm"} if name == "production-bedrock" else set()
 diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
-index d2df5e3..6e4b3ab 100644
+index d2df5e3..02c9b45 100644
 --- a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
 +++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
-@@ -287,9 +287,13 @@ def test_only_the_readers_are_given_the_managed_stores_details(fixture: str) ->
+@@ -287,9 +287,15 @@ def test_only_the_readers_are_given_the_managed_stores_details(fixture: str) ->
      values = _values(_config(fixture))
      variables = set(managed_variables(_config(fixture)))
      cluster = _on_the_cluster(fixture)
@@ -74,13 +74,15 @@ index d2df5e3..6e4b3ab 100644
      for pod in _pods(values):
          for container in [pod, *pod.get("initContainers", [])]:
 -            given = {e["name"] for e in container.get("env", []) if "secretKeyRef" in e}
-+            # A store's details, not P9's Secret of its own (ClickHouse's backup user's password).
++            # A store's details: ClickHouse's own pod alone is also given P9's Secret of its own
++            # (its backup user's password), which is not a store's detail.
++            own = BACKUP_SECRET if pod["name"] == "clickhouse" else None
 +            given = {e["name"] for e in container.get("env", []) if "secretKeyRef" in e
-+                     and e["secretKeyRef"]["name"] != BACKUP_SECRET}  # fmt: skip
++                     and e["secretKeyRef"]["name"] != own}  # fmt: skip
              if pod["name"] in READERS and container.get("envFrom"):
                  assert given == variables, (container["name"], variables - given)
                  continue
-@@ -329,8 +333,13 @@ def test_the_conduit_ingest_and_workers_run_as_the_bucket_s_service_account(
+@@ -329,8 +335,13 @@ def test_the_conduit_ingest_and_workers_run_as_the_bucket_s_service_account(
      values: dict[str, Any],
  ) -> None:
      account = load_platform("client").secrets.irsa.service_account
@@ -94,7 +96,7 @@ index d2df5e3..6e4b3ab 100644
          assert pod.get("serviceAccountName") == expected, pod["name"]
  
  
-@@ -344,7 +353,11 @@ def test_with_bedrock_enabled_the_gateway_runs_as_its_own_account() -> None:
+@@ -344,7 +355,11 @@ def test_with_bedrock_enabled_the_gateway_runs_as_its_own_account() -> None:
      namespace_pods = ("api", "worker", "report-sync")
      for pod in _pods(_values(_engines(BEDROCK))):
          default = irsa.service_account if pod["name"] in namespace_pods else None
@@ -124,10 +126,10 @@ index 5213e4d..12d7f98 100644
  # service, port, paths}`), `controllerNamespace` and an optional `tlsSecret`.
  ingress:
 diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-index 9d68c2b..d24365d 100644
+index 7d0d7f6..9c4545d 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-@@ -1040,6 +1040,10 @@ def render_cloud_platform(
+@@ -1050,6 +1050,10 @@ def render_cloud_platform(
          "workloads": workloads,
          "jobs": jobs,
      }
@@ -138,7 +140,7 @@ index 9d68c2b..d24365d 100644
      artefacts = {
          "values.yaml": _BANNER
          + _bare_connector_hosts_note(config)
-@@ -1059,6 +1063,7 @@ def render_cloud_platform(
+@@ -1069,6 +1073,7 @@ def render_cloud_platform(
              for name, text in render_terraform(config, platform, out).items()
          }
      )
