@@ -50,6 +50,9 @@ STATE = Path.home() / "osprey-runs" / "platform.r1"
 RECORDS = STATE / "records"
 NS = "ospreyflow-poc"
 FOLDER = CORE / "deploy" / "generated" / "cloud-platform"
+#: The render the install used, kept outside the copy: each sync to the server prunes what git does not track,
+#: the render folder with it, where a platform team keeps theirs for the restore and the decommission.
+KEPT = STATE / "render"
 MANAGED = "platform-managed"
 LOCAL_BIN = Path.home() / ".local" / "bin"  # where `uv tool install` puts a command
 ACCOUNT = "123456789012"
@@ -524,7 +527,20 @@ def script_for(name: str, text: str, start: int) -> str:
     return "\n".join(script) + "\n"
 
 
+def keep_render() -> None:
+    if (FOLDER / "values.yaml").exists():
+        shutil.rmtree(KEPT, ignore_errors=True)
+        shutil.copytree(FOLDER, KEPT)
+
+
+def render_back() -> None:
+    if not (FOLDER / "values.yaml").exists() and (KEPT / "values.yaml").exists():
+        shutil.copytree(KEPT, FOLDER, dirs_exist_ok=True)
+        print(f"the install's render put back from {KEPT}")
+
+
 def runbook(name: str, start: int) -> None:
+    render_back()
     path = FOLDER / f"{name}.md"
     if name == "INSTALL" and not path.exists():
         # The runbook's own header: the render that writes it, before anything is pushed.
@@ -555,6 +571,7 @@ def runbook(name: str, start: int) -> None:
             out.write(line)
         code = proc.wait()
         out.write(f"\n# exit {code} after {time.monotonic() - started:.0f} s\n")
+    keep_render()
     if code:
         raise SystemExit(f"{name} stopped (exit {code}): the record is {log}")
 
@@ -748,6 +765,7 @@ def _run_filled(name: str, script: str) -> str:
 
 def backup() -> None:
     """*A backup now*, as the recovery runbook gives it, for the namespace."""
+    render_back()
     block = next(b for b in recovery_blocks() if b.startswith("S=$(( $(date +%s) / 60 ))"))
     out = _run_filled("backup", block.replace("<namespace>", NS) + 'echo "SLOT=$S"\n')
     slot = int(re.search(r"SLOT=(\d+)", out).group(1))  # type: ignore[union-attr]
@@ -759,6 +777,7 @@ def backup() -> None:
 def restore(which: str | None) -> None:
     """*A restore*, as the recovery runbook gives it, of the last set (or `which`): steps 1-4, with
     <namespace>, <render> and <set> filled, and step 4's `<each one noted>` from step 2's own output."""
+    render_back()
     the_set = which or state()["last_set"]
     block = next(b for b in recovery_blocks() if b.startswith("# 1. No backup during the restore"))
     filled = block.replace("<namespace>", NS).replace("<render>", str(FOLDER)).replace("<set>", the_set)
