@@ -1,0 +1,33 @@
+...F..F.                                                                 [100%]
+=================================== FAILURES ===================================
+_______ test_a_documents_text_is_a_document_of_its_own_read_by_its_unit ________
+
+    def test_a_documents_text_is_a_document_of_its_own_read_by_its_unit() -> None:
+        node = _node("Document", {"title": "Statement", "sent_at": "2026-02-03T10:00:00+00:00"}, ["Z1"])
+        doc = node_document(node, ONTOLOGY)
+        assert "text" not in doc and doc["date"] == "2026-02-03T10:00:00+00:00"
+>       text = text_document(node, "He met Mohamad at the docks.", "unit-3", ONTOLOGY)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: text_document() takes 3 positional arguments but 4 were given
+
+../OspreyFlow_Build/tests/services/search_index/test_document.py:81: TypeError
+____ test_names_match_by_trigrams_edge_ngrams_and_the_conduits_phonetic_key ____
+
+    def test_names_match_by_trigrams_edge_ngrams_and_the_conduits_phonetic_key() -> None:
+        names = MAPPING["properties"]["names"]["fields"]
+        analyzers = SETTINGS["analysis"]["analyzer"]
+        filters = SETTINGS["analysis"]["filter"]
+        # Trigrams from a tokenizer, each at its own position. An `ngram` token filter puts them all
+        # at one position, where a `match` query reads them as synonyms and `minimum_should_match`
+        # never applies, so one shared trigram made a close name (found live, 13 November 2026).
+        tri = analyzers[names["tri"]["analyzer"]]
+        tokenizer = SETTINGS["analysis"]["tokenizer"][tri["tokenizer"]]
+>       assert (tokenizer["type"], tokenizer["min_gram"], tokenizer["max_gram"]) == ("ngram", 3, 3)
+                                   ^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'min_gram'
+
+../OspreyFlow_Build/tests/services/search_index/test_mapping_strict_ranking.py:41: KeyError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_document.py::test_a_documents_text_is_a_document_of_its_own_read_by_its_unit
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_mapping_strict_ranking.py::test_names_match_by_trigrams_edge_ngrams_and_the_conduits_phonetic_key
+2 failed, 6 passed in 0.45s

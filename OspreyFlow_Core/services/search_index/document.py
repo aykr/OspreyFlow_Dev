@@ -119,7 +119,6 @@ def node_document(node: Node, schema: OntologySchema) -> dict[str, Any]:
         identifiers = [v for f in identifiers_of for v in _strings(props.get(f))]
         identifiers += [a for v in list(identifiers) if (a := search_alternative(v)) is not None]
         names = [v for f in names_of for v in _strings(props.get(f))]
-    date = props.get(date_of) if date_of else None
     return {
         "kind": "node",
         "id": seen.id,
@@ -129,13 +128,23 @@ def node_document(node: Node, schema: OntologySchema) -> dict[str, Any]:
         "identifiers": list(dict.fromkeys(identifiers)),
         "names": list(dict.fromkeys(names)),
         "names_phonetic": list(dict.fromkeys(c for n in names for c in phonetic_codes(n))),
-        "date": date if isinstance(date, str) and date else seen.audit.created_at.isoformat(),
+        "date": _date(seen, date_of),
     }
 
 
-def text_document(node: Node, text: str, text_owning_unit: str) -> dict[str, Any]:
+def _date(node: Node, date_of: str | None) -> str:
+    """The type's date property where it has one and the node sets it, else when it was made."""
+    date = node.properties.get(date_of) if date_of else None
+    return date if isinstance(date, str) and date else node.audit.created_at.isoformat()
+
+
+def text_document(
+    node: Node, text: str, text_owning_unit: str, schema: OntologySchema
+) -> dict[str, Any]:
     """A Document's text (`kind: text`): read only by the text's owning unit, so never on the node's
-    own document (ADR-150 decision 3)."""
+    own document (ADR-150 decision 3). It carries its Document's `date`, so a date filter and the
+    newest-first order reach a mention too."""
+    _, _, date_of = searchable_fields(schema, node.type)
     return {
         "kind": "text",
         "id": text_document_id(node.id),
@@ -144,6 +153,7 @@ def text_document(node: Node, text: str, text_owning_unit: str) -> dict[str, Any
         **_access(node),
         "text_owning_unit": text_owning_unit,
         "text": text,
+        "date": _date(_as_its_reader(node), date_of),
     }
 
 
@@ -159,4 +169,4 @@ def documents_for(
     yield node_document(node, schema)
     if node.id in texts:
         text, unit = texts[node.id]
-        yield text_document(node, text, unit)
+        yield text_document(node, text, unit, schema)

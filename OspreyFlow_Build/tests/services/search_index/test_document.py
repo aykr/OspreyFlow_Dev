@@ -78,8 +78,11 @@ def test_a_documents_text_is_a_document_of_its_own_read_by_its_unit() -> None:
     node = _node("Document", {"title": "Statement", "sent_at": "2026-02-03T10:00:00+00:00"}, ["Z1"])
     doc = node_document(node, ONTOLOGY)
     assert "text" not in doc and doc["date"] == "2026-02-03T10:00:00+00:00"
-    text = text_document(node, "He met Mohamad at the docks.", "unit-3")
+    text = text_document(node, "He met Mohamad at the docks.", "unit-3", ONTOLOGY)
     assert text["kind"] == "text" and text["id"] == "text:n-1" and text["node_id"] == "n-1"
+    # The text's own date is its Document's, so a date filter and the newest-first order reach a
+    # mention too (found live by the studio lane's bands test, 13 November 2026).
+    assert text["date"] == doc["date"]
     assert text["text_owning_unit"] == "unit-3"
     assert (text["handling_classification"], text["datasets"]) == ("SECRET", ["Z1"])
 

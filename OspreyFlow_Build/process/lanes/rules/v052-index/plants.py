@@ -253,9 +253,17 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      '            "type": "text",\n            "analyzer": "english",\n            "index_options": "offsets",\n',
      [f"{RANK}::test_no_phonetic_fuzzy_synonym_or_stemming_analysis_inside_opensearch"]),
     ("V53 no trigrams on a name", MAPPING,
-     '                "filter": ["lowercase", "asciifolding", "tri"],\n',
-     '                "filter": ["lowercase", "asciifolding"],\n',
+     '                "tokenizer": "tri",\n', '                "tokenizer": "whole",\n',
      [f"{RANK}::test_names_match_by_trigrams_edge_ngrams_and_the_conduits_phonetic_key"]),
+    # --- studio's two findings, live on stack f (13 November): each test red on the old shape -------
+    # The analysis as it was at 0001fd3, put back whole: a keyword tokenizer and an ngram filter.
+    ("V59 trigrams from a filter, all at one position (read as synonyms)", MAPPING,
+     '        "filter": {\n            "edge_prefix": {"type": "edge_ngram", "min_gram": 2, "max_gram": PREFIX_MAX_CHARS},\n        },\n        "tokenizer": {\n            "whole": {"type": "keyword"},\n            # Trigrams from a tokenizer, each at its own position, so `minimum_should_match`\n            # counts them; an `ngram` filter puts them at one position, read as synonyms.\n            "tri": {"type": "ngram", "min_gram": 3, "max_gram": 3, "token_chars": []},\n        },\n        "analyzer": {\n            "prefix_index": {\n                "type": "custom",\n                "tokenizer": "whole",\n                "filter": ["lowercase", "asciifolding", "edge_prefix"],\n            },\n            "prefix_search": {\n                "type": "custom",\n                "tokenizer": "whole",\n                "filter": ["lowercase", "asciifolding"],\n            },\n            "tri": {\n                "type": "custom",\n                "tokenizer": "tri",\n                "filter": ["lowercase", "asciifolding"],\n            },\n',
+     '        "filter": {\n            "edge_prefix": {"type": "edge_ngram", "min_gram": 2, "max_gram": PREFIX_MAX_CHARS},\n            "tri": {"type": "ngram", "min_gram": 3, "max_gram": 3},\n        },\n        "tokenizer": {"whole": {"type": "keyword"}},\n        "analyzer": {\n            "prefix_index": {\n                "type": "custom",\n                "tokenizer": "whole",\n                "filter": ["lowercase", "asciifolding", "edge_prefix"],\n            },\n            "prefix_search": {\n                "type": "custom",\n                "tokenizer": "whole",\n                "filter": ["lowercase", "asciifolding"],\n            },\n            "tri": {\n                "type": "custom",\n                "tokenizer": "whole",\n                "filter": ["lowercase", "asciifolding", "tri"],\n            },\n',
+     [f"{RANK}::test_names_match_by_trigrams_edge_ngrams_and_the_conduits_phonetic_key"]),
+    ("V60 a Document's text carries no date", DOCUMENT,
+     '        "date": _date(_as_its_reader(node), date_of),\n', "",
+     [f"{DOC}::test_a_documents_text_is_a_document_of_its_own_read_by_its_unit"]),
     # --- decision 7: the CA bundle ------------------------------------------------------------------
     ("V54 the named bundle not passed to the client", CLIENTPY,
      '        kwargs["ca_certs"] = config.ca_certs\n', "        pass\n",

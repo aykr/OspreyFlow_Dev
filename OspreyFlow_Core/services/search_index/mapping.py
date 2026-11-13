@@ -25,9 +25,13 @@ SETTINGS: dict[str, Any] = {
         "normalizer": {"folded": {"type": "custom", "filter": ["lowercase", "asciifolding"]}},
         "filter": {
             "edge_prefix": {"type": "edge_ngram", "min_gram": 2, "max_gram": PREFIX_MAX_CHARS},
-            "tri": {"type": "ngram", "min_gram": 3, "max_gram": 3},
         },
-        "tokenizer": {"whole": {"type": "keyword"}},
+        "tokenizer": {
+            "whole": {"type": "keyword"},
+            # Trigrams from a tokenizer, each at its own position, so `minimum_should_match`
+            # counts them; an `ngram` filter puts them at one position, read as synonyms.
+            "tri": {"type": "ngram", "min_gram": 3, "max_gram": 3, "token_chars": []},
+        },
         "analyzer": {
             "prefix_index": {
                 "type": "custom",
@@ -41,8 +45,8 @@ SETTINGS: dict[str, Any] = {
             },
             "tri": {
                 "type": "custom",
-                "tokenizer": "whole",
-                "filter": ["lowercase", "asciifolding", "tri"],
+                "tokenizer": "tri",
+                "filter": ["lowercase", "asciifolding"],
             },
             "words": {
                 "type": "custom",

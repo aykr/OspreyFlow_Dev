@@ -179,7 +179,7 @@ async def drift(
                 continue  # changed since it was listed; the next check sees it
             documents = [node_document(node, schema)]
             if node_id in held:
-                documents.append(text_document(node, *held[node_id]))
+                documents.append(text_document(node, *held[node_id], schema))
             for document in documents:
                 expected.add(document["id"])
                 if document["id"] not in indexed:

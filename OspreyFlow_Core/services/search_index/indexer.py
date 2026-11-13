@@ -62,7 +62,7 @@ def actions_for(
             text, unit = texts[node_id]
             body += [
                 {"index": {"_index": index, "_id": text_document_id(node_id)}},
-                text_document(node, text, unit),
+                text_document(node, text, unit, schema),
             ]
         else:
             body.append({"delete": {"_index": index, "_id": text_document_id(node_id)}})

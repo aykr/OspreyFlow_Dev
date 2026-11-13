@@ -33,9 +33,13 @@ def test_names_match_by_trigrams_edge_ngrams_and_the_conduits_phonetic_key() -> 
     names = MAPPING["properties"]["names"]["fields"]
     analyzers = SETTINGS["analysis"]["analyzer"]
     filters = SETTINGS["analysis"]["filter"]
-    assert filters[analyzers[names["tri"]["analyzer"]]["filter"][-1]] == {
-        "type": "ngram", "min_gram": 3, "max_gram": 3,
-    }  # fmt: skip
+    # Trigrams from a tokenizer, each at its own position. An `ngram` token filter puts them all
+    # at one position, where a `match` query reads them as synonyms and `minimum_should_match`
+    # never applies, so one shared trigram made a close name (found live, 13 November 2026).
+    tri = analyzers[names["tri"]["analyzer"]]
+    tokenizer = SETTINGS["analysis"]["tokenizer"][tri["tokenizer"]]
+    assert (tokenizer["type"], tokenizer["min_gram"], tokenizer["max_gram"]) == ("ngram", 3, 3)
+    assert not any(filters.get(f, {}).get("type") == "ngram" for f in tri.get("filter", []))
     edge = filters[analyzers[names["prefix"]["analyzer"]]["filter"][-1]]
     assert edge == {"type": "edge_ngram", "min_gram": 2, "max_gram": PREFIX_MAX_CHARS}
     assert MAPPING["properties"]["names_phonetic"]["type"] == "keyword"
@@ -43,10 +47,10 @@ def test_names_match_by_trigrams_edge_ngrams_and_the_conduits_phonetic_key() -> 
 
 #: Everything the analysis may be built of: an allow-list, so a built-in stemmer, a language
 #: analyser, a phonetic tokenizer or a synonym filter named anywhere is refused, not missed.
-TOKENIZERS = {"whole", "standard"}
-FILTERS = {"lowercase", "asciifolding", "edge_prefix", "tri"}
-CUSTOM_FILTER_TYPES = {"ngram", "edge_ngram"}
-CUSTOM_TOKENIZER_TYPES = {"keyword"}
+TOKENIZERS = {"whole", "tri", "standard"}
+FILTERS = {"lowercase", "asciifolding", "edge_prefix"}
+CUSTOM_FILTER_TYPES = {"edge_ngram"}
+CUSTOM_TOKENIZER_TYPES = {"keyword", "ngram"}
 NORMALIZER_FILTERS = {"lowercase", "asciifolding"}
 
 
