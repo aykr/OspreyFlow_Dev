@@ -828,6 +828,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         **v0.5.1**, an exception to "no new work" for documentation only. The navigation decision (Parts A-E) is in
         NAVIGATION_2026-11-13.md: A and B started (case), C/D/E awaiting estimates.
 
+        **The owner, 13 Nov, about 22:30:** C, D and E go ahead (rules-b reopened for D; C's wording "Expand by link
+        type" and a real per-type link count; E in both looks); a "Build a report" link with Superset's builder role
+        mapped (platform-b); the client-size load waits for the write-path fix (ADR-124 Am 18, rules), then full
+        scale; suggestions measured on what is loaded, said plainly; a POC seed path for spec 08 (platform); the
+        Makefile skips test_feed_live.py (602b139).
+
         **The owner's word, about 07:45:** once both demo fixes land (one key prompt, ADR-114 Am 42, platform-b; Home's
         "Your access and tasks", ADR-145 Am 11, platform), push main to the dev repo and publish the product repo
         again from the same commit (no tag), each recorded in PUSH_LOG.
