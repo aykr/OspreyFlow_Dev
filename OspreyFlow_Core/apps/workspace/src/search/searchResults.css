@@ -13,6 +13,7 @@
   background: var(--surface-app);
   color: var(--text-primary);
 }
+.search-results[hidden] { display: none; }
 .search-results__back {
   justify-self: start;
   min-height: 24px;
