@@ -158,8 +158,8 @@ def rendered(config: Any, *, resolver: Any = None) -> dict[str, Any]:
         if key.endswith("-db"):  # a database made by its service's own step on the instance
             databases[key.split("/", 1)[1].removesuffix("-db")] = {}
     if any(w["name"] == "superset" for w in values["workloads"]):
-        # Superset makes its own settings database at its first start (`osprey_entrypoint.py`), as on
-        # Small (ADR-148 Amendment 11), named by its environment or its default.
+        # Superset makes its own settings database at its first start (`osprey_entrypoint.py`), as
+        # on Small (ADR-148 Amendment 11), named by its environment or its default.
         databases[values["environment"].get("SUPERSET_METADATA_DB", "superset")] = {}
     parameter = re.search(r'name\s*=\s*"max_connections"\s*\n\s*value\s*=\s*"(\d+)"', terraform)
     backups_bucket = 'resource "aws_s3_bucket" "backups"' in terraform
