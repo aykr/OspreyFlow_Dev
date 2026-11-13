@@ -678,10 +678,14 @@ def checks() -> None:
     ok("a file is uploaded to the Ingest root", r.status_code == 201, r.text[:200])
     location = r.json()["source_location"]
     r = c.post(f"{base}/recipes", headers=admin, json={"label": "R1 people", "connector_profile": "generic-csv",
-                                                       "source_location": location, "handling": {}, "legal_basis": "synthetic"})
+                                                       "source_location": location, "legal_basis": "synthetic test data (R1)",
+                                                       # Connect's three gates (09 §2) before Profile runs.
+                                                       "handling": {"classification": "OFFICIAL", "handling_code": "P",
+                                                                    "originator": "unit-1", "owning_unit": "unit-1"}})
     ok("a recipe is made", r.status_code == 201, r.text[:200])
     rid = r.json()["recipe_id"]
-    ok("its file is profiled", c.get(f"{base}/recipes/{rid}/profile", headers=admin).status_code == 200)
+    r = c.get(f"{base}/recipes/{rid}/profile", headers=admin)
+    ok("its file is profiled", r.status_code == 200, f"{r.status_code} {r.text[:300]}")
     template = yaml.safe_load((HERE / "r1_kind_row_template.yaml").read_text())
     r = c.put(f"{base}/recipes/{rid}/row-template", headers=admin, json=template)
     ok("it is mapped", r.status_code == 200, r.text[:300])
