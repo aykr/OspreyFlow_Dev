@@ -37014,9 +37014,12 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    - **merge:** `upsert_edges`, `bulk_load_edges` and `supersede_edge` for a `SAME_AS` edge (both endpoints);
    - **new version:** `supersede_node` (the old revision and the new one);
    - **promotion:** `promote_elements`, `revert_promotion` (each node); a confirm (`extract/writer.py`) is a supersede;
-   - **deletion:** `revert_elements`, `withdraw_elements`, `withdraw_layer`, `restore_withdrawn`,
-     `restore_link_state`, `regrade_drawn` (each node they change).
-   A write that changes no node's document (an edge other than `SAME_AS`) records nothing. Writes that bypass the
+   - **deletion:** `revert_elements`, `withdraw_elements`, `withdraw_layer`, `restore_withdrawn` (each node
+     they change).
+   A write that changes no node's document records nothing: an edge other than `SAME_AS`,
+   `restore_link_state` (a link's state) and `regrade_drawn` (a drawn item's grading, in its provenance, which
+   no document holds). `bulk_load_edges` commits in chunks of its own, so its `SAME_AS` ends are recorded after
+   them. Writes that bypass the
    adapter (the seed scripts' raw deletes and resets, `scripts/stamp_datasets.py`) are not in the outbox; the drift
    check (decision 5) finds them and the rebuild (decision 4) mends them, and every seed reset runs the rebuild.
 2. **The indexer drains the outbox.** In batches, it reads each id's node as stored through a narrow port,
@@ -37034,10 +37037,13 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    still records both endpoints, so the documents are re-read after every merge and a later field derived from
    resolution reaches the index without a new event type. The document (ADR-149's mapping, held here once; studio's
    corrections of 13 November folded in):
-   - `kind: node`; keyword: `id`, `type`, `datasets[]`, `handling_classification`, `handling_code`, `owning_unit`,
+   - `kind: node`; keyword: `id`, `node_id` (equal to `id`, so the query side collapses a node's hits on one
+     field), `type`, `datasets[]`, `handling_classification`, `handling_code`, `owning_unit`,
      `originator`, copied verbatim from the node's stored record;
    - `identifiers[]` (keyword): the node's declared identifier values as a reader of its own dataset receives them,
-     plus each one's canonical form (`identifier_reading.search_alternative`) where it has one;
+     plus each one's canonical form (`identifier_reading.search_alternative`) where it has one, with a subfield
+     `prefix` (edge n-grams 2 to 20, lowercase, at index time) for the type-ahead (ADR-059), so no prefix query
+     expands against the term list;
    - `names[]`: the type's string properties the ontology marks `indexed` and not `sensitivity: high` — the set the
      type-ahead already searches (ADR-074; `tests/ontology/test_searchable_names.py` guards that no sensitive
      property is marked) — as keyword with a lowercase and asciifolding normaliser, and subfields `prefix` (edge
@@ -37064,8 +37070,10 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    query side takes the index name as a parameter, so a test points it at a throwaway index.
 4. **A rebuild from the graph:** `python -m scripts.rebuild_search_index`. It pages every node (`list_nodes`' keyset
    cursor, through `nodes_for_index`) into a new index named with its build time, then moves the alias the indexer
-   and the search service use onto it and deletes the old one, so a reader never sees a half-built index. The
-   outbox is emptied only of rows older than the rebuild's start. `ospreyflow restore` runs it after a restore
+   and the search service use onto it and deletes the old one, so a reader never sees a half-built index. While it
+   fills, the new index holds a second alias (`<alias>-building`) and the indexer writes each change to both, so a
+   node changed after the rebuild read it does not stay at its older state; the outboxes are left alone and their
+   rows re-applied after the move, idempotently. `ospreyflow restore` runs it after a restore
    (ADR-114 Amendment 35 point 2), with a test that restores a set and finds the index again.
 5. **A drift check:** `python -m scripts.search_index_drift`. It compares the graph's live nodes with the index and
    reports, by id: missing from the index, in the index but not live in the graph, and stale (a per-node fingerprint
