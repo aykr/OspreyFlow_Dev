@@ -1,0 +1,148 @@
+diff --git a/OspreyFlow_Build/tests/services/search_index/test_document.py b/OspreyFlow_Build/tests/services/search_index/test_document.py
+index 42cbf5e..0a9a96d 100644
+--- a/OspreyFlow_Build/tests/services/search_index/test_document.py
++++ b/OspreyFlow_Build/tests/services/search_index/test_document.py
+@@ -78,8 +78,11 @@ def test_a_documents_text_is_a_document_of_its_own_read_by_its_unit() -> None:
+     node = _node("Document", {"title": "Statement", "sent_at": "2026-02-03T10:00:00+00:00"}, ["Z1"])
+     doc = node_document(node, ONTOLOGY)
+     assert "text" not in doc and doc["date"] == "2026-02-03T10:00:00+00:00"
+-    text = text_document(node, "He met Mohamad at the docks.", "unit-3")
++    text = text_document(node, "He met Mohamad at the docks.", "unit-3", ONTOLOGY)
+     assert text["kind"] == "text" and text["id"] == "text:n-1" and text["node_id"] == "n-1"
++    # The text's own date is its Document's, so a date filter and the newest-first order reach a
++    # mention too (found live by the studio lane's bands test, 13 November 2026).
++    assert text["date"] == doc["date"]
+     assert text["text_owning_unit"] == "unit-3"
+     assert (text["handling_classification"], text["datasets"]) == ("SECRET", ["Z1"])
+ 
+diff --git a/OspreyFlow_Build/tests/services/search_index/test_mapping_strict_ranking.py b/OspreyFlow_Build/tests/services/search_index/test_mapping_strict_ranking.py
+index 5671d33..54ff34d 100644
+--- a/OspreyFlow_Build/tests/services/search_index/test_mapping_strict_ranking.py
++++ b/OspreyFlow_Build/tests/services/search_index/test_mapping_strict_ranking.py
+@@ -33,9 +33,13 @@ def test_names_match_by_trigrams_edge_ngrams_and_the_conduits_phonetic_key() ->
+     names = MAPPING["properties"]["names"]["fields"]
+     analyzers = SETTINGS["analysis"]["analyzer"]
+     filters = SETTINGS["analysis"]["filter"]
+-    assert filters[analyzers[names["tri"]["analyzer"]]["filter"][-1]] == {
+-        "type": "ngram", "min_gram": 3, "max_gram": 3,
+-    }  # fmt: skip
++    # Trigrams from a tokenizer, each at its own position. An `ngram` token filter puts them all
++    # at one position, where a `match` query reads them as synonyms and `minimum_should_match`
++    # never applies, so one shared trigram made a close name (found live, 13 November 2026).
++    tri = analyzers[names["tri"]["analyzer"]]
++    tokenizer = SETTINGS["analysis"]["tokenizer"][tri["tokenizer"]]
++    assert (tokenizer["type"], tokenizer["min_gram"], tokenizer["max_gram"]) == ("ngram", 3, 3)
++    assert not any(filters.get(f, {}).get("type") == "ngram" for f in tri.get("filter", []))
+     edge = filters[analyzers[names["prefix"]["analyzer"]]["filter"][-1]]
+     assert edge == {"type": "edge_ngram", "min_gram": 2, "max_gram": PREFIX_MAX_CHARS}
+     assert MAPPING["properties"]["names_phonetic"]["type"] == "keyword"
+diff --git a/OspreyFlow_Core/services/search_index/document.py b/OspreyFlow_Core/services/search_index/document.py
+index f9e615c..831e899 100644
+--- a/OspreyFlow_Core/services/search_index/document.py
++++ b/OspreyFlow_Core/services/search_index/document.py
+@@ -119,7 +119,6 @@ def node_document(node: Node, schema: OntologySchema) -> dict[str, Any]:
+         identifiers = [v for f in identifiers_of for v in _strings(props.get(f))]
+         identifiers += [a for v in list(identifiers) if (a := search_alternative(v)) is not None]
+         names = [v for f in names_of for v in _strings(props.get(f))]
+-    date = props.get(date_of) if date_of else None
+     return {
+         "kind": "node",
+         "id": seen.id,
+@@ -129,13 +128,23 @@ def node_document(node: Node, schema: OntologySchema) -> dict[str, Any]:
+         "identifiers": list(dict.fromkeys(identifiers)),
+         "names": list(dict.fromkeys(names)),
+         "names_phonetic": list(dict.fromkeys(c for n in names for c in phonetic_codes(n))),
+-        "date": date if isinstance(date, str) and date else seen.audit.created_at.isoformat(),
++        "date": _date(seen, date_of),
+     }
+ 
+ 
+-def text_document(node: Node, text: str, text_owning_unit: str) -> dict[str, Any]:
++def _date(node: Node, date_of: str | None) -> str:
++    """The type's date property where it has one and the node sets it, else when it was made."""
++    date = node.properties.get(date_of) if date_of else None
++    return date if isinstance(date, str) and date else node.audit.created_at.isoformat()
++
++
++def text_document(
++    node: Node, text: str, text_owning_unit: str, schema: OntologySchema
++) -> dict[str, Any]:
+     """A Document's text (`kind: text`): read only by the text's owning unit, so never on the node's
+-    own document (ADR-150 decision 3)."""
++    own document (ADR-150 decision 3). It carries its Document's `date`, so a date filter and the
++    newest-first order reach a mention too."""
++    _, _, date_of = searchable_fields(schema, node.type)
+     return {
+         "kind": "text",
+         "id": text_document_id(node.id),
+@@ -144,6 +153,7 @@ def text_document(node: Node, text: str, text_owning_unit: str) -> dict[str, Any
+         **_access(node),
+         "text_owning_unit": text_owning_unit,
+         "text": text,
++        "date": _date(_as_its_reader(node), date_of),
+     }
+ 
+ 
+@@ -159,4 +169,4 @@ def documents_for(
+     yield node_document(node, schema)
+     if node.id in texts:
+         text, unit = texts[node.id]
+-        yield text_document(node, text, unit)
++        yield text_document(node, text, unit, schema)
+diff --git a/OspreyFlow_Core/services/search_index/indexer.py b/OspreyFlow_Core/services/search_index/indexer.py
+index ea2a468..677f2ec 100644
+--- a/OspreyFlow_Core/services/search_index/indexer.py
++++ b/OspreyFlow_Core/services/search_index/indexer.py
+@@ -58,7 +58,7 @@ def actions_for(
+             text, unit = texts[node_id]
+             body += [
+                 {"index": {"_index": index, "_id": text_document_id(node_id)}},
+-                text_document(node, text, unit),
++                text_document(node, text, unit, schema),
+             ]
+         else:
+             body.append({"delete": {"_index": index, "_id": text_document_id(node_id)}})
+diff --git a/OspreyFlow_Core/services/search_index/mapping.py b/OspreyFlow_Core/services/search_index/mapping.py
+index 0dc6220..7e52d5a 100644
+--- a/OspreyFlow_Core/services/search_index/mapping.py
++++ b/OspreyFlow_Core/services/search_index/mapping.py
+@@ -21,9 +21,13 @@ SETTINGS: dict[str, Any] = {
+         "normalizer": {"folded": {"type": "custom", "filter": ["lowercase", "asciifolding"]}},
+         "filter": {
+             "edge_prefix": {"type": "edge_ngram", "min_gram": 2, "max_gram": PREFIX_MAX_CHARS},
+-            "tri": {"type": "ngram", "min_gram": 3, "max_gram": 3},
+         },
+-        "tokenizer": {"whole": {"type": "keyword"}},
++        "tokenizer": {
++            "whole": {"type": "keyword"},
++            # Trigrams from a tokenizer, each at its own position, so `minimum_should_match`
++            # counts them; an `ngram` filter puts them at one position, read as synonyms.
++            "tri": {"type": "ngram", "min_gram": 3, "max_gram": 3, "token_chars": []},
++        },
+         "analyzer": {
+             "prefix_index": {
+                 "type": "custom",
+@@ -37,8 +41,8 @@ SETTINGS: dict[str, Any] = {
+             },
+             "tri": {
+                 "type": "custom",
+-                "tokenizer": "whole",
+-                "filter": ["lowercase", "asciifolding", "tri"],
++                "tokenizer": "tri",
++                "filter": ["lowercase", "asciifolding"],
+             },
+             "words": {
+                 "type": "custom",
+diff --git a/OspreyFlow_Core/services/search_index/rebuild.py b/OspreyFlow_Core/services/search_index/rebuild.py
+index 4d3b548..d10fc8c 100644
+--- a/OspreyFlow_Core/services/search_index/rebuild.py
++++ b/OspreyFlow_Core/services/search_index/rebuild.py
+@@ -126,7 +126,7 @@ async def drift(
+                 continue  # changed since it was listed; the next check sees it
+             documents = [node_document(node, schema)]
+             if node_id in held:
+-                documents.append(text_document(node, *held[node_id]))
++                documents.append(text_document(node, *held[node_id], schema))
+             for document in documents:
+                 expected.add(document["id"])
+                 if document["id"] not in indexed:

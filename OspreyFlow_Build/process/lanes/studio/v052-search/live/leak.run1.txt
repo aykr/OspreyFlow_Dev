@@ -1,0 +1,89 @@
+Running on ospreyflow-test (stack f, osprey-runs/studio/), logged at osprey-runs/studio.meta/runs/20261113T223640Z-738ff8df/log: bash -c cd OspreyFlow_Build && ../OspreyFlow_Core/.venv/bin/python -m pytest -p no:cacheprovider -q -rA tests/services/search_index/test_search_leak_live.py
+..FF.......                                                              [100%]
+=================================== FAILURES ===================================
+_ test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[public-other-unit] _
+
+reader = 'public-other-unit'
+
+    @pytest.mark.parametrize("reader", list(READERS))
+    async def test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent(
+        reader: str,
+    ) -> None:
+        principal = READERS[reader]
+        access = index_access_filter(SCHEME, principal)
+        async with _worlds(principal) as (client, present, absent):
+            with_hidden = await _answers(client, present, principal, access)
+            without = await _answers(client, absent, principal, access)
+        assert _differences(with_hidden, without) == []
+        found = sum(len(r[1]["results"]) for r in with_hidden if isinstance(r[1], dict))
+        if reader == "empty-case":
+            assert found == 0
+        else:
+>           assert found > 0, "the test must not pass by finding nothing"
+E           AssertionError: the test must not pass by finding nothing
+E           assert 0 > 0
+
+tests/services/search_index/test_search_leak_live.py:330: AssertionError
+_ test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[empty-case] _
+
+reader = 'empty-case'
+
+    @pytest.mark.parametrize("reader", list(READERS))
+    async def test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent(
+        reader: str,
+    ) -> None:
+        principal = READERS[reader]
+        access = index_access_filter(SCHEME, principal)
+        async with _worlds(principal) as (client, present, absent):
+>           with_hidden = await _answers(client, present, principal, access)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/services/search_index/test_search_leak_live.py:323: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/services/search_index/test_search_leak_live.py:282: in _answers
+    response = await s.search_page(
+../OspreyFlow_Core/services/api/search_service.py:242: in search_page
+    _check_datasets(request, principal)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+request = SearchPageRequest(query='Kestrel', limit=20, group=None, filters=SearchFilters(datasets=['ds-1'], date_from=None, date_to=None), page=1, page_size=50)
+principal = Principal(id='d', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=['R'], roles=[], datasets=[])
+
+    def _check_datasets(request: SearchPageRequest, principal: Principal) -> None:
+        case = set(principal.datasets or ())
+        outside = sorted(set(request.filters.datasets or ()) - case)
+        if outside:
+>           raise ValueError(f"not a dataset of this case: {', '.join(outside)}")
+E           ValueError: not a dataset of this case: ds-1
+
+../OspreyFlow_Core/services/api/search_service.py:224: ValueError
+==================================== PASSES ====================================
+============================= slowest 30 durations =============================
+1.25s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+0.92s call     tests/services/search_index/test_search_leak_live.py::test_default_relevance_would_leak_through_word_rarity
+0.88s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[classification]
+0.88s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[not-for-R]
+0.79s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[datasets]
+0.77s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[handling_code]
+0.69s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[public-other-unit]
+0.64s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[text_unit]
+0.49s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[empty-case]
+0.45s call     tests/services/search_index/test_search_leak_live.py::test_fuzzy_expansion_would_leak_a_visible_record_out
+0.44s call     tests/services/search_index/test_search_leak_live.py::test_the_world_is_not_vacuous
+0.08s setup    tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+
+(18 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+PASSED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[not-for-R]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_world_is_not_vacuous
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[classification]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[handling_code]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[datasets]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[text_unit]
+PASSED tests/services/search_index/test_search_leak_live.py::test_default_relevance_would_leak_through_word_rarity
+PASSED tests/services/search_index/test_search_leak_live.py::test_fuzzy_expansion_would_leak_a_visible_record_out
+FAILED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[public-other-unit]
+FAILED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[empty-case]
+2 failed, 9 passed in 9.52s
+Wall time: 10 s, exit 1 (stack f, the lease studio took at 2026-11-13T22:35:56Z; set-up before it 29 s)

@@ -1,0 +1,32 @@
+Running on ospreyflow-test (stack f, osprey-runs/studio/), logged at osprey-runs/studio.meta/runs/20261113T223732Z-73cbff4d/log: bash -c cd OspreyFlow_Build && ../OspreyFlow_Core/.venv/bin/python -m pytest -p no:cacheprovider -q -rA tests/services/search_index/test_search_leak_live.py
+...........                                                              [100%]
+==================================== PASSES ====================================
+============================= slowest 30 durations =============================
+0.88s call     tests/services/search_index/test_search_leak_live.py::test_default_relevance_would_leak_through_word_rarity
+0.70s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+0.69s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[classification]
+0.65s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[not-for-R]
+0.64s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[datasets]
+0.64s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[public-other-unit]
+0.63s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[handling_code]
+0.62s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[text_unit]
+0.56s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[empty-case]
+0.42s call     tests/services/search_index/test_search_leak_live.py::test_fuzzy_expansion_would_leak_a_visible_record_out
+0.41s call     tests/services/search_index/test_search_leak_live.py::test_the_world_is_not_vacuous
+0.06s setup    tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+
+(18 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+PASSED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[not-for-R]
+PASSED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[public-other-unit]
+PASSED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[empty-case]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_world_is_not_vacuous
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[classification]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[handling_code]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[datasets]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[text_unit]
+PASSED tests/services/search_index/test_search_leak_live.py::test_default_relevance_would_leak_through_word_rarity
+PASSED tests/services/search_index/test_search_leak_live.py::test_fuzzy_expansion_would_leak_a_visible_record_out
+11 passed in 7.73s
+Wall time: 9 s, exit 0 (stack f, the lease studio took at 2026-11-13T22:35:56Z; set-up before it 13 s)
