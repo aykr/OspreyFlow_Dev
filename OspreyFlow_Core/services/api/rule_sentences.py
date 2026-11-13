@@ -534,6 +534,10 @@ class SentenceContext:
     hotlisted: frozenset[str] | None = None
     #: Screening-list entries by entity type, reference data (ADR-109 phase F).
     screening_entries: dict[str, list[Any]] = field(default_factory=dict)
+    #: The entry each subject matched (`on_screening_list`), by the subject's id: its list's marking
+    #: is one the alert rests on without citing it (`sentence_rules._findings`, the lane review of
+    #: the second pass, defect 6).
+    screened: dict[str, Any] = field(default_factory=dict)
     #: ADR-139: the link-strength influencers in force in the case (case, then installation, then
     #: the weights file's), which a strength condition judges by; and the types rarity leaves out.
     influencers: Sequence[ActiveInfluencer] = ()
@@ -699,7 +703,10 @@ async def _meets_relationship(
     hits = screen(_screening_name(node), None, entries, min_score=relationship.min_score)
     if not hits:
         return None
-    return f"a {hits[0].score:.2f} match to an entry on {hits[0].entry.list_name}"
+    ctx.screened[node.id] = hits[0].entry
+    # ADR-146 Amendment 7 (the orchestrator's review, item 1): a sentence's alert cites no list, so
+    # its words name none: a reader of the subject not cleared for the list is told no list's name.
+    return f"a {hits[0].score:.2f} match to an entry on a screening list"
 
 
 async def _meets_strength(

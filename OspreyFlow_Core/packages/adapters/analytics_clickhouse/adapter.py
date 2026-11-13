@@ -26,7 +26,14 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
 
 from adapters.analytics_duckdb.access_filter import AccessFilter, SqlPredicate
-from adapters.analytics_duckdb.alert_facts import alert_predicate, series_expression
+from adapters.analytics_duckdb.alert_facts import (
+    FACT_COLUMNS,
+    HANDLING_COLUMNS,
+    alert_predicate,
+    counted_handlings,
+    fact_rows,
+    series_expression,
+)
 from ontology.handling import HandlingScheme
 from ports.analytics import TrendLimitExceeded, refuse_an_amount_total_out_of_range
 from schemas.analytics import (
@@ -414,7 +421,7 @@ class AnalyticsClickHouseAdapter:
             "ORDER BY period, series ASC NULLS FIRST",
             predicate.params,
         )
-        counted = f"alert_id IN (SELECT alert_id FROM alert_facts WHERE {predicate.where})"
+        counted = counted_handlings(predicate.where)
         handlings = [
             CountedHandling(
                 classification=str(c), handling_code=str(h), owning_unit=str(u), originator=str(o)
@@ -442,8 +449,9 @@ class AnalyticsClickHouseAdapter:
 
     async def load_alert_facts(self, facts: Sequence[AlertFact]) -> None:
         """Each fact replaces what was kept for its alert: its rows deleted (the mutation waited
-        for), then written again. Unproven on a real ClickHouse here: no server ran in this
-        build."""
+        for), then written again. Proven on a real ClickHouse by the analytics port's conformance
+        suite (`test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader`, run
+        on a leased test stack)."""
         if not facts:
             return
         ids = [f.alert_id for f in facts]
@@ -451,40 +459,21 @@ class AnalyticsClickHouseAdapter:
             await self._ch.command(
                 f"ALTER TABLE {table} DELETE WHERE has(?, alert_id)" + _SYNC, [ids]
             )
+        # The DuckDB store's rows, column for column (`alert_facts.fact_rows`): one per set of an
+        # alert's citations, each citation outside the set a group of its own.
+        rows, handling_rows = fact_rows(facts)
+        names = [c.strip() for c in FACT_COLUMNS.split(",")]
         await self._ch.insert(
             "alert_facts",
             [
-                {
-                    "alert_id": f.alert_id,
-                    "investigation_scope": f.investigation_scope,
-                    "kind": f.kind,
-                    "rule": f.rule,
-                    "typology": f.typology,
-                    "severity": f.severity,
-                    "outcome": f.outcome,
-                    "raised_at": utc_text(f.raised_at),
-                    "owner_id": f.owner_id,
-                    "audience": f.audience,
-                    "team": f.team,
-                    "dataset_id": f.dataset_id,
-                    "known": 0 if f.handlings is None else 1,
-                }
-                for f in facts
+                {**dict(zip(names, row, strict=True)), "raised_at": utc_text(row[7])}  # type: ignore[arg-type]
+                for row in rows
             ],
         )
+        handling_names = [c.strip() for c in HANDLING_COLUMNS.split(",")]
         await self._ch.insert(
             "alert_fact_handlings",
-            [
-                {
-                    "alert_id": f.alert_id,
-                    "handling_classification": h.classification,
-                    "handling_code": h.handling_code,
-                    "owning_unit": h.owning_unit,
-                    "originator": h.originator,
-                }
-                for f in facts
-                for h in f.handlings or []
-            ],
+            [dict(zip(handling_names, row, strict=True)) for row in handling_rows],
         )
 
     async def _fixed_interval_histogram(

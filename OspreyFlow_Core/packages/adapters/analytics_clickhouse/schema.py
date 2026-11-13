@@ -131,7 +131,8 @@ CREATE TABLE IF NOT EXISTS alert_facts (
     audience String,
     team Nullable(String),
     dataset_id Nullable(String),
-    known UInt8
+    known UInt8,
+    fact_id String DEFAULT alert_id
 ) ENGINE = MergeTree ORDER BY (alert_id)
 """
 
@@ -141,7 +142,9 @@ CREATE TABLE IF NOT EXISTS alert_fact_handlings (
     handling_classification String,
     handling_code String,
     owning_unit String,
-    originator String
+    originator String,
+    fact_id String DEFAULT alert_id,
+    grp UInt8 DEFAULT 0
 ) ENGINE = MergeTree ORDER BY (alert_id)
 """
 
@@ -163,6 +166,30 @@ def drop_database(database: str, cluster: str | None) -> str:
     return f"DROP DATABASE IF EXISTS {database}{on}" + (" SYNC" if cluster else "")
 
 
+#: ADR-146 Amendment 7 (the orchestrator's review, item 6), as the DuckDB store's
+#: (`adapters/analytics_duckdb/schema.py`): an alert with citations kept as one row per set of
+#: them, each citation outside the set a group of handling rows. A new store is made with them; one
+#: made before them is brought forward, reading its one row per alert as its own set, group 0. Each
+#: `ALTER` only where `system.columns` finds its column missing, as `load_id`'s (ADR-127 decision 6:
+#: a no-op `ALTER` on a `Replicated` database still goes through the DDL queue, at every start).
+ADD_ALERT_FACT_SETS = (
+    ("alert_facts", "fact_id",
+     "ALTER TABLE alert_facts ADD COLUMN IF NOT EXISTS fact_id String DEFAULT alert_id"),
+    ("alert_fact_handlings", "fact_id",
+     "ALTER TABLE alert_fact_handlings ADD COLUMN IF NOT EXISTS fact_id String DEFAULT alert_id"),
+    ("alert_fact_handlings", "grp",
+     "ALTER TABLE alert_fact_handlings ADD COLUMN IF NOT EXISTS grp UInt8 DEFAULT 0"),
+)  # fmt: skip
+
+
+async def _has_column(client: ClickHouseClient, table: str, column: str) -> bool:
+    (present,) = await client.rows(
+        "SELECT count() FROM system.columns WHERE database = ? AND table = ? AND name = ?",
+        [client.database, table, column],
+    )
+    return int(present[0]) > 0
+
+
 async def create_tables(client: ClickHouseClient) -> None:
     for statement in (
         CREATE_EVENTS_TABLE,
@@ -174,10 +201,8 @@ async def create_tables(client: ClickHouseClient) -> None:
         if client.cluster:
             statement = statement.replace("ENGINE = MergeTree", "ENGINE = ReplicatedMergeTree")
         await client.command(statement)
-    (present,) = await client.rows(
-        "SELECT count() FROM system.columns "
-        "WHERE database = ? AND table = 'events' AND name = 'load_id'",
-        [client.database],
-    )
-    if int(present[0]) == 0:
+    if not await _has_column(client, "events", "load_id"):
         await client.command(ADD_EVENTS_LOAD_ID)
+    for table, column, statement in ADD_ALERT_FACT_SETS:
+        if not await _has_column(client, table, column):
+            await client.command(statement)

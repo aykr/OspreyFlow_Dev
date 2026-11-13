@@ -266,7 +266,9 @@ async def test_a_refresh_judges_the_rule_over_the_last_day_against_the_new_versi
 
     async def context(rule: Any, deployer: Any, gate: Any) -> Any:
         assert isinstance(rule.params, SentenceRuleParams)
-        return rule.params, None, None
+        # A context as the real `_context` always returns one: its subjects matched to a screening
+        # entry (`screened`, ADR-146 Amendment 7) read by the raise (none here).
+        return rule.params, None, SimpleNamespace(screened={})
 
     async def hits(subjects: Any, sentence: Any, deployer: Any, ctx: Any, **k: Any) -> list[Any]:
         windows.append(k["window"])
@@ -274,7 +276,7 @@ async def test_a_refresh_judges_the_rule_over_the_last_day_against_the_new_versi
 
     monkeypatch.setattr(sentence_rules, "_context", context)
     monkeypatch.setattr(sentence_rules, "judge_subjects", hits)
-    monkeypatch.setattr(sentence_rules, "_findings", lambda rule, d, found, words: list(found))
+    monkeypatch.setattr(sentence_rules, "_findings", lambda rule, d, found, words, screened=None: list(found))
     raised = await sentence_rules.run_on_list_refresh(_rule("r-uk", "l-uk"), AUTHOR, _Gate(), now=NOW)  # type: ignore[arg-type]
     assert raised == 1
     (window,) = windows

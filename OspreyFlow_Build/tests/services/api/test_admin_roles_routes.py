@@ -246,10 +246,14 @@ class _AdminPeople:
 
             async def fetchval(self, sql: str, *args: Any) -> bool:
                 # What the real `_WITHHELD_SQL` binds: the person, the administrator's unit, the
-                # markings they clear and the scheme's highest (review finding 10).
+                # markings they clear, the scheme's highest (review finding 10), and the handling
+                # codes they may receive, which a screening list's schedule is read by (ADR-146
+                # Amendment 7; the orchestrator's verification of lane/rules-lists at 7a1c760).
                 cleared = [m for m in scheme.classification if scheme.clears(admin.clearance, m)]
-                assert "EXISTS" in sql
-                assert args == (person, admin.org_unit, cleared, scheme.classification[-1]), args
+                codes = [k for k, d in scheme.handling_codes.items()
+                         if d.dissemination != "restricted" or k in admin.receivable_handling_codes]  # fmt: skip
+                assert "EXISTS" in sql and "screening_lists" in sql
+                assert args == (person, admin.org_unit, cleared, scheme.classification[-1], codes), args
                 return self.hidden
 
         self.asked_withheld.append(person)

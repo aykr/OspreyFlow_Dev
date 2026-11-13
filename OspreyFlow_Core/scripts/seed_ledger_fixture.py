@@ -379,7 +379,7 @@ async def _run(args: argparse.Namespace) -> int:
     monitoring = write_monitoring_files(ingest_root())
     screening = await ScreeningListStore.connect(PostgresConfig.from_env().dsn)
     try:
-        await screening.replace_list(list_name, entries)
+        await screening.replace_list(list_name, entries, scheme=load_uk_le_scheme())
         monitoring.append(await subscribe_uk_list(screening, principal.id))
     finally:
         await screening.close()

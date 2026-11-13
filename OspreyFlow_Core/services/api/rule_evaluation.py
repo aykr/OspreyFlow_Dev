@@ -54,6 +54,7 @@ from ports.graph import GraphPort
 from schemas.analytics import EventFilter, EventListRequest, EventRecord
 from schemas.domain import (
     Alert,
+    AlertCitation,
     AlertMode,
     CircularFlowParams,
     EdgeWrite,
@@ -72,7 +73,7 @@ from schemas.domain import (
     TypologyRule,
 )
 
-from .alerts import AlertStore
+from .alerts import AlertStore, CitedHandlings
 from .audit import AuditWriter
 from .dataset_scope import (
     CompositeReadOnlyError,
@@ -339,6 +340,22 @@ class Finding:
     edge_ids: list[str] = field(default_factory=list)
     events: tuple[EventRecord, ...] = ()
     pending: tuple[NodeWrite | EdgeWrite, ...] = ()
+    #: ADR-146 Amendment 7: what it cites that a reader is cleared for one by one (a screening
+    #: match on each list). Each citation's ids are among `node_ids` and `edge_ids` too.
+    citations: tuple[AlertCitation, ...] = ()
+    #: Of `refs`, those naming a citation's source (a screening match's list entry, `<list>:<id>`):
+    #: in the finding's signature, so a match on a new entry alerts again, but never on the `Alert`
+    #: node, which a reader cleared for one list reads (ADR-146 Amendment 7; the lane review's
+    #: item 1: the node's sources named every list's entry, a hidden one's too).
+    cited_refs: tuple[str, ...] = ()
+    #: Each citation's list marking, in order (its listed party's): what a reader must be cleared
+    #: for to be shown that citation, for a count told to the loader (the orchestrator's review,
+    #: item 7; `counted_for`).
+    citation_handlings: tuple[Handling, ...] = ()
+    #: Markings the alert rests on without citing (a sentence rule's screening list, the lane review
+    #: of the second pass, defect 6): its own node is marked at least so, and they are among the
+    #: handlings it is stored with, so a reader not cleared for them is shown nothing of it.
+    floor_handlings: tuple[Handling, ...] = ()
 
     @classmethod
     def from_hit(
@@ -642,19 +659,35 @@ async def write_alert_node(
                 subject=renamed.get(finding.subject, finding.subject),
                 node_ids=[renamed.get(i, i) for i in finding.node_ids],
                 edge_ids=[renamed.get(i, i) for i in finding.edge_ids],
-                pending=(),
+                # Only the writes the store merged are gone; one written new keeps its marking as
+                # written for the node's and its citation's markings (the lane review's item 5: an
+                # owner's match on one list merged, on another new, lost the new one's).
+                pending=tuple(w for w in finding.pending if w.id not in renamed),
+                citations=tuple(
+                    c.model_copy(update={"node_ids": [renamed.get(i, i) for i in c.node_ids],
+                                         "edge_ids": [renamed.get(i, i) for i in c.edge_ids]})
+                    for c in finding.citations
+                ),  # fmt: skip
             )
+    # ADR-146 Amendment 7: the node is marked by what the alert rests on outside its citations, so
+    # a reader cleared for one list's match and not another's still reads it; the `ALERTED_ON` to
+    # a citation's party is marked by that citation too (`_citation_markings`).
     marking = alert_handling(
-        scheme, await _referent_handlings(graph, scheme, finding, unseen, known or {})
+        scheme,
+        [
+            *await _referent_handlings(graph, scheme, core_of(finding), unseen, known or {}),
+            *finding.floor_handlings,
+        ],
     )
     if marking is None:
         return None, finding
+    by_target = await _citation_markings(graph, scheme, finding, marking, unseen, known or {})
     now = datetime.now(UTC)
     provenance = Provenance(
         state=ProvenanceState.INFERRED,
         sources=[
             SourceRef(document_id=f"rule:{finding.rule.id}", locator=ref, excerpt_hash="")
-            for ref in finding.refs
+            for ref in alert_node_refs(finding)
         ],
         extracted_by=f"rule:{finding.rule.id}",
         first_seen=now,
@@ -677,6 +710,8 @@ async def write_alert_node(
     )
     (node_id,) = await graph.upsert_nodes([node], tx)
     record.node_ids.append(node_id)
+    # A citation's party no single marking can join to the node's gets no `ALERTED_ON`.
+    targets = [(t, by_target.get(t, marking)) for t in finding.node_ids]
     alerted = [
         EdgeWrite(
             id=new_edge_id(),
@@ -685,16 +720,77 @@ async def write_alert_node(
             target=target,
             basis="probabilistic",
             provenance=provenance,
-            handling=marking,
+            handling=link_marking,
             created_by=finding.deployer.id,
             created_at=now,
             load_id=load_id,
             datasets=into,
         )
-        for target in finding.node_ids
+        for target, link_marking in targets
+        if link_marking is not None
     ]
     record.edges(alerted, await graph.upsert_edges(alerted, tx))
     return node_id, finding
+
+
+def alert_node_refs(finding: Finding) -> list[str]:
+    """What the `Alert` node's sources name: the finding's refs outside its citations' (ADR-146
+    Amendment 7)."""
+    return [r for r in finding.refs if r not in set(finding.cited_refs)]
+
+
+def counted_for(finding: Finding, reader: Principal, scheme: HandlingScheme) -> bool:
+    """Whether a load's report counts this alert for `reader` (the orchestrator's review of ADR-146
+    Amendment 7, item 7): an alert with citations is shown only to a reader cleared for one of
+    them, so it is counted only for one; the load's own rows and their customers are the loader's,
+    so the rest of what it rests on is theirs to read."""
+    if not finding.citations:
+        return True
+    return any(handling_readable(scheme, reader, h) for h in finding.citation_handlings)
+
+
+def core_of(finding: Finding) -> Finding:
+    """The finding without its citations (ADR-146 Amendment 7): what every reader of the alert
+    must be able to read, and what its own node is marked by."""
+    if not finding.citations:
+        return finding
+    nodes = {i for c in finding.citations for i in c.node_ids}
+    edges = {i for c in finding.citations for i in c.edge_ids}
+    return replace(
+        finding,
+        node_ids=[i for i in finding.node_ids if i not in nodes],
+        edge_ids=[i for i in finding.edge_ids if i not in edges],
+        pending=tuple(w for w in finding.pending if w.id not in nodes | edges),
+        citations=(),
+    )
+
+
+async def _citation_markings(
+    graph: GraphPort,
+    scheme: HandlingScheme,
+    finding: Finding,
+    marking: Handling,
+    unseen: Handling | None,
+    known: Mapping[str, Handling],
+) -> dict[str, Handling | None]:
+    """Each cited party's `ALERTED_ON` marking: the node's, raised to everything its citation rests
+    on; `None` where no single marking is safe (`alert_handling`), and no link is written."""
+    out: dict[str, Handling | None] = {}
+    for citation in finding.citations:
+        ids = {*citation.node_ids, *citation.edge_ids}
+        part = replace(
+            finding,
+            node_ids=list(citation.node_ids),
+            edge_ids=list(citation.edge_ids),
+            events=(),
+            pending=tuple(w for w in finding.pending if w.id in ids),
+            citations=(),
+        )
+        handlings = await _referent_handlings(graph, scheme, part, unseen, known)
+        joined = alert_handling(scheme, [marking, *handlings])
+        for node_id in citation.node_ids:
+            out[node_id] = joined
+    return out
 
 
 def alert_row(finding: Finding, alert_node_id: str | None, investigation_id: str) -> Alert:
@@ -715,6 +811,7 @@ def alert_row(finding: Finding, alert_node_id: str | None, investigation_id: str
         window=finding.window,
         trigger=finding.rule.trigger,
         alert_node_id=alert_node_id,
+        citations=list(finding.citations),
     )
 
 
@@ -1048,10 +1145,13 @@ class RuleGate:
                     rows = rows_of_finding(finding, events, written)
                     for row in rows:
                         verdict.hold.setdefault(row, (rule, held_because(rule)))
-                    verdict.notes.append(
-                        f"Rule “{rule.name}” matched {len(rows)} row(s); they are held for "
-                        "review, not loaded."
-                    )
+                    # Said only of a finding its loader may read (the lane review of the second
+                    # pass, defect 8, as item 7's count): the rows are held all the same.
+                    if counted_for(finding, self.loader, self.scheme):
+                        verdict.notes.append(
+                            f"Rule “{rule.name}” matched {len(rows)} row(s); they are held for "
+                            "review, not loaded."
+                        )
                 continue
             for finding in fresh:
                 node_id, why, stored = await self._alert_node_in_load(
@@ -1060,8 +1160,9 @@ class RuleGate:
                 if why is not None:
                     verdict.withheld[len(verdict.findings)] = why
                 verdict.findings.append((stored, node_id))
-            if fresh:
-                verdict.notes.append(f"Rule “{rule.name}” raised {len(fresh)} alert(s).")
+            told = [f for f in fresh if counted_for(f, self.loader, self.scheme)]
+            if told:
+                verdict.notes.append(f"Rule “{rule.name}” raised {len(told)} alert(s).")
         return verdict
 
     async def _alert_node_in_load(
@@ -1111,13 +1212,41 @@ class RuleGate:
             *(n.handling for n in nodes),
             *(e.handling for e in edges),
             *(e.handling for e in finding.events),
+            *finding.floor_handlings,
         ]
+
+    async def _cited_handlings(
+        self, finding: Finding, node_id: str | None
+    ) -> CitedHandlings | None:
+        """For an alert with citations, what it rests on outside them and each citation's
+        handlings, read as its deployer (the orchestrator's review of ADR-146 Amendment 7, item 6:
+        the trends count it once per reader, as the queue shows it). `None` when any cannot be read
+        so, or for an alert without citations."""
+        if not finding.citations:
+            return None
+        core = await self._rests_on(core_of(finding), node_id)
+        groups: list[list[Handling]] = []
+        for c in finding.citations:
+            nodes = await self.graph.get_nodes(list(c.node_ids), finding.deployer)
+            edges = await self.graph.get_edges(list(c.edge_ids), finding.deployer)
+            if {n.id for n in nodes} != set(c.node_ids) or {e.id for e in edges} != set(c.edge_ids):
+                return None
+            groups.append([*(n.handling for n in nodes), *(e.handling for e in edges)])
+        return None if core is None else (core, groups)
 
     async def _raise_row(
         self, finding: Finding, node_id: str | None, *, withheld: NodeWithheld | None = None
     ) -> Alert:
         alert = alert_row(finding, node_id, self.investigation_id)
-        await self.alert_store.save(alert, handlings=await self._rests_on(finding, node_id))
+        handlings = await self._rests_on(finding, node_id)
+        if finding.citations:
+            await self.alert_store.save(
+                alert,
+                handlings=handlings,
+                cited_handlings=await self._cited_handlings(finding, node_id),
+            )
+        else:
+            await self.alert_store.save(alert, handlings=handlings)
         await self._remember(finding)
         detail: dict[str, object] = {
             "rule_id": finding.rule.id,
@@ -1217,8 +1346,9 @@ class RuleGate:
                 )
                 for finding in fresh:
                     await self.raise_committed(finding, load_id=load_id, writes=writes)
-                if fresh:
-                    notes.append(f"Rule “{rule.name}” raised {len(fresh)} alert(s).")
+                told = [f for f in fresh if counted_for(f, self.loader, self.scheme)]
+                if told:
+                    notes.append(f"Rule “{rule.name}” raised {len(told)} alert(s).")
             except Exception as exc:  # noqa: BLE001 - best-effort, audited and said
                 await self._audit(
                     "rule_failed",

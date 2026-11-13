@@ -573,6 +573,16 @@ class AlertFact(BaseModel):
     that cites nothing (a `notify` stub), counted for its audience alone."""
 
     alert_id: str = Field(min_length=1)
+    #: ADR-146 Amendment 7 (the orchestrator's review, item 6, and the owner's ruling of 12 November
+    #: 2026): an alert with citations is kept as one row per set of its citations, each its own
+    #: `fact_id`, counted for the readers who may read exactly that set (its own `handlings` the
+    #: alert's core and the set's; `hidden_from` each citation outside it), with the outcome those
+    #: readers are shown. So a reader counts it once, as the queue shows it to them, or not at all.
+    #: Left out, the alert's own id: an alert without citations is one row, as before.
+    fact_id: str | None = None
+    #: Each citation outside this row's set, as its handlings: the row is counted for no reader who
+    #: may view every handling of any one of them (they are counted by another row).
+    hidden_from: list[list[Handling]] = Field(default_factory=list)
     #: The case a typology alert belongs to; a hotlist or monitor alert may name none.
     investigation_scope: str | None = None
     kind: AlertFactKind

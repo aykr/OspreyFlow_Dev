@@ -409,6 +409,35 @@ class TriageStore(Store):
         self.writes.append(f"triage {alert_id}")
         return next(a for a in self.alerts if a.id == alert_id)
 
+    async def triage_citations(
+        self, alert_id: str, investigation_id: str, principal: Principal, **decide: Any
+    ) -> Alert:
+        """`AlertStore.triage_citations`: the real store's own decision (`decide_citations`) over
+        the stored alert, refused as a conflict where it moves nothing, as the store refuses it."""
+        from datetime import UTC, datetime
+
+        from services.api.alerts import AlertTriageConflict, decide_citations
+
+        self.writes.append(f"triage {alert_id}")
+        n, stored = next((n, a) for n, a in enumerate(self.alerts) if a.id == alert_id)
+        if stored.status == "closed":
+            raise AlertTriageConflict(alert_id)
+        decision = decide_citations(stored, principal.id, now=datetime.now(UTC),
+                                    disposition=decide.pop("disposition", None),
+                                    disposition_reason=decide.pop("disposition_reason", None),
+                                    **decide)  # fmt: skip
+        if decision is None:
+            raise AlertTriageConflict(alert_id)
+        cites, status, assignee, (disposition, reason, decided_by) = decision
+        from services.api.alerts import last_proposer
+
+        self.alerts[n] = stored.model_copy(update={
+            "citations": cites, "status": status, "assignee": assignee, "disposition": disposition,
+            "disposition_reason": reason, "decided_by": decided_by,
+            "close_proposed_by": last_proposer(cites) if status == "closed" else None,
+        })  # fmt: skip
+        return self.alerts[n]
+
 
     def __getattr__(self, name: str) -> Any:  # any other write
         if name.startswith("__"):

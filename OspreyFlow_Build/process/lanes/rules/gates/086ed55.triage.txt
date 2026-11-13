@@ -1,0 +1,15 @@
+Triage of the offline gates (rules lists, 12 Nov 2026; the server's heavy slot, the orchestrator's go).
+
+962d6e0 (first run): make -k ci red on domain-model-coverage-check: AlertCitation was not documented in
+spec/01_DOMAIN_MODEL.md. This branch's defect, fixed in the domain model commit. make test failed the
+gate's own test (test_no_new_drift_beyond_the_allowlist) for the same reason, plus the two below.
+
+086ed55 (re-gated after the fix): make -k ci exit 0 (schemas-check: 602 generated types match;
+domain-model-coverage-check: 105 classes, no new drift). make test: 12921 passed, 1 failed, 33 skipped,
+plus 1 vitest failure, neither in a file this branch changes (it touches no apps/, harness or preflight file):
+- tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass:
+  'pass' == 'skip'. The server has a GPU (RTX 5060 Ti). Run alone at main df2643b on the same host: failed
+  the same way.
+- apps/workspace src/matrix/MatrixView.budget.test.tsx (50,000 nodes): 7199 ms inside the full parallel
+  run (studio's live run on the box beside it). Run alone on the server, twice at main df2643b and twice
+  at 086ed55: passed each time, 3756/3719 ms at main and 3669/3699 ms at 086ed55.

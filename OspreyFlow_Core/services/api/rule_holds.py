@@ -19,11 +19,19 @@ from collections.abc import Sequence
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from ports.media import MediaStore
-from schemas.domain import HeldRow, OntologySchema, Principal, RuleAuditEntry, RuleAuditPage
+from schemas.domain import (
+    Alert,
+    HeldRow,
+    OntologySchema,
+    Principal,
+    RuleAuditEntry,
+    RuleAuditPage,
+)
 from schemas.ingest import LoadReport, Recipe
 
 from .alerts import (
     AlertStore,
+    citation_ids,
     evidence_node_ids,
     raiser_reads_admitting,
     read_evidence_ids,
@@ -32,12 +40,18 @@ from .alerts import (
 from .audit import AuditWriter
 from .kyc_sweep import FAILED_WORDS_WITHOUT_COUNTS
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
+from .screening import ListClearance, ScreeningListStore
 from .studio_publish import LoadSink, load_with_rules, post_commit_notes
 
 
 def _ids(entry: RuleAuditEntry, key: str) -> list[str]:
     raw = entry.detail.get(key) or []
     return [str(n) for n in raw] if isinstance(raw, list) else []
+
+
+def _about_a_list(entry: RuleAuditEntry) -> bool:
+    """A screening rule's re-screening as a list refreshed (`screening_refresh.Rescreener`)."""
+    return entry.action == "rule_evaluated" and entry.detail.get("trigger") == "list_update"
 
 
 def _old_firing(entry: RuleAuditEntry) -> bool:
@@ -64,6 +78,7 @@ async def readable_rule_audit(
     *,
     analytics: AnalyticsPort,
     alerts: AlertStore,
+    lists: ScreeningListStore | None = None,
     offset: int = 0,
     limit: int = 100,
 ) -> RuleAuditPage:
@@ -107,7 +122,39 @@ async def readable_rule_audit(
         edge_ids={n for c in named if c for n in c[1]},
         event_ids_by_scope={investigation_id: {n for c in named if c for n in c[2]}},
     )
-    shown = [c is not None and readable.covers(*c) for c in named]
+    cleared = ListClearance.of(reader, alerts.scheme)
+    # A list's marking as it stands now as well as when the entry was written (the lane review of
+    # the second pass, defect 10): a list raised since is named to no reader below its new one.
+    now_marked = (
+        await lists.markings({str(e.detail.get("list_name")) for e in entries if _about_a_list(e)})
+        if lists is not None
+        else {}
+    )
+
+    def shown_to_reader(entry: RuleAuditEntry, cited: tuple[list[str], ...] | None) -> bool:
+        if cited is None:
+            return False
+        if _about_a_list(entry):
+            # The orchestrator's review, item 2: a list's re-screening is named only to a reader
+            # cleared for the list; any other is given no entry about it, and no count.
+            return cleared.admits(
+                str(entry.detail.get("list_classification") or "OFFICIAL"),
+                str(entry.detail.get("list_handling_code") or "P"),
+            ) and cleared.admits(*now_marked.get(str(entry.detail.get("list_name")), (None, None)))
+        alert = _alert_of(entry)
+        if alert is not None and alert.citations:
+            # ADR-146 Amendment 7 (the orchestrator's review, item 4): a firing on an alert with
+            # citations is read as the queue reads its alert, its core whole and at least one
+            # citation, so the audit says nothing the queue does not.
+            return readable.whole(alert)
+        return readable.covers(*cited)
+
+    def _alert_of(entry: RuleAuditEntry) -> Alert | None:
+        if entry.action in _ABOUT_AN_ALERT and "alert_id" in entry.detail:
+            return current.get(str(entry.detail["alert_id"]))
+        return None
+
+    shown = [shown_to_reader(e, c) for e, c in zip(entries, named, strict=True)]
     unseen_rules = {
         str(e.detail.get("rule_id"))
         for e, ok in zip(entries, shown, strict=True)
@@ -121,6 +168,23 @@ async def readable_rule_audit(
             entry = entry.model_copy(
                 update={"detail": {k: v for k, v in entry.detail.items() if k != "words"}}
             )
+        alert = _alert_of(entry)
+        if alert is not None and alert.citations:
+            # A hidden citation's nodes and links left out of the entry, as the queue leaves them
+            # out of the alert: no id or count of a list the reader may not see.
+            hidden_nodes, hidden_edges = citation_ids(
+                alert.model_copy(update={"citations": [
+                    c for n, c in enumerate(alert.citations)
+                    if n not in set(readable.citations_read(alert))
+                ]})
+            )  # fmt: skip
+            entry = entry.model_copy(update={"detail": {
+                **entry.detail,
+                **{k: [i for i in _ids(entry, k) if i not in hidden_nodes]
+                   for k in ("node_ids",) if k in entry.detail},
+                **{k: [i for i in _ids(entry, k) if i not in hidden_edges]
+                   for k in ("edge_ids",) if k in entry.detail},
+            }})  # fmt: skip
         hidden = str(entry.detail.get("rule_id")) in unseen_rules
         if entry.action == "rule_evaluation_failed":
             # Rule 7: the documents a sweep could not judge are counted across every customer the

@@ -162,6 +162,19 @@ CREATE TABLE IF NOT EXISTS alert_fact_handlings (
 """
 
 
+#: ADR-146 Amendment 7 (the orchestrator's review, item 6): an alert with citations kept as one row
+#: per set of them (`fact_id`), each citation outside the set a group of handling rows (`grp` > 0).
+#: A store made before these columns has one row per alert: its id, group 0.
+ADD_ALERT_FACT_SETS = (
+    "ALTER TABLE alert_facts ADD COLUMN IF NOT EXISTS fact_id VARCHAR",
+    "UPDATE alert_facts SET fact_id = alert_id WHERE fact_id IS NULL",
+    "ALTER TABLE alert_fact_handlings ADD COLUMN IF NOT EXISTS fact_id VARCHAR",
+    "UPDATE alert_fact_handlings SET fact_id = alert_id WHERE fact_id IS NULL",
+    "ALTER TABLE alert_fact_handlings ADD COLUMN IF NOT EXISTS grp INTEGER DEFAULT 0",
+    "UPDATE alert_fact_handlings SET grp = 0 WHERE grp IS NULL",
+)
+
+
 def create_events_table(con: duckdb.DuckDBPyConnection) -> None:
     """The events table, and the alert facts beside it: every store that holds events can be asked
     for an alert trend, so the two are made together."""
@@ -170,6 +183,8 @@ def create_events_table(con: duckdb.DuckDBPyConnection) -> None:
     con.execute(CREATE_WITHDRAWN_EVENTS_TABLE)
     con.execute(CREATE_ALERT_FACTS_TABLE)
     con.execute(CREATE_ALERT_FACT_HANDLINGS_TABLE)
+    for statement in ADD_ALERT_FACT_SETS:
+        con.execute(statement)
 
 
 def create_geometries_table(con: duckdb.DuckDBPyConnection) -> None:

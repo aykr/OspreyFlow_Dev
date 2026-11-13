@@ -32,20 +32,30 @@ reads a refresh through `updates(org_unit=...)` and `update_for(...)`: the query
 unit's row and nothing else, so another unit's customers, alerts and rule names never leave the
 store. The whole-deployment totals stay on `screening_list_updates` for the operator's command and
 the audit; no route selects them.
+
+**A list is read only by whom its marking clears (ADR-146 Amendment 7, the orchestrator's review of
+12 November 2026; rule 3 in the adapter).** A list's marking is kept in `screening_list_markings`
+(its entries carry it too), so it outlives the list's entries and needs no subscription. Every read
+a person's work reaches (`entries`, `subscriptions`, `updates`, `update_for`, `hidden`) takes the
+reader's `ListClearance` and filters in its `WHERE`, so no caller can screen against, or show, a
+list its reader may not read. `replace_list` refuses to lower a list's marking, as a refresh never
+does (`apply_update` keeps it).
 """
 
 from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from typing import Literal
 
 import asyncpg
 import duckdb
 
+from ontology.handling import HandlingScheme
+from schemas.domain import Principal
 from schemas.monitoring import ListSchedule
 from schemas.screening import (
     ScreeningListStatus,
@@ -69,6 +79,9 @@ CREATE TABLE IF NOT EXISTS screening_entries (
 );
 CREATE INDEX IF NOT EXISTS screening_entries_type_idx ON screening_entries (entity_type);
 ALTER TABLE screening_entries ADD COLUMN IF NOT EXISTS aliases TEXT[] NOT NULL DEFAULT '{}';
+-- ADR-146 Amendment 7: the list's marking, carried by each of its entries; NULL is OFFICIAL, P.
+ALTER TABLE screening_entries ADD COLUMN IF NOT EXISTS classification TEXT;
+ALTER TABLE screening_entries ADD COLUMN IF NOT EXISTS handling_code TEXT;
 CREATE TABLE IF NOT EXISTS screening_lists (
     list_name TEXT PRIMARY KEY,
     source TEXT NOT NULL,
@@ -111,6 +124,17 @@ ALTER TABLE screening_list_updates ADD COLUMN IF NOT EXISTS trigger TEXT NOT NUL
 -- The owner's answer of 1 November 2026: a refresh's re-screening counted per unit, and the words
 -- about the list alone (version, entries changed), which every unit may read.
 ALTER TABLE screening_list_updates ADD COLUMN IF NOT EXISTS list_words TEXT;
+-- ADR-146 Amendment 7 (the orchestrator's review): a list's marking, kept apart from its entries so
+-- an emptied list, or one loaded with no subscription, keeps it; a list with no row is OFFICIAL, P.
+CREATE TABLE IF NOT EXISTS screening_list_markings (
+    list_name TEXT PRIMARY KEY,
+    classification TEXT NOT NULL,
+    handling_code TEXT NOT NULL
+);
+INSERT INTO screening_list_markings (list_name, classification, handling_code)
+    SELECT DISTINCT ON (list_name) list_name, classification, COALESCE(handling_code, 'P')
+    FROM screening_entries WHERE classification IS NOT NULL
+    ORDER BY list_name ON CONFLICT (list_name) DO NOTHING;
 CREATE TABLE IF NOT EXISTS screening_list_update_units (
     update_id TEXT NOT NULL,
     org_unit TEXT NOT NULL,
@@ -149,6 +173,68 @@ def unit_words(list_words: str, screened_entries: int, counts: UnitCounts) -> st
     return words
 
 
+DEFAULT_CLASSIFICATION, DEFAULT_HANDLING_CODE = "OFFICIAL", "P"
+
+
+@dataclass(frozen=True)
+class ListClearance:
+    """The list markings one reader is cleared for (ADR-146 Amendment 7): every classification
+    their clearance dominates and every handling code they may receive. A list's match is written
+    in the reader's own unit (`kyc_rules.list_handling`), so a restricted code is one they hold;
+    `handling_readable` over a list's marking answers the same (`test_screening.py`). Passed to
+    every store read a person's work reaches, which filters in its `WHERE` (rule 3)."""
+
+    classifications: tuple[str, ...]
+    codes: tuple[str, ...]
+
+    @classmethod
+    def of(cls, principal: Principal, scheme: HandlingScheme) -> ListClearance:
+        return cls.of_clearance(principal.clearance, principal.receivable_handling_codes, scheme)
+
+    @classmethod
+    def of_clearance(
+        cls, clearance: str | None, receivable: Sequence[str], scheme: HandlingScheme
+    ) -> ListClearance:
+        """As `of`, from a clearance and handling codes alone: a directory account's, for one who
+        is to be given a list's schedule (`admin_people.markings_hold`)."""
+        try:
+            classifications = tuple(
+                c for c in scheme.classification
+                if clearance is not None and scheme.clears(clearance, c)
+            )  # fmt: skip
+        except Exception:  # noqa: BLE001 - a clearance outside the scheme clears nothing
+            classifications = ()
+        codes = tuple(
+            k for k, d in scheme.handling_codes.items()
+            if d.dissemination != "restricted" or k in receivable
+        )  # fmt: skip
+        return cls(classifications, codes)
+
+    def admits(self, classification: str | None, code: str | None) -> bool:
+        return (classification or DEFAULT_CLASSIFICATION) in self.classifications and (
+            code or DEFAULT_HANDLING_CODE
+        ) in self.codes
+
+
+class MarkingLowered(ValueError):
+    """A reload that would lower a list's marking, refused in words (the orchestrator's review,
+    item 8): a list loaded SECRET is never read again as OFFICIAL by loading its file without
+    one."""
+
+
+#: A list's marking in a query over `screening_entries` (`e`) or a table naming lists (`l`): the
+#: kept marking, else the entry's own, else OFFICIAL, P.
+def _admitted_sql(table: str, cls_param: int) -> str:
+    entry = table == "e"
+    cls = "COALESCE(m.classification" + (", e.classification" if entry else "") + ", 'OFFICIAL')"
+    code = "COALESCE(m.handling_code" + (", e.handling_code" if entry else "") + ", 'P')"
+    return f"{cls} = ANY(${cls_param}::text[]) AND {code} = ANY(${cls_param + 1}::text[])"
+
+
+def _markings_join(table: str) -> str:
+    return f" LEFT JOIN screening_list_markings m ON m.list_name = {table}.list_name"
+
+
 @dataclass(frozen=True)
 class ScheduledList:
     """A list with a refresh schedule, as the scheduler reads it."""
@@ -172,11 +258,17 @@ class ScreeningEntry:
     synthetic: bool = True
     #: Every other name the list gives (ADR-133 stage (c)); a name matches on any of them.
     aliases: tuple[str, ...] = ()
+    #: ADR-146 Amendment 7: the list's marking, which its listed party (and so each match on it)
+    #: carries: only a reader it clears is shown a match on the list. `None` is the default,
+    #: OFFICIAL with handling code P, as every list was marked before.
+    classification: str | None = None
+    handling_code: str | None = None
 
     def fingerprint(self) -> tuple[object, ...]:
         """What makes two versions of one entry the same entry: everything screening reads."""
         return (self.listing, self.entity_type, self.name, tuple(sorted(self.aliases)),
-                self.date_of_birth, self.country)  # fmt: skip
+                self.date_of_birth, self.country, self.classification,
+                self.handling_code)  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -291,13 +383,27 @@ class ScreeningListStore:
     async def close(self) -> None:
         await self._pool.close()
 
-    async def replace_list(self, list_name: str, entries: Sequence[ScreeningEntry]) -> int:
+    async def replace_list(
+        self, list_name: str, entries: Sequence[ScreeningEntry], *, scheme: HandlingScheme
+    ) -> int:
         """The named list, replaced whole in one transaction — a reload never leaves half of an
-        old list beside half of a new one."""
+        old list beside half of a new one. Refused (`MarkingLowered`), with nothing changed, where
+        the file's marking (none is OFFICIAL, P) is below the list's kept one or names another
+        handling code at the same classification: lowering a list is removing it and loading it
+        again, never a reload."""
         now = datetime.now(UTC)
+        new = _list_marking(entries)
         async with self._pool.acquire() as conn, conn.transaction():
+            kept = await _kept_marking(conn, list_name, lock=True)
+            if kept is not None and _lowers(scheme, kept, new):
+                raise MarkingLowered(
+                    f"“{list_name}” is held at {kept[0]} {kept[1]}; this file's marking "
+                    f"({new[0]} {new[1]}) would lower it, so nothing was loaded. Remove the list "
+                    "first to load it lower."
+                )
             await conn.execute("DELETE FROM screening_entries WHERE list_name = $1", list_name)
             await self._insert(conn, list_name, entries, now)
+            await _keep_marking(conn, list_name, new)
         return len(entries)
 
     @staticmethod
@@ -306,24 +412,59 @@ class ScreeningListStore:
     ) -> None:
         await conn.executemany(
             "INSERT INTO screening_entries (id, list_name, listing, entity_type, name, "
-            "date_of_birth, country, synthetic, loaded_at, aliases) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            "date_of_birth, country, synthetic, loaded_at, aliases, classification, "
+            "handling_code) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
             [
                 (e.id, list_name, e.listing, e.entity_type, e.name, e.date_of_birth,
-                 e.country, e.synthetic, now, list(e.aliases))
+                 e.country, e.synthetic, now, list(e.aliases), e.classification,
+                 e.handling_code)
                 for e in entries
             ],
         )  # fmt: skip
 
-    async def entries(self, entity_type: str) -> list[ScreeningEntry]:
-        """Reference data, read by the screening rules' evaluation only (never a route)."""
+    async def entries(self, entity_type: str, *, cleared: ListClearance) -> list[ScreeningEntry]:
+        """Reference data, read by the screening rules' evaluation and a sentence's preview as the
+        rule's deployer or the previewer, never a route: only the lists `cleared` admits, in the
+        query (ADR-146 Amendment 7, point 8; rule 3)."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, list_name, listing, entity_type, name, date_of_birth, country, "
-                "synthetic, aliases FROM screening_entries WHERE entity_type = $1 ORDER BY id",
-                entity_type,
-            )
+                "SELECT e.id, e.list_name, e.listing, e.entity_type, e.name, e.date_of_birth, "
+                "e.country, e.synthetic, e.aliases, "
+                "COALESCE(m.classification, e.classification) AS classification, "
+                "COALESCE(m.handling_code, e.handling_code) AS handling_code "
+                f"FROM screening_entries e{_markings_join('e')} "
+                f"WHERE e.entity_type = $1 AND {_admitted_sql('e', 2)} ORDER BY e.id",
+                entity_type, list(cleared.classifications), list(cleared.codes),
+            )  # fmt: skip
         return [_entry(r) for r in rows]
+
+    async def hidden(self, list_name: str, *, cleared: ListClearance) -> bool:
+        """Whether a list of this name is held at a marking `cleared` does not admit: a route
+        answers it as it answers a list no one subscribed, before it reads or changes anything."""
+        async with self._pool.acquire() as conn:
+            kept = await _kept_marking(conn, list_name)
+            if kept is None and await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM screening_lists WHERE list_name = $1) OR "
+                "EXISTS (SELECT 1 FROM screening_entries WHERE list_name = $1)",
+                list_name,
+            ):
+                # A list held with no marking is OFFICIAL, P, as every read of it takes it (the lane
+                # review of the second pass, defect 9: a reader below OFFICIAL could refresh it).
+                kept = (DEFAULT_CLASSIFICATION, DEFAULT_HANDLING_CODE)
+        return kept is not None and not cleared.admits(*kept)
+
+    async def markings(self, list_names: Collection[str]) -> dict[str, tuple[str, str]]:
+        """Each named list's kept marking, as it stands now (a list with none kept is left out, and
+        is OFFICIAL, P): what an audit entry recorded at an older marking is read by too."""
+        if not list_names:
+            return {}
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT list_name, classification, handling_code FROM screening_list_markings "
+                "WHERE list_name = ANY($1::text[])",
+                sorted(list_names),
+            )
+        return {r["list_name"]: (r["classification"], r["handling_code"]) for r in rows}
 
     # --- a list as a managed source (ADR-133 decision 4, stage (c)) ------------------------------
 
@@ -359,9 +500,18 @@ class ScreeningListStore:
             )
         return str(value or "local_development")
 
-    async def subscriptions(self) -> list[ScreeningListStatus]:
+    async def subscriptions(self, *, cleared: ListClearance | None) -> list[ScreeningListStatus]:
+        """Every subscribed list `cleared` admits, in the query (rule 3); `None` only for the
+        operator's own command and the scheduler, which read every list as the system."""
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch(f"{_LIST_SELECT} ORDER BY list_name")
+            if cleared is None:
+                rows = await conn.fetch(f"{_LIST_SELECT} ORDER BY list_name")
+            else:
+                rows = await conn.fetch(
+                    f"{_LIST_SELECT}{_markings_join('screening_lists')} "
+                    f"WHERE {_admitted_sql('l', 1)} ORDER BY screening_lists.list_name",
+                    list(cleared.classifications), list(cleared.codes),
+                )  # fmt: skip
         return [_status(r) for r in rows]
 
     async def apply_update(
@@ -381,9 +531,22 @@ class ScreeningListStore:
             )
             rows = await conn.fetch(
                 "SELECT id, list_name, listing, entity_type, name, date_of_birth, country, "
-                "synthetic, aliases FROM screening_entries WHERE list_name = $1",
+                "synthetic, aliases, classification, handling_code FROM screening_entries "
+                "WHERE list_name = $1",
                 list_name,
             )
+            # ADR-146 Amendment 7 (the lane review's item 10): a refresh's file carries no marking,
+            # so a marked list keeps the one it was loaded with, never dropped to OFFICIAL by an
+            # update of the same name; kept apart from the entries, so an emptied list keeps it too.
+            marked = await _kept_marking(conn, list_name)
+            if marked is not None:
+                entries = [
+                    e if e.classification is not None else replace(
+                        e, classification=marked[0], handling_code=marked[1],
+                    )
+                    for e in entries
+                ]  # fmt: skip
+                await _keep_marking(conn, list_name, marked)
             diff = diff_entries(
                 list_name, [_entry(r) for r in rows], entries,
                 previous_version=previous, version=version,
@@ -495,18 +658,30 @@ class ScreeningListStore:
             )
         return not done.endswith(" 0")
 
-    async def updates(self, *, org_unit: str, limit: int = 20) -> list[ScreeningListUpdate]:
-        """The latest refreshes, newest first, each counted for `org_unit` alone: the query joins
-        that unit's own counts and nothing else (rules 3 and 7)."""
+    async def updates(
+        self, *, org_unit: str, cleared: ListClearance, limit: int = 20
+    ) -> list[ScreeningListUpdate]:
+        """The latest refreshes of the lists `cleared` admits, newest first, each counted for
+        `org_unit` alone: the query joins that unit's own counts and nothing else (rules 3, 7)."""
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch(f"{_UPDATE_SELECT} ORDER BY u.at DESC, u.id DESC LIMIT $2",
-                                    org_unit, limit)  # fmt: skip
+            rows = await conn.fetch(
+                f"{_UPDATE_SELECT}{_markings_join('u')} WHERE {_admitted_sql('l', 3)} "
+                "ORDER BY u.at DESC, u.id DESC LIMIT $2",
+                org_unit, limit, list(cleared.classifications), list(cleared.codes),
+            )  # fmt: skip
         return [_update(r) for r in rows]
 
-    async def update_for(self, update_id: str, *, org_unit: str) -> ScreeningListUpdate | None:
-        """One refresh counted for `org_unit` alone, as `updates` counts it."""
+    async def update_for(
+        self, update_id: str, *, org_unit: str, cleared: ListClearance
+    ) -> ScreeningListUpdate | None:
+        """One refresh counted for `org_unit` alone, as `updates` counts it; none for a list
+        `cleared` does not admit."""
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(f"{_UPDATE_SELECT} WHERE u.id = $2", org_unit, update_id)
+            row = await conn.fetchrow(
+                f"{_UPDATE_SELECT}{_markings_join('u')} "
+                f"WHERE u.id = $2 AND {_admitted_sql('l', 3)}",
+                org_unit, update_id, list(cleared.classifications), list(cleared.codes),
+            )  # fmt: skip
         return _update(row) if row is not None else None
 
 
@@ -547,10 +722,57 @@ def _update(row: asyncpg.Record) -> ScreeningListUpdate:
 
 
 _LIST_SELECT = (
-    "SELECT list_name, source, location, dataset, synthetic, version, entry_count, updated_at, "
-    "attempted_at, failure, schedule_every, schedule_hour, schedule_weekday, schedule_owner "
-    "FROM screening_lists"
+    "SELECT screening_lists.list_name, source, location, dataset, synthetic, version, "
+    "entry_count, updated_at, attempted_at, failure, schedule_every, schedule_hour, "
+    "schedule_weekday, schedule_owner FROM screening_lists"
 )
+
+
+def _list_marking(entries: Sequence[ScreeningEntry]) -> tuple[str, str]:
+    """The marking a file gives its list (every entry carries the file's): none is OFFICIAL, P."""
+    first = entries[0] if entries else None
+    return (
+        (first.classification if first else None) or DEFAULT_CLASSIFICATION,
+        (first.handling_code if first else None) or DEFAULT_HANDLING_CODE,
+    )
+
+
+async def _kept_marking(
+    conn: asyncpg.Connection, list_name: str, *, lock: bool = False
+) -> tuple[str, str] | None:
+    """The list's kept marking, else its entries' (a list loaded before it was kept apart)."""
+    row = await conn.fetchrow(
+        "SELECT classification, handling_code FROM screening_list_markings WHERE list_name = $1"
+        + (" FOR UPDATE" if lock else ""),
+        list_name,
+    )
+    if row is None:
+        row = await conn.fetchrow(
+            "SELECT classification, COALESCE(handling_code, 'P') AS handling_code "
+            "FROM screening_entries WHERE list_name = $1 AND classification IS NOT NULL LIMIT 1",
+            list_name,
+        )
+    return (row["classification"], row["handling_code"]) if row is not None else None
+
+
+async def _keep_marking(conn: asyncpg.Connection, list_name: str, marking: tuple[str, str]) -> None:
+    await conn.execute(
+        "INSERT INTO screening_list_markings (list_name, classification, handling_code) "
+        "VALUES ($1, $2, $3) ON CONFLICT (list_name) DO UPDATE SET "
+        "classification = EXCLUDED.classification, handling_code = EXCLUDED.handling_code",
+        list_name, *marking,
+    )  # fmt: skip
+
+
+def _lowers(scheme: HandlingScheme, kept: tuple[str, str], new: tuple[str, str]) -> bool:
+    """A new marking below the kept one, or another handling code at the same classification
+    (a code is not ranked, so changing it is treated as lowering it: strict)."""
+    try:
+        old_rank = scheme.classification.index(kept[0])
+        new_rank = scheme.classification.index(new[0])
+    except ValueError:
+        return True
+    return new_rank < old_rank or (new_rank == old_rank and new[1] != kept[1])
 
 
 def _status(row: asyncpg.Record) -> ScreeningListStatus:
@@ -586,10 +808,13 @@ def _entry(r: asyncpg.Record) -> ScreeningEntry:
         id=r["id"], list_name=r["list_name"], listing=r["listing"],
         entity_type=r["entity_type"], name=r["name"], date_of_birth=r["date_of_birth"],
         country=r["country"], synthetic=r["synthetic"], aliases=tuple(r["aliases"] or ()),
+        classification=r["classification"], handling_code=r["handling_code"],
     )  # fmt: skip
 
 
 __all__ = [
+    "ListClearance",
+    "MarkingLowered",
     "ListDiff",
     "ScreeningEntry",
     "diff_entries",

@@ -1,0 +1,58 @@
+test_custom_roles_store.py and test_person_ownership_store.py live at 3a9f00a (OspreyFlow_Core tree 2431612baa0a433c4e329322d5634c285be61ea9), stack b under the rules lane's lease (taken 2026-11-13T11:53:07Z): the review of 7a1c760's live cases. Exit 0.
+Running on ospreyflow-test (stack b, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261113T115327Z-03aefbf3/log: .venv/bin/python -m pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py
+..........................................                               [100%]
+--------------------- 41 unmarked test(s) reached a store ----------------------
+tests/services/api/test_custom_roles_store.py::test_a_case_whose_other_author_answers_for_nothing_is_still_the_persons_to_transfer: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_a_lead_is_handed_to_a_member_only: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_a_persons_level_is_the_highest_they_hold_in_their_name_or_a_teams: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_a_refused_transfer_changes_nothing: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_a_role_is_versioned_and_its_rights_are_read_as_they_are_now: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_a_rule_goes_only_to_an_author_of_its_case: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_a_teams_level_is_gained_and_lost_with_membership: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_a_watch_never_goes_to_someone_already_watching_its_pattern: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_a_write_that_finds_its_item_changed_rolls_every_transfer_back: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_an_administrator_cleared_for_the_list_transfers_its_schedule: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_disable_moves_every_item_and_audits_each: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_the_cover_ends_on_its_day_and_the_lead_acts_again: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_the_people_lock_lets_one_holder_in_at_a_time: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_the_persons_covers_end_with_the_disable_and_are_audited: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_the_plan_lists_every_kind_owned_today_and_not_a_shared_case: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_the_rows_name_levels_through_a_team_and_cases_with_no_author: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_the_store_refuses_a_second_role_of_the_same_name: Postgres on port 55434
+tests/services/api/test_custom_roles_store.py::test_two_teams_never_share_a_name: Postgres on port 55434
+… and 21 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+0.65s setup    tests/services/api/test_custom_roles_store.py::test_two_units_each_transfer_their_share_and_only_then_is_nothing_left
+0.60s setup    tests/services/api/test_custom_roles_store.py::test_a_role_is_versioned_and_its_rights_are_read_as_they_are_now
+0.60s setup    tests/services/api/test_custom_roles_store.py::test_the_cover_ends_on_its_day_and_the_lead_acts_again
+0.59s setup    tests/services/api/test_custom_roles_store.py::test_a_lead_is_handed_to_a_member_only
+0.59s setup    tests/services/api/test_custom_roles_store.py::test_a_persons_level_is_the_highest_they_hold_in_their_name_or_a_teams
+0.58s setup    tests/services/api/test_custom_roles_store.py::test_a_teams_level_is_gained_and_lost_with_membership
+0.57s setup    tests/services/api/test_custom_roles_store.py::test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace
+0.57s setup    tests/services/api/test_custom_roles_store.py::test_a_rule_goes_only_to_an_author_of_its_case
+0.56s setup    tests/services/api/test_custom_roles_store.py::test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list
+0.55s setup    tests/services/api/test_custom_roles_store.py::test_the_people_lock_lets_one_holder_in_at_a_time
+0.55s setup    tests/services/api/test_custom_roles_store.py::test_an_administrator_cleared_for_the_list_transfers_its_schedule
+0.55s setup    tests/services/api/test_custom_roles_store.py::test_the_store_refuses_a_second_role_of_the_same_name
+0.55s setup    tests/services/api/test_custom_roles_store.py::test_the_rows_name_levels_through_a_team_and_cases_with_no_author
+0.55s setup    tests/services/api/test_custom_roles_store.py::test_disable_moves_every_item_and_audits_each
+0.54s setup    tests/services/api/test_custom_roles_store.py::test_the_persons_covers_end_with_the_disable_and_are_audited
+0.54s setup    tests/services/api/test_custom_roles_store.py::test_two_teams_never_share_a_name
+0.54s setup    tests/services/api/test_custom_roles_store.py::test_a_write_that_finds_its_item_changed_rolls_every_transfer_back
+0.54s setup    tests/services/api/test_custom_roles_store.py::test_a_watch_never_goes_to_someone_already_watching_its_pattern
+0.53s setup    tests/services/api/test_custom_roles_store.py::test_a_refused_transfer_changes_nothing
+0.52s setup    tests/services/api/test_custom_roles_store.py::test_a_case_whose_other_author_answers_for_nothing_is_still_the_persons_to_transfer
+0.51s setup    tests/services/api/test_custom_roles_store.py::test_the_plan_lists_every_kind_owned_today_and_not_a_shared_case
+0.38s setup    tests/services/api/test_person_ownership_store.py::test_an_item_above_the_administrators_clearance_is_never_named_nor_counted
+0.37s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[proposal_of_this_unit_on_another_units_case]
+0.36s setup    tests/services/api/test_person_ownership_store.py::test_a_list_schedule_the_administrator_is_cleared_for_is_not_withheld
+0.35s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[watch_on_no_dataset]
+0.35s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[board_elsewhere]
+0.35s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[proposal_elsewhere]
+0.35s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[proposal_of_another_unit_on_this_units_case]
+0.35s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[list_schedule_above]
+0.35s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[watch_above]
+42 passed in 23.82s
+Wall time: 25 s, exit 0 (stack b, the lease rules took at 2026-11-13T11:53:07Z; set-up before it 15 s)

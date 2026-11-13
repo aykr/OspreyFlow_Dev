@@ -45,6 +45,7 @@ from .rule_sentences import (
     sentence_of,
     sentence_words,
 )
+from .screening import ListClearance, ScreeningEntry
 
 if TYPE_CHECKING:
     from .rule_evaluation import Finding, RuleGate
@@ -199,7 +200,11 @@ async def _context(
         else:
             if gate.screening is None:
                 raise RuntimeError("this run has no screening lists to screen against")
-            entries[subject] = await gate.screening.entries(subject)
+            # ADR-146 Amendment 7 point 8 (the orchestrator's review, item 1): only the lists the
+            # deployer is cleared for, in the store's own query.
+            entries[subject] = await gate.screening.entries(
+                subject, cleared=ListClearance.of(deployer, gate.scheme)
+            )
     influencers, exclude, settings = await strength_context(
         gate.influencers, gate.investigation_id
     )
@@ -219,8 +224,18 @@ async def _context(
 
 
 def _findings(
-    rule: TypologyRule, deployer: Principal, hits: Sequence[Hit], said: str
+    rule: TypologyRule,
+    deployer: Principal,
+    hits: Sequence[Hit],
+    said: str,
+    screened: dict[str, Any] | None = None,
 ) -> list[Finding]:
+    """Each hit's finding. A subject matched to a screening list's entry (`screened`) rests on
+    that list without citing it, so the alert is marked at least as the list is
+    (`Finding.floor_handlings`) and shown to no reader not cleared for it: its subject alone would
+    tell a reader of it that a list they may not see matched (the lane review of the second pass,
+    defect 6; ADR-146 Amendment 7)."""
+    from .kyc_rules import list_handling
     from .rule_evaluation import Finding
 
     return [
@@ -232,6 +247,13 @@ def _findings(
             refs=hit.refs,
             words=f"{hit.words}. {said}",
             node_ids=[hit.node.id],
+            floor_handlings=tuple(
+                list_handling(entry, deployer)
+                for entry in [(screened or {}).get(hit.node.id)]
+                # A Studio list's rows are read within the rule's dataset (ADR-146 decision 3),
+                # not by a list marking: only a screening list's entry carries one.
+                if isinstance(entry, ScreeningEntry)
+            ),
         )
         for hit in hits
     ]
@@ -248,7 +270,9 @@ async def judge_sentence_rule(
     hits = await judge_sentence(
         rule, deployer, written, events, ctx, pattern=pattern, scheme=gate.scheme
     )
-    return _findings(rule, deployer, hits, sentence_words(params.sentence, gate.ontology))
+    return _findings(
+        rule, deployer, hits, sentence_words(params.sentence, gate.ontology), ctx.screened
+    )
 
 
 #: How far back a scheduled run reads: the day, or the week, since the last slot.
@@ -320,7 +344,9 @@ async def _judge_stored(
 
     raised = 0
     try:
-        for finding in _findings(rule, deployer, hits, sentence_words(sentence, gate.ontology)):
+        for finding in _findings(
+            rule, deployer, hits, sentence_words(sentence, gate.ontology), ctx.screened
+        ):
             if await gate.seen(finding):
                 continue
             await gate.raise_committed(finding)

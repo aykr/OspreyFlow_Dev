@@ -1,0 +1,8 @@
+Triage of the fourth pass's gates at 3a9f00a (lane/rules-lists on main e41d712), 13 Nov 2026.
+- 3a9f00a.live-disable.txt: test_custom_roles_store.py and test_person_ownership_store.py live on stack b: 42 passed.
+- lists/AM7_LIVE_RECORD.txt: L0 to L27 with L0b, L2b and L24b, 31 red, built and restored green (103).
+- 3a9f00a.test.txt, exit 2: four failures, none in a file this branch changes, each triaged at 999860a
+  (999860a.triage.txt): the GPU preflight (fails at main alike); the preflight stream's new
+  'access-key' check and the admin guide's settings appendix (x2) lacking `network.access_key`, both
+  main's 19c22fb. The doc-citations failure there is gone at e41d712.
+- 3a9f00a.ci.txt: make -k ci exit 0; schemas-check: 603 generated types match committed output.

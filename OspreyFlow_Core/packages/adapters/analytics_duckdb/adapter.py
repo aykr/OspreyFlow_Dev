@@ -64,7 +64,14 @@ from schemas.analytics import (
 from schemas.domain import Handling, Interval, Principal
 
 from .access_filter import AccessFilter, SqlPredicate
-from .alert_facts import FACT_COLUMNS, HANDLING_COLUMNS, alert_predicate, series_expression
+from .alert_facts import (
+    FACT_COLUMNS,
+    HANDLING_COLUMNS,
+    alert_predicate,
+    counted_handlings,
+    fact_rows,
+    series_expression,
+)
 from .schema import EVENT_COLUMNS
 
 #: Event columns a `CATEGORICAL` dimension may bucket by directly. Anything
@@ -349,7 +356,7 @@ class AnalyticsDuckDBAdapter:
             f"WHERE {predicate.where} GROUP BY period, series ORDER BY period, series NULLS FIRST",
             predicate.params,
         ).fetchall()
-        counted = f"alert_id IN (SELECT alert_id FROM alert_facts WHERE {predicate.where})"
+        counted = counted_handlings(predicate.where)
         handlings = [
             CountedHandling(
                 classification=str(c), handling_code=str(h), owning_unit=str(u), originator=str(o)
@@ -389,23 +396,14 @@ class AnalyticsDuckDBAdapter:
         try:
             self._con.execute(f"DELETE FROM alert_facts WHERE alert_id IN ({marks})", ids)
             self._con.execute(f"DELETE FROM alert_fact_handlings WHERE alert_id IN ({marks})", ids)
+            fact_rows_, rows = fact_rows(facts)
             self._con.executemany(
-                f"INSERT INTO alert_facts ({FACT_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                [
-                    [f.alert_id, f.investigation_scope, f.kind, f.rule, f.typology, f.severity,
-                     f.outcome, f.raised_at, f.owner_id, f.audience, f.team, f.dataset_id,
-                     0 if f.handlings is None else 1]
-                    for f in facts
-                ],
-            )  # fmt: skip
-            rows = [
-                [f.alert_id, h.classification, h.handling_code, h.owning_unit, h.originator]
-                for f in facts
-                for h in f.handlings or []
-            ]
+                f"INSERT INTO alert_facts ({FACT_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                fact_rows_,
+            )
             if rows:
                 self._con.executemany(
-                    f"INSERT INTO alert_fact_handlings ({HANDLING_COLUMNS}) VALUES (?,?,?,?,?)",
+                    f"INSERT INTO alert_fact_handlings ({HANDLING_COLUMNS}) VALUES (?,?,?,?,?,?,?)",
                     rows,
                 )
         except Exception:

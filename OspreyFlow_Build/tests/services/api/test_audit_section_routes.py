@@ -39,6 +39,7 @@ from services.api.promotion_ageing import (
     may_review,
 )
 
+from ontology.handling import load_uk_le_scheme
 from schemas.domain import Principal, RuleAuditEntry, RuleAuditPage
 
 from tests.services.api.test_principal_names import idp  # noqa: F401 - the fixture, used by name
@@ -69,22 +70,27 @@ class _Reader:
         self.asked: list[tuple[Principal, StreamFilters]] = []
         self.cases: list[bool] = []
         self.unit_of: dict[str, str] = {}
+        #: The lists' clearance each read was asked with (`stream`, then `writers`).
+        self.lists_cleared: list[Any] = []
+        self.writers_lists_cleared: list[Any] = []
 
     async def stream(self, reader: Principal, filters: StreamFilters, *, offset: int,
-                     limit: int, rights: Any = frozenset(),
-                     cases: bool = False) -> tuple[list[StreamRow], int]:  # fmt: skip
+                     limit: int, rights: Any = frozenset(), cases: bool = False,
+                     lists_cleared: Any = None) -> tuple[list[StreamRow], int]:  # fmt: skip
         self.asked.append((reader, filters))
         self.cases.append(cases)
+        self.lists_cleared.append(lists_cleared)
         return self.rows[offset : offset + limit], len(self.rows)
 
     async def model_history(self, filters: StreamFilters, *, offset: int, limit: int) -> Any:
         rows = [e for e in self.models if filters.who is None or e.who in filters.who]
         return rows[offset : offset + limit], len(rows)
 
-    async def writers(self, reader: Principal, *, cases: bool) -> set[str]:
+    async def writers(self, reader: Principal, *, cases: bool, lists_cleared: Any = None) -> set[str]:
         """As the real read narrows them (`test_audit_section_store.py` holds its SQL): the reader's
         unit's writers alone, and a case's writers only with `cases`; a row's unit is
         `unit_of`'s, the reader's own unless a test says otherwise."""
+        self.writers_lists_cleared.append(lists_cleared)
         return {
             r.principal_id for r in self.rows
             if self.unit_of.get(r.principal_id, reader.org_unit) == reader.org_unit
@@ -164,7 +170,8 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     state = {"principal_resolver": _Resolver(), "audit_section": reader, "audit": audit,
              "investigations": _Cases(), "principal_names": _Names(), "custom_roles": None,
              "promotion_ageing": ageing, "waiting_promotions": NoPromotionsYet(),
-             "graph": object(), "analytics": object(), "alerts_store": object()}  # fmt: skip
+             "graph": object(), "analytics": object(), "alerts_store": object(),
+             "handling_scheme": load_uk_le_scheme()}  # fmt: skip
     for name, value in state.items():
         monkeypatch.setattr(app.state, name, value, raising=False)
 
@@ -726,3 +733,19 @@ def test_recipients_are_asked_of_the_dataset_as_it_stands_now() -> None:
     assert asyncio.run(_promotion_recipients(fake, recorded)) == ["adm-2"]  # type: ignore[arg-type]
     datasets.held = {}
     assert asyncio.run(_promotion_recipients(fake, recorded)) == []  # type: ignore[arg-type]
+
+
+def test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance(
+    world: SimpleNamespace,
+) -> None:
+    """ADR-146 Amendment 7 (the orchestrator's re-check of lane/rules-lists at 6bfc8d6, must 3): an
+    entry naming a screening list is read only by a reader cleared for the list, in the read
+    (`audit_section._lists_clause`, its SQL proven in `test_audit_section_store.py`). The route asks
+    both the stream and the picker's writers with the reader's own `ListClearance`, never none and
+    never another's. Red with the route asking without it: None, which clears no list."""
+    from services.api.screening import ListClearance
+
+    response = world.client.get("/v1/admin/audit", headers=_as("adm-1"))
+    assert response.status_code == 200, response.text
+    expected = ListClearance.of(TOKENS["adm-1"], load_uk_le_scheme())
+    assert world.reader.lists_cleared == [expected] and world.reader.writers_lists_cleared == [expected]

@@ -1,0 +1,37 @@
+Triage of 00b24cc.live.txt (37 failed, 3450 passed, 94 skipped; stack b, rules' lease, 12 Nov 2026).
+Two are this branch's and are fixed; the other 35 are in no file this branch changes (git diff
+--name-only main...HEAD touches no rights, harness, worker, ticket, media, model or recogniser file)
+and are the same environment classes as 0eae072.live.triage.txt.
+
+This branch's (both in tests/ingest/test_kyc_rules.py, both passed at 0eae072, neither in the
+plants' selection, so the second pass's change of the close path reached them unseen):
+- test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record: asserted the store's
+  row reads "closing" after a refused approval. Since the owner's ruling a screening alert's
+  proposal is held on each citation, the stored row "claimed", and the proposer is served
+  "closing". The code is right; the expectation was the old storage. Now: the row as stored before
+  the approval (status and citations), and as served, "closing".
+- test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node: refused the
+  triage write at set_queue_triage, which a cited alert's approval no longer calls
+  (triage_citations does), so nothing was refused: "DID NOT RAISE". Now refused at both writes.
+Both shown red for their own reasons after the change, stack b, alert_queue.py planted and put back:
+the alert node's rename left out of the close's record -> "the alert names its confirmed node"
+failed; the record kept after a commit never sent -> "assert 1 == 0" (the record left). The whole
+file then: 27 passed (stack b), and again at the final head (gates/<head>.live-kyc.txt).
+
+Environment, not this change:
+- 9 (test_worker x3, test_ws_ticket x5, resolve/test_trigger overlap guard): the port guard refuses
+  127.0.0.1:6379 (stack a's valkey; stack a is off).
+- 13 model / recogniser (model_port x3 + vision x1 model_litellm, recognise_port x4 stanza, golden
+  set, phase 6 exit, witness statement): httpx ConnectError / RecogniserUnavailableError, no model
+  or stanza service on stack b.
+- 10 test_apply_env: 9 "apply did not get as far as writing the deployment environment file" (as at
+  0eae072), and test_the_demo_analyst_holds_the_studio_roles_the_ingest_flow_needs: the realm's
+  analyst lacks edit/publish/run_pipelines (main's Ingest Studio rights, not in this branch).
+- 4 test_media_blob: KeyError 'AZURE_STORAGE_ACCOUNT', media_blob not in the suite.
+- test_phase8_exit_criterion_end_to_end: failed the same way at main at 0eae072's triage (seed
+  returned 0 of 4 nodes).
+
+test_route_rights.py and the live files this change reaches, each among the 310 the run selected
+(test_screening_list_store.py, test_screening_list_routes.py, test_screening_refresh.py,
+test_list_refresh_schedule.py, the analytics conformance suite, the other test_kyc_rules.py cases),
+had no failure in this run.

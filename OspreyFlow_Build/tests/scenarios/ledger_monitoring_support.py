@@ -60,13 +60,22 @@ RECIPE = load_recipe(ledger.FIXTURES / ledger_monitoring.RECIPE)
 class LedgerGraph(AccessGraph):
     """See the module docstring."""
 
-    async def find_node(self, entity_type: str, field: str, value: str, principal: Any) -> Any:
+    async def find_node(
+        self, entity_type: str, field: str, value: str, principal: Any, *, also: Any = None
+    ) -> Any:
+        """As the port: the first node with the value and every `also` property (a screening
+        match's listed party is looked up by its list too, ADR-146 Amendment 7)."""
+
+        def fits(node: Any) -> bool:
+            return (node.type == entity_type and str(node.properties.get(field)) == value
+                    and all(str(node.properties.get(k)) == v for k, v in (also or {}).items()))  # fmt: skip
+
         for node in self._visible_nodes(principal).values():
-            if node.type == entity_type and str(node.properties.get(field)) == value:
+            if fits(node):
                 return self._node(node)
         # A write still open in the transaction (the engine finding what it has just made).
         for node in self.open_nodes:
-            if node.type == entity_type and str(node.properties.get(field)) == value:
+            if fits(node):
                 return self._node(node)
         return None
 

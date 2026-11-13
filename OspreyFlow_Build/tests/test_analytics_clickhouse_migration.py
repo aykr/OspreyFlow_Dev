@@ -14,7 +14,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from adapters.analytics_clickhouse.schema import CREATE_EVENTS_TABLE, create_tables
+from adapters.analytics_clickhouse.schema import (
+    ADD_ALERT_FACT_SETS,
+    CREATE_ALERT_FACT_HANDLINGS_TABLE,
+    CREATE_ALERT_FACTS_TABLE,
+    CREATE_EVENTS_TABLE,
+    create_tables,
+)
 
 
 class RecordingClient:
@@ -44,9 +50,8 @@ class RecordingClient:
         asked = params[0]
         if asked != self.database:
             return [[0]]
-        wanted = [column for column in ("load_id",) if f"'{column}'" in sql]
-        present = self.tables.get("events", set())
-        return [[sum(1 for c in wanted if c in present)]]
+        table, column = str(params[1]), str(params[2])  # each column asked about by name
+        return [[1 if column in self.tables.get(table, set()) else 0]]
 
     def alters(self) -> list[str]:
         return [s for s in self.statements if s.lstrip().startswith("ALTER")]
@@ -89,10 +94,31 @@ async def test_the_column_is_looked_for_in_the_clients_own_database() -> None:
     real_rows = client.rows
 
     async def rows(sql: str, params: Sequence[object] = ()) -> list[list[Any]]:
-        seen.extend(params)
+        seen.append(params[0])  # the database each question asks about
         return await real_rows(sql, params)
 
     client.rows = rows  # type: ignore[method-assign]
     await create_tables(client)  # type: ignore[arg-type]
-    assert seen == ["osprey"]
+    assert seen and set(seen) == {"osprey"}
     assert len(client.alters()) == 1
+
+
+def _columns(create: str, *dropped: str) -> set[str]:
+    body = create[create.index("(") + 1 : create.rindex(") ENGINE")]
+    return {line.split()[0].rstrip(",") for line in body.splitlines() if line.strip()} - set(dropped)
+
+
+async def test_a_store_made_before_the_alert_facts_sets_issues_their_three_alters_once() -> None:
+    """ADR-146 Amendment 7 (the orchestrator's review, item 6): `fact_id` and `grp` added to a store
+    made before them, each only where it is missing, and nothing at the next start. Red with the
+    `ALTER`s issued unasked (the gate at 3511480: a store that had them altered at every start)."""
+    client = RecordingClient({
+        "events": _columns(CREATE_EVENTS_TABLE),
+        "alert_facts": _columns(CREATE_ALERT_FACTS_TABLE, "fact_id"),
+        "alert_fact_handlings": _columns(CREATE_ALERT_FACT_HANDLINGS_TABLE, "fact_id", "grp"),
+    })  # fmt: skip
+    await create_tables(client)  # type: ignore[arg-type]
+    assert client.alters() == [statement for _, _, statement in ADD_ALERT_FACT_SETS]
+    assert {"fact_id", "grp"} <= client.tables["alert_fact_handlings"]
+    await create_tables(client)  # type: ignore[arg-type]
+    assert len(client.alters()) == 3, "the second start finds the columns and asks for nothing"

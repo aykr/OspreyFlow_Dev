@@ -28,7 +28,10 @@ What a mistake would do, and the case that catches it (each shown red at its rea
   read of `audit_log` (and in one process deadlocks):
   `test_a_second_start_does_not_wait_behind_a_read_of_the_audit`;
 - the engines' history truncated at its own read's 200: `test_the_engines_history_pages_with_its_true_total`;
-- "once" left to the caller: `test_an_overdue_alert_is_raised_once_by_the_database`.
+- "once" left to the caller: `test_an_overdue_alert_is_raised_once_by_the_database`;
+- an entry naming a screening list (a list's schedule moved, subscribed, scheduled or refreshed) read,
+  counted or offered in the picker to a reader not cleared for the list (ADR-146 Amendment 7):
+  `test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list`.
 """
 
 from __future__ import annotations
@@ -49,7 +52,9 @@ from services.api.investigations import InvestigationStore
 from services.api.model_admin import PostgresModelAdminAudit
 from services.api.promotion_ageing import PendingPromotion, PromotionAgeingStore
 from services.api.rule_evaluation import RULE_AUDIT_ACTIONS
+from services.api.screening import ListClearance, ScreeningListStore
 
+from ontology.handling import load_uk_le_scheme
 from schemas.admin import PromotionOverdueAlert
 from schemas.domain import Principal
 from schemas.model_admin import ModelAdminEntry
@@ -78,6 +83,9 @@ async def world() -> AsyncIterator[SimpleNamespace]:
     models = await PostgresModelAdminAudit.connect(dsn)
     reader = await AuditSectionReader.connect(dsn)
     ageing = await PromotionAgeingStore.connect(dsn)
+    # The screening lists' tables, which the read admits a list's entries by (ADR-146 Amendment 7).
+    lists = await ScreeningListStore.connect(dsn)
+    await lists.close()
     raw = await asyncpg.connect(dsn=dsn)
     case_a = await cases.create(ANA_A, name="Op Kestrel")
     case_b = await cases.create(ANA_B, name="Op Harrier")
@@ -526,3 +534,45 @@ async def test_the_build_survives_any_failure_and_close_still_closes(
     await asyncio.sleep(0.2)
     await failing.close()  # raises nothing
     assert failing._pool.is_closing()
+
+
+async def test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list(
+    world: SimpleNamespace,
+) -> None:
+    """The orchestrator's re-check of lane/rules-lists at 6bfc8d6, must 3 (rules 3 and 4, each way):
+    a SECRET list's schedule moved by a cleared administrator, and its refresh by another person,
+    are left out of the stream, its total and its picker for an OFFICIAL administrator of the same
+    unit, with nothing in their place; a plain list's entries, and the rest, are read as before. A
+    SECRET administrator reads every one. Red with `_lists_clause` gone: the OFFICIAL administrator
+    read "A secret list" in the transfer's words, counted both, and was offered its refresher."""
+    scheme = load_uk_le_scheme()
+    await world.raw.execute(
+        "INSERT INTO screening_list_markings (list_name, classification, handling_code) "
+        "VALUES ('A secret list', 'SECRET', 'P')"
+    )
+    await _record(world, A, "transfer_owned_item", None, {
+        "from": "ana-a", "to": "sam-a", "kind": "list_schedule", "id": "A secret list",
+        "list_classification": "SECRET", "list_handling_code": "P"})  # fmt: skip
+    refresher = Principal(id="ref-a", clearance="SECRET", org_unit="unit-a", roles=["data_engineer"])
+    await _record(world, refresher, "screening_list_refreshed", None, {"list_name": "A secret list"})
+    await _record(world, A, "transfer_owned_item", None,
+                  {"from": "ana-a", "to": "bea-a", "kind": "list_schedule", "id": "Plain list"})  # fmt: skip
+    await _record(world, A, "set_person_roles", None, {"user_id": "ana-a"})
+    low = Principal(id="adm-low", clearance="OFFICIAL", org_unit="unit-a", roles=["osprey-admin"])
+
+    def _named(rows: list[object]) -> list[str]:
+        return sorted(str(r.resolved_query.get("id") or r.resolved_query.get("list_name") or r.action)  # type: ignore[attr-defined]
+                      for r in rows)  # fmt: skip
+
+    rows, total = await world.reader.stream(low, StreamFilters(), offset=0, limit=50, rights=FULL,
+                                            cases=False, lists_cleared=ListClearance.of(low, scheme))  # fmt: skip
+    assert _named(rows) == ["Plain list", "set_person_roles"] and total == 2
+    assert "A secret list" not in str([r.resolved_query for r in rows])
+    assert await world.reader.writers(low, cases=False, lists_cleared=ListClearance.of(low, scheme)) == {"adm-a"}
+    rows, total = await world.reader.stream(A, StreamFilters(), offset=0, limit=50, rights=FULL,
+                                            cases=False, lists_cleared=ListClearance.of(A, scheme))  # fmt: skip
+    assert _named(rows) == ["A secret list", "A secret list", "Plain list", "set_person_roles"] and total == 4
+    assert await world.reader.writers(A, cases=False, lists_cleared=ListClearance.of(A, scheme)) == {"adm-a", "ref-a"}
+    # A caller naming no clearance is shown no list's entry at all.
+    rows, total = await world.reader.stream(A, StreamFilters(), offset=0, limit=50, rights=FULL, cases=False)
+    assert _named(rows) == ["set_person_roles"] and total == 1

@@ -851,6 +851,34 @@ class AlertMode(StrEnum):
     NOTIFY_STUB = "notify_stub"
 
 
+class AlertCitation(BaseModel):
+    """ADR-146 Amendment 7: one of the things an alert cites that a reader may be cleared for or
+    not, apart from the rest of it: a screening alert's match on one list (the listed party and the
+    scored `SAME_AS` to it). The alert is shown to a reader who may read everything it rests on
+    outside its citations and at least one citation; each citation is shown only to a reader who
+    may read every node and link it names, and a hidden one is left out of the alert as served
+    (its words, its ids and how many there are), so the alert never says which lists, or how many,
+    a reader cannot see (rule 3)."""
+
+    #: The words this citation adds to the alert's: for a screening match, "“PETROVA, Elena” on a
+    #: sanctions list (<list>), score 0.95".
+    words: str
+    node_ids: list[NodeId] = Field(default_factory=list)
+    edge_ids: list[EdgeId] = Field(default_factory=list)
+    #: The owner's ruling of 12 November 2026 (about 15:30): a close decides only the citations its
+    #: closer may read. Each citation keeps its own decision: `open`; `closing`, proposed by
+    #: `close_proposed_by` with `disposition` and `disposition_reason`, waiting for a second person
+    #: (ADR-133 decision 7); or `closed`, decided by `decided_by`. A reader is shown the alert
+    #: closed when every citation they may read is closed (`alerts.as_read`), so a closer cleared
+    #: for one list sees it closed while it stays open, for a reader cleared for the other.
+    status: Literal["open", "closing", "closed"] = "open"
+    disposition: AlertDisposition | None = None
+    disposition_reason: str | None = None
+    decided_by: str | None = None
+    decided_at: datetime | None = None
+    close_proposed_by: str | None = None
+
+
 class Alert(BaseModel):
     """A persisted alert row — `06_DECISIONS.md` ADR-038/039, Phase 7 Stage 6a's own foundation.
     Stores references to evidence, never copies (`rule_id` plus `referent_node_ids`) — access is
@@ -924,6 +952,12 @@ class Alert(BaseModel):
     suppressed_until: date | None = None
     suppress_reason: str | None = None
     suppressed_by: str | None = None
+    #: ADR-146 Amendment 7: what the alert cites that a reader is cleared for one by one (a
+    #: screening alert's match on each list). Every citation's ids are also among
+    #: `referent_node_ids` and `edge_ids` as stored; as served to a reader, a citation they may not
+    #: read is gone from all three, and `words` names only the ones they may (`alerts.as_read`).
+    #: Empty for every other alert, which is all-or-nothing as before (ADR-039).
+    citations: list[AlertCitation] = Field(default_factory=list)
 
 
 #: ADR-126 decision 1: the domain packs a case can carry, defined once here. `ontology.packs`
@@ -2116,6 +2150,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     PatternEdge,
     PatternQuery,
     SavedPattern,
+    AlertCitation,
     Alert,
     Hotlist,
     Monitor,

@@ -1,0 +1,10 @@
+Triage of the fifth pass's gates at 9b3d07f (lane/rules-lists on main 68568c3), 13 Nov 2026.
+- 9b3d07f.live-files.txt: test_custom_roles_store.py, test_person_ownership_store.py and
+  test_audit_section_store.py live on stack b: 65 passed.
+- lists/AM7_LIVE_RECORD.txt: L0 to L28 with L0b, L2b, L24b, L24c and L24d, 34 red, built and restored
+  green (147).
+- lists/AM7_RED_RECORD.txt: P1 to P52 with P3b, P49b and P51b, 55 red, none broken.
+- 9b3d07f.test.txt, exit 2: one failure, test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_
+  never_shown_as_a_pass (the server has a GPU; fails at main alike, 086ed55.triage.txt). main's
+  access-key failures of 999860a and 3a9f00a are gone at 68568c3.
+- 9b3d07f.ci.txt: make -k ci exit 0; schemas-check: 603 generated types match committed output.

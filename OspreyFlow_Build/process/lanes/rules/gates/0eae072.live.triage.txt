@@ -1,0 +1,21 @@
+Triage of 0eae072.live.txt (36 failed, 3419 passed, 94 skipped; stack c, rules' lease, 12 Nov 2026).
+None of the 36 is in a file this branch changes; each is accounted for below.
+
+- 9 (test_worker x3, test_ws_ticket x5, resolve/test_trigger overlap guard): the port guard refuses
+  127.0.0.1:6379 (stack a's valkey; stack a is off). These files reach valkey on the default port,
+  not the leased stack's: the harness, not this change.
+- 11 model / recogniser (model_port x4 model_litellm, recognise_port x4 stanza, golden set, phase 6
+  exit, witness statement): httpx ConnectError, no model or stanza service on stack c.
+- 9 test_apply_env: "apply did not get as far as writing the deployment environment file" (the
+  ospreyflow apply harness on the server: ports preflight refused, a missing deployment.env).
+- 4 test_media_blob: KeyError 'AZURE_STORAGE_ACCOUNT' and media_blob not in the suite (no Azure
+  blob settings on stack c).
+- test_phase7_stage6c_watch_routes::test_a_run_referencing_over_two_hundred_nodes_…: the alert on
+  an older node of the same fixed number (residue of an earlier case in the same run). Re-run alone
+  on stack c at 0eae072: passed.
+- test_phase8_exit_criterion_end_to_end (seed returned 0 of 4 nodes): re-run alone at 0eae072:
+  failed; re-run alone at main (5675103) on the same stack: failed the same way. Not this change.
+
+The files this change reaches (test_kyc_rules.py, test_screening_*.py, test_alerts.py,
+test_list_refresh_schedule.py, the scenarios importing ledger_monitoring_support) and
+test_route_rights.py all passed in this run.

@@ -1,0 +1,3 @@
+Running on ospreyflow-test (stack b, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261112T214544Z-fb0bb908/log: .venv/bin/python ../OspreyFlow_Build/process/lanes/rules/lists/am7_live_plants.py
+built: RED - FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_one_owner_on_two_lists_raises_one_alert_citing_both | 1 failed, 102 passed, 1 warning in 106.68s (0:01:46)
+Wall time: 108 s, exit 1 (stack b, the lease rules took at 2026-11-12T21:45:29Z; set-up before it 12 s)

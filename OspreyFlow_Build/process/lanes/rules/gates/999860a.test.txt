@@ -1,0 +1,1424 @@
+rules lists: make test at 999860a (on main 19c22fb; OspreyFlow_Core tree c738be0800146956cd0c6cf97ae6852d86571bbd), offline on the server, after the verification of e911b90, 2026-11-13T07:26:56Z
+Running on ospreyflow-test (stack offline, osprey-runs/rules/OspreyFlow_Build/), logged at osprey-runs/rules.meta/runs/20261113T072707Z-a2bb5b3e/log: make test
+( cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/rules/OspreyFlow_Build/pytest.ini -n auto --dist loadgroup --ignore=../OspreyFlow_Build/tests/conformance/graph_port --ignore=../OspreyFlow_Build/tests/test_worker_isolation_live.py --ignore=../OspreyFlow_Build/tests/conformance/analytics_port --ignore=../OspreyFlow_Build/tests/test_analytics_clickhouse.py --ignore=../OspreyFlow_Build/tests/test_media_blob.py --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness_clickhouse.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_runs.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_schedule_executor.py --ignore=../OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_pins_lifespan.py --ignore=../OspreyFlow_Build/tests/services/api/test_schedule_notice.py --ignore=../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py --ignore=../OspreyFlow_Build/tests/conformance/model_port --ignore=../OspreyFlow_Build/tests/golden --ignore=../OspreyFlow_Build/tests/ingest --ignore=../OspreyFlow_Build/tests/scenarios/test_hmp_graph.py --ignore=../OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py --ignore=../OspreyFlow_Build/tests/services/api/test_sites_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_tile_cache.py --ignore=../OspreyFlow_Build/tests/services/api/test_prefetch.py --ignore=../OspreyFlow_Build/tests/geocoder/test_match_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_assessments.py --ignore=../OspreyFlow_Build/tests/test_case_seed.py --ignore=../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_disable_l38_transfers.py --ignore=../OspreyFlow_Build/tests/services/api/test_admin_converted_views.py --ignore=../OspreyFlow_Build/tests/services/api/test_audit_section_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_notes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_brief_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_entity_pictures.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_type_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_suppression.py --ignore=../OspreyFlow_Build/tests/services/api/test_assessment_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_export.py --ignore=../OspreyFlow_Build/tests/services/api/test_export_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_valkey_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_ws_ticket.py --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py --ignore=../OspreyFlow_Build/tests/services/api/test_change_stream.py --ignore=../OspreyFlow_Build/tests/services/api/test_alerts.py --ignore=../OspreyFlow_Build/tests/services/api/test_pattern_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_hotlists.py --ignore=../OspreyFlow_Build/tests/services/api/test_history_relabel.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitors.py --ignore=../OspreyFlow_Build/tests/services/api/test_evaluation.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py --ignore=../OspreyFlow_Build/tests/resolve/test_projection_access_control.py --ignore=../OspreyFlow_Build/tests/resolve/test_trigger.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6a_glass_surfaces.py --ignore=../OspreyFlow_Build/tests/services/api/test_access.py --ignore=../OspreyFlow_Build/tests/services/api/test_pid_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_dossier_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_review.py --ignore=../OspreyFlow_Build/tests/services/api/test_review_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_compute_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_no_corpus_count_reveals_a_secret_link.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_seed_against_the_vault.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_link_weight_on_the_wire.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_explain_cluster_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_manual_resolution_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_resolution_threshold_access_control.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py --ignore=../OspreyFlow_Build/tests/scenarios/test_fixture_corp_shape.py --ignore=../OspreyFlow_Build/tests/services/api/test_worker.py --ignore=../OspreyFlow_Build/tests/services/api/test_worker_replicas.py --ignore=../OspreyFlow_Build/tests/services/api/test_revoked_principal_precheck.py --ignore=../OspreyFlow_Build/tests/harness/test_restore_exit_test.py --ignore=../OspreyFlow_Build/tests/harness/test_workspace_bundle.py --ignore=../OspreyFlow_Build/tests/harness/test_sustained_load.py --ignore=../OspreyFlow_Build/tests/harness/test_bundle_exit_test.py --ignore=../OspreyFlow_Build/tests/harness/test_harness_image.py --ignore=../OspreyFlow_Build/tests/harness/test_access_key_proxy.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py --ignore=../OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_client_row_limit.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py --ignore=../OspreyFlow_Build/tests/harness/test_identity.py --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_graph.py --ignore=../OspreyFlow_Build/tests/services/api/test_dataset_names_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_dataset_egress_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_explore_whats_new.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_export.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_packs.py --ignore=../OspreyFlow_Build/tests/services/api/test_questions_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_report_freshness.py --ignore=../OspreyFlow_Build/tests/services/api/test_reports.py --ignore=../OspreyFlow_Build/tests/services/api/test_route_rights.py --ignore=../OspreyFlow_Build/tests/services/api/test_add_by_identifiers_live.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_sources_withheld_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_sources_withheld_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_address_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_pid_scale_seed_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_starter_run.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_trend_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_facts.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_store_query.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py --ignore=../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_list_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_refresh.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_strength_influencer_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_connection_strength_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_schedule.py --ignore=../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py --ignore=../OspreyFlow_Build/tests/services/api/test_load_checks.py --ignore=../OspreyFlow_Build/tests/services/api/test_pin_calls_refresh_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_row_key_withdrawal_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_refresh_incremental_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_watermark_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_writes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_composite_writes_live.py --ignore=../OspreyFlow_Build/tests/test_migrate_cases_to_one_dataset_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_target_models_store.py --ignore=../OspreyFlow_Build/tests/test_seed_target_models_store.py --ignore=../OspreyFlow_Build/tests/test_make_home_cases_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_views_store.py --ignore=../OspreyFlow_Build/tests/test_migrate_branches_to_views_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_unconverted_case_merge_live.py --ignore=../OspreyFlow_Build/tests/resolve/test_trigger_layers.py --ignore=../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py --ignore=../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py --ignore=../OspreyFlow_Build/tests/test_seed_links_replace.py --ignore=../OspreyFlow_Build/tests/test_stamp_datasets.py --ignore=../OspreyFlow_Build/tests/test_stamp_records.py --ignore=../OspreyFlow_Build/tests/test_seed_ledger_screening_rule.py --ignore=../OspreyFlow_Build/tests/harness/test_apply_env.py --ignore=../OspreyFlow_Build/tests/services/api/test_object_transfer.py --ignore=../OspreyFlow_Build/tests/harness/test_first_admin.py --ignore=../OspreyFlow_Build/tests/services/api/test_postgres_dsn.py --ignore=../OspreyFlow_Build/tests/conformance/media_store/test_suite.py --ignore=../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py --ignore=../OspreyFlow_Build/tests/services/api/test_board_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py --ignore=../OspreyFlow_Build/tests/test_migrate_rules_to_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_grading_change_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_grading_registry.py --ignore=../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py --ignore=../OspreyFlow_Build/tests/services/api/test_list_connector_store.py --ignore=../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_live.py ../OspreyFlow_Build/tests --ignore=../OspreyFlow_Build/tests/services/api/test_promotion_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_external_runs_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_entra_people_live.py ) || touch /root/osprey-runs/rules/OspreyFlow_Build/.make-test-failed
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+worker_isolation: 15 workers, Valkey databases 1 to 15, no stores made (offline)
+rootdir: /root/osprey-runs/rules/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+created: 15/15 workers
+15 workers [13137 items]
+
+........................................................................ [  0%]
+........................................................................ [  1%]
+........................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  2%]
+........................................................................ [  3%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+........................................................................ [  4%]
+.......................................................................s [  5%]
+........................................................................ [  6%]
+........................................................................ [  6%]
+........................................................................ [  7%]
+........................................................................ [  7%]
+........................................................................ [  8%]
+........................................................................ [  8%]
+........................................................................ [  9%]
+........................................................................ [  9%]
+........................................................................ [ 10%]
+...................................................sss.s................ [ 10%]
+..............................................sssssss................... [ 11%]
+................................s.......s..................ss..........s [ 12%]
+s....................................................................... [ 12%]
+........................................................................ [ 13%]
+........................................................................ [ 13%]
+........................................................................ [ 14%]
+........................................................................ [ 14%]
+.........................................ss...s......................... [ 15%]
+........................................................................ [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 16%]
+........................................................................ [ 17%]
+........................................................................ [ 18%]
+........................................................................ [ 18%]
+........................................................................ [ 19%]
+........................................................................ [ 19%]
+........................................................................ [ 20%]
+........................................................................ [ 20%]
+........................................................................ [ 21%]
+........................................................................ [ 21%]
+........................................................................ [ 22%]
+........................................................................ [ 23%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+........................................................................ [ 24%]
+........................................................................ [ 25%]
+........................................................................ [ 25%]
+........................................................................ [ 26%]
+........................................................................ [ 26%]
+........................................................................ [ 27%]
+........................................................................ [ 27%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 29%]
+........................................................................ [ 30%]
+........................................................................ [ 30%]
+........................................................................ [ 31%]
+......................................................F................. [ 31%]
+........................................s............................... [ 32%]
+.........................................................F.............. [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 33%]
+........................................................................ [ 34%]
+........................................................................ [ 35%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 36%]
+........................................................................ [ 37%]
+........................................................................ [ 37%]
+........................................................................ [ 38%]
+........................................................................ [ 38%]
+........................................................................ [ 39%]
+........................................................................ [ 40%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 43%]
+........................................................................ [ 44%]
+........................................................................ [ 44%]
+........................................................................ [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 46%]
+........................................................................ [ 47%]
+........................................................................ [ 47%]
+........................................................................ [ 48%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 50%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+........................................................................ [ 53%]
+........................................................................ [ 54%]
+..................................s..................................... [ 54%]
+........................................................................ [ 55%]
+........................................................................ [ 55%]
+........................................................................ [ 56%]
+........................................................................ [ 56%]
+........................................................................ [ 57%]
+.....................................................s..s............... [ 58%]
+.........s.............................................................. [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+......................s..s.s............................................ [ 60%]
+........................................................................ [ 61%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 65%]
+........................................................................ [ 66%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 69%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+........................................................................ [ 70%]
+........................................................................ [ 71%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 75%]
+........................................................................ [ 75%]
+........................................................................ [ 76%]
+........................................................................ [ 76%]
+........................................................................ [ 77%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+........................................................................ [ 78%]
+........................................................................ [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 80%]
+........................................................................ [ 81%]
+........................................................................ [ 81%]
+........................................................................ [ 82%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 83%]
+........................................................................ [ 84%]
+........................................................................ [ 84%]
+........................................................................ [ 85%]
+......................................................F........F........ [ 86%]
+........................................................................ [ 86%]
+........................................................................ [ 87%]
+........................................................................ [ 87%]
+........................................................................ [ 88%]
+........................................................................ [ 88%]
+........................................................................ [ 89%]
+........................................................................ [ 89%]
+........F............................................................... [ 90%]
+........................................................................ [ 90%]
+........................................................................ [ 91%]
+.......................s................................................ [ 92%]
+........................................................................ [ 92%]
+........................................................................ [ 93%]
+..................sss................................................... [ 93%]
+........................................................................ [ 94%]
+........................................................................ [ 94%]
+........................................................................ [ 95%]
+........................................................................ [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 97%]
+........................................................................ [ 97%]
+..................................s..................................... [ 98%]
+........................................................................ [ 98%]
+........................................................................ [ 99%]
+........................................................................ [ 99%]
+.................................                                        [100%]
+=================================== FAILURES ===================================
+__________ test_the_stream_reports_every_check_in_order_once_rendered __________
+[gw4] linux -- Python 3.12.3 /root/osprey-runs/rules/OspreyFlow_Core/.venv/bin/python
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6350/popen-gw4/test_the_stream_reports_every_0')
+
+    def test_the_stream_reports_every_check_in_order_once_rendered(tmp_path: Path) -> None:
+        config_path = tmp_path / "osprey.yaml"
+        out_root = tmp_path / "generated"
+        client = _client(config_path, out_root)
+        client.put("/api/config", json={"profile": "local-lite"})
+        _generate(client)
+    
+        response = client.get("/api/preflight/stream")
+        events = _events(response.text)
+>       assert [e["check"] for e in events] == [
+            "memory",
+            "disk",
+            "gpu",
+            "ports",
+            "container-runtime",
+            "cluster-connectivity",
+            "interpreter",
+            "bind-address",
+            "basemap",
+            "duckdb-lock",
+            "oidc-audience",
+        ]
+E       AssertionError: assert ['memory', 'd...ctivity', ...] == ['memory', 'd...ctivity', ...]
+E         
+E         Left contains one more item: 'access-key'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py:63: AssertionError
+__________ test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass __________
+[gw4] linux -- Python 3.12.3 /root/osprey-runs/rules/OspreyFlow_Core/.venv/bin/python
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6350/popen-gw4/test_gpu_is_skipped_on_this_pl0')
+
+    def test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass(tmp_path: Path) -> None:
+        """`05_DEPLOYMENT.md` §2.1's own "skipped-with-reason (never a pass)" — the brief's named
+        skipped case, on the real platform this suite actually runs on."""
+        config_path = tmp_path / "osprey.yaml"
+        out_root = tmp_path / "generated"
+        client = _client(config_path, out_root)
+        client.put("/api/config", json={"profile": "local-lite"})
+        _generate(client)
+    
+        events = {e["check"]: e for e in _events(client.get("/api/preflight/stream").text)}
+>       assert events["gpu"]["status"] == "skip"
+E       AssertionError: assert 'pass' == 'skip'
+E         
+E         - skip
+E         + pass
+
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py:110: AssertionError
+__ test_the_settings_appendix_is_the_schemas_own[10_ADMINISTRATION_GUIDE.md] ___
+[gw10] linux -- Python 3.12.3 /root/osprey-runs/rules/OspreyFlow_Core/.venv/bin/python
+
+name = '10_ADMINISTRATION_GUIDE.md'
+
+    @each_guide
+    def test_the_settings_appendix_is_the_schemas_own(name: str) -> None:
+>       assert admin_guide_options.guide_copy(GUIDES[name]) == admin_guide_options.reference(), (
+            "the guide's appendix A differs from the schema: run "
+            "`python -m tools.admin_guide_options --write` and read what changed"
+        )
+E       AssertionError: the guide's appendix A differs from the schema: run `python -m tools.admin_guide_options --write` and read what changed
+E       assert '| Option | V... install. |\n' == '| Option | V... install. |\n'
+E         
+E         Skipping 19872 identical leading characters in diff, use -v to show
+E           ace. |
+E         - | `network.access_key` | bool | false | Small over https:// only: the front proxy asks every browser for a shared key (the browser's own user name and key box) on all three names before anything loads, and every answer says noindex. The key's bcrypt hash is set on the server by `python -m harness.access_key set <the deployment's folder>`, never here. Default: false. |
+E           | `map` | section or none | none | The basemaps the map offers. |
+E           | `map.default` | str | required | The provider the map open...
+E         
+E         ...Full output truncated (92 lines hidden), use '-vv' to show
+
+../OspreyFlow_Build/tests/test_admin_guide.py:29: AssertionError
+____ test_the_settings_appendix_is_the_schemas_own[administration-guide.md] ____
+[gw14] linux -- Python 3.12.3 /root/osprey-runs/rules/OspreyFlow_Core/.venv/bin/python
+
+name = 'administration-guide.md'
+
+    @each_guide
+    def test_the_settings_appendix_is_the_schemas_own(name: str) -> None:
+>       assert admin_guide_options.guide_copy(GUIDES[name]) == admin_guide_options.reference(), (
+            "the guide's appendix A differs from the schema: run "
+            "`python -m tools.admin_guide_options --write` and read what changed"
+        )
+E       AssertionError: the guide's appendix A differs from the schema: run `python -m tools.admin_guide_options --write` and read what changed
+E       assert '| Option | V... install. |\n' == '| Option | V... install. |\n'
+E         
+E         Skipping 19872 identical leading characters in diff, use -v to show
+E           ace. |
+E         - | `network.access_key` | bool | false | Small over https:// only: the front proxy asks every browser for a shared key (the browser's own user name and key box) on all three names before anything loads, and every answer says noindex. The key's bcrypt hash is set on the server by `python -m harness.access_key set <the deployment's folder>`, never here. Default: false. |
+E           | `map` | section or none | none | The basemaps the map offers. |
+E           | `map.default` | str | required | The provider the map open...
+E         
+E         ...Full output truncated (92 lines hidden), use '-vv' to show
+
+../OspreyFlow_Build/tests/test_admin_guide.py:29: AssertionError
+_____________________ test_the_repository_itself_is_clean ______________________
+[gw5] linux -- Python 3.12.3 /root/osprey-runs/rules/OspreyFlow_Core/.venv/bin/python
+
+    def test_the_repository_itself_is_clean() -> None:
+        """The gate's current state, asserted so a new broken citation fails a test rather than
+        waiting to be noticed by accident — which is how all three of the originals were found."""
+        broken = find_broken()
+    
+>       assert broken == [], "new citation(s) name a file that does not exist:\n  " + "\n  ".join(
+            broken
+        )
+E       AssertionError: new citation(s) name a file that does not exist:
+E           process/lanes/platform-b/stateless/REPORT.md:17: cites 'scripts/stack_lease.sh', which does not exist
+E       assert ['process/lan...es not exist'] == []
+E         
+E         Left contains one more item: "process/lanes/platform-b/stateless/REPORT.md:17: cites 'scripts/stack_lease.sh', which does not exist"
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_doc_citations_check.py:156: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: 15 warnings
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/cli/test_no_make_for_operators.py: 1 warning
+tests/harness/test_env_writers_whole.py: 2 warnings
+tests/test_live_select.py: 3 warnings
+tests/test_seed_recipe_methods_confined.py: 9 warnings
+  <unknown>:468: SyntaxWarning: invalid escape sequence '\.'
+
+tests/scenarios/test_pid_plan.py::test_no_pid_number_is_produced_by_any_other_fixture_or_seed
+  /root/osprey-runs/rules/OspreyFlow_Build/tests/scenarios/test_pid_plan.py:1971: UserWarning: no generator produces a prison-number-shaped value, so the prison numbers' disjointness from other generators is untested
+    warnings.warn(
+
+tests/services/api/test_analyst_layer.py: 4 warnings
+tests/services/api/test_datasets.py: 4 warnings
+tests/services/api/test_drawn_datasets.py: 3 warnings
+tests/services/api/test_link_change_routes.py: 3 warnings
+tests/services/api/test_pattern_ask.py: 3 warnings
+tests/services/api/test_pattern_conditions_routes.py: 9 warnings
+tests/services/api/test_resolution_routes.py: 1 warning
+tests/services/api/test_rule_sentence_routes.py: 3 warnings
+tests/services/api/test_rule_standards_routes.py: 1 warning
+tests/services/api/test_schedule_admin_routes.py: 1 warning
+tests/services/api/test_sites_routes.py: 1 warning
+tests/services/api/test_studio_map_routes.py: 1 warning
+tests/services/api/test_studio_publish_routes.py: 4 warnings
+tests/services/api/test_studio_recipe_routes.py: 2 warnings
+tests/services/api/test_studio_schedule_routes.py: 4 warnings
+tests/services/api/test_studio_staging_routes.py: 2 warnings
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+tests/services/api/test_cloud_connector_access.py::test_a_read_past_the_byte_cap_is_refused_with_its_typed_error_and_writes_nothing[s3]
+tests/services/api/test_cloud_connector_access.py::test_a_host_off_the_egress_allow_list_is_never_reached[athena]
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[s3]
+tests/services/api/test_cloud_connector_access.py::test_a_read_past_the_byte_cap_is_refused_with_its_typed_error_and_writes_nothing[athena]
+tests/services/api/test_cloud_connector_access.py::test_a_host_off_the_egress_allow_list_is_never_reached[s3]
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[athena]
+tests/services/api/test_connector_routes.py::test_a_source_whose_first_read_is_refused_is_not_registered
+  /root/osprey-runs/rules/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:11793: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise _connector_refused(refused, principal) from refused
+
+tests/services/api/test_cloud_sources_declared.py: 20 warnings
+tests/services/api/test_connector_private_hosts.py: 1 warning
+tests/services/api/test_connector_routes.py: 1 warning
+  /root/osprey-runs/rules/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:10029: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise _connector_refused(refused, principal) from refused
+
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[s3]
+tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[s3]
+tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[athena]
+tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[athena]
+tests/services/api/test_connector_routes.py::test_refresh_now_tells_a_source_author_fixed_words_and_audits_why
+  /root/osprey-runs/rules/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:11850: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise _connector_refused(refused, principal) from refused
+
+tests/services/api/test_connection_binding.py::test_a_secret_belongs_to_one_connection
+tests/services/api/test_connector_routes.py::test_a_connector_source_lands_as_its_one_file
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+tests/services/api/test_list_connector_routes.py::test_a_location_outside_the_ingest_folder_is_refused_on_naming
+tests/services/api/test_list_connector_routes.py::test_the_deployment_lists_are_for_whoever_may_load_screening_lists
+tests/services/api/test_list_connector_routes.py::test_a_dataset_s_own_list_is_imported_from_its_own_files
+tests/services/api/test_sites_routes.py::test_grid_cannot_be_set_before_control_points
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_connector_routes.py::test_a_registration_never_overwrites_a_file_and_leaves_none_when_refused
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /root/osprey-runs/rules/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9915: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+tests/services/api/test_connector_routes.py::test_only_an_administrator_is_given_a_refusal_s_own_words
+  /root/osprey-runs/rules/OspreyFlow_Build/tests/services/api/test_connector_routes.py:459: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    admin = _connector_refused(refused, PEOPLE["admin"])
+
+tests/services/api/test_connector_routes.py::test_only_an_administrator_is_given_a_refusal_s_own_words
+  /root/osprey-runs/rules/OspreyFlow_Build/tests/services/api/test_connector_routes.py:462: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    author = _connector_refused(refused, PEOPLE[person])
+
+tests/services/api/test_connector_routes.py::test_a_source_whose_first_read_is_refused_is_not_registered
+  /root/osprey-runs/rules/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:11638: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    made = await _register_through_connection(
+
+tests/services/api/test_drawn_datasets.py::test_its_highest_marking_is_within_the_makers_clearance
+  /root/osprey-runs/rules/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:10400: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await _make_drawn(
+
+tests/services/api/test_investigation_access_routes.py::test_a_grantee_name_must_be_a_plain_non_empty_account_name
+tests/services/api/test_investigation_access_routes.py::test_a_grantee_name_must_be_a_plain_non_empty_account_name
+  /root/osprey-runs/rules/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:4331: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    grantee = _grantee(account_id)
+
+tests/services/api/test_model_engines.py::test_a_request_naming_a_refused_engine_is_answered_in_words_with_a_4xx
+  /usr/lib/python3.12/asyncio/events.py:88: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    self._context.run(self._callback, *self._args)
+
+tests/services/api/test_no_corpus_counts_on_the_wire.py::test_a_delta_the_stream_sends_never_carries_corpus_counts[DeltaViewOverCap]
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/pydantic/main.py:587: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Unexpected too few items present in tuple)
+    return self.__pydantic_serializer__.to_json(
+
+tests/services/api/test_studio_recipe_routes.py::test_deploy_refuses_a_keyless_pipeline_over_a_watched_source_in_words
+  /root/osprey-runs/rules/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:13199: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key([recipe.label])
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /root/osprey-runs/rules/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12353: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /root/osprey-runs/rules/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12287: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+157.85s call     tests/schemas/test_drift_gate.py::test_committed_generated_types_match_current_models
+129.98s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_restore_stopped_between_its_renames_is_never_overwritten
+128.97s setup    tests/cloud_platform_backup/test_restore_graph.py::test_the_set_replaces_the_live_database_and_the_old_one_goes
+128.79s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_failed_put_back_says_where_each_copy_is_and_never_that_it_was_put_back
+128.63s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_restore_failing_before_the_swap_leaves_the_live_database_as_it_was[check-refuses-the restored database is not the set's]
+128.43s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_killed_runs_restoring_folder_is_cleared_and_the_restore_goes_on
+127.95s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_restore_failing_before_the_swap_leaves_the_live_database_as_it_was[no-zip-no set's zip at]
+127.66s setup    tests/cloud_platform_backup/test_restore_graph.py::test_an_old_copy_that_cannot_be_removed_is_said_plainly
+127.57s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_deployment_whose_database_was_lost_gets_the_set
+105.23s call     tests/schemas/test_drift_gate.py::test_drift_gate_detects_a_changed_model
+86.43s setup    tests/harness/test_organisation_sign_in.py::test_the_printed_redirect_uri_is_the_one_keycloak_sends@serial
+54.12s call     tests/conduit_common/test_s3_settings.py::test_on_an_instance_role_no_client_sends_a_key
+48.41s setup    tests/scenarios/test_pid_files.py::test_the_call_file_carries_a_seeded_duration_direction_and_running_sequence
+48.16s setup    tests/scenarios/test_pid_files.py::test_the_mess_counts_go_red_for_one_duplicate_fewer
+41.32s setup    tests/scenarios/test_pid_files.py::test_reading_every_file_reconstructs_the_demo_plan_at_each_moment
+40.35s call     tests/services/api/test_deployment_ceiling.py::test_a_load_at_the_ceiling_passes
+40.01s call     tests/services/api/test_deployment_ceiling.py::test_with_no_ceiling_set_a_secret_row_loads_as_before
+39.34s call     tests/test_seed_pid.py::test_the_seed_and_check_warn_while_resolution_is_on_and_say_nothing_when_off
+39.29s call     tests/services/api/test_deployment_ceiling.py::test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing
+39.12s call     tests/cloud_platform_backup/test_restore_graph.py::test_the_check_refuses_every_damage_arcadedb_itself_opens_with_a_warning
+34.98s setup    tests/scenarios/test_pid_files.py::test_the_call_file_has_exactly_the_planted_mess_at_the_recorded_positions
+33.50s call     tests/scenarios/test_pid_plan.py::test_the_rows_dates_are_the_shared_instants_spans_and_constants
+31.69s setup    tests/scenarios/test_pid_files.py::test_the_first_row_of_every_number_in_each_file_is_the_plans_own_form
+31.65s call     tests/scenarios/test_pid_files.py::test_the_round_trip_goes_red_for_one_call_row_dropped
+27.15s call     tests/test_seed_pid.py::test_a_brief_that_is_not_there_makes_the_seed_exit_non_zero
+26.28s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[development]
+24.46s call     tests/test_seed_pid.py::test_a_second_seed_over_a_case_that_has_them_writes_none
+24.25s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production-bedrock]
+24.11s call     tests/test_seed_pid.py::test_every_write_of_the_seed_carries_the_id_it_was_told_to_run_as
+23.95s call     tests/cp_policy_check/test_rendered_terraform.py::test_a_reference_to_nothing_is_refused
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_the_stream_reports_every_check_in_order_once_rendered
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_the_settings_appendix_is_the_schemas_own[10_ADMINISTRATION_GUIDE.md]
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_the_settings_appendix_is_the_schemas_own[administration-guide.md]
+FAILED ../OspreyFlow_Build/tests/test_doc_citations_check.py::test_the_repository_itself_is_clean
+==== 5 failed, 13098 passed, 34 skipped, 132 warnings in 519.00s (0:08:39) =====
+make live-collect || touch /root/osprey-runs/rules/OspreyFlow_Build/.make-test-failed
+make[1]: Entering directory '/root/osprey-runs/rules/OspreyFlow_Build'
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/rules/OspreyFlow_Build/pytest.ini --collect-only -qq -p no:cacheprovider $(cd /root/osprey-runs/rules/OspreyFlow_Build && ../OspreyFlow_Core/.venv/bin/python -m tools.live_select --all | sed 's|^|../OspreyFlow_Build/|')
+tests/adapters/graph_arcadedb/test_client_row_limit.py: 3
+tests/adapters/graph_arcadedb/test_datasets_index.py: 4
+tests/adapters/graph_arcadedb/test_sources_withheld_live.py: 4
+tests/conformance/analytics_port/test_guard.py: 2
+tests/conformance/analytics_port/test_suite.py: 272
+tests/conformance/graph_port/test_analyst_layer.py: 2
+tests/conformance/graph_port/test_bulk_loader.py: 46
+tests/conformance/graph_port/test_composite_write_to_member_node.py: 4
+tests/conformance/graph_port/test_dataset_footprints.py: 8
+tests/conformance/graph_port/test_guard.py: 3
+tests/conformance/graph_port/test_promotion.py: 17
+tests/conformance/graph_port/test_schema_batch_live.py: 7
+tests/conformance/graph_port/test_suite.py: 284
+tests/conformance/graph_port/test_type_aliases.py: 5
+tests/conformance/media_store/test_suite.py: 18
+tests/conformance/model_port/test_guard.py: 5
+tests/conformance/model_port/test_laurium_key_live.py: 1
+tests/conformance/model_port/test_laurium_reads_a_real_model_live.py: 3
+tests/conformance/model_port/test_suite.py: 12
+tests/conformance/model_port/test_suite_extract.py: 8
+tests/conformance/model_port/test_suite_vision.py: 2
+tests/conformance/recognise_port/test_suite.py: 4
+tests/connectors/test_sql_connector_live.py: 16
+tests/geocoder/test_match_live.py: 1
+tests/golden/test_golden_ask_to_search.py: 1
+tests/golden/test_golden_set.py: 1
+tests/harness/test_access_key_proxy.py: 60
+tests/harness/test_apply_env.py: 10
+tests/harness/test_bundle_exit_test.py: 1
+tests/harness/test_first_admin.py: 6
+tests/harness/test_harness_image.py: 7
+tests/harness/test_identity.py: 7
+tests/harness/test_restore_drawn_layer.py: 2
+tests/harness/test_restore_exit_test.py: 9
+tests/harness/test_six_screen_live_exit.py: 2
+tests/harness/test_sustained_load.py: 1
+tests/harness/test_workspace_bundle.py: 7
+tests/ingest/test_account_ref_engine.py: 4
+tests/ingest/test_alert_evidence_withheld_live.py: 38
+tests/ingest/test_build_local_basemap_end_to_end.py: 1
+tests/ingest/test_case_gazetteer_copies_live.py: 10
+tests/ingest/test_case_gazetteer_routes_live.py: 1
+tests/ingest/test_committed_recipes_pin.py: 55
+tests/ingest/test_crs_reprojection.py: 5
+tests/ingest/test_dedup_key.py: 21
+tests/ingest/test_deduplicate_problems.py: 10
+tests/ingest/test_deployment_ceiling_staged_live.py: 2
+tests/ingest/test_document_holds_its_own_text.py: 21
+tests/ingest/test_document_holds_its_own_text_live.py: 1
+tests/ingest/test_events_carry_their_load.py: 2
+tests/ingest/test_fuzzy_match.py: 14
+tests/ingest/test_fuzzy_same_as_live.py: 2
+tests/ingest/test_gazetteer_ids_withheld_live.py: 1
+tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py: 6
+tests/ingest/test_gazetteer_place_search_live.py: 4
+tests/ingest/test_handling_from_columns.py: 30
+tests/ingest/test_handling_from_columns_live.py: 7
+tests/ingest/test_handling_from_columns_review.py: 67
+tests/ingest/test_handling_override.py: 5
+tests/ingest/test_handling_read_paths.py: 15
+tests/ingest/test_held_content.py: 11
+tests/ingest/test_kyc_rules.py: 27
+tests/ingest/test_link_spans.py: 10
+tests/ingest/test_load_record_created_and_merged.py: 17
+tests/ingest/test_load_report_counts_links.py: 1
+tests/ingest/test_load_report_markings.py: 10
+tests/ingest/test_long_run_keeps_its_transaction_live.py: 1
+tests/ingest/test_map_admin_build_end_to_end.py: 2
+tests/ingest/test_merging_graph_counts_writes.py: 4
+tests/ingest/test_merging_graph_merges_as_the_adapter_does.py: 7
+tests/ingest/test_message_content.py: 5
+tests/ingest/test_metering.py: 8
+tests/ingest/test_named_packs.py: 8
+tests/ingest/test_node_preview_access.py: 3
+tests/ingest/test_occurred_at_event_position.py: 2
+tests/ingest/test_optional_bindings.py: 9
+tests/ingest/test_osm_gazetteer_connector.py: 4
+tests/ingest/test_osm_gazetteer_recipe_end_to_end.py: 2
+tests/ingest/test_ownership.py: 3
+tests/ingest/test_pattern_rules.py: 5
+tests/ingest/test_phase7_exit.py: 1
+tests/ingest/test_phase7_exit_live.py: 1
+tests/ingest/test_phase8_exit.py: 2
+tests/ingest/test_pid_monitoring_recipes.py: 5
+tests/ingest/test_pid_monitoring_storyline_live.py: 1
+tests/ingest/test_pid_r5_cost.py: 2
+tests/ingest/test_pid_recipe_r1.py: 11
+tests/ingest/test_pid_recipe_r10.py: 5
+tests/ingest/test_pid_recipe_r11.py: 6
+tests/ingest/test_pid_recipe_r12.py: 5
+tests/ingest/test_pid_recipe_r13.py: 5
+tests/ingest/test_pid_recipe_r14.py: 5
+tests/ingest/test_pid_recipe_r15.py: 5
+tests/ingest/test_pid_recipe_r16.py: 5
+tests/ingest/test_pid_recipe_r17.py: 4
+tests/ingest/test_pid_recipe_r2.py: 5
+tests/ingest/test_pid_recipe_r3.py: 6
+tests/ingest/test_pid_recipe_r4.py: 5
+tests/ingest/test_pid_recipe_r5.py: 11
+tests/ingest/test_pid_recipe_r6.py: 10
+tests/ingest/test_pid_recipe_r7.py: 7
+tests/ingest/test_pid_recipe_r8.py: 4
+tests/ingest/test_pid_recipe_r9.py: 7
+tests/ingest/test_pid_recipes_pass_rules.py: 230
+tests/ingest/test_pid_seed_live.py: 4
+tests/ingest/test_pid_seed_order.py: 7
+tests/ingest/test_pipeline_extract_markings.py: 3
+tests/ingest/test_pipeline_graph.py: 10
+tests/ingest/test_pipeline_run.py: 14
+tests/ingest/test_recipe_engine_end_to_end.py: 15
+tests/ingest/test_recipe_rules.py: 19
+tests/ingest/test_reference_list_rows.py: 7
+tests/ingest/test_reference_match_guard.py: 13
+tests/ingest/test_referenced_in_change_stream.py: 10
+tests/ingest/test_release_bundle.py: 19
+tests/ingest/test_remaining_gazetteers.py: 7
+tests/ingest/test_repoint_journal_callers_live.py: 35
+tests/ingest/test_report_found_by_message_id_live.py: 1
+tests/ingest/test_rerun_events.py: 2
+tests/ingest/test_revert_load.py: 64
+tests/ingest/test_risk.py: 5
+tests/ingest/test_row_elements.py: 6
+tests/ingest/test_row_keys.py: 35
+tests/ingest/test_rule_standards_routes_live.py: 2
+tests/ingest/test_rule_writes_in_the_record.py: 7
+tests/ingest/test_run_writes_each_link_once.py: 29
+tests/ingest/test_run_writes_each_link_once_live.py: 3
+tests/ingest/test_run_yields_the_loop.py: 5
+tests/ingest/test_site_grid_connector.py: 3
+tests/ingest/test_site_grid_recipe_end_to_end.py: 2
+tests/ingest/test_snapshot_withdrawal.py: 20
+tests/ingest/test_sql_transform.py: 112
+tests/ingest/test_staged_counts.py: 6
+tests/ingest/test_staged_pipeline_run.py: 9
+tests/ingest/test_staged_provenance_live.py: 3
+tests/ingest/test_staged_run.py: 12
+tests/ingest/test_staging.py: 5
+tests/ingest/test_staging_catalogue.py: 30
+tests/ingest/test_staging_golden.py: 19
+tests/ingest/test_staging_marked_rows.py: 22
+tests/ingest/test_staging_pipeline_nodes.py: 10
+tests/ingest/test_structured_transform_parts.py: 7
+tests/ingest/test_studio_publish_pipeline.py: 8
+tests/ingest/test_studio_run_events.py: 1
+tests/ingest/test_studio_run_geometries.py: 6
+tests/ingest/test_subscribed_has_no_default.py: 7
+tests/ingest/test_transaction_keepalive_live.py: 2
+tests/ingest/test_transform_connector_defaults.py: 18
+tests/ingest/test_typologies.py: 6
+tests/ingest/test_typology_rule_routes.py: 13
+tests/ingest/test_typology_rules.py: 19
+tests/ingest/test_verify_dry_run.py: 4
+tests/ingest/test_visits_pipeline_fixture.py: 2
+tests/ingest/test_watermark.py: 12
+tests/ingest/test_wrong_type_rejects_the_row.py: 2
+tests/resolve/test_projection_access_control.py: 1
+tests/resolve/test_trigger.py: 5
+tests/resolve/test_trigger_layers.py: 3
+tests/scenarios/test_fixture_corp_shape.py: 6
+tests/scenarios/test_hmp_graph.py: 2
+tests/scenarios/test_ledger_graph.py: 6
+tests/scenarios/test_ledger_monitoring_storyline.py: 28
+tests/scenarios/test_phase3_working_set.py: 5
+tests/scenarios/test_phase6_extraction_and_resolution.py: 1
+tests/scenarios/test_phase6a_glass_surfaces.py: 1
+tests/scenarios/test_phase7_stage6c_watch_routes.py: 11
+tests/scenarios/test_phase8_exit_criterion_end_to_end.py: 2
+tests/scenarios/test_phase8_exit_over_the_wire.py: 27
+tests/scenarios/test_pid_monitoring_storyline.py: 19
+tests/scenarios/test_witness_statement_extraction.py: 1
+tests/services/api/test_access.py: 1
+tests/services/api/test_add_by_identifiers_live.py: 4
+tests/services/api/test_admin_converted_views.py: 1
+tests/services/api/test_alert_address_live.py: 1
+tests/services/api/test_alert_close_approval.py: 8
+tests/services/api/test_alert_facts.py: 8
+tests/services/api/test_alert_view_explains_live.py: 2
+tests/services/api/test_alerts.py: 11
+tests/services/api/test_analyst_layer_store.py: 10
+tests/services/api/test_assessment_routes.py: 9
+tests/services/api/test_assessments.py: 13
+tests/services/api/test_audit_section_store.py: 21
+tests/services/api/test_board_store.py: 8
+tests/services/api/test_case_brief_store.py: 12
+tests/services/api/test_case_queue_reads.py: 2
+tests/services/api/test_case_views_store.py: 7
+tests/services/api/test_case_writes_store.py: 2
+tests/services/api/test_change_stream.py: 4
+tests/services/api/test_composite_writes_live.py: 11
+tests/services/api/test_custom_roles_store.py: 21
+tests/services/api/test_dataset_egress_store.py: 9
+tests/services/api/test_dataset_names_store.py: 9
+tests/services/api/test_datasets_store.py: 13
+tests/services/api/test_disable_l38_transfers.py: 15
+tests/services/api/test_dossier_access_control.py: 2
+tests/services/api/test_drawn_watch_queue_live.py: 5
+tests/services/api/test_entity_pictures.py: 23
+tests/services/api/test_entra_people_live.py: 19
+tests/services/api/test_evaluation.py: 16
+tests/services/api/test_explore_whats_new.py: 3
+tests/services/api/test_export.py: 16
+tests/services/api/test_export_routes.py: 5
+tests/services/api/test_external_runs_live.py: 12
+tests/services/api/test_grading_change_live.py: 1
+tests/services/api/test_grading_registry.py: 1
+tests/services/api/test_history_relabel.py: 18
+tests/services/api/test_hotlists.py: 10
+tests/services/api/test_investigation_access_store.py: 42
+tests/services/api/test_link_changes_store.py: 2
+tests/services/api/test_link_changes_withheld_live.py: 1
+tests/services/api/test_link_notes_store.py: 6
+tests/services/api/test_link_type_store.py: 8
+tests/services/api/test_list_connector_store.py: 3
+tests/services/api/test_list_refresh_schedule.py: 9
+tests/services/api/test_load_checks.py: 9
+tests/services/api/test_monitoring_dashboard.py: 6
+tests/services/api/test_monitoring_queue.py: 23
+tests/services/api/test_monitoring_routes.py: 15
+tests/services/api/test_monitoring_settings.py: 9
+tests/services/api/test_monitors.py: 7
+tests/services/api/test_object_transfer.py: 5
+tests/services/api/test_pack_alert_item.py: 11
+tests/services/api/test_pack_export.py: 6
+tests/services/api/test_pack_store.py: 4
+tests/services/api/test_pack_store_query.py: 4
+tests/services/api/test_packs.py: 16
+tests/services/api/test_pattern_store.py: 11
+tests/services/api/test_person_ownership_store.py: 18
+tests/services/api/test_pid_access_control.py: 8
+tests/services/api/test_pid_scale_seed_live.py: 4
+tests/services/api/test_pin_calls_refresh_live.py: 1
+tests/services/api/test_postgres_dsn.py: 2
+tests/services/api/test_prefetch.py: 7
+tests/services/api/test_promotion_store.py: 16
+tests/services/api/test_promotion_sweep_live.py: 2
+tests/services/api/test_questions_store.py: 3
+tests/services/api/test_recipe_pins_lifespan.py: 1
+tests/services/api/test_recipe_run_ledger.py: 2
+tests/services/api/test_recipe_runs.py: 46
+tests/services/api/test_report_freshness.py: 3
+tests/services/api/test_reports.py: 12
+tests/services/api/test_review.py: 7
+tests/services/api/test_review_store.py: 10
+tests/services/api/test_revoked_principal_precheck.py: 10
+tests/services/api/test_route_rights.py: 5
+tests/services/api/test_row_key_withdrawal_ledger.py: 16
+tests/services/api/test_rule_drafts_store.py: 11
+tests/services/api/test_rule_editor_routes.py: 10
+tests/services/api/test_rule_maker_checker_routes.py: 8
+tests/services/api/test_rule_maker_checker_store.py: 10
+tests/services/api/test_rule_schedule.py: 11
+tests/services/api/test_run_metering_ledger.py: 3
+tests/services/api/test_schedule_executor.py: 55
+tests/services/api/test_schedule_notice.py: 1
+tests/services/api/test_schedule_notices_needs_you.py: 5
+tests/services/api/test_scheduler_lifespan.py: 1
+tests/services/api/test_screening_list_routes.py: 16
+tests/services/api/test_screening_list_store.py: 13
+tests/services/api/test_screening_refresh.py: 15
+tests/services/api/test_sentence_rule_store.py: 2
+tests/services/api/test_sites_store.py: 7
+tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py: 1
+tests/services/api/test_source_refresh_incremental_live.py: 2
+tests/services/api/test_source_refresh_snapshot_live.py: 5
+tests/services/api/test_source_watermark_ledger.py: 3
+tests/services/api/test_sources_withheld_routes.py: 1
+tests/services/api/test_starter_run.py: 4
+tests/services/api/test_statelessness.py: 2
+tests/services/api/test_statelessness_clickhouse.py: 1
+tests/services/api/test_strength_influencer_routes.py: 9
+tests/services/api/test_strength_sentence_rules.py: 5
+tests/services/api/test_studio_load_stamps_its_case_dataset_live.py: 3
+tests/services/api/test_studio_recipe_datasets_store.py: 4
+tests/services/api/test_studio_recipes_store.py: 84
+tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py: 1
+tests/services/api/test_subscribed_lookup_live.py: 2
+tests/services/api/test_suppression.py: 5
+tests/services/api/test_target_models_store.py: 7
+tests/services/api/test_tile_cache.py: 4
+tests/services/api/test_trend_store.py: 1
+tests/services/api/test_unconverted_case_merge_live.py: 2
+tests/services/api/test_valkey_store.py: 60
+tests/services/api/test_watch_datasets_store.py: 4
+tests/services/api/test_worker.py: 4
+tests/services/api/test_worker_replicas.py: 4
+tests/services/api/test_ws_ticket.py: 5
+tests/services/api/working_set/test_compute_access_control.py: 1
+tests/services/api/working_set/test_connection_strength_access_control.py: 6
+tests/services/api/working_set/test_explain_cluster_access_control.py: 2
+tests/services/api/working_set/test_link_weight_on_the_wire.py: 1
+tests/services/api/working_set/test_manual_resolution_access_control.py: 1
+tests/services/api/working_set/test_no_corpus_count_reveals_a_secret_link.py: 1
+tests/services/api/working_set/test_resolution_threshold_access_control.py: 1
+tests/services/api/working_set/test_seed_against_the_vault.py: 3
+tests/services/report_sync/test_report_sync.py: 9
+tests/test_analytics_clickhouse.py: 15
+tests/test_case_seed.py: 13
+tests/test_make_home_cases_store.py: 4
+tests/test_media_blob.py: 5
+tests/test_migrate_branches_to_views_store.py: 2
+tests/test_migrate_cases_to_one_dataset_store.py: 6
+tests/test_migrate_rules_to_datasets_store.py: 2
+tests/test_seed_ledger_screening_rule.py: 4
+tests/test_seed_links_replace.py: 1
+tests/test_seed_target_models_store.py: 3
+tests/test_stamp_datasets.py: 11
+tests/test_stamp_records.py: 4
+tests/test_worker_isolation_live.py: 2
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+make[1]: Leaving directory '/root/osprey-runs/rules/OspreyFlow_Build'
+make -C ../OspreyFlow_Core test-js || touch /root/osprey-runs/rules/OspreyFlow_Build/.make-test-failed
+make[1]: Entering directory '/root/osprey-runs/rules/OspreyFlow_Core'
+npm test --workspace apps/workspace
+
+> @ospreyflow/workspace@0.0.0 test
+> vitest run
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/root/osprey-runs/rules/OspreyFlow_Core/apps/workspace[39m
+
+ [32m✓[39m src/color/textContrast.test.ts [2m([22m[2m41 tests[22m[2m)[22m[32m 178[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeAttributes.test.ts [2m([22m[2m57 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m src/questions/QuestionsPanel.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 727[2mms[22m[39m
+ [32m✓[39m src/ingest/sources/sources.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 904[2mms[22m[39m
+   [32m✓[39m the register wizard [2m(2)[22m
+     [33m[2m✓[22m[39m goes Connection, File, Governance, refuses to register until governance is complete, and sends what was chosen[33m 307[2mms[22m[39m
+ [32m✓[39m src/ingest/map/ElementInspector.handling.test.tsx [2m([22m[2m47 tests[22m[2m)[22m[33m 1065[2mms[22m[39m
+ [32m✓[39m src/reader/DocumentReader.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 1316[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseBrief.test.tsx [2m([22m[2m23 tests[22m[2m)[22m[33m 1505[2mms[22m[39m
+ [32m✓[39m src/investigation/CasePicker.test.tsx [2m([22m[2m27 tests[22m[2m)[22m[33m 1529[2mms[22m[39m
+ [32m✓[39m src/alerts/RulesPlaceQueue.test.tsx [2m([22m[2m19 tests[22m[2m)[22m[33m 2000[2mms[22m[39m
+   [32m✓[39m Rules and Monitoring [2m(10)[22m
+     [33m[2m✓[22m[39m is one place, headed Rules and Monitoring, with the owner's four tabs (M1)[33m 343[2mms[22m[39m
+     [33m[2m✓[22m[39m gives a case alert to a member, by name, and a shared one only to be claimed[33m 417[2mms[22m[39m
+ [32m✓[39m src/inspector/Inspector.test.tsx [2m([22m[2m23 tests[22m[2m)[22m[33m 1765[2mms[22m[39m
+   [32m✓[39m Inspector — a selected link [2m(5)[22m
+     [33m[2m✓[22m[39m shows the link's details and a Notes section for that link[33m 429[2mms[22m[39m
+ [32m✓[39m src/home/HomePage.test.tsx [2m([22m[2m30 tests[22m[2m)[22m[33m 1869[2mms[22m[39m
+ [32m✓[39m src/alerts/StageD.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 2301[2mms[22m[39m
+   [32m✓[39m a rule on a schedule (decision 1) [2m(4)[22m
+     [33m[2m✓[22m[39m offers the schedule's blanks in the builder and deploys them[33m 361[2mms[22m[39m
+     [33m[2m✓[22m[39m says when a scheduled rule runs, and its runs and why one did not[33m 361[2mms[22m[39m
+   [32m✓[39m maker–checker on a whole-deployment rule (decision 7) [2m(5)[22m
+     [33m[2m✓[22m[39m offers Approve and Reject to a second administrator-author, and sends each[33m 399[2mms[22m[39m
+ [32m✓[39m src/admin/adminWords.test.tsx [2m([22m[2m22 tests[22m[2m)[22m[33m 2300[2mms[22m[39m
+   [32m✓[39m Admin's words: roles by name, never people or ids [2m(22)[22m
+     [33m[2m✓[22m[39m in People: each role's box, each person's levels and their grants[33m 480[2mms[22m[39m
+ [32m✓[39m src/explore/ExplorePanel.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 3127[2mms[22m[39m
+ [32m✓[39m src/patterns/QueryBuilderPanel.test.tsx [2m([22m[2m27 tests[22m[2m)[22m[33m 3942[2mms[22m[39m
+   [32m✓[39m QueryBuilderPanel value field on a node [2m(6)[22m
+     [33m[2m✓[22m[39m stops offering the field at three conditions[33m 306[2mms[22m[39m
+   [32m✓[39m QueryBuilderPanel ask to search over a pattern already there [2m(7)[22m
+     [33m[2m✓[22m[39m starts a new unsaved pattern: Save then writes a new one, never a version of the loaded pattern[33m 303[2mms[22m[39m
+ [32m✓[39m src/admin/AdminPlace.test.tsx [2m([22m[2m39 tests[22m[2m)[22m[33m 3743[2mms[22m[39m
+   [32m✓[39m the Admin area [2m(5)[22m
+     [33m[2m✓[22m[39m shows only the sections the account holds a right for[33m 340[2mms[22m[39m
+ [32m✓[39m src/canvas/layoutModes.test.ts [2m([22m[2m53 tests[22m[2m)[22m[32m 201[2mms[22m[39m
+ [32m✓[39m src/ingest/studio/rightsGate.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 1586[2mms[22m[39m
+ [32m✓[39m src/ingest/runs/drawnMerge.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1001[2mms[22m[39m
+   [32m✓[39m Merge into a dataset… [2m(6)[22m
+     [33m[2m✓[22m[39m maps, matches, runs the dry run first, and merges what the dry run showed[33m 442[2mms[22m[39m
+ [32m✓[39m src/inspector/LinkChange.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 1086[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/PipelineStudio.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 2788[2mms[22m[39m
+   [32m✓[39m PipelineStudio [2m(16)[22m
+     [33m[2m✓[22m[39m lists the pipelines and opens one onto the canvas[33m 388[2mms[22m[39m
+ [32m✓[39m src/ingest/ConnectScreenDeduplicate.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 3238[2mms[22m[39m
+   [32m✓[39m Connect: the deduplicate control [2m(18)[22m
+     [33m[2m✓[22m[39m reads an existing draft's key back in its own order, with its transform[33m 421[2mms[22m[39m
+ [32m✓[39m src/reports/TrendsTab.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 2609[2mms[22m[39m
+ [32m✓[39m src/alerts/SentenceBuilder.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 1454[2mms[22m[39m
+   [32m✓[39m the sentence builder [2m(8)[22m
+     [33m[2m✓[22m[39m previews the rule on the last 90 days: the count, up to five examples, and that nothing was written[33m 509[2mms[22m[39m
+ [32m✓[39m src/admin/sections/Models.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 1847[2mms[22m[39m
+ [32m✓[39m src/ingest/ConnectScreenMarking.test.tsx [2m([22m[2m22 tests[22m[2m)[22m[33m 3697[2mms[22m[39m
+   [32m✓[39m Connect: classification is optional and blank means PUBLIC [2m(5)[22m
+     [33m[2m✓[22m[39m lists PUBLIC among the classifications the scheme offers[33m 384[2mms[22m[39m
+   [32m✓[39m Connect: the units a source's rows may name [2m(5)[22m
+     [33m[2m✓[22m[39m does not add a blank name or one already listed[33m 313[2mms[22m[39m
+ [32m✓[39m src/inspector/linkChangeForm.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m src/admin/PeopleAndRoles.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 2333[2mms[22m[39m
+   [32m✓[39m Admin › People's row (R3) [2m(2)[22m
+     [33m[2m✓[22m[39m gives the Super user preset as its three roles, and keeps a custom role[33m 466[2mms[22m[39m
+ [32m✓[39m src/export/ExportPanel.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 615[2mms[22m[39m
+ [32m✓[39m src/design/designContract.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 50[2mms[22m[39m
+ [32m✓[39m src/home/homeData.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 91[2mms[22m[39m
+ [32m✓[39m src/auth/tokenRenewal.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m src/alerts/OneQueue.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 994[2mms[22m[39m
+ [32m✓[39m src/reports/PacksTab.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 2706[2mms[22m[39m
+ [32m✓[39m src/workingset/ViewOverCapDialog.test.tsx [2m([22m[2m19 tests[22m[2m)[22m[33m 1169[2mms[22m[39m
+ [32m✓[39m src/matrix/MatrixView.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 4503[2mms[22m[39m
+   [32m✓[39m MatrixView — the tables [2m(8)[22m
+     [33m[2m✓[22m[39m is two real tables, each with a caption, column headers and a row header per row[33m 373[2mms[22m[39m
+     [33m[2m✓[22m[39m pages a long view and says plainly which rows are shown (rule 2)[33m 1868[2mms[22m[39m
+   [32m✓[39m MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) [2m(3)[22m
+     [33m[2m✓[22m[39m PageDown and PageUp turn the page[33m 900[2mms[22m[39m
+ [32m✓[39m src/canvas/CanvasLegend.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 737[2mms[22m[39m
+ [32m✓[39m src/workingset/store.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/ingest/map/ElementInspector.content.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 424[2mms[22m[39m
+ [32m✓[39m src/reports/ReportsView.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 1641[2mms[22m[39m
+   [32m✓[39m the Reports view [2m(12)[22m
+     [33m[2m✓[22m[39m says the figures in words, by typology, age, outcome and KYC[33m 363[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/PublishScreen.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 933[2mms[22m[39m
+   [32m✓[39m PublishScreen [2m(7)[22m
+     [33m[2m✓[22m[39m renders a pipeline run per branch and per stage, refusals in words[33m 370[2mms[22m[39m
+ [32m✓[39m src/connections/FindConnectionsPanel.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1537[2mms[22m[39m
+   [32m✓[39m choosing the two ends [2m(3)[22m
+     [33m[2m✓[22m[39m takes each end from a search, and asks for the fewest degrees with no degree given[33m 433[2mms[22m[39m
+ [32m✓[39m src/inspector/LinkEvents.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 1014[2mms[22m[39m
+ [32m✓[39m src/map/MapControls.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 703[2mms[22m[39m
+ [32m✓[39m src/ingest/releases/ReleasesTab.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 1102[2mms[22m[39m
+   [32m✓[39m Export [2m(3)[22m
+     [33m[2m✓[22m[39m sends the release's name and version and lists the files, saying what was left out[33m 398[2mms[22m[39m
+ [32m✓[39m src/map/style.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+ [32m✓[39m src/auth/SignInScreen.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 2039[2mms[22m[39m
+   [32m✓[39m the signed-out page's marking [2m(2)[22m
+     [33m[2m✓[22m[39m is the deployment's[33m 307[2mms[22m[39m
+ [32m✓[39m src/layout/SidePanelStack.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 1074[2mms[22m[39m
+ [32m✓[39m src/canvas/communities.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m src/search/GlobalSearch.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 643[2mms[22m[39m
+ [32m✓[39m src/alerts/RulesPlace.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 1529[2mms[22m[39m
+   [32m✓[39m the Alerts place [2m(8)[22m
+     [33m[2m✓[22m[39m lists the queue by name and explains an alert with its transactions[33m 451[2mms[22m[39m
+ [32m✓[39m src/ingest/runs/promotions.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 873[2mms[22m[39m
+   [32m✓[39m Analyst promotions [2m(10)[22m
+     [33m[2m✓[22m[39m lists each promotion, and an approver reviews and approves one[33m 381[2mms[22m[39m
+ [32m✓[39m src/patterns/store.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/admin/sections/Datasets.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1254[2mms[22m[39m
+   [32m✓[39m Datasets [2m(6)[22m
+     [33m[2m✓[22m[39m shows a dataset's kind, policy, Authors and linked cases as counts, and only removed cases' dry runs[33m 621[2mms[22m[39m
+ [32m✓[39m src/alerts/RuleEditor.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1454[2mms[22m[39m
+ [32m✓[39m src/strength/clientParity.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 509[2mms[22m[39m
+ [32m✓[39m src/inspector/LinkNotes.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 860[2mms[22m[39m
+   [32m✓[39m LinkNotes [2m(16)[22m
+     [33m[2m✓[22m[39m lists the notes with who wrote them, newest first as the server gives them[33m 335[2mms[22m[39m
+ [32m✓[39m src/shell/places.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 538[2mms[22m[39m
+ [32m✓[39m src/auth/unauthorised.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 68[2mms[22m[39m
+ [32m✓[39m src/admin/sections/Audit.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 967[2mms[22m[39m
+   [32m✓[39m Admin › Audit [2m(7)[22m
+     [33m[2m✓[22m[39m shows what the Conduit sent, its words withheld where it withheld them, and the total[33m 344[2mms[22m[39m
+ [32m✓[39m src/admin/Schedules.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 1370[2mms[22m[39m
+   [32m✓[39m Schedules and runs [2m(8)[22m
+     [33m[2m✓[22m[39m is a tab only for an account holding operate_schedules[33m 375[2mms[22m[39m
+ [32m✓[39m src/layout/PanelFrames.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 595[2mms[22m[39m
+ [32m✓[39m src/ingest/sources/connectors.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1058[2mms[22m[39m
+   [32m✓[39m a source's read [2m(4)[22m
+     [33m[2m✓[22m[39m registers a SQL source by its read, never a file[33m 529[2mms[22m[39m
+   [32m✓[39m the screening lists [2m(3)[22m
+     [33m[2m✓[22m[39m sends a blank list's column picks, and a format's template without any[33m 330[2mms[22m[39m
+[90mstderr[2m | src/admin/sections/Connections.test.tsx[2m > [22m[2mConnections[2m > [22m[2mnames an S3 bucket and Athena with no field for a key or a secret, and sends none
+[22m[39mEncountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+ [32m✓[39m src/admin/sections/Connections.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1792[2mms[22m[39m
+   [32m✓[39m Connections [2m(6)[22m
+     [33m[2m✓[22m[39m is a tab for administer_system alone, lists the built-in Files, and names a new one[33m 525[2mms[22m[39m
+     [33m[2m✓[22m[39m names a SQL connection with its datasets and its secret by name, and nothing else[33m 304[2mms[22m[39m
+     [33m[2m✓[22m[39m names an S3 bucket and Athena with no field for a key or a secret, and sends none[33m 484[2mms[22m[39m
+ [32m✓[39m src/admin/needsYou/NeedsYou.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 612[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseDatasets.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 705[2mms[22m[39m
+   [32m✓[39m a new case's data [2m(4)[22m
+     [33m[2m✓[22m[39m asks for the one dataset chosen[33m 377[2mms[22m[39m
+ [32m✓[39m src/alerts/ListsPanel.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 485[2mms[22m[39m
+ [32m✓[39m src/investigation/cases.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m src/strength/StrengthPanel.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 901[2mms[22m[39m
+ [32m✓[39m src/patterns/api.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/linktypes/ModelProposals.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 686[2mms[22m[39m
+   [32m✓[39m ModelProposals [2m(8)[22m
+     [33m[2m✓[22m[39m lists the dataset's proposals with what each means and who proposed it, and names no case[33m 317[2mms[22m[39m
+ [32m✓[39m src/search/addFromListApi.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/admin/sections/Maps.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1224[2mms[22m[39m
+   [32m✓[39m Maps [2m(7)[22m
+     [33m[2m✓[22m[39m shows each provider's tier, attribution and state[33m 303[2mms[22m[39m
+     [33m[2m✓[22m[39m sends the key once, clears the field, and never shows it again[33m 301[2mms[22m[39m
+ [32m✓[39m src/ingest/IngestStudio.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1024[2mms[22m[39m
+   [32m✓[39m IngestStudio: four places [2m(8)[22m
+     [33m[2m✓[22m[39m reads the registered sources again for the strip when the Sources tab edits one[33m 330[2mms[22m[39m
+ [32m✓[39m src/matrix/matrixRows.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/canvas/labelChoices.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/ingest/map/MapEditor.links.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1971[2mms[22m[39m
+   [32m✓[39m Map: the links are reachable without a pointer [2m(5)[22m
+     [33m[2m✓[22m[39m lists the template's link beside the canvas[33m 363[2mms[22m[39m
+ [32m✓[39m src/crossfilter/store.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/reports/AlertMonitoringBoard.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 880[2mms[22m[39m
+   [32m✓[39m the Alert monitoring board [2m(5)[22m
+     [33m[2m✓[22m[39m is the first board on the Dashboards, drawn by the Glass with no Superset token asked for it[33m 404[2mms[22m[39m
+ [32m✓[39m src/App.chrome.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 2138[2mms[22m[39m
+   [32m✓[39m the case screen's chrome, variant B (ADR-145 Amendment 2) [2m(4)[22m
+     [33m[2m✓[22m[39m 24 controls stand before the canvas, in this order[33m 735[2mms[22m[39m
+     [33m[2m✓[22m[39m the column opens with the Inspector only, the other panels folded in their order[33m 364[2mms[22m[39m
+ [32m✓[39m src/App.test.tsx [2m([22m[2m43 tests[22m[2m)[22m[33m 14557[2mms[22m[39m
+   [32m✓[39m 06_DECISIONS.md ADR-050 — the sign-in gate [2m(2)[22m
+     [33m[2m✓[22m[39m an unauthenticated load shows the sign-in screen and issues no /v1 call[33m 372[2mms[22m[39m
+   [32m✓[39m the tab the launcher asked for is the tab the Glass opens on [2m(19)[22m
+     [33m[2m✓[22m[39m after a reload in the Studio, Back returns to the Glass's last view on the open case[33m 355[2mms[22m[39m
+     [33m[2m✓[22m[39m the switcher and the cross-link move between the places, and coming back returns to the view that was open[33m 365[2mms[22m[39m
+     [33m[2m✓[22m[39m Open the evidence, then Back to the alert, returns to the same alert, still open[33m 583[2mms[22m[39m
+     [33m[2m✓[22m[39m Open the evidence says so on the alert when the view cannot be opened[33m 435[2mms[22m[39m
+   [32m✓[39m windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) [2m(6)[22m
+     [33m[2m✓[22m[39m a token near expiry is renewed in the background, with no navigation, and the next call carries it[33m 624[2mms[22m[39m
+     [33m[2m✓[22m[39m an unattended window lets its token lapse: no renewal, and nothing asked[33m 2568[2mms[22m[39m
+ [32m✓[39m src/search/AddFromList.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 802[2mms[22m[39m
+ [32m✓[39m src/canvas/iconChoices.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m src/inspector/LinkDetails.test.tsx [2m([22m[2m21 tests[22m[2m)[22m[32m 239[2mms[22m[39m
+ [32m✓[39m src/canvas/SelectionBar.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 508[2mms[22m[39m
+ [32m✓[39m src/metrics/MetricsPanel.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 825[2mms[22m[39m
+   [32m✓[39m MetricsPanel ranking rows [2m(1)[22m
+     [33m[2m✓[22m[39m names each node as the canvas labels it, not by its id[33m 345[2mms[22m[39m
+ [32m✓[39m src/reports/packExport.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/ScheduleEditor.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1265[2mms[22m[39m
+   [32m✓[39m the structured schedule [2m(9)[22m
+     [33m[2m✓[22m[39m explains a chosen schedule in words with its next five runs, then saves it with its zone[33m 532[2mms[22m[39m
+     [33m[2m✓[22m[39m says, in the Conduit's words, a schedule it could not keep[33m 323[2mms[22m[39m
+ [32m✓[39m src/auth/oidcConfig.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m keyboard/registryCoverage.test.ts [2m([22m[2m69 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m src/ingest/ConnectScreenUpload.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1500[2mms[22m[39m
+   [32m✓[39m Connect: choose a file from your computer [2m(10)[22m
+     [33m[2m✓[22m[39m offers a Choose file button even when the ingest folder is empty[33m 373[2mms[22m[39m
+ [32m✓[39m src/ownership/OwnershipPlace.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 985[2mms[22m[39m
+   [32m✓[39m the Ownership place [2m(6)[22m
+     [33m[2m✓[22m[39m shows a customer's due diligence, every factor in words[33m 364[2mms[22m[39m
+ [32m✓[39m src/reports/packAlert.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 304[2mms[22m[39m
+ [32m✓[39m src/ingest/map/LinkList.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 1341[2mms[22m[39m
+   [32m✓[39m LinkList: the links of the row template [2m(6)[22m
+     [33m[2m✓[22m[39m lists each link by its type and its two ends, in the template's order[33m 347[2mms[22m[39m
+     [33m[2m✓[22m[39m lists every link however many there are, in a region that scrolls[33m 748[2mms[22m[39m
+ [32m✓[39m src/ingest/map/rowTemplate.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/home/guides.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/investigation/NewCaseForm.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 951[2mms[22m[39m
+ [32m✓[39m src/canvas/linkMenu.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/assessment/JudgementsPanel.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 421[2mms[22m[39m
+ [32m✓[39m src/search/searchOptions.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/design/topBarStyle.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m src/timeline/Timeline.cells.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1137[2mms[22m[39m
+   [32m✓[39m the weekly view's Choose cells control [2m(7)[22m
+     [33m[2m✓[22m[39m is in the options menu in the weekly view and not in the density view[33m 490[2mms[22m[39m
+ [32m✓[39m src/reports/AlertsPanel.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 497[2mms[22m[39m
+ [32m✓[39m keyboard/playwrightPorts.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 1143[2mms[22m[39m
+   [32m✓[39m each lane's Playwright runs use ports of their own [2m(18)[22m
+     [33m[2m✓[22m[39m ../a11y/playwright.config.ts: two slots never share a port[33m 642[2mms[22m[39m
+ [32m✓[39m src/home/answersFor.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 403[2mms[22m[39m
+ [32m✓[39m src/rights/visibility.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+ [32m✓[39m src/canvas/IconsMenu.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 787[2mms[22m[39m
+ [32m✓[39m src/map/gazetteers.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 60[2mms[22m[39m
+ [32m✓[39m src/map/geometries.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/linktypes/ProposedTypes.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 716[2mms[22m[39m
+ [32m✓[39m src/export/reportExport.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 63[2mms[22m[39m
+ [32m✓[39m src/connections/connectionsApi.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 77[2mms[22m[39m
+ [32m✓[39m src/theme/theme.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m src/App.matrix.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 3353[2mms[22m[39m
+   [33m[2m✓[22m[39m the view switch offers the Graph and the Map, and the Matrix one click away under More views[33m 1192[2mms[22m[39m
+   [33m[2m✓[22m[39m a selection made on the canvas is the Matrix's selection, and the Matrix's goes back to the canvas[33m 676[2mms[22m[39m
+   [33m[2m✓[22m[39m Expand and Show on a row go to the Graph and use the canvas's own Expand and centring[33m 1006[2mms[22m[39m
+ [32m✓[39m src/ingest/checks/ChecksScreen.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 508[2mms[22m[39m
+   [32m✓[39m the step [2m(2)[22m
+     [33m[2m✓[22m[39m attaches a rule, holds on a hit, and cannot leave off a whole-deployment rule[33m 367[2mms[22m[39m
+ [32m✓[39m src/shell/shell.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 582[2mms[22m[39m
+ [32m✓[39m src/theme/themeCookieSnippet.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 146[2mms[22m[39m
+ [32m✓[39m src/admin/AdminSections.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 1061[2mms[22m[39m
+ [32m✓[39m src/views/ViewsPanel.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 508[2mms[22m[39m
+ [32m✓[39m src/design/primitives/RadialMenu.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 638[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/NodePreview.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 389[2mms[22m[39m
+ [32m✓[39m src/canvas/labelStyle.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/brand/brand.test.tsx [2m([22m[2m25 tests[22m[2m)[22m[33m 632[2mms[22m[39m
+ [32m✓[39m src/ingest/runs/ExternalOrchestration.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 525[2mms[22m[39m
+ [32m✓[39m src/admin/needsYou/StudioNeedsYou.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 624[2mms[22m[39m
+   [32m✓[39m the Studio's proposals count [2m(6)[22m
+     [33m[2m✓[22m[39m names this dataset's count on the Model tab, never another's[33m 332[2mms[22m[39m
+ [32m✓[39m src/canvas/linksAmong.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+ [32m✓[39m src/crossfilter/lit.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/reports/EmbeddedDashboards.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 556[2mms[22m[39m
+ [32m✓[39m src/auth/launcherHandoff.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/inspector/Inspector.rawIdentifiers.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 488[2mms[22m[39m
+ [32m✓[39m src/color/tokens.test.ts [2m([22m[2m37 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m src/brand/BrandFrame.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 356[2mms[22m[39m
+ [32m✓[39m src/workingset/ViewOverCapGate.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 331[2mms[22m[39m
+ [32m✓[39m src/alerts/drawnWatchAlert.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 688[2mms[22m[39m
+   [32m✓[39m a drawn watch's alert [2m(4)[22m
+     [33m[2m✓[22m[39m opens the board its drawn item names, from the alert's detail[33m 400[2mms[22m[39m
+ [32m✓[39m src/search/GlobalSearchFilters.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1104[2mms[22m[39m
+ [32m✓[39m src/admin/sections/ModelsUsage.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 826[2mms[22m[39m
+   [32m✓[39m limits [2m(3)[22m
+     [33m[2m✓[22m[39m sends whole numbers, blank as no limit, and shows the limits in words[33m 628[2mms[22m[39m
+ [32m✓[39m src/admin/OperationsFigures.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 696[2mms[22m[39m
+   [32m✓[39m OperationsFigures [2m(4)[22m
+     [33m[2m✓[22m[39m rolls the runs up, withholding a count it may not show, never drawing it as a number[33m 350[2mms[22m[39m
+ [32m✓[39m src/views/viewsApi.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m src/workingset/deltaClient.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/ingest/runs/RunsTab.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1087[2mms[22m[39m
+   [32m✓[39m the Runs tab [2m(6)[22m
+     [33m[2m✓[22m[39m draws one row per deployed pipeline and a cell per day, in words[33m 500[2mms[22m[39m
+ [32m✓[39m src/canvas/valueIconsInNode.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/site/bilinear.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/layout/layoutSizes.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/color/nodeVisualIcon.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/linktypes/linkTypesApi.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/auth/resolvedPrincipal.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 110[2mms[22m[39m
+ [32m✓[39m src/help/roles.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/alerts/ruleStandards/ShowAsBpmn.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 433[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/runNowWait.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 345[2mms[22m[39m
+   [32m✓[39m the capture kit's wait for a run it started [2m(3)[22m
+     [33m[2m✓[22m[39m is the run-now request alone: the screen shows an older Succeeded while the new run is going[33m 341[2mms[22m[39m
+ [32m✓[39m src/ingest/map/MapEditor.handling.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 875[2mms[22m[39m
+ [32m✓[39m src/canvas/forceLayout.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 126[2mms[22m[39m
+ [32m✓[39m src/admin/PeopleEntra.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 771[2mms[22m[39m
+   [32m✓[39m Admin › People on Entra ID sign-in [2m(3)[22m
+     [33m[2m✓[22m[39m says Entra holds the accounts and offers add by object id, never invite, access, reset or remove[33m 335[2mms[22m[39m
+ [32m✓[39m src/metrics/filters.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/ingest/map/MapEditor.rename.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 438[2mms[22m[39m
+ [32m✓[39m src/canvas/entityPictures.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/PublishScreen.deduplicate.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 574[2mms[22m[39m
+ [32m✓[39m src/boards/boardModel.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseAccessPanel.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 526[2mms[22m[39m
+ [32m✓[39m src/canvas/LabelsMenu.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 500[2mms[22m[39m
+ [32m✓[39m src/layout/panelOrder.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/ingest/map/MapEditor.rawIdentifiers.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 542[2mms[22m[39m
+   [32m✓[39m the Studio map shows no link-type key (build order step 30) [2m(3)[22m
+     [33m[2m✓[22m[39m the list, the form and the inspector name the type; none shows its key[33m 472[2mms[22m[39m
+ [32m✓[39m src/design/radialMenuStyle.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/inspector/linkChangeApi.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/questions/graphFacts.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/boards/PromoteSheet.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 363[2mms[22m[39m
+ [32m✓[39m src/welcome/WorkspaceWelcome.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 468[2mms[22m[39m
+ [32m✓[39m src/timeline/cyclicalOption.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/timeline/Timeline.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 654[2mms[22m[39m
+ [32m✓[39m src/export/api.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/canvas/communityLinks.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 218[2mms[22m[39m
+ [32m✓[39m src/timeline/math.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/GovukFooter.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 392[2mms[22m[39m
+ [32m✓[39m src/ingest/map/MapEditor.source.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 558[2mms[22m[39m
+   [32m✓[39m Map's left pane and the registered source [2m(4)[22m
+     [33m[2m✓[22m[39m names the registered source and its version, and shows the pipeline's own profile[33m 312[2mms[22m[39m
+ [32m✓[39m src/ingest/map/ElementInspector.names.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 153[2mms[22m[39m
+ [32m✓[39m src/inspector/StrengthExplained.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 338[2mms[22m[39m
+   [32m✓[39m StrengthExplained [2m(2)[22m
+     [33m[2m✓[22m[39m explains the link's strength and ranks what its ends share, rarest first[33m 310[2mms[22m[39m
+ [32m✓[39m src/map/pmtilesAuth.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m src/alerts/address.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 207[2mms[22m[39m
+ [32m✓[39m src/playback/math.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/inspector/SharedContacts.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 365[2mms[22m[39m
+ [32m✓[39m src/resolution/explainView.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/content/AddFiles.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 422[2mms[22m[39m
+   [32m✓[39m AddFiles [2m(3)[22m
+     [33m[2m✓[22m[39m uploads each file with its marking, legal basis and holder, and draws the Documents[33m 336[2mms[22m[39m
+ [32m✓[39m src/layout/Sash.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 315[2mms[22m[39m
+ [32m✓[39m src/statusbar/StatusBar.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 347[2mms[22m[39m
+ [32m✓[39m src/home/homeKey.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/help/rightNames.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m src/reports/PublishedTab.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 652[2mms[22m[39m
+ [32m✓[39m src/ingest/verify/VerifyScreen.deduplicate.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 377[2mms[22m[39m
+ [32m✓[39m src/alerts/amlTemplates.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/crossfilter/selectLit.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseList.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 393[2mms[22m[39m
+ [32m✓[39m src/resolution/ThresholdControl.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 301[2mms[22m[39m
+ [32m✓[39m src/ingest/ConnectScreen.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/ingest/map/FieldBindingEditor.names.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 201[2mms[22m[39m
+ [32m✓[39m src/canvas/LargeExpansionPrompt.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 465[2mms[22m[39m
+ [32m✓[39m src/ingest/ConnectScreenPinned.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 648[2mms[22m[39m
+   [32m✓[39m ConnectScreen pinned to a pipeline's draft [2m(3)[22m
+     [33m[2m✓[22m[39m shows that draft's form without the Sources sidebar, and saves as an update[33m 441[2mms[22m[39m
+ [32m✓[39m src/canvas/expansionPreview.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/alerts/ScreeningAlert.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 434[2mms[22m[39m
+   [32m✓[39m a screening alert's detail [2m(1)[22m
+     [33m[2m✓[22m[39m names the customer once, and the list's entry for the listed party as the list's[33m 432[2mms[22m[39m
+ [32m✓[39m src/strength/words.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/color/nodeVisual.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/stagingSteps.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/theme/ThemeToggle.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 402[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/pipelineGraphEdit.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/canvas/JudgementBadgeOverlay.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 119[2mms[22m[39m
+ [32m✓[39m src/canvas/chunkedTextureRefresh.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/design/primitives/DropdownPanel.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 511[2mms[22m[39m
+ [32m✓[39m src/reports/DataFeedsTab.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 331[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeLabel.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/canvas/valueIcons.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/assessment/api.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/auth/callbackFrame.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/ingest/map/mapGraphSync.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/admin/sections/GradingScheme.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 574[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/PublishScreen.drawnWatch.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 476[2mms[22m[39m
+   [32m✓[39m a run's drawn-watch count [2m(5)[22m
+     [33m[2m✓[22m[39m is said in the load result beside the counts[33m 301[2mms[22m[39m
+ [32m✓[39m src/history/HistoryPanel.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 339[2mms[22m[39m
+ [32m✓[39m src/canvas/crowding.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseDomains.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 420[2mms[22m[39m
+   [32m✓[39m CaseDomains [2m(6)[22m
+     [33m[2m✓[22m[39m shows the packs read-only to an author, saying they come from the dataset's domain model[33m 307[2mms[22m[39m
+ [32m✓[39m src/auth/AccountMenu.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 393[2mms[22m[39m
+ [32m✓[39m src/canvas/CommunityBoxOverlay.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 261[2mms[22m[39m
+ [32m✓[39m src/alerts/HeldRowsPanel.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 388[2mms[22m[39m
+ [32m✓[39m src/inspector/emailDocuments.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/ingest/map/EntityList.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1097[2mms[22m[39m
+   [32m✓[39m EntityList: the entities of the row template [2m(6)[22m
+     [33m[2m✓[22m[39m lists every entity however many there are, in a region that scrolls[33m 699[2mms[22m[39m
+ [32m✓[39m src/map/basemapAvailability.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 45[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeIcons.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+[90mstderr[2m | src/App.crossfilter.test.tsx[2m > [22m[2ma filter's dimming reaches the status bar when the sign-in completes after the Glass opened
+[22m[39m[ECharts] Can't get DOM width or height. Please check dom.clientWidth and dom.clientHeight. They should not be 0.For example, you may need to call this in the callback of window.onload.
+
+ [32m✓[39m src/canvas/edgeSelection.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/search/SearchFilters.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 658[2mms[22m[39m
+ [32m✓[39m src/App.crossfilter.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1754[2mms[22m[39m
+   [33m[2m✓[22m[39m a filter's dimming reaches the status bar when the sign-in completes after the Glass opened[33m 535[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/PipelineCanvas.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 405[2mms[22m[39m
+   [32m✓[39m PipelineCanvas [2m(2)[22m
+     [33m[2m✓[22m[39m draws every node as a focusable button named by stage and label, and the edges[33m 312[2mms[22m[39m
+ [32m✓[39m src/canvas/valueIconShown.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/export/pngMark.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/inspector/linkEventsApi.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/color/nodeGlyphs.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/canvas/expansionOutcome.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/color/oklab.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/canvas/ViewActions.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 345[2mms[22m[39m
+ [32m✓[39m src/crossfilter/mapBins.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 81[2mms[22m[39m
+ [32m✓[39m src/canvas/edgeTypeMenu.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/ontology/schema.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m src/export/subgraphExport.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/reports/ExportControl.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 328[2mms[22m[39m
+ [32m✓[39m src/inspector/describeChange.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/export/chartExport.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/canvas/zoomBands.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseSwitcher.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 281[2mms[22m[39m
+ [32m✓[39m src/canvas/CommunitiesControls.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 328[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseSettings.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 277[2mms[22m[39m
+ [32m✓[39m src/ingest/map/FieldBindingEditor.valuemap.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 354[2mms[22m[39m
+ [32m✓[39m src/boards/BoardAlerts.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 309[2mms[22m[39m
+ [32m✓[39m src/reader/pendingSpans.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/views/SaveViewForm.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 399[2mms[22m[39m
+ [32m✓[39m src/canvas/LayoutMenu.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 434[2mms[22m[39m
+ [32m✓[39m src/linktypes/defineType.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/ingest/map/SourceFieldsPanel.ignore.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 418[2mms[22m[39m
+   [33m[2m✓[22m[39m keeps the note typed beside the field when Ignore is pressed[33m 313[2mms[22m[39m
+ [32m✓[39m src/watches/HotlistPanel.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 171[2mms[22m[39m
+ [32m✓[39m src/admin/updateNotice.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m src/ingest/draftSave.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeAttributesTheme.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/canvas/removeNodes.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m src/inspector/NeighbourhoodRisk.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 250[2mms[22m[39m
+ [32m✓[39m compute-tier1/communities.test.mjs [2m([22m[2m3 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/design/primitives/Popover.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 159[2mms[22m[39m
+ [32m✓[39m src/design/shellSizes.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/metrics/hulls.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/alerts/strengthSentence.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/canvas/ReasonPrompt.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 378[2mms[22m[39m
+ [32m✓[39m src/investigation/openAttachment.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+ [32m✓[39m src/design/primitives/Drawer.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 324[2mms[22m[39m
+ [32m✓[39m src/reports/packText.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/ingest/runs/runsGrid.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/PhaseBanner.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 335[2mms[22m[39m
+ [32m✓[39m src/reports/ReportsPlace.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 446[2mms[22m[39m
+   [32m✓[39m ReportsPlace's starting tab [2m(3)[22m
+     [33m[2m✓[22m[39m opens on Trends when asked to[33m 325[2mms[22m[39m
+ [32m✓[39m src/reader/designation.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m src/reports/journey.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/explore/exploreApi.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m src/crossfilter/emergence.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/inspector/linkHandling.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/admin/refusals.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 406[2mms[22m[39m
+   [32m✓[39m Admin's refusals say why and which roles can [2m(2)[22m
+     [33m[2m✓[22m[39m a right the Conduit asks for, by the roles that hold it[33m 396[2mms[22m[39m
+ [32m✓[39m src/map/providers.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/canvas/communityAssigner.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/ingest/studio/datasets.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/shell/router.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m src/design/canvasOverlays.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/map/conduitRequest.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/inspector/LinkHistory.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 272[2mms[22m[39m
+[90mstderr[2m | src/map/HotspotHistogram.stale.test.tsx[2m > [22m[2mHotspotHistogram, answers out of order[2m > [22m[2mdrops an older answer that arrives after a newer one
+[22m[39mThe current testing environment is not configured to support act(...)
+
+ [32m✓[39m src/map/HotspotHistogram.stale.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m src/reports/TrendChart.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 227[2mms[22m[39m
+ [32m✓[39m src/search/drawSearchResult.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/welcome/figure.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/dossier/Dossier.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 78[2mms[22m[39m
+ [32m✓[39m src/ingest/map/ElementInspector.identifiers.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 97[2mms[22m[39m
+ [32m✓[39m src/map/places.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m src/ingest/verify/VerifyScreen.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 277[2mms[22m[39m
+ [32m✓[39m src/map/HotspotHistogram.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m src/testing/slowestReporter.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/canvas/linkLabel.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/canvas/ZoomControls.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 238[2mms[22m[39m
+ [32m✓[39m src/design/radiusTokens.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m src/search/GlobalSearchLayout.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 411[2mms[22m[39m
+ [32m✓[39m src/shell/brandButton.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 244[2mms[22m[39m
+ [32m✓[39m src/inspector/EntityPicture.clears.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 232[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeGestures.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/scheduleChoice.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/canvas/iconImage.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/timeline/Timeline.elsewhere.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 147[2mms[22m[39m
+ [32m✓[39m src/design/fonts.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/inspector/sourceLocator.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/investigation/investigationId.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m src/canvas/expansionGate.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/canvas/linkCollapse.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/ingest/map/mapCanvasColours.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+[90mstderr[2m | src/timeline/TimelineStrip.test.tsx[2m > [22m[2mthe folded timeline's strip[2m > [22m[2mdraws one bar a bucket, the tallest full height, and names the range in mono
+[22m[39mThe current testing environment is not configured to support act(...)
+
+ [32m✓[39m src/assessment/ReviewFlagChip.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+[90mstderr[2m | src/timeline/TimelineStrip.test.tsx[2m > [22m[2mthe folded timeline's strip[2m > [22m[2msays nothing it has not been given, and ignores the cyclical week
+[22m[39mThe current testing environment is not configured to support act(...)
+
+ [32m✓[39m src/design/canvasGrid.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/timeline/TimelineStrip.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 75[2mms[22m[39m
+ [32m✓[39m src/analytics/eventsElsewhere.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/inspector/SelectionList.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 319[2mms[22m[39m
+ [32m✓[39m src/views/ViewLensBanner.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 243[2mms[22m[39m
+ [32m✓[39m src/design/undefinedTokens.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 41[2mms[22m[39m
+ [32m✓[39m src/canvas/DegreeMarkOverlay.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 79[2mms[22m[39m
+ [32m✓[39m src/design/brassUse.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeDrag.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/canvas/cameraMoves.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/analytics/api.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/canvas/linkHover.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/ingest/verify/VerifyScreen.rows.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 261[2mms[22m[39m
+ [32m✓[39m src/search/GlobalSearchAddMany.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 293[2mms[22m[39m
+ [32m✓[39m src/welcome/WelcomeAbout.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 376[2mms[22m[39m
+   [32m✓[39m WelcomeAbout [2m(3)[22m
+     [33m[2m✓[22m[39m names the four places as the help page names them, claiming nothing not built[33m 316[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeHitArea.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/views/lensHandoff.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/ingest/map/FieldBindingEditor.bind.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 267[2mms[22m[39m
+ [32m✓[39m src/explore/exploreOverlayPlace.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/strength/useOnReturn.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 61[2mms[22m[39m
+ [32m✓[39m src/explore/ExplorePanelAddMany.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 408[2mms[22m[39m
+   [32m✓[39m Where to start's add-many fold [2m(2)[22m
+     [33m[2m✓[22m[39m is offered, folded, when there is a canvas to draw on[33m 367[2mms[22m[39m
+ [32m✓[39m src/design/primitives/ContextMenu.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 151[2mms[22m[39m
+ [32m✓[39m src/canvas/singleFlight.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/ingest/map/FieldBindingEditor.parts.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 65[2mms[22m[39m
+ [32m✓[39m src/canvas/settledAnchor.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 426[2mms[22m[39m
+   [32m✓[39m settledAnchors: where an arriving node starts [2m(3)[22m
+     [33m[2m✓[22m[39m is linear in the links: the perf fixture's 50,000 nodes and 250,000 links take well under a second[33m 417[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/syncGovukAssets.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/design/accordionStyle.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/shell/startScreen.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 339[2mms[22m[39m
+ [32m✓[39m keyboard/mapMeaning.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/GovukHeader.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 237[2mms[22m[39m
+ [32m✓[39m src/assessment/judgementCounts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/inspector/intervalText.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/ingest/rowTemplateSave.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/shell/topBarWidths.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/watches/StatusBadge.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+ [32m✓[39m src/alerts/templates.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/ingest/fileSize.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m src/reports/alertBadges.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/auth/disabledAccount.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/workingset/deltaOps.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/reader/readerApi.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/map/contrast.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/map/mapStart.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/ingest/percent.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/map/geometry.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/canvas/focusAnnouncement.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m src/canvas/dottedEdgePatterns.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/site/api.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/history/lastChange.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/time/utcStamp.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/auth/signInArgs.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/inspector/sourcesWithheld.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/govukChrome.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/studioMode.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/design/primitives/Toast.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 123[2mms[22m[39m
+ [32m✓[39m src/shell/StartPage.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 147[2mms[22m[39m
+ [32m✓[39m src/help/RolesHelpPage.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 334[2mms[22m[39m
+   [32m✓[39m the help page [2m(1)[22m
+     [33m[2m✓[22m[39m draws every right's words from roles.ts, and its way back has focus[33m 333[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/SkipLink.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 112[2mms[22m[39m
+ [31m❯[39m src/matrix/MatrixView.budget.test.tsx [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 6759[2mms[22m[39m
+   [31m❯[39m MatrixView at 50,000 nodes and 250,000 links [2m(1)[22m
+[31m     [31m×[31m opens inside §5's first-frame budget, drawing one page of each table and saying so[39m[33m 6757[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/matrix/MatrixView.budget.test.tsx[2m > [22mMatrixView at 50,000 nodes and 250,000 links[2m > [22mopens inside §5's first-frame budget, drawing one page of each table and saying so
+[31m[1mAssertionError[22m: opened in 3596 ms: expected 3596.1816960000006 to be less than 2500[39m
+[36m [2m❯[22m src/matrix/MatrixView.budget.test.tsx:[2m50:60[22m[39m
+    [90m 48|[39m     expect(entities.querySelector("caption")?.textContent).toContain("…
+    [90m 49|[39m     expect(links.querySelector("caption")?.textContent).toContain("Row…
+    [90m 50|[39m     expect(elapsed, `opened in ${Math.round(elapsed)} ms`).toBeLessTha…
+    [90m   |[39m                                                            [31m^[39m
+    [90m 51|[39m   }, 60_000);
+    [90m 52|[39m });
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m368 passed[39m[22m[90m (369)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m3195 passed[39m[22m[90m (3196)[39m
+[2m   Start at [22m 07:36:06
+[2m   Duration [22m 37.98s[2m (environment 46%, tests 38%, import 9%, transform 5%, setup 1%)[22m
+
+[2m    Isolate [22m [33m369 workers spawned[39m[2m · ~766ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~18.09s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+
+
+Slowest 30 of 3196 tests:
+  6757 ms  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+  2568 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > an unattended window lets its token lapse: no renewal, and nothing asked
+  1868 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > pages a long view and says plainly which rows are shown (rule 2)
+  1192 ms  src/App.matrix.test.tsx > the view switch offers the Graph and the Map, and the Matrix one click away under More views
+  1006 ms  src/App.matrix.test.tsx > Expand and Show on a row go to the Graph and use the canvas's own Expand and centring
+   900 ms  src/matrix/MatrixView.test.tsx > MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) > PageDown and PageUp turn the page
+   748 ms  src/ingest/map/LinkList.test.tsx > LinkList: the links of the row template > lists every link however many there are, in a region that scrolls
+   735 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > 24 controls stand before the canvas, in this order
+   699 ms  src/ingest/map/EntityList.test.tsx > EntityList: the entities of the row template > lists every entity however many there are, in a region that scrolls
+   676 ms  src/App.matrix.test.tsx > a selection made on the canvas is the Matrix's selection, and the Matrix's goes back to the canvas
+   642 ms  keyboard/playwrightPorts.test.ts > each lane's Playwright runs use ports of their own > ../a11y/playwright.config.ts: two slots never share a port
+   628 ms  src/admin/sections/ModelsUsage.test.tsx > limits > sends whole numbers, blank as no limit, and shows the limits in words
+   624 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a token near expiry is renewed in the background, with no navigation, and the next call carries it
+   621 ms  src/admin/sections/Datasets.test.tsx > Datasets > shows a dataset's kind, policy, Authors and linked cases as counts, and only removed cases' dry runs
+   583 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence, then Back to the alert, returns to the same alert, still open
+   535 ms  src/App.crossfilter.test.tsx > a filter's dimming reaches the status bar when the sign-in completes after the Glass opened
+   532 ms  src/ingest/publish/ScheduleEditor.test.tsx > the structured schedule > explains a chosen schedule in words with its next five runs, then saves it with its zone
+   529 ms  src/ingest/sources/connectors.test.tsx > a source's read > registers a SQL source by its read, never a file
+   525 ms  src/admin/sections/Connections.test.tsx > Connections > is a tab for administer_system alone, lists the built-in Files, and names a new one
+   509 ms  src/alerts/SentenceBuilder.test.tsx > the sentence builder > previews the rule on the last 90 days: the count, up to five examples, and that nothing was written
+   500 ms  src/ingest/runs/RunsTab.test.tsx > the Runs tab > draws one row per deployed pipeline and a cell per day, in words
+   490 ms  src/timeline/Timeline.cells.test.tsx > the weekly view's Choose cells control > is in the options menu in the weekly view and not in the density view
+   484 ms  src/admin/sections/Connections.test.tsx > Connections > names an S3 bucket and Athena with no field for a key or a secret, and sends none
+   480 ms  src/admin/adminWords.test.tsx > Admin's words: roles by name, never people or ids > in People: each role's box, each person's levels and their grants
+   472 ms  src/ingest/map/MapEditor.rawIdentifiers.test.tsx > the Studio map shows no link-type key (build order step 30) > the list, the form and the inspector name the type; none shows its key
+   466 ms  src/admin/PeopleAndRoles.test.tsx > Admin › People's row (R3) > gives the Super user preset as its three roles, and keeps a custom role
+   451 ms  src/alerts/RulesPlace.test.tsx > the Alerts place > lists the queue by name and explains an alert with its transactions
+   442 ms  src/ingest/runs/drawnMerge.test.tsx > Merge into a dataset… > maps, matches, runs the dry run first, and merges what the dry run showed
+   441 ms  src/ingest/ConnectScreenPinned.test.tsx > ConnectScreen pinned to a pipeline's draft > shows that draft's form without the Sources sidebar, and saves as an update
+   435 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence says so on the alert when the view cannot be opened
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /root/osprey-runs/rules/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /root/osprey-runs/rules/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c vitest run
+make[1]: *** [Makefile:24: test-js] Error 1
+make[1]: Leaving directory '/root/osprey-runs/rules/OspreyFlow_Core'
+make test: a part above failed
+make: *** [Makefile:175: test] Error 1
+Wall time: 577 s, exit 2 (no stack, no lease; set-up before it 11 s)
+exit=2

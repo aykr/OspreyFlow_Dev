@@ -37,6 +37,12 @@ from schemas.domain import Principal
 from schemas.person_ownership import OwnershipItem, OwnershipKind, PersonOwnership
 
 from .admin_people import DisableRefused
+from .screening import (
+    DEFAULT_CLASSIFICATION,
+    DEFAULT_HANDLING_CODE,
+    ListClearance,
+    _markings_join,
+)
 
 #: The seam for L3.4's promotion store: the kinds said in `not_yet_listed` until it is on main.
 PROMOTION_KINDS: tuple[str, ...] = ("promotions waiting for review", "reviews waiting on them")
@@ -88,15 +94,34 @@ SELECT EXISTS (
     LEFT JOIN datasets d ON d.id = w.dataset_id
     WHERE w.owner = $1 AND w.ended_at IS NULL
       AND NOT COALESCE(i.owning_unit = $2 AND {_CLEARED}, FALSE)
+) OR EXISTS (
+    SELECT 1 FROM screening_lists l{_markings_join("l")}
+    WHERE l.schedule_owner = $1 AND NOT (
+        COALESCE(m.classification, '{DEFAULT_CLASSIFICATION}') = ANY($3::text[])
+        AND COALESCE(m.handling_code, '{DEFAULT_HANDLING_CODE}') = ANY($5::text[]))
 )
 """
 
 
 async def withheld(
-    conn: asyncpg.Connection, person: str, *, admin_unit: str | None, cleared: list[str], top: str
+    conn: asyncpg.Connection,
+    person: str,
+    *,
+    admin_unit: str | None,
+    cleared: list[str],
+    top: str,
+    codes: list[str],
 ) -> bool:
-    """Whether the person owns items of these kinds the administrator may not see: never which."""
-    return bool(await conn.fetchval(_WITHHELD_SQL, person, admin_unit, cleared, top))
+    """Whether the person owns items of these kinds the administrator may not see: never which.
+    A screening list's refresh schedule is one, where the administrator is not cleared for the
+    list's classification (`cleared`) and handling code (`codes`, the ones they may receive): the
+    orchestrator's verification of lane/rules-lists at 7a1c760, under the owner's ruling below."""
+    return bool(await conn.fetchval(_WITHHELD_SQL, person, admin_unit, cleared, top, codes))
+
+
+def list_codes(admin: Principal, scheme: HandlingScheme) -> list[str]:
+    """The handling codes a list may carry for the administrator to see it (`ListClearance`)."""
+    return list(ListClearance.of(admin, scheme).codes)
 
 
 #: *Transfer and disable* refused while any item is withheld from the administrator: the owner's
@@ -120,7 +145,8 @@ async def refuse_if_withheld(
     these kinds the administrator may not see. Raises `admin_people.DisableRefused`, which that
     route already answers 409 with its code and words: `withheld_items`, naming nothing."""
     unit, cleared, top = reach(admin, scheme)
-    if await withheld(conn, person, admin_unit=unit, cleared=cleared, top=top):
+    codes = list_codes(admin, scheme)
+    if await withheld(conn, person, admin_unit=unit, cleared=cleared, top=top, codes=codes):
         raise DisableRefused(WITHHELD_ERROR, WITHHELD_WORDS)
 
 
@@ -226,7 +252,10 @@ class PostgresOwnershipStore:
             conn.transaction(isolation="repeatable_read", readonly=True),
         ):
             items = await owned_items(conn, person, admin_unit=unit, cleared=cleared, top=top)
-            hidden = await withheld(conn, person, admin_unit=unit, cleared=cleared, top=top)
+            hidden = await withheld(
+                conn, person, admin_unit=unit, cleared=cleared, top=top,
+                codes=list_codes(admin, scheme),
+            )  # fmt: skip
         return ownership_of(person, items, withheld=hidden)
 
 

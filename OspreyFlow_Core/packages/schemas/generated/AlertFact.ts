@@ -1,6 +1,15 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type AlertId = string;
+export type FactId = string | null;
+export type Classification = string;
+export type HandlingCode = string;
+export type ActionCode = string | null;
+export type SanitisationCode = string | null;
+export type OrgUnitId = string;
+export type ReviewDate = string | null;
+export type LegalBasis = string | null;
+export type HiddenFrom = Handling[][];
 export type InvestigationScope = string | null;
 export type Kind = "typology" | "hotlist" | "monitor" | "analyst" | "drawn_watch";
 export type Rule = string;
@@ -14,13 +23,6 @@ export type Audience = "case" | "team" | "owner" | "routed";
 export type Team = string | null;
 export type DatasetId = string | null;
 export type Handlings = Handling[] | null;
-export type Classification = string;
-export type HandlingCode = string;
-export type ActionCode = string | null;
-export type SanitisationCode = string | null;
-export type OrgUnitId = string;
-export type ReviewDate = string | null;
-export type LegalBasis = string | null;
 
 /**
  * One alert as the analytics store keeps it for alert trends (ADR-134 decision 3): written by
@@ -34,6 +36,8 @@ export type LegalBasis = string | null;
  */
 export interface AlertFact {
   alert_id: AlertId;
+  fact_id?: FactId;
+  hidden_from?: HiddenFrom;
   investigation_scope?: InvestigationScope;
   kind: Kind;
   rule: Rule;

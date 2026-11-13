@@ -337,11 +337,23 @@ class Rescreener:
         changed: Sequence[ScreeningEntry],
         diff: ListDiff,
     ) -> tuple[int, int]:
-        from .kyc_rules import CUSTOMER_TYPES, KycContext, party_name, screening_finding
+        from .kyc_rules import (
+            CUSTOMER_TYPES,
+            KycContext,
+            lists_cleared_for,
+            party_name,
+            screening_finding,
+        )
         from .rule_evaluation import PartlyRaised, RuleGate
 
         params = rule.params
         assert isinstance(params, KycScreeningParams)
+        # ADR-146 Amendment 7 point 8: only a list the deployer is cleared for is screened. A rule
+        # whose deployer is not cleared for this list screens nothing and records nothing about it
+        # (the orchestrator's review, item 2): its audit is read by every member of its case.
+        cleared = lists_cleared_for(changed, deployer, self.scheme)
+        if not cleared:
+            return 0, 0
         # The rule reads within its case's datasets, as at onboarding (ADR-099): its own dataset,
         # else the case's; whatever it writes belongs to the first of them. In a case reading a
         # composite it reads the case, and its alert goes into the case's analyst layer, whichever
@@ -371,7 +383,8 @@ class Rescreener:
         customers = raised = 0
         try:
             for entity_type in CUSTOMER_TYPES:
-                entries = [e for e in changed if e.entity_type == entity_type]
+                # Only a list the deployer is cleared for (ADR-146 Amendment 7).
+                entries = [e for e in cleared if e.entity_type == entity_type]
                 if not entries:
                     continue
                 cursor: str | None = None
@@ -385,11 +398,12 @@ class Rescreener:
                         customers += 1
                         dob = node.properties.get("date_of_birth")
                         born = _date(dob)
-                        for hit in screen(
-                            party_name(node), born, entries, min_score=params.min_score
-                        ):
+                        # Every changed entry the customer matches, one alert citing each
+                        # (ADR-146 Amendment 7).
+                        hits = screen(party_name(node), born, entries, min_score=params.min_score)
+                        if hits:
                             finding = await screening_finding(
-                                rule, deployer, node, node, hit, context
+                                rule, deployer, node, node, hits, context
                             )
                             if await gate.seen(finding):
                                 continue
@@ -408,9 +422,14 @@ class Rescreener:
             principal=self.runner,
             action="rule_evaluated",
             investigation_id=rule.investigation_id,
+            # Named and counted for the list's cleared entries alone, with the list's marking, so
+            # the rule audit gives the entry only to a reader cleared for the list (the review's
+            # review, item 2; `rule_holds.readable_rule_audit`).
             resolved_query={"rule_id": rule.id, "trigger": "list_update",
                             "list_name": diff.list_name, "version": diff.version,
-                            "entries": len(changed), "findings": raised},
+                            "entries": len(cleared), "findings": raised,
+                            "list_classification": cleared[0].classification or "OFFICIAL",
+                            "list_handling_code": cleared[0].handling_code or "P"},
             result_cardinality=raised,
         )  # fmt: skip
         return customers, raised

@@ -352,3 +352,39 @@ async def test_list_never_returns_another_analysts_alert(alert_store, audit) -> 
         )
         listed = await alert_store.list_authorized(OTHER_ANALYST)
         assert listed == [] or all(a.owner_id != OWNER.id for a in listed)
+
+
+async def test_a_repoint_and_a_rename_rewrite_each_citation_with_the_alerts_own_lists(alert_store: AlertStore) -> None:
+    """ADR-146 Amendment 7 (the lane review's item 8): a confirmed match's new revision, and a
+    renamed node, are written into the alert's citations in the statement that writes its own
+    lists, each citation's order and words kept; a citation left on the old id would read as hidden
+    and withhold the alert from a reader cleared for that list. Red with either rewrite planted out
+    of its statement."""
+    from schemas.domain import Alert, AlertCitation, AlertMode
+
+    tag = new_id()
+    ids = {k: f"{k}-{tag}" for k in ("cust", "l-a", "l-b", "s-a", "s-b", "s-a2", "l-b2")}
+    alert = Alert(
+        id=f"a-{tag}", rule_id="typology:kyc", owner_id=f"o-{tag}", mode=AlertMode.FULL,
+        referent_node_ids=[ids["cust"], ids["l-a"], ids["l-b"]], edge_ids=[ids["s-a"], ids["s-b"]],
+        investigation_id=f"case-{tag}", created_at=datetime.now(UTC), typology="kyc_screening",
+        citations=[AlertCitation(words="A", node_ids=[ids["l-a"]], edge_ids=[ids["s-a"]]),
+                   AlertCitation(words="B", node_ids=[ids["l-b"]], edge_ids=[ids["s-b"]])],
+    )  # fmt: skip
+    await alert_store.save(alert)
+    try:
+        await alert_store.apply_repoints({ids["s-a"]: ids["s-a2"]})
+        await alert_store.rename_alert_nodes({}, referents={ids["l-b"]: ids["l-b2"]})
+        stored = (await alert_store.cited_by_ids([alert.id]))[alert.id]
+        assert stored.edge_ids == [ids["s-a2"], ids["s-b"]]
+        assert stored.referent_node_ids == [ids["cust"], ids["l-a"], ids["l-b2"]]
+        assert [(c.words, c.node_ids, c.edge_ids) for c in stored.citations] == [
+            ("A", [ids["l-a"]], [ids["s-a2"]]),
+            ("B", [ids["l-b2"]], [ids["s-b"]]),
+        ]
+    finally:
+        conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+        try:
+            await conn.execute("DELETE FROM alerts WHERE id = $1", alert.id)
+        finally:
+            await conn.close()

@@ -61,6 +61,7 @@ from schemas.rights import CUSTOM_ROLE_PREFIX, Right, rights_for
 from .audit import AuditWriter
 from .entra_people import STALE_ACCESS_WORDS, access_current
 from .investigations import TEAM_GRANT_PREFIX, AccessLevel, InvestigationStore
+from .screening import ListClearance, _admitted_sql, _markings_join
 
 #: The kinds a person owns that the plan cannot list yet (L3.4's promotions, through L3.8's seam).
 #: Said in the plan, so an administrator is never told the list is whole.
@@ -197,6 +198,9 @@ class _Plan:
     elsewhere: int
     #: The marking each proposal's and watch's recipient must clear.
     marking_of: dict[tuple[str, str], str] = field(default_factory=dict)
+    #: Each list schedule's list marking, by the list (only one the administrator is cleared for is
+    #: listed), which its recipient must clear.
+    list_marking_of: dict[str, tuple[str, str]] = field(default_factory=dict)
 
 
 def answering(
@@ -233,6 +237,7 @@ async def _plan_items(
     *,
     cleared: list[str],
     top: str,
+    lists_cleared: ListClearance,
     classification: Sequence[str] = (),
 ) -> _Plan:
     """Everything the person owns in the administrator's unit, each read with the unit in its own
@@ -313,16 +318,25 @@ async def _plan_items(
         )
         if row["schedule_case"]:
             case_of[("pipeline_schedule", row["recipe_id"])] = row["schedule_case"]
+    # A list's schedule, read through the lists' own clearance filter, in the query (ADR-146
+    # Amendment 7 point 8; `screening._admitted_sql`). One the administrator is not cleared for is
+    # left out, its kind, number and place unsaid: `person_ownership`'s withheld check refuses the
+    # disable for it (409 `withheld_items`) until an administrator cleared for the list transfers it
+    # (the owner's ruling of 9 November 2026; the orchestrator's verification of 7a1c760). Its
+    # recipient must be cleared for the list too (`markings_hold`).
+    list_marking_of: dict[str, tuple[str, str]] = {}
     for row in await conn.fetch(
-        "SELECT list_name FROM screening_lists WHERE schedule_owner = $1 ORDER BY list_name", person
+        "SELECT l.list_name, COALESCE(m.classification, 'OFFICIAL') AS classification, "
+        "COALESCE(m.handling_code, 'P') AS handling_code "
+        f"FROM screening_lists l{_markings_join('l')} "
+        f"WHERE l.schedule_owner = $1 AND {_admitted_sql('l', 2)} ORDER BY l.list_name",
+        person,
+        list(lists_cleared.classifications),
+        list(lists_cleared.codes),
     ):
-        items.append(
-            OwnedItem(
-                kind="list_schedule",
-                id=row["list_name"],
-                label=f"The refresh schedule of the list {row['list_name']}",
-            )
-        )
+        label = f"The refresh schedule of the list {row['list_name']}"
+        items.append(OwnedItem(kind="list_schedule", id=row["list_name"], label=label))
+        list_marking_of[row["list_name"]] = (row["classification"], row["handling_code"])
     l38 = await l38_owned_items(conn, person, admin_unit=admin_unit, cleared=cleared, top=top)
     marking_of: dict[tuple[str, str], str] = {}
     for kind, sql in _MARKING_SQL.items():
@@ -347,7 +361,8 @@ async def _plan_items(
     ]
     items.extend(l38)
     elsewhere = int(await conn.fetchval(_ELSEWHERE_SQL, person, admin_unit) or 0)
-    return _Plan(items=items, case_of=case_of, elsewhere=elsewhere, marking_of=marking_of)
+    return _Plan(items=items, case_of=case_of, elsewhere=elsewhere, marking_of=marking_of,
+                 list_marking_of=list_marking_of)  # fmt: skip
 
 
 _RANK = {level.value: level.rank for level in AccessLevel}
@@ -478,13 +493,34 @@ def markings_hold(
     chosen: Mapping[tuple[str, str], str],
     who: Recipients,
     scheme: HandlingScheme,
+    list_markings: Mapping[str, tuple[str, str]] | None = None,
 ) -> None:
     """A proposal or a watch goes only to someone cleared to its dataset's marking (rule 3: a watch
     tells its owner of changes to an item they could not otherwise read), and a view or a board to
     someone cleared to its case's highest (ADR-145 Amendment 9: a view's count is not filtered per
-    reader). The words name neither the marking nor the item's contents."""
+    reader). A list's schedule goes only to someone cleared for the list's marking, its
+    classification and its handling code (`list_markings`; the orchestrator's verification of
+    e911b90, item 2: its refreshes run as them). The words name neither the marking nor the item's
+    contents."""
     for item in items:
         key = _key(item.kind, item.id)
+        if item.kind == "list_schedule" and list_markings is not None:
+            list_marking = list_markings.get(item.id)
+            account = who.people.get(chosen[key])
+            if (
+                list_marking is None
+                or account is None
+                or not ListClearance.of_clearance(
+                    account.clearance, account.receivable_handling_codes, scheme
+                ).admits(*list_marking)
+            ):
+                raise DisableRefused(
+                    "recipient_refused",
+                    f"{item.label}: {chosen[key]} is not cleared for the list; "
+                    "choose someone who is",
+                    [item],
+                )
+            continue
         marking = plan_markings.get(key)
         if marking is None:
             continue
@@ -600,6 +636,12 @@ def check_transfers(
     return chosen
 
 
+def _list_marking_words(marking: tuple[str, str] | None) -> dict[str, str]:
+    if marking is None:
+        return {}
+    return {"list_classification": marking[0], "list_handling_code": marking[1]}
+
+
 _TRANSFER_SQL: Mapping[str, str] = {
     "hotlist": "UPDATE hotlists SET owner_id = $2 WHERE id = $1 AND owner_id = $3",
     "monitor": "UPDATE monitors SET owner_id = $2 WHERE id = $1 AND owner_id = $3",
@@ -693,6 +735,7 @@ class AdminPeopleStore:
                 None if people is None else answering(people, person, unit),
                 cleared=cleared,
                 top=top,
+                lists_cleared=ListClearance.of(admin, scheme),
                 classification=scheme.classification,
             )
         return DisablePlan(person=person, items=plan.items, not_yet_listed=list(L38_OWNED_KINDS))
@@ -752,12 +795,13 @@ class AdminPeopleStore:
                 answering(list(who.people.values()), person, admin_unit),
                 cleared=cleared,
                 top=top,
+                lists_cleared=ListClearance.of(by, scheme),
                 classification=scheme.classification,
             )
             items = plan.items
             chosen = check_transfers(person, items, transfers, who, admin_unit)
             await _case_levels_hold(conn, plan, chosen, who)
-            markings_hold(plan.marking_of, items, chosen, who, scheme)
+            markings_hold(plan.marking_of, items, chosen, who, scheme, plan.list_marking_of)
             await _watch_clash(conn, items, chosen)
             done: list[tuple[OwnedItem, str]] = []
             for item in items:
@@ -786,7 +830,13 @@ class AdminPeopleStore:
                     investigation_id=(
                         item.id if item.kind in ("case_author", "home_case_author") else None
                     ),
-                    resolved_query={"from": person, "to": to, "kind": item.kind, "id": item.id},
+                    resolved_query={
+                        "from": person, "to": to, "kind": item.kind, "id": item.id,
+                        # A list's marking as it was moved, which the audit's read admits its
+                        # reader by, beside the list's now (`audit_section._lists_clause`).
+                        **_list_marking_words(plan.list_marking_of.get(item.id)
+                                              if item.kind == "list_schedule" else None),
+                    },  # fmt: skip
                     conn=conn,
                 )
                 done.append((item, to))

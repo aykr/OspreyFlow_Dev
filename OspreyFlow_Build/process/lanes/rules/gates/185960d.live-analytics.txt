@@ -1,0 +1,62 @@
+The analytics files live after the fact-sets migration fix, at b95d268 with the live case of 3a5811e (185960d after the rebase onto main 524b96a, the same tree) in the working tree (OspreyFlow_Core tree 1a0aa9656bd742d1652fb2ddd07a5055fd534560, the same at 3a5811e and 185960d), stack b under the rules lane's lease taken 2026-11-12T20:59:09Z: the analytics port conformance suite, test_analytics_clickhouse.py, test_analytics_clickhouse_migration.py, test_analytics_store.py. Exit 0, 302 passed. The new live case then shown red with the ALTERs gone: "assert 'fact_id' in {'alert_id', 'audience', ...}", 1 failed; the schema put back.
+Running on ospreyflow-test (stack b, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261112T205953Z-3d547fed/log: .venv/bin/python -m pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/conformance/analytics_port ../OspreyFlow_Build/tests/test_analytics_clickhouse.py ../OspreyFlow_Build/tests/test_analytics_clickhouse_migration.py ../OspreyFlow_Build/tests/services/api/test_analytics_store.py
+........................................................................ [ 23%]
+........................................................................ [ 47%]
+........................................................................ [ 71%]
+........................................................................ [ 95%]
+..............                                                           [100%]
+--------------------- 142 unmarked test(s) reached a store ---------------------
+tests/conformance/analytics_port/test_suite.py::test_a_case_alert_is_counted_in_its_own_case_only[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_movement_at_the_windows_start_is_in_the_window_not_before_it[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_retract_does_not_cross_investigations_it_was_not_asked_about[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_team_routed_alert_is_counted_for_the_teams_members_alone[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-6e+27-analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-9e+28-analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-6e+27-analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-9e+28-analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_trend_past_its_bounds_is_refused_not_cut[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_activity_counts_an_account_at_either_end_and_each_event_once[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_activity_counts_only_this_case_and_the_link_types_named[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_activity_counts_the_window_and_the_days_before_it[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_activity_says_the_first_movement_in_the_window_and_the_last_before_it[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_activity_sums_amounts_as_decimals_and_skips_one_that_is_not[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_after_a_retract_no_read_for_any_principal_returns_or_counts_a_retracted_event[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_alert_trend_counts_alerts_raised_per_week_and_month[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_alert_trend_filters_by_equalities[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_alert_trend_splits_by_rule_typology_severity_or_outcome[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_an_alert_kept_twice_is_counted_once_as_it_now_is[analytics_clickhouse]: ClickHouse on port 18124
+… and 122 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+2.09s call     tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_takes_more_ids_than_one_statement_holds[analytics_duckdb]
+1.84s call     tests/conformance/analytics_port/test_suite.py::test_restore_withdrawn_events_puts_back_exactly_what_that_load_withdrew[analytics_clickhouse]
+1.82s call     tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_leaves_every_other_event_on_the_same_link[analytics_clickhouse]
+1.79s call     tests/conformance/analytics_port/test_suite.py::test_retracting_the_load_that_wrote_withdrawn_events_leaves_nothing_to_restore[analytics_clickhouse]
+1.77s call     tests/conformance/analytics_port/test_suite.py::test_after_a_retract_no_read_for_any_principal_returns_or_counts_a_retracted_event[analytics_clickhouse]
+1.73s call     tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_takes_exactly_those_events_out_of_every_read[analytics_clickhouse]
+0.78s call     tests/conformance/analytics_port/test_suite.py::test_the_comparison_sees_a_missing_survivor_in_every_read[analytics_clickhouse]
+0.73s call     tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_takes_more_ids_than_one_statement_holds[analytics_clickhouse]
+0.67s call     tests/conformance/analytics_port/test_suite.py::test_alert_trend_splits_by_rule_typology_severity_or_outcome[analytics_clickhouse]
+0.60s call     tests/conformance/analytics_port/test_suite.py::test_unauthorised_list_events_matches_a_corpus_without_the_hidden_event[analytics_clickhouse]
+0.49s call     tests/conformance/analytics_port/test_suite.py::test_geocode_twice_changes_nothing_the_second_time[analytics_clickhouse]
+0.49s call     tests/conformance/analytics_port/test_suite.py::test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not[analytics_clickhouse]
+0.45s call     tests/test_analytics_clickhouse.py::test_a_polygon_with_a_hole_covers_what_duckdb_covers
+0.44s call     tests/conformance/analytics_port/test_suite.py::test_a_team_routed_alert_is_counted_for_the_teams_members_alone[analytics_clickhouse]
+0.44s call     tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-9e+28-analytics_clickhouse]
+0.44s call     tests/conformance/analytics_port/test_suite.py::test_geocode_records_the_covering_cell_on_each_event_with_a_point[analytics_clickhouse]
+0.39s call     tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-6e+27-analytics_clickhouse]
+0.39s call     tests/conformance/analytics_port/test_suite.py::test_geocode_a_point_on_a_shared_edge_lands_in_exactly_one_cell[analytics_clickhouse]
+0.39s call     tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_leaves_every_other_event_on_the_same_link[analytics_duckdb]
+0.38s call     tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-6e+27-analytics_clickhouse]
+0.38s call     tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-9e+28-analytics_clickhouse]
+0.38s call     tests/conformance/analytics_port/test_suite.py::test_geocode_clears_its_own_stale_value_and_leaves_other_sites_alone[analytics_clickhouse]
+0.38s call     tests/conformance/analytics_port/test_suite.py::test_restore_withdrawn_events_puts_back_exactly_what_that_load_withdrew[analytics_duckdb]
+0.36s call     tests/conformance/analytics_port/test_suite.py::test_geocode_neither_touches_nor_reveals_what_the_principal_cannot_see[analytics_clickhouse]
+0.36s call     tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_takes_exactly_those_events_out_of_every_read[analytics_duckdb]
+0.36s call     tests/conformance/analytics_port/test_suite.py::test_retracting_the_load_that_wrote_withdrawn_events_leaves_nothing_to_restore[analytics_duckdb]
+0.35s call     tests/conformance/analytics_port/test_suite.py::test_after_a_retract_no_read_for_any_principal_returns_or_counts_a_retracted_event[analytics_duckdb]
+0.34s call     tests/conformance/analytics_port/test_suite.py::test_alert_trend_counts_alerts_raised_per_week_and_month[analytics_clickhouse]
+0.34s call     tests/conformance/analytics_port/test_suite.py::test_an_alert_resting_on_a_handling_the_reader_may_not_view_moves_nothing[analytics_clickhouse]
+0.34s call     tests/conformance/analytics_port/test_suite.py::test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader[analytics_clickhouse]
+302 passed in 57.47s
+Wall time: 59 s, exit 0 (stack b, the lease rules took at 2026-11-12T20:59:09Z; set-up before it 11 s)

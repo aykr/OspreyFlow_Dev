@@ -33,6 +33,7 @@ from services.api.config import PostgresConfig
 from services.api.datasets import PostgresDatasetStore
 from services.api.investigations import InvestigationStore
 from services.api.link_type_store import LinkTypeProposalStore
+from services.api.screening import ScreeningListStore
 from services.api.person_ownership import (
     PROMOTION_KINDS,
     WITHHELD_ERROR,
@@ -72,7 +73,7 @@ async def dsn() -> AsyncIterator[str]:
 async def conn(dsn: str) -> AsyncIterator[asyncpg.Connection]:
     """The tables as their own stores make them, so the reads meet the real columns."""
     for store in (InvestigationStore, PostgresCaseViewStore, PostgresBoardItemStore,
-                  LinkTypeProposalStore, PostgresDatasetStore):  # fmt: skip
+                  LinkTypeProposalStore, PostgresDatasetStore, ScreeningListStore):  # fmt: skip
         held = await store.connect(dsn)  # type: ignore[attr-defined]
         await held.close()
     held_conn = await asyncpg.connect(dsn)
@@ -271,7 +272,25 @@ async def test_an_item_above_the_administrators_clearance_is_never_named_nor_cou
 HIDDEN_ONE = ["view_elsewhere", "board_elsewhere", "proposal_elsewhere",
               "proposal_of_another_unit_on_this_units_case",
               "proposal_of_this_unit_on_another_units_case", "watch_elsewhere",
-              "proposal_above", "watch_above", "watch_on_no_dataset"]  # fmt: skip
+              "proposal_above", "watch_above", "watch_on_no_dataset",
+              "list_schedule_above", "list_schedule_of_a_restricted_code"]  # fmt: skip
+
+
+async def _list_schedule(conn: asyncpg.Connection, name: str, owner: str,
+                         marking: tuple[str, str] | None) -> str:  # fmt: skip
+    """A screening list whose refresh schedule `owner` set, held at `marking` (none: OFFICIAL, P)
+    (ADR-146 Amendment 7; the orchestrator's verification of lane/rules-lists at 7a1c760)."""
+    await conn.execute(
+        "INSERT INTO screening_lists (list_name, source, location, use_for, subscribed_by, "
+        "subscribed_at, schedule_owner) VALUES ($1, 'csv', 'x', 'screening', $2, $3, $2)",
+        name, owner, T0,
+    )  # fmt: skip
+    if marking is not None:
+        await conn.execute(
+            "INSERT INTO screening_list_markings (list_name, classification, handling_code) "
+            "VALUES ($1, $2, $3)", name, *marking,
+        )  # fmt: skip
+    return name
 
 
 @pytest.mark.parametrize("hidden", HIDDEN_ONE)
@@ -295,6 +314,9 @@ async def test_each_item_left_out_is_said_to_be_withheld_and_never_named(
         "proposal_above": lambda: _proposal(conn, "c-k", "ana-1", dataset="ds-top"),
         "watch_above": lambda: _watch(conn, "c-k", "ana-1", dataset="ds-top"),
         "watch_on_no_dataset": lambda: _watch(conn, "c-k", "ana-1", dataset=None),
+        "list_schedule_above": lambda: _list_schedule(conn, "Nightjar list", "ana-1", ("SECRET", "P")),
+        "list_schedule_of_a_restricted_code": lambda: _list_schedule(
+            conn, "Nightjar list", "ana-1", ("OFFICIAL", "R")),
     }  # fmt: skip
     item = await made[hidden]()
 
@@ -380,3 +402,30 @@ def test_the_fixtures_markings_are_the_schemes_own() -> None:
     assert ADMIN.clearance in SCHEME.classification and "SECRET" == SCHEME.classification[-1]
     assert not SCHEME.clears(ADMIN.clearance, SCHEME.classification[-1])
     assert SCHEME.clears(ADMIN.clearance, "OFFICIAL")
+
+
+async def test_a_list_schedule_the_administrator_is_cleared_for_is_not_withheld(
+    conn: asyncpg.Connection, ownership: PostgresOwnershipStore
+) -> None:
+    """The other way (rule 4): a list's schedule at a marking the administrator clears is theirs to
+    transfer in *Disable…*'s plan (`admin_people`), so nothing is withheld for it and the disable is
+    not refused. Red with every list's schedule withheld: refused."""
+    await _list_schedule(conn, "Plain list", "ana-1", None)
+    await _list_schedule(conn, "Marked list", "ana-1", ("OFFICIAL", "P"))
+    owned = await ownership.owned_by("ana-1", admin=ADMIN, scheme=SCHEME)
+    assert owned.withheld is False
+    await refuse_if_withheld(conn, "ana-1", admin=ADMIN, scheme=SCHEME)
+
+
+async def test_a_restricted_code_list_is_not_withheld_from_an_administrator_who_receives_it(
+    conn: asyncpg.Connection, ownership: PostgresOwnershipStore
+) -> None:
+    """The code half, the other way (the orchestrator's re-check of 6bfc8d6, should 5): an OFFICIAL,
+    R list's schedule is withheld from the administrator who may not receive R (the parametrised
+    `list_schedule_of_a_restricted_code`), and not from one who may. Red with the code read for no
+    one: withheld from both."""
+    await _list_schedule(conn, "Restricted list", "ana-1", ("OFFICIAL", "R"))
+    receives = ADMIN.model_copy(update={"receivable_handling_codes": ["R"]})
+    assert (await ownership.owned_by("ana-1", admin=receives, scheme=SCHEME)).withheld is False
+    await refuse_if_withheld(conn, "ana-1", admin=receives, scheme=SCHEME)
+    assert (await ownership.owned_by("ana-1", admin=ADMIN, scheme=SCHEME)).withheld is True

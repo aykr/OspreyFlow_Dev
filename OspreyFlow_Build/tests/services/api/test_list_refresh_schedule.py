@@ -27,12 +27,15 @@ from fastapi.testclient import TestClient
 from services.api.config import PostgresConfig
 from services.api.list_schedule import ListRefreshExecutor
 from services.api.scheduler import next_slot
-from services.api.screening import ScreeningListStore
+from services.api.screening import ListClearance, ScreeningListStore
+
+from ontology.handling import load_uk_le_scheme
 
 from conduit_common.identity import new_id
 from schemas.domain import Principal
 from schemas.monitoring import ListSchedule
 from schemas.screening import ScreeningListUpdate, ScreeningSubscriptionInput
+from tests.services.api.screening_cleanup import EVERYTHING, remove_screening_lists
 from tests.services.api.test_rule_schedule import _Valkey
 from tests.services.api.test_screening_list_routes import (  # noqa: F401 - `world` is a fixture
     ANALYST,
@@ -42,14 +45,26 @@ from tests.services.api.test_screening_list_routes import (  # noqa: F401 - `wor
     world,
 )
 
+#: This file's lists' names begin so (`lists` removes them by it).
+SCHEDULED = "Scheduled test "
+SCHEME = load_uk_le_scheme()
 OWNER = Principal(id="list-owner", clearance="OFFICIAL", org_unit="unit-a", roles=["osprey-admin"])
 
 
 @pytest.fixture
 async def lists() -> AsyncIterator[ScreeningListStore]:
-    store = await ScreeningListStore.connect(PostgresConfig.from_env().dsn)
-    yield store
-    await store.close()
+    dsn = PostgresConfig.from_env().dsn
+    store = await ScreeningListStore.connect(dsn)
+    try:
+        yield store
+    finally:
+        # Its own lists, and the refusals recorded for them, removed on a failure too (CARRIES row
+        # 113, `screening_cleanup`); the `world` fixture removes the routes' own. First, so a store
+        # that fails to close cannot leave them (the orchestrator's review, a note).
+        try:
+            await remove_screening_lists(dsn, prefixes=[SCHEDULED])
+        finally:
+            await store.close()
 
 
 class _Refreshes:
@@ -63,7 +78,7 @@ class _Refreshes:
 
 
 async def _subscribed(lists: ScreeningListStore, schedule: ListSchedule) -> tuple[str, datetime]:
-    name = f"Scheduled {new_id()}"
+    name = f"{SCHEDULED}{new_id()}"
     await lists.subscribe(ScreeningSubscriptionInput(list_name=name, source="opensanctions",
                                                      location="lists/x.json"), OWNER.id, synthetic=False)  # fmt: skip
     status = await lists.set_schedule(name, schedule, OWNER.id)
@@ -83,7 +98,8 @@ def _executor(lists: ScreeningListStore, refresh: _Refreshes, owner: Principal |
         def __getattr__(self, name: str) -> object:
             return getattr(lists, name)
 
-    return ListRefreshExecutor(lists=_Only(), valkey=_Valkey(), resolve_owner=resolve, refresh=refresh)  # type: ignore[arg-type]
+    return ListRefreshExecutor(lists=_Only(), valkey=_Valkey(), resolve_owner=resolve, refresh=refresh,  # type: ignore[arg-type]
+                               scheme=SCHEME)  # fmt: skip
 
 
 async def test_a_scheduled_refresh_runs_once_as_the_person_who_set_it(lists: ScreeningListStore) -> None:
@@ -102,10 +118,52 @@ async def test_an_owner_without_the_right_is_refused_in_words_and_nothing_is_rea
     refresh = _Refreshes()
     await _executor(lists, refresh, OWNER.model_copy(update={"roles": ["analyst"]}), {name}).tick(at)
     assert refresh.calls == []
-    (update,) = [u for u in await lists.updates(org_unit=OWNER.org_unit, limit=50) if u.list_name == name]
+    (update,) = [u for u in await lists.updates(org_unit=OWNER.org_unit, cleared=EVERYTHING, limit=50) if u.list_name == name]
     assert (update.outcome, update.trigger) == ("refused", "schedule")
     assert update.words == (f"The scheduled refresh was refused: the schedule's owner, {OWNER.id}, no "
                             "longer holds load_screening_lists. The list was left as it was.")  # fmt: skip
+
+
+async def _marked(name: str, classification: str) -> None:
+    conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    try:
+        await conn.execute(
+            "INSERT INTO screening_list_markings (list_name, classification, handling_code) "
+            "VALUES ($1, $2, 'P') ON CONFLICT (list_name) DO UPDATE SET classification = $2",
+            name, classification,
+        )  # fmt: skip
+    finally:
+        await conn.close()
+
+
+async def test_an_owner_not_cleared_for_the_list_is_refused_in_words_and_nothing_is_read(
+    lists: ScreeningListStore,
+) -> None:
+    """The orchestrator's verification of e911b90, item 2: the list is SECRET now (raised since the
+    schedule was set, or the schedule given to someone), and its OFFICIAL owner's slot is refused,
+    recorded in words with the list's refreshes, which only a reader cleared for it is shown. Red
+    with the owner's clearance unread: the refresh ran as them."""
+    name, at = await _subscribed(lists, ListSchedule(every="daily", hour=5))
+    await _marked(name, "SECRET")
+    refresh = _Refreshes()
+    await _executor(lists, refresh, OWNER, {name}).tick(at)
+    assert refresh.calls == []
+    (update,) = [u for u in await lists.updates(org_unit=OWNER.org_unit, cleared=EVERYTHING, limit=50) if u.list_name == name]
+    assert (update.outcome, update.words) == ("refused", (
+        f"The scheduled refresh was refused: the schedule's owner, {OWNER.id}, is not cleared for "
+        "the list. The list was left as it was."))  # fmt: skip
+    official = ListClearance.of(OWNER, SCHEME)
+    assert name not in {u.list_name for u in await lists.updates(org_unit=OWNER.org_unit, cleared=official, limit=50)}
+
+
+async def test_an_owner_cleared_for_a_marked_list_refreshes_it(lists: ScreeningListStore) -> None:
+    """The other way: the same SECRET list, its owner SECRET, refreshed as them."""
+    name, at = await _subscribed(lists, ListSchedule(every="daily", hour=5))
+    await _marked(name, "SECRET")
+    refresh = _Refreshes()
+    cleared = OWNER.model_copy(update={"clearance": "SECRET"})
+    await _executor(lists, refresh, cleared, {name}).tick(at)
+    assert refresh.calls == [(name, OWNER.id)]
 
 
 async def test_a_stopped_schedule_runs_no_more(lists: ScreeningListStore) -> None:

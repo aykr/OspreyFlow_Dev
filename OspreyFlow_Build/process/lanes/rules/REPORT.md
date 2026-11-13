@@ -1,3 +1,202 @@
+# rules lane · report · rules-lists, fifth pass: the orchestrator's re-check of 6bfc8d6 (13 November 2026)
+
+| Item | State | Proving test |
+| --- | --- | --- |
+| MUST 3. Admin › Audit naming a hidden list (the transfer's entry, to any administrator of the unit) | done: an entry naming a list (`list_name`, or a transfer's `list_schedule` id) is read, counted and offered in the picker only by a reader cleared for the list's marking now and as recorded (the transfer records it), in the read's `WHERE` (`audit_section._lists_clause`); none given clears no list; the subscribe, schedule and refresh entries the same | live `test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list` (L28); route `test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance` (P52) |
+| S4. The code half alone; every list withheld | done, both red | L24c (`[list_schedule_of_a_restricted_code]`), L24d (the cleared cases) |
+| S5. A reader of R not withheld; `refuse_if_withheld` before the cleared transfer | done | `test_a_restricted_code_list_is_not_withheld_from_an_administrator_who_receives_it`; the cleared transfer case |
+| S6. Am 7 point 1: the withheld cases named, the audit sentence | done | — |
+| S7. The live records at the new head with its tree | done | below |
+
+**Gates at 9b3d07f** (on main 68568c3; `gates/9b3d07f.triage.txt`): offline plants 55 red; the three live files 65
+passed; live plants 34 red, built and restored green (147); `make test` the GPU preflight alone; `make -k ci` exit 0.
+
+**Out of map, this pass.** `services/api/audit_section.py`, `tests/services/api/test_audit_section_store.py` and
+`test_audit_section_routes.py`.
+
+# rules lane · report · rules-lists, fourth pass: the orchestrator's review of 7a1c760 (13 November 2026)
+
+MUST 1 was confirmed fixed. MUST 2 is redone to the owner's ruling of 9 November 2026: nothing of a withheld item is
+said, and nothing is moved by anyone who cannot see it.
+
+| Item | State | Proving test |
+| --- | --- | --- |
+| MUST 2. A hidden list's schedule listed in *Disable…* (its kind, count and place) and movable by one who cannot see it | done: left out of the plan; a withheld item (`person_ownership._WITHHELD_SQL`, by classification and code), so Disable is refused, 409 `withheld_items`, until a cleared administrator transfers it | `test_custom_roles_store.py`: `test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace`, `test_an_administrator_cleared_for_the_list_transfers_its_schedule`, `test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list` (L24, L24b, L25); `test_person_ownership_store.py`: two hidden cases in `test_each_item_left_out_is_said_to_be_withheld_and_never_named`, `test_a_list_schedule_the_administrator_is_cleared_for_is_not_withheld` |
+| S1. The transfer's audit by the list's own name | done (only visible lists are moved, by name) | the cleared case's audit check |
+| S2. Am 7's record ranges | done | — |
+| S3. Rule 12: named tests for the executor's refusal and the plan; `_holds`' code half; the must tests in the list | done | `test_a_party_held_at_its_lists_classification_under_another_code_is_not_reused` (P49b) |
+| S4. The schedule and refresh routes' check-then-write race | logged in Am 7 | — |
+
+**Gates.** Offline plants at this tree: 54 red, none broken (`lists/AM7_RED_RECORD.txt`). The offline files changed
+pass locally (`test_alert_citations_written.py`, `test_admin_roles_routes.py`, `test_admin_routes.py`,
+`test_person_ownership_route.py`). Then, on the orchestrator's word (the demo postponed), at 3a9f00a: the two live
+files on stack b, 42 passed (`gates/3a9f00a.live-disable.txt`); the live plants, L0 to L27 with L0b, L2b and L24b, 31
+red, built and restored green (`lists/AM7_LIVE_RECORD.txt`); `make test`, four failures, all main's and triaged
+(`gates/3a9f00a.triage.txt`); `make -k ci` exit 0, schemas-check included.
+
+**Out of map, this pass.** `services/api/person_ownership.py` (its withheld check), with
+`tests/services/api/test_person_ownership_store.py` and `test_admin_roles_routes.py` (its fake).
+
+# rules lane · report · rules-lists, third pass: the orchestrator's verification of e911b90 (12–13 November 2026)
+
+The verification confirmed the first review's items and found two more rule-3 reads, both fixed with tests
+each way and plants. Gated on stack b under the rules lane's lease, then offline; head in "ready".
+
+| Item | State | Proving test |
+| --- | --- | --- |
+| MUST 1. A listed party reused at its list's old marking after a raise | done: reused only where its marking holds the list's now (`kyc_rules._holds`); else a party of its own at the list's marking | `test_a_party_held_below_its_lists_marking_now_is_not_reused`, `test_a_party_held_at_its_lists_marking_is_reused` (P49) |
+| MUST 2. *Disable…*'s plan naming a hidden list's schedule and handing it on | done: read through `_admitted_sql`; a hidden one shown as "a list you can't see" under `hidden-list-N`; `markings_hold` checks the list's classification and code; `ListRefreshExecutor` refuses an owner not cleared, in words | `test_custom_roles_store.py`: `test_the_plan_names_only_the_lists_its_administrator_is_cleared_for`, `test_a_hidden_lists_schedule_goes_only_to_someone_cleared_for_it`, `test_a_lists_schedule_a_cleared_administrator_sees_still_goes_only_to_someone_cleared` (L24, L25); `test_list_refresh_schedule.py`: `test_an_owner_not_cleared_for_the_list_is_refused_in_words_and_nothing_is_read`, `test_an_owner_cleared_for_a_marked_list_refreshes_it` (L26) |
+| 3. A DuckDB migration test | done | `tests/adapters/analytics_duckdb/test_alert_fact_sets_migration.py` (P51, P51b) |
+| 4. Am 7 point 1 true; the unfiltered reads named; "lowering is removing" corrected | done | `spec/06_DECISIONS.md` ADR-146 Am 7 |
+| 5. ClickHouse: the offline case's own red, the live red's raw output, `_has_column` one | done | P50 (`AM7_RED_RECORD.txt`); L27 (`AM7_LIVE_RECORD.txt`, raw) |
+| 6. The friction fragment one row, current counts | done | `process/friction/2026-11-12-rules-lists.md` |
+| 7. Stale text: this report, `app.py`'s subscribe docstring, ClickHouse `load_alert_facts` | done | — |
+| 8. Plant records at the final tree, headed by its id | done | `lists/AM7_RED_RECORD.txt` (53 red), `lists/AM7_LIVE_RECORD.txt` (30 red) |
+| NOTE. The confirm commits before `triage_citations`' `FOR UPDATE` | carried (row text sent) | — |
+
+**Gates.** Offline plants: P1 to P51, P3b and P51b, 53 red, none broken. Live plants: L0 to L27, L0b and L2b, 30
+red, built and restored green (103). One earlier built red, intermittent, is kept raw (`verification-1`). Broad
+live run at d7f7f29 (`gates/d7f7f29.live.txt`): 35 failed, the same environmental 35 as at 00b24cc, none in a
+file this branch changes. `make test` at 8a07144 errored on the new list-schedule file, which needs Postgres;
+its cases moved into `test_custom_roles_store.py` (live), and the live plants were re-run after the move.
+Final `make test` and `make -k ci`: `gates/<head>.{test,ci}.txt`.
+
+**Out of map, this pass, for ratification.** `services/api/admin_people.py` and `services/api/list_schedule.py`
+(item 2), `tests/services/api/test_custom_roles_store.py`, `tests/adapters/analytics_duckdb/test_alert_fact_sets_migration.py`.
+
+**Decisions taken.** A hidden list's item id is its ordinal among the person's hidden lists (`hidden-list-N`):
+stable while the plan and the transfer read the same lists, and checked again inside the transfer's
+transaction; a list gained or lost between the two can move the ordinal, which the recipient's clearance check
+at the list actually moved still holds (rule 3), logged. `needs_clearance` is left empty for a list, so *Transfer
+to…* does not name a hidden list's level; the refusal names neither list nor marking. After a raise, a new party
+may be written at each match while the old one is found first (the lookup returns the first carrying the name):
+more nodes for one entry, never a leak, logged in Am 7.
+
+# rules lane · report · rules-lists, second pass: the orchestrator's review and the owner's ruling on every close (12 November 2026, evening)
+
+The review of 97826d0 found four rule-3 leaks and the owner ruled at about 15:30 that a close decides only the
+citations its closer may read, for every disposition. All built in one pass; my lane-reviewer then found 15
+defects, fixed below. Red first: `lists/AM7_RED_RECORD.txt` (offline P1 to P48 at their call sites, headed
+by the commit and the code's identity) and `lists/REVIEW2_RED_BEFORE.txt` (the new cases against the code
+before the pass). Am 7 rewritten as built.
+
+**Gated on the orchestrator's go (12 November, 19:00 to 22:00 UTC), stack b under the rules lane's lease,
+then offline.** Final head 5203481 (schemas last) on main 524b96a.
+- Offline plants re-run after the rebase (`lists/AM7_RED_RECORD.txt`): 49 red, none broken.
+- Live plants (`lists/AM7_LIVE_RECORD.txt`): L0 to L23, L0b and L2b, 26 red, built and restored green.
+  The first runs found L0 broken (the fixture's rewrap left an empty `try:`), L4 and L12 green, and L6 not
+  applied, all four because the second pass moved the invariant (the judge asks the store with its
+  clearance; the kept marking lives in its own table; the refresh filters once). Each was retargeted to
+  where the invariant now lives, with the earlier runs kept raw.
+- Broad live run at 00b24cc (`gates/00b24cc.live.txt`, with test_route_rights.py; 310 files): 37 failed.
+  - Two were this branch's (`test_kyc_rules.py`'s close-refusal cases): stale expectations of the stored
+    status, and a refusal injected at a write a cited approval no longer makes. Both fixed and shown red for
+    their own reasons; the file is green at the final head (`gates/3511480.live-kyc.txt`).
+  - 35 were environmental, triaged in `gates/00b24cc.live.triage.txt`.
+- `make test` at 3511480 (`gates/3511480.test.txt`): found two more of this branch's.
+  - The ClickHouse fact-set `ALTER`s ran at every start. ADR-127 decision 6 asks `system.columns` first,
+    since a no-op `ALTER` still goes through a Replicated DDL queue. Fixed: a new store is made with the
+    columns, an old one is altered once. Proved by the fake and live (`gates/185960d.live-analytics.txt`:
+    302 passed, the new case red).
+  - Two sentence-rule fakes no longer matched the real contract (`_context`, `_findings`). Fixed.
+- Final head: `make test` (`gates/5203481.test.txt`) fails only the GPU preflight, which fails at main too.
+  `make -k ci` (`gates/5203481.ci.txt`) exits 0, schemas-check included.
+
+| Review item | State | Proving test |
+| --- | --- | --- |
+| 1. Lists screened by clearance in the store's `WHERE`, for every caller; sentence words name no list | done | `test_screening_clearance.py` (equivalence with `handling_readable`, the KYC gate, a sentence rule, the preview, the words; P25 to P29); live `test_a_lists_entries_are_read_only_for_a_clearance_admitting_its_marking` (L8) |
+| 2. A refresh's audit names and counts only cleared lists, shown only to cleared readers | done | `test_the_rule_audit_names_a_lists_re_screening_only_to_a_reader_cleared_for_the_list` (P30); the two marked refresh cases, live (L15) |
+| 3. The Lists routes filtered, an access test each way; refresh, schedule and subscribe by a hidden name | done | live `test_a_list_is_shown_only_to_a_reader_cleared_for_its_marking`, `test_a_list_a_reader_is_not_cleared_for_is_answered_as_one_never_subscribed`, the store's case (L9 to L11, L14) |
+| 4. The rule audit reads a cited firing as the queue does; Am 7's "Not changed" corrected; the test and P21 flipped | done | `test_the_rule_audit_reads_a_firing_citing_two_lists_as_the_queue_reads_its_alert` (P21) |
+| The owner's ruling: a close decides only readable citations, every disposition, proposal and approval | done | `test_alert_citations_closing.py` (P31 to P35); live `test_a_close_decides_only_the_matches_its_closer_may_read`, `test_an_approval_by_a_reader_cleared_for_both_confirms_only_the_proposed_match` (L17, L18) |
+| 6. Trends count a cited alert once per reader as the queue shows it | done | `test_the_trends_count_a_cited_alert_once_for_each_reader_as_the_queue_shows_it`; conformance `test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader` (both adapters; P36 to P38, L19) |
+| 7. A load's report counts only what its loader may read | done | `test_a_loads_report_counts_only_the_alerts_its_loader_may_read`, offline (P39) and live (L16) |
+| 8. A reload never lowers a list's marking | done | `test_a_reload_that_would_lower_a_lists_marking_is_refused` (P40), live `…_is_refused_and_changes_nothing` (L13) |
+| 9. The listed party keyed by its entry id | **done otherwise:** keyed by its name and every property it is written with, never failing past the bound; by entry id it needs an ontology version (not this lane's), logged | `test_a_match_reuses_its_own_entrys_party_never_another_entry_of_the_same_name`, `test_a_match_on_a_name_more_parties_share_than_the_lookup_reads_never_fails_the_rule`, `test_a_written_party_is_one_the_ontology_declares` (P24, P41, P42; live L23) |
+| 10. Point 6 with a differing approver; Home's counts, Reports figures, the address; risk with a hidden factor | done | `test_an_approver_cleared_for_one_list_approves_only_that_lists_proposal`; `test_homes_counts_…`, `test_the_reports_figures_…`, `test_the_alerts_address_…`; live `test_a_reader_not_cleared_for_a_list_is_given_a_risk_its_hidden_match_takes_no_part_in` |
+| 11. Out-of-map files listed for ratification | done | below |
+| Notes: removal before close; the plants' code identity; collection error apart from red | done | the five fixtures; each record's header; the runners' BROKEN |
+| Gates (`make test`, `make -k ci`, live) at the head | done on 12 November evening (above), and again after the third pass | `gates/` |
+
+**Out of the rules lane's map, for ratification (item 11).** `services/api/packs.py` (a pack item read by the
+citations it shows); `services/api/screening_refresh.py` and `scripts/load_screening_list.py`, with
+`scripts/seed_ledger_fixture.py` and `scripts/refresh_screening_list.py` (the store's new signatures);
+`services/api/app.py` (the preview, *Test* and the four Lists routes); `services/api/rule_holds.py` (the rule
+audit); `services/api/sentence_rules.py` and `rule_sentences.py` (a sentence's lists and words);
+`packages/adapters/analytics_duckdb/{alert_facts,adapter,schema}.py`, `packages/adapters/analytics_clickhouse/{adapter,schema}.py`
+and `packages/schemas/analytics.py` (`AlertFact.fact_id`, `hidden_from`); `spec/01_DOMAIN_MODEL.md`. Tests of
+other areas changed for the new signatures: `test_rule_editor_routes.py`, `test_rule_sentence_routes.py` (the
+scheme's dependency), `test_alert_evidence_withheld.py` (`TriageStore.triage_citations`, the real decision),
+`test_alert_node_marking.py` (`save`'s `cited_handlings`), the analytics conformance suite (one case).
+
+**The lane-reviewer's findings on the pass, and what became of each.** 1: `list_entry_id` was undeclared in the
+ontology, so ArcadeDB would refuse every new party; the fakes accepted it (rule 15). Reworked as above, and
+the fakes now validate writes and refuse a lookup on a field ArcadeDB cannot find by. 2: records claimed before
+they existed; now recorded offline, and the live ones are said to be unrun. 3: self-approval beside another's
+proposal, refused. 4: confirm read from the first proposal, now each its own. 5: a partial close cleared
+another reader's claim, now kept. 6: a sentence alert on a hidden list shown to its subject's readers, now
+marked as the list. 7: the hidden-name refusal is unique to hidden lists; the spec now says so, logged for the
+owner. 8: the hold note, now only for the loader's own matches (held rows' reasons logged). 9: an unmarked list
+is OFFICIAL for `hidden`. 10: the audit also reads the list's marking now. 11: item 7's call sites are planted
+live only (L16, L20). 12: stored and served decider agree. 13: the positive route case added. 14: friction
+row updated; the schemas commit is the orchestrator's to take, as before. 15: logged with 7.
+
+## Decisions taken (second pass)
+- A list's marking is kept apart from its entries (`screening_list_markings`), so an emptied list keeps it.
+- A code change at the same classification counts as lowering (codes are not ranked): strict.
+- A hidden list's name, offered for a new subscription, is refused before anything is written. That refusal is
+  unique to hidden names, so it tells the administrator one exists (a name, not its contents). For the owner.
+- The listed party is found by its properties, not an entry id: an entry id needs an ontology version.
+- A close that leaves a citation open hands the alert back open and unassigned; a proposal leaves it claimed by
+  its proposer. A claim and a suppression stay the alert's, shown to every reader (no list, match or count);
+  a suppression's free-text reason is the lead's to word. Logged.
+- Trends: one row per set of citations, at most six citations (else counted for no one, said in Am 7).
+- A party written before entry ids is not found by id: a later match on its entry writes it once more.
+- A list's refresh is recorded only for rules whose deployer is cleared for it.
+
+# rules lane · report · rules-lists: CARRIES rows 113 and 114 (ADR-146 Amendment 7), 12 November 2026
+
+Resumed from HANDOFF.md (stale: removed, never committed; no `wip(rules)` commit was on the branch).
+Branch `lane/rules-lists`, rebased on main b4b570d, the packages/schemas commit at the head. Not pushed.
+
+| Brief item | State | Proving test |
+| --- | --- | --- |
+| Row 113: every live file loading a screening list removes its own, in teardown (after the `yield`, so on failure too) | done: `test_kyc_rules`, `test_screening_refresh`, `test_screening_list_store`, `test_screening_list_routes` (`world`, shared by `test_list_refresh_schedule`), `test_list_refresh_schedule` (its lists renamed "Scheduled test ") | `test_kyc_rules.py::test_no_other_file_leaves_a_list_naming_this_files_people`, red before the teardowns (live plants L0, L0b), green after |
+| Am 7, one owner on two lists: one alert citing both | done | `test_one_owner_on_two_lists_raises_one_alert_citing_both` (live, L1); `test_one_finding_cites_each_list_and_its_words_name_none` |
+| Each list's citation and `owner_listed` shown only to a reader cleared for that list, at each read path (queue, explain, canvas, claim/release/dispose/approve/send back/assign, suppress, packs), each with a leak plant | done | `test_alert_citations_per_list.py` (28; plants P1–P10, P3b); live `test_a_reader_not_cleared_for_a_list_is_shown_the_alert_with_the_other_list_alone` (L3) |
+| A list's marking (the rule-11 gap: lists carried none) | done: OFFICIAL/P by default; above the ceiling and unit-restricted codes refused; kept by an update and a refresh | `test_screening.py` (P11–P13, P22, P23); `test_an_update_keeps_a_marked_lists_marking` and the refresh's case (L5) |
+| A true positive confirms only the matches the closer can read (the owner's ruling, 12:05) | done | `test_a_true_positive_confirms_only_the_matches_the_closer_can_read` (live, L2); `test_a_repoint_and_a_rename_rewrite_each_citation_with_the_alerts_own_lists` (L7, L2b) |
+| What is written names no list (node sources, words, ALERTED_ON per list, trends, re-mark) | done | `test_alert_citations_written.py` (9; P15–P20, P24) |
+| Point 8: a rule screens only lists its deployer is cleared for | done | `test_a_rule_screens_only_against_the_lists_its_deployer_is_cleared_for` (P14); live (L4, and the refresh L6) |
+| Am 7 written as built, the rulings dated | done | `spec/06_DECISIONS.md` ADR-146 Amendment 7; reservation "written" |
+| Offline gates (`make test`, `make -k ci`, schemas-check) | done, on the server's heavy slot (the orchestrator's go). At 962d6e0, domain-model-coverage-check was red on AlertCitation (mine, fixed in the domain model). At 086ed55, ci exit 0; make test 12921 passed, with two failures outside the branch | `gates/086ed55.{test,ci,triage}.txt`, `gates/962d6e0.*` |
+
+Half-done: none.
+
+**Records.** Offline plants at 8d1997e's tree: 25 of 25 red, the three files green built and restored
+(`lists/AM7_RED_RECORD.txt`). Live plants on stack c at 0eae072: 10 of 10 red, built and restored green
+(`lists/AM7_LIVE_RECORD.txt`). The broad leased run at 0eae072 (the live files the change reaches against main,
+plus `test_route_rights.py`): 3419 passed, 36 failed, none of them in a file the change reaches. All 36 are triaged
+in `gates/0eae072.live.triage.txt`: valkey on stack a's port, no model or stanza service, the apply harness, no
+Azure blob settings, one case's residue that passes alone, and phase 8's exit, which fails at main the same way.
+The rebase onto 5675103 overlaps rules-b only in the two spec files, so no code under the live run changed.
+Stack c is down and released.
+
+**Lane review.** 16 items; each fixed with its test and plant, or answered in Am 7 (see the friction row,
+`process/friction/2026-11-12-rules-lists.md`).
+
+## Decisions taken
+- Point 8: a rule screens only lists its deployer is cleared for (the strict option; the orchestrator confirmed it stands).
+- Three files keep their setup-time wipes of their own names: a killed run leaves nothing for the next run of that file to trip on.
+- The rule audit stays strict: a firing that cites a hidden list is withheld whole.
+- The trends undercount rather than leak: an alert is counted only for a reader cleared for every handling it rests on.
+- A subscribed list takes its marking from its file, within the deployment's ceiling; a unit-restricted code is refused, since a list is read by every unit's rules.
+- The approver of a two-person close is the closer the ruling means.
+
+## Requests / carries
+- Gates done (see the table). Branch rebased on main b4b570d. Main's later commits (to df2643b) are docs only and overlap no file of this branch.
+- Carry: in the broad run, test_worker, test_ws_ticket and resolve/test_trigger reach valkey on 6379 rather than the leased stack's port. Phase 8's exit criterion fails on stack c at main.
+
 # rules lane · report · rules-hyg, three hygiene carries, and the test_kyc_rules fix (10 November 2026, 20:30–23:30 UTC)
 
 - **Item 1, Home's key cap: MET.** `.home-key` no longer dims itself; `homeKey.test.ts` reads the tokens and blends the key cap over the primary button's three faces in three themes: red on main (light 4.13, GOV.UK 3.91, and dark's pressed 3.59, which T3 cannot reach), green 9/9. T3's eight listings removed with it. Merger: no findings.

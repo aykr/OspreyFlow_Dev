@@ -29,9 +29,10 @@ from datetime import UTC, date, datetime
 from conduit_common.identity import new_edge_id, new_node_id
 from ontology.handling import HandlingScheme, merge_handling
 from ports.compute import ComputePort
-from ports.graph import GraphPort
+from ports.graph import FindLimitExceeded, GraphPort
 from schemas.compute import OwnershipLink, OwnershipRequest, OwnershipTrace, StructureNode
 from schemas.domain import (
+    AlertCitation,
     DocumentVerificationParams,
     EdgeWrite,
     ExpandRequest,
@@ -47,9 +48,10 @@ from schemas.domain import (
     TypologyRule,
 )
 
+from .alerts import SCREENING_MATCH_WORDS
 from .ownership import OWNERSHIP_EDGE_TYPES, read_structure
 from .rule_evaluation import Finding, handling_readable
-from .screening import ScreeningHit, ScreeningListStore, screen
+from .screening import ListClearance, ScreeningEntry, ScreeningHit, ScreeningListStore, screen
 
 CUSTOMER_TYPES = ("Person", "Organisation")
 
@@ -163,6 +165,27 @@ def customer_rows(customers: Sequence[NodeWrite]) -> list[int]:
 # --- screening ----------------------------------------------------------------
 
 
+def list_handling(entry: ScreeningEntry, deployer: Principal) -> Handling:
+    """The marking a match on `entry`'s list carries (ADR-146 Amendment 7): the list's
+    classification and handling code (unmarked, OFFICIAL and P, as every list was), in the
+    deployer's unit, who writes it."""
+    return Handling(
+        classification=entry.classification or "OFFICIAL",
+        handling_code=entry.handling_code or "P",
+        originator=deployer.org_unit,
+        owning_unit=deployer.org_unit,
+    )
+
+
+def lists_cleared_for(
+    entries: Sequence[ScreeningEntry], deployer: Principal, scheme: HandlingScheme
+) -> list[ScreeningEntry]:
+    """The entries of the lists the rule's deployer is cleared for (ADR-146 Amendment 7): a rule
+    runs as its deployer, and screens no one against a list its deployer may not read, as it judges
+    no customer its deployer may not read (rule 3)."""
+    return [e for e in entries if handling_readable(scheme, deployer, list_handling(e, deployer))]
+
+
 def _listed_write(hit: ScreeningHit, deployer: Principal, now: datetime) -> NodeWrite:
     entry = hit.entry
     if entry.entity_type == "Person":
@@ -190,12 +213,9 @@ def _listed_write(hit: ScreeningHit, deployer: Principal, now: datetime) -> Node
             sources=[SourceRef(document_id=entry.list_name, locator=entry.id, excerpt_hash="")],
             first_seen=now,
         ),
-        handling=Handling(
-            classification="OFFICIAL",
-            handling_code="P",
-            originator=deployer.org_unit,
-            owning_unit=deployer.org_unit,
-        ),
+        # The list's marking (ADR-146 Amendment 7): a match on it is shown only to a reader it
+        # clears, since its `SAME_AS` is marked by both its ends. Unmarked, OFFICIAL and P.
+        handling=list_handling(entry, deployer),
         created_by=deployer.id,
         created_at=now,
     )
@@ -205,19 +225,55 @@ async def _listed_party(
     hit: ScreeningHit, ctx: KycContext, deployer: Principal, now: datetime
 ) -> tuple[str, NodeWrite | None, Handling]:
     """The listed party's node: the one already written for this entry if the deployer can read
-    it, else a new one to write with the alert."""
+    it, else a new one to write with the alert (the orchestrator's review, item 9). Found by its
+    indexed name and every other property the party is written with (`also`: its list, listing,
+    given names and date of birth, or an organisation's country), so two entries sharing a family
+    name, on one list or two, are two parties. Past the lookup's bound (more visible people sharing
+    the name than it reads, none of them this entry's), a party of its own is written, never a
+    failed rule: a second node for one entry, which resolution may later link (rule 6). Keyed by
+    the entry's own id it would need that id declared and indexed in the ontology, which is not this
+    lane's to change (logged)."""
     candidate = _listed_write(hit, deployer, now)
     key = "family_name" if hit.entry.entity_type == "Person" else "name"
-    found = await ctx.graph.find_node(
-        hit.entry.entity_type, key, str(candidate.properties[key]), deployer
-    )
-    if found is not None and found.properties.get("list_name") == hit.entry.list_name:
+    also = {k: str(v) for k, v in candidate.properties.items() if k != key}
+    try:
+        found = await ctx.graph.find_node(
+            hit.entry.entity_type, key, str(candidate.properties[key]), deployer, also=also
+        )
+    except FindLimitExceeded:
+        found = None
+    if (
+        found is not None
+        and all(str(found.properties.get(k)) == v for k, v in also.items())
+        and _holds(ctx.scheme, found.handling, candidate.handling)
+    ):
         return found.id, None, found.handling
+    # None found, or one written at a marking below the list's now (a list may be reloaded at a
+    # higher marking, never a lower: `replace_list`): a party of its own at the list's marking, so
+    # the match is never shown at the old one (the orchestrator's verification of e911b90, item 1).
     return candidate.id, candidate, candidate.handling
+
+
+def _holds(scheme: HandlingScheme, found: Handling, wanted: Handling) -> bool:
+    """A party found at `found` may carry a match at `wanted`: its classification at least as high,
+    and the same handling code (a code is not ranked, as `screening._lowers` reads it)."""
+    try:
+        return scheme.clears(found.classification, wanted.classification) and (
+            found.handling_code == wanted.handling_code
+        )
+    except Exception:  # noqa: BLE001 - a marking outside the scheme holds nothing
+        return False
 
 
 _LISTING_WORDS = {"sanction": "a sanctions list", "pep": "a politically exposed persons list",
                   "adverse_media": "an adverse-media list"}  # fmt: skip
+
+
+def _hit_words(hit: ScreeningHit) -> str:
+    return (
+        f"“{hit.entry.name}” on {_LISTING_WORDS.get(hit.entry.listing, 'a screening list')} "
+        f"({hit.entry.list_name}), score {hit.score:.2f}"
+    )
 
 
 async def screening_finding(
@@ -225,51 +281,72 @@ async def screening_finding(
     deployer: Principal,
     customer: Party,
     screened: Party,
-    hit: ScreeningHit,
+    hits: Sequence[ScreeningHit],
     ctx: KycContext,
     *,
     chain_words: str = "",
     chain_nodes: Sequence[str] = (),
     chain_edges: Sequence[str] = (),
 ) -> Finding:
+    """One finding for one screened party, citing every entry it matches, on whichever lists
+    (ADR-146 Amendment 7, the owner's ruling of 12 November 2026): each match is a citation of its
+    own (the listed party and the scored, inferred `SAME_AS` to it), which a reader is shown only
+    if they may read both, so a list one reader may not see is never named, or counted, to them."""
+    if not hits:
+        raise ValueError("a screening finding needs at least one match")
     now = datetime.now(UTC)
-    listed_id, listed_write, listed_handling = await _listed_party(hit, ctx, deployer, now)
-    same_as = EdgeWrite(
-        id=new_edge_id(),
-        type="SAME_AS",
-        source=screened.id,
-        target=listed_id,
-        properties={"score": hit.score, "model_version": f"screening:{hit.entry.list_name}"},
-        basis="probabilistic",
-        provenance=Provenance(
-            state=ProvenanceState.INFERRED,
-            sources=[
-                SourceRef(document_id=hit.entry.list_name, locator=hit.entry.id, excerpt_hash="")
-            ],
-            extracted_by=f"screening:{hit.entry.list_name}",
-            extraction_confidence=min(hit.score, 1.0),
-            first_seen=now,
-        ),
-        handling=merge_handling(screened.handling, listed_handling, ctx.scheme),
-        created_by=deployer.id,
-        created_at=now,
-    )
+    pending: list[NodeWrite | EdgeWrite] = []
+    citations: list[AlertCitation] = []
+    citation_handlings: list[Handling] = []
+    for hit in hits:
+        listed_id, listed_write, listed_handling = await _listed_party(hit, ctx, deployer, now)
+        citation_handlings.append(listed_handling)
+        same_as = EdgeWrite(
+            id=new_edge_id(),
+            type="SAME_AS",
+            source=screened.id,
+            target=listed_id,
+            properties={"score": hit.score, "model_version": f"screening:{hit.entry.list_name}"},
+            basis="probabilistic",
+            provenance=Provenance(
+                state=ProvenanceState.INFERRED,
+                sources=[
+                    SourceRef(
+                        document_id=hit.entry.list_name, locator=hit.entry.id, excerpt_hash=""
+                    )
+                ],
+                extracted_by=f"screening:{hit.entry.list_name}",
+                extraction_confidence=min(hit.score, 1.0),
+                first_seen=now,
+            ),
+            handling=merge_handling(screened.handling, listed_handling, ctx.scheme),
+            created_by=deployer.id,
+            created_at=now,
+        )
+        pending.extend(w for w in (listed_write, same_as) if w is not None)
+        citations.append(
+            AlertCitation(words=_hit_words(hit), node_ids=[listed_id], edge_ids=[same_as.id])
+        )
     who = party_name(screened)
     words = (
-        f"{party_name(customer)}{chain_words}: {who} matches “{hit.entry.name}” on "
-        f"{_LISTING_WORDS.get(hit.entry.listing, 'a screening list')} ({hit.entry.list_name}), "
-        f"score {hit.score:.2f} — a suggestion to confirm, not a finding"
+        f"{party_name(customer)}{chain_words}: {who} {SCREENING_MATCH_WORDS} — a suggestion to "
+        "confirm, not a finding"
     )
+    cited_nodes = {i for c in citations for i in c.node_ids}
+    cited_edges = {i for c in citations for i in c.edge_ids}
     return Finding(
         rule=rule,
         deployer=deployer,
         typology="kyc_screening",
         subject=customer.id,
-        refs=(screened.id, hit.entry.id),
+        refs=(screened.id, *sorted(h.entry.id for h in hits)),
+        cited_refs=tuple(sorted(h.entry.id for h in hits)),
         words=words,
-        node_ids=sorted({customer.id, screened.id, listed_id, *chain_nodes}),
-        edge_ids=sorted({same_as.id, *chain_edges}),
-        pending=tuple(w for w in (listed_write, same_as) if w is not None),
+        node_ids=sorted({customer.id, screened.id, *cited_nodes, *chain_nodes}),
+        edge_ids=sorted({*cited_edges, *chain_edges}),
+        pending=tuple(pending),
+        citations=tuple(citations),
+        citation_handlings=tuple(citation_handlings),
     )
 
 
@@ -341,14 +418,16 @@ async def judge_screening(
     assert isinstance(params, KycScreeningParams)
     if ctx.screening is None:
         raise RuntimeError("this deployment has no screening list store")
-    entries = {t: await ctx.screening.entries(t) for t in CUSTOMER_TYPES}
+    # ADR-146 Amendment 7 point 8: only the lists the deployer is cleared for, in the store's own
+    # query (the orchestrator's review, item 1: never filtered after the read).
+    cleared = ListClearance.of(deployer, ctx.scheme)
+    entries = {t: await ctx.screening.entries(t, cleared=cleared) for t in CUSTOMER_TYPES}
     findings: list[Finding] = []
     for customer in customers_in(written, ctx.scheme, deployer):
         dob = _date(customer.properties.get("date_of_birth"))
-        for hit in screen(
-            party_name(customer), dob, entries[customer.type], min_score=params.min_score
-        ):
-            findings.append(await screening_finding(rule, deployer, customer, customer, hit, ctx))
+        hits = screen(party_name(customer), dob, entries[customer.type], min_score=params.min_score)
+        if hits:
+            findings.append(await screening_finding(rule, deployer, customer, customer, hits, ctx))
         if customer.type != "Organisation" or not params.screen_owners or ctx.compute is None:
             continue
         trace, parties, links = await _owners(
@@ -366,16 +445,17 @@ async def judge_screening(
             share = f"{owner.cumulative_percent:.4g}%" + (
                 ", with control" if owner.controls else ""
             )
-            for hit in screen(
+            hits = screen(
                 party_name(party), owner_dob, entries["Person"], min_score=params.min_score
-            ):
+            )
+            if hits:
                 findings.append(
                     await screening_finding(
                         rule,
                         deployer,
                         customer,
                         party,
-                        hit,
+                        hits,
                         ctx,
                         chain_words=f" is ultimately owned {share} by {party_name(party)}",
                         chain_nodes=chain_nodes,

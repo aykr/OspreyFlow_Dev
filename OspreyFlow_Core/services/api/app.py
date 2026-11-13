@@ -979,7 +979,7 @@ from .scheduler import (
     schedule_notice,
     validate_schedule,
 )
-from .screening import ScreeningListStore
+from .screening import ListClearance, ScreeningListStore
 from .screening_refresh import (
     ListNotSubscribed,
     ListRefused,
@@ -2035,6 +2035,12 @@ def get_screening_lists(request: Request) -> ScreeningListStore:
     return request.app.state.screening_lists  # type: ignore[no-any-return]
 
 
+def get_optional_screening_lists(request: Request) -> ScreeningListStore | None:
+    """For the rule audit's reads: the store, to read a list's marking as it stands now; an app
+    started without it (a test's) reads the marking each entry recorded alone."""
+    return getattr(request.app.state, "screening_lists", None)
+
+
 def get_kyc_expiries(request: Request) -> KycExpiryStore:
     return request.app.state.kyc_expiries  # type: ignore[no-any-return]
 
@@ -2247,6 +2253,9 @@ OptionalStrengthInfluencersDep = Annotated[
 StrengthDefaultsDep = Annotated[StrengthDefaults, Depends(get_strength_defaults)]
 HeldRowsDep = Annotated[HeldRowStore, Depends(get_held_rows)]
 ScreeningListsDep = Annotated[ScreeningListStore, Depends(get_screening_lists)]
+OptionalScreeningListsDep = Annotated[
+    ScreeningListStore | None, Depends(get_optional_screening_lists)
+]
 KycExpiriesDep = Annotated[KycExpiryStore, Depends(get_kyc_expiries)]
 
 
@@ -13748,6 +13757,7 @@ def _list_schedule_executor(application: FastAPI) -> ListRefreshExecutor:
             application, state.principal_resolver.resolve_for_owner_detailed
         ),
         refresh=refresh,
+        scheme=state.handling_scheme,
     )
 
 
@@ -15544,6 +15554,7 @@ async def preview_rule_sentence(
     screening_lists: ScreeningListsDep,
     audit: AuditDep,
     body: RulePreviewRequest,
+    handling_scheme: HandlingSchemeDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
 ) -> RulePreview:
     """Decision 3: "Preview on the last 90 days" — the rule run as the caller over the case's stored
@@ -15557,7 +15568,7 @@ async def preview_rule_sentence(
         await _sentence_context(
             sentence, principal, investigation.id, graph=graph, analytics=analytics,
             ontology=ontology, hotlists_store=hotlists_store, screening_lists=screening_lists,
-            influencers_store=influencers_store,
+            influencers_store=influencers_store, scheme=handling_scheme,
         ),
     )  # fmt: skip
     await audit.record(
@@ -15645,10 +15656,13 @@ async def _sentence_context(
     hotlists_store: HotlistStore,
     screening_lists: ScreeningListStore,
     influencers_store: InfluencerStore | None,
+    scheme: HandlingScheme,
     named_list: Callable[[str, str], Awaitable[list[Any]]] | None = None,
 ) -> SentenceContext:
     """What a sentence is judged with when it is previewed or tested, as `principal`; a list the
-    sentence names is read through `named_list` (the rule's dataset's, ADR-146 decision 3)."""
+    sentence names is read through `named_list` (the rule's dataset's, ADR-146 decision 3), and a
+    screening list only where `principal` is cleared for it, in the store's query (ADR-146
+    Amendment 7 point 8; the orchestrator's review, item 1)."""
     relationship = sentence.relationship
     hotlisted = None
     if relationship is not None and relationship.kind == "on_hotlist":
@@ -15664,7 +15678,11 @@ async def _sentence_context(
                 raise rule_editor.ListNotOffered(relationship.list_id)
             entries[sentence.subject] = await named_list(relationship.list_id, sentence.subject)
         else:
-            entries[sentence.subject] = list(await screening_lists.entries(sentence.subject))
+            entries[sentence.subject] = list(
+                await screening_lists.entries(
+                    sentence.subject, cleared=ListClearance.of(principal, scheme)
+                )
+            )
     # ADR-139 decision 8: a strength condition previews with the case's influencers in force.
     influencers, rarity_exclude, strength_settings = await strength_context(
         influencers_store, investigation_id
@@ -15898,6 +15916,7 @@ async def test_rule_draft(
     hotlists_store: HotlistsStoreDep,
     screening_lists: ScreeningListsDep,
     audit: AuditDep,
+    handling_scheme: HandlingSchemeDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
     rule_lists: RuleListsDep = None,  # type: ignore[assignment]
 ) -> RuleTestResult:
@@ -15919,7 +15938,7 @@ async def test_rule_draft(
         await _sentence_context(
             sentence, tester, investigation.id, graph=graph, analytics=analytics, ontology=model,
             hotlists_store=hotlists_store, screening_lists=screening_lists,
-            influencers_store=influencers_store,
+            influencers_store=influencers_store, scheme=handling_scheme,
             named_list=lambda list_id, subject: rule_lists(rule, list_id, subject),
         ),
         days=RULE_TEST_DAYS,
@@ -16084,6 +16103,7 @@ async def read_rule_audit(
     principal_names: PrincipalNamesDep,
     analytics: AnalyticsDep,
     alerts_store: AlertsStoreDep,
+    screening_lists: OptionalScreeningListsDep,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> RuleAuditPage:
@@ -16092,7 +16112,7 @@ async def read_rule_audit(
     see is withheld whole, from the page and the total (rule 3; `readable_rule_audit`)."""
     page = await readable_rule_audit(
         audit, graph, investigation.id, principal, analytics=analytics, alerts=alerts_store,
-        offset=offset, limit=limit,
+        lists=screening_lists, offset=offset, limit=limit,
     )  # fmt: skip
     # Who acted, by name — only for the entries this reader is served (ADR-106 decision 3).
     names = await principal_names.display_names(e.principal_id for e in page.entries)
@@ -17445,15 +17465,20 @@ async def data_feeds_route(
     ],
 )
 async def list_screening_lists(
-    principal: PrincipalDep, screening_lists: ScreeningListsDep, audit: AuditDep
+    principal: PrincipalDep,
+    screening_lists: ScreeningListsDep,
+    audit: AuditDep,
+    handling_scheme: HandlingSchemeDep,
 ) -> ScreeningListsOverview:
     """The Lists screen for a reader of the alert queue: each list's version, entries, last update
     and failure, in words. Not its refreshes: their counts of customers re-screened and alerts
     raised are taken across every case in the deployment (rule 7: no unfiltered count), and the
-    model has no field to hold them."""
+    model has no field to hold them. Only the lists the reader is cleared for, in the store's query
+    (ADR-146 Amendment 7; the orchestrator's review, item 3)."""
+    cleared = ListClearance.of(principal, handling_scheme)
     # Who a list's schedule runs as is for whoever manages lists to know.
     found = [s.model_copy(update={"schedule_owner": None})
-             for s in await screening_lists.subscriptions()]  # fmt: skip
+             for s in await screening_lists.subscriptions(cleared=cleared)]  # fmt: skip
     await audit.record(principal=principal, action="list_screening_lists", investigation_id=None,
                        resolved_query={}, result_cardinality=len(found))  # fmt: skip
     return ScreeningListsOverview(lists=found)
@@ -17467,14 +17492,21 @@ async def list_screening_lists(
     ],
 )
 async def manage_screening_lists(
-    principal: PrincipalDep, screening_lists: ScreeningListsDep, audit: AuditDep
+    principal: PrincipalDep,
+    screening_lists: ScreeningListsDep,
+    audit: AuditDep,
+    handling_scheme: HandlingSchemeDep,
 ) -> ScreeningLists:
     """The Lists screen for whoever may load screening lists: the lists and their latest
     refreshes, with what each changed, and what each re-screened and raised **in the reader's own
     unit** (the owner's answer of 1 November 2026; rule 7). The store's query joins that unit's
-    counts alone; another unit's customers, alerts and rule names never reach the Conduit."""
-    found = await screening_lists.subscriptions()
-    updates = await screening_lists.updates(org_unit=principal.org_unit, limit=20)
+    counts alone; another unit's customers, alerts and rule names never reach the Conduit. Only the
+    lists, and their refreshes, the reader is cleared for (ADR-146 Amendment 7; review item 3)."""
+    cleared = ListClearance.of(principal, handling_scheme)
+    found = await screening_lists.subscriptions(cleared=cleared)
+    updates = await screening_lists.updates(
+        org_unit=principal.org_unit, cleared=cleared, limit=20
+    )
     await audit.record(principal=principal, action="list_screening_lists", investigation_id=None,
                        resolved_query={"manage": True}, result_cardinality=len(found))  # fmt: skip
     return ScreeningLists(lists=found, updates=updates, can_manage=True)
@@ -17493,15 +17525,28 @@ async def subscribe_screening_list(
     screening_lists: ScreeningListsDep,
     audit: AuditDep,
     body: ScreeningSubscriptionInput,
+    handling_scheme: HandlingSchemeDep,
 ) -> ScreeningListStatus:
     """A list subscribed (or its subscription changed): its connector and its file in the ingest
-    folder. Nothing is read until it is refreshed; a location outside the folder is refused now."""
+    folder. Nothing is read until it is refreshed; a location outside the folder is refused now. A
+    name held by a list the administrator is not cleared for is refused before anything is written,
+    never changing or answering that list (ADR-146 Amendment 7; the orchestrator's review, item 3).
+    The refusal says only that the name cannot be used, which tells them some list holds it: logged
+    in Amendment 7, and accepted by the orchestrator."""
     try:
         check_location(body.location)
     except ListRefused as refused:
         raise HTTPException(
             status_code=422, detail={"error": "list_refused", "message": str(refused)}
         ) from refused
+    if await screening_lists.hidden(
+        body.list_name, cleared=ListClearance.of(principal, handling_scheme)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "list_refused",
+                    "message": "A list cannot be subscribed under that name; choose another."},
+        )  # fmt: skip
     status_ = await screening_lists.subscribe(body, principal.id, synthetic=False)
     await audit.record(principal=principal, action="screening_list_subscribed",
                        investigation_id=None, resolved_query=body.model_dump(mode="json"),
@@ -17522,11 +17567,18 @@ async def set_screening_list_schedule(
     screening_lists: ScreeningListsDep,
     audit: AuditDep,
     body: ListScheduleInput,
+    handling_scheme: HandlingSchemeDep,
 ) -> ScreeningListStatus:
     """ADR-133 Amendment 3 item 4, stage (d): the list refreshed every day or every week at an
     hour, as the person setting it — resolved afresh at each slot, and refused in words if they no
     longer hold the right. Without a schedule, the list is refreshed by hand only."""
     try:
+        # A list the setter is not cleared for is answered as one never subscribed (ADR-146
+        # Amendment 7; the orchestrator's review, item 3).
+        if await screening_lists.hidden(
+            list_name, cleared=ListClearance.of(principal, handling_scheme)
+        ):
+            raise LookupError(list_name)
         updated = await screening_lists.set_schedule(list_name, body.schedule, principal.id)
     except ListScheduleRefused as refused:
         raise HTTPException(
@@ -17569,7 +17621,15 @@ async def refresh_screening_list_route(
     every customer of every case with a screening rule re-screened against the changed entries
     only, as each rule's deployer (rule 3). Refused or failed in words, the list left as it was.
     The answer counts the administrator's own unit alone, read back through the store's query as
-    the Lists screen reads it (rule 7); the deployment's totals go to the audit only."""
+    the Lists screen reads it (rule 7); the deployment's totals go to the audit only. A list the
+    administrator is not cleared for is answered as one never subscribed, before it is read
+    (ADR-146 Amendment 7; the orchestrator's review, item 3)."""
+    cleared = ListClearance.of(principal, handling_scheme)
+    if await screening_lists.hidden(list_name, cleared=cleared):
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": f"no list is subscribed as “{list_name}”"},
+        )
     rescreen = Rescreener(
         rules=typology_rules,
         datasets=get_datasets(request),
@@ -17593,7 +17653,9 @@ async def refresh_screening_list_route(
                        resolved_query={"list_name": list_name, "outcome": update.outcome,
                                        "version": update.version, "alerts": update.alerts},
                        result_cardinality=update.alerts)  # fmt: skip
-    own = await screening_lists.update_for(update.id, org_unit=principal.org_unit)
+    own = await screening_lists.update_for(
+        update.id, org_unit=principal.org_unit, cleared=cleared
+    )
     if own is None:  # recorded a moment ago in the same store
         raise HTTPException(
             status_code=500,
@@ -19657,6 +19719,7 @@ async def read_audit_section(
     reader: AuditSectionDep,
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
+    handling_scheme: HandlingSchemeDep,
     kind: Annotated[str | None, Query(max_length=40)] = None,
     who: Annotated[str | None, Query(max_length=200)] = None,
     case: Annotated[str | None, Query(max_length=200)] = None,
@@ -19674,16 +19737,22 @@ async def read_audit_section(
         raise AuditFiltersRefused(f"{kind!r} is not a kind of this record")
     rights = rights_for(principal.roles)
     cases = ADMIN_ROLE in principal.roles
+    # An entry naming a screening list only for a reader cleared for it, in the read (ADR-146
+    # Amendment 7; the orchestrator's re-check of lane/rules-lists at 6bfc8d6, must 3).
+    lists_cleared = ListClearance.of(principal, handling_scheme)
     people, accounts = await _people_choice(
-        principal_names, await reader.writers(principal, cases=cases), who or None
+        principal_names,
+        await reader.writers(principal, cases=cases, lists_cleared=lists_cleared),
+        who or None,
     )
     filters = audit_section_module.StreamFilters(
         who=accounts, kind=kind or None, investigation_id=case or None,
         dataset_id=dataset or None, since=since, until=until,
     )  # fmt: skip
     rows, total = await reader.stream(
-        principal, filters, offset=offset, limit=limit, rights=rights, cases=cases
-    )
+        principal, filters, offset=offset, limit=limit, rights=rights, cases=cases,
+        lists_cleared=lists_cleared,
+    )  # fmt: skip
     names = await principal_names.full_names(audit_section_module.ids_to_name(rows, rights))
     note = audit_section_module.stream_note(cases, await reader.units_from())
     return await _served_audit(
@@ -19708,6 +19777,7 @@ async def read_audit_section_rules(
     graph: GraphDep,
     analytics: AnalyticsDep,
     alerts_store: AlertsStoreDep,
+    screening_lists: OptionalScreeningListsDep,
     principal_names: PrincipalNamesDep,
     case: Annotated[str, Query(min_length=1, max_length=200)],
     who: Annotated[str | None, Query(max_length=200)] = None,
@@ -19726,7 +19796,7 @@ async def read_audit_section_rules(
     )
     whole = await readable_rule_audit(
         audit, graph, case_.id, principal, analytics=analytics, alerts=alerts_store,
-        offset=0, limit=10**9,
+        lists=screening_lists, offset=0, limit=10**9,
     )  # fmt: skip
     people, accounts = await _people_choice(
         principal_names, {e.principal_id for e in whole.entries}, who or None

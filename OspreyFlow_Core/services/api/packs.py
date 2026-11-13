@@ -48,7 +48,13 @@ from schemas.packs import (
 from schemas.trends import TrendFigures
 
 from .alert_queue import node_name
-from .alerts import AlertStore, distinct_handlings, read_evidence, settle_repoints
+from .alerts import (
+    AlertStore,
+    distinct_handlings,
+    edges_shown_with,
+    read_evidence,
+    settle_repoints,
+)
 from .assessments import judgement_visible_to, resolve_superseded_citation
 from .export import (
     BlockedItem,
@@ -150,7 +156,9 @@ async def readable(
     for item in items:
         if item.alert is not None:
             alert = cited.get(item.alert.alert_id)
-            if alert is None or not evidence.covers((), alert.edge_ids, alert.event_ids):
+            if alert is None or not evidence.covers(
+                (), edges_shown_with(alert, item.alert.node_ids), alert.event_ids
+            ):
                 continue
         if item_visible(item.handlings, reader, scheme) and await _still_visible(
             item, reader, graph, case_id

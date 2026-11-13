@@ -119,8 +119,9 @@ class Stores:
         self.said: list[str] = []
         self.withheld_because: list[str] = []
 
-    async def save(self, alert: Any, *, handlings: Any = None) -> None:
+    async def save(self, alert: Any, *, handlings: Any = None, cited_handlings: Any = None) -> None:
         self.saved.append(alert)
+        self.cited_handlings = cited_handlings
 
     async def record(self, **kwargs: Any) -> None:
         self.said.append(str(kwargs.get("action")))

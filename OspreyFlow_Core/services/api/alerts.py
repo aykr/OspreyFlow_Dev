@@ -35,7 +35,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Collection,
+    Iterable,
+    Mapping,
+    Sequence,
+)
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal, Protocol
@@ -57,6 +65,7 @@ from schemas.domain import (
     CLOSING_REASONS,
     Alert,
     AlertAudience,
+    AlertCitation,
     AlertKind,
     AlertMode,
     AlertSeverity,
@@ -123,6 +132,13 @@ ALTER TABLE alerts ADD COLUMN IF NOT EXISTS routed_team TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS suppressed_until DATE;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS suppress_reason TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS suppressed_by TEXT;
+-- ADR-146 Amendment 7: what the alert cites that a reader is cleared for one by one (JSON, a
+-- list of `AlertCitation`); NULL for every alert without any.
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS citations TEXT;
+-- The orchestrator's review of ADR-146 Amendment 7, item 6: the handlings an alert with citations
+-- rests on outside them (`core`) and each citation's, as its raiser read them (JSON), so the alert
+-- trends count it as the queue shows it, once per reader (`_row_to_facts`).
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS cited_handlings TEXT;
 CREATE INDEX IF NOT EXISTS alerts_investigation_idx ON alerts (investigation_id);
 CREATE INDEX IF NOT EXISTS alerts_owner_id_idx ON alerts (owner_id);
 -- ADR-109 Amendment 10: a write that supersedes links (or an alert's node) alerts may cite keeps
@@ -174,7 +190,7 @@ _COLUMNS = (
     "id, rule_id, owner_id, mode, referent_node_ids, investigation_id, created_at, dataset_id, "
     "typology, words, edge_ids, event_ids, window_json, trigger, alert_node_id, status, assignee, "
     "disposition, disposition_reason, decided_by, decided_at, severity, team, close_proposed_by, "
-    "close_proposed_at, routed_team, suppressed_until, suppress_reason, suppressed_by"
+    "close_proposed_at, routed_team, suppressed_until, suppress_reason, suppressed_by, citations"
 )
 
 
@@ -209,6 +225,9 @@ def _row_to_alert(row: asyncpg.Record) -> Alert:
         suppressed_until=row["suppressed_until"],
         suppress_reason=row["suppress_reason"],
         suppressed_by=row["suppressed_by"],
+        citations=[AlertCitation.model_validate(c) for c in json.loads(row["citations"])]
+        if row["citations"]
+        else [],
     )
 
 
@@ -391,11 +410,14 @@ _log = logging.getLogger(__name__)
 #: home case's Authors — so a trend may count fewer of them than the queue lists, never more.
 _FACT_COLUMNS = (
     f"id, rule_id, owner_id, investigation_id, created_at, dataset_id, typology, status, "
-    f"disposition, team, routed_team, handlings, {_KIND_SQL} AS kind, "
+    f"disposition, team, routed_team, handlings, citations, cited_handlings, assignee, "
+    f"{_KIND_SQL} AS kind, "
     f"{_SEVERITY_SQL} AS severity_read, {_AUDIENCE_SQL} AS audience"
 )
 
 FactSink = Callable[[list[AlertFact]], Awaitable[None]]
+#: An alert with citations (ADR-146 Amendment 7), in a query over `alerts`.
+_CITED_SQL = "(citations IS NOT NULL AND citations <> '[]')"
 #: L3.6: a drawn watch's alert is its owner's in the watch's case alone (`queue_scope`), which an
 #: owner's trend, counted in every case they open, cannot say: it is kept out of the trends, so a
 #: trend counts fewer than the queue lists, never more (rule 3; carried: a case-bound audience).
@@ -438,6 +460,53 @@ def _row_to_fact(row: asyncpg.Record) -> AlertFact:
     )
 
 
+#: An alert with citations: the handlings it rests on outside them, and each citation's, in order.
+CitedHandlings = tuple[Sequence[Handling], Sequence[Sequence[Handling]]]
+#: The most citations whose every set a trend keeps a row for (2**6 - 1 rows); an alert citing more
+#: is counted for no one, never guessed (rule 2: said here, not cut).
+MAX_CITATIONS_IN_TRENDS = 6
+
+
+def _row_to_facts(row: asyncpg.Record) -> list[AlertFact]:
+    """An alert as the trends keep it (the orchestrator's review of ADR-146 Amendment 7, item 6):
+    one row, or, for an alert with citations, one row per non-empty set of them, each counted for
+    the readers who may read exactly that set and the alert's core, with the outcome they are shown
+    (`served_triage`). A reader then counts the alert once, as the queue shows it, or not at all;
+    one cleared for no citation counts no row, as the queue shows them nothing. Handlings not
+    known, or more than `MAX_CITATIONS_IN_TRENDS` citations: one row counted for no one."""
+    fact = _row_to_fact(row)
+    citations = [AlertCitation.model_validate(c) for c in json.loads(row["citations"] or "[]")]
+    if not citations:
+        return [fact]
+    split = json.loads(row["cited_handlings"]) if row["cited_handlings"] else None
+    groups = (
+        [[Handling(**h) for h in group] for group in split["citations"]] if split else []
+    )
+    if (
+        split is None
+        or len(groups) != len(citations)
+        or not all(groups)
+        or len(citations) > MAX_CITATIONS_IN_TRENDS
+    ):
+        return [fact.model_copy(update={"handlings": None})]
+    core = [Handling(**h) for h in split["core"]]
+    facts: list[AlertFact] = []
+    for mask in range(1, 2 ** len(citations)):
+        inside = [n for n in range(len(citations)) if mask >> n & 1]
+        shown = _served_state(
+            citations, row["status"], row["assignee"], [citations[n] for n in inside]
+        )
+        status = str(shown.get("status", row["status"]))
+        disposition = shown.get("disposition", row["disposition"]) if shown else row["disposition"]
+        facts.append(fact.model_copy(update={
+            "fact_id": f"{fact.alert_id}#{mask}",
+            "outcome": _outcome(status, disposition if isinstance(disposition, str) else None),
+            "handlings": distinct_handlings([*core, *(h for n in inside for h in groups[n])]),
+            "hidden_from": [groups[n] for n in range(len(citations)) if n not in inside],
+        }))  # fmt: skip
+    return facts
+
+
 def distinct_handlings(handlings: Sequence[Handling]) -> list[Handling]:
     """Each handling once, in a stable order: what an alert rests on, not how often."""
     seen = {h.model_dump_json(): h for h in handlings}
@@ -446,6 +515,19 @@ def distinct_handlings(handlings: Sequence[Handling]) -> list[Handling]:
 
 #: The alerts citing any of `$1`'s links: an alert stores the links it cites as a JSON list.
 _CITES_ANY_SQL = "COALESCE(NULLIF(edge_ids, ''), '[]')::jsonb ?| $1::text[]"
+
+
+def _renamed_in_citations_sql(field: str, param: int) -> str:
+    """ADR-146 Amendment 7: each citation's `field` (`node_ids` or `edge_ids`) with the rename map
+    in parameter `$param` applied in place, as the alert's own lists are, in the same statement;
+    the citations' order and every other field kept. NULL stays NULL."""
+    return (
+        "CASE WHEN citations IS NULL THEN NULL ELSE (SELECT COALESCE(jsonb_agg(jsonb_set(c.v, "
+        f"'{{{field}}}', COALESCE((SELECT jsonb_agg(COALESCE(${param}::jsonb ->> x.e, x.e) "
+        f"ORDER BY x.n) FROM jsonb_array_elements_text(c.v -> '{field}') WITH ORDINALITY "
+        "AS x(e, n)), '[]'::jsonb)) ORDER BY c.n), '[]'::jsonb)::text "
+        "FROM jsonb_array_elements(citations::jsonb) WITH ORDINALITY AS c(v, n)) END"
+    )
 
 
 def _names_any_sql(param: int) -> str:
@@ -559,7 +641,8 @@ async def _repoint_cited_links(conn: asyncpg.Connection, repoint: Mapping[str, s
     rows = await conn.fetch(
         "UPDATE alerts SET edge_ids = (SELECT jsonb_agg(COALESCE($2::jsonb ->> t.e, t.e) "
         "ORDER BY t.n)::text FROM jsonb_array_elements_text(edge_ids::jsonb) "
-        f"WITH ORDINALITY AS t(e, n)) WHERE {_CITES_ANY_SQL} RETURNING id",
+        f"WITH ORDINALITY AS t(e, n)), citations = {_renamed_in_citations_sql('edge_ids', 2)} "
+        f"WHERE {_CITES_ANY_SQL} RETURNING id",
         sorted(repoint),
         json.dumps(dict(repoint)),
     )
@@ -679,7 +762,7 @@ class AlertStore:
                 list(alert_ids),
             )
         try:
-            await self.fact_sink([_row_to_fact(r) for r in rows])
+            await self.fact_sink([f for r in rows for f in _row_to_facts(r)])
         except Exception:  # noqa: BLE001 — the queue row stands; the trend catches up at start
             _log.warning("alert facts not kept for %d alert(s)", len(rows), exc_info=True)
 
@@ -701,14 +784,23 @@ class AlertStore:
                                                        rule_id)]  # fmt: skip
         await self.publish_facts(ids)
 
-    async def save(self, alert: Alert, *, handlings: Sequence[Handling] | None = None) -> None:
+    async def save(
+        self,
+        alert: Alert,
+        *,
+        handlings: Sequence[Handling] | None = None,
+        cited_handlings: CitedHandlings | None = None,
+    ) -> None:
         """`handlings`: every handling the alert rests on, read as whoever raised it (ADR-134
-        decision 3). Left out, they are not known, and alert trends count the alert for no one."""
+        decision 3). Left out, they are not known, and alert trends count the alert for no one.
+        `cited_handlings`, for an alert with citations: those outside its citations and each
+        citation's, which the trends count it by (ADR-146 Amendment 7; the review's item 6); left
+        out, the alert is counted for no one."""
         async with self._pool.acquire() as conn:
             await conn.execute(
-                f"INSERT INTO alerts ({_COLUMNS}, handlings) "
+                f"INSERT INTO alerts ({_COLUMNS}, handlings, cited_handlings) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, "
-                "$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)",
+                "$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)",
                 alert.id,
                 alert.rule_id,
                 alert.owner_id,
@@ -738,9 +830,19 @@ class AlertStore:
                 alert.suppressed_until,
                 alert.suppress_reason,
                 alert.suppressed_by,
+                json.dumps([c.model_dump(mode="json") for c in alert.citations])
+                if alert.citations
+                else None,
                 None
                 if handlings is None
                 else json.dumps([h.model_dump() for h in distinct_handlings(handlings)]),
+                None
+                if cited_handlings is None
+                else json.dumps({
+                    "core": [h.model_dump() for h in distinct_handlings(cited_handlings[0])],
+                    "citations": [[h.model_dump() for h in distinct_handlings(group)]
+                                  for group in cited_handlings[1]],
+                }),  # fmt: skip
             )
         await self.publish_facts([alert.id])
 
@@ -957,11 +1059,16 @@ class AlertStore:
         for expression, wanted in (
             (_KIND_SQL, kinds),
             (_SEVERITY_SQL, severities),
-            ("status", statuses),
         ):
             if wanted is not None:
                 params.append(list(wanted))
                 filters += f" AND {expression} = ANY(${len(params)}::text[])"
+        # The owner's ruling of 12 November 2026: an alert with citations stands differently for
+        # each reader (`served_triage`), so its status and assignee are filtered as the reader is
+        # shown them, once its citations are read (`alert_queue.monitoring_queue`), never as stored.
+        if statuses is not None:
+            params.append(list(statuses))
+            filters += f" AND (status = ANY(${len(params)}::text[]) OR {_CITED_SQL})"
         if show is not None and show != "all":
             params.append(today or datetime.now(UTC).date())
             filters += (
@@ -969,9 +1076,9 @@ class AlertStore:
             )
             if show == "mine":
                 params.append(principal.id)
-                filters += f" AND assignee = ${len(params)}"
+                filters += f" AND (assignee = ${len(params)} OR {_CITED_SQL})"
             elif show == "unassigned":
-                filters += " AND assignee IS NULL"
+                filters += f" AND (assignee IS NULL OR {_CITED_SQL})"
             elif show == "team":
                 params.append(reader_teams(principal))
                 params.append(principal.org_unit)
@@ -1200,7 +1307,9 @@ class AlertStore:
                 "UPDATE alerts SET referent_node_ids = (SELECT jsonb_agg(COALESCE("
                 "$1::jsonb ->> t.e, t.e) ORDER BY t.n)::text "
                 "FROM jsonb_array_elements_text(referent_node_ids::jsonb) "
-                f"WITH ORDINALITY AS t(e, n)) WHERE {_names_any_sql(2)} RETURNING id",
+                "WITH ORDINALITY AS t(e, n)), "
+                f"citations = {_renamed_in_citations_sql('node_ids', 1)} "
+                f"WHERE {_names_any_sql(2)} RETURNING id",
                 json.dumps(named),
                 sorted(named),
             )
@@ -1498,6 +1607,58 @@ class AlertStore:
         await self.publish_facts([alert_id])
         return _row_to_alert(row)
 
+    async def triage_citations(
+        self,
+        alert_id: str,
+        investigation_id: str,
+        principal: Principal,
+        *,
+        words: Collection[str],
+        action: Literal["close", "propose", "approve", "send_back"],
+        disposition: str | None = None,
+        disposition_reason: str | None = None,
+    ) -> Alert:
+        """The owner's ruling of 12 November 2026 (about 15:30), for an alert with citations: a
+        triage decides only the citations its member was shown (`words`, which a repoint never
+        changes), each on its own, in one transaction holding the row, within the member's queue
+        scope. `close` decides each open one; `propose` proposes closing each open one; `approve`
+        closes each proposed one with its proposer's disposition; `send_back` reopens each proposed
+        one. The alert closes once every citation is closed; a decision that leaves one open hands
+        the alert back to the queue, open and given to no one, so a reader cleared for that one
+        decides it. Raises `AlertTriageConflict` when none of the member's citations could move."""
+        scope, extra = queue_scope(
+            principal, investigation_id, 2, answers_for=await self._answers_for(principal)
+        )
+        now = datetime.now(UTC)
+        async with self._pool.acquire() as conn, conn.transaction():
+            row = await conn.fetchrow(
+                f"SELECT {_COLUMNS} FROM alerts WHERE id = $1 AND status <> 'closed'{scope} "
+                "FOR UPDATE",
+                alert_id, *extra,
+            )  # fmt: skip
+            if row is None:
+                raise AlertTriageConflict(alert_id)
+            alert = _row_to_alert(row)
+            decision = decide_citations(
+                alert, principal.id, words=words, action=action, disposition=disposition,
+                disposition_reason=disposition_reason, now=now,
+            )  # fmt: skip
+            if decision is None:
+                raise AlertTriageConflict(alert_id)
+            cites, status, assignee, decided = decision
+            row = await conn.fetchrow(
+                "UPDATE alerts SET citations = $2, status = $3, assignee = $4, disposition = $5, "
+                "disposition_reason = $6, decided_by = $7, "
+                "decided_at = CASE WHEN $7::text IS NULL THEN NULL ELSE now() END, "
+                "close_proposed_by = $8, close_proposed_at = NULL "
+                f"WHERE id = $1 RETURNING {_COLUMNS}",
+                alert_id, json.dumps([c.model_dump(mode="json") for c in cites]), status,
+                assignee, *decided, last_proposer(cites) if status == "closed" else None,
+            )  # fmt: skip
+        assert row is not None
+        await self.publish_facts([alert_id])
+        return _row_to_alert(row)
+
     async def set_suppression(
         self,
         alert_id: str,
@@ -1540,17 +1701,19 @@ class AlertStore:
         disposition_reason: str | None = None,
         decided_by: str | None = None,
         alert_node_id: str | None = None,
-        edge_ids: Sequence[str] | None = None,
     ) -> Alert:
         """Moves one case alert from a status in `expect_status` to `status`, in one statement, so
-        two members acting at once cannot both win (the loser is told it moved on). `alert_node_id`
-        and `edge_ids`, when given, replace what the alert cites with the revisions triage wrote."""
+        two members acting at once cannot both win (the loser is told it moved on). `alert_node_id`,
+        when given, replaces the alert's node with the revision triage wrote. What it cites is
+        never replaced here: a confirmed link is repointed through the journal (ADR-109 Amendments
+        9 to 11), which rewrites an alert's citations with its links (ADR-146 Amendment 7; the lane
+        review's item 14: the `edge_ids` this took rewrote the links and left the citations)."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "UPDATE alerts SET status = $3, assignee = $4, disposition = $5, "
                 "disposition_reason = $6, decided_by = $7, "
                 "decided_at = CASE WHEN $7::text IS NULL THEN NULL ELSE now() END, "
-                "alert_node_id = COALESCE($8, alert_node_id), edge_ids = COALESCE($10, edge_ids) "
+                "alert_node_id = COALESCE($8, alert_node_id) "
                 "WHERE id = $1 AND investigation_id = $2 AND status = ANY($9::text[]) "
                 f"RETURNING {_COLUMNS}",
                 alert_id,
@@ -1562,7 +1725,6 @@ class AlertStore:
                 decided_by,
                 alert_node_id,
                 list(expect_status),
-                None if edge_ids is None else json.dumps(list(edge_ids)),
             )
         if row is None:
             raise AlertTriageConflict(alert_id)
@@ -1681,6 +1843,186 @@ class AlertTriageConflict(Exception):
     """The alert was not in a state that allows this (someone else claimed or closed it)."""
 
 
+#: ADR-146 Amendment 7: where a screening alert's stored words put its matches. The stored alert,
+#: its `Alert` node and its audit entry say these words, naming no list and saying no count;
+#: `as_read` puts in their place the matches the reader may see, each in its own words.
+SCREENING_MATCH_WORDS = "matches an entry on a screening list"
+
+
+def citation_ids(alert: Alert) -> tuple[set[str], set[str]]:
+    """Every node and link the alert's citations name (ADR-146 Amendment 7)."""
+    return (
+        {i for c in alert.citations for i in c.node_ids},
+        {i for c in alert.citations for i in c.edge_ids},
+    )
+
+
+def as_read(alert: Alert, kept: Iterable[int]) -> Alert:
+    """The alert as a reader is served it (ADR-146 Amendment 7): only the citations at the
+    positions `kept` (those the reader may read whole, `ReadableEvidence.citations_read`); every
+    other citation's nodes and links gone from `referent_node_ids` and `edge_ids` too, and its
+    words, its list's name and the number of citations with it, so nothing served says a list the
+    reader may not see was matched (rule 3). An alert without citations is served as stored."""
+    if not alert.citations:
+        return alert
+    keep = sorted(set(kept))
+    shown = [alert.citations[n] for n in keep if 0 <= n < len(alert.citations)]
+    nodes, edges = citation_ids(alert)
+    shown_nodes = {i for c in shown for i in c.node_ids}
+    shown_edges = {i for c in shown for i in c.edge_ids}
+    words = alert.words
+    if words is not None and SCREENING_MATCH_WORDS in words:
+        words = words.replace(
+            SCREENING_MATCH_WORDS, "matches " + "; and ".join(c.words for c in shown), 1
+        )
+    return alert.model_copy(
+        update={
+            "citations": shown,
+            "referent_node_ids": [
+                i for i in alert.referent_node_ids if i not in nodes or i in shown_nodes
+            ],
+            "edge_ids": [i for i in alert.edge_ids if i not in edges or i in shown_edges],
+            "words": words,
+            **served_triage(alert, shown),
+        }
+    )
+
+
+_NEVER = datetime.min.replace(tzinfo=UTC)
+
+
+CitationDecision = tuple[
+    list[AlertCitation], str, "str | None", tuple["str | None", "str | None", "str | None"]
+]
+
+
+def decide_citations(
+    alert: Alert,
+    member_id: str,
+    *,
+    words: Collection[str],
+    action: Literal["close", "propose", "approve", "send_back"],
+    disposition: str | None,
+    disposition_reason: str | None,
+    now: datetime,
+) -> CitationDecision | None:
+    """`AlertStore.triage_citations`'s decision over the stored alert (the owner's ruling of 12
+    November 2026): its citations after the triage, the alert's status and assignee, and its
+    disposition, reason and decider (set once every citation is closed). `None` when none of the
+    member's citations (`words`) could move, which the store refuses as a conflict."""
+    moved: list[AlertCitation] = []
+    cites: list[AlertCitation] = []
+    for c in alert.citations:
+        change: dict[str, object] | None = None
+        if c.words in words:
+            if action == "close" and c.status == "open":
+                change = {"status": "closed", "disposition": disposition,
+                          "disposition_reason": disposition_reason, "decided_by": member_id,
+                          "decided_at": now}  # fmt: skip
+            elif action == "propose" and c.status == "open":
+                change = {"status": "closing", "disposition": disposition,
+                          "disposition_reason": disposition_reason,
+                          "close_proposed_by": member_id}  # fmt: skip
+            elif action == "approve" and c.status == "closing" and c.close_proposed_by != member_id:
+                # ADR-133 decision 7: never a proposal of the approver's own (the lane review of
+                # the second pass, defect 3: one citation's proposer approved it beside another's).
+                change = {"status": "closed", "decided_by": member_id, "decided_at": now}
+            elif action == "send_back" and c.status == "closing":
+                change = {"status": "open", "disposition": None, "disposition_reason": None,
+                          "close_proposed_by": None}  # fmt: skip
+        if change is not None:
+            moved.append(c)
+            c = c.model_copy(update=change)
+        cites.append(c)
+    if not moved:
+        return None
+    decided: tuple[str | None, str | None, str | None] = (None, None, None)
+    status: str
+    assignee: str | None
+    if all(c.status == "closed" for c in cites):
+        chosen = next((c for c in cites if c.disposition == "true_positive"), None) or max(
+            cites, key=lambda c: c.decided_at or _NEVER
+        )
+        # Given to its last decider, as `served_triage` shows a reader cleared for every citation.
+        status, assignee = "closed", member_id
+        decided = (chosen.disposition, chosen.disposition_reason, member_id)
+    elif action in ("close", "approve"):
+        # One still open, for a reader cleared for it. The member's own claim, or a proposer's whose
+        # proposals were decided, is let go; anyone else's stays, so a claim on a citation the
+        # member cannot read is never seen to change (the lane review of the second pass, defect 5).
+        letting_go = {member_id, *(c.close_proposed_by for c in moved if c.close_proposed_by)}
+        if alert.assignee is None or alert.assignee in letting_go:
+            status, assignee = "open", None
+        else:
+            status, assignee = "claimed", alert.assignee
+    elif action == "propose":
+        status, assignee = "claimed", alert.assignee or member_id
+    else:
+        status, assignee = "claimed", moved[0].close_proposed_by or alert.assignee
+    return cites, status, assignee, decided
+
+
+def last_proposer(cites: Sequence[AlertCitation]) -> str | None:
+    """Who proposed the latest decision among closed citations (kept beside a closed alert, as
+    for one without citations): what `served_triage` shows a reader cleared for every one."""
+    closed = [c for c in cites if c.status == "closed"]
+    return max(closed, key=lambda c: c.decided_at or _NEVER).close_proposed_by if closed else None
+
+
+def served_triage(alert: Alert, shown: Sequence[AlertCitation]) -> dict[str, object]:
+    """Where an alert with citations stands for a reader shown `shown` (the owner's ruling of 12
+    November 2026, about 15:30): a close decides only the citations its closer may read, so the
+    alert is shown closed to a reader every one of whose citations is closed, decided as the latest
+    of them was (a true match among them first), and open, or claimed, to one with any still open,
+    on that one. A proposed close of one they may read is shown as `closing`. A reader is never told
+    of a decision, a proposal or a person on a citation they may not read. Closed by the system
+    (a load reverted) with citations still open, the alert is shown closed as stored. An alert with
+    no citations is shown as stored ({})."""
+    return _served_state(alert.citations, alert.status, alert.assignee, shown)
+
+
+def _served_state(
+    citations: Sequence[AlertCitation],
+    status: str,
+    assignee: str | None,
+    shown: Sequence[AlertCitation],
+) -> dict[str, object]:
+    """`served_triage` over the stored citations, status and assignee alone (the trends' rows
+    read it too, `_row_to_facts`)."""
+    if not citations or not shown:
+        return {}
+    if status == "closed" and not all(c.status == "closed" for c in citations):
+        return {}
+    unset = {"disposition": None, "disposition_reason": None, "decided_by": None,
+             "decided_at": None, "close_proposed_by": None, "close_proposed_at": None}  # fmt: skip
+    if all(c.status == "closed" for c in shown):
+        last = max(shown, key=lambda c: c.decided_at or _NEVER)
+        chosen = next((c for c in shown if c.disposition == "true_positive"), last)
+        return {**unset, "status": "closed", "disposition": chosen.disposition,
+                "disposition_reason": chosen.disposition_reason, "decided_by": last.decided_by,
+                "decided_at": last.decided_at, "assignee": last.decided_by,
+                "close_proposed_by": last.close_proposed_by}  # fmt: skip
+    proposed = next((c for c in shown if c.status == "closing"), None)
+    if proposed is not None:
+        return {**unset, "status": "closing", "disposition": proposed.disposition,
+                "disposition_reason": proposed.disposition_reason,
+                "close_proposed_by": proposed.close_proposed_by}  # fmt: skip
+    claimed = assignee is not None and status != "closed"
+    return {**unset, "status": "claimed" if claimed else "open",
+            "assignee": assignee if claimed else None}  # fmt: skip
+
+
+def edges_shown_with(alert: Alert, node_ids: Iterable[str]) -> list[str]:
+    """The links an alert cites outside its citations, and those of each citation all of whose
+    nodes are among `node_ids` (ADR-146 Amendment 7): what a pack's alert item, frozen as its adder
+    was shown it, is checked by. A citation its adder was not shown is not in the item, and asks
+    nothing of its reader; one it shows is checked as the queue checks it."""
+    have = set(node_ids)
+    _, cited = citation_ids(alert)
+    shown = {i for c in alert.citations if set(c.node_ids) <= have for i in c.edge_ids}
+    return [i for i in alert.edge_ids if i not in cited or i in shown]
+
+
 def evidence_node_ids(alert: Alert) -> list[str]:
     """The nodes an alert rests on: the entities it concerns and its own `Alert` node."""
     return [*alert.referent_node_ids, *([alert.alert_node_id] if alert.alert_node_id else [])]
@@ -1713,13 +2055,27 @@ class ReadableEvidence:
         )
 
     def whole(self, alert: Alert) -> bool:
-        """ADR-039's all-or-nothing: every node, link and transaction the alert cites is
-        readable."""
+        """Whether the alert may be shown to the reader. ADR-039's all-or-nothing for everything
+        it cites outside its citations: every node, link and transaction readable; and, for an
+        alert with citations (ADR-146 Amendment 7), at least one citation readable whole. What of
+        it is then served is `as_read(alert, self.citations_read(alert))`, never the alert as
+        stored."""
+        nodes, edges = citation_ids(alert)
         return (
-            all(i in self.nodes for i in evidence_node_ids(alert))
-            and set(alert.edge_ids) <= self.edge_ids
+            all(i in self.nodes for i in evidence_node_ids(alert) if i not in nodes)
+            and {i for i in alert.edge_ids if i not in edges} <= self.edge_ids
             and set(alert.event_ids) <= self.event_ids
+            and (not alert.citations or bool(self.citations_read(alert)))
         )
+
+    def citations_read(self, alert: Alert) -> list[int]:
+        """The positions of the alert's citations the reader may read whole (ADR-146
+        Amendment 7): every node and link each names."""
+        return [
+            n
+            for n, c in enumerate(alert.citations)
+            if all(i in self.nodes for i in c.node_ids) and set(c.edge_ids) <= self.edge_ids
+        ]
 
 
 async def read_evidence(
@@ -1833,13 +2189,24 @@ async def remark_alerts(
         if node is None:
             continue  # taken back or superseded since: nothing to re-mark
         report.checked += 1
-        referents = await graph.get_nodes(sorted(set(alert.referent_node_ids)), reader)
-        links = await graph.get_edges(sorted(set(alert.edge_ids)), reader) if alert.edge_ids else []
+        # ADR-146 Amendment 7: an alert's node is marked by what it rests on outside its citations
+        # (a reader cleared for one list's match and not another's still reads it), so a re-mark
+        # reads that alone. Its stored handlings are its citations' too (the trends count it for a
+        # reader cleared for all), and an alert with citations cites no transaction, so they are
+        # not read; one that cites a transaction is not re-marked by a guess.
+        cited_nodes, cited_edges = citation_ids(alert)
+        if alert.citations and alert.event_ids:
+            report.unsafe.append(alert.id)
+            continue
+        core_nodes = sorted(set(alert.referent_node_ids) - cited_nodes)
+        core_edges = sorted(set(alert.edge_ids) - cited_edges)
+        referents = await graph.get_nodes(core_nodes, reader) if core_nodes else []
+        links = await graph.get_edges(core_edges, reader) if core_edges else []
         end_ids = sorted({end for e in links for end in (e.source, e.target)})
         ends = await graph.get_nodes(end_ids, reader) if end_ids else []
         unread = (
-            len(referents) < len(set(alert.referent_node_ids))
-            or len(links) < len(set(alert.edge_ids))
+            len(referents) < len(core_nodes)
+            or len(links) < len(core_edges)
             or len(ends) < len(end_ids)
         )
         if unread:
@@ -1852,7 +2219,7 @@ async def remark_alerts(
             *(n.handling for n in referents),
             *(e.handling for e in links),
             *(n.handling for n in ends),
-            *(await alerts.handlings_of(alert.id) or []),
+            *([] if alert.citations else (await alerts.handlings_of(alert.id) or [])),
         ]
         required = alert_handling(scheme, rests_on)
         if required is None:

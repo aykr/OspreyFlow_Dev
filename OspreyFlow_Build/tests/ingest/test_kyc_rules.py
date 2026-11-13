@@ -27,16 +27,17 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
+import asyncpg
 import duckdb
 import pytest
 import yaml
 from scripts.load_screening_list import parse_list
-from services.api.alerts import AlertStore
+from services.api.alerts import AlertStore, as_read
 from services.api.audit import AuditWriter
 from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.held_rows import HeldRowStore
 from services.api.rule_evaluation import RuleGate
-from services.api.screening import ScreeningListStore
+from services.api.screening import ScreeningEntry, ScreeningListStore, normalised
 from services.api.studio_publish import load_with_rules
 from services.api.typology_rules import TypologyRuleStore
 from services.ingest.recipe_loader import load_recipe
@@ -63,6 +64,7 @@ from schemas.domain import (
     SourceRef,
     TypologyRuleInput,
 )
+from tests.services.api.screening_cleanup import remove_screening_lists
 from tests.services.api.repoint_journal_cleanup import remove_repoint_records  # noqa: F401 - autouse teardown
 
 SCHEME = load_uk_le_scheme()
@@ -73,6 +75,10 @@ SYNTHETIC_LIST = CORE / "packages/demo_fixtures/screening_list_synthetic.yaml"
 OFFICER = Principal(id="kyc-officer", clearance="OFFICIAL", org_unit="verify", roles=["analyst"])  # deploy_rules: may have written a rule (ADR-146 Amendment 6 decision 13)
 SECRET_LOADER = Principal(id="kyc-secret-loader", clearance="SECRET", org_unit="verify", roles=["analyst"])  # deploys rules too: deploy_rules (ADR-146 Amendment 6 decision 13)
 SHARED_PHONE = "447700900777"
+#: When this module was imported, which is before any test of the run wrote a row: a list loaded
+#: after it was loaded by this run (`test_no_other_file_leaves_a_list_naming_this_files_people`).
+#: Rows an earlier, killed run left are older and are `_OwnList`'s to keep out.
+RUN_STARTED = datetime.now(UTC)
 
 
 def _application(name: str, **overrides: str) -> dict[str, str]:
@@ -96,14 +102,22 @@ async def stores() -> AsyncIterator[dict[str, Any]]:
         "screening": await ScreeningListStore.connect(dsn),
     }
     list_name, entries = parse_list(yaml.safe_load(SYNTHETIC_LIST.read_text()), use="local_development")
-    await made["screening"].replace_list(list_name, entries)
+    await made["screening"].replace_list(list_name, entries, scheme=SCHEME)
     made["list_name"] = list_name
     cfg = ValkeyConfig.from_env()
     made["valkey"] = Valkey(host=cfg.host, port=cfg.port, db=cfg.db)
-    yield made
-    for key in ("rules", "held", "alerts", "audit", "screening"):
-        await made[key].close()
-    await made["valkey"].aclose()
+    try:
+        yield made
+    finally:
+        # Its own list removed, on a failure too: the next file's gate screens against every list
+        # the store holds (CARRIES row 113, `screening_cleanup`); first, so a store that fails to
+        # close cannot leave it (the orchestrator's review, a note).
+        try:
+            await remove_screening_lists(dsn, names=[list_name])
+        finally:
+            for key in ("rules", "held", "alerts", "audit", "screening"):
+                await made[key].close()
+            await made["valkey"].aclose()
 
 
 class _OwnList:
@@ -120,8 +134,9 @@ class _OwnList:
     def __init__(self, store: ScreeningListStore, list_name: str) -> None:
         self._store, self._name = store, list_name
 
-    async def entries(self, entity_type: str) -> list[Any]:
-        return [e for e in await self._store.entries(entity_type) if e.list_name == self._name]
+    async def entries(self, entity_type: str, *, cleared: Any) -> list[Any]:
+        return [e for e in await self._store.entries(entity_type, cleared=cleared)
+                if e.list_name == self._name]  # fmt: skip
 
 
 def _gate(stores: dict[str, Any], graph: Any, rules: list[Any], case: str, loader: Principal = OFFICER) -> RuleGate:
@@ -154,7 +169,11 @@ async def _onboard(graph: Any, gate: RuleGate, rows: list[dict[str, str]], *, lo
 
 
 async def _alerts(stores: dict[str, Any], case: str, who: Principal = OFFICER) -> list[Any]:
-    return [a for a in await stores["alerts"].list_authorized(who) if a.investigation_id == case]
+    """The case's alerts as stored, each served as to a reader cleared for every list it cites
+    (`as_read`, ADR-146 Amendment 7): the words with every match in them. A reader's own view is
+    read through the queue (`_queue`)."""
+    return [as_read(a, range(len(a.citations))) for a in await stores["alerts"].list_authorized(who)
+            if a.investigation_id == case]  # fmt: skip
 
 
 def _rule(params: Any, trigger: str = "pre_commit") -> TypologyRuleInput:
@@ -183,6 +202,25 @@ async def test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_
         assert same_as[0].properties["score"] >= 0.9
         listed = await graph.get_node(same_as[0].target, OFFICER)
         assert listed is not None and listed.properties["listing"] == "sanction"
+
+
+async def test_no_other_file_leaves_a_list_naming_this_files_people(stores: dict[str, Any]) -> None:
+    """CARRIES row 113 (ADR-146 Amendment 7): a list another live file loaded in this run is gone
+    by the time this file runs, so the gate, which screens against every list the store holds, does
+    not match this file's people twice. Red with `test_screening_refresh.py` run first, before its
+    teardown removed its "Synthetic list" (Elena Petrova and Priya Nair on both)."""
+    conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    try:
+        rows = await conn.fetch(
+            "SELECT list_name, name FROM screening_entries WHERE entity_type = 'Person' "
+            "AND list_name <> $1 AND loaded_at >= $2",
+            stores["list_name"], RUN_STARTED,
+        )  # fmt: skip
+    finally:
+        await conn.close()
+    people = {normalised("Elena Petrova"), normalised("Priya Nair")}
+    others = sorted({r["list_name"] for r in rows if normalised(r["name"]) in people})
+    assert others == [], f"lists another file left in the store this run, naming this file's people: {others}"
 
 
 async def test_an_owner_below_the_threshold_is_not_screened(stores: dict[str, Any]) -> None:
@@ -608,7 +646,15 @@ async def test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_rec
             )
         assert left == 0
         (row,) = [a for a in await stores["alerts"].list_case_queue(case, OFFICER) if a.id == petrov.id]
-        assert (row.edge_ids, row.alert_node_id, row.status) == (before.edge_ids, before.alert_node_id, "closing")
+        # As stored, then as served: a screening alert's proposal is held on each citation (the
+        # owner's ruling of 12 November 2026), the row's own status "claimed", and its proposer is
+        # shown it closing (the run after the rebase onto 4ecd322: the literal "closing" read the
+        # stored row as the alert was stored before citations were decided one by one).
+        assert (row.edge_ids, row.alert_node_id, row.status, row.citations) == (
+            before.edge_ids, before.alert_node_id, before.status, before.citations)  # fmt: skip
+        (shown,) = [q.alert for q in await alert_queue.queue(stores["alerts"], graph, gate.analytics, case, OFFICER)
+                    if q.alert.id == petrov.id]  # fmt: skip
+        assert shown.status == "closing"
 
 
 async def test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node(
@@ -633,14 +679,24 @@ async def test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_co
         proposed = await alert_queue.dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
                                              disposition="true_positive", reason="Matches the list entry")  # fmt: skip
         assert proposed.status == "closing"
-        real = stores["alerts"].set_queue_triage
+        # Refused where the approval writes: a screening alert's close decides its citations
+        # (`triage_citations`, the owner's ruling of 12 November 2026); `set_queue_triage` is
+        # refused too, for an alert without them (the run after the rebase onto 4ecd322: refusing
+        # only `set_queue_triage` refused nothing, and the case could not fail for its reason).
+        real, real_cited = stores["alerts"].set_queue_triage, stores["alerts"].triage_citations
 
         async def taken(alert_id: str, *a: Any, **k: Any) -> Any:
             if k.get("status") == "closed":
                 raise AlertTriageConflict(alert_id)
             return await real(alert_id, *a, **k)
 
+        async def taken_cited(alert_id: str, *a: Any, **k: Any) -> Any:
+            if k.get("action") == "approve":
+                raise AlertTriageConflict(alert_id)
+            return await real_cited(alert_id, *a, **k)
+
         monkeypatch.setattr(stores["alerts"], "set_queue_triage", taken)
+        monkeypatch.setattr(stores["alerts"], "triage_citations", taken_cited)
         colleague = OFFICER.model_copy(update={"id": "kyc-colleague"})
         with pytest.raises(AlertTriageConflict):
             await alert_queue.approve_close(stores["alerts"], graph, gate.analytics, case, petrov.id, colleague)
@@ -649,3 +705,324 @@ async def test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_co
         assert row.alert_node_id != petrov.alert_node_id, "the alert names its confirmed node"
         listed = [q.alert.id for q in await alert_queue.queue(stores["alerts"], graph, gate.analytics, case, OFFICER)]
         assert petrov.id in listed
+
+
+# --- ADR-146 Amendment 7: one owner named on two screening lists ---------------------------------
+
+SECOND_LIST = "Synthetic second list (kyc test)"
+SECRET_READER = Principal(id="kyc-secret-reader", clearance="SECRET", org_unit="verify", roles=["analyst"])
+
+
+@pytest.fixture
+async def second_list(stores: dict[str, Any]) -> AsyncIterator[Any]:
+    """A second list naming Elena Petrova (and no one else this file onboards), loaded as
+    `marking` says, and removed in teardown, on a failure too (CARRIES row 113)."""
+    loaded: list[str] = []
+
+    async def load(marking: str | None) -> None:
+        entry = ScreeningEntry(
+            id=f"{SECOND_LIST}:2-001", list_name=SECOND_LIST, listing="sanction",
+            entity_type="Person", name="Elena PETROVA", country="XA",
+            classification=marking, handling_code="P" if marking else None,
+        )  # fmt: skip
+        await stores["screening"].replace_list(SECOND_LIST, [entry], scheme=SCHEME)
+        loaded.append(SECOND_LIST)
+
+    try:
+        yield load
+    finally:
+        if loaded:
+            await remove_screening_lists(PostgresConfig.from_env().dsn, names=[SECOND_LIST])
+
+
+class _BothLists:
+    """The real store, read for this file's list and the second one alone (as `_OwnList`)."""
+
+    def __init__(self, store: ScreeningListStore, names: set[str]) -> None:
+        self._store, self._names = store, names
+
+    async def entries(self, entity_type: str, *, cleared: Any) -> list[Any]:
+        return [e for e in await self._store.entries(entity_type, cleared=cleared)
+                if e.list_name in self._names]  # fmt: skip
+
+
+def _gate_both(stores: dict[str, Any], graph: Any, rules: list[Any], case: str) -> RuleGate:
+    gate = _gate(stores, graph, rules, case)
+    gate.screening = cast(ScreeningListStore, _BothLists(stores["screening"], {stores["list_name"], SECOND_LIST}))
+    return gate
+
+
+async def _queue(stores: dict[str, Any], graph: Any, gate: RuleGate, case: str, reader: Principal) -> list[Any]:
+    from services.api.alert_queue import monitoring_queue
+
+    return await monitoring_queue(stores["alerts"], graph, gate.analytics, case, reader)
+
+
+def _petrov(queued: list[Any]) -> Any:
+    (one,) = [q for q in queued if "Elena Petrov" in q.summary]
+    return one
+
+
+async def _owner_listed(graph: Any, reader: Principal) -> list[str]:
+    halcyon = await graph.find_node("Organisation", "name", "Halcyon Marine Ltd", OFFICER)
+    assert halcyon is not None
+    seen = await assess(graph, ComputeRustworkxAdapter(), halcyon.id, reader, today=date(2026, 11, 12))
+    return sorted(f.words for f in seen.factors if f.factor == "owner_listed" and "Petrov" in f.words)
+
+
+async def test_one_owner_on_two_lists_raises_one_alert_citing_both(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """Amendment 7, the owner's ruling of 12 November 2026: Elena Petrov, on both lists, raises one
+    alert citing both, not two (CARRIES row 114). Red before it: two Petrov alerts. Due diligence
+    keeps one `owner_listed` factor per list, each read as the reader."""
+    await second_list(None)
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        stored = await stores["alerts"].list_authorized(OFFICER)
+        petrov = [a for a in stored if a.investigation_id == case and "Elena Petrov" in (a.words or "")]
+        assert len(petrov) == 1, [a.words for a in petrov]
+        assert len(petrov[0].citations) == 2
+        assert "Synthetic" not in (petrov[0].words or ""), "the stored words name no list"
+        shown = _petrov(await _queue(stores, graph, gate, case, OFFICER))
+        assert stores["list_name"] in shown.summary and SECOND_LIST in shown.summary
+        assert len(await _owner_listed(graph, OFFICER)) == 2
+
+
+async def test_a_reader_not_cleared_for_a_list_is_shown_the_alert_with_the_other_list_alone(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The second list is SECRET; the rule's deployer is cleared for it. The OFFICIAL reader is
+    shown the one alert citing the first list alone, in the queue and its explanation, with nothing
+    of the second (its name, its match, a second citation), and one `owner_listed` factor; the
+    SECRET reader is shown both. Red with the queue's check all or nothing: the OFFICIAL reader was
+    shown no Petrov alert at all; red with the alert served as stored: the second list named."""
+    await second_list("SECRET")
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        low = _petrov(await _queue(stores, graph, gate, case, OFFICER))
+        assert SECOND_LIST not in low.summary and stores["list_name"] in low.summary
+        assert SECOND_LIST not in low.alert.model_dump_json() and len(low.alert.citations) == 1
+        why = await explain(stores["alerts"], graph, gate.analytics, case, low.alert.id, OFFICER)
+        assert SECOND_LIST not in why.model_dump_json()
+        assert len([e for e in why.edges if e.type == "SAME_AS"]) == 1
+        high = _petrov(await _queue(stores, graph, gate, case, SECRET_READER))
+        assert high.alert.id == low.alert.id and len(high.alert.citations) == 2
+        assert SECOND_LIST in high.summary
+        assert len(await _owner_listed(graph, OFFICER)) == 1
+        assert len(await _owner_listed(graph, SECRET_READER)) == 2
+
+
+async def test_a_true_positive_confirms_only_the_matches_the_closer_can_read(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The owner's ruling of 12 November 2026 on ADR-109 Amendment 7 as it meets rules 3 and 5: an
+    OFFICIAL closer's true positive confirms the first list's match, and the SECRET list's, which
+    the closer cannot see, stays inferred. The SECRET reader still opens the closed alert with both
+    matches (the confirmed one repointed in its citation too). Red with the citations' links not
+    repointed: the SECRET reader's alert was withheld, its first match citing the superseded link."""
+    await second_list("SECRET")
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        alert_id = _petrov(await _queue(stores, graph, gate, case, OFFICER)).alert.id
+        await dispose(stores["alerts"], graph, gate.analytics, case, alert_id, OFFICER,
+                      disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+        colleague = OFFICER.model_copy(update={"id": "kyc-colleague"})
+        closed = await approve_close(stores["alerts"], graph, gate.analytics, case, alert_id, colleague)
+        assert closed.status == "closed" and SECOND_LIST not in closed.model_dump_json()
+        why = await explain(stores["alerts"], graph, gate.analytics, case, alert_id, SECRET_READER)
+        listed = {n.id: n.properties.get("list_name") for n in why.nodes}
+        states = {listed.get(e.target): e.provenance.state for e in why.edges if e.type == "SAME_AS"}
+        assert states == {stores["list_name"]: ProvenanceState.ASSERTED, SECOND_LIST: ProvenanceState.INFERRED}
+
+
+async def test_a_rule_screens_only_against_lists_its_deployer_is_cleared_for(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """Amendment 7 (rule 3): a rule runs as its deployer, who is OFFICIAL here, so the SECRET list
+    is not screened against at all: the alert cites the first list alone, even to a SECRET reader,
+    and no match on the SECRET list is written. Red with every list screened: two citations."""
+    await second_list("SECRET")
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        high = _petrov(await _queue(stores, graph, gate, case, SECRET_READER))
+        assert len(high.alert.citations) == 1 and SECOND_LIST not in high.summary
+        assert len(await _owner_listed(graph, SECRET_READER)) == 1
+
+
+async def test_a_reader_not_cleared_for_a_list_is_given_a_risk_its_hidden_match_takes_no_part_in(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The orchestrator's review, item 10: the risk score and band a reader is shown are their
+    factors' alone. The SECRET list's match adds one `owner_listed` factor for the SECRET reader
+    and nothing for the OFFICIAL one: their score is the sum of their factors, their band that
+    score's, and the SECRET reader's exceeds it by that one factor's weight."""
+    from services.api.kyc import risk_config
+
+    await second_list("SECRET")
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        halcyon = await graph.find_node("Organisation", "name", "Halcyon Marine Ltd", OFFICER)
+        assert halcyon is not None
+        seen = {r.id: await assess(graph, ComputeRustworkxAdapter(), halcyon.id, r, today=date(2026, 11, 12))
+                for r in (OFFICER, SECRET_READER)}  # fmt: skip
+    low, high = seen[OFFICER.id], seen[SECRET_READER.id]
+    assert low.risk_score == sum(f.weight for f in low.factors)
+    bands = risk_config()["bands"]
+    expected = "high" if low.risk_score >= bands["high"] else "medium" if low.risk_score >= bands["medium"] else "low"
+    assert low.risk_band == expected
+    extra = [f for f in high.factors if f.factor == "owner_listed"]
+    assert len(extra) == len([f for f in low.factors if f.factor == "owner_listed"]) + 1
+    assert high.risk_score - low.risk_score == extra[0].weight
+    assert SECOND_LIST not in low.model_dump_json()
+
+
+async def test_a_close_decides_only_the_matches_its_closer_may_read(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The owner's ruling of 12 November 2026 (about 15:30), live: the OFFICIAL officer proposes a
+    false positive and an OFFICIAL colleague approves it; the alert is closed for them, and open for
+    the SECRET reader on the SECRET list's match alone, which their own proposal and a SECRET
+    colleague's approval then close. Each reader is shown their own decision. Red before the ruling:
+    the OFFICIAL close decided the SECRET match unseen, and the SECRET reader found it closed."""
+    await second_list("SECRET")
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        alert_id = _petrov(await _queue(stores, graph, gate, case, OFFICER)).alert.id
+        args = (stores["alerts"], graph, gate.analytics, case, alert_id)
+        await dispose(*args, OFFICER, disposition="false_positive", reason="Not the listed Petrova")
+        await approve_close(*args, OFFICER.model_copy(update={"id": "kyc-colleague"}))
+        low = _petrov(await _queue(stores, graph, gate, case, OFFICER)).alert
+        assert (low.status, low.disposition) == ("closed", "false_positive")
+        high = _petrov(await _queue(stores, graph, gate, case, SECRET_READER)).alert
+        assert high.status == "open" and [c.status for c in high.citations] == ["closed", "open"]
+        assert "Not the listed Petrova" in high.model_dump_json(), "the SECRET reader reads both"
+        secret_only = SECRET_READER.model_copy(update={"id": "kyc-secret-only"})
+        await dispose(*args, SECRET_READER, disposition="referred", reason="To the sanctions team")
+        await approve_close(*args, secret_only.model_copy(update={"id": "kyc-secret-colleague"}))
+        (stored,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_READER) if a.id == alert_id]
+        assert stored.status == "closed"
+        low = _petrov(await _queue(stores, graph, gate, case, OFFICER)).alert
+        assert (low.disposition, "To the sanctions team" in low.model_dump_json()) == ("false_positive", False)
+
+
+async def test_a_loads_report_counts_only_the_alerts_its_loader_may_read(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The orchestrator's review, item 7: the rule is screened against the SECRET list alone, so
+    Elena Petrov's alert cites it alone. Loaded by the OFFICIAL officer, the load's report says no
+    alert was raised; loaded by the SECRET loader, one. Red with every fresh finding counted: the
+    OFFICIAL loader was told of an alert their queue never shows them."""
+    await second_list("SECRET")
+    said = {}
+    for loader in (OFFICER, SECRET_LOADER):
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case, loader=loader)
+            gate.screening = cast(ScreeningListStore, _BothLists(stores["screening"], {SECOND_LIST}))
+            report = await _onboard(graph, gate, [_application("Halcyon Marine Ltd")], loader=loader)
+        said[loader.id] = [n for n in report.rule_notes if "raised" in n]
+    assert said[OFFICER.id] == [], said
+    assert len(said[SECRET_LOADER.id]) == 1 and "raised 1 alert(s)" in said[SECRET_LOADER.id][0]
+
+
+async def test_an_approval_by_a_reader_cleared_for_both_confirms_only_the_proposed_match(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The owner's ruling, and item 10's point 6 with an approver whose clearance differs from the
+    proposer's: the OFFICIAL officer proposes a true match, which names list A's match alone; the
+    SECRET colleague, who reads both, approves it. Only A's `SAME_AS` is confirmed: B's, which no one
+    has decided, stays inferred, and the alert stays open on it for the SECRET reader. Red with the
+    close confirming every match its approver could read: B's confirmed undecided (rule 5)."""
+    await second_list("SECRET")
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        alert_id = _petrov(await _queue(stores, graph, gate, case, OFFICER)).alert.id
+        args = (stores["alerts"], graph, gate.analytics, case, alert_id)
+        await dispose(*args, OFFICER, disposition="true_positive", reason="Matches the list entry")
+        await approve_close(*args, SECRET_READER.model_copy(update={"id": "kyc-secret-colleague"}))
+        why = await explain(stores["alerts"], graph, gate.analytics, case, alert_id, SECRET_READER)
+        listed = {n.id: n.properties.get("list_name") for n in why.nodes}
+        states = {listed.get(e.target): e.provenance.state for e in why.edges if e.type == "SAME_AS"}
+        assert states == {stores["list_name"]: ProvenanceState.ASSERTED, SECOND_LIST: ProvenanceState.INFERRED}
+        assert why.alert.status == "open"
+
+
+async def test_each_proposal_confirms_by_its_own_disposition(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The lane review of the second pass, defect 4: the OFFICIAL officer proposes list A's match a
+    false positive, the SECRET reader proposes list B's a true match, and a SECRET colleague approves
+    both. B's `SAME_AS` is confirmed and A's stays inferred. Red with the approval's confirm read
+    from the first proposal shown (A's false positive): the alert closed a true match with its
+    match left inferred (rule 5)."""
+    await second_list("SECRET")
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        alert_id = _petrov(await _queue(stores, graph, gate, case, OFFICER)).alert.id
+        args = (stores["alerts"], graph, gate.analytics, case, alert_id)
+        await dispose(*args, OFFICER, disposition="false_positive", reason="Not the listed Petrova")
+        await dispose(*args, SECRET_READER, disposition="true_positive", reason="The listed Petrova")
+        await approve_close(*args, SECRET_READER.model_copy(update={"id": "kyc-secret-colleague"}))
+        why = await explain(stores["alerts"], graph, gate.analytics, case, alert_id, SECRET_READER)
+        listed = {n.id: n.properties.get("list_name") for n in why.nodes}
+        states = {listed.get(e.target): e.provenance.state for e in why.edges if e.type == "SAME_AS"}
+        assert states == {stores["list_name"]: ProvenanceState.INFERRED, SECOND_LIST: ProvenanceState.ASSERTED}
+        assert why.alert.status == "closed"
+
+
+async def test_a_held_loads_note_counts_only_the_matches_its_loader_may_read(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The lane review of the second pass, defect 8: the pipeline makes the rule hold, and Elena
+    Petrov's match cites the SECRET list alone. The OFFICIAL loader is told nothing of a match
+    (the rows are held all the same); the SECRET loader is told the rows were held. Red with the
+    note said for every finding: the OFFICIAL loader told of a match on a list they may not read."""
+    await second_list("SECRET")
+    said = {}
+    for loader in (OFFICER, SECRET_LOADER):
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case, loader=loader)
+            gate.screening = cast(ScreeningListStore, _BothLists(stores["screening"], {SECOND_LIST}))
+            gate.on_hit = {rule.id: "hold"}
+            report = await _onboard(graph, gate, [_application("Halcyon Marine Ltd")], loader=loader)
+        said[loader.id] = [n for n in report.rule_notes if "held for review" in n]
+    assert said[OFFICER.id] == [], said
+    assert len(said[SECRET_LOADER.id]) == 1

@@ -97,3 +97,73 @@ def test_a_real_list_whose_licence_is_not_confirmed_is_refused_even_with_the_exc
     config = _exceptions(tmp_path, ["local_development"], dataset="un_consolidated")
     with pytest.raises(ListRefused, match="non-commercial use only"):
         parse_list({**REAL, "dataset": "un_consolidated"}, use="local_development", config_path=config)
+
+
+# --- ADR-146 Amendment 7: a list's marking ------------------------------------------------------
+
+_MARKED = {"list_name": "Marked", "synthetic": True,
+           "entries": [{"id": "m-1", "listing": "sanction", "entity_type": "Person", "name": "Elena PETROVA"}]}  # fmt: skip
+
+
+def test_a_lists_marking_is_carried_by_each_entry_and_an_unmarked_list_is_official_p() -> None:
+    _, entries = parse_list({**_MARKED, "marking": {"classification": "SECRET", "handling_code": "P"}},
+                            use="local_development")  # fmt: skip
+    assert [(e.classification, e.handling_code) for e in entries] == [("SECRET", "P")]
+    _, unmarked = parse_list(_MARKED, use="local_development")
+    assert [(e.classification, e.handling_code) for e in unmarked] == [(None, None)]
+
+
+@pytest.mark.parametrize(
+    ("marking", "said"),
+    [
+        ({"classification": "RESTRICTED-ISH", "handling_code": "P"}, "is not a classification"),
+        ({"classification": "SECRET", "handling_code": "Z9"}, "is not a handling code"),
+        ({"classification": "SECRET"}, "names exactly"),
+        ({"classification": "SECRET", "handling_code": "P", "caveat": "x"}, "names exactly"),
+        ("SECRET", "names exactly"),
+        # The lane review's item 11: a code restricted to one unit, which a list's matches,
+        # written in the deployer's unit, cannot name.
+        ({"classification": "OFFICIAL", "handling_code": "R"}, "restricts a list to one unit"),
+    ],
+)
+def test_a_marking_the_scheme_does_not_define_is_refused_in_words(marking: object, said: str) -> None:
+    with pytest.raises(ListRefused, match=said):
+        parse_list({**_MARKED, "marking": marking}, use="local_development")
+
+
+def test_a_change_of_marking_is_a_change_of_the_entry() -> None:
+    """A refresh that re-marks a list re-screens its entries (`diff_entries`, by fingerprint)."""
+    plain = LIST[0]
+    marked = ScreeningEntry(**{**plain.__dict__, "classification": "SECRET", "handling_code": "P"})
+    assert plain.fingerprint() != marked.fingerprint()
+
+
+def test_a_rule_screens_only_against_the_lists_its_deployer_is_cleared_for() -> None:
+    from services.api.kyc_rules import lists_cleared_for
+
+    from ontology.handling import load_uk_le_scheme
+    from schemas.domain import Principal
+
+    marked = ScreeningEntry(**{**LIST[0].__dict__, "id": "s", "classification": "SECRET", "handling_code": "P"})
+    entries = [LIST[0], marked]
+    official = Principal(id="o", clearance="OFFICIAL", org_unit="u")
+    secret = Principal(id="s", clearance="SECRET", org_unit="u")
+    scheme = load_uk_le_scheme()
+    assert [e.id for e in lists_cleared_for(entries, official, scheme)] == ["1"]
+    assert [e.id for e in lists_cleared_for(entries, secret, scheme)] == ["1", "s"]
+
+
+def test_a_marking_above_the_deployments_highest_is_refused_in_words() -> None:
+    """The lane review's item 11: a deployment whose ceiling is OFFICIAL (ADR-148) never holds a
+    SECRET list's matches."""
+    from services.ingest.ceiling import DeploymentCeiling
+
+    from ontology.handling import load_uk_le_scheme
+
+    ceiling = DeploymentCeiling.of("OFFICIAL", load_uk_le_scheme())
+    with pytest.raises(ListRefused, match="above this deployment's highest marking"):
+        parse_list({**_MARKED, "marking": {"classification": "SECRET", "handling_code": "P"}},
+                   use="local_development", ceiling=ceiling)  # fmt: skip
+    _, entries = parse_list({**_MARKED, "marking": {"classification": "OFFICIAL", "handling_code": "P"}},
+                            use="local_development", ceiling=ceiling)  # fmt: skip
+    assert entries[0].classification == "OFFICIAL"
