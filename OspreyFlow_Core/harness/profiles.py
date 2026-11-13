@@ -189,29 +189,34 @@ def store_memory(resources: ResourcesConfig) -> StoreMemory:
 
 
 #: ADR-114 Amendment 43: what a deployment's own PostgreSQL allows at once, from the product's own
-#: numbers. Its image's default (100) was rendered until 13 November 2026, and one Conduit holds 49
-#: connections at rest (its 48 stores' asyncpg pools at `min_size`) and up to 197 under load (at
-#: `max_size`), beside Keycloak, the gateway, Superset and the report sync: a second Conduit was
-#: refused (`TooManyConnectionsError`; platform-b's stateless finding).
+#: numbers. Its image's default (100) was rendered until 13 November 2026, and one Conduit holds 50
+#: connections at rest (platform-b's stateless finding): a second Conduit was refused
+#: (`TooManyConnectionsError`).
 #:
-#: The Conduit's stores' pools at their `max_size`, summed: 197 on 13 November 2026, measured
-#: by `tests/harness/test_postgres_connections.py`, which fails when a pool added or grown takes
-#: the sum past this, so the number below never silently falls short.
-CONDUIT_POOL_CEILING = 200
+#: The pools one Conduit process opens, at their `max_size`, summed: **measured** in a running
+#: Conduit by `tests/harness/test_postgres_connections.py` (every `asyncpg.create_pool` it makes,
+#: two stores opened twice included), with Entra ID's people store (opened only when Entra is
+#: configured) added: 48 pools, 201 and 4, on 13 November 2026; the test fails past this.
+CONDUIT_POOL_CEILING = 220
 #: Conduits allowed at their ceiling at once: the one a deployment runs, and a second (a replica,
 #: or a worker opening the same stores; a restart's old and new processes overlapping).
 CONDUITS_ALLOWED = 2
-#: Keycloak 26's own `db-pool-max-size` default, which the render does not change.
+#: Each running load holds one connection outside every pool for its row-key lock
+#: (`recipe_runs.RecipeRunLedger.hold_row_keys`), and nothing bounds how many loads run at once:
+#: an allowance, not a bound (carried).
+RUNNING_LOADS_ALLOWED = 20
+#: Keycloak's pool, rendered (`KC_DB_POOL_MAX_SIZE`; Keycloak 26's own default, made the product's).
 KEYCLOAK_POOL_MAX = 100
-#: LiteLLM's `database_connection_pool_limit` (10 a worker) for its two, and Superset's
-#: SQLAlchemy pool (5 and 10 overflow) for two processes, with the report sync's mart pool (4):
-#: allowances, each the client's own default, not measurements.
-GATEWAY_POOL_MAX = 20
-SUPERSET_AND_REPORT_SYNC_MAX = 40
+#: The gateway's pool, rendered (LiteLLM's `database_connection_pool_limit`, one worker).
+GATEWAY_POOL_MAX = 10
+#: Superset's two gunicorn workers (`deploy/superset/osprey_entrypoint.py`) at SQLAlchemy's 5 and 10
+#: overflow, its queries to the mart (up to 8 at once) and the report sync's mart pool (4): 42, an
+#: allowance from those clients' own defaults.
+SUPERSET_AND_REPORT_SYNC_MAX = 50
 #: For the owner's `psql`, a backup, and PostgreSQL's own three superuser slots.
 OPERATOR_RESERVE = 20
 POSTGRES_MAX_CONNECTIONS = (
-    CONDUITS_ALLOWED * CONDUIT_POOL_CEILING
+    CONDUITS_ALLOWED * (CONDUIT_POOL_CEILING + RUNNING_LOADS_ALLOWED)
     + KEYCLOAK_POOL_MAX
     + GATEWAY_POOL_MAX
     + SUPERSET_AND_REPORT_SYNC_MAX

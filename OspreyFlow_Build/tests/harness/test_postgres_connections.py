@@ -1,18 +1,24 @@
 """A deployment's own PostgreSQL allows what its services may hold (ADR-114 Amendment 43).
 
-Rule 12, the invariant and the test that fails without it:
+Rule 12, each invariant and the test that fails without it:
 
-- **The number is the product's own, and cannot fall behind it.** `CONDUIT_POOL_CEILING` must cover
-  the Conduit's stores' asyncpg pools at their `max_size`, summed from the source itself (every
-  `asyncpg.create_pool` call under `services/api` and `packages`), so a pool added or grown tomorrow
-  fails here rather than in production. A pool whose `max_size` is not a literal cannot be counted,
-  and is refused in words. The scanner is shown red on a planted pool in the real call site's shape.
-- **Every profile with a PostgreSQL of its own renders it** (Lite and Small, sized or not).
-- **Two Conduits and their pools at the ceiling fit the rendered PostgreSQL** (docker): a real
-  `postgres:16.4` started with exactly the rendered command, two real Conduits started against it
-  (ArcadeDB a stand-in answering empty, as platform-b's probe did), and then the connections their
-  pools and the other services may still open taken up to the product's number. Against the image's
-  own default (100), the same is refused (the red).
+- **The Conduit's share is measured, not counted from the source.** A real Conduit is started with
+  `asyncpg.create_pool` wrapped (a `sitecustomize` on its path), so every pool the process opens is
+  recorded with its sizes, two stores opened twice included. The sum of their `max_size`, with Entra
+  ID's people store (opened only when Entra is configured), must fit `CONDUIT_POOL_CEILING`; and the
+  connections the process adds to the server at rest must equal the sum of their `min_size`, so a
+  connection opened outside the recorded pools would show.
+- **Every profile with a PostgreSQL of its own renders the number** (Lite and Small, sized or not),
+  and the gateway's and Keycloak's pools are rendered as the number counts them.
+- **Two Conduits at their ceiling, and every other client at its allowance, fit the rendered
+  PostgreSQL** (docker): `postgres:16.4` started with exactly the rendered command; Conduit 1 up,
+  its pools grown to their measured maximum and its running loads' lock connections opened;
+  Conduit 2 up, the same; then Keycloak's, the gateway's, Superset's and the report sync's
+  allowances. None may be refused. Red against the image's own command (100):
+  `gates/pg_two_conduits_red.txt`.
+
+Every address the Conduits read is pinned to the throwaway PostgreSQL, the ArcadeDB stand-in or a
+closed port: nothing here reaches a lane stack or the owner's deployment.
 """
 
 from __future__ import annotations
@@ -37,98 +43,32 @@ import yaml
 from harness.profiles import (
     CONDUIT_POOL_CEILING,
     CONDUITS_ALLOWED,
+    GATEWAY_POOL_MAX,
+    KEYCLOAK_POOL_MAX,
     POSTGRES_MAX_CONNECTIONS,
+    RUNNING_LOADS_ALLOWED,
+    SUPERSET_AND_REPORT_SYNC_MAX,
     postgres_command,
 )
-from harness.render import POSTGRES_IMAGE, render
+from harness.render import POSTGRES_IMAGE, render, render_litellm_config
 from tools.layout import CORE
 
 from schemas.deployment import OspreyConfig
 
 from .tls_fixtures import docker
 
-
-def _pool_sizes(root: Path) -> list[tuple[str, int]]:
-    """Every `create_pool(...)` call's `max_size` under `root`'s Conduit code, tests left out."""
-    found: list[tuple[str, int]] = []
-    for path in sorted(root.rglob("*.py")):
-        relative = path.relative_to(root).as_posix()
-        if "/tests/" in f"/{relative}" or path.name.startswith("test_") or ".venv" in relative:
-            continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            name = (
-                node.func.attr
-                if isinstance(node.func, ast.Attribute)
-                else getattr(node.func, "id", "")
-            )
-            if name != "create_pool":
-                continue
-            size = next((k.value for k in node.keywords if k.arg == "max_size"), None)
-            if not isinstance(size, ast.Constant) or not isinstance(size.value, int):
-                raise AssertionError(
-                    f"{relative}:{node.lineno}: a pool whose max_size is not a number written "
-                    "there cannot be counted against CONDUIT_POOL_CEILING (ADR-114 Amendment 43)"
-                )
-            found.append((f"{relative}:{node.lineno}", size.value))
-    return found
+SMALL = {"profile": "small", "network": {"public_origin": "https://demo.example.org"}}
+#: Closed ports for every service the Conduit may reach that this test does not stand in for.
+CLOSED = {"VALKEY": 59993, "CLICKHOUSE": 59994, "MINIO": 59996, "LITELLM": 59997, "OIDC": 59998}
 
 
-def _conduit_pools() -> list[tuple[str, int]]:
-    return [
-        *(("services/api/" + w, n) for w, n in _pool_sizes(CORE / "services" / "api")),
-        *(("packages/" + w, n) for w, n in _pool_sizes(CORE / "packages")),
-    ]
-
-
-def _over_the_ceiling(pools: list[tuple[str, int]]) -> str | None:
-    total = sum(n for _, n in pools)
-    if total <= CONDUIT_POOL_CEILING:
-        return None
-    return (
-        f"the Conduit's {len(pools)} pools reach {total} connections, past CONDUIT_POOL_CEILING "
-        f"({CONDUIT_POOL_CEILING}): raise it in harness/profiles.py (ADR-114 Amendment 43)"
-    )
-
-
-def test_the_conduits_pools_at_their_max_fit_the_ceiling() -> None:
-    pools = _conduit_pools()
-    assert len(pools) >= 40, "the scanner found almost no pools: it is not reading the Conduit"
-    assert _over_the_ceiling(pools) is None, _over_the_ceiling(pools)
-
-
-def test_a_pool_added_past_the_ceiling_is_caught_in_the_real_call_sites_shape(
-    tmp_path: Path,
-) -> None:
-    """Rule 15: planted as the stores write it, `await asyncpg.create_pool(dsn=dsn, ...)`, one
-    connection more than the ceiling leaves."""
-    room = CONDUIT_POOL_CEILING - sum(n for _, n in _conduit_pools())
-    (tmp_path / "new_store.py").write_text(
-        "import asyncpg\n\nasync def open_pool(dsn):\n"
-        f"    return await asyncpg.create_pool(dsn=dsn, min_size=1, max_size={room + 1})\n",
-        encoding="utf-8",
-    )
-    planted = _pool_sizes(tmp_path)
-    assert planted == [("new_store.py:4", room + 1)]
-    assert _over_the_ceiling([*_conduit_pools(), *planted]) is not None
-    (tmp_path / "unsized.py").write_text(
-        "import asyncpg\nasync def p(dsn, n):\n"
-        "    return await asyncpg.create_pool(dsn, max_size=n)\n",
-        encoding="utf-8",
-    )
-    with pytest.raises(AssertionError, match="cannot be counted"):
-        _pool_sizes(tmp_path)
-
-
-def _rendered_postgres(raw: dict[str, Any]) -> dict[str, Any]:
+def _rendered(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     config = OspreyConfig.model_validate(raw)
     artefacts = render(config, resolver=lambda _image: "sha256:" + "0" * 64).artefacts
-    return dict(yaml.safe_load(artefacts["compose.yaml"])["services"]["postgres"])
-
-
-SMALL = {"profile": "small", "network": {"public_origin": "https://demo.example.org"}}
+    return (
+        yaml.safe_load(artefacts["compose.yaml"])["services"],
+        yaml.safe_load(render_litellm_config(config)),
+    )
 
 
 @pytest.mark.parametrize(
@@ -137,31 +77,85 @@ SMALL = {"profile": "small", "network": {"public_origin": "https://demo.example.
     ids=["lite", "small", "small-sized"],
 )
 def test_every_owned_postgres_is_rendered_with_the_products_number(raw: dict[str, Any]) -> None:
-    command = _rendered_postgres(raw)["command"]
+    command = _rendered(raw)[0]["postgres"]["command"]
     assert command[:3] == ["postgres", "-c", f"max_connections={POSTGRES_MAX_CONNECTIONS}"]
-    assert POSTGRES_MAX_CONNECTIONS >= CONDUITS_ALLOWED * CONDUIT_POOL_CEILING + 100
 
 
-def test_an_existing_deployment_restarts_its_postgres_alone_on_apply(tmp_path: Path) -> None:
-    """A deployed Small picks the number up on `ospreyflow apply`: its PostgreSQL's definition
-    differs from the one rendered before (no command, the image's 100), so apply restarts it, and
-    nothing else (ADR-137's `services_to_restart`)."""
+def test_the_gateway_and_keycloak_are_rendered_with_the_pools_the_number_counts() -> None:
+    services, gateway = _rendered(SMALL)
+    assert services["keycloak"]["environment"]["KC_DB_POOL_MAX_SIZE"] == str(KEYCLOAK_POOL_MAX)
+    assert gateway["general_settings"]["database_connection_pool_limit"] == GATEWAY_POOL_MAX
+    # One gateway worker: the render gives LiteLLM no `--num_workers`.
+    assert "--num_workers" not in json.dumps(services["litellm"].get("command", []))
+
+
+def _entra_people_pool_max() -> int:
+    """Entra ID's people store's pool (`services/api/entra_people.py`), opened only when Entra is
+    configured, so a Conduit started here does not open it: read from its one `create_pool` call."""
+    tree = ast.parse((CORE / "services/api/entra_people.py").read_text(encoding="utf-8"))
+    sizes = [
+        k.value.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "create_pool"
+        for k in node.keywords
+        if k.arg == "max_size" and isinstance(k.value, ast.Constant)
+    ]
+    assert len(sizes) == 1, sizes
+    return int(str(sizes[0]))
+
+
+def test_an_existing_deployment_restarts_postgres_keycloak_and_the_gateway_on_apply(
+    tmp_path: Path,
+) -> None:
+    """A deployed Small picks the number up on `ospreyflow apply` of a release that carries it: the
+    definitions of PostgreSQL (its command), Keycloak (its pool) and the gateway (its pool) differ
+    from those rendered before, so apply restarts those three and nothing else (ADR-137's
+    `services_to_restart`)."""
     from harness.apply import services_to_restart
     from harness.render import write
 
     config = OspreyConfig.model_validate(SMALL)
     resolver = lambda _image: "sha256:" + "0" * 64  # noqa: E731
     write(render(config, resolver=resolver), tmp_path / "after")
-    # As rendered before Amendment 43: the same deployment, its PostgreSQL with no command.
+    # `litellm.yaml` is written beside the render by apply itself (`harness/apply.py`).
+    (tmp_path / "after" / "litellm.yaml").write_text(
+        render_litellm_config(config), encoding="utf-8"
+    )
     old = render(config, resolver=resolver)
     compose = yaml.safe_load(old.artefacts["compose.yaml"])
     del compose["services"]["postgres"]["command"]
+    del compose["services"]["keycloak"]["environment"]["KC_DB_POOL_MAX_SIZE"]
     old.artefacts["compose.yaml"] = yaml.safe_dump(compose)
     write(old, tmp_path / "before")
-    assert services_to_restart(tmp_path / "before", tmp_path / "after") == {"postgres"}
+    gateway = yaml.safe_load(render_litellm_config(config))
+    del gateway["general_settings"]["database_connection_pool_limit"]
+    (tmp_path / "before" / "litellm.yaml").write_text(
+        yaml.safe_dump(gateway, sort_keys=False), encoding="utf-8"
+    )
+    assert services_to_restart(tmp_path / "before", tmp_path / "after") == {
+        "postgres", "keycloak", "litellm",
+    }  # fmt: skip
 
 
-# --- two Conduits against the rendered PostgreSQL (docker) ---------------------------------------
+# --- real Conduits against the rendered PostgreSQL (docker) --------------------------------------
+
+#: Wraps `asyncpg.create_pool` in the Conduit's own process, before anything imports it.
+_RECORD_POOLS = """
+import json, os
+import asyncpg
+
+_real = asyncpg.create_pool
+
+
+def create_pool(*args, **kwargs):
+    with open(os.environ["OSPREY_TEST_POOL_LOG"], "a", encoding="utf-8") as out:
+        sizes = {"min": kwargs.get("min_size", 10), "max": kwargs.get("max_size", 10)}
+        out.write(json.dumps(sizes) + "\\n")
+    return _real(*args, **kwargs)
+
+
+asyncpg.create_pool = create_pool
+"""
 
 
 def _free_port() -> int:
@@ -199,71 +193,124 @@ def _postgres(command: list[str]) -> Iterator[tuple[int, str]]:
            "-e", "POSTGRES_DB=ospreyflow", POSTGRES_IMAGE, *command)  # fmt: skip
     try:
         deadline = time.monotonic() + 90
-        while docker("exec", name, "pg_isready", "-U", "osprey", check=False).returncode != 0:
+        # Over TCP: the image's set-up server answers on its socket alone, and is then restarted.
+        ready = ("exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "osprey")
+        while docker(*ready, check=False).returncode != 0:
             assert time.monotonic() < deadline, docker("logs", name, check=False).stderr[-1500:]
-            time.sleep(1)
-        time.sleep(2)  # the image's init restarts the server once after pg_isready first answers
-        while docker("exec", name, "pg_isready", "-U", "osprey", check=False).returncode != 0:
-            assert time.monotonic() < deadline
             time.sleep(1)
         yield port, password
     finally:
         docker("rm", "-f", "-v", name, check=False)
 
 
-async def _take_up_to(port: int, password: str, target: int) -> tuple[int, str | None]:
-    """Opens connections until the server holds `target` client backends, or it refuses one."""
-    dsn = f"postgresql://osprey:{password}@127.0.0.1:{port}/ospreyflow"
-    first = await asyncpg.connect(dsn)
-    opened = [first]
-    try:
-        held = int(await first.fetchval(
-            "SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend'"
-        ))  # fmt: skip
-        for _ in range(max(0, target - held)):
+class _Clients:
+    """Connections standing for clients' pools grown, held until the end."""
+
+    def __init__(self, dsn: str) -> None:
+        self.dsn = dsn
+        self.opened: list[asyncpg.Connection] = []
+
+    async def held_by_the_server(self) -> int:
+        """Client connections the server holds, this question's own left out."""
+        conn = await asyncpg.connect(self.dsn)
+        try:
+            sql = "SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend'"
+            return int(await conn.fetchval(sql)) - 1
+        finally:
+            await conn.close()
+
+    async def open(self, n: int, what: str) -> None:
+        for _ in range(n):
             try:
-                opened.append(await asyncpg.connect(dsn))
+                self.opened.append(await asyncpg.connect(self.dsn))
             except asyncpg.exceptions.TooManyConnectionsError as refused:
-                return held + len(opened) - 1, str(refused)
-        held = int(await first.fetchval(
-            "SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend'"
-        ))  # fmt: skip
-        return held, None
-    finally:
-        await asyncio.gather(*(c.close() for c in opened), return_exceptions=True)
+                raise AssertionError(f"refused while {what}: {refused}") from refused
+
+    async def close(self) -> None:
+        await asyncio.gather(*(c.close() for c in self.opened), return_exceptions=True)
 
 
-def _two_conduits_then_the_ceiling(
-    command: list[str], monkeypatch: pytest.MonkeyPatch
-) -> tuple[int, str | None]:
+def _pools(log: Path) -> list[dict[str, int]]:
+    return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+
+
+def _the_product_at_once(
+    command: list[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> list[str]:
+    """Two Conduits and the other clients at their numbers, against `command`, step by step.
+    Returns what was measured; raises at the first refusal, naming its step."""
     from tests.services.api.test_statelessness import _ConduitInstance
 
+    (tmp_path / "hook").mkdir()
+    (tmp_path / "hook" / "sitecustomize.py").write_text(_RECORD_POOLS, encoding="utf-8")
     arcade = http.server.ThreadingHTTPServer(("127.0.0.1", _free_port()), _EmptyArcadeDB)
     threading.Thread(target=arcade.serve_forever, daemon=True).start()
     conduits: list[Any] = []
+    said: list[str] = []
     try:
         with _postgres(command) as (port, password):
-            for name, value in {
+            oidc = f"http://127.0.0.1:{CLOSED['OIDC']}"
+            pinned = {
                 "POSTGRES_HOST": "127.0.0.1", "POSTGRES_PORT": str(port), "POSTGRES_USER": "osprey",
                 "POSTGRES_PASSWORD": password, "POSTGRES_DB": "ospreyflow",
+                "POSTGRES_SSLMODE": "disable",
                 "ARCADEDB_HOST": "127.0.0.1", "ARCADEDB_HTTP_PORT": str(arcade.server_address[1]),
-            }.items():  # fmt: skip
+                "VALKEY_HOST": "127.0.0.1", "VALKEY_PORT": str(CLOSED["VALKEY"]),
+                "CLICKHOUSE_HOST": "127.0.0.1", "CLICKHOUSE_HTTP_PORT": str(CLOSED["CLICKHOUSE"]),
+                "MINIO_ENDPOINT": f"127.0.0.1:{CLOSED['MINIO']}",
+                "LITELLM_HOST": "127.0.0.1", "LITELLM_PORT": str(CLOSED["LITELLM"]),
+                "OIDC_ISSUER": f"{oidc}/realms/osprey", "OIDC_ADMIN_USERS_URL": f"{oidc}/admin",
+                "OIDC_TOKEN_EXCHANGE_URL": f"{oidc}/token", "OSPREY_ANALYTICS_ENGINE": "duckdb",
+                "PYTHONPATH": str(tmp_path / "hook"),
+            }  # fmt: skip
+            for name, value in pinned.items():
                 monkeypatch.setenv(name, value)
-            for _ in range(CONDUITS_ALLOWED):
-                conduits.append(_ConduitInstance(f"http://127.0.0.1:{_free_port()}/jwks.json"))
-            # The pools as load grows them: every Conduit's to its ceiling, and the other services'.
-            return asyncio.run(_take_up_to(port, password, POSTGRES_MAX_CONNECTIONS - 5))
+            clients = _Clients(f"postgresql://osprey:{password}@127.0.0.1:{port}/ospreyflow")
+            try:
+                for n in range(1, CONDUITS_ALLOWED + 1):
+                    log = tmp_path / f"pools-{n}.jsonl"
+                    monkeypatch.setenv("OSPREY_TEST_POOL_LOG", str(log))
+                    before = asyncio.run(clients.held_by_the_server())
+                    try:
+                        conduits.append(_ConduitInstance(f"{oidc}/jwks"))
+                    except TimeoutError as exc:
+                        raise AssertionError(f"Conduit {n} did not come up: {exc}"[-800:]) from exc
+                    pools = _pools(log)
+                    at_rest = sum(p["min"] for p in pools)
+                    ceiling = sum(p["max"] for p in pools)
+                    added = asyncio.run(clients.held_by_the_server()) - before
+                    said.append(
+                        f"Conduit {n}: {len(pools)} pools opened, {at_rest} connections at their "
+                        f"min, {ceiling} at their max; it added {added} to the server"
+                    )
+                    assert added == at_rest, said
+                    entra = _entra_people_pool_max()
+                    assert ceiling + entra <= CONDUIT_POOL_CEILING, (
+                        f"one Conduit's pools reach {ceiling} (+{entra} with Entra ID), past "
+                        f"CONDUIT_POOL_CEILING ({CONDUIT_POOL_CEILING}): raise it in profiles.py"
+                    )
+                    asyncio.run(clients.open(ceiling - at_rest, f"Conduit {n}'s pools grew"))
+                    asyncio.run(clients.open(RUNNING_LOADS_ALLOWED, f"Conduit {n}'s loads ran"))
+                others = KEYCLOAK_POOL_MAX + GATEWAY_POOL_MAX + SUPERSET_AND_REPORT_SYNC_MAX
+                asyncio.run(
+                    clients.open(others, "Keycloak, the gateway, Superset and the report sync grew")
+                )
+                total = asyncio.run(clients.held_by_the_server())
+                said.append(
+                    f"all at once: {total} client connections, of {POSTGRES_MAX_CONNECTIONS}"
+                )
+            finally:
+                asyncio.run(clients.close())
+        return said
     finally:
         for conduit in conduits:
             conduit.kill()
         arcade.shutdown()
 
 
-def test_two_conduits_at_their_ceiling_fit_the_rendered_postgres(
-    monkeypatch: pytest.MonkeyPatch,
+def test_two_conduits_at_their_ceiling_and_every_other_client_fit_the_rendered_postgres(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    command = _rendered_postgres(SMALL)["command"]
+    command = _rendered(SMALL)[0]["postgres"]["command"]
     assert command == postgres_command()
-    held, refused = _two_conduits_then_the_ceiling(command, monkeypatch)
-    assert refused is None, f"refused at {held} client connections: {refused}"
-    assert held >= POSTGRES_MAX_CONNECTIONS - 5
+    print("\n".join(_the_product_at_once(command, monkeypatch, tmp_path)))
