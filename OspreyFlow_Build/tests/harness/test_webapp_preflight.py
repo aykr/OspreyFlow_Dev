@@ -162,7 +162,9 @@ def _stand_in_host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, smi: str | N
     if smi is not None:
         (bin_dir / "nvidia-smi").write_text(f"#!/bin/sh\n{smi}\n")
         (bin_dir / "nvidia-smi").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin")
+    # The host's own PATH less every folder holding a real nvidia-smi (the test server's is in /usr/bin).
+    real = [d for d in os.environ.get("PATH", "").split(os.pathsep) if d and not (Path(d) / "nvidia-smi").exists()]
+    monkeypatch.setenv("PATH", os.pathsep.join([str(bin_dir), *real]))
 
 
 def test_on_a_stand_in_gpu_host_the_gpu_passes_naming_its_driver(
