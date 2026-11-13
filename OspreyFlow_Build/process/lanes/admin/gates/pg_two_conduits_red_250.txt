@@ -1,0 +1,353 @@
+PLANT at 6074baf: max_connections=250: the second Conduit must not come up
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T191327Z-8774602d/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py -v -s -k rendered_number_holds
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/admin/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve FAILED
+
+=================================== FAILURES ===================================
+_ test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve _
+
+self = <tests.services.api.test_statelessness._ConduitInstance object at 0x717d24016270>
+jwks_url = 'http://127.0.0.1:59998/jwks', extra_env = None
+
+    def __init__(self, jwks_url: str, extra_env: dict[str, str] | None = None) -> None:
+        self.port = _free_port()
+        self.base_url = f"http://127.0.0.1:{self.port}"
+        repo_root = _REPO
+        # `pytest`'s own `pythonpath = ["packages"]` (pyproject.toml) only
+        # affects this process's `sys.path`, not a `subprocess.Popen` —
+        # `uvicorn` here needs the same `packages` root on `PYTHONPATH`
+        # explicitly, the same way `services/api/Dockerfile` sets it.
+        packages_root = repo_root / "packages"
+        # Its own scratch analytics path, not the shared default — see this
+        # module's own docstring for why two instances cannot share one.
+        analytics_db_path = (
+            Path(tempfile.mkdtemp(prefix="ospreyflow-analytics-")) / "analytics.duckdb"
+        )
+        self._log = tempfile.TemporaryFile()
+        env = {
+            **os.environ,
+            "OIDC_JWKS_URL": jwks_url,
+            "OIDC_ALGORITHMS": "RS256",
+            "ARCADEDB_DATABASE": "ospreyflow",
+            "PYTHONPATH": f"{repo_root}:{packages_root}:{os.environ.get('PYTHONPATH', '')}",
+            "ANALYTICS_DB_PATH": str(analytics_db_path),
+            **(extra_env or {}),
+        }
+        self._process = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                _LAUNCH,
+                "services.api.app:app",
+                "--loop",
+                "asyncio",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(self.port),
+            ],
+            env=env,
+            cwd=repo_root,
+            stdout=subprocess.DEVNULL,
+            # Kept, not discarded: GitHub run 43198701543's second Conduit "never came up" and
+            # nothing said why. Its last lines go into the error below.
+            stderr=self._log,
+        )
+        started = time.monotonic()
+        # A deeper root cause than `_spawn_two_instances`'s own list-based cleanup covers: `Popen`
+        # above already spawned a real process by the time `_wait_until_up` can fail. If it does,
+        # this constructor raises and `self` is never returned to any caller — the process it just
+        # started has no reference anywhere a `finally` could reach. Caught and killed here, at
+        # the point of failure, rather than relying on a caller that never gets the object back.
+        try:
+>           _wait_until_up(self.base_url, process=self._process)
+
+../OspreyFlow_Build/tests/services/api/test_statelessness.py:178: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:48125', timeout_s = 60.0
+process = <Popen: returncode: 3 args: ['/root/osprey-runs/admin/OspreyFlow_Core/.venv/...>
+
+    def _wait_until_up(
+        base_url: str, *, timeout_s: float = 60.0, process: subprocess.Popen[bytes] | None = None
+    ) -> None:
+        deadline = time.monotonic() + timeout_s
+        last_error: Exception | None = None
+        while time.monotonic() < deadline:
+            if process is not None and process.poll() is not None:
+>               raise ConduitExited(f"{base_url} exited ({process.returncode}) before it came up")
+E               tests.services.api.test_statelessness.ConduitExited: http://127.0.0.1:48125 exited (3) before it came up
+
+../OspreyFlow_Build/tests/services/api/test_statelessness.py:73: ConduitExited
+
+The above exception was the direct cause of the following exception:
+
+command = ['postgres', '-c', 'max_connections=250']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x717d24afd7f0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6640/test_the_rendered_number_holds0')
+
+    def _the_product_at_once(
+        command: list[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> list[str]:
+        """Two Conduits and the other clients at their numbers, against `command`, step by step.
+        Returns what was measured; raises at the first refusal, naming its step."""
+        from tests.services.api.test_statelessness import _ConduitInstance
+    
+        for service, closed in CLOSED.items():
+            with socket.socket() as probe:
+                assert probe.connect_ex(("127.0.0.1", closed)) != 0, (
+                    f"{service}'s port {closed} is open"
+                )
+        (tmp_path / "hook").mkdir()
+        (tmp_path / "hook" / "sitecustomize.py").write_text(_RECORD_POOLS, encoding="utf-8")
+        arcade = http.server.ThreadingHTTPServer(("127.0.0.1", _free_port()), _EmptyArcadeDB)
+        threading.Thread(target=arcade.serve_forever, daemon=True).start()
+        conduits: list[Any] = []
+        said: list[str] = []
+        try:
+            with _postgres(command) as (port, password):
+                oidc = f"http://127.0.0.1:{CLOSED['OIDC']}"
+                pinned = {
+                    "POSTGRES_HOST": "127.0.0.1", "POSTGRES_PORT": str(port), "POSTGRES_USER": "osprey",
+                    "POSTGRES_PASSWORD": password, "POSTGRES_DB": "ospreyflow",
+                    "POSTGRES_SSLMODE": "disable",
+                    "ARCADEDB_HOST": "127.0.0.1", "ARCADEDB_HTTP_PORT": str(arcade.server_address[1]),
+                    "VALKEY_HOST": "127.0.0.1", "VALKEY_PORT": str(CLOSED["VALKEY"]),
+                    "CLICKHOUSE_HOST": "127.0.0.1", "CLICKHOUSE_HTTP_PORT": str(CLOSED["CLICKHOUSE"]),
+                    "MINIO_ENDPOINT": f"127.0.0.1:{CLOSED['MINIO']}",
+                    "LITELLM_HOST": "127.0.0.1", "LITELLM_PORT": str(CLOSED["LITELLM"]),
+                    "OIDC_ISSUER": f"{oidc}/realms/osprey", "OIDC_ADMIN_USERS_URL": f"{oidc}/admin",
+                    "OIDC_TOKEN_EXCHANGE_URL": f"{oidc}/token", "OSPREY_ANALYTICS_ENGINE": "duckdb",
+                    "PYTHONPATH": str(tmp_path / "hook"),
+                }  # fmt: skip
+                for name, value in pinned.items():
+                    monkeypatch.setenv(name, value)
+                clients = _Clients(f"postgresql://osprey:{password}@127.0.0.1:{port}/ospreyflow")
+                try:
+                    for n in range(1, CONDUITS_ALLOWED + 1):
+                        log = tmp_path / f"pools-{n}.jsonl"
+                        monkeypatch.setenv("OSPREY_TEST_POOL_LOG", str(log))
+                        before = asyncio.run(clients.held_by_the_server())
+                        try:
+>                           conduits.append(_ConduitInstance(f"{oidc}/jwks"))
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:220: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <tests.services.api.test_statelessness._ConduitInstance object at 0x717d24016270>
+jwks_url = 'http://127.0.0.1:59998/jwks', extra_env = None
+
+    def __init__(self, jwks_url: str, extra_env: dict[str, str] | None = None) -> None:
+        self.port = _free_port()
+        self.base_url = f"http://127.0.0.1:{self.port}"
+        repo_root = _REPO
+        # `pytest`'s own `pythonpath = ["packages"]` (pyproject.toml) only
+        # affects this process's `sys.path`, not a `subprocess.Popen` —
+        # `uvicorn` here needs the same `packages` root on `PYTHONPATH`
+        # explicitly, the same way `services/api/Dockerfile` sets it.
+        packages_root = repo_root / "packages"
+        # Its own scratch analytics path, not the shared default — see this
+        # module's own docstring for why two instances cannot share one.
+        analytics_db_path = (
+            Path(tempfile.mkdtemp(prefix="ospreyflow-analytics-")) / "analytics.duckdb"
+        )
+        self._log = tempfile.TemporaryFile()
+        env = {
+            **os.environ,
+            "OIDC_JWKS_URL": jwks_url,
+            "OIDC_ALGORITHMS": "RS256",
+            "ARCADEDB_DATABASE": "ospreyflow",
+            "PYTHONPATH": f"{repo_root}:{packages_root}:{os.environ.get('PYTHONPATH', '')}",
+            "ANALYTICS_DB_PATH": str(analytics_db_path),
+            **(extra_env or {}),
+        }
+        self._process = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                _LAUNCH,
+                "services.api.app:app",
+                "--loop",
+                "asyncio",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(self.port),
+            ],
+            env=env,
+            cwd=repo_root,
+            stdout=subprocess.DEVNULL,
+            # Kept, not discarded: GitHub run 43198701543's second Conduit "never came up" and
+            # nothing said why. Its last lines go into the error below.
+            stderr=self._log,
+        )
+        started = time.monotonic()
+        # A deeper root cause than `_spawn_two_instances`'s own list-based cleanup covers: `Popen`
+        # above already spawned a real process by the time `_wait_until_up` can fail. If it does,
+        # this constructor raises and `self` is never returned to any caller — the process it just
+        # started has no reference anywhere a `finally` could reach. Caught and killed here, at
+        # the point of failure, rather than relying on a caller that never gets the object back.
+        try:
+            _wait_until_up(self.base_url, process=self._process)
+        except TimeoutError as exc:
+            if self._process.poll() is None:
+                self._process.send_signal(signal.SIGUSR1)  # where it waits (`_LAUNCH`)
+                time.sleep(2)
+            self._process.kill()
+            self._process.wait(timeout=10)
+            self._log.seek(0)
+            said = self._log.read().decode("utf-8", "replace")[-20000:]
+            self._log.close()
+>           raise TimeoutError(f"{exc}; the Conduit's own last words:\n{said}") from exc
+E           TimeoutError: http://127.0.0.1:48125 exited (3) before it came up; the Conduit's own last words:
+E           INFO:     Started server process [548857]
+E           INFO:     Waiting for application startup.
+E           ERROR:    Traceback (most recent call last):
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/routing.py", line 656, in lifespan
+E               async with self.lifespan_context(app) as maybe_state:
+E             File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+E               return await anext(self.gen)
+E                      ^^^^^^^^^^^^^^^^^^^^^
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/services/api/app.py", line 1185, in lifespan
+E               resources = await build_run_resources(config)
+E                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/services/api/run_resources.py", line 261, in build_run_resources
+E               kyc_expiries = await KycExpiryStore.connect(config.postgres.dsn)
+E                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/services/api/kyc_expiries.py", line 44, in connect
+E               pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=2)
+E                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/asyncpg/pool.py", line 496, in _async__init__
+E               await self._initialize()
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/asyncpg/pool.py", line 530, in _initialize
+E               await first_ch.connect()
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/asyncpg/pool.py", line 172, in connect
+E               con = await self._pool._get_new_connection()
+E                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/asyncpg/pool.py", line 655, in _get_new_connection
+E               con = await self._connect(
+E                     ^^^^^^^^^^^^^^^^^^^^
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2498, in connect
+E               return await connect_utils._connect(
+E                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1278, in _connect
+E               conn = await _connect_addr(
+E                      ^^^^^^^^^^^^^^^^^^^^
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1088, in _connect_addr
+E               return await __connect_addr(params, False, *args)
+E                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1173, in __connect_addr
+E               await connected
+E           asyncpg.exceptions.TooManyConnectionsError: sorry, too many clients already
+E           
+E           ERROR:    Application startup failed. Exiting.
+
+../OspreyFlow_Build/tests/services/api/test_statelessness.py:188: TimeoutError
+
+The above exception was the direct cause of the following exception:
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x717d24afd7f0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6640/test_the_rendered_number_holds0')
+
+    def test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        command = ["postgres", "-c", "max_connections=250"]  # PLANT
+>       print("\n".join(_the_product_at_once(command, monkeypatch, tmp_path)))
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:273: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+command = ['postgres', '-c', 'max_connections=250']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x717d24afd7f0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6640/test_the_rendered_number_holds0')
+
+    def _the_product_at_once(
+        command: list[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> list[str]:
+        """Two Conduits and the other clients at their numbers, against `command`, step by step.
+        Returns what was measured; raises at the first refusal, naming its step."""
+        from tests.services.api.test_statelessness import _ConduitInstance
+    
+        for service, closed in CLOSED.items():
+            with socket.socket() as probe:
+                assert probe.connect_ex(("127.0.0.1", closed)) != 0, (
+                    f"{service}'s port {closed} is open"
+                )
+        (tmp_path / "hook").mkdir()
+        (tmp_path / "hook" / "sitecustomize.py").write_text(_RECORD_POOLS, encoding="utf-8")
+        arcade = http.server.ThreadingHTTPServer(("127.0.0.1", _free_port()), _EmptyArcadeDB)
+        threading.Thread(target=arcade.serve_forever, daemon=True).start()
+        conduits: list[Any] = []
+        said: list[str] = []
+        try:
+            with _postgres(command) as (port, password):
+                oidc = f"http://127.0.0.1:{CLOSED['OIDC']}"
+                pinned = {
+                    "POSTGRES_HOST": "127.0.0.1", "POSTGRES_PORT": str(port), "POSTGRES_USER": "osprey",
+                    "POSTGRES_PASSWORD": password, "POSTGRES_DB": "ospreyflow",
+                    "POSTGRES_SSLMODE": "disable",
+                    "ARCADEDB_HOST": "127.0.0.1", "ARCADEDB_HTTP_PORT": str(arcade.server_address[1]),
+                    "VALKEY_HOST": "127.0.0.1", "VALKEY_PORT": str(CLOSED["VALKEY"]),
+                    "CLICKHOUSE_HOST": "127.0.0.1", "CLICKHOUSE_HTTP_PORT": str(CLOSED["CLICKHOUSE"]),
+                    "MINIO_ENDPOINT": f"127.0.0.1:{CLOSED['MINIO']}",
+                    "LITELLM_HOST": "127.0.0.1", "LITELLM_PORT": str(CLOSED["LITELLM"]),
+                    "OIDC_ISSUER": f"{oidc}/realms/osprey", "OIDC_ADMIN_USERS_URL": f"{oidc}/admin",
+                    "OIDC_TOKEN_EXCHANGE_URL": f"{oidc}/token", "OSPREY_ANALYTICS_ENGINE": "duckdb",
+                    "PYTHONPATH": str(tmp_path / "hook"),
+                }  # fmt: skip
+                for name, value in pinned.items():
+                    monkeypatch.setenv(name, value)
+                clients = _Clients(f"postgresql://osprey:{password}@127.0.0.1:{port}/ospreyflow")
+                try:
+                    for n in range(1, CONDUITS_ALLOWED + 1):
+                        log = tmp_path / f"pools-{n}.jsonl"
+                        monkeypatch.setenv("OSPREY_TEST_POOL_LOG", str(log))
+                        before = asyncio.run(clients.held_by_the_server())
+                        try:
+                            conduits.append(_ConduitInstance(f"{oidc}/jwks"))
+                        except TimeoutError as exc:
+>                           raise AssertionError(f"Conduit {n} did not come up: {exc}"[-800:]) from exc
+E                           AssertionError: rn await connect_utils._connect(
+E                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E                             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1278, in _connect
+E                               conn = await _connect_addr(
+E                                      ^^^^^^^^^^^^^^^^^^^^
+E                             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1088, in _connect_addr
+E                               return await __connect_addr(params, False, *args)
+E                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E                             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1173, in __connect_addr
+E                               await connected
+E                           asyncpg.exceptions.TooManyConnectionsError: sorry, too many clients already
+E                           
+E                           ERROR:    Application startup failed. Exiting.
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:222: AssertionError
+=============================== warnings summary ===============================
+tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:220: ConduitStartTime: a Conduit came up in 7.2 s (http://127.0.0.1:59845)
+    conduits.append(_ConduitInstance(f"{oidc}/jwks"))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+---------------------- 1 unmarked test(s) reached a store ----------------------
+tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve: ClickHouse on port 59994, Valkey on port 59993
+============================= slowest 30 durations =============================
+21.70s call     tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+0.22s setup    tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+======================== 1 failed, 1 warning in 22.64s =========================
+Wall time: 24 s, exit 1 (no stack, no lease; set-up before it 13 s)
+exit=1

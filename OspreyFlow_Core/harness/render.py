@@ -64,7 +64,13 @@ from harness.images import (
     unresolved_digest_resolver,
 )
 from harness.laurium import laurium_env, laurium_services
-from harness.profiles import arcadedb_java_memory_opts, postgres_command, store_memory
+from harness.profiles import (
+    GATEWAY_POOL_MAX,
+    KEYCLOAK_POOL_MAX,
+    arcadedb_java_memory_opts,
+    postgres_command,
+    store_memory,
+)
 from harness.realm import CONDUIT_CLIENT_ID
 from harness.reporting import reporting_env, reporting_services
 from harness.site import (
@@ -464,6 +470,8 @@ def _local_model_table(config: OspreyConfig, extraction: str) -> str:
             "general_settings": {
                 "master_key": "os.environ/LITELLM_MASTER_KEY",
                 "store_model_in_db": True,
+                # ADR-114 Amendment 43: the gateway's share of PostgreSQL, the product's number.
+                "database_connection_pool_limit": GATEWAY_POOL_MAX,
             },
         },
         sort_keys=False,
@@ -932,6 +940,8 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
             "KC_HEALTH_ENABLED": "true",
             "KC_DB": "postgres",
             "KC_DB_URL": "jdbc:postgresql://postgres:5432/keycloak",
+            # ADR-114 Amendment 43: Keycloak's share of PostgreSQL, the product's number.
+            "KC_DB_POOL_MAX_SIZE": str(KEYCLOAK_POOL_MAX),
             "KC_DB_USERNAME": "keycloak",
             "KC_DB_PASSWORD": "${OSPREY_KEYCLOAK_DB_PASSWORD:?set in the deployment env file}",
         },
@@ -1140,8 +1150,11 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
                     **cast(dict[str, str], service["environment"]),
                     "OPENSEARCH_JAVA_OPTS": sized.search_java_opts,
                 }
-            elif (command := postgres_command(sized)) is not None:
-                service["command"] = command
+            else:
+                service["command"] = postgres_command(sized)
+        elif entry.service == "postgres":
+            # ADR-114 Amendment 43: the connections the product's services may hold, every profile.
+            service["command"] = postgres_command()
         if entry.service == "keycloak":
             # ADR-114 Amendment 4 decision 4: one issuer, whichever door a token came through —
             # the browser's, by name through the proxy, or the services' inside the network.

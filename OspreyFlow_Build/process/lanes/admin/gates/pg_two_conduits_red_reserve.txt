@@ -1,0 +1,132 @@
+PLANT at 6074baf: max_connections=640 (the formula less the reserve): refused at the reserve
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T191406Z-fd2593b9/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py -v -s -k rendered_number_holds
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/admin/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve FAILED
+
+=================================== FAILURES ===================================
+_ test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x783033202db0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6641/test_the_rendered_number_holds0')
+
+    def test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        command = ["postgres", "-c", "max_connections=640"]  # PLANT: the formula less its reserve
+>       print("\n".join(_the_product_at_once(command, monkeypatch, tmp_path)))
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:273: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:248: in _the_product_at_once
+    held = asyncio.run(clients.held_by_the_server())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/runners.py:194: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/base_events.py:687: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:155: in held_by_the_server
+    conn = await asyncpg.connect(self.dsn)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+params = ConnectionParameters(user='osprey', password='xRhlfneKvck7sGbS', database='ospreyflow', ssl=<ssl.SSLContext object at ...postgres'>, server_settings=None, target_session_attrs=<SessionAttribute.any: 'any'>, krbsrvname=None, gsslib='gssapi')
+retry = True, addr = ('127.0.0.1', 34003)
+loop = <_UnixSelectorEventLoop running=False closed=True debug=False>
+config = ConnectionConfiguration(command_timeout=None, statement_cache_size=100, max_cached_statement_lifetime=300, max_cacheable_statement_size=15360)
+connection_class = <class 'asyncpg.connection.Connection'>
+record_class = <class 'asyncpg.protocol.record.Record'>
+params_input = ConnectionParameters(user='osprey', password='xRhlfneKvck7sGbS', database='ospreyflow', ssl=<ssl.SSLContext object at ...postgres'>, server_settings=None, target_session_attrs=<SessionAttribute.any: 'any'>, krbsrvname=None, gsslib='gssapi')
+
+    async def __connect_addr(
+        params,
+        retry,
+        addr,
+        loop,
+        config,
+        connection_class,
+        record_class,
+        params_input,
+    ):
+        connected = _create_future(loop)
+    
+        proto_factory = lambda: protocol.Protocol(
+            addr, connected, params, record_class, loop)
+    
+        if isinstance(addr, str):
+            # UNIX socket
+            connector = loop.create_unix_connection(proto_factory, addr)
+    
+        elif params.ssl and params.ssl_negotiation is SSLNegotiation.direct:
+            # if ssl and ssl_negotiation is `direct`, skip STARTTLS and perform
+            # direct SSL connection
+            connector = loop.create_connection(
+                proto_factory, *addr, ssl=params.ssl
+            )
+    
+        elif params.ssl:
+            connector = _create_ssl_connection(
+                proto_factory, *addr, loop=loop, ssl_context=params.ssl,
+                ssl_is_advisory=params.sslmode == SSLMode.prefer,
+                retry=retry and params.sslmode == SSLMode.prefer)
+        else:
+            connector = loop.create_connection(proto_factory, *addr)
+    
+        try:
+            tr, pr = await connector
+        except (Exception, asyncio.CancelledError):
+            # The protocol can exist before create_connection() returns.  If
+            # that operation is cancelled, nobody will await authentication.
+            if not connected.done():
+                connected.cancel()
+            elif not connected.cancelled():
+                connected.exception()
+            raise
+    
+        try:
+>           await connected
+E           asyncpg.exceptions.TooManyConnectionsError: sorry, too many clients already
+
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1173: TooManyConnectionsError
+=============================== warnings summary ===============================
+tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:220: ConduitStartTime: a Conduit came up in 7.1 s (http://127.0.0.1:49091)
+    conduits.append(_ConduitInstance(f"{oidc}/jwks"))
+
+tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:220: ConduitStartTime: a Conduit came up in 5.7 s (http://127.0.0.1:43251)
+    conduits.append(_ConduitInstance(f"{oidc}/jwks"))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+---------------------- 1 unmarked test(s) reached a store ----------------------
+tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve: ClickHouse on port 59994, Valkey on port 59993
+============================= slowest 30 durations =============================
+22.43s call     tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+0.14s setup    tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+======================== 1 failed, 2 warnings in 23.13s ========================
+Wall time: 25 s, exit 1 (no stack, no lease; set-up before it 13 s)
+exit=1

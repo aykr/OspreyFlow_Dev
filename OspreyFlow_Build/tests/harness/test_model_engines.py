@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 import yaml
 from harness.apply import ApplyFailed, keep_existing_secrets, provider_secret_lines
+from harness.profiles import GATEWAY_POOL_MAX
 from harness.render import load_config, render, render_litellm_config
 from pydantic import ValidationError
 from tools.layout import CORE
@@ -145,6 +146,8 @@ def test_hosted_engines_are_not_rendered_but_held_in_the_gateway_s_database(
     assert table["general_settings"] == {
         "master_key": "os.environ/LITELLM_MASTER_KEY",
         "store_model_in_db": True,
+        # ADR-114 Amendment 43: the gateway's share of PostgreSQL.
+        "database_connection_pool_limit": GATEWAY_POOL_MAX,
     }
     compose = yaml.safe_load(render(_config(tmp_path, TWO), resolver=_fake_resolver)
                              .artefacts["compose.yaml"])  # fmt: skip

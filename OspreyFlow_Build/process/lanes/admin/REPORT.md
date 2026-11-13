@@ -1,3 +1,43 @@
+# admin · pg (Step 2 of BRIEF.md) · report (13 November 2026): a deployment's own PostgreSQL allows what its services may hold
+
+`lane/admin-pg` over main `20fab33`, gated at `6074baf`. ADR-114 Amendment 43 (written). Reviewed twice by
+my lane-reviewer and by the orchestrator; every must closed, each with its red. Two owner-file diffs travel with the
+branch for the orchestrator to apply at merge: `platform-pg.diff` (`scripts/refresh.py` and platform's tests) and
+`ci-pg.diff` (`ci.yml`, the `Makefile`, `tools/test_file_coverage_check.py`); the branch holds main's copies of those files.
+
+| Exit criterion (brief) | Met | Proving test (records in `gates/`) |
+| --- | --- | --- |
+| Choose with evidence: render `max_connections`, bound the pools, or both | render, pools unchanged (Am 43 point 3: `min_size=0` moves only the count at rest, 50 → 0; what two Conduits may grow to, 402, is unchanged by it) | the measured Conduit below |
+| The Conduit's share measured, not counted | yes: 48 pools, 50 at rest, 201 at their max (+4 with Entra ID), against the ceiling 220 | `test_postgres_connections_live.py` (a running Conduit's `create_pool` recorded); red with the ceiling at 200 and with InvestigationStore's pools hidden from the record |
+| Every profile with its own PostgreSQL rendered (Lite, Small, sized or not); the managed ones carried | yes: 660 on Lite and Small; cluster and cloud-platform's RDS set their own (carried) | `test_postgres_connections.py` (render cases); `pg_render_red.txt` |
+| Red: two Conduits against the rendered PostgreSQL, refused before, up after | yes: 659 of 660 held at once | `pg_two_conduits_green.txt`; red at the image's 100, at 250 (Conduit 2 cannot start), at 640 (the reserve) |
+| A deployed Small picks it up on `ospreyflow apply` (and `update`, `start --build`) | yes: apply restarts PostgreSQL, Keycloak and the gateway, nothing else; update brings an existing compose file to the number | `test_an_existing_deployment_restarts_postgres_keycloak_and_the_gateway_on_apply`, `test_update_brings_an_existing_compose_file_to_the_number`, `test_refresh.py`'s case in `platform-pg.diff`; `pg_update_{function,path}_red.txt` |
+| Say so in the amendment | yes | ADR-114 Amendment 43 point 4 |
+
+**R1's cloud-platform figure agrees.** R1 finding 15 put `max_connections ≥ 750` in the cloud-platform INSTALL.md
+(`lane/platform-r1` `harness/cloud_platform/runbooks.py`). Its four constants are equal to `harness.profiles`'s
+(`CONDUIT_POOL_CEILING` 220, `RUNNING_LOADS_ALLOWED` 20, `GATEWAY_POOL_MAX` 10, `OPERATOR_RESERVE` 20): 3 × (220 + 20) +
+10 + 20 = 750. The totals differ by what each profile runs: cloud-platform runs the job worker as its own image, which
+opens the same stores (three Conduit-shaped processes), and has no Keycloak (Entra ID) and, for now, no report sync or
+Superset (refused on that profile); a deployed Small's compose has no worker container (the loop runs in the Conduit,
+whose pools were measured): 2 × 240 + Keycloak 100 + gateway 10 + Superset and the report sync 50 + reserve 20 = 660.
+Not measured by anyone: that the worker image holds what a Conduit holds (750 assumes it). When report sync and Superset
+come to cloud-platform, its number gains `SUPERSET_AND_REPORT_SYNC_MAX` (50).
+
+**Gates** (offline on the test server, `platform-pg.diff` and `ci-pg.diff` applied): `make test` at `6074baf`: pytest 13,172 passed, 1 failed, the server's GPU case (`test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass`, known, CARRIES: the host has a real GPU); test-js 3,271 passed. `make -k ci`: exit 0. The docker case (its own job's file) green and its five reds, recorded at `6074baf`. At `0f8b3e7` the same gates failed the test-file coverage check (the docker case's file, live through `asyncpg`, wired in no job): `gates/0f8b3e7.{test,ci}.txt`, fixed at `f1c64fa`. Records: `gates/6074baf.{test,ci}.txt`, `gates/pg_two_conduits_*.txt`. After `6074baf`: the records, Amendment 43 naming the live file and its job (`test_spec_doc_paths.py`, `test_doc_citations_check.py` and the citation check green on the Mac), and this report.
+
+**Decisions taken** (Prompt L): render the number rather than bound the pools (above); the ceiling 220 over the measured
+201 + 4 (room for a pool or two without a release); the running loads' lock connections an allowance of 20, not
+measured; Keycloak's and the gateway's pools rendered (`KC_DB_POOL_MAX_SIZE` 100, `database_connection_pool_limit` 10)
+so the number counts the product's own settings, not their defaults; the docker case in its own file, wired as a
+live-service test in its own CI job (the coverage check found the whole file unwired at `0f8b3e7`).
+
+**Commits:** `git log --oneline 20fab33..lane/admin-pg`. **Requests:** apply `platform-pg.diff` and `ci-pg.diff` at merge. **Carried**
+(Am 43 point 5, CARRIES): managed PostgreSQL and RDS; the gateway's pool unmeasured; a bound on concurrent loads; the
+lane stacks' and CI's 400. **Questions for the owner:** none. **Still running:** nothing.
+
+---
+
 # admin · refresh (Step 1 of BRIEF.md) · report (13 November 2026): a refresh keeps the person signed in and where they were
 
 `lane/admin-refresh` over main `fa5d988`, gated at `6c691e8` (tree `635aef59`). ADR-050 Amendment 3 (written). Reviewed by

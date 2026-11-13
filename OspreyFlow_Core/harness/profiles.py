@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from schemas.deployment import ResourcesConfig
@@ -188,14 +188,84 @@ def store_memory(resources: ResourcesConfig) -> StoreMemory:
     )
 
 
-def postgres_command(memory: StoreMemory) -> list[str] | None:
-    """PostgreSQL's server command with the sized settings, or None for the image's own."""
-    if memory.postgres_shared_buffers_mib is None:
-        return None
+#: ADR-114 Amendment 43: what a deployment's own PostgreSQL allows at once, from the product's own
+#: numbers. Its image's default (100) was rendered until 13 November 2026, and one Conduit holds 50
+#: connections at rest (platform-b's stateless finding): a second Conduit was refused
+#: (`TooManyConnectionsError`).
+#:
+#: The pools one Conduit process opens, at their `max_size`, summed: **measured** in a running
+#: Conduit by `tests/harness/test_postgres_connections.py` (every `asyncpg.create_pool` it makes,
+#: two stores opened twice included), with Entra ID's people store (opened only when Entra is
+#: configured) added: 48 pools, 201 and 4, on 13 November 2026; the test fails past this.
+CONDUIT_POOL_CEILING = 220
+#: Conduits allowed at their ceiling at once: the one a deployment runs, and a second (a replica,
+#: or a worker opening the same stores; a restart's old and new processes overlapping).
+CONDUITS_ALLOWED = 2
+#: Each running load holds one connection outside every pool for its row-key lock
+#: (`recipe_runs.RecipeRunLedger.hold_row_keys`), and nothing bounds how many loads run at once:
+#: an allowance, not a bound (carried).
+RUNNING_LOADS_ALLOWED = 20
+#: Keycloak's pool, rendered (`KC_DB_POOL_MAX_SIZE`; Keycloak 26's own default, made the product's).
+KEYCLOAK_POOL_MAX = 100
+#: The gateway's pool, rendered (LiteLLM's `database_connection_pool_limit`, one worker).
+GATEWAY_POOL_MAX = 10
+#: Superset's two gunicorn workers (`deploy/superset/osprey_entrypoint.py`) at SQLAlchemy's 5 and 10
+#: overflow, its queries to the mart (up to 8 at once) and the report sync's mart pool (4): 42, an
+#: allowance from those clients' own defaults.
+SUPERSET_AND_REPORT_SYNC_MAX = 50
+#: For the owner's `psql`, a backup, and PostgreSQL's own three superuser slots.
+OPERATOR_RESERVE = 20
+POSTGRES_MAX_CONNECTIONS = (
+    CONDUITS_ALLOWED * (CONDUIT_POOL_CEILING + RUNNING_LOADS_ALLOWED)
+    + KEYCLOAK_POOL_MAX
+    + GATEWAY_POOL_MAX
+    + SUPERSET_AND_REPORT_SYNC_MAX
+    + OPERATOR_RESERVE
+)
+
+
+def postgres_command(memory: StoreMemory | None = None) -> list[str]:
+    """PostgreSQL's server command: `max_connections` always (ADR-114 Amendment 43), with the sized
+    memory settings when the deployment is sized (Amendment 33 decision 6)."""
+    command = ["postgres", "-c", f"max_connections={POSTGRES_MAX_CONNECTIONS}"]
+    if memory is None or memory.postgres_shared_buffers_mib is None:
+        return command
     return [
-        "postgres",
+        *command,
         "-c",
         f"shared_buffers={memory.postgres_shared_buffers_mib}MB",
         "-c",
         f"effective_cache_size={memory.postgres_effective_cache_mib}MB",
     ]
+
+
+def postgres_connections_up_to_date(services: dict[str, Any]) -> bool:
+    """ADR-114 Amendment 43 on a deployment rendered before it (`scripts/refresh.py`, run by
+    `ospreyflow update` and `start --build`, which keep an existing compose file rather than render
+    it again): PostgreSQL's `max_connections` set to the product's number, the sized settings and
+    anything else on its command kept; Keycloak's pool named. Says whether anything changed."""
+    changed = False
+    postgres = services.get("postgres")
+    if isinstance(postgres, dict):
+        command = [str(part) for part in postgres.get("command") or ["postgres"]]
+        setting = f"max_connections={POSTGRES_MAX_CONNECTIONS}"
+        kept = [
+            part
+            for i, part in enumerate(command)
+            if not part.startswith("max_connections=")
+            and not (
+                part == "-c"
+                and i + 1 < len(command)
+                and command[i + 1].startswith("max_connections=")
+            )
+        ]
+        wanted = [kept[0], "-c", setting, *kept[1:]] if kept else ["postgres", "-c", setting]
+        if postgres.get("command") != wanted:
+            postgres["command"] = wanted
+            changed = True
+    keycloak = services.get("keycloak")
+    if isinstance(keycloak, dict) and isinstance(keycloak.get("environment"), dict):
+        if keycloak["environment"].get("KC_DB_POOL_MAX_SIZE") != str(KEYCLOAK_POOL_MAX):
+            keycloak["environment"]["KC_DB_POOL_MAX_SIZE"] = str(KEYCLOAK_POOL_MAX)
+            changed = True
+    return changed

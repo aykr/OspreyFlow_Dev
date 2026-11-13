@@ -73,6 +73,7 @@ from harness.keycloak_theme import (
     render_login_theme,
     write_login_theme,
 )
+from harness.profiles import postgres_connections_up_to_date
 from harness.render import (
     STATE_CONTAINER_PATH,
     STORE_VOLUMES,
@@ -668,6 +669,21 @@ def _stores_named(directory: Path) -> bool:
     return changed
 
 
+def _postgres_connections_named(directory: Path) -> bool:
+    """ADR-114 Amendment 43: PostgreSQL's `max_connections` and Keycloak's pool, as the render
+    gives them (`harness.profiles.postgres_connections_up_to_date`), on a deployment rendered
+    before them. Says whether anything changed."""
+    compose_path = directory / "compose.yaml"
+    text = compose_path.read_text(encoding="utf-8")
+    header_end = text.find("\nname:") + 1
+    document = yaml.safe_load(text) or {}
+    if not postgres_connections_up_to_date(document.get("services") or {}):
+        return False
+    body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
+    compose_path.write_text(text[:header_end] + body, encoding="utf-8")
+    return True
+
+
 def files_up_to_date(repo_root: Path = REPO_ROOT) -> dict[str, bool]:
     """Every file of the deployment as this checkout writes it, and nothing run: `update` uses this
     from the new checkout (ADR-114 Amendment 8 point 6a). Says which services must restart."""
@@ -855,6 +871,7 @@ def _files_up_to_date_in(directory: Path, repo_root: Path) -> dict[str, bool]:
     routing_changed = _routing_up_to_date(directory)
     _release_up_to_date(directory)
     _stores_named(directory)
+    _postgres_connections_named(directory)
     return {
         "proxy_changed": proxy_changed,
         "theme_changed": theme_changed,

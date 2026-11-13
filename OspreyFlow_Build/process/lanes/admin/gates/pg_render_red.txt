@@ -1,0 +1,96 @@
+PLANT: harness/render.py and postgres_command without Amendment 43 (no max_connections, sized or not; no Keycloak or gateway pool rendered)
+FFFFF                                                                    [100%]
+=================================== FAILURES ===================================
+_____ test_every_owned_postgres_is_rendered_with_the_products_number[lite] _____
+
+raw = {'profile': 'local-lite'}
+
+    @pytest.mark.parametrize(
+        "raw",
+        [{"profile": "local-lite"}, SMALL, {**SMALL, "resources": {"memory_gib": 64}}],
+        ids=["lite", "small", "small-sized"],
+    )
+    def test_every_owned_postgres_is_rendered_with_the_products_number(raw: dict[str, Any]) -> None:
+>       command = _rendered(raw)[0]["postgres"]["command"]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'command'
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py:84: KeyError
+____ test_every_owned_postgres_is_rendered_with_the_products_number[small] _____
+
+raw = {'profile': 'small', 'network': {'public_origin': 'https://demo.example.org'}}
+
+    @pytest.mark.parametrize(
+        "raw",
+        [{"profile": "local-lite"}, SMALL, {**SMALL, "resources": {"memory_gib": 64}}],
+        ids=["lite", "small", "small-sized"],
+    )
+    def test_every_owned_postgres_is_rendered_with_the_products_number(raw: dict[str, Any]) -> None:
+>       command = _rendered(raw)[0]["postgres"]["command"]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'command'
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py:84: KeyError
+_ test_every_owned_postgres_is_rendered_with_the_products_number[small-sized] __
+
+raw = {'profile': 'small', 'network': {'public_origin': 'https://demo.example.org'}, 'resources': {'memory_gib': 64}}
+
+    @pytest.mark.parametrize(
+        "raw",
+        [{"profile": "local-lite"}, SMALL, {**SMALL, "resources": {"memory_gib": 64}}],
+        ids=["lite", "small", "small-sized"],
+    )
+    def test_every_owned_postgres_is_rendered_with_the_products_number(raw: dict[str, Any]) -> None:
+        command = _rendered(raw)[0]["postgres"]["command"]
+>       assert command[:3] == ["postgres", "-c", f"max_connections={POSTGRES_MAX_CONNECTIONS}"]
+E       AssertionError: assert ['postgres', ...ffers=2048MB'] == ['postgres', ...nections=660']
+E         
+E         At index 2 diff: 'shared_buffers=2048MB' != 'max_connections=660'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py:85: AssertionError
+_ test_the_gateway_and_keycloak_are_rendered_with_the_pools_the_number_counts __
+
+    def test_the_gateway_and_keycloak_are_rendered_with_the_pools_the_number_counts() -> None:
+        services, gateway = _rendered(SMALL)
+>       assert services["keycloak"]["environment"]["KC_DB_POOL_MAX_SIZE"] == str(KEYCLOAK_POOL_MAX)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'KC_DB_POOL_MAX_SIZE'
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py:90: KeyError
+_ test_an_existing_deployment_restarts_postgres_keycloak_and_the_gateway_on_apply _
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3763/test_an_existing_deployment_re0')
+
+    def test_an_existing_deployment_restarts_postgres_keycloak_and_the_gateway_on_apply(
+        tmp_path: Path,
+    ) -> None:
+        """A deployed Small picks the number up on `ospreyflow apply` of a release that carries it: the
+        definitions of PostgreSQL (its command), Keycloak (its pool) and the gateway (its pool) differ
+        from those rendered before, so apply restarts those three and nothing else (ADR-137's
+        `services_to_restart`)."""
+        from harness.apply import services_to_restart
+        from harness.render import write
+    
+        config = OspreyConfig.model_validate(SMALL)
+        resolver = lambda _image: "sha256:" + "0" * 64  # noqa: E731
+        write(render(config, resolver=resolver), tmp_path / "after")
+        # `litellm.yaml` is written beside the render by apply itself (`harness/apply.py`).
+        (tmp_path / "after" / "litellm.yaml").write_text(
+            render_litellm_config(config), encoding="utf-8"
+        )
+        old = render(config, resolver=resolver)
+        compose = yaml.safe_load(old.artefacts["compose.yaml"])
+>       del compose["services"]["postgres"]["command"]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'command'
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py:130: KeyError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_every_owned_postgres_is_rendered_with_the_products_number[lite]
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_every_owned_postgres_is_rendered_with_the_products_number[small]
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_every_owned_postgres_is_rendered_with_the_products_number[small-sized]
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_the_gateway_and_keycloak_are_rendered_with_the_pools_the_number_counts
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_an_existing_deployment_restarts_postgres_keycloak_and_the_gateway_on_apply
+5 failed, 4 deselected in 2.80s
+exit=1

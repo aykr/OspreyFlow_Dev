@@ -934,3 +934,35 @@ def test_a_refused_move_puts_back_a_symlinked_file_through_its_link(
     assert "the deployment's files are as they were" in str(refused.value)
     assert (out / linked).is_symlink() and (out / linked).resolve() == real.resolve()
     assert real.read_bytes() == before
+
+
+# --- ADR-114 Amendment 43: PostgreSQL's connections reach a deployment rendered before them ------
+
+
+def test_postgres_connections_reach_a_deployment_rendered_before_them(repo: Path) -> None:
+    """`update` and `start --build` keep the deployment's compose file; without this a deployed
+    Small would keep the image's 100 connections however often it was updated, while its gateway's
+    pool (in `litellm.yaml`, written whole) moved on."""
+    import yaml
+
+    out = _rendered(repo)
+    rendered = yaml.safe_load((out / "compose.yaml").read_text())
+    text = (out / "compose.yaml").read_text()
+    banner = text[: text.index("\nname:") + 1]
+    document = yaml.safe_load(text)
+    del document["services"]["postgres"]["command"]
+    del document["services"]["keycloak"]["environment"]["KC_DB_POOL_MAX_SIZE"]
+    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
+
+    refresh.files_up_to_date(repo)
+    after = yaml.safe_load((out / "compose.yaml").read_text())
+    assert after["services"]["postgres"]["command"] == rendered["services"]["postgres"]["command"]
+    assert (
+        after["services"]["keycloak"]["environment"]["KC_DB_POOL_MAX_SIZE"]
+        == rendered["services"]["keycloak"]["environment"]["KC_DB_POOL_MAX_SIZE"]
+    )
+    assert (out / "compose.yaml").read_text().startswith(banner)
+    # Safe to repeat: a deployment already as rendered is not written again.
+    before = (out / "compose.yaml").read_bytes()
+    refresh.files_up_to_date(repo)
+    assert (out / "compose.yaml").read_bytes() == before

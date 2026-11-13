@@ -1,0 +1,33 @@
+PLANT: scripts/refresh.py's _files_up_to_date_in without _postgres_connections_named (update and start --build as before this step)
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_postgres_connections_reach_a_deployment_rendered_before_them _______
+
+repo = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3757/test_postgres_connections_reac0')
+
+    def test_postgres_connections_reach_a_deployment_rendered_before_them(repo: Path) -> None:
+        """`update` and `start --build` keep the deployment's compose file; without this a deployed
+        Small would keep the image's 100 connections however often it was updated, while its gateway's
+        pool (in `litellm.yaml`, written whole) moved on."""
+        import yaml
+    
+        out = _rendered(repo)
+        rendered = yaml.safe_load((out / "compose.yaml").read_text())
+        text = (out / "compose.yaml").read_text()
+        banner = text[: text.index("\nname:") + 1]
+        document = yaml.safe_load(text)
+        del document["services"]["postgres"]["command"]
+        del document["services"]["keycloak"]["environment"]["KC_DB_POOL_MAX_SIZE"]
+        (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
+    
+        refresh.files_up_to_date(repo)
+        after = yaml.safe_load((out / "compose.yaml").read_text())
+>       assert after["services"]["postgres"]["command"] == rendered["services"]["postgres"]["command"]
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'command'
+
+../OspreyFlow_Build/tests/test_refresh.py:959: KeyError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_refresh.py::test_postgres_connections_reach_a_deployment_rendered_before_them
+1 failed, 33 deselected in 0.56s
+exit=1
