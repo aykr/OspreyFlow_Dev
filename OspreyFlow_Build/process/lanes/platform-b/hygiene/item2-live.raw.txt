@@ -1,0 +1,79 @@
+# Item 2 with the real Caddy, on the test server (stack_lease.sh offline platform-b; no stack, no lease). Caddy taken from
+# caddy:2.11.4-alpine as CI's access-key-proxy-test job takes it (docker create/cp/rm, a container named for this lane).
+
+== main 2b78820's two files:
+Running on ospreyflow-test (stack offline, osprey-runs/platform-b/), logged at osprey-runs/platform-b.meta/runs/20261113T194705Z-3b078de8/log: sh -c c=$HOME/osprey-runs/platform-b.meta/bin/caddy; $c version; cd OspreyFlow_Core && OSPREY_TEST_CADDY=$c .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly -q -rs ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py ../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py
+v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=
+.....................................................................    [100%]
+============================= slowest 30 durations =============================
+2.76s call     tests/harness/test_access_key_proxy.py::test_setting_the_key_again_refuses_the_old_pass_and_the_old_key
+1.77s setup    tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[bi.demo.gate.localhost]
+1.75s call     tests/harness/test_access_key_proxy.py::test_every_attempt_is_logged_and_the_log_holds_no_key_and_no_pass
+1.69s call     tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[id.demo.gate.localhost]
+1.65s call     tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[demo.gate.localhost]
+1.65s call     tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[id.demo.gate.localhost]
+1.65s call     tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[bi.demo.gate.localhost]
+1.65s call     tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[demo.gate.localhost]
+1.64s call     tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[bi.demo.gate.localhost]
+1.57s setup    tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-POST-/realms/osprey/protocol/openid-connect/token]
+1.51s setup    tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-demo.gate.localhost]
+1.38s setup    tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-id.demo.gate.localhost]
+1.38s setup    tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[demo.gate.localhost]
+1.35s setup    tests/harness/test_access_key_proxy.py::test_a_wrong_or_no_key_still_asks_on_all_three[demo.gate.localhost]
+1.35s setup    tests/harness/test_access_key_proxy.py::test_a_refusal_says_nothing_more[id.demo.gate.localhost]
+1.33s setup    tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/admin/master/console/]
+1.33s setup    tests/harness/test_access_key_proxy.py::test_every_attempt_is_logged_and_the_log_holds_no_key_and_no_pass
+1.33s setup    tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[bi.demo.gate.localhost-OPTIONS-/v1/x]
+1.32s setup    tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[demo.gate.localhost]
+1.32s setup    tests/harness/test_access_key_proxy.py::test_the_identity_providers_cross_origin_answers_go_without_the_key[/realms/osprey/protocol/openid-connect/certs]
+1.31s setup    tests/harness/test_access_key_proxy.py::test_the_pass_lets_in_a_request_with_a_token_of_its_own[id.demo.gate.localhost]
+1.31s setup    tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing
+1.31s setup    tests/harness/test_access_key_proxy.py::test_one_answer_on_any_name_lets_the_other_two_through[bi.demo.gate.localhost]
+1.30s setup    tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/REALMS/osprey/protocol/openid-connect/auth]
+1.30s setup    tests/harness/test_access_key_proxy.py::test_without_the_key_nothing_behind_the_proxy_answers[demo.gate.localhost]
+1.29s setup    tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-bi.demo.gate.localhost]
+1.29s setup    tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/protocol/openid-connect/token/../auth]
+1.27s setup    tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/protocol/openid-connect/auth]
+1.27s setup    tests/harness/test_access_key_proxy.py::test_the_identity_providers_cross_origin_answers_go_without_the_key[/realms/osprey/.well-known/openid-configuration]
+1.27s setup    tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[bi.demo.gate.localhost]
+69 passed in 138.54s (0:02:18)
+Wall time: 139 s, exit 0 (no stack, no lease; set-up before it 11 s)
+
+== the branch (the shared module, both files importing it, the guard):
+Running on ospreyflow-test (stack offline, osprey-runs/platform-b/), logged at osprey-runs/platform-b.meta/runs/20261113T194420Z-6258c231/log: sh -c set -e; docker image ls caddy:2.11.4-alpine --format "{{.Repository}}:{{.Tag}} {{.ID}}"; mkdir -p $HOME/osprey-runs/platform-b.meta/bin; c=$HOME/osprey-runs/platform-b.meta/bin/caddy; if [ ! -x $c ]; then docker create --name platform-b-hygiene-caddy caddy:2.11.4-alpine >/dev/null; docker cp platform-b-hygiene-caddy:/usr/bin/caddy $c; docker rm platform-b-hygiene-caddy >/dev/null; fi; $c version; cd OspreyFlow_Core && OSPREY_TEST_CADDY=$c .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly -q -rs ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py ../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py ../OspreyFlow_Build/tests/harness/test_access_key_proxy_fixtures_shared.py
+caddy:2.11.4-alpine 6aeddd44c307
+v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=
+........................................................................ [100%]
+============================= slowest 30 durations =============================
+3.33s call     tests/harness/test_access_key_proxy_fixtures_shared.py::test_no_test_module_takes_the_proxy_from_the_proxy_s_test_file
+2.68s call     tests/harness/test_access_key_proxy.py::test_setting_the_key_again_refuses_the_old_pass_and_the_old_key
+1.75s call     tests/harness/test_access_key_proxy.py::test_every_attempt_is_logged_and_the_log_holds_no_key_and_no_pass
+1.73s call     tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[id.demo.gate.localhost]
+1.68s call     tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[bi.demo.gate.localhost]
+1.65s call     tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[demo.gate.localhost]
+1.65s call     tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[demo.gate.localhost]
+1.61s call     tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[id.demo.gate.localhost]
+1.60s call     tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[bi.demo.gate.localhost]
+1.49s setup    tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[id.demo.gate.localhost]
+1.49s setup    tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/admin/master/console/]
+1.48s setup    tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/account/]
+1.46s setup    tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[bi.demo.gate.localhost]
+1.45s setup    tests/harness/test_access_key_proxy.py::test_a_forged_pass_is_refused[bi.demo.gate.localhost]
+1.43s setup    tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-id.demo.gate.localhost]
+1.34s setup    tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[id.demo.gate.localhost]
+1.32s setup    tests/harness/test_access_key_proxy.py::test_a_wrong_or_no_key_still_asks_on_all_three[bi.demo.gate.localhost]
+1.32s setup    tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-id.demo.gate.localhost]
+1.31s setup    tests/harness/test_access_key_proxy.py::test_a_refusal_says_nothing_more[id.demo.gate.localhost]
+1.31s setup    tests/harness/test_access_key_proxy.py::test_without_the_key_nothing_behind_the_proxy_answers[bi.demo.gate.localhost]
+1.30s setup    tests/harness/test_access_key_proxy.py::test_without_the_key_nothing_behind_the_proxy_answers[demo.gate.localhost]
+1.30s setup    tests/harness/test_access_key_proxy.py::test_a_refusal_says_nothing_more[bi.demo.gate.localhost]
+1.30s setup    tests/harness/test_access_key_proxy.py::test_the_identity_providers_cross_origin_answers_go_without_the_key[/realms/osprey/protocol/openid-connect/token]
+1.29s setup    tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/protocol/openid-connect/token/../auth]
+1.29s setup    tests/harness/test_access_key_proxy.py::test_a_wrong_or_no_key_still_asks_on_all_three[id.demo.gate.localhost]
+1.29s setup    tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing
+1.29s setup    tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/realms/osprey/protocol/openid-connect/auth-id.demo.gate.localhost]
+1.29s setup    tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-bi.demo.gate.localhost]
+1.26s setup    tests/harness/test_access_key_proxy.py::test_an_options_that_is_not_a_preflight_asks_for_the_key[bi.demo.gate.localhost]
+1.26s setup    tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/realms/osprey/protocol/openid-connect/auth-demo.gate.localhost]
+72 passed in 140.26s (0:02:20)
+Wall time: 143 s, exit 0 (no stack, no lease; set-up before it 10 s)

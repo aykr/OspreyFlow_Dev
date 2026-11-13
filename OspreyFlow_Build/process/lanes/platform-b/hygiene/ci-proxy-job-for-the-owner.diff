@@ -1,0 +1,12 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index a4cbc82..21d8cd3 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1357,6 +1357,7 @@ jobs:
+         run: >-
+           OSPREY_TEST_CADDY="$RUNNER_TEMP/caddy" PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest
+           -c ../OspreyFlow_Build/pytest.ini -p no:randomly ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py
++          ../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py
+ 
+   harness-image-exit-test:
+     runs-on: ubuntu-latest
