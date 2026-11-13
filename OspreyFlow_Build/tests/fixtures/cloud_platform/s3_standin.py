@@ -254,7 +254,12 @@ class StandIn:
     #: Every refusal given, for a test to read back (`(code, message)`).
     refusals: list[tuple[str, str]] = field(default_factory=list)
     #: The namespace's OpenSearch domains (ADR-148 Amendment 13), by the host the pods ask: the roles
-    #: its access policy admits (`es:ESHttp*`) and the OpenSearch behind it.
+    #: its access policy admits (`es:ESHttp*`) and the OpenSearch behind it. Refused as the poc domain
+    #: refuses (unsigned; another service, region or token; a bad signature; a role not admitted; over
+    #: five minutes of skew; a body over 10 MiB, 413). Not modelled (Amendment 13 lists why each
+    #: matters): two nodes in two zones (one here, so yellow, not green), the domain's restricted API,
+    #: its plugins beyond analysis-phonetic, its security group, rate limits, its TLS policy, presigned
+    #: or chunked `es` requests, PATCH; `/_standin/configure` is unauthenticated.
     domains: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @classmethod
