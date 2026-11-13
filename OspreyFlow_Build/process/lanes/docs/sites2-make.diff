@@ -1,0 +1,25 @@
+--- a/OspreyFlow_Build/Makefile
++++ b/OspreyFlow_Build/Makefile
+@@ -4,7 +4,7 @@
+ # with this folder on `PYTHONPATH` — so every command and every relative path in it is unchanged.
+ # The reasoning each target used to carry in Core's Makefile is in git history (`git log -p
+ # OspreyFlow_Core/Makefile`) and in each tool's own docstring.
+-.PHONY: publish-user-repo ci cp-policy-check lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle live-collect
++.PHONY: publish-user-repo ci cp-policy-check lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle live-collect sites-check
+ 
+ CORE := ../OspreyFlow_Core
+ BUILD := $(CURDIR)
+@@ -160,6 +160,13 @@
+ docs-pdf:
+ 	$(IN_CORE) $(TOOLS) $(PY) -m tools.docs_pdf --write
+ 
++# The two websites' browser checks (ospreyflow.org and ospreyflow.net, `marketing_site/check/`): the theme switch, the
++# animations' player, reduced motion, off screen, keyboard, a phone's width and axe in both themes. On the Mac or any host
++# with Core's node_modules and Playwright's Chromium; no stack. Not in `ci` until the owner says: shown red first in
++# `process/lanes/docs/gates/sites2-browser-red-first.txt`. SITES_DIR serves another copy of the sites.
++sites-check:
++	NODE_PATH=$(abspath $(CORE))/node_modules $(CORE)/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts
++
+ # Kept in sync with `ci.yml`'s `test` job ignore list by `test-file-coverage-check`. `SKIP_JS=1` leaves out
+ # test-js, for a run on a host with no Node (`stack_lease.sh offline`, 9 November 2026); run test-js where Node is.
+ # Each of the three runs whatever the one before it did, and the target fails after them if any failed (12 November
