@@ -629,13 +629,12 @@ def test_every_workload_that_serves_a_port_says_when_it_is_ready(poc: dict[str, 
 def test_the_install_says_how_many_connections_the_managed_postgres_must_allow(
     runbooks: dict[str, str],
 ) -> None:
-    """R1 on kind, finding 15: a new Conduit beside the old one in a rolling update failed at start with
-    `TooManyConnectionsError` (the stand-in allows PostgreSQL's 100; one Conduit held 51 at rest). A
-    managed Postgres's limit follows its instance class unless its parameter group sets it, so the
-    install says the least to set: two Conduits (the update's old and new), the worker opening the same
-    stores, the gateway and an operator's reserve. The Conduit's figures are ADR-114 Amendment 43's
-    (`harness.profiles` once lane/admin-pg merges, held there by a running Conduit's own pools); this
-    test takes them from there when they are, and never keeps a second count beside them."""
+    """R1 on kind, finding 15, and the owner's decisions of 13 November 2026: the managed PostgreSQL
+    allows 1000, set in its parameter group, which covers the least it must allow with Superset and
+    the report sync rendered (v0.5.2) and an upgrade in progress. The figures are counted here a
+    second time on purpose, from the clients' own numbers, so dropping a term from runbooks.py's
+    floor (Superset's, or the upgrade's) is red; the Conduit's are ADR-114 Amendment 43's, taken
+    from `harness.profiles` where they are."""
     import importlib
 
     from harness.cloud_platform import runbooks as rb
@@ -644,15 +643,52 @@ def test_the_install_says_how_many_connections_the_managed_postgres_must_allow(
     for name in ("CONDUIT_POOL_CEILING", "RUNNING_LOADS_ALLOWED", "GATEWAY_POOL_MAX", "OPERATOR_RESERVE"):
         if hasattr(profiles, name):
             assert getattr(rb, name) == getattr(profiles, name), name
-    assert rb.POSTGRES_MAX_CONNECTIONS == (
-        2 * (rb.CONDUIT_POOL_CEILING + rb.RUNNING_LOADS_ALLOWED)
-        + rb.CONDUIT_POOL_CEILING + rb.RUNNING_LOADS_ALLOWED  # the worker opens the same stores
-        + rb.GATEWAY_POOL_MAX + rb.OPERATOR_RESERVE
-    )
+    # Superset's own worker count, as its entrypoint starts it.
+    entrypoint = (Path(rb.__file__).parents[2] / "deploy/superset/osprey_entrypoint.py").read_text()
+    assert f'"--workers", "{rb.SUPERSET_WORKERS}"' in entrypoint
+    conduits = 3 * (220 + 20)  # an update's old and new Conduit, and the worker opening the same stores
+    superset_copy = 2 * (5 + 10) + 8  # two gunicorn workers at SQLAlchemy's 5 + 10; 8 mart queries
+    report_sync_copy = 4
+    upgrade = 2  # every Deployment's old and new copies side by side during an upgrade
+    least = conduits + 10 + 20 + upgrade * (2 * superset_copy + 2 * report_sync_copy)
+    assert least == 918
+    assert rb.POSTGRES_LEAST_CONNECTIONS == least
+    assert rb.POSTGRES_MAX_CONNECTIONS == 1000  # the owner's figure (13 November 2026)
+    assert rb.POSTGRES_MAX_CONNECTIONS >= rb.POSTGRES_LEAST_CONNECTIONS
     needs = runbooks["INSTALL.md"]
     needs = needs[needs.index("**What it needs.**") : needs.index("## 1.")]
-    assert f"`max_connections` of at least {rb.POSTGRES_MAX_CONNECTIONS}" in needs
-    assert "parameter group" in needs and "Amendment 43" in needs
+    assert "`max_connections` of 1000" in needs
+    assert f"{rb.POSTGRES_LEAST_CONNECTIONS}" in needs and "82 to spare" in needs
+    assert "Amendment 43" in needs and "db.t4g.large" in needs
+    # The client's environments repository: MoJ's cloud-platform-terraform-rds-instance module.
+    assert (
+        'db_parameter = [{ name = "max_connections", value = "1000", '
+        'apply_method = "pending-reboot" }]'
+    ) in needs
+    assert "at creation" in needs and "reboot" in needs
+
+
+@pytest.mark.parametrize("fixture", ["poc", "development", "production"])
+def test_the_rendered_rds_sets_max_connections_to_1000_in_its_parameter_group(fixture: str) -> None:
+    """The parameter group in our Terraform, attached to the instance, family postgres16:
+    max_connections is static in PostgreSQL, so pending-reboot; the class every shape's."""
+    files = _artefacts(_config(fixture))
+    terraform = "\n".join(t for n, t in files.items() if n.startswith("terraform/"))
+    group = re.search(r'resource "aws_db_parameter_group" "postgres" \{(.*?)\n\}', terraform, re.S)
+    assert group, "no aws_db_parameter_group"
+    body = group.group(1)
+    assert re.search(r'family\s*=\s*"postgres16"', body)
+    parameter = re.search(r"parameter \{(.*?)\}", body, re.S)
+    assert parameter
+    assert re.search(r'name\s*=\s*"max_connections"', parameter.group(1))
+    assert re.search(r'value\s*=\s*"1000"', parameter.group(1))
+    assert re.search(r'apply_method\s*=\s*"pending-reboot"', parameter.group(1))
+    instance = re.search(r'resource "aws_db_instance" "postgres" \{(.*?)\n\}', terraform, re.S)
+    assert instance
+    assert re.search(
+        r"parameter_group_name\s*=\s*aws_db_parameter_group\.postgres\.name", instance.group(1)
+    )
+    assert re.search(r'instance_class\s*=\s*"db\.t4g\.large"', instance.group(1))
 
 
 def test_the_decommission_s_settings_hold_after_step_7_removes_their_secret(
@@ -695,56 +731,3 @@ def test_the_decommission_s_settings_hold_after_step_7_removes_their_secret(
     neither = run(None)
     assert neither.returncode != 0 and "PREFIX=" in neither.stdout + neither.stderr
 
-
-#: Each RDS instance class's memory, in GiB, as AWS lists it (Amazon RDS DB instance classes,
-#: "Hardware specifications for DB instance classes": db.t4g and db.m6g, 2-vCPU and up).
-RDS_CLASS_MEMORY_GIB = {
-    "db.t4g.micro": 1, "db.t4g.small": 2, "db.t4g.medium": 4, "db.t4g.large": 8,
-    "db.t4g.xlarge": 16, "db.t3.medium": 4, "db.m6g.large": 8,
-}  # fmt: skip
-#: What RDS takes for the operating system and its own processes before `DBInstanceClassMemory`;
-#: AWS does not publish it by class. One GiB is above what is seen (db.t3.medium's default of
-#: about 410 is 3.6 GiB of 4; db.t4g.small's about 190 is 1.7 GiB of 2), so a class passed here
-#: passes with room.
-RDS_RESERVED_GIB = 1
-
-
-def _rds_default_max_connections(instance_class: str) -> int:
-    """RDS for PostgreSQL's default parameter group: max_connections =
-    LEAST({DBInstanceClassMemory/9531392}, 5000)."""
-    usable = (RDS_CLASS_MEMORY_GIB[instance_class] - RDS_RESERVED_GIB) * 1024**3
-    return min(usable // 9531392, 5000)
-
-
-@pytest.mark.parametrize("fixture", ["poc", "development", "production"])
-def test_the_rendered_rds_class_allows_the_connections_install_asks_for_by_default(
-    fixture: str,
-) -> None:
-    """The owner's ruling, 13 Nov: INSTALL.md asks for max_connections >= the derived minimum
-    (runbooks.py), and the class Terraform renders gives it by RDS's own default, with no parameter
-    group forcing it onto too little memory. Shrinking the class, or raising the pools, is red."""
-    from harness.cloud_platform import runbooks as rb
-
-    terraform = "\n".join(
-        text for name, text in _artefacts(_config(fixture)).items() if name.startswith("terraform/")
-    )
-    rendered = re.findall(r'instance_class\s*=\s*"([^"]+)"', terraform)
-    assert len(rendered) == 1, rendered
-    assert _rds_default_max_connections(rendered[0]) >= rb.POSTGRES_MAX_CONNECTIONS, (
-        rendered[0], _rds_default_max_connections(rendered[0]), rb.POSTGRES_MAX_CONNECTIONS)  # fmt: skip
-
-
-def test_the_rds_default_formula_refuses_the_classes_too_small() -> None:
-    """The check itself shown red (rule 15): the classes R1's finding named fall short."""
-    from harness.cloud_platform import runbooks as rb
-
-    assert _rds_default_max_connections("db.t4g.small") < rb.POSTGRES_MAX_CONNECTIONS
-    assert _rds_default_max_connections("db.t3.medium") < rb.POSTGRES_MAX_CONNECTIONS
-    assert _rds_default_max_connections("db.t4g.large") >= rb.POSTGRES_MAX_CONNECTIONS
-
-
-def test_install_names_the_class_and_that_its_default_suffices(runbooks: dict[str, str]) -> None:
-    needs = runbooks["INSTALL.md"]
-    needs = needs[needs.index("**What it needs.**") : needs.index("## 1.")]
-    assert "db.t4g.large" in needs and "no parameter group" in needs
-    assert "db.t3.medium gives about 410" not in needs

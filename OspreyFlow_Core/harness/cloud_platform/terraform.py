@@ -19,6 +19,7 @@ import json
 import re
 from typing import Any
 
+from harness.cloud_platform.connections import POSTGRES_MAX_CONNECTIONS
 from harness.cloud_platform.settings import PlatformSettings
 from schemas.deployment import OspreyConfig, SearchBackend
 
@@ -30,11 +31,8 @@ Attr = tuple[str, str]
 Block = tuple[str, list[Any]]  # ("resource \"x\" \"y\"", body)
 
 
-#: The managed PostgreSQL's class, in every shape (the owner's ruling, 13 November 2026): its RDS
-#: default `max_connections`, LEAST({DBInstanceClassMemory/9531392}, 5000), covers the
-#: `runbooks.POSTGRES_MAX_CONNECTIONS` INSTALL.md asks for with no parameter group, which on a
-#: smaller class (db.t4g.small, about 190) would force the connections onto too little memory.
-#: `test_the_rendered_rds_class_allows_the_connections_install_asks_for_by_default` holds it.
+#: The managed PostgreSQL's class, in every shape (the owner's ruling, 13 November 2026), with 8 GiB
+#: for the `max_connections` its parameter group sets (`runbooks.POSTGRES_MAX_CONNECTIONS`).
 RDS_INSTANCE_CLASS = "db.t4g.large"
 
 
@@ -158,6 +156,22 @@ def render_terraform(
             ),
             ('resource "random_password" "postgres"', [("length", "32"), ("special", "false")]),
             (
+                'resource "aws_db_parameter_group" "postgres"',
+                [
+                    ("name", '"${var.namespace}-postgres"'),
+                    ("family", _q("postgres16")),
+                    (
+                        "parameter",
+                        [
+                            ("name", _q("max_connections")),
+                            ("value", _q(str(POSTGRES_MAX_CONNECTIONS))),
+                            # Static in PostgreSQL: set at creation, else at the next reboot.
+                            ("apply_method", _q("pending-reboot")),
+                        ],
+                    ),
+                ],
+            ),
+            (
                 'resource "aws_db_instance" "postgres"',
                 [
                     ("identifier", '"${var.namespace}-postgres"'),
@@ -172,6 +186,7 @@ def render_terraform(
                     ("username", _q("osprey")),
                     ("password", "random_password.postgres.result"),
                     ("db_subnet_group_name", "aws_db_subnet_group.postgres.name"),
+                    ("parameter_group_name", "aws_db_parameter_group.postgres.name"),
                     ("vpc_security_group_ids", "[aws_security_group.postgres.id]"),
                     ("backup_retention_period", "7"),
                     ("deletion_protection", "true" if production else "false"),
