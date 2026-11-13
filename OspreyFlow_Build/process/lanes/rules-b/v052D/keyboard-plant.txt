@@ -1,4 +1,4 @@
-# plant: the radios' onChange made a no-op (QuestionsPanel.tsx), at 3d88885
+# plant: the radios' onChange made a no-op (QuestionsPanel.tsx), branch head 94e49dd plus the review fixes, bar and registry patches applied
 
 Running 1 test using 1 worker
 

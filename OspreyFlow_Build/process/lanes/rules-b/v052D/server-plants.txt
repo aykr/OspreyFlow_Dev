@@ -1,12 +1,37 @@
-# server plants at ccdbfc3, 2026-11-13T22:13:12Z; script: plant.py below
-RED  | documents not narrowed to the scope | test_selected_items_reads_the_selection_its_links_and_their_documents | E       AssertionError: assert 'Far away' not in 'You answer ...estion: Who?'
-RED  | whole case falls back to the graph | test_whole_case_is_refused_in_words_until_the_search_service_exists | E       Failed: DID NOT RAISE ReadFromUnavailableError
-RED  | selected counted from the request, not the view | test_a_hidden_document_and_item_are_not_counted_quoted_or_cited | E       assert ('Dana MERCER' == 'Dana MERCER'
-RED  | a document with no text not counted | test_a_document_with_no_text_is_counted_apart | E       assert (0, 0) == (0, 1)
-RED  | no documents still refused | test_with_no_document_the_model_answers_from_the_links_and_events_and_the_answer_says_so | E           services.api.questions.NothingToReadError: x
-RED  | will read names the engine chosen | test_will_read_names_the_engine_that_will_answer_not_the_one_chosen | E       assert ('gemini', 'Gemini') == ('local', "Th...'s own model")
-RED  | handling reason dropped | test_will_read_lists_an_engine_the_materials_own_handling_code_may_not_reach | E       ValueError: not enough values to unpack (expected 1, got 0)
-RED  | read summary not kept | test_the_read_summary_is_kept_with_the_answer_and_read_back | E       AssertionError: assert (None is not None)
+# server plants, 2026-11-13T22:40:05Z: branch head 94e49dd plus the review fixes (uncommitted at the time); script below
+RED  | documents not narrowed to the scope | test_selected_items_reads_the_selection_its_links_and_their_documents
+    E       AssertionError: assert 'Far away' not in 'You answer ...estion: Who?'
+    E         
+RED  | whole case falls back to the graph | test_whole_case_is_refused_in_words_until_the_search_service_exists
+    E       Failed: DID NOT RAISE ReadFromUnavailableError
+RED  | selected counted from the request, not the view | test_a_hidden_document_and_item_are_not_counted_quoted_or_cited
+    E       assert ('MERCER, Dana' == 'MERCER, Dana'
+    E         
+RED  | a document with no text not counted | test_a_document_with_no_text_is_counted_apart
+    E       assert (0, 0) == (0, 1)
+    E         
+RED  | no documents still refused | test_with_no_document_the_model_answers_from_the_links_and_events_and_the_answer_says_so
+    E           services.api.questions.NothingToReadError: x
+RED  | will read names the engine chosen | test_will_read_names_the_engine_that_will_answer_not_the_one_chosen
+    E       assert ('gemini', 'Gemini') == ('local', "Th...'s own model")
+    E         
+RED  | handling reason dropped | test_will_read_lists_an_engine_the_materials_own_handling_code_may_not_reach
+    E       ValueError: not enough values to unpack (expected 1, got 0)
+RED  | read summary not kept | test_the_read_summary_is_kept_with_the_answer_and_read_back
+    E       AssertionError: assert (None is not None)
+    E        +  where None = QuestionAnswer(id='01M7BH37R0K0BK4MSNVQR05C6H', author='analyst-1', author_name=None, question='Who?', answer='Rohan S...ids=['node-rohan-2e8d', 'node-dana-7f3a'], link_ids=['
+RED  | a selected link counted outside the window | test_a_selected_link_outside_the_window_is_not_counted
+    E       AssertionError: assert (ReadSummary(read_from='selection', documents=1, documents_without_text=0, items=3, links=2, events=0, selected=2, first_selected='MERCER, Dana') is not None and 2 == 1)
+    E        +  where ReadSummary(read_from='selection', documents=1, documents_without_text=0, items=3, links=2, events=0, selected=2, first_selected='MERCER, Dana') = QuestionAnswer(id='01M7BH39EX9D0MKN
+RED  | will read's refusal names datasets to anyone | test_will_reads_refusal_names_no_dataset_to_a_caller_the_store_names_none_to
+    E       AssertionError: assert ('Open' not in 'The extract...use instead.'
+    E         
+RED  | ask's 409 names datasets to anyone | test_asks_refusal_names_no_dataset_to_a_caller_the_store_names_none_to
+    E       AssertionError: assert ('Open' not in 'The extract...use instead.'
+    E         
+RED  | About names the person as the brief does | test_the_read_summary_counts_the_items_links_events_and_names_the_first_selected
+    E       AssertionError: assert (3, 'Dana MERCER') == (3, 'MERCER, Dana')
+    E         
 
 --- plant.py
 import subprocess, sys, shutil
@@ -20,6 +45,10 @@ plants = [
  ("will read names the engine chosen", "        label = LOCAL_LABEL if choice.engine == LOCAL", "        choice = type(choice)(engine or choice.engine, choice.model)\n        label = LOCAL_LABEL if choice.engine == LOCAL", "test_will_read_names_the_engine_that_will_answer_not_the_one_chosen"),
  ("handling reason dropped", "            elif handling.handling_code not in routes.sendable:", "            elif False:", "test_will_read_lists_an_engine_the_materials_own_handling_code_may_not_reach"),
  ("read summary not kept", "            read=material.read,\n        )\n        await self._store.add(entry)", "        )\n        await self._store.add(entry)", "test_the_read_summary_is_kept_with_the_answer_and_read_back"),
+ ("a selected link counted outside the window", "        held_links = {e.id for e in scope.edges if e.id in wanted_links}", "        held_links = {e.id for e in edges if e.id in wanted_links and e.source in held and e.target in held}", "test_a_selected_link_outside_the_window_is_not_counted"),
+ ("will read's refusal names datasets to anyone", "        if await self._datasets.of_case(investigation_id, principal):\n            return refused", "        if True:\n            return refused", "test_will_reads_refusal_names_no_dataset_to_a_caller_the_store_names_none_to"),
+ ("ask's 409 names datasets to anyone", "            raise await self._egress_words(investigation_id, principal, refused) from None", "            raise", "test_asks_refusal_names_no_dataset_to_a_caller_the_store_names_none_to"),
+ ("About names the person as the brief does", "            first_selected=canvas_label(held_nodes[0]) if held_nodes else None,", "            first_selected=display_name(held_nodes[0]) if held_nodes else None,", "test_the_read_summary_counts_the_items_links_events_and_names_the_first_selected"),
 ]
 orig=open(P).read()
 env=dict(__import__('os').environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994"); env.pop("OSPREY_LANE", None)
@@ -28,7 +57,8 @@ try:
     assert orig.count(a)==1,(name,orig.count(a))
     open(P,'w').write(orig.replace(a,b))
     r=subprocess.run([".venv/bin/pytest","-c","../OspreyFlow_Build/pytest.ini","-q","-p","no:cacheprovider",f"../OspreyFlow_Build/tests/services/api/test_questions_read_from.py::{test}"],capture_output=True,text=True,env=env)
-    last=[l for l in r.stdout.splitlines() if l.startswith("E ")][:1]
-    print(f"{'RED ' if r.returncode else 'GREEN?!'} | {name} | {test} | {last[0][:150] if last else ''}")
+    failed=[l for l in r.stdout.splitlines() if l.startswith("E ")][:2]
+    print(f"{'RED ' if r.returncode else 'GREEN?!'} | {name} | {test}")
+    for l in failed: print("    " + l[:200])
 finally:
   open(P,'w').write(orig)
