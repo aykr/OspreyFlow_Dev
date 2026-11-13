@@ -548,14 +548,21 @@ async def test_selecting_a_hidden_id_is_the_same_as_selecting_one_that_is_not_th
     for held, ids in (
         (_with_a_hidden_node(), [HIDDEN, DANA]),
         (_without_it(), ["no-such-node", DANA]),
-        (_with_a_hidden_node(), [HIDDEN]),
-        (_without_it(), ["no-such-node"]),
     ):
         service, model, _, _, _ = await _case(*held)
         await _asked(service, model, nodes=ids)
         sent.append(model.requests[0].model_dump_json())
     assert sent[0] == sent[1]
-    assert sent[2] == sent[3]
+    # A selection of nothing the view holds is nothing to read (ADR-098 Amendment 7), in the same
+    # words whether the id is hidden or not there, and nothing is sent.
+    refusals = []
+    for held, ids in ((_with_a_hidden_node(), [HIDDEN]), (_without_it(), ["no-such-node"])):
+        service, model, _, _, _ = await _case(*held)
+        with pytest.raises(questions.NothingToReadError) as refused:
+            await _asked(service, model, nodes=ids)
+        assert model.requests == []
+        refusals.append(refused.value.words)
+    assert refusals[0] == refusals[1]
 
 
 # --- handling ---------------------------------------------------------------------------------
@@ -615,9 +622,16 @@ async def test_the_answer_maps_each_cited_fact_to_the_ids_it_stands_for() -> Non
     assert (cited.node_ids, cited.link_ids) == ([ROHAN, DANA], [ASSOCIATED])
 
 
+#: Selected with Dana, so the selection reads it (ADR-098 Amendment 7: *Selected items* reads the
+#: selection, its links and their documents, and the fixture's document is linked to nothing).
+THE_DOCUMENT = email_document_id("ev-1")
+
+
 async def test_an_invented_citation_is_dropped_and_counted_unplaced() -> None:
     service, _, _, _, _ = await _case()
-    answered = await service.ask("inv-1", "Who?", ANALYST, selected_node_ids=[DANA])
+    answered = await service.ask(
+        "inv-1", "Who?", ANALYST, selected_node_ids=[DANA, THE_DOCUMENT]
+    )
     assert [c.number for c in answered.graph_citations] == [1]
     assert answered.answer == "Rohan SHAH is tied to Dana MERCER [G-1]; she wrote to him [1]."
     assert answered.unplaced == 1  # the entity is placed; the citation is the one left out
@@ -715,7 +729,9 @@ async def test_the_route_answers_the_typed_limit_with_its_three_options() -> Non
 
 async def test_a_proposal_from_a_graph_fact_answer_is_pending_and_accepted_inferred() -> None:
     service, _, _, candidates, graph = await _case()
-    answered = await service.ask("inv-1", "Who?", ANALYST, selected_node_ids=[DANA])
+    answered = await service.ask(
+        "inv-1", "Who?", ANALYST, selected_node_ids=[DANA, THE_DOCUMENT]
+    )
     assert answered.graph_citations  # it is a graph-fact answer
     assert answered.candidates
     assert all(c.status is CandidateStatus.PENDING for c in answered.candidates)
