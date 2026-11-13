@@ -63,6 +63,7 @@ from .identity_admin import (
     PersonExistsError,
     UnknownRoleError,
     allowed_role,
+    dashboard_slug,
 )
 
 #: The role the first administrators are given (`schemas.rights.ROLE_RIGHTS`).
@@ -121,7 +122,8 @@ CREATE TABLE IF NOT EXISTS entra_dashboards (
     org_unit text NOT NULL,
     receivable_handling_codes text[] NOT NULL DEFAULT '{}',
     registered_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (tenant_id, application_id)
+    PRIMARY KEY (tenant_id, application_id),
+    UNIQUE (tenant_id, name)
 );
 """
 
@@ -181,6 +183,7 @@ def _dashboard(row: Mapping[str, Any]) -> StoredDashboard:
         clearance=str(row["clearance"]),
         org_unit=str(row["org_unit"]),
         receivable_handling_codes=tuple(row["receivable_handling_codes"]),
+        name=str(row["name"]),
     )
 
 
@@ -219,7 +222,7 @@ class EntraPeopleStore:
             return None
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT application_id, clearance, org_unit, receivable_handling_codes "
+                "SELECT application_id, name, clearance, org_unit, receivable_handling_codes "
                 "FROM entra_dashboards WHERE tenant_id = $1 AND application_id = $2",
                 self.tenant_id, application_id,
             )  # fmt: skip
@@ -228,7 +231,7 @@ class EntraPeopleStore:
     async def dashboards(self) -> list[StoredDashboard]:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT application_id, clearance, org_unit, receivable_handling_codes "
+                "SELECT application_id, name, clearance, org_unit, receivable_handling_codes "
                 "FROM entra_dashboards WHERE tenant_id = $1 ORDER BY registered_at, application_id",
                 self.tenant_id,
             )
@@ -239,14 +242,20 @@ class EntraPeopleStore:
     ) -> StoredDashboard:
         if not is_object_id(application_id):
             raise ValueError("a dashboard identity is named by its application id")
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "INSERT INTO entra_dashboards (tenant_id, application_id, name, clearance, "
-                "org_unit, receivable_handling_codes) VALUES ($1, $2, $3, $4, $5, $6) "
-                "ON CONFLICT DO NOTHING "
-                "RETURNING application_id, clearance, org_unit, receivable_handling_codes",
-                self.tenant_id, application_id, name, clearance, org_unit, list(DASHBOARD_CODES),
-            )  # fmt: skip
+        if not name or dashboard_slug(name) != name:
+            raise ValueError(f"a dashboard's name is a slug, as Keycloak's: {name!r} is not one")
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "INSERT INTO entra_dashboards (tenant_id, application_id, name, clearance, "
+                    "org_unit, receivable_handling_codes) VALUES ($1, $2, $3, $4, $5, $6) "
+                    "ON CONFLICT (tenant_id, application_id) DO NOTHING RETURNING "
+                    "application_id, name, clearance, org_unit, receivable_handling_codes",
+                    self.tenant_id, application_id, name, clearance, org_unit,
+                    list(DASHBOARD_CODES),
+                )  # fmt: skip
+        except asyncpg.UniqueViolationError as clash:  # UNIQUE (tenant_id, name)
+            raise DashboardExistsError(name) from clash
         if row is None:
             raise DashboardExistsError(application_id)
         return _dashboard(row)
@@ -529,7 +538,7 @@ class EntraPeopleAdmin:
                 "application id (the registration holds its secret)"
             )
         stored = await self.store.register_dashboard(
-            application_id, name, clearance=clearance, org_unit=org_unit
+            application_id, dashboard_slug(name), clearance=clearance, org_unit=org_unit
         )
         return RegisteredDashboard(dashboard=_identity(stored), secret=None)
 
@@ -546,6 +555,7 @@ def _identity(stored: StoredDashboard) -> DashboardIdentity:
     return DashboardIdentity(
         client_id=stored.application_id,
         account_id=stored.application_id,
+        name=stored.name or None,
         clearance=stored.clearance,
         org_unit=stored.org_unit,
         receivable_handling_codes=list(stored.receivable_handling_codes),

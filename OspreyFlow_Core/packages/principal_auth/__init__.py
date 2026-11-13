@@ -463,6 +463,9 @@ class StoredDashboard:
     clearance: str
     org_unit: str
     receivable_handling_codes: tuple[str, ...]
+    #: Its name, the slug Keycloak's `osprey-dashboard-<slug>` carries; Superset's embedding
+    #: matches a board on it. The resolver never reads it.
+    name: str = ""
 
 
 class DashboardSource(Protocol):

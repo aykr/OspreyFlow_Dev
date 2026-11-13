@@ -108,6 +108,10 @@ class DashboardIdentity(BaseModel):
     client_id: str
     #: The identity's account id — what a case Author grants Viewer to.
     account_id: str
+    #: Its name, a slug: on Keycloak what follows `osprey-dashboard-` in its client id; on Entra ID
+    #: the name it was registered by, one a tenant (ADR-148 Amendment 10). Superset's embedding
+    #: matches a board on it.
+    name: str | None = None
     clearance: str | None = None
     org_unit: str | None = None
     #: The handling codes the identity may receive — a viewer of its embedded board must hold
