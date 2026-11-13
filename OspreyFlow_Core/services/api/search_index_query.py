@@ -73,10 +73,12 @@ EXPANDING_QUERIES = frozenset(
     }
 )
 
-#: Highlight marks: control characters no extracted text holds, so a mark is never confused with the
-#: text's own content, and no markup is ever made here or sent to the Glass.
-HIGHLIGHT_OPEN = "\x02"
-HIGHLIGHT_CLOSE = "\x03"
+#: Highlight marks: private-use characters no extracted text is expected to hold, so no markup is
+#: ever made here or sent to the Glass. Not control characters: OpenSearch trims a fragment's edges
+#: of every character up to U+0020 (Java's `String.trim`), which cut a mark at a fragment's start or
+#: end and left "Kestrel" unmarked in "Kestrel paid the invoice" (found live, 13 November 2026).
+HIGHLIGHT_OPEN = "\ue000"
+HIGHLIGHT_CLOSE = "\ue001"
 SNIPPET_CHARS = 160
 
 PhoneticCodes = Callable[[str], Sequence[str]]

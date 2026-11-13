@@ -286,6 +286,14 @@ def test_a_score_between_bands_is_a_defect_not_a_guess() -> None:
         q.read_search_response(_reply([_hit("n1", 2950.0)]), page_size=5)
 
 
+def test_the_marks_survive_opensearch_trimming_a_fragments_edges() -> None:
+    """OpenSearch trims a fragment's edges of every character up to U+0020, so a mark there was
+    cut and "Kestrel" left unmarked at the start of "Kestrel paid the invoice" (found live)."""
+    for mark in (q.HIGHLIGHT_OPEN, q.HIGHLIGHT_CLOSE):
+        assert ord(mark) > 0x20
+        assert f" {mark} ".strip() == mark
+
+
 def test_a_snippet_is_text_and_marks_never_markup() -> None:
     o, c = q.HIGHLIGHT_OPEN, q.HIGHLIGHT_CLOSE
     hit = _hit("n1", 1500, "text", text=[f"paid <b>{o}Kestrel{c}</b> & co"])
