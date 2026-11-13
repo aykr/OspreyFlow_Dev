@@ -784,6 +784,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         Entra choice is a stand-in now, the real tenant later (a local OIDC provider in P10's Entra shape, modelling
         Entra's refusals; the real-tenant steps a marked section of the install runbook).
 
+        **Orchestrator's ruling, about 16:00 (proceed-with-recommendation; no accepted ADR changed):** R1 finding 9,
+        the `ospreyflow` command fails on every verb (httpx imported at module level since 58bcfc3, against
+        ADR-114 decision 3's "standard library and PyYAML"; osprey's own installed command confirmed broken).
+        Option B taken: keep decision 3; httpx imported only where used, `release`/`run` through the checkout's
+        environment; rather than option A (amend ADR-114 to admit httpx). The owner may overrule.
+
         **The owner's word, about 07:45:** once both demo fixes land (one key prompt, ADR-114 Am 42, platform-b; Home's
         "Your access and tasks", ADR-145 Am 11, platform), push main to the dev repo and publish the product repo
         again from the same commit (no tag), each recorded in PUSH_LOG.
