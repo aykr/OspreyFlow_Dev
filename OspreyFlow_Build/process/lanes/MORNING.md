@@ -26,6 +26,12 @@ count records).
      standing in for SECRET. This keeps every spec 08 row, but the scenarios' access cases then test codes, not
      clearance.
 
+3. **CI runs pile up on main (a proposal).** ci.yml has no `concurrency` group, so every push to main starts a
+   full ~80-minute run, and superseded ones are not cancelled. Overnight about ten queued and delayed v0.5.1's
+   re-run. A bulk cancel was refused by my permission check, so they ran to the end. Proposed: add
+   `concurrency: {group: ci-${{ github.ref }}, cancel-in-progress: true}` to ci.yml's push runs. Your word, since
+   it is `.github`. Meanwhile I push in batches.
+
 ## Done overnight
 
 - Landed and pushed: deps-opensearch, step 2 (the manifest), step 3a with data safety and docs' D2/D3/D8,
