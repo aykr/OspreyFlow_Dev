@@ -11,8 +11,10 @@ green before and after. The output, unfiltered, is `PLANTS_RECORD.txt`, headed b
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 CORE = Path(__file__).resolve().parents[5] / "OspreyFlow_Core"
@@ -191,9 +193,10 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      '    return text.encode("utf-8", "surrogatepass")\n', '    return text.encode("utf-8")\n',
      [f"{BULK}::test_a_lone_surrogate_is_measured_as_the_client_sends_it"]),
     # --- decision 2: a document refused for good is set aside --------------------------------------
-    ("V38 a permanent refusal holds the outbox", INDEXER,
-     "    return 400 <= status < 500 and status not in (404, 408, 409, 429)\n", "    return False\n",
-     [f"{REFUSED}::test_a_permanent_refusal_of_one_item_is_set_aside"]),
+    ("V38 a refusal for the document's own content holds the outbox", INDEXER,
+     "    return bool(kinds & _DOCUMENT_REFUSALS)\n", "    return False\n",
+     [f"{REFUSED}::test_a_permanent_refusal_of_one_item_is_set_aside",
+      f"{REFUSED}::test_a_refused_update_deletes_the_older_version_so_it_fails_closed"]),
     ("V39 a refusal set aside unrecorded", INDEXER,
      "    if not refused:\n        return\n    index = refused_index(alias)\n",
      "    return\n    index = refused_index(alias)\n",
@@ -210,9 +213,6 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ("V42 a crashed rebuild's index kept", REBUILD,
      "            await client.indices.delete(index=left, ignore_unavailable=True)\n", "            pass\n",
      [f"{REFUSED}::test_a_rebuild_removes_the_index_a_crashed_rebuild_left"]),
-    ("V43 a rebuild keeps the older refusal records", REBUILD,
-     "    if await client.indices.exists(index=refused_index(alias)):\n", "    if False:\n",
-     [f"{REFUSED}::test_a_rebuild_keeps_only_its_own_refusal_records"]),
     # --- decision 5: the drift check's refused and pending -----------------------------------------
     ("V44 the drift check reports a refused document as missing", REBUILD,
      "    report.refused = {d: set_aside[d] for d in sorted(report.missing) if d in set_aside}\n",
@@ -283,17 +283,50 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      '            if rel in ALLOWED or "/node_modules/" in rel:\n',
      '            if rel in ALLOWED or rel.startswith("services/search_index/") or "/node_modules/" in rel:\n',
      [f"{REACH}::test_the_walk_names_a_planted_route_and_a_query_module_beside_the_feed"]),
+    # --- the second lane review: the set-aside path fails closed -----------------------------------
+    ("V61 every refusal set aside, whatever it is", INDEXER,
+     "    return bool(kinds & _DOCUMENT_REFUSALS)\n", "    return True\n",
+     [f"{REFUSED}::test_the_clusters_own_refusal_is_raised_whatever_its_status",
+      f"{REFUSED}::test_an_alias_over_two_indexes_is_raised_not_set_aside"]),
+    ("V62 a refused document's older version left in the index", INDEXER,
+     "    if refused:\n        removal = ", "    if False:\n        removal = ",
+     [f"{REFUSED}::test_a_refused_update_deletes_the_older_version_so_it_fails_closed"]),
+    ("V63 the refusal's reason quotes the record", INDEXER,
+     "    return f\"{status} {' / '.join(kinds)}\" + (f\" in field {field}\" if field else \"\")\n",
+     "    return f\"{status} {error}\"\n",
+     [f"{REFUSED}::test_a_permanent_refusal_of_one_item_is_set_aside",
+      f"{REFUSED}::test_a_refused_update_deletes_the_older_version_so_it_fails_closed"]),
+    ("V64 a write to the alias without require_alias", INDEXER,
+     "require_alias=index is None", "require_alias=False",
+     [f"{REFUSED}::test_a_write_to_a_missing_alias_makes_no_index_of_its_name"]),
+    ("V65 a refusal record kept after its document is written", INDEXER,
+     "        await clear_refused(self._client, self._alias, sorted(sent - set(refused)))\n", "",
+     [f"{REFUSED}::test_a_record_is_removed_once_its_document_is_written"]),
+    ("V66 an access field's long value left unindexed", MAPPING,
+     '_KEYWORD = {"type": "keyword", **_BOOLEAN}\n',
+     '_KEYWORD = {"type": "keyword", "ignore_above": KEYWORD_MAX_CHARS, **_BOOLEAN}\n',
+     [f"{REFUSED}::test_a_refused_update_deletes_the_older_version_so_it_fails_closed"]),
+    ("V67 two rebuilds at once", REBUILD,
+     '        await client.indices.create(index=lock, body={"settings": {"number_of_shards": 1}})\n',
+     "        pass\n",
+     [f"{REFUSED}::test_one_rebuild_at_a_time"]),
+
 ]
 
 
 def _run(tests: list[str]) -> tuple[str, str]:
     """RED only where pytest ran the tests and some failed (exit 1, "failed" in its summary, no
     error); a collection error, an error in a set-up or nothing run is BROKEN, never read as red."""
-    done = subprocess.run(
-        [".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", "-p", "no:cacheprovider",
-         "-p", "no:randomly", "-q", *tests],
-        cwd=CORE, capture_output=True, text=True, check=False,
-    )  # fmt: skip
+    # A fresh bytecode cache for every run: Python matches a cached module by its source's mtime (to
+    # the second) and size, so two plants of one file that are the same size, written in the same
+    # second, would run the first plant's bytecode for the second (seen: V53 green on V52's).
+    with tempfile.TemporaryDirectory() as cache:
+        done = subprocess.run(
+            [".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", "-p", "no:cacheprovider",
+             "-p", "no:randomly", "-q", *tests],
+            cwd=CORE, capture_output=True, text=True, check=False,
+            env={**os.environ, "PYTHONPYCACHEPREFIX": cache, "PYTHONDONTWRITEBYTECODE": "1"},
+        )  # fmt: skip
     lines = [line for line in done.stdout.splitlines() if line.strip()]
     failed = [line for line in lines if line.startswith(("FAILED ", "ERROR ../"))]
     summary = lines[-1] if lines else done.stderr.strip()

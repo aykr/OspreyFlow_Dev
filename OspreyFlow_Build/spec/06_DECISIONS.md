@@ -37039,17 +37039,26 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
      429 or a 5xx for an item, is raised, never swallowed: the batch stays in its outbox and is sent again, and a
      rebuild fails (decision 4). Held by `tests/services/search_index/test_bulk_cap.py`, against `FakeOpenSearch`,
      which refuses an oversized body with OpenSearch's 413.
-   - **A document OpenSearch can never take is set aside, never left to hold the outbox.** One action over the cap on
-     its own, or an item refused with a 4xx other than a delete's 404, a 408, a 409 or a 429 (a strict mapping's
-     unknown field, a term over Lucene's 32,766 bytes), is recorded in the deployment's refused index
-     (`<alias>-refused`, outside the alias, so no search reads it), with its reason, and an error naming it is
-     logged; the rest of the batch is written and the outbox cleared. The drift check reports it (decision 5); a
-     rebuild records afresh what it refuses, and keeps only its own records once its alias has moved. A keyword
-     field indexes at most `KEYWORD_MAX_CHARS` (8,191) characters (`ignore_above`, under Lucene's term at four bytes
-     a character), so a long name is never refused for its length. Held by `test_refused.py`, against
-     `FakeOpenSearch`, which refuses each of these as OpenSearch does.
-   - **The plants** for each sentence of decisions 2, 3, 4, 5 and 7 are code in `process/lanes/rules/v052-index/plants.py`
-     and each is red in its `PLANTS_RECORD.txt`.
+   - **A document OpenSearch can never take is set aside, never left to hold the outbox, and it fails closed.** It
+     is set aside when it is one action over the cap on its own, or a write refused for the document's own content:
+     an error of type `mapper_parsing_exception`, `strict_dynamic_mapping_exception` or `document_parsing_exception`,
+     or caused by `max_bytes_length_exceeded_exception` (a term over Lucene's 32,766 bytes). It is decided by the
+     error's type, never its status. Every other refusal is the cluster's state, not the document's, and is raised
+     with the batch kept: a write block's 403, `read_only_allow_delete` at the flood-stage watermark, a closed index,
+     an alias over two indexes, a 429, a 5xx. A delete is never set aside. A document set aside is recorded in the
+     deployment's refused index (`<alias>-refused`, outside the alias, so no search reads it) and an error naming it
+     is logged; whatever the index already held for it is deleted in the same pass, so an older version never stays
+     searchable with older access fields; the rest of the batch is written and the outbox cleared. Its reason is the
+     error's type and the field it names, never OpenSearch's words, which quote the value. A later write or delete of
+     the same document removes its record, so a record names only what is still set aside. A name or an identifier
+     indexes at most `KEYWORD_MAX_CHARS` (8,191) characters as a keyword (`ignore_above`), so a long name is never
+     refused for its length; an access field (datasets, handling, units) has no `ignore_above`, so an over-long
+     value there is refused and set aside rather than left unindexed for a filter to miss. A write to the alias says
+     `require_alias`, so a missing alias is a refusal, never a new unmapped index of its name. Held by
+     `test_refused.py`, against `FakeOpenSearch`, which refuses each of these as OpenSearch does.
+   - **The plants** for each sentence of decisions 1 to 7 are code in `process/lanes/rules/v052-index/plants.py`,
+     each run with a fresh bytecode cache, and each is red in its `PLANTS_RECORD.txt`, taken at the branch's head on
+     the lane's leased stack.
 3. **One document per node, keyed by the node's id.** Never one per file (a Document's `object_ref` is
    content-addressed, so two Document nodes with different handling can share one) and never one per merged entity.
    **No cluster or `SAME_AS` field:** a cluster id would tell a reader that hidden members exist. Merged entities are
@@ -37107,6 +37116,9 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    finds every node of a graph again, `test_feed_live.py`'s
    `test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them`. A restore run end to end and then
    searched is not run by this step: CARRIES' row, for platform-b's restore exit test.
+   - **One rebuild at a time:** a rebuild holds a lock index (`<alias>-rebuild-lock`, made atomically: a second
+     create is refused) and is refused in words while another holds it; a crashed rebuild's lock is deleted by hand,
+     as the refusal says (`test_one_rebuild_at_a_time`).
    - **A failed rebuild leaves nothing behind:** its index is deleted, and the building alias with it, and the alias
      stays where it was. A rebuild first deletes any index a crashed one left under `<alias>-building` (otherwise
      every change goes to that stray index too, and a second index under the alias refuses every write). Held by
