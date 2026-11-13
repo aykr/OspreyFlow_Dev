@@ -1,0 +1,1 @@
+At the head, offline on the Mac: tests/harness/test_poc_manifest.py and test_cloud_platform_poc.py: 75 passed. ruff (Core) clean; mypy harness/cloud_platform/manifest.py clean. python -m harness.cloud_platform.manifest check --config tests/fixtures/cloud_platform/poc.yaml (unpinned, as an operator runs it): the render agrees.
