@@ -36,6 +36,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 import yaml
@@ -742,6 +743,86 @@ def door() -> Any:
     return httpx.Client(base_url=f"https://{GLASS}", verify=str(ca() / "ca.crt"), timeout=60)
 
 
+#: Run in a pod of the namespace by `domain_probe` (and offline by the domain's tests): a GET of the
+#: domain's health signed for `es` as rules' client signs (botocore's SigV4, the pod's IRSA credentials
+#: resolved by botocore itself, the platform's CA as AWS_CA_BUNDLE gives it), the same unsigned, and a
+#: connection straight to the OpenSearch pod's 9200, which the namespace's egress must not allow.
+DOMAIN_PROBE = r"""
+import hashlib, json, os, socket, ssl, urllib.error, urllib.request
+import botocore.session
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
+
+url = os.environ["OPENSEARCH_URL"].rstrip("/") + "/_cluster/health"
+context = ssl.create_default_context(cafile=os.environ.get("AWS_CA_BUNDLE"))
+
+def send(headers):
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, context=context, timeout=30) as answer:
+            return [answer.status, answer.read().decode()[:300]]
+    except urllib.error.HTTPError as error:
+        return [error.code, error.read().decode()[:300]]
+
+credentials = botocore.session.get_session().get_credentials().get_frozen_credentials()
+signed = AWSRequest(method="GET", url=url, headers={"x-amz-content-sha256": hashlib.sha256(b"").hexdigest()})
+SigV4Auth(credentials, "es", os.environ["AWS_REGION"]).add_auth(signed)
+host, _, port = os.environ.get("R1_DIRECT", "opensearch.platform-managed.svc.cluster.local:9200").rpartition(":")
+try:
+    socket.create_connection((host, int(port)), timeout=5).close()
+    direct = "open"
+except OSError:
+    direct = "closed"
+print(json.dumps({"signed": send(dict(signed.headers.items())), "unsigned": send({}), "direct": direct}))
+"""
+
+
+def domain_probe(account: str) -> dict[str, Any]:
+    """`DOMAIN_PROBE` in a pod of the namespace under `account`'s service account (so the webhook gives
+    it that role), labelled as the search drift check's pods so the namespace's egress admits it to
+    the managed networks on 443, as it admits the search Jobs; removed when it ends."""
+    image = kubectl("-n", NS, "get", "deployment/api", "-o", "jsonpath={.spec.template.spec.containers[0].image}")
+    name = f"r1-domain-{account}"
+    kubectl("-n", NS, "delete", "pod", name, "--ignore-not-found", "--wait")
+    container = {"name": "probe", "image": image, "command": ["/app/.venv/bin/python", "-c", DOMAIN_PROBE],
+                 "env": [{"name": "OPENSEARCH_URL", "valueFrom": {"secretKeyRef": {"name": "opensearch-output", "key": "proxy_url"}}}],
+                 "securityContext": {"allowPrivilegeEscalation": False, "capabilities": {"drop": ["ALL"]},
+                                     "runAsNonRoot": True, "runAsUser": 10001}}
+    overrides = {"spec": {"serviceAccountName": account, "restartPolicy": "Never", "containers": [container],
+                          "securityContext": {"seccompProfile": {"type": "RuntimeDefault"}}}}
+    kubectl("-n", NS, "run", name, f"--image={image}", "--restart=Never",
+            "--labels=app.kubernetes.io/name=search-drift,app.kubernetes.io/part-of=ospreyflow,r1/probe=domain",
+            f"--overrides={json.dumps(overrides)}")
+    for _ in range(60):
+        phase = kubectl("-n", NS, "get", "pod", name, "-o", "jsonpath={.status.phase}")
+        if phase in ("Succeeded", "Failed"):
+            break
+        time.sleep(5)
+    said = kubectl("-n", NS, "logs", name)
+    kubectl("-n", NS, "delete", "pod", name, "--ignore-not-found")
+    if phase != "Succeeded":
+        raise SystemExit(f"the domain probe as {account} ended {phase or 'unstarted'}: {said[-500:]}")
+    return json.loads(said.strip().splitlines()[-1])
+
+
+def domain_checks(ok: Callable[[str, bool, Any], None]) -> None:
+    """The domain checked from the namespace's own pods (ADR-148 Amendment 13): the service role's
+    signed request reaches OpenSearch, an unsigned one and another role's are refused 403 by the
+    domain, the OpenSearch pod is unreachable past it, and the stand-in's log says the same."""
+    mine = domain_probe("ospreyflow")
+    ok("the namespace's role reaches the domain, signed for es", mine["signed"][0] == 200 and '"status"' in mine["signed"][1], mine)
+    ok("an unsigned request is refused by the domain", mine["unsigned"][0] == 403, mine)
+    ok("the OpenSearch pod is not reachable past the domain (9200)", mine["direct"] == "closed", mine)
+    other = domain_probe("ospreyflow-backup")
+    ok("another role of the namespace is refused by the domain", other["signed"][0] == 403 and "not authorized" in other["signed"][1], other)
+    logged = [line for line in kubectl("-n", MANAGED, "logs", "deployment/s3-standin", "--since=15m").splitlines()
+              if line.startswith(f"domain: {SEARCH_HOST} GET /_cluster/health ")]
+    roles = state()["roles"]
+    ok("the stand-in's log: the service role admitted, the backup role and the unsigned refused",
+       f"200 {roles['ospreyflow']}" in "\n".join(logged) and f"403 {roles['ospreyflow-backup']}" in "\n".join(logged)
+       and any(line.endswith("403 anonymous") for line in logged), logged[-6:])
+
+
 def checks() -> None:
     """The check list (CHECKS.md), each with its expected answer; stops at the first that fails."""
     log = record("check")
@@ -836,6 +917,7 @@ def checks() -> None:
             break
         time.sleep(5)
     ok("the rule raises its alert on the load", r.status_code == 200 and any((a.get("alert") or a).get("rule_id") == f"hotlist:{hotlist}" for a in r.json()), r.text[:300])
+    domain_checks(ok)
     print(f"every check passed (record {log})")
 
 

@@ -271,3 +271,59 @@ def test_a_compressed_body_reaches_opensearch_with_its_encoding(
     status, answer = _send(base, request)
     assert status == 200, answer
     assert _OpenSearch.seen[-1]["encoding"] == "gzip"
+
+
+def test_each_domain_request_is_logged_with_who_and_the_answer(
+    domain: tuple[str, StandIn], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """R1's run reads the stand-in's log as its evidence that the domain admitted the service
+    role and refused the rest (`r1_kind.checks`): one line per domain request, who, the answer."""
+    monkeypatch.setenv("S3_STANDIN_LOG", "1")
+    base, stand_in = domain
+    _send(base, _signed(_session(stand_in), "GET", "/_cluster/health"))
+    _send(base, _signed(_session(stand_in, OTHER_ROLE), "GET", "/_cluster/health"))
+    _send(base, None, path="/_cluster/health")
+    lines = [line for line in capsys.readouterr().err.splitlines() if line.startswith("domain: ")]
+    assert lines == [
+        f"domain: {DOMAIN} GET /_cluster/health 200 {SEARCH_ROLE}",
+        f"domain: {DOMAIN} GET /_cluster/health 403 {OTHER_ROLE}",
+        f"domain: {DOMAIN} GET /_cluster/health 403 anonymous",
+    ]
+
+
+def test_r1s_domain_probe_signs_as_a_pod_does_and_reports_both_answers(
+    domain: tuple[str, StandIn],
+) -> None:
+    """The probe `r1_kind.checks` runs in a pod of the namespace, run here against the stand-in
+    with a session's credentials in the environment (IRSA's, resolved): signed admitted, unsigned
+    refused; another role's session refused; a closed port 9200 reported closed."""
+    import subprocess
+    import sys
+
+    base, stand_in = domain
+    # The probe asks by OPENSEARCH_URL's own host, here loopback: the domain answers on it too.
+    [(host, behind)] = stand_in.domains.items()
+    both = [{"host": h, "roles": behind["roles"], "upstream": behind["upstream"]}
+            for h in (host, "127.0.0.1")]  # fmt: skip
+    stand_in.configure_domains(both)
+    gates = Path(__file__).parents[1] / "process/lanes/platform/gates"
+    sys.path.insert(0, str(gates))
+    try:
+        import r1_kind
+    finally:
+        sys.path.remove(str(gates))
+    said = {}
+    for role in (SEARCH_ROLE, OTHER_ROLE):
+        session = _session(stand_in, role)
+        env = {"PATH": "/usr/bin:/bin", "AWS_ACCESS_KEY_ID": session.access_key,
+               "AWS_SECRET_ACCESS_KEY": session.secret, "AWS_SESSION_TOKEN": session.token or "",
+               "AWS_REGION": "eu-west-2", "R1_DIRECT": "127.0.0.1:9",
+               "OPENSEARCH_URL": base}  # fmt: skip
+        done = subprocess.run([sys.executable, "-c", r1_kind.DOMAIN_PROBE], env=env,
+                              capture_output=True, text=True, timeout=60)  # fmt: skip
+        assert done.returncode == 0, done.stderr
+        said[role] = json.loads(done.stdout.strip().splitlines()[-1])
+    mine, other = said[SEARCH_ROLE], said[OTHER_ROLE]
+    assert mine["signed"][0] == 200 and mine["unsigned"][0] == 403 and mine["direct"] == "closed"
+    assert other["signed"][0] == 403 and "not authorized" in other["signed"][1]
+    assert [s["path"] for s in _OpenSearch.seen] == ["/_cluster/health"]

@@ -286,3 +286,16 @@ def test_the_terraform_stand_in_makes_the_domains_secret_and_admits_what_its_pol
     [config] = configs
     assert [d["roles"] for d in config["domains"]] == [admitted]
     assert admitted == [roles["ospreyflow"]] and roles["ospreyflow-backup"] not in admitted
+
+
+def test_the_namespaces_pods_never_reach_the_opensearch_pod_past_the_domain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The OpenSearch pod's security plugin is off (no FGAC), so only the domain's checks stand in
+    front of it: R1's render lets the namespace reach the managed networks on 443, 5432 and 6379
+    alone, never 9200 (the run's probe confirms it on the cluster)."""
+    folder = _kind_render(tmp_path, monkeypatch)
+    values = yaml.safe_load((folder / "values.yaml").read_text())
+    egress = values["egress"]
+    assert egress["managedPorts"] == [443, 5432, 6379]
+    assert "9200" not in json.dumps(egress)

@@ -42,6 +42,7 @@ import os
 import re
 import secrets
 import ssl
+import sys
 import threading
 import urllib.error
 import urllib.parse
@@ -754,18 +755,23 @@ class Handler(BaseHTTPRequestHandler):
         name = host.split(".", 1)[0].removeprefix("vpc-").rsplit("-", 1)[0]
         path = self.path.partition("?")[0]
         resource = f"arn:aws:es:{stand_in.region}:{account}:domain/{name}{path}"
+        who = "anonymous" if not headers.get("authorization") else "unverified"
+
+        def answer(status: int, data: bytes, kind: str | None) -> None:
+            # One line per domain request, who and the answer: R1's run reads it (`r1_kind.checks`).
+            if os.environ.get("S3_STANDIN_LOG"):
+                print(f"domain: {host} {method} {path} {status} {who}", file=sys.stderr, flush=True)
+            self._send(status, data, {"Content-Type": kind or "application/json"})
 
         def refuse(message: str) -> None:
             stand_in.refusals.append(("es", message))
-            data = json.dumps({"message": message}).encode()
-            self._send(403, data, {"Content-Type": "application/json"})
+            answer(403, json.dumps({"message": message}).encode(), "application/json")
 
         # Before anything else, as the domain's front answers it.
         if len(raw_body) > DOMAIN_MAX_BODY:
             stand_in.refusals.append(("es", "413"))
             words = {"Message": f"Request size exceeded {DOMAIN_MAX_BODY} bytes"}
-            data = json.dumps(words).encode()
-            self._send(413, data, {"Content-Type": "application/json"})
+            answer(413, json.dumps(words).encode(), "application/json")
             return
         if not headers.get("authorization"):
             refuse(f"User: anonymous is not authorized to perform: {action} on resource: {resource}")
@@ -778,15 +784,16 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 refuse(self._DOMAIN_WORDS.get(refusal.code, refusal.message))
             return
-        if _role_of(principal.arn) not in domain["roles"]:
+        who = _role_of(principal.arn)
+        if who not in domain["roles"]:
             refuse(f"User: {principal.arn} is not authorized to perform: {action} on resource: {resource}")
             return
         passed = {k: v for k, v in headers.items() if k in ("content-type", "content-encoding")}
         request = urllib.request.Request(domain["upstream"] + self.path, data=raw_body or None,
                                          method=method, headers=passed)  # fmt: skip
         try:
-            with urllib.request.urlopen(request, timeout=60) as answer:
-                status, data, kind = answer.status, answer.read(), answer.headers.get("Content-Type")
+            with urllib.request.urlopen(request, timeout=60) as got:
+                status, data, kind = got.status, got.read(), got.headers.get("Content-Type")
         except urllib.error.HTTPError as error:
             status, data, kind = error.code, error.read(), error.headers.get("Content-Type")
         except TimeoutError:
@@ -794,7 +801,7 @@ class Handler(BaseHTTPRequestHandler):
             status, data, kind = 504, json.dumps(words).encode(), None
         except OSError as error:
             status, data, kind = 502, json.dumps({"message": f"upstream: {error}"}).encode(), None
-        self._send(status, data, {"Content-Type": kind or "application/json"})
+        answer(status, data, kind)
 
     def _body(self) -> bytes:
         length = int(self.headers.get("Content-Length") or 0)
