@@ -106,7 +106,7 @@ admin	v052-identities	M	todo	v0.5.2: dashboard identities and report sync on Ent
 platform	v052-standin	M	todo	v0.5.2: R1's Entra stand-in signs (token, authorize)
 platform-b	v052-r1	L	todo	v0.5.2: R1 on kind with a dashboards check (with platform)
 platform	v052-manifest	M	done	v0.5.2 step 2: the poc manifest and its render test
-platform	v052-opensearch	M	review	v0.5.2 step 3a: OpenSearch on poc
+platform	v052-opensearch	M	done	v0.5.2 step 3a: OpenSearch on poc
 rules	v052-index	L	todo	v0.5.2 step 3c: the index feed, rebuild, drift check
 rules	v052-load	M	todo	v0.5.2 B: client-size synthetic data, loaded once
 studio	v052-search	L	todo	v0.5.2 step 3d: the search service

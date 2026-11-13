@@ -65,3 +65,5 @@ d2312e8 c4b955e rules stack-opensearch
 8d6a898 a386fe3 docs v052-sweep part one (v0.5.1)
 f5a6f3d fcdfec4 rules deps-opensearch (v0.5.2)
 19e28e1 6b4bb26 platform v052-manifest (v0.5.2, step 2)
+72c9303 89816c8 platform v052-datasafety (v0.5.2, step 3a and audit ruling 3)
+258b510 7ca69aa docs v052-sweep D2/D3/D8
