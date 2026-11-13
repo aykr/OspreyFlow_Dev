@@ -1,0 +1,17 @@
+# The ospreyflow command's small install (ADR-114 decision 3, the orchestrator's ruling (B), 13 November 2026).
+# tests/cli/test_cli_dependencies.py against main dfa6031's cli/ospreyflow/{main,conduit_client}.py:
+6 failed, 1 passed in 1.28s
+E           ModuleNotFoundError: No module named 'httpx'
+E         ModuleNotFoundError: No module named 'httpx'
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_a_checkout_without_httpx_is_refused_in_words
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_help_from_the_small_install
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_images_push_from_the_small_install_reaches_its_own_work
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_no_module_of_the_command_loads_more_than_pyyaml
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_release_from_the_small_install_runs_in_the_checkout
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_run_from_the_small_install_runs_in_the_checkout
+# (the one passing is the check's own red-then-green on hand-written shapes, rule 15)
+# Each part shown red alone while building it:
+# - re-run through ctx.run: test_run_from_the_small_install_runs_in_the_checkout failed, its refusal hidden by
+#   the step runner's redactor ("[a line naming a secret was hidden ...]"), as a person would have seen it;
+# - before httpx.TransportError was turned into words, release ended in a traceback (the Conduit unreachable).
+# With the fix: tests/cli 534 passed; test_bootstrap's pyyaml-only assertion unchanged and green.
