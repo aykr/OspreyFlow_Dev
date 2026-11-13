@@ -1,19 +1,20 @@
-# Platform · R1: the client install's acceptance, run on kind (13 November 2026), ready to merge
+# Platform · 4b: the cloud-platform RDS, db.t4g.large and max_connections 1000 (13 November 2026), ready to merge
 
-Branch `lane/platform-r1` on main `20fab33`. The poc install, checks, backup, restore and decommission were run on kind on the test server, as P7b's runbooks are written, beside osprey-small (never touched). The cluster is down and the server freed at 18:12.
+Branch `lane/platform-poc-rds` on main `3f18d71`. Offline; nothing on the server. Merges into v0.5.1, with no R1 re-run, since kind's PostgreSQL is a stand-in.
 
-| Exit (BRIEF.md) | State | Proof |
+| Exit (the orchestrator's 4b, as revised by the owner's decisions) | State | Proof |
 |---|---|---|
-| Install by INSTALL.md, exactly as written | done, every block | `r1/run/…175844Z-INSTALL.log` |
-| Checked | 28 of 28 | `r1/run/…180425Z-check.log` (sign-in by the Entra stand-in, the owner's choice: nine refusals) |
-| Backed up and restored | the change after the set gone, the set back, the door at once, no stack trace | `r1/run/…180557Z-restored.log` |
-| Removed by DECOMMISSION.md | 0 left behind; backups kept with the last set | `r1/run/…181017Z-DECOMMISSION.log` |
-| Every place wrong or unclear: a finding, fixed, re-run | 16 (7 by reading, 9 on kind), each red first | `r1/RUN.md` (the owner's plain-words list), `r1/desk-reds.txt` |
-| Memory: node and every pod | node 6.3 GiB after the install, 7.8 after the restore, of 32; requests 26.6 GiB | `r1/RUN.md`, `r1/run/*memory.log` |
-| Gates at the final head | `make ci` exit 0 (5cdfcd2); `make test` 13176 passed; its 5 cli-deps fixture errors are platform-b's fix on main (b4712bf), taken here: `tests/cli` 533 passed on the server after the rebase | 1 failure not this lane's (GPU preflight on a GPU host, in CARRIES) |
+| db.t4g.large in every shape | done (`terraform.RDS_INSTANCE_CLASS`) | `test_the_rendered_rds_sets_max_connections_to_1000_in_its_parameter_group` |
+| max_connections 1000 in an `aws_db_parameter_group` (postgres16, pending-reboot) attached to the instance | done | the same test, ×3 fixtures |
+| The least, derived in code (Superset and report sync ×2, an upgrade in progress): 918, 82 to spare | done (`connections.py`, counted again in the test) | red first, and red with Superset's or the upgrade's term dropped: `poc-rds/red-1000.txt` |
+| INSTALL.md: N, why, MoJ module's `db_parameter` line, when it takes effect | done | `test_the_install_says_how_many_connections…` |
+| Admin guide §6a, PDF reprinted alone | 1.92 (1.91 was the first ruling's, superseded the same evening) | `tools.docs_pdf` check exit 0 |
+| ADR-114 Amendment 46 | written | `tools.adr_reservations_check` |
+| CARRIES row 227 | closed at 1000 | — |
+| Gates | cloud-platform, policy, backup, guide and PDF suites: 550 passed; after the rebase, 132 passed; ruff, and mypy on `harness/cloud_platform` | `poc-rds/gates.txt` |
 
-**The two serious findings:** no readiness probe on the Conduit or the Glass, so every wait passed before either served (dd3cc99); and 48 Postgres pools, so an update's second Conduit was refused (cae6958: INSTALL asks for `max_connections` ≥ 750).
+**Also delivered:** part B's table, sent to you (`poc-rds/client-page-table.md`); R1's thin `test_webapp_sign_in` record (a `tail -3`), sent to platform-b (`gates/r1-webapp-sign-in-under-load.txt`).
 
-**Merged ahead:** `lane/platform-cli-deps` (614ec43, the `ospreyflow` command's small install, ADR-114 kept). **Requests to the orchestrator:** apply `R1_admin_guide.diff` at merge; CARRIES: the Conduit's pools (one shared pool, or sizes from settings, for the owner).
+**Open, the owner's:** Superset and the report sync, ×2 (the page) or ×1 (the poc render). The 918 takes ×2.
 
-**Questions for the owner:** none open. **Running:** nothing. No cluster, no lease. Nothing pushed.
+**Running:** nothing. **Paused:** Part 3 on `lane/platform-part3` at 28ef2f3 (stage 1 done; stage 2 begun, nothing uncommitted). Nothing pushed.
