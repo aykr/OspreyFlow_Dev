@@ -1,51 +1,64 @@
-# plants.py at 6a31180 + the working tree committed as 'the review of 1f06074' (round 3), 2026-11-13T22:14:55Z
-GREEN unplanted: 182 passed in 1.47s
-RED   an unknown key inside an entry is not a stop: 1 failed, 2 passed in 0.42s
-RED   an unknown section is not a stop: 1 failed, 1 passed in 0.36s
-RED   a pending entry is not a stop: 1 failed, 60 passed in 0.77s
-RED   a CronJob listed suspended that runs by itself passes: 1 failed, 120 passed in 1.21s
-RED   a job never succeeded passes: 1 failed, 118 passed in 1.17s
-RED   a failed restore step passes: 1 failed, 117 passed in 1.18s
-RED   kubectl's absent readyReplicas read as all ready: 1 failed, 143 passed in 1.35s
-RED   a database reached by a stranger passes: 1 failed, 141 passed in 1.46s
-RED   a check that raises passes: 1 failed, 139 passed in 1.46s
-RED   r1's SystemExit ends the whole run: 1 failed, 139 passed in 1.51s
-RED   a rollout the controller has not observed passes: 1 failed, 123 passed in 1.34s
-RED   another shape passes: 1 failed, 63 passed in 0.85s
-RED   a probe with no answer reads as blocked: 1 failed, 153 passed in 1.39s
-RED   the runbook's listing Job or a v0.5.1 run counts as a backup: 1 failed, 157 passed in 1.43s
-RED   the claims restore's run counts as the graph's: 1 failed, 158 passed in 1.40s
-RED   a finished pod's address names a reader: 1 failed, 159 passed in 1.35s
-RED   restore-graph unchecked when steps does not name it: 1 failed, 138 passed in 1.36s
-RED   a key inside an egress entry is not a stop: 1 failed, 47 passed in 0.67s
-RED   a collected case with no disposition runs: 1 failed, 180 passed in 1.51s
-RED   a narrowed selection stops the run: 1 failed, 179 passed in 1.48s
-RED   a spec 08 case with no disposition runs unremarked: 1 failed, 174 passed in 1.55s
-RED   a disposition for a case that no longer exists is not noticed: 1 failed, 175 passed in 1.47s
-RED   a case that cannot run on poc is run anyway: 1 failed, 178 passed in 1.44s
-RED   the module still signs in at Keycloak: 1 failed, 178 passed in 1.51s
+# plants.py at 1bf7e42 (clean tree), 2026-11-13T22:31:30Z, rc=0
+GREEN unplanted: 204 passed in 1.49s
+RED   an unknown key inside an entry is not a stop: 1 failed, 2 passed in 0.33s
+RED   an unknown section is not a stop: 1 failed, 1 passed in 0.32s
+RED   a pending entry is not a stop: 1 failed, 60 passed in 0.74s
+RED   a CronJob listed suspended that runs by itself passes: 1 failed, 120 passed in 1.15s
+RED   a job never succeeded passes: 1 failed, 118 passed in 1.10s
+RED   a failed restore step passes: 1 failed, 117 passed in 1.20s
+RED   kubectl's absent readyReplicas read as all ready: 1 failed, 161 passed in 1.34s
+RED   a database reached by a stranger passes: 1 failed, 159 passed in 1.37s
+RED   a check that raises passes: 1 failed, 157 passed in 1.30s
+RED   r1's SystemExit ends the whole run: 1 failed, 157 passed in 1.31s
+RED   a rollout the controller has not observed passes: 1 failed, 123 passed in 1.18s
+RED   another shape passes: 1 failed, 63 passed in 0.75s
+RED   a probe with no answer reads as blocked: 1 failed, 171 passed in 1.37s
+RED   the runbook's listing Job or a v0.5.1 run counts as a backup: 1 failed, 175 passed in 2.20s
+RED   the claims restore's run counts as the graph's: 1 failed, 176 passed in 2.57s
+RED   a finished pod's address names a reader: 1 failed, 177 passed in 2.61s
+RED   restore-graph unchecked when steps does not name it: 1 failed, 156 passed in 2.28s
+RED   a key inside an egress entry is not a stop: 1 failed, 47 passed in 1.33s
+RED   a collected case with no disposition runs: 1 failed, 202 passed in 6.33s
+RED   a narrowed selection stops the run: 1 failed, 201 passed in 2.64s
+RED   a spec 08 case with no disposition runs unremarked: 1 failed, 196 passed in 5.87s
+RED   a disposition for a case that no longer exists is not noticed: 1 failed, 197 passed in 3.03s
+RED   a case that cannot run on poc is run anyway: 1 failed, 200 passed in 2.28s
+RED   the module still signs in at Keycloak: 1 failed, 200 passed in 2.86s
 RED   open egress passes: 1 failed, 108 passed in 1.23s
-RED   a workload or job on another reference passes the version check: 1 failed, 62 passed in 0.86s
-RED   a deployment of another release passes: 1 failed, 128 passed in 1.37s
-RED   an init or second container on the old reference passes: 1 failed, 134 passed in 1.99s
-RED   a template the render never pinned reads as the candidate: 1 failed, 134 passed in 2.71s
-RED   kubectl's name order picks the run read: 1 failed, 160 passed in 1.40s
-RED   a search reader answered unsigned passes (not the domain): 1 failed, 161 passed in 1.40s
-RED   an empty search alias passes: 1 failed, 166 passed in 1.32s
-RED   a refused signed search count passes: 1 failed, 164 passed in 1.32s
-RED   a search reader that does not sign passes: 1 failed, 163 passed in 1.37s
-RED   a search reader's refusal is not said: 1 failed, 161 passed in 1.38s
-RED   an egress placeholder is probed: 1 failed, 171 passed in 1.39s
-RED   a rollout still holding the old pod passes: 1 failed, 122 passed in 1.28s
-RED   an unavailable replica passes: 1 failed, 122 passed in 1.26s
-RED   updated, ready and available unchecked: 1 failed, 110 passed in 1.15s
-RED   a StatefulSet mid-update passes: 1 failed, 125 passed in 1.23s
-RED   kubectl's unavailableReplicas ignored: 1 failed, 122 passed in 1.22s
-RED   an offline node reads as egress blocked: 1 failed, 137 passed in 1.28s
-RED   the shape is not read from the deployed configuration: 1 failed, 136 passed in 1.26s
-RED   a CronJob's template on the old release reads as current: 1 failed, 172 passed in 1.35s
-RED   a restore run at the candidate's image reads as old: 1 failed, 150 passed in 1.29s
-RED   init containers' references left out of the candidate's: 1 failed, 132 passed in 1.26s
-RED   a StatefulSet is never found: 1 failed, 149 passed in 1.26s
-RED   a workload not ready passes: 1 failed, 110 passed in 1.04s
+RED   a workload or job on another reference passes the version check: 1 failed, 62 passed in 1.35s
+RED   a deployment of another release passes: 1 failed, 128 passed in 2.42s
+RED   dev-unknown or another commit passes as the candidate: 1 failed, 134 passed in 2.25s
+RED   one of ours tagged with another commit (or unknown) passes: 1 failed, 141 passed in 1.45s
+RED   a short or tag-shaped candidate is taken: 1 failed, 146 passed in 1.75s
+RED   the probe's failure read as an answer: 1 failed, 188 passed in 1.47s
+RED   any 403 taken for the domain's refusal: 1 failed, 187 passed in 1.61s
+RED   the probe's failure left on stderr: 1 failed, 191 passed in 2.20s
+RED   the release read from another ConfigMap: 1 failed, 148 passed in 2.22s
+RED   an init or second container on the old reference passes: 1 failed, 152 passed in 1.68s
+RED   a template the render never pinned reads as the candidate: 1 failed, 152 passed in 1.65s
+RED   kubectl's name order picks the run read: 1 failed, 178 passed in 1.40s
+RED   a search reader answered unsigned passes (not the domain): 1 failed, 179 passed in 1.66s
+RED   an empty search alias passes: 1 failed, 184 passed in 1.43s
+RED   a refused signed search count passes: 1 failed, 182 passed in 1.43s
+RED   a search reader that does not sign passes: 1 failed, 181 passed in 1.38s
+RED   a search reader's refusal is not said: 1 failed, 179 passed in 1.53s
+RED   an egress placeholder is probed: 1 failed, 193 passed in 2.07s
+RED   a rollout still holding the old pod passes: 1 failed, 122 passed in 1.52s
+RED   an unavailable replica passes: 1 failed, 122 passed in 2.25s
+RED   updated, ready and available unchecked: 1 failed, 110 passed in 1.23s
+RED   a StatefulSet mid-update passes: 1 failed, 125 passed in 1.51s
+RED   kubectl's unavailableReplicas ignored: 1 failed, 122 passed in 1.62s
+RED   an offline node reads as egress blocked: 1 failed, 155 passed in 1.85s
+RED   the shape is not read from the deployed configuration: 1 failed, 154 passed in 1.50s
+RED   a CronJob's template on the old release reads as current: 1 failed, 194 passed in 1.64s
+RED   a restore run at the candidate's image reads as old: 1 failed, 168 passed in 1.54s
+RED   init containers' references left out of the candidate's: 1 failed, 150 passed in 2.56s
+RED   a StatefulSet is never found: 1 failed, 167 passed in 5.28s
+RED   a workload not ready passes: 1 failed, 110 passed in 1.26s
+GREEN routes unplanted: 8 passed in 4.87s
+RED   unreadable calls skipped: 1 failed, 7 passed in 3.49s
+RED   a path led by a field that is not an origin skipped: 1 failed, 7 passed in 3.07s
+RED   the sign-in exceptions removed (the real module has unreadable calls): 2 failed, 6 passed in 2.57s
+RED   an origin-prefixed path not read: 2 failed, 6 passed in 1.85s
+RED   the stream the module opens not read: 1 failed, 7 passed in 3.10s
 every plant red, unplanted green
