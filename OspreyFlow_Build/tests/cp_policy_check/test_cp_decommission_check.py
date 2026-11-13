@@ -105,9 +105,12 @@ def _clean() -> dict[str, Any]:
     }
 
 
-def _check(values: dict[str, Any], terraform: dict[str, str], given: dict[str, Any]) -> Leftovers:
+def _check(
+    values: dict[str, Any], terraform: dict[str, str], given: dict[str, Any], backups: str = "keep"
+) -> Leftovers:
     return check(
         values,
+        backups=backups,
         objects=given["objects"],
         state=given["state"],
         terraform=terraform,
@@ -301,6 +304,11 @@ def test_main_exits_1_on_a_leftover_and_0_on_none(tmp_path: Path, rendered: dict
             "--state", str(tmp_path / "state.txt"),
             "--terraform", str(folder), "--buckets", str(tmp_path / "buckets.txt"),
             "--bucket-prefix", PREFIX]  # fmt: skip
+    # The audit's ruling 3: no default for the backups; the check refuses to run without the choice.
+    with pytest.raises(SystemExit) as refused:
+        main(argv)
+    assert refused.value.code == 2
+    argv += ["--backups", "keep"]
     assert main(argv) == 0
     (tmp_path / "state.txt").write_text("aws_iam_role.service\n", encoding="utf-8")
     assert main(argv) == 1
@@ -396,6 +404,43 @@ def test_the_backups_bucket_and_its_key_are_kept_never_left_behind(
     found = _check(values, with_backups, given)
     assert [i.what for i in found.items] == ["terraform/aws_iam_role.backup",
                                              "terraform/aws_iam_role.backup_clickhouse", f"bucket/{PREFIX}media"]
+
+
+def test_destroy_chosen_names_the_backups_bucket_and_key_if_they_are_still_there(
+    values: dict[str, Any], terraform: dict[str, str]
+) -> None:
+    """The audit's ruling 3 (v0.5.2): with `destroy` chosen, the bucket and its key are the
+    deployment's like anything else, and left behind if they are there; with `keep`, kept."""
+    with_backups = {**terraform, "backups.tf": _backups_tf()}
+    given = _clean()
+    given["state"] += "aws_s3_bucket.backups\naws_kms_key.backups\n"
+    given["buckets"] += f"{PREFIX}{BUCKET_SUFFIX}\n"
+    found = _check(values, with_backups, given, backups="destroy")
+    assert found.kept == []
+    assert {i.what for i in found.items} == {
+        "terraform/aws_s3_bucket.backups", "terraform/aws_kms_key.backups",
+        f"bucket/{PREFIX}{BUCKET_SUFFIX}",
+    }  # fmt: skip
+    assert all("destroy was chosen" in i.why for i in found.items)
+    assert _check(values, with_backups, _clean(), backups="destroy").items == []
+    with pytest.raises(ValueError, match="keep or destroy"):
+        _check(values, with_backups, given, backups="maybe")
+
+
+def test_the_record_states_the_choice(
+    values: dict[str, Any], terraform: dict[str, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    from harness.cloud_platform.decommission_check import report
+
+    with_backups = {**terraform, "backups.tf": _backups_tf()}
+    given = _clean()
+    given["buckets"] += f"{PREFIX}{BUCKET_SUFFIX}\n"
+    report(_check(values, with_backups, given, backups="keep"))
+    said = capsys.readouterr().out
+    assert "backups: kept (the operator chose keep)" in said
+    report(_check(values, with_backups, _clean(), backups="destroy"))
+    said = capsys.readouterr().out
+    assert "backups: destroyed (the operator chose destroy)" in said
 
 
 def test_the_runbook_keeps_the_backups_and_says_how_to_remove_them(rendered: dict[str, str]) -> None:

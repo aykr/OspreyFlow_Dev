@@ -322,10 +322,30 @@ def database_names(environment: dict[str, Any]) -> tuple[str, str]:
 
 #: The stores the restore replaces with their pods stopped (ArcadeDB, from its claim); ClickHouse
 #: and its Keeper run through their restore (RESTORE, then a RENAME swap).
+#: The ADR-148 audit's ruling 3 (v0.5.2): the shared claim's folders the deployment cannot make
+#: again, each a part of the set's claims part: the published pipelines (the recipes repository,
+#: under the Conduit's data folder), the model settings, and the map settings with the map key file
+#: (ADR-147). The rest of the shared claim (the tiles, the uploads' scratch) is made again or is
+#: the Ingest's.
+SHARED_PARTS = (
+    {"name": "shared-recipes", "subPath": "data/recipes"},
+    {"name": "shared-model-settings", "subPath": "model-settings"},
+    {"name": "shared-map-settings", "subPath": "map-settings"},
+)
 STOPPED_STORES = ("arcadedb",)
 RUNNING_STORES = ("clickhouse", "clickhouse-keeper")
 #: P9's own runs, which a restore must not run beside: a backup reads what is being replaced.
 OWN_RUNS = ("backup", "backup-claims")
+
+
+def _holds_a_shared_part(sub_path: str) -> bool:
+    """A mount of the shared claim that holds a part of the set (the folder, or one above it)."""
+    if not sub_path:
+        return False
+    return any(
+        part["subPath"] == sub_path or part["subPath"].startswith(sub_path.rstrip("/") + "/")
+        for part in SHARED_PARTS
+    )
 
 
 def writers(
@@ -349,7 +369,7 @@ def writers(
         mounts = [*(workload.get("shared") or [])]
         for init in workload.get("initContainers", []):
             mounts += init.get("shared") or []
-        if any(m.get("claim") for m in mounts):
+        if any(m.get("claim") or _holds_a_shared_part(str(m.get("subPath", ""))) for m in mounts):
             found.add(str(workload["name"]))
     targets = found | {"clickhouse"}
     while True:
@@ -422,6 +442,8 @@ def backups_values(
         "deadlineSeconds": DEADLINE_SECONDS,
         "resources": copy.deepcopy(api.get("resources") or {}),
         "env": env,
+        # The audit's ruling 3: the shared claim's parts, beside the claims of their own.
+        "shared": [dict(part) for part in SHARED_PARTS],
         "clickhouse": {"env": clickhouse_env},
         # The pods a restore refuses to run beside (the orchestrator's ruling 4), from the render.
         "writers": writers([*workloads, *(jobs or [])]),

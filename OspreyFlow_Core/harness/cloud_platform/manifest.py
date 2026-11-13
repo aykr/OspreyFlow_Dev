@@ -164,6 +164,7 @@ def rendered(config: Any, *, resolver: Any = None) -> dict[str, Any]:
             "engine": f"postgres {rds('engine_version')}",
             "class": rds("instance_class"),
             "max_connections": int(parameter.group(1)) if parameter else None,
+            "point_in_time_days": int(rds("backup_retention_period") or 0),
             "databases": databases,
         },
         "elasticache": {

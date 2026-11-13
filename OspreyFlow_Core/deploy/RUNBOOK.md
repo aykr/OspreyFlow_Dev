@@ -268,7 +268,8 @@ restore refuses part-way for space.
 **The managed database with the stores.** The stores and PostgreSQL must agree: restoring ArcadeDB and
 ClickHouse to a set while PostgreSQL stays as it is now would bring back, visible under today's grants,
 anything withdrawn or deleted since the set. So PostgreSQL (RDS) is restored point in time to the set's finish
-time (`sets` prints it), by the platform team's own RDS procedure. The new instance may be started at once,
+time (`sets` prints it), by the platform team's own RDS procedure. RDS keeps point in time for 35 days
+(`backup_retention_period`), the sets' own expiry, so every set kept in the bucket can be met by it. The new instance may be started at once,
 since restoring it takes a while; **the deployment is pointed at it only after step 2**, once nothing that
 writes runs:
 

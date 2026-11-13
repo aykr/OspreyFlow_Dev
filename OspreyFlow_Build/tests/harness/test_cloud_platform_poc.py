@@ -224,7 +224,7 @@ _LATER = re.compile(r"^```bash later\n(.*?)^```\n", re.S | re.M)
 #: runbook's own words as something to give (`STATE`, `DISKS`, ...), or bash's and the system's.
 _GIVEN = {
     "BASH_VERSION", "TMPDIR", "OSPREY_CURL_OPTS", "STATE", "DISKS", "CLUSTER_ACCOUNT",
-    "BACKUP_RETENTION_DAYS", "TF_MODULE",
+    "BACKUP_RETENTION_DAYS", "TF_MODULE", "BACKUPS",
 }  # fmt: skip
 
 
@@ -316,7 +316,16 @@ def test_a_block_for_later_is_never_in_the_sequence(runbooks: dict[str, str], tm
     ):
         text = runbooks[name]
         for on_the_platform in (True, False):
-            assert not any(marker in b for b in command_blocks(text, on_the_platform=on_the_platform)), name
+            for block in command_blocks(text, on_the_platform=on_the_platform):
+                if marker not in block:
+                    continue
+                # The ADR-148 audit's ruling 3 (v0.5.2): the decommission's step 7 destroys the backups
+                # in order only when the operator chose it, a block that refuses without the choice;
+                # never by default, and the removal is inside that branch alone.
+                assert name == "DECOMMISSION.md", name
+                assert ': "${BACKUPS:?' in block and 'if [ "$BACKUPS" = destroy ]; then' in block
+                branch = block.split('if [ "$BACKUPS" = destroy ]; then', 1)
+                assert marker not in branch[0] and marker in branch[1], name
         held = [b for b in _LATER.findall(text) if marker in b]
         assert len(held) == 1, name
         script = tmp_path / "later.sh"

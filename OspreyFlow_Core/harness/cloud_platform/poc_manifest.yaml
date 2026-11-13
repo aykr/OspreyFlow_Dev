@@ -159,6 +159,7 @@ managed:
     engine: postgres 16
     class: db.t4g.large
     max_connections: 1000  # ADR-114 Amendment 46, in its parameter group (pending-reboot)
+    point_in_time_days: 35  # the sets' own expiry (the ADR-148 audit's ruling 3)
     databases:
       ospreyflow: {}
       litellm: {}

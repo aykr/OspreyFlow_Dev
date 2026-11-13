@@ -330,6 +330,27 @@ def test_the_search_index_s_jobs_hold_the_graph_s_password_alone(
     ]
 
 
+def test_the_claims_backup_reads_the_shared_claim_s_parts_read_only(
+    rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
+) -> None:
+    """The ADR-148 audit's ruling 3 (v0.5.2), in Helm's own output: the claims backup mounts the
+    shared claim's three folders read-only, each at its part's name, and names them to the runner."""
+    docs, _, _ = rendered
+    job = next(d for d in docs if d["kind"] == "CronJob" and d["metadata"]["name"] == "ospreyflow-backup-claims")
+    spec = pod_spec(job)
+    container = spec["containers"][0]
+    mounts = {m["mountPath"]: m for m in container["volumeMounts"] if m["name"] == "shared"}
+    assert {path: (m["subPath"], m.get("readOnly")) for path, m in mounts.items()} == {
+        "/claims/shared-recipes": ("data/recipes", True),
+        "/claims/shared-model-settings": ("model-settings", True),
+        "/claims/shared-map-settings": ("map-settings", True),
+    }
+    [shared] = [v for v in spec["volumes"] if v["name"] == "shared"]
+    assert shared["persistentVolumeClaim"] == {"claimName": "ospreyflow-shared", "readOnly": True}
+    named = next(e["value"] for e in container["env"] if e["name"] == "OSPREY_BACKUP_CLAIMS").split(",")
+    assert {"shared-recipes", "shared-model-settings", "shared-map-settings"} <= set(named)
+
+
 def test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more(
     rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
 ) -> None:
