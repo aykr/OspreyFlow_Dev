@@ -36,6 +36,12 @@ dependencies = [
     # `phonetics` (MIT) instead. Re-check `igraph` is still absent from
     # `requires_dist` on PyPI before ever bumping this pin.
     "splink==3.9.9",
+    # ADR-150's index feed and ADR-149's search service: the OpenSearch client (Apache-2.0), with its
+    # async transport (aiohttp), for every shape that runs OpenSearch (v0.5.2).
+    "opensearch-py[async]>=2.8",
+    # The phonetic key the index stores and the search service queries by (ADR-150; MIT), already here
+    # through splink; named directly because the indexer and the query side call it themselves.
+    "phonetics>=1.0.5",
     # `adapters/compute_rustworkx` — ComputePort Tier 2, `00_ARCHITECTURE.md` §2.3.
     # Apache-2.0, Rust core.
     "rustworkx>=0.15",

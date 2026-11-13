@@ -1,0 +1,26 @@
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build .venv/bin/python -m tools.licence_check
+licence-check: 160 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+cd ../OspreyFlow_Core && node /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/tools/licence_check.mjs
+licence-check: 354 packages, all allowed.
+cd ../OspreyFlow_Core && node --test /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/tests/licence_check/*.test.mjs
+✔ a GPL-3.0 licence is rejected (0.894208ms)
+✔ a GNU General Public License, spelled out, is rejected (0.133209ms)
+✔ an MIT licence is allowed (0.061292ms)
+✔ an Apache-2.0 licence is allowed (0.070625ms)
+✔ LGPL-3.0 is refused for a package with no recorded exception (0.054458ms)
+✔ an LGPL term never carries an AGPL one through (0.050417ms)
+✔ an OR is a choice, so one allowed alternative is enough, but AND needs every term (0.097708ms)
+✔ terms match by whole words, and CC-BY-SA is not CC-BY (0.403167ms)
+✔ the four licences added on 19 October 2026 pass (0.066083ms)
+✔ a dual-licensed package naming both an allowed licence and GPL is rejected -- the real shape main() produces via licenses.join(" AND "), where an allowed marker elsewhere in the string must not let a GPL term slip through (0.082125ms)
+✔ an OFL-1.1 licence, by its SPDX short form, is allowed (0.051875ms)
+✔ OFL-1.1 beside GPL is still rejected (0.041292ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 47.11575
+licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
