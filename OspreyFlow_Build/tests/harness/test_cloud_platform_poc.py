@@ -15,7 +15,10 @@ What a mistake would do, and the case that catches it (rule 12):
 
 from __future__ import annotations
 
+import base64
 import re
+import tomllib
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -215,6 +218,153 @@ def test_the_decommission_removes_every_claim_the_render_makes(
     )
 
 
+_LATER = re.compile(r"^```bash later\n(.*?)^```\n", re.S | re.M)
+
+#: What the runbooks read from the operator's shell and never set themselves: each named in the
+#: runbook's own words as something to give (`STATE`, `DISKS`, ...), or bash's and the system's.
+_GIVEN = {
+    "BASH_VERSION", "TMPDIR", "OSPREY_CURL_OPTS", "STATE", "DISKS", "CLUSTER_ACCOUNT",
+    "BACKUP_RETENTION_DAYS", "TF_MODULE",
+}  # fmt: skip
+
+
+def test_every_variable_a_runbook_reads_is_one_it_sets_or_asks_for(
+    runbooks: dict[str, str],
+) -> None:
+    """R1's reading of P7b's decommission: `s3://$PREFIXbackups/` is read by bash as the variable
+    `PREFIXbackups`, which is empty, so the last backup was named `s3://backups/...` and the
+    bucket in steps 7 and 9 was `""`; the line after it repeated the same text, so its check could
+    not fail. Every `$NAME` in either runbook, as bash reads the name (the longest run of word
+    characters), is a variable the runbook sets, or one it asks the operator for; the text after
+    a variable is fenced off by `${NAME}` where a word character follows."""
+    for name, text in runbooks.items():
+        blocks = "".join(command_blocks(text, on_the_platform=True) + _LATER.findall(text))
+        set_here = set(re.findall(r"(?:^|[\s;(]|export )([A-Za-z_]\w*)=", blocks, re.M))
+        set_here |= set(re.findall(r"\bfor ([A-Za-z_]\w*) in\b", blocks))
+        set_here |= set(re.findall(r"\bread -r ([A-Za-z_]\w*)", blocks))
+        read = set(re.findall(r"\$\{?([A-Za-z_]\w*)", text))
+        assert read - set_here - _GIVEN == set(), name
+
+
+def test_the_last_backup_is_named_in_the_backups_bucket(
+    runbooks: dict[str, str], tmp_path: Any
+) -> None:
+    """The decommission's step 2, run under bash as written, with a `kubectl` that answers as a
+    finished backup Job does: `LAST_BACKUP` names the set in `<prefix>backups`, the bucket the
+    decommission keeps (rule 12: the line's own `case` check could not see the empty name)."""
+    import subprocess
+    import sys
+
+    text = runbooks["DECOMMISSION.md"]
+    step = text[text.index("## 2.") : text.index("## 3.")]
+    (block,) = command_blocks(step, on_the_platform=False)
+    stub = tmp_path / "kubectl"
+    stub.write_text(
+        "#!/bin/sh\n"
+        'case "$*" in *"get cronjob"*) exit 1;; *"-o jsonpath={.status.succeeded}"*) echo 1;; esac\n'
+    )
+    stub.chmod(0o755)
+    done = subprocess.run(
+        ["bash", "-c", f'set -e\n{block}\necho "$LAST_BACKUP"'],
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": f"{tmp_path}:/usr/bin:/bin",
+            "NS": "ospreyflow-poc",
+            "PREFIX": "ospreyflow-poc-1a2b3c4d-",
+            "PY": sys.executable,
+        },
+    )
+    assert done.returncode == 0, done.stderr
+    assert re.fullmatch(
+        r"s3://ospreyflow-poc-1a2b3c4d-backups/sets/\d{8}T\d{6}Z/",
+        done.stdout.strip().splitlines()[-1],
+    ), done.stdout
+
+
+def test_the_entra_registrations_are_asked_for_before_the_deployment(
+    runbooks: dict[str, str],
+) -> None:
+    """R1's reading of the install: step 6 said "Before step 5, the client's Entra administrator
+    registers ...", read after step 5 by anyone running the blocks in order. The registrations,
+    with the tenant and both application ids, are asked for in what the install needs, before its
+    first block."""
+    text = runbooks["INSTALL.md"]
+    needs = text[text.index("**What it needs.**") : text.index("## 1.")]
+    for named in (
+        "00000000-1111-4222-8333-444444444444",
+        "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+        "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    ):
+        assert named in needs, named
+    assert "Before step 5" not in text[text.index("## 5.") :]
+
+
+def test_a_block_for_later_is_never_in_the_sequence(runbooks: dict[str, str], tmp_path: Any) -> None:
+    """R1's reading: both runbooks say "run each block in order", yet the decommission's step 9
+    (when the retention ends: the kept backups bucket emptied and deleted, its key scheduled for
+    deletion) was a `bash platform` block in that order, so a platform team following it to the
+    letter would destroy the retained last backup at the decommission itself; and the install's way
+    back in (only when no administrator is left) stood in the sequence too. Each is fenced
+    `bash later`: in neither sequence, still shell that parses, and the runbook says what the fence
+    means before its first block."""
+    import subprocess
+
+    for name, marker in (
+        ("DECOMMISSION.md", "aws kms schedule-key-deletion"),
+        ("INSTALL.md", "rollout status deploy/api --timeout 10m"),
+    ):
+        text = runbooks[name]
+        for on_the_platform in (True, False):
+            assert not any(marker in b for b in command_blocks(text, on_the_platform=on_the_platform)), name
+        held = [b for b in _LATER.findall(text) if marker in b]
+        assert len(held) == 1, name
+        script = tmp_path / "later.sh"
+        script.write_text(held[0], encoding="utf-8")
+        assert subprocess.run(["bash", "-n", str(script)]).returncode == 0, name
+        assert text.index("`bash later`") < text.index("```bash"), name
+
+
+def test_the_install_check_says_what_its_curl_options_are(runbooks: dict[str, str]) -> None:
+    """Step 7's `OSPREY_CURL_OPTS` was named nowhere: a team whose ingress certificate is not
+    publicly trusted had no way to know it is where curl's `--cacert` goes."""
+    text = runbooks["INSTALL.md"]
+    step = text[text.index("## 7.") :]
+    prose = step[: step.index("```")]
+    assert "OSPREY_CURL_OPTS" in prose and "--cacert" in prose
+
+
+def test_the_install_says_how_the_ospreyflow_command_is_installed(runbooks: dict[str, str]) -> None:
+    """R1 on kind, install block 2: "no ospreyflow command: put .venv/bin on PATH". `uv sync --frozen`
+    makes `.venv` from the checkout's own project, and the command is another package (`cli/`, which
+    `install.sh` installs with `uv tool install`), so `.venv/bin/ospreyflow` never exists and the
+    runbook's own remedy could not work."""
+    core = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
+    root = tomllib.loads((core / "pyproject.toml").read_text())
+    assert "ospreyflow" not in root.get("project", {}).get("scripts", {})  # the premise: not in .venv
+    text = runbooks["INSTALL.md"]
+    assert ".venv/bin/ospreyflow" not in text
+    assert "put .venv/bin on PATH" not in text
+    needs = text[text.index("**What it needs.**") : text.index("## 1.")]
+    block = command_blocks(text, on_the_platform=False)[1]
+    for words in (needs, block):
+        assert "uv tool install ./cli" in words and "~/.local/bin" in words
+
+
+def test_the_install_ends_with_what_only_the_real_tenant_can_show(runbooks: dict[str, str]) -> None:
+    """R1 signed in through a stand-in for Entra ID (the owner's ruling, 13 November 2026): its tokens
+    were minted beside it, so nothing about the client's own tenant was shown. The install ends with a
+    section, marked as such, of what the platform team checks against the real tenant, each item named,
+    and none of it in the sequence of blocks (it needs a person at a browser)."""
+    text = runbooks["INSTALL.md"]
+    assert "## 8. Against the client's real tenant" in text
+    section = text[text.index("## 8. Against the client's real tenant") :]
+    assert "```" not in section
+    for item in ("requestedAccessTokenVersion", "AADSTS50105", "guest", "200 groups", "no role",
+                 "OFFICIAL", "signing key"):
+        assert item in section, item
+
+
 def test_no_command_needs_more_than_a_namespace_s_rights(runbooks: dict[str, str]) -> None:
     """The client's team is the namespace's tenant: no block lists or changes anything cluster-wide
     (volumes, every kind there is), and the disks are read from the account, by the claims'
@@ -273,10 +423,10 @@ def test_the_install_runbook_signs_in_with_entra_and_runs_no_realm_step(
     Keycloak)."""
     text = runbooks["INSTALL.md"]
     step = text[text.index("## 6.") : text.index("## 7.")]
+    # The two registrations are asked for before step 5, in what the install needs (R1;
+    # `test_the_entra_registrations_are_asked_for_before_the_deployment`).
     named = (
         "00000000-1111-4222-8333-444444444444",  # the tenant
-        "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",  # the Glass's registration
-        "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",  # the API's
         "50000000-0000-4000-8000-000000000001",  # the first administrator
     )
     assert [n for n in named if n not in step] == []
@@ -298,8 +448,15 @@ def test_the_install_runbook_says_how_to_recover_when_no_administrator_is_left(
     assert "cloud_platform.claims.first_administrators" in recovery
     assert "only when nobody can manage people" in " ".join(recovery.split())
     assert "grant_first_administrator" in recovery
-    assert "harness.render" in recovery
-    assert 'kubectl -n "$NS" rollout restart deploy/api' in recovery
+    # R1: the list is in the ConfigMap, so a render and a restart alone read the old list; the
+    # recovery renders pinned, installs the values, then waits for the Conduit.
+    (block,) = _LATER.findall(recovery)  # in no sequence: only when no administrator is left
+    lines = block.splitlines()
+    assert [i for i, x in enumerate(lines) if "harness.render" in x] == [0], block
+    assert "--allow-unpinned" not in block
+    assert lines[1].startswith('helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml"')
+    assert 'kubectl -n "$NS" rollout status deploy/api' in lines[-1]
+    assert "(step 4)" in recovery
 
 
 # ---- CPU limits (the orchestrator's D2c finding on LimitRanges) --------------------------------
@@ -384,3 +541,156 @@ def test_the_standard_shape_leaves_the_configuration_s_copy_as_it_was() -> None:
         yaml.safe_load(_values(_config())["files"]["osprey.yaml"])["cloud_platform"]["shape"]
         == "poc"
     )
+
+
+def test_the_install_checks_the_certificate_secret_the_settings_name() -> None:
+    """R1's reading: `cloud_platform.tls_secret` names a Secret the platform's team makes, and step
+    2 checked every other Secret the deployment reads but that one, so a missing certificate first
+    showed at step 7 as curl's TLS error. Named, it is checked with the rest; not named, the
+    platform's wildcard is used and nothing is checked."""
+    poc = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
+    poc["cloud_platform"]["tls_secret"] = "ospreyflow-poc-certificate"
+    named = render(OspreyConfig.model_validate(poc), resolver=_resolver).artefacts["INSTALL.md"]
+    step = named[named.index("## 2.") : named.index("## 3.")]
+    (check,) = [b for b in command_blocks(step, on_the_platform=False) if "get secret" in b]
+    assert "ospreyflow-poc-certificate" in check.splitlines()[0]
+    unnamed = _artefacts(_config())["INSTALL.md"]
+    assert "certificate" not in unnamed[unnamed.index("## 2.") : unnamed.index("## 3.")]
+
+
+# ---- the values, pinned (install step 4) ------------------------------------------------------
+
+_OURS = "ghcr.io/ospreyflow/"
+_REGISTRY = "123456789012.dkr.ecr.eu-west-2.amazonaws.com/"
+
+
+def _registry_only(ref: str) -> str | None:
+    """As a release's build machine finds them at install step 4: ours are in the namespace's registry
+    (step 3 pushed them) and not at ghcr.io for an unpublished head, nor where ghcr.io is out of reach."""
+    return None if ref.startswith(_OURS) else _resolver(ref)
+
+
+def test_the_pinned_render_needs_ours_only_in_the_namespace_s_registry() -> None:
+    """R1 on kind, install block 8: the pinned render refused ghcr.io/ospreyflow/*'s digests, which it
+    asked for before taking each of ours from the registry's copy instead. Every test's resolver
+    answered any reference, so none could see it (rule 15: the fake refuses what the real one does)."""
+    artefacts = render(_config(), resolver=_registry_only).artefacts
+    values = yaml.safe_load(artefacts["values.yaml"])
+    images = {w["name"]: w["image"] for w in values["workloads"]}
+    lock = {e["service"]: e for e in yaml.safe_load(artefacts["versions.lock"])["images"]}
+    for name in ("api", "workspace", "worker"):
+        reference, digest = images[name].split("@")
+        assert reference.startswith(_REGISTRY + "ospreyflow/"), images[name]
+        assert digest == _resolver(reference), images[name]
+        # The lock names the image whose digest it records: the registry's copy, as the values pin.
+        assert lock[name]["repository"] == reference.rsplit(":", 1)[0], lock[name]
+        assert lock[name]["digest"] == digest
+
+
+def test_the_pinned_render_before_the_push_names_the_registry_s_copies() -> None:
+    """Before step 3's push the registry holds none of ours: refused, naming the copies it lacks."""
+    from harness.render import UnpinnedImagesError
+
+    with pytest.raises(UnpinnedImagesError) as refused:
+        render(_config(), resolver=lambda ref: None if "/ospreyflow/" in ref else _resolver(ref))
+    assert _REGISTRY + "ospreyflow/api:" in str(refused.value)
+    assert _OURS not in str(refused.value)
+
+
+def test_the_decommission_removes_a_restore_s_jobs_before_the_claims(runbooks: dict[str, str]) -> None:
+    """R1 on kind, finding 12: step 4 waited ten minutes and failed on `databases-arcadedb-0`. A restore's
+    Jobs are applied from `helm template`, not installed, so `helm uninstall` leaves them, and their
+    finished pods still name the claims, which Kubernetes then keeps (`kubernetes.io/pvc-protection`).
+    Step 3 removes the release's Jobs and waits for their pods to go, before step 4 removes a claim."""
+    text = runbooks["DECOMMISSION.md"]
+    blocks = command_blocks(text, on_the_platform=False)
+    jobs = next(i for i, b in enumerate(blocks) if "delete job" in b)
+    claims = next(i for i, b in enumerate(blocks) if "delete pvc" in b)
+    assert jobs < claims
+    line = next(x for x in blocks[jobs].splitlines() if "delete job" in x)
+    assert '-l app.kubernetes.io/instance="$RELEASE"' in line
+    assert "--cascade=foreground" in line and "--wait" in line  # their pods gone, not only the Jobs
+    step3 = text[text.index("## 3. The workloads") : text.index("## 4. The claims")]
+    assert "pvc-protection" in step3 or "keeps a claim" in step3
+
+
+def test_every_workload_that_serves_a_port_says_when_it_is_ready(poc: dict[str, Any]) -> None:
+    """R1 on kind, finding 14: the Conduit and the Glass had no readiness probe (no compose healthcheck to
+    translate), so a pod was ready the moment its container started: every `rollout status` and the
+    install's `helm --wait` passed before either listened, and after a restore the door answered 503."""
+    unready = [w["name"] for w in poc["workloads"] if w.get("ports") and not w.get("probe")]
+    assert unready == []
+    by_name = _by_name(poc)
+    assert "127.0.0.1:8000/healthz" in " ".join(by_name["api"]["probe"]["exec"])
+    assert "127.0.0.1:8080/" in " ".join(by_name["workspace"]["probe"]["exec"])
+
+
+
+def test_the_install_says_how_many_connections_the_managed_postgres_must_allow(
+    runbooks: dict[str, str],
+) -> None:
+    """R1 on kind, finding 15: a new Conduit beside the old one in a rolling update failed at start with
+    `TooManyConnectionsError` (the stand-in allows PostgreSQL's 100; one Conduit held 51 at rest). A
+    managed Postgres's limit follows its instance class unless its parameter group sets it, so the
+    install says the least to set: two Conduits (the update's old and new), the worker opening the same
+    stores, the gateway and an operator's reserve. The Conduit's figures are ADR-114 Amendment 43's
+    (`harness.profiles` once lane/admin-pg merges, held there by a running Conduit's own pools); this
+    test takes them from there when they are, and never keeps a second count beside them."""
+    import importlib
+
+    from harness.cloud_platform import runbooks as rb
+
+    profiles = importlib.import_module("harness.profiles")
+    for name in ("CONDUIT_POOL_CEILING", "RUNNING_LOADS_ALLOWED", "GATEWAY_POOL_MAX", "OPERATOR_RESERVE"):
+        if hasattr(profiles, name):
+            assert getattr(rb, name) == getattr(profiles, name), name
+    assert rb.POSTGRES_MAX_CONNECTIONS == (
+        2 * (rb.CONDUIT_POOL_CEILING + rb.RUNNING_LOADS_ALLOWED)
+        + rb.CONDUIT_POOL_CEILING + rb.RUNNING_LOADS_ALLOWED  # the worker opens the same stores
+        + rb.GATEWAY_POOL_MAX + rb.OPERATOR_RESERVE
+    )
+    needs = runbooks["INSTALL.md"]
+    needs = needs[needs.index("**What it needs.**") : needs.index("## 1.")]
+    assert f"`max_connections` of at least {rb.POSTGRES_MAX_CONNECTIONS}" in needs
+    assert "parameter group" in needs and "Amendment 43" in needs
+
+
+def test_the_decommission_s_settings_hold_after_step_7_removes_their_secret(
+    runbooks: dict[str, str], tmp_path: Any
+) -> None:
+    """R1 on kind, finding 16: step 1 read the bucket prefix from the Secret that step 7's Terraform
+    removal deletes, so a team whose decommission stopped at step 8 could not open a shell and go on:
+    step 1 itself refused. Step 1 keeps the prefix in its working folder, and a run after step 7 reads
+    it back there (or takes the PREFIX the team gives); with neither, it says how to give it."""
+    import subprocess
+
+    text = runbooks["DECOMMISSION.md"]
+    step = text[text.index("## 1. The settings") : text.index("## 2.")]
+    (_settings_block, prefix_block) = command_blocks(step, on_the_platform=False)
+    folder = tmp_path / "render"
+    (folder / "terraform").mkdir(parents=True)
+    (folder / "values.yaml").write_text("x: 1\n")
+    stub = tmp_path / "bin" / "kubectl"
+    stub.parent.mkdir()
+
+    def run(secret: str | None, **env: str) -> subprocess.CompletedProcess[str]:
+        answer = f"printf %s {base64.b64encode(secret.encode()).decode()}" if secret else "echo 'NotFound' >&2; exit 1"
+        stub.write_text(f"#!/bin/sh\n{answer}\n")
+        stub.chmod(0o755)
+        return subprocess.run(
+            ["bash", "-c", f'set -e\n{prefix_block}\necho "PREFIX=$PREFIX"'], capture_output=True, text=True,
+            env={"PATH": f"{stub.parent}:/usr/bin:/bin", "NS": "ospreyflow-poc", "FOLDER": str(folder),
+                 "WORK": str(tmp_path / "work"), **env},
+        )  # fmt: skip
+
+    (tmp_path / "work").mkdir()
+    first = run("ospreyflow-poc-1a2b3c4d-")
+    assert first.returncode == 0 and first.stdout.strip().endswith("PREFIX=ospreyflow-poc-1a2b3c4d-"), first.stderr
+    after_step_7 = run(None)  # a new shell, the Secret gone
+    assert after_step_7.returncode == 0, after_step_7.stdout + after_step_7.stderr
+    assert after_step_7.stdout.strip().endswith("PREFIX=ospreyflow-poc-1a2b3c4d-")
+    given = run(None, PREFIX="ospreyflow-poc-9z9z9z9z-")
+    assert given.stdout.strip().endswith("PREFIX=ospreyflow-poc-9z9z9z9z-")
+    (tmp_path / "work" / "prefix").unlink()
+    neither = run(None)
+    assert neither.returncode != 0 and "PREFIX=" in neither.stdout + neither.stderr

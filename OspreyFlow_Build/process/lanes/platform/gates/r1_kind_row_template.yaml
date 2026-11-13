@@ -1,0 +1,25 @@
+# R1's load (r1_kind.py check): a person and the synthetic number they use, mapped as an analyst maps a
+# two-column file in the Ingest Studio (the shape of tests/ingest/fixtures/visits_contacts_calls). Synthetic.
+row_template:
+  entities:
+    - ref: person
+      pole_class: person
+      type: Person
+      on_match: create
+      properties:
+        family_name: {field: family_name}
+        given_names: {field: given_names}
+    - ref: phone
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: phone}
+        value_normalised: {field: phone, transform: msisdn}
+        endpoint_kind: {literal: msisdn}
+  edges:
+    - type: USES
+      from: person
+      to: phone
+unmapped_fields: []

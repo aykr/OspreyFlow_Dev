@@ -8,7 +8,8 @@ shell, and stopped at the first command that fails. A block fenced `bash` runs w
 runbook is followed; a block fenced `bash platform` only on the client's platform (the Terraform
 pull requests, the registry's sign-in and the AWS accounts' own commands), for which a rehearsal on
 a local cluster supplies its stand-in instead (the files the platform's blocks would write) and
-says so. `command_blocks` reads them back, so a rehearsal runs the text the client's team reads.
+says so. A block fenced `bash later` is in no sequence (R1): the way back in when no administrator
+is left, and the backups' removal when their retention ends, each run only when its words say. `command_blocks` reads them back, so a rehearsal runs the text the client's team reads.
 Every command runs with the rights a namespace's tenant has: nothing cluster-wide is listed or
 changed (the disks are the platform team's command), and every AWS call names its region.
 """
@@ -32,6 +33,21 @@ CHART = "deploy/helm/ospreyflow"
 RENDER = '"$PY" -m harness.render --config "$CONFIG"'
 
 _FENCE = re.compile(r"^```bash( platform)?\n(.*?)^```\n", re.S | re.M)
+
+
+#: The managed PostgreSQL's least `max_connections` (R1 on kind, finding 15). The Conduit's figures are
+#: ADR-114 Amendment 43's (lane/admin-pg: `harness.profiles`, where a running Conduit's own pools hold
+#: them; `test_cloud_platform_poc.py` holds these equal to them once it merges): one Conduit's pools at
+#: their `max_size`, and the one connection each running load holds outside them.
+CONDUIT_POOL_CEILING = 220
+RUNNING_LOADS_ALLOWED = 20
+GATEWAY_POOL_MAX = 10
+OPERATOR_RESERVE = 20
+#: Two Conduits (an update's old and new pods, side by side), the worker (which opens the same stores),
+#: the gateway, and an operator's reserve. No Keycloak or Superset on this profile.
+POSTGRES_MAX_CONNECTIONS = (
+    3 * (CONDUIT_POOL_CEILING + RUNNING_LOADS_ALLOWED) + GATEWAY_POOL_MAX + OPERATOR_RESERVE
+)
 
 
 def command_blocks(text: str, *, on_the_platform: bool) -> list[str]:
@@ -78,6 +94,8 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
     assert cp is not None and cp.namespace is not None and cp.registry is not None
     secrets = platform.secrets
     theirs = " ".join(s.name for s in (secrets.postgres, secrets.redis, secrets.s3))
+    if cp.tls_secret:  # the certificate the platform's team makes for the deployment's name (R1)
+        theirs += f" {cp.tls_secret}"
     rollouts = "\n".join(
         f'kubectl -n "$NS" rollout status {w["kind"].lower()}/{w["name"]} --timeout=900s'
         for w in values["workloads"]
@@ -96,17 +114,28 @@ renders it again, pinned.
 **What it needs.** The release's `OspreyFlow_Core` folder, at the release's tag: `ospreyflow images
 push` builds our images from its Dockerfiles and source, so it must be the release these files were
 rendered from (`git describe --tags` names it). In it: the release's environment (`uv sync
---frozen`, which makes `.venv`), the `ospreyflow` command (`.venv/bin/ospreyflow`, or the release's
-own install of it), and the deployment's `osprey.yaml` (or `CONFIG` naming it). Then `kubectl`
+--frozen`, which makes `.venv`), the `ospreyflow` command (its own package: `uv tool install ./cli`
+from that folder puts it in `~/.local/bin`, which must be on `PATH`), and the deployment's `osprey.yaml` (or `CONFIG` naming it). Then `kubectl`
 pointed at the namespace, `helm` 3.16 or later, Docker with `buildx`, the AWS command line (v2)
 signed in to the namespace's account, and bash. Run each block in order, in one bash shell, from
 that folder. If a command fails, stop there: put right what it says, then run its block again.
+A block fenced `bash later` is not part of that order: the words before it say when, if ever, it is run.
+
+**Before step 5, from the client's Entra administrator** (ADR-148 Amendment 8; step 6 checks it):
+two app registrations in tenant `{claims.tenant_id}`, the Glass (application id `{claims.client_id}`)
+and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the Glass is
+granted), with the claims `cloud_platform.claims` names.
+
+**The managed PostgreSQL** allows a `max_connections` of at least {POSTGRES_MAX_CONNECTIONS}: two Conduits
+side by side during an update, the worker, the gateway and a reserve (ADR-114 Amendment 43's figures). RDS
+derives it from the instance's memory unless its parameter group sets it (a db.t3.medium gives about 410),
+so set it there; with too few, the new Conduit of an update stops at `TooManyConnectionsError`.
 {_bare_connector_hosts(cp.connector_hosts)}
 ## 1. The settings and the namespace
 
 {_settings(config, platform)}
 ```bash
-command -v ospreyflow >/dev/null || {{ echo "no ospreyflow command: put .venv/bin on PATH"; false; }}
+command -v ospreyflow >/dev/null || {{ echo "no ospreyflow command: uv tool install ./cli, and put ~/.local/bin on PATH"; false; }}
 docker buildx version >/dev/null || {{ echo "Docker's buildx is needed to build the images"; false; }}
 kubectl auth can-i create statefulsets -n "$NS"
 kubectl auth can-i create persistentvolumeclaims -n "$NS"
@@ -116,7 +145,7 @@ kubectl auth can-i create persistentvolumeclaims -n "$NS"
 
 Copy `$FOLDER/terraform/` into the namespace's folder in the environments repository and raise the
 pull request. Once it is applied, the namespace holds the managed stores' Secrets, our Secret and the
-service account the Conduit reads S3 as.
+service account the Conduit reads S3 as{f", and the platform's team has made the certificate's Secret, `{cp.tls_secret}`" if cp.tls_secret else ""}.
 
 ```bash platform
 echo "Raise the pull request with $FOLDER/terraform/, and wait for it to be applied."
@@ -166,10 +195,8 @@ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --t
 ## 6. Sign-in: Entra ID and the first administrators
 
 People sign in with the client's own Entra ID (ADR-148 Amendment 8): there is no sign-in service of
-ours to set up. Before step 5, the client's Entra administrator registers the Glass (application id
-`{claims.client_id}`) and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the
-Glass is granted), in tenant `{claims.tenant_id}`, with the claims `cloud_platform.claims` names. The
-first administrators ({", ".join(claims.first_administrators)}) were given the Admin role when the
+ours to set up, only the two app registrations *What it needs* asks for, in tenant
+`{claims.tenant_id}`. The first administrators ({", ".join(claims.first_administrators)}) were given the Admin role when the
 Conduit first started; they give everyone else their roles in Admin › People. Check the Conduit reads
 Entra's settings:
 
@@ -179,24 +206,55 @@ kubectl -n "$NS" exec deploy/api -- printenv OSPREY_IDENTITY_PROVIDER OIDC_ISSUE
 
 **If no administrator is left** (nobody enabled who has signed in can manage people): add the Entra
 object id of a person who is not disabled here to `cloud_platform.claims.first_administrators` in
-`osprey.yaml`, render again (step 3) and restart the Conduit. At start, and only when nobody can
+`osprey.yaml`, render again (step 4) and install the new values: the list is in the deployment's
+ConfigMap, so a restart alone would read the old one, and the install restarts the Conduit. At start, and only when nobody can
 manage people, the Conduit adds the Admin role to each one named there, and audits it
 (`grant_first_administrator`). While anyone can manage people, it changes nobody's roles.
 
-```bash
+```bash later
 {RENDER}
-kubectl -n "$NS" rollout restart deploy/api
+helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m
 kubectl -n "$NS" rollout status deploy/api --timeout 10m
 ```
 
 ## 7. Check
 
-The doors answer through the platform's ingress ({", ".join(hosts)}).
+The doors answer through the platform's ingress ({", ".join(hosts)}): `/healthz` is the Conduit's,
+answered through the Glass. `OSPREY_CURL_OPTS` is curl's options for that door, if it needs any:
+where the ingress's certificate is signed by a CA your machine does not trust, export
+`OSPREY_CURL_OPTS="--cacert <that CA's file>"` first.
 
 ```bash
 curl -fsS ${{OSPREY_CURL_OPTS:-}} "https://{glass}/healthz" >/dev/null && echo "the Glass answers"
 kubectl -n "$NS" get pods
 ```
+
+## 8. Against the client's real tenant (once, with the client's Entra administrator)
+
+**This section is not a block to run: each item needs a person at a browser.** Our own acceptance
+signed in through a stand-in for Entra ID, which can show how the Conduit treats a token but nothing
+about how tenant `{claims.tenant_id}` is set up. Only the real tenant shows these. If any item fails,
+stop and raise it with the client's Entra administrator before anyone else is told the service is ready.
+
+1. **Token version.** With `token_version` 2.0, the API registration's manifest has
+   `requestedAccessTokenVersion` set to 2. Without it, Entra issues v1.0 tokens with another issuer,
+   and every sign-in is refused.
+2. **The first administrator.** One of {", ".join(claims.first_administrators)} signs in at
+   `https://{glass}`. Admin › People lists them with Admin, and their clearance (for example
+   OFFICIAL-SENSITIVE), unit and handling codes are the ones their groups give. If they are not, the
+   claims set in the registration (`claims_mapping_policy`, optional claims) do not send what
+   `cloud_platform.claims` names.
+3. **A person given no role.** A member of the tenant whom no administrator has given a role signs in,
+   is listed in Admin › People with no role, and sees no case and no Admin.
+4. **Who may sign in at all.** If the Glass's enterprise application has *Assignment required*, a person
+   who is not assigned is refused by Entra itself (AADSTS50105) and never reaches the deployment. If it
+   does not, every member of the tenant can sign in, with no role until given one: confirm which the
+   client wants.
+5. **A guest.** A guest (B2B) account signs in and is refused.
+6. **Many groups.** A person in more than 200 groups is refused in words, because Entra then leaves the
+   groups out of the token. Limit the claim to the groups assigned to the application.
+7. **Keys.** Entra rolls its signing key unannounced. The Conduit fetches the tenant's keys again
+   within five minutes. A sign-in still refused for an unknown key after that is a fault: report it.
 """
 
 
@@ -226,13 +284,22 @@ backup in them, until the retention you agree ends; section 9 removes them then.
 deployment's rendered folder, `kubectl` pointed at the namespace, `helm`, the AWS command line (v2)
 signed in to the namespace's account, and bash. Run each block in order, in one bash shell, from
 that folder; if a command fails, stop there.
+A block fenced `bash later` is not part of that order: the words before it say when, if ever, it is run.
 
 ## 1. The settings
 
+The bucket prefix is read from `{secrets.s3.name}`, which step 7 removes, and kept in `$WORK/prefix`: a
+shell opened after step 7 (to finish step 8, say) reads it back there. Give `PREFIX` yourself if that
+file has gone too.
+
 {_settings(config, platform)}
 ```bash
-export PREFIX="$(kubectl -n "$NS" get secret {secrets.s3.name} -o jsonpath='{{.data.{secrets.s3.keys["prefix"]}}}' | base64 -d)"
-test -n "$PREFIX" || {{ echo "no bucket prefix in {secrets.s3.name}"; false; }}
+if [ -z "${{PREFIX:-}}" ]; then
+  PREFIX="$(cat "$WORK/prefix" 2>/dev/null || kubectl -n "$NS" get secret {secrets.s3.name} -o jsonpath='{{.data.{secrets.s3.keys["prefix"]}}}' | base64 -d)"
+fi
+export PREFIX
+test -n "$PREFIX" || {{ echo "no bucket prefix in {secrets.s3.name} nor in $WORK/prefix: give it, PREFIX=<the buckets' prefix>"; false; }}
+printf '%s\n' "$PREFIX" > "$WORK/prefix"
 cp "$FOLDER/values.yaml" "$WORK/values.yaml" && rm -rf "$WORK/terraform" && cp -R "$FOLDER/terraform" "$WORK/terraform"
 ```
 
@@ -251,17 +318,21 @@ fi
 kubectl -n "$NS" wait --for=jsonpath='{{.status.conditions[0].status}}'=True "job/ospreyflow-backup-$S" --timeout=6h
 kubectl -n "$NS" get job "ospreyflow-backup-$S" -o jsonpath='{{.status.succeeded}}' | grep -qx 1 \\
   || {{ echo "the last backup did not finish: read its log (kubectl -n $NS logs job/ospreyflow-backup-$S)"; false; }}
-export LAST_BACKUP="s3://$PREFIX{BUCKET_SUFFIX}/sets/$("$PY" -c 'import datetime, sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]) * 60, datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"))' "$S")/"
-case "$LAST_BACKUP" in "s3://$PREFIX{BUCKET_SUFFIX}/sets/"*) echo "the last backup: $LAST_BACKUP";; *) false;; esac
+export LAST_BACKUP="s3://${{PREFIX}}{BUCKET_SUFFIX}/sets/$("$PY" -c 'import datetime, sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]) * 60, datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"))' "$S")/"
+echo "the last backup: $LAST_BACKUP"
 ```
 
 ## 3. The workloads
 
 `helm uninstall` removes what the chart made, but keeps every claim: each store's own and the shared
-ones (`helm.sh/resource-policy: keep`), which hold the data.
+ones (`helm.sh/resource-policy: keep`), which hold the data. A restore's Jobs were applied from `helm
+template`, not installed, so they stay: their finished pods still name the claims, and Kubernetes keeps a
+claim while any pod names it (`kubernetes.io/pvc-protection`), so step 4 would wait and fail. They are
+removed here, their pods with them.
 
 ```bash
 helm uninstall "$RELEASE" -n "$NS" --wait --timeout 15m || helm status "$RELEASE" -n "$NS" 2>&1 | grep -q 'not found'
+kubectl -n "$NS" delete job -l app.kubernetes.io/instance="$RELEASE" --cascade=foreground --ignore-not-found --wait --timeout=10m
 ```
 
 ## 4. The claims
@@ -353,14 +424,14 @@ platform's and stay.
 : "${{BACKUP_RETENTION_DAYS:?the retention you agree for the kept backups, in days}}"
 printf '{{"Rules": [{{"ID": "abort-unfinished-uploads", "Status": "Enabled", "Filter": {{"Prefix": ""}}, "AbortIncompleteMultipartUpload": {{"DaysAfterInitiation": 7}}}}, {{"ID": "retained-sets", "Status": "Enabled", "Filter": {{"Prefix": "sets/"}}, "Expiration": {{"Days": %d}}, "NoncurrentVersionExpiration": {{"NoncurrentDays": 7}}}}, {{"ID": "remove-expired-markers", "Status": "Enabled", "Filter": {{"Prefix": "sets/"}}, "Expiration": {{"ExpiredObjectDeleteMarker": true}}}}]}}' \\
   "$BACKUP_RETENTION_DAYS" > "$WORK/retention.json"
-aws s3api put-bucket-lifecycle-configuration --region "$REGION" --bucket "$PREFIX{BUCKET_SUFFIX}" \\
+aws s3api put-bucket-lifecycle-configuration --region "$REGION" --bucket "${{PREFIX}}{BUCKET_SUFFIX}" \\
   --lifecycle-configuration "file://$WORK/retention.json"
-aws s3api get-bucket-lifecycle-configuration --region "$REGION" --bucket "$PREFIX{BUCKET_SUFFIX}" | grep -q retained-sets
+aws s3api get-bucket-lifecycle-configuration --region "$REGION" --bucket "${{PREFIX}}{BUCKET_SUFFIX}" | grep -q retained-sets
 M="${{TF_MODULE:+$TF_MODULE.}}"   # the deployment's module in the environments repository, if any
 removed=0
 for kept in {" ".join(KEPT_AT_DECOMMISSION)}; do tofu state rm "$M$kept" >/dev/null 2>&1 && removed=$((removed + 1)); done
 test "$removed" -gt 0 || {{ echo "no kept resource was in the state (is TF_MODULE right?): stop"; false; }}
-tofu state list | grep -E '(^|\.)({"|".join(re.escape(k) for k in KEPT_AT_DECOMMISSION)})$' && {{ echo "a kept resource is still in the state: stop"; false; }}
+tofu state list | grep -E '(^|[.])({"|".join(re.escape(k) for k in KEPT_AT_DECOMMISSION)})$' && {{ echo "a kept resource is still in the state: stop"; false; }}
 echo "Raise the pull request removing $FOLDER/terraform/'s files, and wait for it to be applied."
 ```
 
@@ -431,8 +502,8 @@ Only then the key: its own policy refuses everyone its deletion, so that policy 
 by one keeping the account's administration, and the deletion scheduled (thirty days, cancellable).
 A key deleted while the bucket still held a set would leave that set unreadable.
 
-```bash platform
-B="$PREFIX{BUCKET_SUFFIX}"
+```bash later
+B="${{PREFIX}}{BUCKET_SUFFIX}"
 aws s3api delete-bucket-policy --region "$REGION" --bucket "$B"
 while :; do
   aws s3api list-object-versions --region "$REGION" --bucket "$B" --max-items 500 --output json \\
@@ -454,10 +525,10 @@ aws kms delete-alias --region "$REGION" --alias-name "alias/{cp.namespace}-backu
 A procedure of the platform team's and the account's administrators, who alone may change the kept
 bucket's and key's policies; not yet rehearsed, so rehearse it before relying on it. Its steps:
 
-1. **Into this namespace again:** the kept bucket (`$PREFIX{BUCKET_SUFFIX}`) and alias
+1. **Into this namespace again:** the kept bucket (`${{PREFIX}}{BUCKET_SUFFIX}`) and alias
    (`alias/{cp.namespace}-backups`) are taken, so the reinstall's Terraform must not make its own:
    before its first apply, the platform team imports them into its state
-   (`tofu import aws_s3_bucket.backups "$PREFIX{BUCKET_SUFFIX}"`, `tofu import aws_kms_key.backups <the key's ID>`,
+   (`tofu import aws_s3_bucket.backups "${{PREFIX}}{BUCKET_SUFFIX}"`, `tofu import aws_kms_key.backups <the key's ID>`,
    `tofu import aws_kms_alias.backups alias/{cp.namespace}-backups`, and the bucket's settings likewise); that
    apply then writes the new roles into the kept bucket's and key's policies itself.
 2. **Into another namespace:** the administrators replace the kept bucket's policy (`BackupRolesOnly`'s

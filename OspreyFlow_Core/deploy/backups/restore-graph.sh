@@ -44,7 +44,10 @@ fi
 rm -rf "$new" # a killed run's, never the live one
 cd /home/arcadedb || refuse "no ArcadeDB in this image"
 ./bin/restore.sh -f "file://$zip" -d "$new" || refuse "ArcadeDB's restore of the set's zip failed"
-java -cp "lib/*" "$check" "$new" "$zip" || refuse "the restored database is not the set's"
+# The check from the zip's own folder (the Job's scratch): ArcadeDB opens ./log where it runs, and the
+# Job's user (the chart's, not the image's) cannot write /home/arcadedb (R1, finding 11).
+(cd "$(dirname "$zip")" && java -cp "/home/arcadedb/lib/*" "$check" "$new" "$zip") \
+    || refuse "the restored database is not the set's"
 aside=no
 if [ -e "$live" ]; then
     mv "$live" "$old" || refuse "the live database could not be set aside"

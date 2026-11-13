@@ -1,0 +1,87 @@
+# DECOMMISSION.md as rendered, run from block 9 at 766ca76
+
+=== DECOMMISSION block 1 (step 1. The settings) ===
+  $ export NS=ospreyflow-poc RELEASE=ospreyflow FOLDER=deploy/generated/cloud-platform CHART=deploy/helm/ospreyflow REGION=eu-west-2
+  $ export CONFIG="${CONFIG:-osprey.yaml}" PY="${PY:-.venv/bin/python}" PYTHONPATH=.:packages
+  $ export WORK="${TMPDIR:-/tmp}/ospreyflow-$NS" && mkdir -p "$WORK"
+  $ test -n "$BASH_VERSION" || { echo "run these blocks in bash"; false; }
+  $ test -x "$PY" || { echo "no $PY: make the release's environment first (uv sync --frozen)"; false; }
+  $ command -v kubectl >/dev/null && command -v helm >/dev/null || { echo "kubectl and helm are needed"; false; }
+  $ test "$(kubectl config view --minify -o jsonpath='{..namespace}')" = "$NS" \
+  $   || { echo "kubectl's context is not the namespace $NS: kubectl config set-context --current --namespace=$NS"; false; }
+
+=== DECOMMISSION block 2 (step 1. The settings) ===
+  $ if [ -z "${PREFIX:-}" ]; then
+  $   PREFIX="$(cat "$WORK/prefix" 2>/dev/null || kubectl -n "$NS" get secret s3-bucket-output -o jsonpath='{.data.bucket_prefix}' | base64 -d)"
+  $ fi
+  $ export PREFIX
+  $ test -n "$PREFIX" || { echo "no bucket prefix in s3-bucket-output nor in $WORK/prefix: give it, PREFIX=<the buckets' prefix>"; false; }
+  $ printf '%s
+  $ ' "$PREFIX" > "$WORK/prefix"
+  $ cp "$FOLDER/values.yaml" "$WORK/values.yaml" && rm -rf "$WORK/terraform" && cp -R "$FOLDER/terraform" "$WORK/terraform"
+
+=== DECOMMISSION block 9 (step 7. The namespace's resources (the platform team's pull request)) [the platform: stand-in] ===
+  (platform) : "${BACKUP_RETENTION_DAYS:?the retention you agree for the kept backups, in days}"
+  (platform) printf '{"Rules": [{"ID": "abort-unfinished-uploads", "Status": "Enabled", "Filter": {"Prefix": ""}, "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 7}}, {"ID": "retained-sets", "Status": "Enabled", "Filter": {"Prefix": "sets/"}, "Expiration": {"Days": %d}, "NoncurrentVersionExpiration": {"NoncurrentDays": 7}}, {"ID": "remove-expired-markers", "Status": "Enabled", "Filter": {"Prefix": "sets/"}, "Expiration": {"ExpiredObjectDeleteMarker": true}}]}' \
+  (platform)   "$BACKUP_RETENTION_DAYS" > "$WORK/retention.json"
+  (platform) aws s3api put-bucket-lifecycle-configuration --region "$REGION" --bucket "${PREFIX}backups" \
+  (platform)   --lifecycle-configuration "file://$WORK/retention.json"
+  (platform) aws s3api get-bucket-lifecycle-configuration --region "$REGION" --bucket "${PREFIX}backups" | grep -q retained-sets
+  (platform) M="${TF_MODULE:+$TF_MODULE.}"   # the deployment's module in the environments repository, if any
+  (platform) removed=0
+  (platform) for kept in aws_kms_key.backups aws_kms_alias.backups aws_s3_bucket.backups aws_s3_bucket_versioning.backups aws_s3_bucket_public_access_block.backups aws_s3_bucket_server_side_encryption_configuration.backups aws_s3_bucket_lifecycle_configuration.backups aws_s3_bucket_policy.backups; do tofu state rm "$M$kept" >/dev/null 2>&1 && removed=$((removed + 1)); done
+  (platform) test "$removed" -gt 0 || { echo "no kept resource was in the state (is TF_MODULE right?): stop"; false; }
+  (platform) tofu state list | grep -E '(^|[.])(aws_kms_key\.backups|aws_kms_alias\.backups|aws_s3_bucket\.backups|aws_s3_bucket_versioning\.backups|aws_s3_bucket_public_access_block\.backups|aws_s3_bucket_server_side_encryption_configuration\.backups|aws_s3_bucket_lifecycle_configuration\.backups|aws_s3_bucket_policy\.backups)$' && { echo "a kept resource is still in the state: stop"; false; }
+  (platform) echo "Raise the pull request removing $FOLDER/terraform/'s files, and wait for it to be applied."
+stand-in: the Terraform deleted the buckets ['ospreyflow-poc-a1e180b8-media', 'ospreyflow-poc-a1e180b8-staging', 'ospreyflow-poc-a1e180b8-tile-cache', 'ospreyflow-poc-a1e180b8-site-images']
+stand-in: the Terraform's removal applied; kept: the backups bucket and its key
+
+=== DECOMMISSION block 10 (step 8. Check that nothing is left) [the platform: stand-in] ===
+  (platform) : "${STATE:?the output of tofu state list in the namespace folder, saved to a file}"
+  (platform) cp "$STATE" "$WORK/state.txt"
+  (platform) : > "$WORK/buckets.txt" && failed=
+  (platform) for b in media staging site-images tile-cache backups; do
+  (platform)   if out=$(aws s3api head-bucket --region "$REGION" --bucket "$PREFIX$b" 2>&1); then echo "$PREFIX$b" >> "$WORK/buckets.txt"
+  (platform)   elif echo "$out" | grep -q -e '404' -e 'Not Found'; then :
+  (platform)   else echo "$PREFIX$b could not be checked: $out"; failed=1; fi
+  (platform) done
+  (platform) test -z "$failed"
+stand-in: /tmp/ospreyflow-ospreyflow-poc/state.txt (empty) and buckets.txt (1 buckets)
+
+=== DECOMMISSION block 11 (step 8. Check that nothing is left) [the platform: stand-in] ===
+  (platform) : "${CLUSTER_ACCOUNT:?the AWS account that holds the cluster disks}"
+  (platform) if [ -n "${DISKS:-}" ]; then cp "$DISKS" "$WORK/disks.json"; else
+  (platform)   aws ec2 describe-volumes --region "$REGION" --filters "Name=tag:kubernetes.io/created-for/pvc/namespace,Values=$NS" --output json > "$WORK/disks-listed.json"
+  (platform)   "$PY" -c 'import json, sys; d = json.load(open(sys.argv[1])); d.update(Account=sys.argv[2], Region=sys.argv[3]); json.dump(d, open(sys.argv[4], "w"))' \
+  (platform)     "$WORK/disks-listed.json" "$(aws sts get-caller-identity --region "$REGION" --query Account --output text)" "$REGION" "$WORK/disks.json"
+  (platform) fi
+stand-in: /tmp/ospreyflow-ospreyflow-poc/volumes.json, the cluster's volumes (the platform team's listing)
+
+=== DECOMMISSION block 12 (step 8. Check that nothing is left) ===
+  $ for listing in state.txt buckets.txt; do
+  $   test -f "$WORK/$listing" || { echo "no $WORK/$listing: step 8's first block (the platform's) writes it"; false; }
+  $ done
+  $ objects=()
+  $ for kind in deployments.apps statefulsets.apps replicasets.apps pods jobs.batch cronjobs.batch services configmaps secrets persistentvolumeclaims serviceaccounts ingresses.networking.k8s.io networkpolicies.networking.k8s.io networkpolicies.projectcalico.org poddisruptionbudgets.policy; do
+  $   if kubectl api-resources -o name | grep -qx "$kind"; then
+  $     kubectl -n "$NS" get "$kind" -o json > "$WORK/objects-$kind.json"
+  $     objects+=(--objects "$WORK/objects-$kind.json")
+  $   fi
+  $ done
+  $ seen=()
+  $ [ -f "$WORK/disks.json" ] && seen+=(--disks "$WORK/disks.json" --disks-account "${CLUSTER_ACCOUNT:-}")
+  $ [ -f "$WORK/volumes.json" ] && seen+=(--volumes "$WORK/volumes.json")
+  $ test "${#seen[@]}" -gt 0 || { echo "no listing of the disks: give DISKS, or let the platform team run step 8's first block"; false; }
+  $ "$PY" -m harness.cloud_platform.decommission_check --values "$WORK/values.yaml" "${objects[@]}" "${seen[@]}" \
+  $   ${TF_MODULE:+--module "$TF_MODULE"} --state "$WORK/state.txt" --terraform "$WORK/terraform" \
+  $   --buckets "$WORK/buckets.txt" --bucket-prefix "$PREFIX"
+left alone (not the deployment's): ConfigMap/kube-root-ca.crt
+left alone (not the deployment's): ConfigMap/r1-trust
+left alone (not the deployment's): Secret/osprey-r1-tls
+left alone (not the deployment's): ServiceAccount/default
+kept: the backups (retention): bucket/ospreyflow-poc-a1e180b8-backups
+decommission check: 0 thing(s) left behind
+
+=== DECOMMISSION: every block ran ===
+
+# exit 0 after 35 s

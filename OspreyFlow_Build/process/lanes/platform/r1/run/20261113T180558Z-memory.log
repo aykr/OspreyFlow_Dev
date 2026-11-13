@@ -1,0 +1,49 @@
+node osprey-r1-control-plane: docker limit 34359738368 bytes; working set 7.81 GiB
+ospreyflow-poc/arcadedb-0: 1175 MiB
+ospreyflow-poc/ner-6467598975-jrwng: 630 MiB
+ospreyflow-poc/clickhouse-0: 606 MiB
+ospreyflow-poc/litellm-78dc86c6f-tfkj7: 490 MiB
+kube-system/kube-apiserver-osprey-r1-control-plane: 450 MiB
+ingress-nginx/ingress-nginx-controller-54d9445ccb-9dvct: 196 MiB
+ospreyflow-poc/laurium-894c7f67-rsq2g: 187 MiB
+ospreyflow-poc/worker-866798dd8-qwdfc: 160 MiB
+calico-system/calico-node-mxnr8: 149 MiB
+platform-managed/postgres-0: 96 MiB
+kube-system/etcd-osprey-r1-control-plane: 90 MiB
+kube-system/kube-controller-manager-osprey-r1-control-plane: 79 MiB
+calico-apiserver/calico-apiserver-7dd6f6d5ff-tvjm8: 48 MiB
+tigera-operator/tigera-operator-789496d6f5-d886f: 39 MiB
+calico-apiserver/calico-apiserver-7dd6f6d5ff-pqw5z: 37 MiB
+platform-managed/s3-standin-789c5cf4b5-ztssp: 34 MiB
+kube-system/kube-scheduler-osprey-r1-control-plane: 30 MiB
+calico-system/calico-typha-6cb8994579-cbggn: 28 MiB
+calico-system/calico-kube-controllers-f96c8994-vmpc9: 19 MiB
+kube-system/coredns-6f4bf4dff7-lr9xf: 19 MiB
+kube-system/coredns-6f4bf4dff7-xqmgl: 18 MiB
+kube-system/kube-proxy-6996j: 17 MiB
+platform-managed/irsa-webhook-6556b4877d-4bb8h: 15 MiB
+platform-managed/entra-standin-857b8f7c9b-bst4h: 14 MiB
+ospreyflow-poc/workspace-545d5c9ff8-7rjxm: 13 MiB
+local-path-storage/local-path-provisioner-7dc846544d-w649j: 10 MiB
+calico-system/csi-node-driver-srp58: 10 MiB
+platform-managed/valkey-0: 5 MiB
+ospreyflow-poc/api-559d645f59-8jkhl: 0 MiB
+
+requests and limits in ospreyflow-poc:
+api-559d645f59-8jkhl 2Gi 4Gi
+arcadedb-0 12Gi 12Gi
+clickhouse-0 8Gi 8Gi
+laurium-894c7f67-rsq2g 1Gi 2Gi
+litellm-78dc86c6f-tfkj7 512Mi 1Gi
+ner-6467598975-jrwng 1Gi 2Gi
+ospreyflow-backup-29909850-29pg6 2Gi 4Gi
+ospreyflow-backup-29909882-twvrh 2Gi 4Gi
+ospreyflow-backup-29909884-cjwxb 2Gi 4Gi
+ospreyflow-backup-claims-29909850-85lnj 2Gi 4Gi
+ospreyflow-backup-claims-29909882-tjrmb 2Gi 4Gi
+ospreyflow-backup-claims-29909884-sb29b 2Gi 4Gi
+ospreyflow-restore-20261113t180400z-2ffrn 2Gi 4Gi
+ospreyflow-restore-claims-20261113t180400z-h56xc 2Gi 4Gi
+worker-866798dd8-qwdfc 2Gi 4Gi
+workspace-545d5c9ff8-7rjxm 128Mi 256Mi
+

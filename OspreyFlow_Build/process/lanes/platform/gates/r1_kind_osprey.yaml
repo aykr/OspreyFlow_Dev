@@ -1,0 +1,43 @@
+# R1's deployment on the kind cluster (r1_kind.sh): the `cloud-platform` profile in `shape: poc`, as the
+# client's team would write its `osprey.yaml`, on the `kind` platform settings (a test fixture), its images in
+# the cluster's own registry. Every id is synthetic (rule 9); the tenant and the app registrations are the
+# Entra stand-in's (r1_kind.py), which answers as login.microsoftonline.com inside the cluster.
+profile: cloud-platform
+components:
+  analytics_engine: clickhouse
+  # The poc shape makes no OpenSearch domain (ADR-148 Amendment 5 point 16).
+  search: postgres-fulltext
+network:
+  public_origin: https://ospreyflow.r1.test
+cloud_platform:
+  platform: kind
+  namespace: ospreyflow-poc
+  environment: development
+  shape: poc
+  registry: localhost:5001
+  # The Ingress's certificate, signed by the stand-in CA (r1_kind.py standins).
+  tls_secret: osprey-r1-tls
+  # Entra ID's sign-in host by its networks: on kind, the pod network the stand-in answers on.
+  egress_nets:
+    login.microsoftonline.com: ["192.168.0.0/16"]
+  claims:
+    tenant_id: 00000000-1111-4222-8333-444444444444
+    client_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
+    api_client_id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
+    clearance: {claim: extension_0123456789abcdef0123456789abcdef_clearance}
+    org_unit: {groups: {20000000-0000-4000-8000-000000000001: unit-1}}
+    handling_codes: {groups: {30000000-0000-4000-8000-000000000001: [P]}}
+    first_administrators: [50000000-0000-4000-8000-000000000001]
+# The map the Conduit reads at start: tier 1, the local OpenStreetMap file (synthetic deployment).
+map:
+  default: osm-local
+  providers:
+  - id: osm-local
+    label: OpenStreetMap
+    kind: vector
+    licence: {id: ODbL, redistributable: true, client_scope: open}
+    source: file:///data/tiles/osm-local.pmtiles
+    variables: {}
+    proxy: none
+    style: bundled:osprey-dark
+    attribution: "\xA9 OpenStreetMap contributors"

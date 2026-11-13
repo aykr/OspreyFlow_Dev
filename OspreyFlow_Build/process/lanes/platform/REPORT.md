@@ -1,51 +1,19 @@
-# Platform lane · P7b · report (11 November 2026, the Mac; after the orchestrator's final review and its second pass; the kind run waits for P11/P12 part 2)
+# Platform · R1: the client install's acceptance, run on kind (13 November 2026), ready to merge
 
-**Ready to merge at `2833a66fdf0ec6f0a057c27a70d606d86d45edd1`** (tree `d934d463777f`), on main fe22804. The
-`connector_hosts` schemas commit sits before the render commit that imports it, so every commit builds; the other three
-schemas commits are at the head. The commit above it holds this report, the server log, the gates' outputs and the
-guide's diff alone. Every run went through `stack_lease.sh offline platform` (no stack, no lease). Nothing running;
-nothing pushed. Merge order (the orchestrator's): P7b first, then P9, then case's `P9_decommission.diff`, then P12 part 2
-with its `laurium` row.
+Branch `lane/platform-r1` on main `20fab33`. The poc install, checks, backup, restore and decommission were run on kind on the test server, as P7b's runbooks are written, beside osprey-small (never touched). The cluster is down and the server freed at 18:12.
 
-| Exit criterion | State | Proof |
-| --- | --- | --- |
-| `cp-policy-check` green | Met: development 57 manifests, poc 49, production-bedrock 64, production 64, each 0 violation(s); `make -k ci` exit 0 | `gates/2833a66f.gates.txt` (the gate's lines unfiltered) |
-| …red on each planted fault | Met: 106 plants, 106 red, each in Helm's own output or at its call site | same |
-| Each workload's own egress, ingress, secrets and token (Am 5 points 21-24) | Met: the evaluator applies Calico's order to Helm's output, every pod to every pod, host (on its own ports and no other), network, the internet and DNS | `test_cp_egress_order.py` |
-| The final review's items, both passes | Met, each red first (Am 5 points 21-24 say each) | `test_cp_policy_check.py`, `test_cloud_platform_egress.py` |
-| Decommission leaves nothing behind, red first | Check built; the backups kept by P9's diff at merge (Am 5 point 20) | `test_cp_decommission_check.py` |
-| Runbooks end to end on kind; acceptance on kind | **Not yet**: after P11/P12 part 2; until then syntax, order and rights only | Am 5 "Left" |
-| The other profiles' renders unchanged | Met: against fe22804 local-lite, small and cluster are byte for byte | `gates/2833a66f.renders-full.txt` |
-| The cloud-platform renders' standard shape unchanged (P7b's brief) | **Superseded by the orchestrator's rulings** (Am 5 points 21-24): the two cloud-platform configurations differ by the ruled rework, every changed line recorded | `gates/2833a66f.renders-full.txt` |
+| Exit (BRIEF.md) | State | Proof |
+|---|---|---|
+| Install by INSTALL.md, exactly as written | done, every block | `r1/run/…175844Z-INSTALL.log` |
+| Checked | 28 of 28 | `r1/run/…180425Z-check.log` (sign-in by the Entra stand-in, the owner's choice: nine refusals) |
+| Backed up and restored | the change after the set gone, the set back, the door at once, no stack trace | `r1/run/…180557Z-restored.log` |
+| Removed by DECOMMISSION.md | 0 left behind; backups kept with the last set | `r1/run/…181017Z-DECOMMISSION.log` |
+| Every place wrong or unclear: a finding, fixed, re-run | 16 (7 by reading, 9 on kind), each red first | `r1/RUN.md` (the owner's plain-words list), `r1/desk-reds.txt` |
+| Memory: node and every pod | node 6.3 GiB after the install, 7.8 after the restore, of 32; requests 26.6 GiB | `r1/RUN.md`, `r1/run/*memory.log` |
+| Gates at the final head | `make ci` exit 0 (5cdfcd2); `make test` 13176 passed; its 5 cli-deps fixture errors are platform-b's fix on main (b4712bf), taken here: `tests/cli` 533 passed on the server after the rebase | 1 failure not this lane's (GPU preflight on a GPU host, in CARRIES) |
 
-**Gates at 2833a66f.**
-- The cp suite, the cloud-platform harness tests, the images verb and the model-engine tests: 587 passed.
-- `make -k ci`: exit 0; its cp-policy-check lines are recorded unfiltered.
-- `make test`: 3 failed, 12171 passed, each known: the GPU preflight case (the server has a GPU); `test_admin_guide`'s
-  appendix, which `P7b_admin_guide.diff` makes green (rebuilt against main's docs); `test_render_memory`'s OpenSearch
-  case, main's own (in CARRIES).
-- Corrected earlier (the final review's item 8): at a5d580a0 `make -k ci` failed two targets, `harness-a11y` and
-  `cp-policy-check`, not `harness-a11y` alone.
+**The two serious findings:** no readiness probe on the Conduit or the Glass, so every wait passed before either served (dd3cc99); and 48 Postgres pools, so an update's second Conduit was refused (cae6958: INSTALL asks for `max_connections` ≥ 750).
 
-**Decisions taken:**
-- "A scratch volume for Ingest" is the Ingest root's own claim (agreed).
-- The kept backups come through case's `P9_decommission.diff` at merge (agreed). `backup/platform-p7b-with-kept-hooks`
-  is kept until then.
-- Keycloak holds no token (agreed).
-- A host's ports: 443 for the AWS services and the engine kinds' hosts, an address's own or its scheme's, `mail.port`,
-  and `connector_hosts`' `host:port`, a bare host on 443 and named in words at the head of `values.yaml` (and in the poc
-  shape's INSTALL.md); an IPv6 literal is refused. A host given twice with two ports is one row with both ports.
+**Merged ahead:** `lane/platform-cli-deps` (614ec43, the `ospreyflow` command's small install, ADR-114 kept). **Requests to the orchestrator:** apply `R1_admin_guide.diff` at merge; CARRIES: the Conduit's pools (one shared pool, or sizes from settings, for the owner).
 
-**For the lanes after this one:** P9's four pods set their own `serviceAccountName` (never the bucket role's or the
-gateway's) and `automountServiceAccountToken: true`, and need no edit at `egress_policy`. P12 part 2 adds
-`paths.laurium: [litellm]` and `laurium` to `paths.api` alone; Laurium holds no key of ours unless listed in
-`NAMED_SECRET_ALLOWED`. A new Calico rule names its protocol and single ports and selects by workload name.
-
-**Carried** (seven new CARRIES rows): the operator docs (D2c); Admin › Connections' port warning; IRSA's webhook and the
-API token; identity by label; the renders comparison as a lane script; the ingest ceiling's unset reading; which pods
-read the platform's own Terraform-made Secrets (a question for the platform team). Also still: the standard shape's
-OpenSearch domain; the seeds' ceiling (studio-b); the identity step against a real Keycloak; the kind rehearsal's
-stand-ins for the platform's blocks.
-
-**Requests:** apply `P7b_admin_guide.diff` at merge (admin guide 1.82 redone); mark Am 5 written (points 1-24); ratify the
-four `packages/schemas` commits (the friction row). No questions for the owner.
+**Questions for the owner:** none open. **Running:** nothing. No cluster, no lease. Nothing pushed.

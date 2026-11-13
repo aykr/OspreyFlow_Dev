@@ -398,7 +398,8 @@ def test_the_backups_bucket_and_its_key_are_kept_never_left_behind(
 def test_the_runbook_keeps_the_backups_and_says_how_to_remove_them(rendered: dict[str, str]) -> None:
     text = rendered["DECOMMISSION.md"] if "DECOMMISSION.md" in rendered else next(
         v for k, v in rendered.items() if k.endswith("DECOMMISSION.md"))
-    assert f"s3://$PREFIX{BUCKET_SUFFIX}/sets/" in text
+    # `${PREFIX}`, fenced: bash reads `$PREFIXbackups` as an empty variable of that name (R1).
+    assert f"s3://${{PREFIX}}{BUCKET_SUFFIX}/sets/" in text and "$PREFIXbackups" not in text
     for kept in KEPT_AT_DECOMMISSION:
         assert kept in text
     removal = text.split("## 9.", 1)[1].split("## 10.", 1)[0]

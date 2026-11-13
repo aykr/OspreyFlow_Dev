@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.89** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.90** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.90 | 2026-11-13 | §6a, from R1 (the cloud-platform install's acceptance on kind): the `ospreyflow` command installed by `uv tool install ./cli`; the managed PostgreSQL's `max_connections` of at least 750 (ADR-114 Amendment 43), set in the RDS parameter group; and what a healthy restore's log ends with. PDF reprinted alone. |
 | 1.89 | 2026-11-13 | Appendix A: `network.access_key` (the shared key the front proxy asks for, ADR-114 Amendments 41 and 42) and `appearance.banner_text` (the banner's own words, ADR-132 Amendment 7), from the schema (`tools.admin_guide_options`), missed when they were added. PDF reprinted alone. |
 | 1.88 | 2026-11-12 | New §6a.9, the model route on a shared platform: the model gateway (LiteLLM), always rendered; an engine as your organisation's own AI gateway (by a token) or Amazon Bedrock in London (by the gateway's own IAM role, no key stored anywhere), with `kind`, `auth` and `region`, London alone and a model's own id; what is refused, in words; `gateway.tf`'s role, policy and service account, and what the platform team applies; the gateway's own way out, its engines' hosts and STS; what *Admin › Models* allows and refuses, in its own words; for a newly declared Bedrock engine, the Terraform before the new values, since only it makes the gateway's service account (also in §10.1); Laurium's key cross-referenced; what is not yet tried against AWS or your own gateway (ADR-135 Amendments 4, 7 and 8). §6a.5: an engine removed in *Admin › Models* keeps its host open while `osprey.yaml` declares it. *Coming* and the questions for the platform's team renumbered 6a.10 and 6a.11; nothing of the model route was listed as coming. PDF made by the orchestrator at merge. |
 | 1.87 | 2026-11-12 | §9.1: the guides from Home. Home links this guide under Admin's card, the user guide under the Glass's and the developer guide under the Ingest Studio's, each only for someone whose roles open that place, and the Conduit refuses anyone else (ADR-145 Amendment 10). A new guide comes with a new image: on Small and `cloud-platform` with a release's images, on Lite with `ospreyflow start --build`. PDF made by the orchestrator at merge. |
@@ -1089,9 +1090,20 @@ nobody can manage people, section 6a.7), and the Glass's health. `DECOMMISSION.m
 last backup, `helm uninstall`, the claims and our Secret, the buckets and repositories emptied, the
 backups kept for their retention, then `python -m harness.cloud_platform.decommission_check`, which
 names anything left behind and exits 1 while anything is. A block fenced `bash platform` runs only
-with the platform's access; the rest runs anywhere. **Neither has yet run against a cluster or an
-account**: the tests check their blocks' syntax, order and rights only. The standard shape has no
-rendered runbook yet.
+with the platform's access; the rest runs anywhere. A block fenced `bash later` is in neither
+runbook's sequence and is run only when its words say: the way back in when nobody can manage people,
+and the kept backups' removal when their retention ends (run with the decommission, it would delete
+the last backup it keeps). The install asks for the Entra app registrations before its first block,
+and its step 2 checks the certificate Secret `cloud_platform.tls_secret` names, when it names one.
+The install's *What it needs* names the `ospreyflow` command's own install (`uv tool install ./cli`)
+and the least `max_connections` the managed PostgreSQL must allow, set in RDS's parameter group: two
+Conduits side by side in an update, the worker, the gateway and a reserve. Its last section, *Against
+the client's real tenant*, is no block to run: what only the real Entra tenant can show. The
+decommission removes a restore's Jobs before the claims, which they would otherwise keep, and its
+settings keep the bucket prefix, so it can be taken up in a new shell after step 7. **Both were run
+on a kind cluster (R1, 13 November 2026)**, with stand-ins for the platform's parts (AWS's S3, STS
+and KMS, EKS's pod identity, RDS, ElastiCache and Entra ID); neither has run against a real account
+or tenant. The standard shape has no rendered runbook yet.
 
 **A platform is a settings file**, `harness/cloud_platform/platforms/<name>.yaml`: its ingress class
 and annotations, the controller's namespace, its storage class, its egress policy kind and the
@@ -1510,8 +1522,8 @@ assigned in *Admin › People*, which keeps them in the deployment's own Postgre
   restart alone reads the old one) and restart the Conduit. With the settings `INSTALL.md`'s step 1
   exports (the poc shape's), the values are installed by
   `helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m`.
-  In the poc shape `INSTALL.md`'s step 6 gives the render and the restart but leaves out installing
-  the values (a known issue).
+  In the poc shape `INSTALL.md`'s step 6 gives the render and the install as one block, fenced
+  `bash later`.
 - **Locking everyone out is refused.** A change that would leave nobody who can manage people is
   refused; only an enabled person who has **signed in at least once** counts, so a person added by
   object id who has never signed in is no proof anyone can administer.
@@ -1607,7 +1619,9 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
    the namespace at the restored RDS instance.
 5. **The restore's Jobs**, rendered for the set by its own name (never `latest`, never by
    `helm upgrade`) and applied, then each waited on.
-6. **Everything started again**, ArcadeDB first, at the copy counts noted, and the CronJobs resumed.
+6. **Everything started again**, ArcadeDB first, at the copy counts noted, each waited on until it
+   is ready (the door answers), and the CronJobs resumed. A healthy restore's logs end in plain
+   words, with no stack trace: the runbook's *A healthy restore* quotes each step's last line.
 
 **It refuses, touching nothing**, while anything that writes still runs, while it cannot see what
 runs, or while any part of the set is missing, changed or another set's. Each store is replaced only

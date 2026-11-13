@@ -190,6 +190,19 @@ class _Translator:
         return first + entries
 
 
+#: A readiness check for a service that serves a port with no compose healthcheck to translate
+#: (R1 on kind, finding 14): without one a pod is ready the moment its container starts, so
+#: `rollout status` and `helm --wait` pass before it listens, and the door answers 503 meanwhile.
+#: The Conduit by its own `/healthz`; the Glass by its own page (its `/healthz` is the Conduit's).
+READY_WITHOUT_HEALTHCHECK: dict[str, list[str]] = {
+    "api": [
+        "python", "-c",
+        "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=5)",
+    ],
+    "workspace": ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"],
+}
+
+
 def _probe(check: object) -> dict[str, Any] | None:
     if not isinstance(check, dict):
         return None
@@ -512,6 +525,9 @@ def render_cluster(
             workload["envFrom"] = True
         if (probe := _probe(service.get("healthcheck"))) is not None:
             workload["probe"] = probe
+        elif name in READY_WITHOUT_HEALTHCHECK:
+            workload["probe"] = {"exec": READY_WITHOUT_HEALTHCHECK[name], "periodSeconds": 5,
+                                 "timeoutSeconds": 5, "failureThreshold": 3}  # fmt: skip
         if user := service.get("user"):
             uid, _, gid = str(user).partition(":")
             workload["runAs"] = {"user": int(uid), "group": int(gid or uid)}

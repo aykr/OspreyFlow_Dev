@@ -1,0 +1,79 @@
+# R1 desk findings 1-4, red at main 1b317d4's runbooks.py with the new tests (2026-11-12T21:42:53Z)
+E           AssertionError: DECOMMISSION.md
+E           assert {'PREFIXbackups'} == set()
+E             
+E             Extra items in the left set:
+E             'PREFIXbackups'
+E             Use -v to get more diff
+E       AssertionError: the last backup: s3:///sets/20261112T214200Z/
+E         s3:///sets/20261112T214200Z/
+E         
+E       assert None
+E        +  where None = <function fullmatch at 0x101973e20>('s3://ospreyflow-poc-1a2b3c4d-backups/sets/\\d{8}T\\d{6}Z/', 's3:///sets/20261112T214200Z/')
+E        +    where <function fullmatch at 0x101973e20> = re.fullmatch
+E           AssertionError: 00000000-1111-4222-8333-444444444444
+E           assert '00000000-1111-4222-8333-444444444444' in "**What it needs.** The release's `OspreyFlow_Core` folder, at the release's tag: `ospreyflow images\npush` builds our...e bash shell, from\nthat folder. If a command fails, stop there: put right what it says, then run its block again.\n\n"
+E       assert ('OSPREY_CURL_OPTS' in "## 7. Check\n\nThe doors answer through the platform's ingress (ospreyflow-poc.apps.example.org).\n\n")
+E       assert False
+E        +  where False = <built-in method startswith of str object at 0x105cb2d30>('helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml"')
+E        +    where <built-in method startswith of str object at 0x105cb2d30> = 'kubectl -n "$NS" rollout restart deploy/api'.startswith
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_every_variable_a_runbook_reads_is_one_it_sets_or_asks_for
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_last_backup_is_named_in_the_backups_bucket
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_entra_registrations_are_asked_for_before_the_deployment
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_check_says_what_its_curl_options_are
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_runbook_says_how_to_recover_when_no_administrator_is_left
+5 failed, 24 passed in 3.06s
+E               AssertionError: DECOMMISSION.md
+E               assert not True
+E                +  where True = any(<generator object test_a_block_for_later_is_never_in_the_sequence.<locals>.<genexpr> at 0x10764b370>)
+1 failed, 29 deselected in 0.55s
+E       AssertionError: assert 'ospreyflow-poc-certificate' in 'for secret in rds-postgresql-instance-output elasticache-redis s3-bucket-output ospreyflow-secrets; do'
+1 failed, 30 deselected in 0.52s
+
+# 13 November 2026, at main 217c7e7: the owner's ruling, "a stand-in now, the real tenant later". The install
+# gains section 8, what only the client's real tenant can show. Red before the section was written:
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_ends_with_what_only_the_real_tenant_can_show
+1 failed, 31 deselected in 0.56s
+
+# 13 November 2026, R1 on kind, install block 2 stopped: "no ospreyflow command: put .venv/bin on PATH". The
+# command is its own package (cli/), never in .venv. Red at the runbook as rendered:
+>       assert ".venv/bin/ospreyflow" not in text
+E       AssertionError: assert '.venv/bin/ospreyflow' not in '# Install: ...report it.\n'
+1 failed, 32 deselected in 0.52s
+
+# 13 November 2026, R1 on kind, install block 8 (step 4, the values pinned) stopped: UnpinnedImagesError for
+# ghcr.io/ospreyflow/{workspace,api,ner,laurium,worker}:<head>. The cloud-platform render asked the release's
+# own registry for ours before taking each from the namespace registry's copy; every test's resolver answered
+# any reference. Red at 614ec43 with a resolver refusing ghcr.io/ospreyflow/* (as an unpublished head does):
+E           harness.render.UnpinnedImagesError: refusing to write versions.lock without a digest for: ghcr.io/ospreyflow/workspace:554bf84e..., ghcr.io/ospreyflow/api:..., ghcr.io/ospreyflow/ner:...
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_pinned_render_needs_ours_only_in_the_namespace_s_registry
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_pinned_render_before_the_push_names_the_registry_s_copies
+2 failed, 33 deselected in 0.84s
+# The lock's half alone (the repository rewrite planted out, the pin kept):
+E           assert 'ghcr.io/ospreyflow/api' == '123456789012...spreyflow/api'
+
+# 13 November 2026, R1 on kind, finding 11: the restore Job's check printed AccessDeniedException ./log/arcadedb.log.0.lck
+# and a 40-line stack trace in a restore that succeeded (the Job runs as the chart's user, 10001, in /home/arcadedb).
+# A read-only root alone, as the image's own user, did not show it (passed: the wrong shape); as uid 10001, red:
+E       AssertionError: exit=0 denied=2 traces=40 | restore-graph: ospreyflow restored from the set, checked and put in place; the old one removed
+# The recovery runbook's healthy-restore words, red before the paragraph:
+E       assert '**A healthy restore.**' in "## The `cloud-platform` profile ..."
+FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_recovery_runbook_success.py::test_the_runbook_says_what_a_healthy_restore_s_logs_end_with
+
+# R1 on kind, finding 12: DECOMMISSION step 4 timed out after 10 minutes on databases-arcadedb-0 (pvc-protection,
+# held by the restore Jobs' finished pods, which helm uninstall leaves). Red before step 3 removed them:
+E       StopIteration
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_decommission_removes_a_restore_s_jobs_before_the_claims
+
+# R1 on kind, finding 13: the restore's step 4 waited for ArcadeDB alone; the restored check right after it met a 503 at the door.
+# Red before the rollout wait:
+E       ValueError: substring not found   (test_a_restore_ends_when_what_it_started_is_ready)
+
+# R1 on kind, finding 14: the Conduit and the Glass had no readiness probe; after the restore's rollout waits the door still answered 503 (8 s), the new api pod Ready at 1 s old. Red:
+E       AssertionError: assert ['workspace', 'api'] == []   (test_every_workload_that_serves_a_port_says_when_it_is_ready)
+
+# R1 on kind, finding 15: a new Conduit in the re-install stopped at asyncpg TooManyConnectionsError (stand-in max 100; one Conduit held 51 at rest, 48 pools). Red:
+E       AttributeError: module 'harness.cloud_platform.runbooks' has no attribute 'POSTGRES_MAX_CONNECTIONS'
+
+# R1 on kind, finding 16: the decommission re-run from step 7 stopped at step 1: "no bucket prefix in s3-bucket-output" (step 7 had removed that Secret). Red:
+E       AssertionError: no bucket prefix in s3-bucket-output

@@ -947,7 +947,7 @@ def render_cloud_platform(
     """`values.yaml`, `versions.lock` and `terraform/*.tf`."""
     from harness.cloud_platform.terraform import render_terraform
     from harness.cluster import render_cluster
-    from harness.render import service_images
+    from harness.render import UnpinnedImagesError, service_images
     from harness.site import highest_marking, render_glass_settings
 
     _refuse(config)
@@ -960,20 +960,37 @@ def render_cloud_platform(
     # gateway always (P11 part 2): an engine first added in Admin › Models then has one without a
     # re-render, and the namespace reaches a model host only while an engine is enabled (egress).
     images = [i for i in service_images(as_cluster) if i.service not in NOT_RENDERED]
-    rendered = render_cluster(
-        as_cluster,
-        images,
-        resolver=resolver,
-        allow_unpinned=allow_unpinned,
-        resolved_source_label=resolved_source_label,
-        replicas=None if production else DEVELOPMENT_REPLICAS,
-    )
-    values = yaml.safe_load(rendered["values.yaml"].split("\n", 3)[-1])
     registry = _cp(config).registry
     assert registry is not None
-    variables = managed_variables(config)
     api_image = next(i.image for i in images if i.service == "api")
-    copies = _Copies(registry, api_image.rsplit("/", 1)[0], resolver, profile)
+    ours_prefix = api_image.rsplit("/", 1)[0]
+
+    def ours_in_the_registry(image: str) -> str | None:
+        """Ours by the namespace registry's copy, the only digest the values pin (`_Copies`):
+        never by the release's own registry, which an unpublished head or a closed network cannot
+        answer (R1 on kind, install step 4). The third-party ones by their source, which their
+        copy keeps."""
+        mine = image.startswith(ours_prefix + "/")
+        return resolver(_in_registry(image, registry) if mine else image)
+
+    try:
+        rendered = render_cluster(
+            as_cluster,
+            images,
+            resolver=ours_in_the_registry,
+            allow_unpinned=allow_unpinned,
+            resolved_source_label=resolved_source_label,
+            replicas=None if production else DEVELOPMENT_REPLICAS,
+        )
+    except UnpinnedImagesError as unpinned:
+        # Named as the copies the registry lacks: `ospreyflow images push` (step 3) makes them.
+        raise UnpinnedImagesError([
+            _in_registry(i, registry) if i.startswith(ours_prefix + "/") else i
+            for i in unpinned.images
+        ]) from None  # fmt: skip
+    values = yaml.safe_load(rendered["values.yaml"].split("\n", 3)[-1])
+    variables = managed_variables(config)
+    copies = _Copies(registry, ours_prefix, resolver, profile)
 
     workloads = [
         w for w in values["workloads"]
@@ -1136,8 +1153,13 @@ def render_cloud_platform(
         "values.yaml": _BANNER
         + _bare_connector_hosts_note(config)
         + yaml.safe_dump(out, sort_keys=False, default_flow_style=False, width=4096),
+        # Ours as the registry's copies, whose digests it records (R1, install step 4).
         "versions.lock": _without(
-            rendered["versions.lock"], {"clickhouse-keeper"} if poc else set()
+            rendered["versions.lock"].replace(
+                f"repository: {ours_prefix}/",
+                f"repository: {_in_registry(ours_prefix + '/', registry)}",
+            ),
+            {"clickhouse-keeper"} if poc else set(),
         ),
         "images.yaml": "# What `ospreyflow images push --registry` copies (ADR-148 decision 8).\n"
         + yaml.safe_dump(
