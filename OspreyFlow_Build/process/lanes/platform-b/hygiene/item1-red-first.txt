@@ -1,0 +1,25 @@
+# Item 1: test_webapp_preflight's GPU case on a GPU host (CARRIES row 226). Mac, offline, main 2b78820.
+# The real host: the server's red is on record (lane/platform-b-live 38fb7a4, ci4/live-preflight.raw.txt):
+#   test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass FAILED, AssertionError: assert 'pass' == 'skip'
+
+== (a) main's expectation (skip everywhere) put to the GPU-host stand-in through the stream (only=gpu): red
+E   AssertionError: {'check': 'gpu', 'status': 'pass', 'what_is_wrong': '', 'what_to_do': '', ...}
+/Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_webapp_preflight.py:141: AssertionError: {'check': 'gpu', 'status': 'pass', 'what_is_wrong': '', 'what_to_do': '', ...}
+E   AssertionError: {'check': 'gpu', 'status': 'fail', 'what_is_wrong': 'nvidia-smi is installed but returned 9: NVIDIA-SMI has failed', '...atched with the installed userspace library. Reinstall the driver package, or r
+/Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_webapp_preflight.py:141: AssertionError: {'check': 'gpu', 'status': 'fail', 'what_is_wrong': 'nvidia-smi is installed but returned 9: NVIDIA-SMI
+2 failed, 1 passed, 1 skipped, 5 deselected, 1 warning in 1.08s
+== (b) plant in gpu.py: no nvidia-smi on local-lite returns passed, not skipped: red
+E   AssertionError: {'check': 'gpu', 'status': 'pass', 'what_is_wrong': '', 'what_to_do': '', ...}
+/Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_webapp_preflight.py:141: AssertionError: {'check': 'gpu', 'status': 'pass', 'what_is_wrong': '', 'what_to_do': '', ...}
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_on_a_stand_in_host_without_a_readable_gpu_the_gpu_is_skipped_never_passed
+1 failed, 2 passed, 1 skipped, 5 deselected, 1 warning in 1.15s
+== (c) plant in gpu.py: a driver read returns skipped, not passed: red
+E   AssertionError: {'check': 'gpu', 'status': 'skip', 'what_is_wrong': 'plant (c)', 'what_to_do': 'Nothing here — this check did not run. It is not evidence that the thing it would have checked is correct.', ...}
+/Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_webapp_preflight.py:145: AssertionError: {'check': 'gpu', 'status': 'skip', 'what_is_wrong': 'plant (c)', 'what_to_do': 'Nothing here — this che
+1 failed, 2 passed, 1 skipped, 5 deselected, 1 warning in 1.19s
+== (d) plant in gpu.py: a driver that errors returns skipped, not failed: red
+E   AssertionError: {'check': 'gpu', 'status': 'skip', 'what_is_wrong': 'plant (d)', 'what_to_do': 'Nothing here — this check did not run. It is not evidence that the thing it would have checked is correct.', ...}
+/Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_webapp_preflight.py:143: AssertionError: {'check': 'gpu', 'status': 'skip', 'what_is_wrong': 'plant (d)', 'what_to_do': 'Nothing here — this che
+1 failed, 2 passed, 1 skipped, 5 deselected, 1 warning in 1.13s
+== green, the code as on main, the fixed tests:
+3 passed, 1 skipped, 5 deselected, 1 warning in 1.15s
