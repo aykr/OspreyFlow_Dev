@@ -297,10 +297,14 @@ echo "the last backup: $LAST_BACKUP"
 ## 3. The workloads
 
 `helm uninstall` removes what the chart made, but keeps every claim: each store's own and the shared
-ones (`helm.sh/resource-policy: keep`), which hold the data.
+ones (`helm.sh/resource-policy: keep`), which hold the data. A restore's Jobs were applied from `helm
+template`, not installed, so they stay: their finished pods still name the claims, and Kubernetes keeps a
+claim while any pod names it (`kubernetes.io/pvc-protection`), so step 4 would wait and fail. They are
+removed here, their pods with them.
 
 ```bash
 helm uninstall "$RELEASE" -n "$NS" --wait --timeout 15m || helm status "$RELEASE" -n "$NS" 2>&1 | grep -q 'not found'
+kubectl -n "$NS" delete job -l app.kubernetes.io/instance="$RELEASE" --cascade=foreground --ignore-not-found --wait --timeout=10m
 ```
 
 ## 4. The claims

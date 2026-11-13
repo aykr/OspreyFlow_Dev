@@ -594,3 +594,20 @@ def test_the_pinned_render_before_the_push_names_the_registry_s_copies() -> None
         render(_config(), resolver=lambda ref: None if "/ospreyflow/" in ref else _resolver(ref))
     assert _REGISTRY + "ospreyflow/api:" in str(refused.value)
     assert _OURS not in str(refused.value)
+
+
+def test_the_decommission_removes_a_restore_s_jobs_before_the_claims(runbooks: dict[str, str]) -> None:
+    """R1 on kind, finding 12: step 4 waited ten minutes and failed on `databases-arcadedb-0`. A restore's
+    Jobs are applied from `helm template`, not installed, so `helm uninstall` leaves them, and their
+    finished pods still name the claims, which Kubernetes then keeps (`kubernetes.io/pvc-protection`).
+    Step 3 removes the release's Jobs and waits for their pods to go, before step 4 removes a claim."""
+    text = runbooks["DECOMMISSION.md"]
+    blocks = command_blocks(text, on_the_platform=False)
+    jobs = next(i for i, b in enumerate(blocks) if "delete job" in b)
+    claims = next(i for i, b in enumerate(blocks) if "delete pvc" in b)
+    assert jobs < claims
+    line = next(x for x in blocks[jobs].splitlines() if "delete job" in x)
+    assert '-l app.kubernetes.io/instance="$RELEASE"' in line
+    assert "--cascade=foreground" in line and "--wait" in line  # their pods gone, not only the Jobs
+    step3 = text[text.index("## 3. The workloads") : text.index("## 4. The claims")]
+    assert "pvc-protection" in step3 or "keeps a claim" in step3

@@ -51,3 +51,16 @@ FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_pi
 2 failed, 33 deselected in 0.84s
 # The lock's half alone (the repository rewrite planted out, the pin kept):
 E           assert 'ghcr.io/ospreyflow/api' == '123456789012...spreyflow/api'
+
+# 13 November 2026, R1 on kind, finding 11: the restore Job's check printed AccessDeniedException ./log/arcadedb.log.0.lck
+# and a 40-line stack trace in a restore that succeeded (the Job runs as the chart's user, 10001, in /home/arcadedb).
+# A read-only root alone, as the image's own user, did not show it (passed: the wrong shape); as uid 10001, red:
+E       AssertionError: exit=0 denied=2 traces=40 | restore-graph: ospreyflow restored from the set, checked and put in place; the old one removed
+# The recovery runbook's healthy-restore words, red before the paragraph:
+E       assert '**A healthy restore.**' in "## The `cloud-platform` profile ..."
+FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_recovery_runbook_success.py::test_the_runbook_says_what_a_healthy_restore_s_logs_end_with
+
+# R1 on kind, finding 12: DECOMMISSION step 4 timed out after 10 minutes on databases-arcadedb-0 (pvc-protection,
+# held by the restore Jobs' finished pods, which helm uninstall leaves). Red before step 3 removed them:
+E       StopIteration
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_decommission_removes_a_restore_s_jobs_before_the_claims
