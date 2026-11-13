@@ -35364,7 +35364,8 @@ one first added in *Admin › Models* is refused (decision 4).
    egress is the profile's `always` hosts alone (S3 and STS); each declared engine adds its own host (its address,
    its kind's row, or its provider's). An engine disabled in *Admin › Models* keeps its host open until the next
    render. The gateway shares the namespace's egress: the Calico policy selects every pod (`all()`), so the hosts
-   are the namespace's, not the gateway's alone.
+   are the namespace's, not the gateway's alone. **Both sentences corrected by Amendment 10**: an engine's host is the gateway's alone
+   (`reach.engines`), and a disabled engine's host stays open while `osprey.yaml` declares it.
 4. **Admin › Models enables an engine only where the render made it** (the orchestrator's ruling): the render
    tells the Conduit what it made (`OSPREY_MODEL_ROUTES_MADE`: the engine hosts, the rules that place an engine's
    host, whether the gateway's own role exists), and on `cloud-platform` an engine whose host is not among them,
@@ -36629,3 +36630,32 @@ place on screen was not kept at all, only the case (`investigation/investigation
   `gates/refresh_key_gate_green.txt`; red with the pass set without `Domain=`, so the Glass's name's
   alone, `gates/refresh_key_gate_red.txt`.
 - No Glass action is added and the Sign in screen is unchanged, so no keyboard step (rule 13).
+
+### ADR-135, Amendment 10 (13 November 2026) — Amendment 8 decision 3 corrected to the code: an engine's host is the gateway's alone, and open while `osprey.yaml` declares the engine
+
+Status: a correction, written by the platform-b lane (CARRIES, the docs lane's D2c part 4 finding) on the
+orchestrator's reservation of 13 November. It changes no code. Two sentences of Amendment 8 decision 3 stopped holding;
+the administration guide already follows the code (§6a.5, since its 1.88: "an engine removed in *Admin ›
+Models* keeps its host open while `osprey.yaml` declares it"). Amendment 8 otherwise stands.
+
+1. **An engine's host is the gateway's alone, not the namespace's.** Amendment 8 decision 3 says "the Calico policy
+   selects every pod (`all()`), so the hosts are the namespace's, not the gateway's alone". Since P7b (ADR-114
+   Amendment 5 point 21) each rendered workload has its own `default.ospreyflow-egress-<name>` policy
+   (`deploy/helm/ospreyflow/templates/networkpolicies.yaml`), and `harness/cloud_platform/profile.yaml`'s
+   `egress.reach.engines` is `[litellm]`: a declared engine's host is given to the gateway and to no other pod.
+   `test_a_model_engine_s_host_is_the_gateway_s_alone` (`tests/harness/test_cloud_platform_egress.py`) fails if any
+   other workload is given it.
+2. **A disabled engine's host stays open while `osprey.yaml` declares the engine.** Amendment 8 decision 3 says "An
+   engine disabled in *Admin › Models* keeps its host open until the next render". The render reads the engines
+   `osprey.yaml` declares (`config.models.enabled_providers`, through `_engine_addresses` in
+   `harness/cloud_platform/__init__.py`) and nothing *Admin › Models* holds, so the next render opens the host again.
+   It is closed only by taking the engine out of `osprey.yaml` and rendering.
+   `test_an_engine_s_host_is_open_while_declared_and_closed_by_a_render_without_it` (the same file) fails if a render drops a declared engine's host, or keeps the host of an engine `osprey.yaml` no longer
+   declares.
+3. **A known gap, named.** An administrator who disables an engine in *Admin › Models* expecting its traffic out of the
+   namespace to stop would be wrong: the egress stays open until `osprey.yaml` is edited and rendered. The gateway
+   no longer routes to it (`_reconcile` in `services/api/model_admin.py` deletes its entries), but the network still
+   allows its host. Closing the gap is the owner's call between two remedies:
+   render from the enabled set as *Admin › Models* holds it, or have *Admin › Models* say in words, when an engine is
+   disabled, that its host stays open until `osprey.yaml` changes. CARRIES carries it for after v0.5.1; it does not
+   block v0.5.1.

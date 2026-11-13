@@ -79,6 +79,27 @@ def test_a_model_engine_s_host_is_the_gateway_s_alone() -> None:
     assert [n for n, r in rows.items() if "api.openai.com" in r.get("hosts", [])] == ["litellm"]
 
 
+def test_an_engine_s_host_is_open_while_declared_and_closed_by_a_render_without_it() -> None:
+    """ADR-135 Amendment 10 point 2, correcting Amendment 8 decision 3: the render reads the engines
+    `osprey.yaml` declares and nothing *Admin › Models* holds, so an engine disabled there keeps its
+    host open at every render while `osprey.yaml` still declares it; it is taking the engine out of
+    `osprey.yaml` and rendering again that closes it."""
+    raw = yaml.safe_load((FIXTURES / "production.yaml").read_text(encoding="utf-8"))
+
+    def hosts(declared: dict[str, Any]) -> dict[str, list[str]]:
+        rendered = render(OspreyConfig.model_validate(declared), resolver=_resolver).artefacts
+        return {
+            n: r.get("hosts", []) for n, r in _rows(yaml.safe_load(rendered["values.yaml"])).items()
+        }
+
+    # Declared: open, and again at the next render of the same file (nothing else is read).
+    for _ in range(2):
+        assert "api.openai.com" in hosts(raw)["litellm"]
+
+    without = {**raw, "models": {k: v for k, v in raw["models"].items() if k != "provider"}}
+    assert not [n for n, h in hosts(without).items() if "api.openai.com" in h]
+
+
 def test_ingress_is_the_paths_turned_round(values: dict[str, Any]) -> None:
     """A workload admits, in the namespace, exactly the rendered workloads whose paths name it."""
     rows, paths = _rows(values), load_profile().egress.paths
