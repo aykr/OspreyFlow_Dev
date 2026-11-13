@@ -37045,8 +37045,14 @@ as on Small, and Superset's own database, three on the one instance). By platfor
    the install with reporting on, and a dashboards check (a dashboard opens embedded in the Glass for a person with
    `read_reports`, is refused for one without and for one above the identity's clearance; Superset's sign-in as
    point 3 of Amendment 9 says; the report sync filling the mart), backup and restore including `superset`, and
-   decommission. Embedding on Entra matches a board to its dashboard identity by the identity's `name`
-   (Amendment 10's registration), which is v0.5.2's step 5.
+   decommission.
+8. **Embedding on Entra ID** matches a board's slug to its dashboard identity's `name` (Amendment 10's
+   registration, one a tenant), Keycloak's identity still by its client id `osprey-dashboard-<slug>`; a named
+   identity is matched by its name alone. The guest token's rows are the identity's client id, the application
+   id, the key the report sync writes the mart under; who may open it is `may_open`, unchanged, the identity's
+   cases read by its application id. Tests: `test_superset_embed.py`'s four Entra cases (the board by name and
+   its rows; another name opens nothing; a lower clearance and a missing case shown nothing; no match through
+   another identity's client id). Record: `step5-embed-red-first.txt` (main's matching and three plants).
 
 Records: `process/lanes/platform-b/v052/am11-render-red-first.txt` (eight plants), `step7-runbooks-red-first.txt`
 (six plants), each red for its reason.

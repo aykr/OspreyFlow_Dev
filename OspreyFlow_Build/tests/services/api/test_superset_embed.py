@@ -60,9 +60,13 @@ class _Cases:
         return [(_case(c), AccessLevel.VIEWER) for c in self.by_principal.get(principal.id, [])]
 
 
+#: What Admin › Dashboards lists: Keycloak's identity, unless a test registers Entra ID's.
+LISTED: list[DashboardIdentity] = [BOARD]
+
+
 class _Identities:
     async def list_dashboards(self) -> list[DashboardIdentity]:
-        return [BOARD]
+        return list(LISTED)
 
 
 class _Names:
@@ -140,6 +144,7 @@ def _client(who: Principal, superset: _Superset, *, cases: dict[str, list[str]],
 def _clear():  # type: ignore[no-untyped-def]
     yield
     app.dependency_overrides.clear()
+    LISTED[:] = [BOARD]
 
 
 def test_may_open_needs_everything_the_identity_counts() -> None:
@@ -205,3 +210,59 @@ def test_not_configured_offers_nothing(superset: _Superset) -> None:
     client = TestClient(app)
     assert client.get("/v1/reports/dashboards").json() == []
     assert client.post("/v1/reports/dashboards/compliance-board/guest-token").status_code == 404
+
+
+
+# --- On Entra ID (ADR-148 Amendments 10 and 11, v0.5.2's step 5) ---------------------------------
+#
+# A dashboard identity is an Entra app registration: its client id and account id are its application
+# id (a GUID), and its name, registered in Admin › Dashboards, is the board's slug. The report sync
+# writes the mart under its client id, so the guest token's rows are that application id's.
+
+APP_ID = "dddddddd-eeee-4fff-8000-111111111111"
+ENTRA_BOARD = DashboardIdentity(client_id=APP_ID, account_id=APP_ID, name="compliance-board",
+                                clearance="OFFICIAL", org_unit="verify")  # fmt: skip
+
+
+def test_on_entra_a_board_is_its_identity_s_by_name_and_its_rows_the_application_s(superset: _Superset) -> None:
+    LISTED[:] = [ENTRA_BOARD]
+    client = _client(VIEWER, superset, cases={APP_ID: ["aml"], "u-viewer": ["aml", "other"]})
+    assert client.get("/v1/reports/dashboards").json() == [{"slug": "compliance-board", "title": "Compliance board"}]
+    token = client.post("/v1/reports/dashboards/compliance-board/guest-token")
+    assert token.status_code == 200, token.text
+    (body,) = superset.guest_bodies
+    assert body["rls"] == [{"clause": f"dashboard = '{APP_ID}'"}]
+
+
+def test_on_entra_an_identity_of_another_name_opens_no_board(superset: _Superset) -> None:
+    LISTED[:] = [ENTRA_BOARD.model_copy(update={"name": "another-board"})]
+    client = _client(VIEWER, superset, cases={APP_ID: ["aml"], "u-viewer": ["aml"]})
+    assert client.get("/v1/reports/dashboards").json() == []
+    assert client.post("/v1/reports/dashboards/compliance-board/guest-token").status_code == 404
+    assert superset.guest_bodies == []
+
+
+@pytest.mark.parametrize(
+    ("who", "cases"),
+    [(LOW, {APP_ID: ["aml"], "u-low": ["aml"]}), (VIEWER, {APP_ID: ["aml", "second"], "u-viewer": ["aml"]})],
+    ids=["a-lower-clearance", "missing-one-of-its-cases"],
+)
+def test_on_entra_who_cannot_see_all_it_counts_is_not_shown_it(superset: _Superset, who: Principal, cases: dict[str, list[str]]) -> None:
+    """Rule 4 on Entra ID: the identity's cases are read by its application id, as its token reads."""
+    LISTED[:] = [ENTRA_BOARD]
+    client = _client(who, superset, cases=cases)
+    assert client.get("/v1/reports/dashboards").json() == []
+    assert client.post("/v1/reports/dashboards/compliance-board/guest-token").status_code == 404
+    assert superset.guest_bodies == []
+
+
+def test_a_name_is_never_matched_through_another_identity_s_client_id(superset: _Superset) -> None:
+    """An identity named on Entra ID is matched by its name alone: one whose name is another board's is
+    not opened as the board its client id would name on Keycloak."""
+    from services.api.superset_embed import identity_for
+
+    keycloak_shaped = DashboardIdentity(client_id="osprey-dashboard-compliance-board", account_id="x",
+                                        name="something-else")  # fmt: skip
+    assert identity_for("compliance-board", [keycloak_shaped]) is None
+    assert identity_for("compliance-board", [BOARD]) == BOARD  # Keycloak, no name stored
+    assert identity_for("compliance-board", [ENTRA_BOARD]) == ENTRA_BOARD

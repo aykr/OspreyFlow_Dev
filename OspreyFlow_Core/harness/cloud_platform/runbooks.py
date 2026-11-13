@@ -66,8 +66,8 @@ def _reporting_registrations(config: OspreyConfig, values: dict[str, Any]) -> st
             f"`https://{_bi(values)}/oauth-authorized/entra`, with a client secret, and granted this API's\n"
             f"delegated scope `{claims.scope}` with admin consent. Its secret is step 2's\n"
             f"`superset_oidc_client_secret`. Superset reads who signed in from the Conduit, so its roles are\n"
-            f"the person's rights here: `administer_system` is Superset's Admin, `read_reports` its read-only\n"
-            f"Gamma, and a person with neither is not let in."
+            f"the person's rights here: `administer_system` is Superset's Admin, `manage_dashboards` its\n"
+            f"builder (Alpha), `read_reports` its read-only Gamma, and a person with none of them is not let in."
         )
     if config.reporting.sync:
         parts.append(
