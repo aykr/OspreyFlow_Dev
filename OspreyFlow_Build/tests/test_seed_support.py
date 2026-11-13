@@ -230,11 +230,24 @@ class FakeClient:
             self.rows[name] = [i for i in self.rows.get(name, []) if i not in matching]
         return len(matching)
 
-    async def sql(self, command: str, **_: object) -> list[dict[str, object]]:
+    async def sql(self, command: str, **kwargs: object) -> list[dict[str, object]]:
         import re
 
         self.statements.append(command)
         self._maybe_fail(command)
+        params: dict[str, object] = kwargs.get("params") or {}  # type: ignore[assignment]
+        # The search index's outbox (ADR-150 decision 1): the ids a clean-up is about to delete,
+        # read in pages by id, then named.
+        page = re.match(r"SELECT id FROM (\w+) WHERE id LIKE :like AND id > :cursor ORDER BY id LIMIT (\d+)$", command)
+        if page:
+            start = str(params["like"]).removesuffix("%")
+            ids = sorted(i for i in self.rows.get(page.group(1), [])
+                         if i.startswith(start) and i > str(params["cursor"]))  # fmt: skip
+            return [{"id": i} for i in ids[: int(page.group(2))]]
+        if command == "INSERT INTO IndexPending CONTENT :rows":
+            self.index_pending = [*getattr(self, "index_pending", []),
+                                  *(r["node_id"] for r in params["rows"])]  # type: ignore[union-attr]  # fmt: skip
+            return []
         truncate = re.match(r"TRUNCATE TYPE (\w+) UNSAFE$", command)
         if truncate:
             if self.truncate_times_out:
@@ -813,3 +826,35 @@ def test_event_progress_says_how_many_how_long_and_how_fast(
         "  50,000 events loaded (0m 10s, 5,000 per s)",
         "  100,000 events loaded (1m 10s, 833 per s)",
     ]
+
+
+# --- ADR-150 decision 1: a seed's own clean-up and reset reach the search index -----------------
+
+
+def test_a_clean_up_names_each_node_it_deletes_to_the_search_index_first() -> None:
+    """The deletes bypass the adapter, so the nodes go to the index's outbox before they go; the
+    indexer then finds each gone and deletes its document. Only this seed's own nodes are named."""
+    accounts = [f"paysim-acct-{i:04d}" for i in range(1_203)]
+    client = FakeClient({"Endpoint": [*accounts, "other-acct-1"], "TRANSACTED": ["paysim-tx-1"]})
+    _clear(client)
+    assert sorted(client.index_pending) == accounts
+    first_insert = client.statements.index("INSERT INTO IndexPending CONTENT :rows")
+    first_delete = next(i for i, c in enumerate(client.statements) if "DELETE" in c and "Endpoint" in c)
+    assert first_insert < first_delete
+
+
+def test_a_reset_rebuilds_the_search_index_where_there_is_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    rebuilt: list[str] = []
+
+    async def rebuild(database: str, *, say: object) -> None:
+        rebuilt.append(database)
+
+    monkeypatch.setattr(seed_support, "rebuild_search_index_if_configured", rebuild)
+    _reset(_Server(["ospreyflow"]))
+    assert rebuilt == ["ospreyflow"]
+
+
+def test_without_an_opensearch_a_reset_rebuilds_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENSEARCH_URL", raising=False)
+    monkeypatch.delenv("OPENSEARCH_HOST", raising=False)
+    asyncio.run(seed_support.rebuild_search_index_if_configured("ospreyflow", say=print))

@@ -31,9 +31,9 @@ class FeedResources:
 
 
 @asynccontextmanager
-async def feed_resources() -> AsyncIterator[FeedResources]:
+async def feed_resources(*, database: str = "ospreyflow") -> AsyncIterator[FeedResources]:
     config = SearchIndexConfig.from_env()
-    arcadedb = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+    arcadedb = ArcadeDBClient(ArcadeDBConfig.from_env(database=database))
     schema = load_deployment_ontology()
     source = GraphArcadeDBAdapter(arcadedb, load_uk_le_scheme())
     await source.apply_schema(schema)

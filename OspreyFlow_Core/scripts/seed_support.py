@@ -247,6 +247,25 @@ async def reset_graph_database(
         raise CleanUpIncomplete(f"database {database!r} still exists after the drop")
     await client.create_database_if_absent()
     say(f"  reset: {database!r} created again, empty")
+    await rebuild_search_index_if_configured(database, say=say)
+
+
+async def rebuild_search_index_if_configured(
+    database: str, *, say: Callable[[str], None] = print
+) -> None:
+    """After the whole graph is dropped, its outbox went with it, so the search index is rebuilt
+    from the (empty) graph where this deployment has one (ADR-150 decision 1): every document of
+    the dropped graph leaves it."""
+    from services.search_index.run import configured
+
+    if not configured():
+        return
+    from services.search_index.rebuild import rebuild
+    from services.search_index.resources import feed_resources
+
+    async with feed_resources(database=database) as r:
+        done = await rebuild(r.source, r.texts, r.client, r.alias, r.schema)
+    say(f"  reset: the search index rebuilt, {done.documents} documents")
 
 
 async def _rows_in(client: _Sql, type_name: str) -> int:
@@ -477,6 +496,28 @@ async def _delete_scoped(
     )
 
 
+async def record_for_search_index(client: _Sql, type_name: str, prefix: str) -> int:
+    """Names every node of `type_name` whose id starts with `prefix` to the search index's outbox
+    (`IndexPending`, ADR-150 decision 1), in pages by id, so a clean-up that deletes them outside
+    the adapter still reaches the index. Returns how many were named."""
+    named, cursor = 0, ""
+    while True:
+        rows = await client.sql(
+            f"SELECT id FROM {type_name} WHERE id LIKE :like AND id > :cursor "
+            "ORDER BY id LIMIT 1000",
+            params={"like": f"{prefix}%", "cursor": cursor},
+        )
+        ids = [str(r["id"]) for r in rows]
+        if not ids:
+            return named
+        await client.sql(
+            "INSERT INTO IndexPending CONTENT :rows",
+            params={"rows": [{"node_id": node_id} for node_id in ids]},
+        )
+        named += len(ids)
+        cursor = ids[-1]
+
+
 async def clear_seeded_graph(
     client: _Sql,
     *,
@@ -499,6 +540,9 @@ async def clear_seeded_graph(
     accounts = await _count(client, node_type, node_prefix)
     transactions = await _count(client, edge_type, edge_prefix)
     say(f"  clean-up: {accounts:,} accounts and {transactions:,} transactions to remove")
+    # ADR-150 decision 1: these deletes bypass the adapter, so the nodes are named to the search
+    # index's outbox first; the indexer finds each gone and deletes its document.
+    await record_for_search_index(client, node_type, node_prefix)
     try:
         for kind, type_name, prefix in (
             ("EDGE", edge_type, edge_prefix),

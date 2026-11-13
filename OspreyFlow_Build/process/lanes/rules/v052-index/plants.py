@@ -25,6 +25,7 @@ REACH = f"{B}/services/search_index/test_index_feed_reach.py"
 RUN = f"{B}/services/search_index/test_run.py"
 HARNESS = f"{B}/harness/test_search_index_render_and_restore.py"
 SIGV4 = f"{B}/services/search_index/test_client_sigv4.py"
+SEEDS = f"{B}/test_seed_support.py"
 ADAPTER = "OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py"
 INDEXER = "OspreyFlow_Core/services/search_index/indexer.py"
 DOCUMENT = "OspreyFlow_Core/services/search_index/document.py"
@@ -143,6 +144,12 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      "    return AWSV4SignerAsyncAuth(credentials, region, \"es\")\n",
      "    return AWSV4SignerAsyncAuth(credentials, region, \"aoss\")\n",
      [f"{SIGV4}::test_a_sigv4_client_is_answered"]),
+    ("V30 a seed's clean-up deletes past the index", "OspreyFlow_Core/scripts/seed_support.py",
+     "    await record_for_search_index(client, node_type, node_prefix)\n", "",
+     [f"{SEEDS}::test_a_clean_up_names_each_node_it_deletes_to_the_search_index_first"]),
+    ("V31 a reset leaves the dropped graph's documents in the index", "OspreyFlow_Core/scripts/seed_support.py",
+     "    await rebuild_search_index_if_configured(database, say=say)\n", "",
+     [f"{SEEDS}::test_a_reset_rebuilds_the_search_index_where_there_is_one"]),
     ("V23 the host and port win over the URL", "OspreyFlow_Core/services/search_index/client.py",
      "        url = (env.get(\"OPENSEARCH_URL\") or \"\").strip()\n", "        url = \"\"\n",
      [f"{CLIENT}::test_the_url_wins_over_host_and_port"]),
@@ -169,7 +176,7 @@ def _run(tests: list[str]) -> tuple[str, str]:
 
 
 def main() -> int:
-    every = [OUTBOX, FEED, DOC, CLIENT, REACH, RUN, HARNESS, SIGV4]
+    every = [OUTBOX, FEED, DOC, CLIENT, REACH, RUN, HARNESS, SIGV4, SEEDS]
     state, line = _run(every)
     print(f"built: {state} - {line}")
     if state != "GREEN":
