@@ -108,7 +108,9 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
         else:
             handlers = [f"\treverse_proxy {upstream}"]
         if gate:
-            handlers = _behind_the_key(identity=name == f"id.{names.host}", handlers=handlers)
+            handlers = _behind_the_key(
+                names.host, identity=name == f"id.{names.host}", handlers=handlers
+            )
         lines += ["", f"{names.scheme}://{name} {{", *given, *handlers, "}"]
     # ADR-114 Amendment 7: the doors this machine alone uses, through the proxy, so the services
     # behind them need no published port — and so no route out (measured: a published port needs
@@ -145,13 +147,14 @@ OPEN_ON_THE_IDENTITY_PROVIDER = (
 )
 
 
-def _behind_the_key(*, identity: bool, handlers: list[str]) -> list[str]:
+def _behind_the_key(host: str, *, identity: bool, handlers: list[str]) -> list[str]:
     """One name's handlers behind the shared key (ADR-114 Amendment 41), in this order: a request
     that has no pass, is not a CORS preflight (an `OPTIONS` naming the method it asks about, which
-    never carries a credential) and, on the identity provider, is not one of its open answers, is
-    asked for the key (`basic_auth`); once it has answered, it is given the pass for this name alone
-    (host-only). **Any Basic `Authorization`, whatever its case, is taken off** before anything
-    behind the proxy sees it, so the key never reaches a service. The file's three snippets,
+    never carries a credential) and, on the identity provider, is not one of its open answers,
+    is asked for the key (`basic_auth`); once it has answered, it is given the pass for the
+    deployment's base name, `host`, so the other two names let it through too (ADR-114 Amendment
+    42). **Any Basic `Authorization`, whatever its case, is taken off** before anything behind
+    the proxy sees it, so the key never reaches a service. The file's three snippets,
     `harness.access_key.snippet`, carry the hash and the pass."""
     unasked = [
         "\t\tnot {",
@@ -186,7 +189,7 @@ def _behind_the_key(*, identity: bool, handlers: list[str]) -> list[str]:
         "\t\tbasic_auth @osprey_locked bcrypt OspreyFlow {",
         "\t\t\timport osprey_access_key",
         "\t\t}",
-        "\t\timport osprey_access_pass_set",
+        f"\t\timport osprey_access_pass_set {host}",
         "\t\trequest_header @osprey_basic -Authorization",
         *("\t" + line for line in handlers),
         "\t}",

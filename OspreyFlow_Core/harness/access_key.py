@@ -79,7 +79,10 @@ def snippet(user: str, hashed: str, token: str) -> str:
         + f"\theader Cookie *{cookie}*\n"
         + "}\n"
         + "(osprey_access_pass_set) {\n"
-        + f'\theader @osprey_answered +Set-Cookie "{cookie}; Path=/; Max-Age={PASS_SECONDS}; '
+        # ADR-114 Amendment 42: for the deployment's base name, given by the Caddyfile's import, so
+        # one answer passes all three names and nothing outside the base.
+        + f'\theader @osprey_answered +Set-Cookie "{cookie}; Domain={{args[0]}}; Path=/; '
+        + f"Max-Age={PASS_SECONDS}; "
         + "Secure; "
         + 'HttpOnly; SameSite=Lax"\n'
         + "}\n"
@@ -108,9 +111,15 @@ def read(path: Path) -> tuple[str, str, str]:
     user, hashed, token = found["user"], found["hash"], found["token"]
     if not (_USER.match(user) and _BCRYPT.match(hashed) and _TOKEN.match(token)):
         raise KeyRefused(f"{path} is not a file `python -m harness.access_key set` wrote")
-    if text != snippet(user, hashed, token):
+    if text not in (snippet(user, hashed, token), _before_amendment_42(user, hashed, token)):
         raise KeyRefused(f"{path} has been edited by hand; set the key again")
     return user, hashed, token
+
+
+def _before_amendment_42(user: str, hashed: str, token: str) -> str:
+    """The file as `set` wrote it under Amendment 41 (its pass for one name alone): still read, and
+    written in the current shape by `carry_into`, keeping the user, the hash and the pass."""
+    return snippet(user, hashed, token).replace("Domain={args[0]}; ", "")
 
 
 def pass_token(directory: Path) -> str | None:
@@ -165,8 +174,19 @@ def carry_into(stage: Path, out_dir: Path, owner: tuple[int, int] | None = None)
         )
     for source in (out_dir / PENDING_FILE, in_place):
         if source.is_file():
-            shutil.copy2(source, stage / ACCESS_KEY_FILE)
-            _give(stage / ACCESS_KEY_FILE, owner)
+            staged = stage / ACCESS_KEY_FILE
+            try:
+                user, hashed, token = read(source)
+            except KeyRefused:
+                # Carried as it is, so preflight refuses it in words.
+                shutil.copy2(source, staged)
+            else:
+                # Written in the current shape (ADR-114 Amendment 42), the same user, hash and pass.
+                from harness.atomic import replace_whole
+
+                text = snippet(user, hashed, token).encode("utf-8")
+                replace_whole(staged, text, mode=0o600)
+            _give(staged, owner)
             return
 
 

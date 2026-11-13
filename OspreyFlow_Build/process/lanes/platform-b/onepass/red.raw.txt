@@ -1,0 +1,13 @@
+# onepass, red first: the tests before the code, at a3df0f4 + the tests, the real Caddy 2.11.4, this Mac (cookie scope by RFC 6265's own rule: http.cookiejar's default sends a host-only cookie to subdomains, so it passed on the old code and was replaced)
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_each_of_the_three_names_asks_for_the_key_and_says_noindex[demo.example.org]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_each_of_the_three_names_asks_for_the_key_and_says_noindex[id.demo.example.org]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_each_of_the_three_names_asks_for_the_key_and_says_noindex[bi.demo.example.org]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_apply_carries_a_key_set_before_the_amendment_into_the_new_shape_unchanged
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[demo.gate.localhost]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[id.demo.gate.localhost]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[bi.demo.gate.localhost]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_one_answer_on_any_name_lets_the_other_two_through[demo.gate.localhost]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_one_answer_on_any_name_lets_the_other_two_through[id.demo.gate.localhost]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_one_answer_on_any_name_lets_the_other_two_through[bi.demo.gate.localhost]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_goes_to_the_deployments_names_and_nowhere_else
+11 failed, 97 passed in 129.81s (0:02:09)

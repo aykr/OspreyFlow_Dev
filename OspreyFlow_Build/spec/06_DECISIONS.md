@@ -35992,3 +35992,43 @@ the key set off again if either fails.
 - Not compared byte for byte: the `cluster` profile's own render (both kind fixtures are refused by
   the cloud-platform profile's sign-in rule) and `cp-policy-check` (it needs Docker, which was not
   running on the Mac); both are for the owner's next run of `make ci` or GitHub.
+
+### ADR-114, Amendment 42 (13 November 2026) — One key prompt for the whole deployment: the pass covers its three names
+
+Status: as built by the platform-b lane (step onepass), at the owner's ruling of 13 November 2026. On the
+demonstration's deployment the owner answered the key on the Glass's name, chose Sign in, and was asked
+again on `id.`: Amendment 41 decision 4's pass was host-only. This amendment changes that decision alone;
+the rest of Amendment 41 stands.
+
+1. **The pass is written for the deployment's base name**, the host of `network.public_origin`
+   (`Domain=<host>`), as the theme cookie is kept for the deployment's names (ADR-072): after a correct
+   key on any one of the three names, the other two let the visitor through without asking. Tests:
+   `test_one_answer_on_any_name_lets_the_other_two_through` (each name first; `curl`'s own cookie
+   engine, which keeps and sends a cookie by a browser's rules), and `process/lanes/platform-b/onepass/
+   chromium.raw.txt`: real Chromium answering the key on one origin only, the other two answering 200,
+   and 401 on both on main's code.
+2. **It reaches nothing outside the deployment's base**: the base name and the names under it, never the
+   domain above it, a sibling, or a name merely ending in the same letters. Test:
+   `test_the_pass_goes_to_the_deployments_names_and_nowhere_else` (RFC 6265 §5.1.3 domain matching on the
+   real `Set-Cookie`; `http.cookiejar`'s default policy was rejected as the judge, since it sends a
+   host-only cookie to subdomains, which no browser does). The exact cookie:
+   `test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind`.
+3. **Unchanged:** no pass or a wrong one is still asked (401) on all three, with `noindex`
+   (`test_a_wrong_or_no_key_still_asks_on_all_three`, each name first); the pass is still given only when
+   the key was checked (`test_the_open_answers_never_give_the_pass_for_an_unchecked_key`); the tools on the
+   server still present it (`test_a_host_tool_presents_the_pass_to_the_deployments_names_alone`,
+   `test_every_tool_that_finds_the_deployment_by_its_settings_carries_the_pass`).
+4. **How it is set:** the key file's third snippet takes the base name from the Caddyfile's import
+   (`import osprey_access_pass_set <host>`, `{args[0]}`), so the render, which never reads the file,
+   supplies it. Test: `test_each_of_the_three_names_asks_for_the_key_and_says_noindex`.
+5. **No key is set again.** A key file written under Amendment 41 is still read
+   (`test_a_key_set_before_the_amendment_is_still_read`), and `ospreyflow apply` carries it into place in
+   the new shape with the same user, hash and pass
+   (`test_apply_carries_a_key_set_before_the_amendment_into_the_new_shape_unchanged`); the changed file
+   restarts the proxy, as any new key does (`test_a_key_set_again_restarts_the_proxy`).
+
+Red first: the cases above before the code (`onepass/red.raw.txt`), the browser on main's code
+(`onepass/chromium.raw.txt`), and five planted defects (`onepass/plants.raw.txt`).
+
+**Cost.** A pass taken from one of the three names now opens the other two for its eight hours, as one
+key opens all three.

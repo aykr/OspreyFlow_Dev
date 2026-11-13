@@ -1,0 +1,37 @@
+# onepass: the access-key and real-proxy tests against each planted defect, this Mac, at a3df0f4 + the uncommitted change
+## the pass host-only again (no Domain): RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_apply_carries_a_key_set_before_the_amendment_into_the_new_shape_unchanged
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_one_answer_on_any_name_lets_the_other_two_through[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_one_answer_on_any_name_lets_the_other_two_through[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_one_answer_on_any_name_lets_the_other_two_through[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_goes_to_the_deployments_names_and_nowhere_else
+  8 failed, 100 passed in 129.40s (0:02:09)
+## the pass for the domain above the deployment: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_each_of_the_three_names_asks_for_the_key_and_says_noindex[demo.example.org]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_each_of_the_three_names_asks_for_the_key_and_says_noindex[id.demo.example.org]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_each_of_the_three_names_asks_for_the_key_and_says_noindex[bi.demo.example.org]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_goes_to_the_deployments_names_and_nowhere_else
+  7 failed, 101 passed in 128.91s (0:02:08)
+## a key file from before the amendment refused: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_a_key_set_before_the_amendment_is_still_read
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_apply_carries_a_key_set_before_the_amendment_into_the_new_shape_unchanged
+  2 failed, 106 passed in 133.57s (0:02:13)
+## a key file from before the amendment carried unchanged: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_apply_carries_a_key_set_before_the_amendment_into_the_new_shape_unchanged
+  1 failed, 107 passed in 129.37s (0:02:09)
+## the pass given without the key (any request on the base): RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-POST-/realms/osprey/protocol/openid-connect/token]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-GET-/realms/osprey/protocol/openid-connect/certs]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-GET-/realms/osprey/.well-known/openid-configuration]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[demo.gate.localhost-OPTIONS-/v1/x]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-OPTIONS-/v1/x]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[bi.demo.gate.localhost-OPTIONS-/v1/x]
+  6 failed, 102 passed in 129.71s (0:02:09)
+## the code as it is
+108 passed in 129.46s (0:02:09)

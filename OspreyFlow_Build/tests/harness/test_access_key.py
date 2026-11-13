@@ -105,7 +105,8 @@ def test_each_of_the_three_names_asks_for_the_key_and_says_noindex(name: str) ->
         "\t\tbasic_auth @osprey_locked bcrypt OspreyFlow {\n\t\t\timport osprey_access_key\n"
         in block
     )
-    assert "\t\timport osprey_access_pass_set\n" in block
+    # ADR-114 Amendment 42: the pass is set for the deployment's own base name.
+    assert "\t\timport osprey_access_pass_set demo.example.org\n" in block
     assert "\tlog\n" in block
 
 
@@ -475,3 +476,37 @@ def test_a_folder_in_the_key_files_place_is_refused_in_words(tmp_path: Path) -> 
     (live / access_key.ACCESS_KEY_FILE).mkdir(parents=True)
     with pytest.raises(access_key.KeyRefused, match="is a folder"):
         access_key.carry_into(stage, live)
+
+
+# --- ADR-114 Amendment 42: a key file set before the amendment ---------------------------------------
+
+
+def _amendment_41_file(path: Path) -> str:
+    """A key file as `set` wrote it before Amendment 42: its pass for one name alone."""
+    token = "k" * 43
+    text = access_key.snippet(user="demo", hashed=HASH, token=token).replace(
+        "Domain={args[0]}; ", ""
+    )
+    path.write_text(text, encoding="utf-8")
+    os.chmod(path, 0o600)
+    return token
+
+
+def test_a_key_set_before_the_amendment_is_still_read(tmp_path: Path) -> None:
+    path = tmp_path / access_key.ACCESS_KEY_FILE
+    token = _amendment_41_file(path)
+    assert access_key.read(path) == ("demo", HASH, token)
+
+
+def test_apply_carries_a_key_set_before_the_amendment_into_the_new_shape_unchanged(tmp_path: Path) -> None:
+    """No key is set again: the user, the hash and the pass are kept, and only the pass's cookie
+    names the base, so the deployment asks once from its next `apply`."""
+    live, stage = tmp_path / "live", tmp_path / "stage"
+    live.mkdir()
+    stage.mkdir()
+    token = _amendment_41_file(live / access_key.ACCESS_KEY_FILE)
+    access_key.carry_into(stage, live)
+    carried = stage / access_key.ACCESS_KEY_FILE
+    assert carried.read_text(encoding="utf-8") == access_key.snippet("demo", HASH, token)
+    assert "Domain={args[0]}" in carried.read_text(encoding="utf-8")
+    assert stat.S_IMODE(carried.stat().st_mode) == 0o600
