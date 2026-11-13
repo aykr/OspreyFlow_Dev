@@ -698,10 +698,10 @@ def checks() -> None:
     ok("what it loaded is found", r.status_code == 200 and r.json().get("nodes"), r.text[:300])
     for _ in range(30):
         r = c.get(f"/v1/investigations/{case}/alert-queue", headers=admin, params={"status": "all"})
-        if r.status_code == 200 and any(a.get("rule_id") == f"hotlist:{hotlist}" for a in r.json()):
+        if r.status_code == 200 and any((a.get("alert") or a).get("rule_id") == f"hotlist:{hotlist}" for a in r.json()):
             break
         time.sleep(5)
-    ok("the rule raises its alert on the load", r.status_code == 200 and any(a.get("rule_id") == f"hotlist:{hotlist}" for a in r.json()), r.text[:300])
+    ok("the rule raises its alert on the load", r.status_code == 200 and any((a.get("alert") or a).get("rule_id") == f"hotlist:{hotlist}" for a in r.json()), r.text[:300])
     print(f"every check passed (record {log})")
 
 
