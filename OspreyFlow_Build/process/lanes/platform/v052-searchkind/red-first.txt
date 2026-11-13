@@ -101,3 +101,12 @@ FAILED tests/test_r1_kind_standins.py::test_the_namespaces_pods_never_reach_the_
 1 failed, 39 passed in 23.23s
 
 Green: tests/test_r1_opensearch_standin.py and tests/test_r1_kind_standins.py 40 passed.
+
+The domain's lifecycle (made by install step 2's stand-in, gone whole with decommission step 7's):
+Plant (the domain's engine and name not made by install step 2's stand-in, as before: made by platform()):
+FAILED tests/test_r1_kind_standins.py::test_the_terraform_stand_in_makes_the_domains_secret_and_admits_what_its_policy_admits
+1 failed, 13 passed in 0.68s
+
+Step 8's missing-listing message, red first (it named step 8 for the backups choice step 7 writes):
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_step_8_names_the_step_that_writes_each_listing_it_lacks
+Green: the kind and domain tests 40 passed; tests/harness and tests/cp_policy_check 1685 passed, 453 skipped.

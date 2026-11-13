@@ -551,9 +551,10 @@ fi
 ```
 
 ```bash
-for listing in state.txt buckets.txt backups; do
+for listing in state.txt buckets.txt; do
   test -f "$WORK/$listing" || {{ echo "no $WORK/$listing: step 8's first block (the platform's) writes it"; false; }}
 done
+test -f "$WORK/backups" || {{ echo "no $WORK/backups: step 7's platform block writes it"; false; }}
 objects=()
 for kind in {kinds}; do
   if kubectl api-resources -o name | grep -qx "$kind"; then

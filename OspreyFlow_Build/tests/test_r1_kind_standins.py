@@ -20,11 +20,7 @@ GATES = Path(__file__).parents[1] / "process/lanes/platform/gates"
 
 
 def test_the_rds_stand_in_allows_what_the_parameter_group_sets() -> None:
-    sys.path.insert(0, str(GATES))
-    try:
-        import r1_kind
-    finally:
-        sys.path.remove(str(GATES))
+    r1_kind = _r1_kind()
     docs = [d for d in yaml.safe_load_all(r1_kind.standins_text("pw")) if d]
     postgres = next(
         d for d in docs if d["kind"] == "StatefulSet" and d["metadata"]["name"] == "postgres"
@@ -69,18 +65,22 @@ def test_the_domains_host_answers_at_the_stand_in_inside_the_cluster() -> None:
     assert re.fullmatch(
         rf"vpc-{r1_kind.NS}-search-[a-z0-9]+\.{r1_kind.REGION}\.es\.amazonaws\.com", host
     )
-    assert r1_kind.NAMES[host] == "s3-standin"
+    # Answered while the domain exists (install step 2 to decommission step 7), never before.
+    assert r1_kind.DOMAIN_NAMES[host] == "s3-standin" and host not in r1_kind.NAMES
 
 
 def test_the_opensearch_behind_the_domain_is_the_poc_manifests_engine() -> None:
     """One OpenSearch pod behind the stand-in, of the engine the poc manifest names
-    (OpenSearch_2.17), its security plugin off as the domain has no fine-grained access
-    control, and nothing else in the cluster reaching it but the stand-in (its port is not
-    the domain's 443)."""
+    (OpenSearch_2.17) with the phonetic plugin the domain has and the stock image lacks, its
+    security plugin off as the domain has no fine-grained access control, and nothing else in
+    the cluster reaching it but the stand-in (its port is not the domain's 443). It is the
+    Terraform's, so not among the platform's own stand-ins."""
     from harness.cloud_platform import manifest
 
     r1_kind = _r1_kind()
-    docs = [d for d in yaml.safe_load_all(r1_kind.standins_text("pw")) if d]
+    platform = [d for d in yaml.safe_load_all(r1_kind.standins_text("pw")) if d]
+    assert not any(d["metadata"]["name"] == "opensearch" for d in platform)
+    docs = [d for d in yaml.safe_load_all(r1_kind.domain_text()) if d]
     sts = next(
         d for d in docs if d["kind"] == "StatefulSet" and d["metadata"]["name"] == "opensearch"
     )
@@ -88,10 +88,13 @@ def test_the_opensearch_behind_the_domain_is_the_poc_manifests_engine() -> None:
     engine = manifest.load()["managed"]["opensearch"]["engine"]  # OpenSearch_2.17
     version = engine.removeprefix("OpenSearch_")
     assert re.fullmatch(
-        rf"localhost:5001/opensearchproject/opensearch:{re.escape(version)}\.\d+",
-        container["image"],
+        rf"public\.ecr\.aws/opensearchproject/opensearch:{re.escape(version)}\.\d+",
+        r1_kind.OPENSEARCH_BASE,
     )
-    assert container["image"].removeprefix("localhost:5001/") in r1_kind.THIRD_PARTY
+    dockerfile = r1_kind.opensearch_dockerfile()
+    assert dockerfile.startswith(f"FROM {r1_kind.OPENSEARCH_BASE}\n")
+    assert "opensearch-plugin install --batch analysis-phonetic" in dockerfile
+    assert container["image"] == f"localhost:5001/{r1_kind.OPENSEARCH_IMAGE}"
     env = {e["name"]: e["value"] for e in container["env"]}
     assert env["DISABLE_SECURITY_PLUGIN"] == "true" and env["discovery.type"] == "single-node"
     # Its disk carries the label decommission step 7 deletes it by.
@@ -131,8 +134,11 @@ def test_the_decommissions_terraform_removal_takes_the_domain_with_it(
     monkeypatch.setattr(r1_kind, "kubectl", kubectl)
     monkeypatch.setattr(r1_kind, "s3_exec", lambda code: "[]")
     monkeypatch.setattr(r1_kind, "s3_standin", given.append)
+    named: list[dict] = []
+    monkeypatch.setattr(r1_kind, "coredns", named.append)
     r1_kind.stand_in("DECOMMISSION", "7. Remove what the Terraform made")
     assert given and given[0]["domains"] == [] and given[0]["roles"] == []
+    assert named == [r1_kind.NAMES]  # the domain's name no longer resolves
     deleted = [c for c in calls if c[:1] == ("-n",) and "delete" in c]
     assert (
         "-n",
@@ -142,6 +148,8 @@ def test_the_decommissions_terraform_removal_takes_the_domain_with_it(
         "opensearch",
         "--ignore-not-found",
     ) in deleted
+    service = ("-n", r1_kind.MANAGED, "delete", "service", "opensearch", "--ignore-not-found")
+    assert service in deleted
     assert (
         "-n",
         r1_kind.MANAGED,
@@ -162,6 +170,7 @@ def _step7(r1_kind, tmp_path: Path, monkeypatch) -> list[dict]:  # type: ignore[
         r1_kind, "kubectl", lambda *a, **k: json.dumps(live) if "configmap" in a else ""
     )
     monkeypatch.setattr(r1_kind, "s3_exec", lambda code: "[]")
+    monkeypatch.setattr(r1_kind, "coredns", lambda names=None: None)
     given: list[dict] = []
     monkeypatch.setattr(r1_kind, "s3_standin", given.append)
     return given
@@ -266,7 +275,13 @@ def test_the_terraform_stand_in_makes_the_domains_secret_and_admits_what_its_pol
     monkeypatch.setattr(r1_kind, "apply", applied.extend)
     monkeypatch.setattr(r1_kind, "s3_standin", configs.append)
     monkeypatch.setattr(r1_kind, "irsa_webhook", lambda roles: None)
+    named: list[dict] = []
+    monkeypatch.setattr(r1_kind, "coredns", named.append)
     r1_kind.terraform(folder)
+    # The domain the Terraform makes: its engine applied, then its name answered.
+    made = [(d["kind"], d["metadata"]["name"]) for d in applied]
+    assert ("StatefulSet", "opensearch") in made
+    assert named == [r1_kind.DOMAIN_NAMES]
 
     tf = (folder / "terraform/opensearch.tf").read_text()
     secret = re.search(r'resource "kubernetes_secret" "\w+" \{\n(.*?)^\}\n', tf, re.S | re.M).group(

@@ -326,4 +326,5 @@ def test_r1s_domain_probe_signs_as_a_pod_does_and_reports_both_answers(
     mine, other = said[SEARCH_ROLE], said[OTHER_ROLE]
     assert mine["signed"][0] == 200 and mine["unsigned"][0] == 403 and mine["direct"] == "closed"
     assert other["signed"][0] == 403 and "not authorized" in other["signed"][1]
-    assert [s["path"] for s in _OpenSearch.seen] == ["/_cluster/health"]
+    assert mine["plugins"][0] == 200 and other["plugins"][0] == 403
+    assert [s["path"] for s in _OpenSearch.seen] == ["/_cluster/health", "/_cat/plugins?h=component"]

@@ -1,0 +1,40 @@
+# The OpenSearch behind the domain's stand-in (v0.5.2, ADR-148 Amendment 13): what the namespace's Terraform
+# makes (`aws_opensearch_domain.search`), so made by install step 2's stand-in (`r1_kind.terraform`) and gone
+# with decommission step 7's, with its disk. The S3/STS stand-in answers as the domain (SigV4 for es, the
+# domain's roles, its own 403s) and proxies only what it admits here, on 9200 inside the platform's
+# namespace. The security plugin is off as the domain has no fine-grained access control; one node, as kind
+# has one (the real domain's two nodes in two zones are not modelled: see the stand-in's docstring). Its
+# image carries the plugins the domain has that the stock image lacks (`r1_kind.OPENSEARCH_PLUGINS`).
+apiVersion: v1
+kind: Service
+metadata: {name: opensearch, namespace: platform-managed}
+spec:
+  selector: {app: opensearch}
+  ports: [{port: 9200, targetPort: 9200}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: opensearch, namespace: platform-managed}
+spec:
+  serviceName: opensearch
+  replicas: 1
+  selector: {matchLabels: {app: opensearch}}
+  template:
+    metadata: {labels: {app: opensearch}}
+    spec:
+      securityContext: {fsGroup: 1000}
+      containers:
+        - name: opensearch
+          image: localhost:5001/${OPENSEARCH_IMAGE}
+          env:
+            - {name: discovery.type, value: single-node}
+            - {name: DISABLE_SECURITY_PLUGIN, value: "true"}
+            - {name: DISABLE_INSTALL_DEMO_CONFIG, value: "true"}
+            - {name: OPENSEARCH_JAVA_OPTS, value: "-Xms512m -Xmx512m"}
+          ports: [{containerPort: 9200}]
+          resources: {requests: {memory: 1Gi}, limits: {memory: 1536Mi}}
+          readinessProbe: {httpGet: {path: /_cluster/health, port: 9200}, periodSeconds: 5}
+          volumeMounts: [{name: data, mountPath: /usr/share/opensearch/data}]
+  volumeClaimTemplates:
+    - metadata: {name: data, labels: {app: opensearch}}
+      spec: {accessModes: [ReadWriteOnce], storageClassName: gp2-expand, resources: {requests: {storage: 5Gi}}}

@@ -69,15 +69,20 @@ NAMES = {
     "login.microsoftonline.com": "entra-standin",
     f"s3.{REGION}.amazonaws.com": "s3-standin",
     f"sts.{REGION}.amazonaws.com": "s3-standin",
-    SEARCH_HOST: "s3-standin",  # checked there as the domain, then proxied to the OpenSearch pod
 }
-#: The engine behind the domain's stand-in, the poc manifest's OpenSearch_2.17 (one tag, kept here alone).
-OPENSEARCH_IMAGE = "opensearchproject/opensearch:2.17.1"
+#: The domain's name, answered at the S3/STS stand-in (checked there as the domain, then proxied to the
+#: OpenSearch pod) from install step 2 (the Terraform makes the domain) until decommission step 7.
+DOMAIN_NAMES = {**NAMES, SEARCH_HOST: "s3-standin"}
+#: The engine behind the domain's stand-in: the poc manifest's OpenSearch_2.17 (one tag, kept here alone),
+#: with the plugins an OpenSearch Service domain carries that the stock image does not and that the
+#: product uses (the search index's phonetic matching), built on the server into the cluster's registry.
+OPENSEARCH_BASE = "public.ecr.aws/opensearchproject/opensearch:2.17.1"
+OPENSEARCH_PLUGINS = ("analysis-phonetic",)
+OPENSEARCH_IMAGE = "r1/opensearch:2.17.1-domain"
 THIRD_PARTY = {  # the managed stores' stand-ins' images, through AWS's mirror of Docker Hub's (no pull limit): Valkey is its own publisher there, not under docker/library
     "postgres:16.4": "public.ecr.aws/docker/library/postgres:16.4",
     "valkey/valkey:8.0": "public.ecr.aws/valkey/valkey:8.0",
     # The engine behind the domain's stand-in: the poc manifest's OpenSearch_2.17.
-    OPENSEARCH_IMAGE: f"public.ecr.aws/{OPENSEARCH_IMAGE}",
 }
 
 
@@ -198,15 +203,29 @@ def mirror_third_party() -> None:
             sh("docker", "push", "-q", target)
 
 
-def coredns() -> None:
-    """The platform's names answer at their stand-ins inside the cluster (and only inside it)."""
+def opensearch_dockerfile() -> str:
+    return f"FROM {OPENSEARCH_BASE}\n" + "".join(
+        f"RUN /usr/share/opensearch/bin/opensearch-plugin install --batch {p}\n" for p in OPENSEARCH_PLUGINS)
+
+
+def build_opensearch() -> None:
+    """The domain's engine image, into the cluster's registry once (`opensearch_dockerfile`)."""
+    target = f"localhost:5001/{OPENSEARCH_IMAGE}"
+    if not sh("docker", "manifest", "inspect", "--insecure", target, check=False).strip():
+        sh("docker", "build", "-q", "-t", target, "-", stdin=opensearch_dockerfile())
+        sh("docker", "push", "-q", target)
+
+
+def coredns(names: dict[str, str] = NAMES) -> None:
+    """The platform's names answer at their stand-ins inside the cluster (and only inside it):
+    `names` as the platform has them now (`DOMAIN_NAMES` while the domain exists)."""
     cm = json.loads(kubectl("-n", "kube-system", "get", "configmap", "coredns", "-o", "json"))
     corefile = cm["data"]["Corefile"]
     corefile = re.sub(r"    # r1-standins\n(    rewrite stop \{\n(?:.*\n)*?    \}\n)+", "", corefile)
     rules = "    # r1-standins\n" + "".join(
         f"    rewrite stop {{\n      name exact {name} {svc}.{MANAGED}.svc.cluster.local\n"
         f"      answer name {svc}.{MANAGED}.svc.cluster.local {name}\n    }}\n"
-        for name, svc in NAMES.items())
+        for name, svc in names.items())
     corefile = corefile.replace("    kubernetes cluster.local", rules + "    kubernetes cluster.local", 1)
     cm["data"]["Corefile"] = corefile
     kubectl("replace", "-f", "-", stdin=json.dumps(cm))
@@ -243,8 +262,12 @@ def standins_text(password: str) -> str:
     from harness.cloud_platform.connections import POSTGRES_MAX_CONNECTIONS
 
     text = (HERE / "r1_kind_standins.yaml").read_text()
-    return (text.replace("${PASSWORD}", password).replace("${MAX_CONNECTIONS}", str(POSTGRES_MAX_CONNECTIONS))
-            .replace("${OPENSEARCH_IMAGE}", OPENSEARCH_IMAGE))
+    return text.replace("${PASSWORD}", password).replace("${MAX_CONNECTIONS}", str(POSTGRES_MAX_CONNECTIONS))
+
+
+def domain_text() -> str:
+    """The OpenSearch behind the domain's stand-in, as install step 2's stand-in applies it."""
+    return (HERE / "r1_kind_domain.yaml").read_text().replace("${OPENSEARCH_IMAGE}", OPENSEARCH_IMAGE)
 
 
 def entra_clients() -> dict[str, str]:
@@ -349,13 +372,14 @@ def platform() -> None:
     """Everything the client's platform has before the install begins: run once, after `up`."""
     log = record("platform")
     mirror_third_party()
+    build_opensearch()
     image = standin_image()
     save(standin_image=image)
     apply([{"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": n}} for n in (MANAGED, NS)])
     # Both forms: a pod asks by the full name, the API server calls a webhook's service by `<svc>.<ns>.svc`.
     names = [f"{s}.{MANAGED}.svc{tail}" for s in ("postgres", "valkey", "s3-standin", "entra-standin", "irsa-webhook")
              for tail in (".cluster.local", "")]
-    crt, key = certificate("standins", [*names, *NAMES])
+    crt, key = certificate("standins", [*names, *DOMAIN_NAMES])
     door_crt, door_key = certificate("door", [GLASS])
     apply([
         tls_secret(MANAGED, "standin-tls", crt, key),
@@ -366,7 +390,7 @@ def platform() -> None:
          "data": {"ca-bundle.crt": bundle()}},
     ])
     apply([d for d in yaml.safe_load_all(standins_text(PASSWORD)) if d])
-    for s in ("postgres", "valkey", "opensearch"):
+    for s in ("postgres", "valkey"):
         kubectl("-n", MANAGED, "rollout", "status", f"statefulset/{s}", "--timeout=300s")
     coredns()
     # Entra ID: the tenant's discovery, keys, /authorize and /token (v0.5.2, step 8). It signs what it
@@ -466,6 +490,10 @@ def terraform(folder: Path) -> None:
     save(terraform_made=made)
     config = s3_config(prefix, roles)
     s3_standin(config)
+    # The domain the Terraform makes: its engine, then its name (`aws_opensearch_domain.search.endpoint`).
+    apply([d for d in yaml.safe_load_all(domain_text()) if d])
+    kubectl("-n", MANAGED, "rollout", "status", "statefulset/opensearch", "--timeout=300s")
+    coredns(DOMAIN_NAMES)
     irsa_webhook(roles)
     print("the Terraform's stand-in made:\n  " + "\n  ".join(made))
 
@@ -565,7 +593,9 @@ def stand_in(runbook: str, step: str) -> None:
         # The domain goes with the Terraform (ADR-148 Amendment 13: no index backup), its disks with it.
         config["domains"] = []
         kubectl("-n", MANAGED, "delete", "statefulset", "opensearch", "--ignore-not-found")
+        kubectl("-n", MANAGED, "delete", "service", "opensearch", "--ignore-not-found")
         kubectl("-n", MANAGED, "delete", "pvc", "-l", "app=opensearch", "--ignore-not-found")
+        coredns(NAMES)  # the domain's name no longer resolves
         # The buckets the Terraform made, deleted as `aws_s3_bucket` deletes one: refused while it holds
         # anything (BucketNotEmpty; no force_destroy), so step 6's emptying is what lets it go.
         prefix = state()["prefix"]
@@ -753,11 +783,12 @@ import botocore.session
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 
-url = os.environ["OPENSEARCH_URL"].rstrip("/") + "/_cluster/health"
+base = os.environ["OPENSEARCH_URL"].rstrip("/")
+url = base + "/_cluster/health"
 context = ssl.create_default_context(cafile=os.environ.get("AWS_CA_BUNDLE"))
 
-def send(headers):
-    request = urllib.request.Request(url, headers=headers)
+def send(headers, to=url):
+    request = urllib.request.Request(to, headers=headers)
     try:
         with urllib.request.urlopen(request, context=context, timeout=30) as answer:
             return [answer.status, answer.read().decode()[:300]]
@@ -765,15 +796,21 @@ def send(headers):
         return [error.code, error.read().decode()[:300]]
 
 credentials = botocore.session.get_session().get_credentials().get_frozen_credentials()
-signed = AWSRequest(method="GET", url=url, headers={"x-amz-content-sha256": hashlib.sha256(b"").hexdigest()})
-SigV4Auth(credentials, "es", os.environ["AWS_REGION"]).add_auth(signed)
+
+def sign(to):
+    request = AWSRequest(method="GET", url=to, headers={"x-amz-content-sha256": hashlib.sha256(b"").hexdigest()})
+    SigV4Auth(credentials, "es", os.environ["AWS_REGION"]).add_auth(request)
+    return dict(request.headers.items())
+
+plugins = base + "/_cat/plugins?h=component"
 host, _, port = os.environ.get("R1_DIRECT", "opensearch.platform-managed.svc.cluster.local:9200").rpartition(":")
 try:
     socket.create_connection((host, int(port)), timeout=5).close()
     direct = "open"
 except OSError:
     direct = "closed"
-print(json.dumps({"signed": send(dict(signed.headers.items())), "unsigned": send({}), "direct": direct}))
+print(json.dumps({"signed": send(sign(url)), "unsigned": send({}), "direct": direct,
+                  "plugins": send(sign(plugins), plugins)}))
 """
 
 
@@ -813,6 +850,8 @@ def domain_checks(ok: Callable[[str, bool, Any], None]) -> None:
     ok("the namespace's role reaches the domain, signed for es", mine["signed"][0] == 200 and '"status"' in mine["signed"][1], mine)
     ok("an unsigned request is refused by the domain", mine["unsigned"][0] == 403, mine)
     ok("the OpenSearch pod is not reachable past the domain (9200)", mine["direct"] == "closed", mine)
+    ok(f"the domain's engine has the plugins the product uses ({', '.join(OPENSEARCH_PLUGINS)})",
+       mine["plugins"][0] == 200 and all(p in mine["plugins"][1] for p in OPENSEARCH_PLUGINS), mine["plugins"])
     other = domain_probe("ospreyflow-backup")
     ok("another role of the namespace is refused by the domain", other["signed"][0] == 403 and "not authorized" in other["signed"][1], other)
     logged = [line for line in kubectl("-n", MANAGED, "logs", "deployment/s3-standin", "--since=15m").splitlines()
