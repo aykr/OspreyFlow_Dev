@@ -101,3 +101,8 @@ platform	compact-govuk	Four places, the Glass and Admin	Small
 admin	refresh	Four places, the Glass and Admin	Small
 admin	pg	Housekeeping	Small
 demo	fixes-13nov	Housekeeping	Small
+platform	part3	Housekeeping	Small
+platform-b	v052-superset	Four places, the Glass and Admin	Client install
+admin	v052-identities	Four places, the Glass and Admin	Client install
+platform	v052-standin	Housekeeping	Client install
+platform-b	v052-r1	Housekeeping	Client install

@@ -9,3 +9,8 @@ platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 5 merged 12 Nov; left: marks, sleeps, the ArcadeDB waits	after v0.5.1	A
 demo	fixes-13nov	done: everything of 13 Nov live on osprey-small at 02f9337; the memory cap after the demo	done	A
 platform-b	gate-b	done: banner, key prompt, footer, one prompt, rail + Help all live	done	A
+platform-b	v052-superset	Superset on Entra, embedding, the render, runbooks (steps 1,4-7)	Wed 18 Nov	B
+admin	v052-identities	dashboard identities and report sync on Entra (steps 2-3)	Tue 17 Nov	B
+platform	v052-standin	the stand-in signs (step 8)	Sat 14 Nov	B
+platform-b	v052-r1	R1 for v0.5.2 with a dashboards check (step 9)	Thu 19 Nov	B
+platform	part3	ospreyflow.app beside the GOV.UK demo (after v0.5.2's stand-in)	after v0.5.1	A
