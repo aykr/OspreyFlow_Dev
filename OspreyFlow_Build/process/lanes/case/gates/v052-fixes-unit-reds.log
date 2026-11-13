@@ -1,100 +1,112 @@
-# v052-fixes jsdom reds at 8edeb6c; each plant restored with `git checkout -- <file>`
-## 1. glassMode answers graph for every view but boards (main's `view !== "boards"`)
-plant in src/shell/ContextBanner.tsx; npx vitest run src/App.chrome.test.tsx -t 'on Dashboards (Alert monitoring)'; exit 1
-     × on Dashboards (Alert monitoring) no Glass mode is current and no mode's note is said 159ms
-      Tests  1 failed | 19 skipped (20)
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-AssertionError: expected 'page' to be null
-## 2. Cases pressed while its drawer is open (main's `pressed: casesOpen`)
-plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'the Cases drawer opened over Dashboards'; exit 1
-     × the Cases drawer opened over Dashboards leaves one rail item marked, Cases expanded instead 186ms
-      Tests  1 failed | 19 skipped (20)
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-AssertionError: expected [ 'Cases', 'Dashboards' ] to deeply equal [ 'Dashboards' ]
-## 3. the cross-link names the dataset again (main's words)
+# v052-fixes jsdom reds at 4c969b3; each plant restored with `git checkout -- <file>`
+## 1. the cross-link names the dataset again (main's words)
 plant in src/shell/ContextBanner.tsx; npx vitest run src/App.chrome.test.tsx -t "names the case's one dataset once"; exit 1
-     × the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it 1143ms
-      Tests  1 failed | 19 skipped (20)
+     × the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it 1132ms
+      Tests  1 failed | 17 skipped (18)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-## 4. the scope badge drawn beside the case in the Glass (main's)
+## 2. the scope badge drawn beside the case in the Glass (main's)
 plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t "names the case's one dataset once"; exit 1
-     × the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it 159ms
-      Tests  1 failed | 19 skipped (20)
+     × the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it 131ms
+      Tests  1 failed | 17 skipped (18)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
 AssertionError: expected [ 'PRISON INTEL', 'Prison intel' ] to have a length of 1 but got 2
-## 5. no words for a case reading no dataset (7b1fbca's banner)
+## 3. no words for a case reading no dataset (7b1fbca's banner)
 plant in src/shell/ContextBanner.tsx; npx vitest run src/App.chrome.test.tsx -t 'a case that reads no dataset says so once'; exit 1
-     × a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it 1140ms
-      Tests  1 failed | 19 skipped (20)
+     × a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it 1139ms
+      Tests  1 failed | 17 skipped (18)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-## 6. the badge dropped in the Glass whatever the banner says (7b1fbca's)
+## 4. the badge dropped in the Glass whatever the banner says (7b1fbca's)
 plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'cannot be read'; exit 1
-     × the badge names the scope when the case's datasets cannot be read 1142ms
-      Tests  1 failed | 19 skipped (20)
+     × the badge names the scope when the case's datasets cannot be read 1136ms
+      Tests  1 failed | 17 skipped (18)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-## 7. CaseSwitcher ignores showScope
+## 5. CaseSwitcher ignores showScope
 plant in src/investigation/CaseSwitcher.tsx; npx vitest run src/investigation/CaseSwitcher.test.tsx -t 'is left out with showScope false'; exit 1
-     × is left out with showScope false, and drawn by default 76ms
+     × is left out with showScope false, and drawn by default 67ms
       Tests  1 failed | 5 skipped (6)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
 AssertionError: expected <span …(2)>…(1)</span> to be null
-## 8. the drawer at the stylesheet's top 0 (main's)
+## 6. the drawer at the stylesheet's top 0 (main's)
 plant in src/design/primitives/Drawer.tsx; npx vitest run src/design/primitives/Drawer.test.tsx -t 'opens under the top bar'; exit 1
-   × opens under the top bar, never over the navigation above it 61ms
+   × opens under the top bar, never over the navigation above it 56ms
       Tests  1 failed | 8 skipped (9)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
 AssertionError: expected '' to be '112px' // Object.is equality
-## 9. the drawer under the top bar alone, over the context row (7b1fbca's)
+## 7. the drawer under the top bar alone, over the context row (7b1fbca's)
 plant in src/design/primitives/Drawer.tsx; npx vitest run src/design/primitives/Drawer.test.tsx -t 'opens under the context row too'; exit 1
-   × opens under the context row too, under GOV.UK's banner and OspreyFlow's alike 64ms
+   × opens under the context row too, under GOV.UK's banner and OspreyFlow's alike 56ms
       Tests  1 failed | 8 skipped (9)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
 AssertionError: expected '112px' to be '153px' // Object.is equality
-## 10. the drawer measured once, never on resize or scroll
+## 8. the drawer measured once, never on resize or scroll
 plant in src/design/primitives/Drawer.tsx; npx vitest run src/design/primitives/Drawer.test.tsx -t 'is measured again'; exit 1
-   × is measured again when the window is resized and when the page scrolls 65ms
+   × is measured again when the window is resized and when the page scrolls 56ms
       Tests  1 failed | 8 skipped (9)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
 AssertionError: expected '112px' to be '152px' // Object.is equality
-## 11. the drawer announced as modal (main's aria-modal)
+## 9. the drawer announced as modal (main's aria-modal)
 plant in src/design/primitives/Drawer.tsx; npx vitest run src/design/primitives/Drawer.test.tsx -t 'is not announced as modal'; exit 1
-   × is not announced as modal 67ms
+   × is not announced as modal 54ms
       Tests  1 failed | 8 skipped (9)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
 AssertionError: expected 'true' to be null
-## 12. Explore Details' menu marks a pressed item alone (7b1fbca's), so History's drawer is unmarked
-plant in src/shell/LeftRail.tsx; npx vitest run src/shell/shell.test.tsx -t "lists the rail's other destinations"; exit 1
-     × lists the rail's other destinations under ⋯ Explore Details, chosen from it and closed by the choice 69ms
-      Tests  1 failed | 14 skipped (15)
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-AssertionError: expected null to be 'page' // Object.is equality
-## 13. Explore Details names a panel before the place (7b1fbca's)
-plant in src/shell/LeftRail.tsx; npx vitest run src/shell/shell.test.tsx -t 'names the place open, not a panel'; exit 1
-     × names the place open, not a panel open over it 79ms
-      Tests  1 failed | 14 skipped (15)
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-## 14. no marker on Explore Details when the place is its own (7b1fbca's)
-plant in src/shell/LeftRail.tsx; npx vitest run src/App.chrome.test.tsx -t 'Ownership, under Explore Details, is the one marker'; exit 1
-     × Ownership, under Explore Details, is the one marker, on the trigger 168ms
-      Tests  1 failed | 19 skipped (20)
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-AssertionError: expected [] to deeply equal [ …(1) ]
-## 15. Cases only opens (main's `setCasesOpen(true)`): a second press leaves it expanded
-plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'Cases is expanded while its panel is open'; exit 1
-     × Cases is expanded while its panel is open, never pressed, and a second press closes it 1136ms
-      Tests  1 failed | 19 skipped (20)
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-AssertionError: expected 'true' to be 'false' // Object.is equality
-## 16. railMark presses a panel's opener
-plant in src/shell/railLayout.ts; npx vitest run src/shell/railMark.test.ts -t 'presses the place open'; exit 1
-     × presses the place open and nothing else; expands a panel's opener and never presses it 5ms
-      Tests  1 failed | 1 skipped (2)
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-AssertionError: expected { cases: { pressed: true }, …(6) } to deeply equal { cases: { expanded: true }, …(6) }
-## 17. the views' actions as full GOV.UK buttons (main's)
+## 10. the views' actions as full GOV.UK buttons (main's)
 plant in src/views/ViewsPanel.tsx; npx vitest run src/views/ViewsPanel.test.tsx -t 'is a GOV.UK summary list'; exit 1
-     × is a GOV.UK summary list with Private and Shared tags under the GOV.UK brand 75ms
+     × is a GOV.UK summary list with Private and Shared tags under the GOV.UK brand 70ms
       Tests  1 failed | 7 skipped (8)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
 AssertionError: expected 'govuk-button govuk-button--secondary …' to contain 'govuk-link'
-# 17 of 17 red
+## 11. Reports not in the one view switch (main's switch of Graph and Map)
+plant in src/shell/railLayout.ts; npx vitest run src/App.chrome.test.tsx -t "the top bar's one view switch is Graph"; exit 1
+     × the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current 125ms
+      Tests  1 failed | 17 skipped (18)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'Graph', 'Map', 'Drawing board' ] to deeply equal [ 'Graph', 'Map', …(2) ]
+## 12. the strip keeps the Graph note (Amendment 13's)
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t "the strip names no mode and says no mode's note"; exit 1
+     × the strip names no mode and says no mode's note 122ms
+      Tests  1 failed | 17 skipped (18)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <span …(2)></span> to be null
+## 13. the board without its sketch line
+plant in src/boards/BoardsPlace.tsx; npx vitest run src/App.chrome.test.tsx -t 'Drawing board is a view'; exit 1
+     × Drawing board is a view: its own screen says it is a sketch that does not change the case's data 141ms
+      Tests  1 failed | 17 skipped (18)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 14. a panel's opener pressed (main's rail)
+plant in src/shell/railLayout.ts; npx vitest run src/App.chrome.test.tsx -t 'the rail holds the panel openers alone'; exit 1
+     × the rail holds the panel openers alone: Explore, Ask & Chat, History, then Help and the names toggle 120ms
+      Tests  1 failed | 17 skipped (18)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'false' to be null
+## 15. Explore only opens (main's setExploreOpen(true)): a second press leaves it open
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'Explore opens its panel without changing the view'; exit 1
+     × Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it 1153ms
+      Tests  1 failed | 17 skipped (18)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'true' to be 'false' // Object.is equality
+## 16. a drawer that leaves focus where it was on closing (main's)
+plant in src/design/primitives/Drawer.tsx; npx vitest run src/App.chrome.test.tsx -t 'History opens its panel without changing the view'; exit 1
+     × History opens its panel without changing the view, a second press closes it, and closing returns focus to it 156ms
+      Tests  1 failed | 17 skipped (18)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <body><div>…(1)</div></body> to be <button type="button" …(5)>…(1)</button> // Object.is equality
+## 17. no visible word Case before the switcher
+plant in src/shell/ContextBanner.tsx; npx vitest run src/App.chrome.test.tsx -t 'the case line: You are in the Glass'; exit 1
+     × the case line: You are in the Glass · Case ‹switcher› · Views in this case · reads … 134ms
+      Tests  1 failed | 17 skipped (18)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'You are in the Glass', …(4) ] to deeply equal [ Array(5) ]
+## 18. Views in this case opening the panel without taking it to the views
+plant in src/views/ViewsPanel.tsx; npx vitest run src/App.chrome.test.tsx -t 'Views in this case opens the Cases panel at its views list'; exit 1
+     × Views in this case opens the Cases panel at its views list 1148ms
+      Tests  1 failed | 17 skipped (18)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <div class="drawer" …(4)>…(2)</div> to be <section tabindex="-1" …(2)>…(2)</section> // Object.is equality
+## 19. no All cases in the switcher (its order before Part B is red in v052-navigation-app-reds.log)
+plant in src/investigation/CaseSwitcher.tsx; npx vitest run src/App.chrome.test.tsx -t "the case switcher's last entry is All cases"; exit 1
+     × the case switcher's last entry is All cases, which opens the Cases panel 1143ms
+      Tests  1 failed | 17 skipped (18)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'New case' to be 'All cases' // Object.is equality
+# 19 of 19 red

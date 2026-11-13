@@ -191,20 +191,16 @@ narrowed.
 └────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 1) holds the places the
-analyst goes to most (ADR-145 Amendment 2's variant B, as ADR-145 Amendment 12 amends it): *Cases*,
-*Explore* (where to start in the case's data, ADR-100, §3.1), *Ask & Chat* (the case's questions to the
-model, ADR-098, §3.1; named *Questions* until Amendment 12) and *Dashboards* (ADR-111 Amendment 3), then
-**⋯ Explore Details**, a menu of the rest, one click away, in this order: *History*, *Ownership*
-(beneficial ownership and due diligence — ADR-109, §3.3) and *Connection strength* (ADR-139, a tab of
-Monitoring until Monitoring left the Glass). *Explore Details*'s name says which of them is open
-("Explore Details, History open"). **One place, one marker** (ADR-145 Amendment 14 decision 3): the rail marks
-the place open (*Dashboards*, *Ownership*, *Connection strength*: `aria-pressed`, or on *Explore Details* itself
-when the place is under it), and only that. *Cases*, *Explore*, *Ask & Chat* and *History* open a panel over the
-place; they are never pressed, they are expanded while the panel is open (`aria-expanded`), and a second press
-closes it (`shell/railLayout.ts`'s `railMark`, which `App.tsx` and the places harness both read). Every drawer
-opens under the top bar and the context row, never over the navigation they carry (decision 2,
-`design/primitives/Drawer.tsx`). The rail's **Help** (and `?`) opens the keys panel, with the user
+The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 1) holds the panels opened beside the
+current view, and only those (the owner's navigation decision of 13 November 2026, ADR-145 Amendment 15, amending
+Amendments 2 and 12): *Explore* (where to start in the case's data, ADR-100, §3.1), *Ask & Chat* (the case's questions
+to the model, ADR-098, §3.1; named *Questions* until Amendment 12) and *History*, then *Help* and *Show names*. *Cases*,
+*Dashboards* (now the view switch's *Reports*) and *⋯ Explore Details* (whose *Ownership* and *Connection strength* are
+now under *More views*) left it. An opener is never pressed: it is expanded while its panel is open (`aria-expanded`,
+`aria-haspopup="dialog"`), a second press closes it, and opening or closing a panel never changes the view
+(`shell/railLayout.ts`'s `railMark`). Closing a panel, by its opener, Escape or its *Close*, returns focus to the opener.
+Every drawer opens under the top bar and the context row, never over the navigation they carry (ADR-145 Amendment 14
+decision 2, `design/primitives/Drawer.tsx`). The rail's **Help** (and `?`) opens the keys panel, with the user
 guide's link, over whichever view is on screen, and a second press, Esc or its × closes it (Amendment
 12). Monitoring (the one alert queue, its rules, the watches, held rows and the rule
 audit — ADR-109, ADR-133, §3.3) is no longer the Glass's: it is *Rules and Monitoring*, a place of its
@@ -220,8 +216,9 @@ any other view (320px, 280 below 1100; a shadow, no hairline). It says what the 
 (each restored as the History drawer restores one) and the keys worth knowing (`/`, the arrows, Enter, F,
 Escape, `?`) and links the user guide. At sign-in it opens on the graph alone, until the person closes it
 once (by ×, Esc, Help or `?`; kept per person in this browser); `?` anywhere in the Glass but a text field
-or a list box opens or closes it (`keyboard/shell.spec.ts`, `App.help.test.tsx`). *Cases* opens a
-drawer with the open case's *Views in this case*, every case with its views (ADR-144 decision 5), and *Browse all cases*. The
+or a list box opens or closes it (`keyboard/shell.spec.ts`, `App.help.test.tsx`). The Cases panel, opened
+from the case line (§2.0a), is a drawer with the open case's *Views in this case*, every case with its views (ADR-144
+decision 5), and *Browse all cases*. The
 **view toolbar** above the canvas holds what belongs to that view alone: the resolution threshold on
 the Graph, *Add site* and *Draw boundary* on the Map. The **selection bar** at the foot of the canvas
 appears when anything is selected (ADR-097 step 1; `keyboard/selection.spec.ts`), on the inverse
@@ -382,10 +379,12 @@ One row, 40px. From the left:
   names, an organisation's name, a place's name, a document's title) and never at a sensitive
   property; it starts after two characters and says `Type at least 2 characters to search.` while
   there is one (ADR-074).
-- **The view switch**, a segmented group named *View*: Graph, Map, and Messages when a dossier is
-  open; then **More views ▾** (ADR-145 Amendment 2), a menu of Matrix and Reports, one click away,
-  named after the one of them that is open. A person offered neither Graph nor Map (a Reports Viewer)
-  has their views in the switch itself. The pressed one is drawn in primary text with a 2px underline, not in brass (ADR-097: brass is
+- **The view switch**, everything that replaces the main area, a segmented group named *View* (ADR-145
+  Amendment 15, the owner's navigation decision): *Graph · Map · Drawing board · Reports*, and Messages when a
+  dossier is open; then **More views ▾**, a menu of *Matrix, Figures, Ownership, Connection strength*, one click
+  away, named after the one of them that is open. *Reports* is the dashboards view (ADR-111 Amendment 3: Alert
+  monitoring first, then the Superset boards); *Figures* is ADR-145 Amendment 4's. Exactly one view is current.
+  A person offered none of the four (a Reports Viewer offered Figures alone) has their views in the switch itself. The pressed one is drawn in primary text with a 2px underline, not in brass (ADR-097: brass is
   for the primary action, focus and the selection).
 - **Export**, for the whole case, on the Graph: one menu button, `Export ▾`, that opens the export panel
   (`aria-expanded`, not a pressed state; ADR-097 step 3).
@@ -401,7 +400,7 @@ One row, 40px. From the left:
 
 While the Ingest Studio is open the bar shows a brass line under it and drops what belongs only to
 the Glass (search, the view switch, Export). Rules and Monitoring is a place of the switcher (§2.0a);
-History, Ownership and Connection strength are under the rail's ⋯ Explore Details; the resolution threshold, named **Match strictness** for what
+Ownership and Connection strength are under *More views*, History is a panel of the rail; the resolution threshold, named **Match strictness** for what
 the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
 wide.
 
@@ -413,7 +412,7 @@ outside it, and when keyboard focus moves outside it, so it never traps a keyboa
 This replaces "there is no application switch" (ADR-097 step 1), which this section said until
 7 November 2026.
 
-**The places.** *The Glass* (analysis: Graph · Drawing board, ADR-145 Amendment 13; *Drawing board* the drawing boards, §2.0b),
+**The places.** *The Glass* (analysis: its views in the top bar's view switch, ADR-145 Amendment 15; *Drawing board* the drawing boards, §2.0b),
 *Ingest Studio* (data: 1 Model · 2 Sources · 3 Pipelines · 4 Runs), *Rules and Monitoring* (alerts:
 Alerts · What raises alerts · Held rows · Changes, the owner's M1) and *Admin*. One table,
 `apps/workspace/src/shell/places.json`, names them, the single rights that open each, and what a place's
@@ -476,18 +475,14 @@ the Glass's frame, not on the identity provider's sign-in page), styled on the h
 
 **The context banner.** One row under the top bar (`shell/ContextBanner.tsx`; 41 pixels at 1440 wide
 under the OspreyFlow brand, its controls 32), a region named by its first words:
-- in the Glass: "You are in the Glass · Graph · Drawing board · ‹case menu› · reads ‹the case's datasets› ·
-  ‹the mode's note›", the sections a navigation named *In the Glass* (*Graph* the case's data and its
-  views, *Drawing board* the case's drawing boards, §2.0b; ADR-145 Amendment 13 renamed them from *Case ·
-  Boards*), and the open mode's one line. *Graph* is current, with its note, only on a view of the case's data
-  (graph, map, matrix, Figures, Messages); on a place of the rail's own (Dashboards with its Alert monitoring
-  board, Ownership, Connection strength) neither section is current and no note is said (ADR-145 Amendment 14
-  decision 3). "reads …" names the case's datasets once in the row ("reads no dataset" for a case reading none):
-  the case menu draws no scope badge beside it and the cross-link does not name them (decision 4); while the
-  datasets are read or refused, "reads" is not drawn and the badge stays. The notes: "Graph: the case's data. Saved views are under Views or
-  Cases." or "Drawing board: your sketch; it does not change the case's data.", part of the region and its
-  description. It stays in the row at 1440 wide (GOV.UK's row 32 pixels, OspreyFlow's 41); at 1024 it is on
-  a line under the row, with the cross-link (GOV.UK 66, OspreyFlow 81);
+- in the Glass, the case line (ADR-145 Amendment 15, replacing Amendment 13's *Graph · Drawing board* and its note):
+  "You are in the Glass · Case ‹case menu› · Views in this case · reads ‹the case's datasets›", the word *Case*
+  visible (hidden from assistive technology, whose name for the menu begins "Case:"). The case menu's last entry,
+  *All cases*, opens the Cases panel (the open case's views, every case with its views, and *Browse all cases*);
+  *Views in this case* opens the same panel with its views list focused. "reads …" names the case's datasets once
+  in the row ("reads no dataset" for a case reading none): the case menu draws no scope badge beside it and the
+  cross-link does not name them (ADR-145 Amendment 14 decision 4); while the datasets are read or refused, "reads"
+  is not drawn and the badge stays. GOV.UK's row is one row at 1440 wide and at most two lines at 1024;
 - in the Studio: "You are in the Ingest Studio · for ‹case menu›";
 - in Rules and Monitoring: "You are in Rules and Monitoring · ‹case menu›";
 - in Admin: "You are in Admin".
@@ -514,12 +509,12 @@ right, with **Proposed types** (`manage_ontology`) under *Data*: it left the Gla
 decided here until the Studio's Model tab shows proposed types (L3.5; ADR-090 Amendment 5). Its routes
 ask for the administrator role as well as `manage_ontology`.
 
-**The count (ADR-145 Amendment 2).** A keyboard user passes 24 controls before the canvas — 25 on the
+**The count (ADR-145 Amendments 2 and 15).** A keyboard user passes 25 controls before the canvas — 26 on the
 deployed page, whose brand frame adds the skip link first — in this order: the mark, the four places
 (Rules and Monitoring with its count), search with *Add many from a list* and *Filters*, Graph, Map,
-*More views*, *Export*, the theme, the account; the banner's Graph and Drawing board, the case menu and the
-cross-link; the rail's Cases,
-Explore, ⋯ More, Help and Show names; and the Graph's *Match strictness*. `App.chrome.test.tsx` counts
+Drawing board, Reports, *More views*, *Export*, the theme, the account; the case menu, *Views in this case* and the
+cross-link; the rail's Explore, Ask & Chat, History, Help and Show names; and the Graph's *Match strictness* (25
+controls, ADR-145 Amendment 15). `App.chrome.test.tsx` counts
 them on the real `App` and fails if one returns.
 
 **Keyboard and accessibility.** `keyboard/shell.spec.ts` proves the switcher (under both brands), the
