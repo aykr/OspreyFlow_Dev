@@ -1,0 +1,15 @@
+        world: SimpleNamespace,
+    ) -> None:
+        """On Entra ID the names directory holds no people (`people()` is None), and a registered
+        dashboard identity is still a Viewer and nothing more: its registration is read first
+        (ADR-148 Amendment 10, the lane review's must 2)."""
+        assert _level(world, "sa-board", "viewer", configured=False) is None
+        refused = _level(world, "sa-board", "author", configured=False)
+>       assert refused["error"] == "service_account" and "Viewer" in refused["message"]
+               ^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+../OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py:785: TypeError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py::test_a_dashboard_is_held_to_viewer_where_the_directory_cannot_tell_people
+1 failed, 97 deselected in 1.67s
