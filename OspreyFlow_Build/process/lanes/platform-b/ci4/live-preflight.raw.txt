@@ -1,0 +1,65 @@
+# CI fix (2), live on the owner's test server: stack_lease.sh offline platform-b (no stack, no lease; the closed ports), main 74bb598, 13 November 2026
+# test_the_stream_reports_every_check_in_order_once_rendered (server-only, it calls the docker CLI) PASSED with access-key last; test_preflight_check_names PASSED.
+# test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass FAILED: the server has a real GPU, so the gpu check passes; the test assumes a platform where it is skipped. Not this fix's; a CARRIES row.
+Running on ospreyflow-test (stack offline, osprey-runs/platform-b/), logged at osprey-runs/platform-b.meta/runs/20261113T121741Z-2fc4602e/log: sh -c cd OspreyFlow_Core && .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly -v ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py ../OspreyFlow_Build/tests/harness/test_preflight_check_names.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/platform-b/OspreyFlow_Core/.venv/bin/python
+cachedir: .pytest_cache
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/platform-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 7 items
+
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_the_stream_reports_the_real_failure_when_nothing_has_been_rendered_yet PASSED [ 14%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_the_stream_reports_every_check_in_order_once_rendered PASSED [ 28%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_basemap_warns_when_a_local_provider_points_at_tiles_not_yet_built PASSED [ 42%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass FAILED [ 57%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_only_re_checks_exactly_one PASSED [ 71%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_an_unknown_check_name_is_a_clean_422_not_a_broken_stream PASSED [ 85%]
+../OspreyFlow_Build/tests/harness/test_preflight_check_names.py::test_the_set_up_console_lists_every_check_in_all_checks_order PASSED [100%]
+
+=================================== FAILURES ===================================
+__________ test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass __________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6419/test_gpu_is_skipped_on_this_pl0')
+
+    def test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass(tmp_path: Path) -> None:
+        """`05_DEPLOYMENT.md` §2.1's own "skipped-with-reason (never a pass)" — the brief's named
+        skipped case, on the real platform this suite actually runs on."""
+        config_path = tmp_path / "osprey.yaml"
+        out_root = tmp_path / "generated"
+        client = _client(config_path, out_root)
+        client.put("/api/config", json={"profile": "local-lite"})
+        _generate(client)
+    
+        events = {e["check"]: e for e in _events(client.get("/api/preflight/stream").text)}
+>       assert events["gpu"]["status"] == "skip"
+E       AssertionError: assert 'pass' == 'skip'
+E         
+E         - skip
+E         + pass
+
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py:112: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/platform-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+0.76s call     tests/harness/test_webapp_preflight.py::test_the_stream_reports_every_check_in_order_once_rendered
+0.75s call     tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+0.75s call     tests/harness/test_webapp_preflight.py::test_basemap_warns_when_a_local_provider_points_at_tiles_not_yet_built
+0.69s call     tests/harness/test_webapp_preflight.py::test_the_stream_reports_the_real_failure_when_nothing_has_been_rendered_yet
+0.11s call     tests/harness/test_webapp_preflight.py::test_only_re_checks_exactly_one
+0.06s call     tests/harness/test_webapp_preflight.py::test_an_unknown_check_name_is_a_clean_422_not_a_broken_stream
+0.01s setup    tests/harness/test_webapp_preflight.py::test_the_stream_reports_the_real_failure_when_nothing_has_been_rendered_yet
+
+(14 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+==================== 1 failed, 6 passed, 1 warning in 3.85s ====================
+Wall time: 5 s, exit 1 (no stack, no lease; set-up before it 30 s)
+exit 1
