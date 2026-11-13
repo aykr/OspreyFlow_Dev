@@ -130,13 +130,20 @@ describe("06_DECISIONS.md ADR-050 — the sign-in gate", () => {
 
   // ADR-050 Amendment 3 point 3 at the App: the kept place, the case in the tab, and a case switch
   // carried over the identity provider's round trip. Home is told by its greeting ("Signed in as").
-  const signedInAs = (sub: string) => {
+  const signedInAs = (sub: string, refused: string[] = []) => {
     const asked: string[] = [];
+    // Just enough for a case's workspace to draw its rail (as "the tab the launcher asked for" does).
+    vi.mocked(ontologySchema.fetchOntologyRegistry).mockResolvedValue(
+      new ontologySchema.OntologyRegistry({ entity_types: [], edge_types: [] } as never),
+    );
     vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input).split("?")[0]!;
       asked.push(url);
+      if (refused.some((path) => url.endsWith(path))) return Promise.resolve(new Response("{}", { status: 404 }));
       if (url.endsWith("/v1/me")) return Promise.resolve(new Response(JSON.stringify({ id: sub, clearance: "OFFICIAL", roles: [] })));
       if (url.endsWith("/v1/me/rights")) return Promise.resolve(new Response(JSON.stringify({ rights: ["investigate"] })));
+      if (url.endsWith("/v1/handling-scheme"))
+        return Promise.resolve(new Response(JSON.stringify({ name: "test", classification: ["OFFICIAL"], handling_codes: {} })));
       return new Promise<Response>(() => undefined);
     });
     return asked;
@@ -152,7 +159,7 @@ describe("06_DECISIONS.md ADR-050 — the sign-in gate", () => {
     } as never);
     sessionStorage.setItem("ospreyflow.investigationId", "case-1");
     sessionStorage.setItem("ospreyflow.place", "home");
-    let asked = signedInAs("analyst-1");
+    signedInAs("analyst-1");
     render(<App />);
     await screen.findByText(/^Signed in as/);
 
@@ -163,11 +170,27 @@ describe("06_DECISIONS.md ADR-050 — the sign-in gate", () => {
       access_token: "t", expires_at: Math.floor(Date.now() / 1000) + 300, profile: { sub: "analyst-1" },
     } as never);
     sessionStorage.setItem("ospreyflow.place", "case");
-    asked = signedInAs("analyst-1");
+    signedInAs("analyst-1");
     render(<App />);
-    await settled(asked);
+    // The case's own workspace, its rail, not Home.
+    await screen.findByRole("navigation", { name: "Workspace" });
     expect(screen.queryByText(/^Signed in as/)).toBeNull();
-    expect(asked.some((u) => u.includes("/v1/investigations/case-1"))).toBe(true);
+  });
+
+  test("a kept case the person can no longer open is dropped, and the refresh lands on Home, kept as Home", async () => {
+    // `caseIsOpenable`: the Conduit answers the case 404 (as it answers one the reader may not see),
+    // so the tab's case is dropped (9 October 2026) and the kept place gives way to Home.
+    vi.mocked(userManager.renewSilently).mockResolvedValue({
+      access_token: "t", expires_at: Math.floor(Date.now() / 1000) + 300, profile: { sub: "analyst-1" },
+    } as never);
+    sessionStorage.setItem("ospreyflow.investigationId", "case-gone");
+    sessionStorage.setItem("ospreyflow.place", "case");
+    signedInAs("analyst-1", ["/v1/investigations/case-gone"]);
+    render(<App />);
+    await screen.findByText(/^Signed in as/);
+    expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
+    expect(sessionStorage.getItem("ospreyflow.investigationId")).toBeNull();
+    await vi.waitFor(() => expect(sessionStorage.getItem("ospreyflow.place")).toBe("home"));
   });
 
   test("a case chosen on Home, carried over a full-page sign-in, opens that case, not the Home the tab kept", async () => {

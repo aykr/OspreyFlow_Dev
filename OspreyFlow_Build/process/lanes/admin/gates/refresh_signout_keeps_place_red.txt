@@ -1,0 +1,45 @@
+PLANT: signOut without forgetPlace
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace
+
+ ❯ src/auth/userManager.test.ts (2 tests | 1 failed) 9ms
+   ✓ clearRedirectCallbackParams (1)
+     ✓ takes the refusal's words out of the address with the callback's, and keeps the rest 6ms
+   ❯ signOut (1)
+     × forgets the place this tab kept before going to the identity provider 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/auth/userManager.test.ts > signOut > forgets the place this tab kept before going to the identity provider
+AssertionError: expected 'admin' to be null
+
+- Expected:
+null
+
++ Received:
+"admin"
+
+ ❯ src/auth/userManager.test.ts:36:55
+     34|     sessionStorage.setItem(REFRESH_PLACE_KEY, "admin");
+     35|     await signOut();
+     36|     expect(sessionStorage.getItem(REFRESH_PLACE_KEY)).toBeNull();
+       |                                                       ^
+     37|     expect(signoutRedirect).toHaveBeenCalledTimes(1);
+     38|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  13:03:50
+   Duration  384ms (environment 90%, transform 3%, tests 3%, import 3%, setup 1%, worker 1%)
+
+
+Slowest 2 tests:
+     6 ms  src/auth/userManager.test.ts > clearRedirectCallbackParams > takes the refusal's words out of the address with the callback's, and keeps the rest
+     3 ms  src/auth/userManager.test.ts > signOut > forgets the place this tab kept before going to the identity provider
+exit=1
