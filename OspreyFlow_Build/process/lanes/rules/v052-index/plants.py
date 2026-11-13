@@ -22,6 +22,7 @@ FEED = f"{B}/services/search_index/test_feed_live.py"
 DOC = f"{B}/services/search_index/test_document.py"
 CLIENT = f"{B}/services/search_index/test_client.py"
 REACH = f"{B}/services/search_index/test_index_feed_reach.py"
+RUN = f"{B}/services/search_index/test_run.py"
 ADAPTER = "OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py"
 INDEXER = "OspreyFlow_Core/services/search_index/indexer.py"
 DOCUMENT = "OspreyFlow_Core/services/search_index/document.py"
@@ -119,6 +120,14 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      "from __future__ import annotations\n",
      "from __future__ import annotations\n\n_READ = \"nodes_for_index\"\n",
      [f"{REACH}::test_no_route_or_other_module_reaches_the_indexers_reads"]),
+    ("V24 every replica drains, lease or none", "OspreyFlow_Core/services/search_index/run.py",
+     "    if await store.set(LEASE_KEY, me, nx=True, ex=LEASE_SECONDS):\n",
+     "    if True:\n",
+     [f"{RUN}::test_the_lease_is_one_replicas_and_renewed_by_it",
+      f"{RUN}::test_only_the_replica_holding_the_lease_drains"]),
+    ("V25 a prefix longer than 20 characters matches nothing", "OspreyFlow_Core/services/search_index/mapping.py",
+     "PREFIX_MAX_CHARS = 50\n", "PREFIX_MAX_CHARS = 20\n",
+     [f"{FEED}::test_a_long_typed_prefix_still_finds_the_name"]),
     ("V23 the host and port win over the URL", "OspreyFlow_Core/services/search_index/client.py",
      "        url = (env.get(\"OPENSEARCH_URL\") or \"\").strip()\n", "        url = \"\"\n",
      [f"{CLIENT}::test_the_url_wins_over_host_and_port"]),
@@ -145,7 +154,7 @@ def _run(tests: list[str]) -> tuple[str, str]:
 
 
 def main() -> int:
-    every = [OUTBOX, FEED, DOC, CLIENT, REACH]
+    every = [OUTBOX, FEED, DOC, CLIENT, REACH, RUN]
     state, line = _run(every)
     print(f"built: {state} - {line}")
     if state != "GREEN":

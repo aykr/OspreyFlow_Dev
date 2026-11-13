@@ -8,14 +8,19 @@ from __future__ import annotations
 from typing import Any
 
 _BOOLEAN = {"similarity": "boolean"}
+
+#: The longest prefix the type-ahead matches (edge n-grams up to it, at index time). The query side
+#: refuses a longer one in words (ADR-149; rule 2), importing this same constant.
+PREFIX_MAX_CHARS = 50
 _KEYWORD = {"type": "keyword", **_BOOLEAN}
 
 SETTINGS: dict[str, Any] = {
-    "index": {"number_of_shards": 1, "number_of_replicas": 0},
+    # An edge n-gram filter's min and max may differ by at most `index.max_ngram_diff`.
+    "index": {"number_of_shards": 1, "number_of_replicas": 0, "max_ngram_diff": PREFIX_MAX_CHARS},
     "analysis": {
         "normalizer": {"folded": {"type": "custom", "filter": ["lowercase", "asciifolding"]}},
         "filter": {
-            "edge_2_20": {"type": "edge_ngram", "min_gram": 2, "max_gram": 20},
+            "edge_prefix": {"type": "edge_ngram", "min_gram": 2, "max_gram": PREFIX_MAX_CHARS},
             "tri": {"type": "ngram", "min_gram": 3, "max_gram": 3},
         },
         "tokenizer": {"whole": {"type": "keyword"}},
@@ -23,7 +28,7 @@ SETTINGS: dict[str, Any] = {
             "prefix_index": {
                 "type": "custom",
                 "tokenizer": "whole",
-                "filter": ["lowercase", "asciifolding", "edge_2_20"],
+                "filter": ["lowercase", "asciifolding", "edge_prefix"],
             },
             "prefix_search": {
                 "type": "custom",

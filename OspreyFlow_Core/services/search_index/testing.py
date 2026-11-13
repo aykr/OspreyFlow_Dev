@@ -1,7 +1,7 @@
 """Test-only: a throwaway index holding exactly the given nodes, built through the real document
-builder and bulk writer (ADR-150), for the query side's leak test (ADR-149): the same query against an
-index with hidden records planted and one without them must answer alike. Not used by production
-code."""
+builder and bulk writer (ADR-150), for the query side's leak test (ADR-149): the same query
+against an index with hidden records planted and one without them must answer alike. Not used by
+production code."""
 
 from __future__ import annotations
 

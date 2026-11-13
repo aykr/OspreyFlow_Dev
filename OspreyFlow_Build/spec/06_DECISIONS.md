@@ -37042,12 +37042,12 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
      `originator`, copied verbatim from the node's stored record;
    - `identifiers[]` (keyword): the node's declared identifier values as a reader of its own dataset receives them,
      plus each one's canonical form (`identifier_reading.search_alternative`) where it has one, with a subfield
-     `prefix` (edge n-grams 2 to 20, lowercase, at index time) for the type-ahead (ADR-059), so no prefix query
+     `prefix` (edge n-grams 2 to `PREFIX_MAX_CHARS`, 50, lowercase, at index time) for the type-ahead (ADR-059), so no prefix query
      expands against the term list;
    - `names[]`: the type's string properties the ontology marks `indexed` and not `sensitivity: high` — the set the
      type-ahead already searches (ADR-074; `tests/ontology/test_searchable_names.py` guards that no sensitive
      property is marked) — as keyword with a lowercase and asciifolding normaliser, and subfields `prefix` (edge
-     n-grams 2 to 20 at index time), `tri` (3-grams) and `words` (standard tokenizer), each lowercase and asciifolding;
+     n-grams 2 to 50 at index time), `tri` (3-grams) and `words` (standard tokenizer), each lowercase and asciifolding;
    - `names_phonetic[]` (keyword): the Double Metaphone codes (`phonetics.dmetaphone`, MIT), primary and alternate,
      of each name token, an empty code dropped; the function is exported so the query side applies the same
      normalisation;

@@ -8,7 +8,6 @@ once and each write is idempotent (a document is its node's current state, keyed
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Sequence
 from typing import Any, Protocol
@@ -117,6 +116,14 @@ class SearchIndexer:
         self._schema = schema
         self._batch = batch
 
+    @property
+    def client(self) -> AsyncOpenSearch:
+        return self._client
+
+    @property
+    def alias(self) -> str:
+        return self._alias
+
     async def index_nodes(self, node_ids: Sequence[str], *, index: str | None = None) -> None:
         """These nodes' documents as the graph and the texts hold them now."""
         nodes = await self._source.nodes_for_index(node_ids)
@@ -146,19 +153,3 @@ class SearchIndexer:
         if text_rows:
             await self._texts.clear_pending_text_index([ref for ref, _ in text_rows])
         return len(rows) + len(text_rows)
-
-    async def run(self, stop: asyncio.Event, *, idle_seconds: float = 1.0) -> None:
-        """Drains until `stop` is set; waits `idle_seconds` while both outboxes are empty, and after
-        a failure, which leaves the batch in its outbox to be sent again."""
-        await ensure_index(self._client, self._alias)
-        while not stop.is_set():
-            try:
-                done = await self.drain_once()
-            except Exception:  # noqa: BLE001 - the batch stays in the outbox; said, then retried
-                log.exception("search index: a batch failed and stays in the outbox")
-                done = 0
-            if done == 0:
-                try:
-                    await asyncio.wait_for(stop.wait(), timeout=idle_seconds)
-                except TimeoutError:
-                    pass

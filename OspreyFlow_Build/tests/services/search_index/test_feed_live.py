@@ -228,3 +228,22 @@ async def test_a_throwaway_index_holds_exactly_the_nodes_given_and_is_gone_after
         assert not await gone.indices.exists(index=name)
     finally:
         await gone.close()
+
+
+async def test_a_long_typed_prefix_still_finds_the_name(world: World) -> None:
+    """Up to `PREFIX_MAX_CHARS` (50): a name still being typed past 20 characters keeps matching."""
+    from services.search_index.mapping import PREFIX_MAX_CHARS
+
+    name = "Kestrel Holdings Limited Partnership Of Northern Wessex"
+    (a,) = await _written(world.graph, _person(name))
+    await world.drain()
+
+    async def found(prefix: str) -> set[str]:
+        hits = await world.client.search(
+            index=world.alias, body={"query": {"match": {"names.prefix": prefix}}}
+        )
+        return {h["_id"] for h in hits["hits"]["hits"]}
+
+    assert await found(name[:21]) == {a}
+    assert await found(name[:PREFIX_MAX_CHARS]) == {a}
+    assert await found(name[:21] + "x") == set()
