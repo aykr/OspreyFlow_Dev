@@ -471,3 +471,91 @@ async def test_fuzzy_expansion_would_leak_a_visible_record_out() -> None:
     assert strict[0] == strict[1]
     assert "p-smythe" in expanded[1]
     assert expanded[0] != expanded[1], expanded
+
+
+# --- the bands, as built, against a real index (stages 2 to 6) ------------------------------------
+
+
+async def _search(text: str, **kw: Any) -> s.SearchPageResponse:
+    reader = READERS["cleared-for-R"]
+    nodes, texts = _seen(reader)
+    async with throwaway_index(nodes, texts, schema=ONTOLOGY) as (client, index):
+        return await s.search_page(
+            s.SearchPageRequest(query=text, page_size=50, **kw),
+            reader,
+            _Unfiltered(),  # type: ignore[arg-type]
+            searcher=s.opensearch_searcher(client, index),
+            access_filter=index_access_filter(SCHEME, reader),
+            phonetic_codes=phonetic_codes,
+            types=TYPES,
+            case_datasets={"ds-1": "Fixture Corp"},
+            tau=TAU,
+        )
+
+
+def _bands(response: s.SearchPageResponse) -> list[tuple[str, str]]:
+    return [(r.node_ids[0], r.match.band) for r in response.results]
+
+
+async def test_an_exact_identifier_comes_first() -> None:
+    assert _bands(await _search("AB123456C"))[0] == ("p-smythe", "identifier")
+
+
+async def test_names_exact_every_word_sounds_alike_and_spelt_alike() -> None:
+    assert _bands(await _search("Smythe"))[0] == ("p-smythe", "name_exact")
+    assert ("p-smythe", "name_words") in _bands(await _search("John Smythe"))
+    sounds = _bands(await _search("Smyth"))
+    assert ("p-smythe", "name_sounds") in sounds and ("p-smith-r", "name_sounds") in sounds
+    assert ("p-mohammed", "name_sounds") in _bands(await _search("Muhammad"))
+    # A misspelling that also changes the sound, so the typo band is the best it reaches.
+    assert _bands(await _search("Kestrel Holdinsg"))[0] == ("o-kestrel", "name_typo")
+
+
+async def test_a_mention_is_found_in_text_with_its_passage_marked() -> None:
+    found = await _search("Kestrel invoice")
+    bands = _bands(found)
+    assert bands[0] == ("d-memo", "mention_words")
+    memo = found.results[0]
+    assert memo.is_document
+    assert [p.text for p in memo.passage if p.match] == ["Kestrel", "invoice"]
+    assert "".join(p.text for p in memo.passage) == "Kestrel paid the invoice at Harbour Street"
+
+
+async def test_names_rank_above_mentions_and_groups_count_records() -> None:
+    found = await _search("Kestrel")
+    bands = [b for _, b in _bands(found)]
+    assert bands == sorted(bands, key=lambda b: -q.BAND_SCORES.get(b, 0))
+    assert bands[0].startswith("name")
+    groups = {g.key: g.count for g in found.groups}
+    assert groups.get("Organisation") == 1 and groups.get("mentions") == 1
+    assert found.counts_exact and found.total == sum(groups.values())
+
+
+async def test_the_date_filter_and_the_offered_span() -> None:
+    found = await _search(
+        "invoice", filters=s.SearchFilters(date_from="2026-01-01", date_to="2026-01-31")
+    )
+    assert [n for n, _ in _bands(found)] == ["d-memo"]
+    everything = await _search("invoice")
+    assert everything.filters.dates is not None
+    assert (everything.filters.dates.earliest, everything.filters.dates.latest) == (
+        "2026-01-05",
+        "2026-02-10",
+    )
+
+
+async def test_suggestions_come_from_stored_prefixes() -> None:
+    reader = READERS["cleared-for-R"]
+    nodes, texts = _seen(reader)
+    async with throwaway_index(nodes, texts, schema=ONTOLOGY) as (client, index):
+        searcher = s.opensearch_searcher(client, index)
+        body = q.build_suggest_body(
+            "Smy", access_filter=index_access_filter(SCHEME, reader), limit=10
+        )
+        ids, more = q.read_suggest_response(await searcher(body), limit=10)
+        body = q.build_suggest_body(
+            "AB1234", access_filter=index_access_filter(SCHEME, reader), limit=10
+        )
+        by_id, _ = q.read_suggest_response(await searcher(body), limit=10)
+    assert set(ids) == {"p-smythe", "p-smythe-public"} and more is False
+    assert by_id == ["p-smythe"]
