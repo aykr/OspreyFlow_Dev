@@ -336,6 +336,16 @@ def test_a_suggestion_needs_two_characters() -> None:
         q.build_suggest_body("S", access_filter=ACCESS, limit=10)
 
 
+def test_a_suggestion_longer_than_the_stored_prefixes_is_refused_not_cut() -> None:
+    """The index keeps prefixes up to `PREFIX_MAX_CHARS` (rules' mapping); a longer typed prefix
+    would match nothing, and cutting it would suggest names that differ after the cut (rule 2)."""
+    from services.search_index.mapping import PREFIX_MAX_CHARS
+
+    q.build_suggest_body("k" * PREFIX_MAX_CHARS, access_filter=ACCESS, limit=10)
+    with pytest.raises(ValueError, match=str(PREFIX_MAX_CHARS)):
+        q.build_suggest_body("k" * (PREFIX_MAX_CHARS + 1), access_filter=ACCESS, limit=10)
+
+
 def test_a_suggestion_asks_stored_prefixes_of_node_documents_alone() -> None:
     body = q.build_suggest_body("Smy", access_filter=ACCESS, limit=10)
     assert {"term": {"kind": "node"}} in body["query"]["bool"]["filter"]

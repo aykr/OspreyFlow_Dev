@@ -41,3 +41,9 @@ FAILED tests/services/api/test_search_index_query.py::test_a_page_past_the_depth
 1 failed, 26 passed in 1.30s
 == restored
 27 passed in 1.19s
+
+== third round: the suggestion prefix limit against rules' PREFIX_MAX_CHARS (50), test written first
+== before the check existed (the test alone):
+FAILED tests/services/api/test_search_index_query.py::test_a_suggestion_longer_than_the_stored_prefixes_is_refused_not_cut
+1 failed, 27 passed
+== with the check: 28 passed

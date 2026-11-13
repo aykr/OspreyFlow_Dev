@@ -26,6 +26,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from services.search_index.mapping import PREFIX_MAX_CHARS
+
 from .identifier_reading import search_alternative
 from .search import SUGGEST_MIN_CHARS
 
@@ -259,6 +261,10 @@ def build_suggest_body(prefix: str, *, access_filter: dict[str, Any], limit: int
     prefix = _require_length(prefix).strip()
     if len(prefix) < SUGGEST_MIN_CHARS:
         raise ValueError(f"a suggestion needs at least {SUGGEST_MIN_CHARS} characters")
+    if len(prefix) > PREFIX_MAX_CHARS:
+        # The index keeps prefixes this long (ADR-150's mapping); a longer one would match
+        # nothing, and a cut one would suggest names that differ after the cut.
+        raise ValueError(f"a suggestion is at most {PREFIX_MAX_CHARS} characters")
 
     def fixed(field_name: str, score: int) -> dict[str, Any]:
         return {
