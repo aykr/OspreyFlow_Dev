@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.47** · 2026-11-12 · For OspreyFlow v0.5.0 · Issued
+**Version 1.48** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.48 | 2026-11-13 | §3: Home's *What you can do, and what you answer for* is now *Your access and tasks*, across the page below the two columns (ADR-145 Amendment 11, the owner's ruling): *Waiting for you*, "Nothing is waiting for you.", *Your access to each case*, each line "Editor: Operation Ledger (synthetic demo)". |
 | 1.47 | 2026-11-12 | §3: Home's guides. *Read the user guide (PDF)* under the Glass's card, the developer guide under the Ingest Studio's and the administration guide under Admin's, each with its place's card alone, opened in a new tab or saved, as the version this deployment was built with (ADR-145 Amendment 10). PDF made by the orchestrator at merge. |
 | 1.46 | 2026-11-11 | The second look at 1.45. §7.10: lists are imported in the Ingest Studio by a data engineer, or anyone holding Load screening lists and Edit pipelines; who here sees a refresh's counts. Captions 23 and 26 say that their pictures still show the former Lists and Watches tabs, to be retaken |
 | 1.45 | 2026-11-11 | The review of 1.44, against the code. §7.6: *Make live*, *Approve* and *Reject* need Deploy rules and Rules and Monitoring itself, so an Analyst, not a Data Engineer; *Deploy the sentence* needs Deploy rules and Keep watches. §7.1, §7.2, §7.4, §7.9 and §7.10: a rule kept just for its author is listed as a *Watched pattern*, and a template or pattern rule kept so raises medium alerts whatever its template's severity, stated as a known issue. §7.4: *Retire*, *Use* and *Deploy* need Deploy rules. §7.10: the screening lists are shown read-only under *What raises alerts*, and imported, mapped and refreshed in the Ingest Studio's *2 Sources*. Captions 23, 24 and 26 recaptioned |
@@ -155,11 +156,12 @@ clearance and your roles, and then shows:
   made;
 - **Ways of working**: four short tips.
 
-Below them, **What you can do, and what you answer for** is worked out for you: **Places you can
-open**; **What you answer for** (each case you are an Author of, the datasets whose promotions you
-review, and proposed link types waiting for you, each with a *Why:* line), or "Nothing waits for
-you."; **Your level in each case**; and, folded, **What you can do, by place**, where each right has
-**Why can I do this?** ("Given by your Analyst role.").
+Below them, across the page, **Your access and tasks** is worked out for you: **Places you can
+open**; **Waiting for you** (each case you are an Author of, the datasets whose promotions you
+review, and proposed link types waiting for you, each with a *Why:* line), or "Nothing is waiting
+for you."; **Your access to each case**, one line a case ("Editor: Operation Ledger (synthetic
+demo)"); and, folded, **What you can do, by place**, where each right has **Why can I do this?**
+("Given by your Analyst role.").
 
 **Needs you**, in the top bar beside your account, appears when something waits for you: a promotion
 waiting past the days your administrator set (for one who may review it), and proposed link types to
