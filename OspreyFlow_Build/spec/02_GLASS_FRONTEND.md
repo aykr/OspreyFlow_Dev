@@ -407,7 +407,7 @@ outside it, and when keyboard focus moves outside it, so it never traps a keyboa
 This replaces "there is no application switch" (ADR-097 step 1), which this section said until
 7 November 2026.
 
-**The places.** *The Glass* (analysis: Case · Boards; *Boards* the drawing boards, §2.0b),
+**The places.** *The Glass* (analysis: Graph · Drawing board, ADR-145 Amendment 13; *Drawing board* the drawing boards, §2.0b),
 *Ingest Studio* (data: 1 Model · 2 Sources · 3 Pipelines · 4 Runs), *Rules and Monitoring* (alerts:
 Alerts · What raises alerts · Held rows · Changes, the owner's M1) and *Admin*. One table,
 `apps/workspace/src/shell/places.json`, names them, the single rights that open each, and what a place's
@@ -470,9 +470,13 @@ the Glass's frame, not on the identity provider's sign-in page), styled on the h
 
 **The context banner.** One row under the top bar (`shell/ContextBanner.tsx`; 41 pixels at 1440 wide
 under the OspreyFlow brand, its controls 32), a region named by its first words:
-- in the Glass: "You are in the Glass · Case · Boards · ‹case menu› · reads ‹the case's datasets›", the
-  sections a navigation named *In the Glass* (*Case* the case's views, *Boards* the case's drawing
-  boards, §2.0b);
+- in the Glass: "You are in the Glass · Graph · Drawing board · ‹case menu› · reads ‹the case's datasets› ·
+  ‹the mode's note›", the sections a navigation named *In the Glass* (*Graph* the case's data and its
+  views, *Drawing board* the case's drawing boards, §2.0b; ADR-145 Amendment 13 renamed them from *Case ·
+  Boards*), and the open mode's one line: "Graph: the case's data. Saved views are under Views or
+  Cases." or "Drawing board: your sketch; it does not change the case's data.", part of the region and its
+  description. It stays in the row at 1440 wide (GOV.UK's row 32 pixels, OspreyFlow's 41); at 1024 it is on
+  a line under the row, with the cross-link (GOV.UK 66, OspreyFlow 81);
 - in the Studio: "You are in the Ingest Studio · for ‹case menu›";
 - in Rules and Monitoring: "You are in Rules and Monitoring · ‹case menu›";
 - in Admin: "You are in Admin".
@@ -501,7 +505,7 @@ ask for the administrator role as well as `manage_ontology`.
 **The count (ADR-145 Amendment 2).** A keyboard user passes 24 controls before the canvas — 25 on the
 deployed page, whose brand frame adds the skip link first — in this order: the mark, the four places
 (Rules and Monitoring with its count), search with *Add many from a list* and *Filters*, Graph, Map,
-*More views*, *Export*, the theme, the account; the banner's Case and Boards, the case menu and the
+*More views*, *Export*, the theme, the account; the banner's Graph and Drawing board, the case menu and the
 cross-link; the rail's Cases,
 Explore, ⋯ More, Help and Show names; and the Graph's *Match strictness*. `App.chrome.test.tsx` counts
 them on the real `App` and fails if one returns.
@@ -534,7 +538,7 @@ offers *← Back to the alert*, which returns to the alert's address with the al
 
 ### 2.0b Boards: drawing on a case (ADR-143 decisions 4 to 7 and 13; Amendment 2 decision 5; L3.3)
 
-*Boards* (`apps/workspace/src/boards/`) lists the open case's boards this person may see, with *New
+*Drawing board* (`apps/workspace/src/boards/`) lists the open case's boards this person may see, with *New
 board* (blank, from one of the case's views this person may see, or from the selection on the canvas,
 its loaded items kept as live references) and
 *New drawing as a case of its own* (a name, the highest marking it may hold, a starter model: a drawn
@@ -1110,6 +1114,13 @@ case while a view is open. A view with no window clears the timeline's window wh
 dialog, the case's, steps aside while a view is open on the Graph, and shows on the Map and the Matrix,
 which show the case, and again on the Graph once the analyst is back on the case, if it is still past
 the cap.
+
+**Views ▾ by the graph (ADR-144 Amendment 3).** The canvas toolbar's View group opens with **Views ▾**,
+beside *Clear view* (`views/ViewsMenu.tsx`): the open case's views as the drawer's list reads them (the
+same route, read again each time it opens, so the same rights), each marked *Private* or *Shared* and the
+one open now marked current; choosing one is the drawer's own *Open* (`openLens`). With none it says "No
+saved views yet. Select nodes and choose Save as a view."; a refused list is said in words. Sharing and
+deleting stay in the drawer.
 
 **Where views are listed (ADR-144 decision 5).** The left rail's **Cases** drawer shows, first, the open
 case's **Views in this case**: each view the reader may see (their own, and those shared with the case)

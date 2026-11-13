@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.49** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.50** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.50 | 2026-11-13 | §3, §4, §5 and §5.13–5.14: the Glass's mode toggle is **Graph · Drawing board** (it was *Case · Boards*), with a line saying what each mode is (ADR-145 Amendment 13); **Views ▾** by the graph lists the case's saved views and opens one, the Cases drawer keeping its list (ADR-144 Amendment 3). PDF reprinted alone. |
 | 1.49 | 2026-11-13 | §5 and §6: the rail as the owner ruled (ADR-145 Amendment 12): Cases, Explore, *Ask & Chat* (Questions renamed) and Dashboards on the rail; *⋯ More* is *⋯ Explore Details*, holding History, Ownership and Connection strength; Help (and **?**) opens the keys, with the user guide's link, over any view, and closes again. PDF reprinted alone. |
 | 1.48 | 2026-11-13 | §3: Home's *What you can do, and what you answer for* is now *Your access and tasks*, across the page below the two columns (ADR-145 Amendment 11, the owner's ruling): *Waiting for you*, "Nothing is waiting for you.", *Your access to each case*, each line "Editor: Operation Ledger (synthetic demo)". |
 | 1.47 | 2026-11-12 | §3: Home's guides. *Read the user guide (PDF)* under the Glass's card, the developer guide under the Ingest Studio's and the administration guide under Admin's, each with its place's card alone, opened in a new tab or saved, as the version this deployment was built with (ADR-145 Amendment 10). PDF made by the orchestrator at merge. |
@@ -173,8 +174,10 @@ The OspreyFlow mark at the top left always brings you back.
 
 **Moving between places.** The **place switcher** in the top bar lists the same places; under the
 GOV.UK theme it sits inside the GOV.UK header. Under it, a **context banner** says where you are: in
-the Glass, "You are in the Glass · Case · Boards", with the case you are in and the dataset it
-reads; elsewhere "You are in the Ingest Studio", "You are in Rules and Monitoring" or "You are in
+the Glass, "You are in the Glass · Graph · Drawing board", with the case you are in and the dataset it
+reads, and a line saying which you are in: "Graph: the case's data. Saved views are under Views or
+Cases." or "Drawing board: your sketch; it does not change the case's data." (on a narrow screen
+that line sits under the banner's row); elsewhere "You are in the Ingest Studio", "You are in Rules and Monitoring" or "You are in
 Admin". If you can open both the Glass and the Ingest Studio, the banner offers **Open ‹dataset› in
 the Ingest Studio ↗**, and from there **← Back to case ‹name› in the Glass**, which brings you back
 to the same case and view.
@@ -208,7 +211,7 @@ role, right and level.
 
 **Starting a case.** **Create case** asks you to name the case and choose what it reads: **Use an
 existing dataset…**, or **Make a new dataset — empty, loaded in the Ingest Studio**. You may tick the
-case's domain packs here too. A third way starts from **Boards**: a drawing as a case of its own
+case's domain packs here too. A third way starts from **Drawing board**: a drawing as a case of its own
 (section 5.14). **Remove**, for a case's Author or an administrator, asks "Remove this case from every
 list? Nothing is deleted."
 
@@ -276,7 +279,7 @@ added from outside, such as a VAST Challenge dataset, is a case of its own named
 | Part | What it is |
 | --- | --- |
 | **Top bar** | The place switcher, the case menu, search, the view switch (Graph and Map, with Matrix and Figures under **More views**), Export, and your account |
-| **Context banner** | Where you are: the Glass's **Case** and **Boards**, the case and the dataset it reads |
+| **Context banner** | Where you are: the Glass's **Graph** and **Drawing board**, with a line saying which is open, the case and the dataset it reads |
 | **Left rail** | Cases, Explore, **Ask & Chat** and Dashboards, then **⋯ Explore Details** with History, Ownership and Connection strength, those your rights allow; and **Help** (**?**), which opens the keys and the user guide over any view and closes again with a second press or Esc |
 | **Canvas** | The graph, the map, the Matrix or the case's figures |
 | **Right column** | The Inspector, Metrics, the query builder and Find connections, stacked; **Full width** and **Hide** |
@@ -689,7 +692,10 @@ copy: there are no branches, and nothing in a view changes the case.
 
 - **Saving.** Select what matters and choose **Save as a view** in the selection bar; name it under
   **View name** and **Save view**. A new view is yours alone.
-- **Finding them.** The rail's **Cases** drawer lists them under **Views in this case**, each with
+- **Finding them.** **Views ▾**, in the graph's toolbar beside *Clear view*, lists the views you may
+  see, each marked *Private* or *Shared*, the one open now marked too; choose one to open it. Before
+  you have any it says "No saved views yet. Select nodes and choose Save as a view." The rail's
+  **Cases** drawer also lists them, under **Views in this case**, each with
   **Open**, **Share with the case** and **Delete** ("Delete this view? Nothing on the case is deleted
   with it."). Only the person who saved a view shares or deletes it. Before you have any it says "No
   views yet. Select nodes on the canvas and choose *Save as a view*."
@@ -704,7 +710,9 @@ declare a person, an account or a place, and draw the links between them. What y
 the case's own **analyst layer**: it is read with the case's dataset but never written into it, and
 no other case can see it or infer it. The analysis canvas never draws.
 
-**Opening a board.** Choose **Boards** in the context banner: "Drawing boards in case ‹name›".
+**Opening a board.** Choose **Drawing board** in the context banner: "Drawing boards in case ‹name›".
+The banner then says "Drawing board: your sketch; it does not change the case's data."; **Graph**
+takes you back to the case's data.
 **New board** asks for a **Board name** and where to **Start from**: blank, **From a view of this
 case**, or **From the selection** (its items as live references); then **Make the board**. A new board
 is yours alone until you **Share with the case**; on a board someone else drew you read it, "Read
