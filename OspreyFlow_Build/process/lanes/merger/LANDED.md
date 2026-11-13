@@ -60,3 +60,4 @@ e19a7db fed0752 platform-b modes (ADR-145 Am 13, ADR-144 Am 3)
 ad55522 1162de4 platform poc-rds (4b, ADR-114 Am 46)
 aa90de3 00ba7c7 rules lists-audit
 ee440c1 5d0999d admin v052-heartbeat
+d2312e8 c4b955e rules stack-opensearch
