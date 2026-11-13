@@ -36,7 +36,7 @@ export function splitRail<T extends { id: string }>(entries: readonly T[]): { it
 export const PANEL_OPENERS: readonly RailEntry[] = ["explore", "questions", "history"];
 
 /** How the rail marks an entry (Amendment 15): a panel's opener is never pressed, only expanded while its panel is
- * open. Since Amendment 15 every entry on the rail is a panel's opener, so the `pressed` branch serves only an entry
+ * open. Since Amendment 15 every entry on the rail is a panel's opener, so its `pressed` answer serves only an entry
  * outside PANEL_OPENERS, of which there is none today. `App.tsx` and the places harness both read it. */
 export function railMark(
   id: RailEntry,
