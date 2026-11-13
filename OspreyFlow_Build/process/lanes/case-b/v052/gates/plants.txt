@@ -1,41 +1,41 @@
-GREEN unplanted: 169 passed in 1.32s
-RED   an unknown key inside an entry is not a stop: 1 failed, 2 passed in 0.34s
-RED   an unknown section is not a stop: 1 failed, 1 passed in 0.32s
-RED   a pending entry is not a stop: 1 failed, 61 passed in 0.72s
-RED   a CronJob listed suspended that runs by itself passes: 1 failed, 122 passed in 1.16s
-RED   a job never succeeded passes: 1 failed, 120 passed in 1.12s
-RED   a failed restore step passes: 1 failed, 119 passed in 1.13s
-RED   kubectl's absent readyReplicas read as all ready: 1 failed, 141 passed in 1.21s
-RED   a database reached by a stranger passes: 1 failed, 139 passed in 1.22s
-RED   a check that raises passes: 1 failed, 137 passed in 1.20s
-RED   r1's SystemExit ends the whole run: 1 failed, 137 passed in 1.21s
-RED   a rollout the controller has not observed passes: 1 failed, 125 passed in 1.17s
-RED   another shape passes: 1 failed, 64 passed in 0.76s
-RED   a probe with no answer reads as blocked: 1 failed, 151 passed in 1.26s
-RED   the runbook's listing Job or a v0.5.1 run counts as a backup: 1 failed, 155 passed in 1.19s
-RED   the claims restore's run counts as the graph's: 1 failed, 156 passed in 1.22s
+GREEN unplanted: 168 passed in 1.49s
+RED   an unknown key inside an entry is not a stop: 1 failed, 2 passed in 0.40s
+RED   an unknown section is not a stop: 1 failed, 1 passed in 0.39s
+RED   a pending entry is not a stop: 1 failed, 61 passed in 0.89s
+RED   a CronJob listed suspended that runs by itself passes: 1 failed, 122 passed in 1.17s
+RED   a job never succeeded passes: 1 failed, 120 passed in 1.15s
+RED   a failed restore step passes: 1 failed, 119 passed in 1.15s
+RED   kubectl's absent readyReplicas read as all ready: 1 failed, 141 passed in 1.31s
+RED   a database reached by a stranger passes: 1 failed, 139 passed in 1.25s
+RED   a check that raises passes: 1 failed, 137 passed in 1.27s
+RED   r1's SystemExit ends the whole run: 1 failed, 137 passed in 1.30s
+RED   a rollout the controller has not observed passes: 1 failed, 125 passed in 1.19s
+RED   another shape passes: 1 failed, 64 passed in 0.73s
+RED   a probe with no answer reads as blocked: 1 failed, 151 passed in 1.27s
+RED   the runbook's listing Job or a v0.5.1 run counts as a backup: 1 failed, 155 passed in 1.21s
+RED   the claims restore's run counts as the graph's: 1 failed, 156 passed in 1.21s
 RED   a finished pod's address names a reader: 1 failed, 157 passed in 1.22s
-RED   restore-graph unchecked when steps does not name it: 1 failed, 136 passed in 1.16s
+RED   restore-graph unchecked when steps does not name it: 1 failed, 136 passed in 1.18s
 RED   a key inside an egress entry is not a stop: 1 failed, 47 passed in 0.62s
-RED   a collected case with no disposition runs: 1 failed, 167 passed in 1.22s
-RED   a narrowed selection stops the run: 1 failed, 166 passed in 1.24s
-RED   a spec 08 case with no disposition runs unremarked: 1 failed, 160 passed in 1.21s
-RED   a disposition for a case that no longer exists is not noticed: 1 failed, 161 passed in 1.20s
-RED   a case that cannot run on poc is run anyway: 1 failed, 165 passed in 1.21s
-RED   the module still signs in at Keycloak: 1 failed, 165 passed in 1.24s
-RED   open egress passes: 1 failed, 110 passed in 1.06s
-RED   a workload or job on another reference passes the version check: 1 failed, 63 passed in 0.74s
-RED   an image of ours tagged with another release passes: 1 failed, 130 passed in 1.18s
-RED   a rollout still holding the old pod passes: 1 failed, 124 passed in 1.13s
-RED   an unavailable replica passes: 1 failed, 124 passed in 1.12s
-RED   updated, ready and available unchecked: 1 failed, 112 passed in 1.09s
-RED   a StatefulSet mid-update passes: 1 failed, 127 passed in 1.17s
-RED   kubectl's unavailableReplicas ignored: 1 failed, 124 passed in 1.12s
-RED   an offline node reads as egress blocked: 1 failed, 135 passed in 1.19s
-RED   the shape is not read from the deployed configuration: 1 failed, 134 passed in 1.16s
-RED   a CronJob's template on the old release reads as current: 1 failed, 158 passed in 1.23s
-RED   a restore run at the candidate's image reads as old: 1 failed, 148 passed in 1.28s
-RED   init containers' references left out of the candidate's: 1 failed, 132 passed in 1.17s
-RED   a StatefulSet is never found: 1 failed, 147 passed in 1.21s
-RED   a workload not ready passes: 1 failed, 112 passed in 1.06s
+RED   a collected case with no disposition runs: 1 failed, 166 passed in 1.30s
+RED   a narrowed selection stops the run: 1 failed, 165 passed in 1.43s
+RED   a spec 08 case with no disposition runs unremarked: 1 failed, 160 passed in 1.23s
+RED   a disposition for a case that no longer exists is not noticed: 1 failed, 161 passed in 1.23s
+RED   a case that cannot run on poc is run anyway: 1 failed, 164 passed in 1.79s
+RED   the module still signs in at Keycloak: 1 failed, 164 passed in 1.39s
+RED   open egress passes: 1 failed, 110 passed in 1.08s
+RED   a workload or job on another reference passes the version check: 1 failed, 63 passed in 0.77s
+RED   an image of ours tagged with another release passes: 1 failed, 130 passed in 1.28s
+RED   a rollout still holding the old pod passes: 1 failed, 124 passed in 1.18s
+RED   an unavailable replica passes: 1 failed, 124 passed in 1.18s
+RED   updated, ready and available unchecked: 1 failed, 112 passed in 1.11s
+RED   a StatefulSet mid-update passes: 1 failed, 127 passed in 1.20s
+RED   kubectl's unavailableReplicas ignored: 1 failed, 124 passed in 1.26s
+RED   an offline node reads as egress blocked: 1 failed, 135 passed in 1.22s
+RED   the shape is not read from the deployed configuration: 1 failed, 134 passed in 1.23s
+RED   a CronJob's template on the old release reads as current: 1 failed, 158 passed in 1.28s
+RED   a restore run at the candidate's image reads as old: 1 failed, 148 passed in 1.30s
+RED   init containers' references left out of the candidate's: 1 failed, 132 passed in 1.28s
+RED   a StatefulSet is never found: 1 failed, 147 passed in 1.27s
+RED   a workload not ready passes: 1 failed, 112 passed in 1.11s
 every plant red, unplanted green

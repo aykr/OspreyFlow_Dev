@@ -13,8 +13,9 @@ pytest plugin that
 stops the compose `api`, seeds, starts it). A cloud-platform deployment has no way to take them, so the
 rows built on them cannot be performed there. What runs is what an analyst can do from an empty case:
 sign in, the ingest root and the Studio on the CDR fixture (B1-B3, uploaded through
-`POST .../ingest/source-files`, the analyst's own door), and the site grid (A1's first three): 9 of 27.
-B13 (both) and B14 are broken on every shape, not only poc: their fixture asks routes the Conduit has moved.
+`POST .../ingest/source-files`, the analyst's own door), the site grid (A1's first three), and B13-B14 on
+the uploaded seizure record: 12 of 27. (B13-B14's fixture asked routes the Conduit had moved; fixed in c6c6044,
+held by tests/scenarios/test_over_the_wire_routes_exist.py.)
 
     # on the kind cluster, after the install and under a lease (from OspreyFlow_Core):
     bash ../OspreyFlow_Build/process/lanes/platform/gates/r1_kind.sh py ../../case-b/v052/spec08_poc.py run
@@ -39,8 +40,6 @@ BUILD = HERE.parents[3]
 MODULE = Path(os.environ.get("OSPREY_V052_SPEC08_MODULE") or BUILD / "tests" / "scenarios" / "test_phase8_exit_over_the_wire.py")
 
 NO_SEED = "no seed path on poc: it rests on the hmp/fixture-corp/scenarios seed datasets, and harness.apply's seed is compose-only"
-ROUTES_MOVED = ("broken on every shape: its fixture `seizure_alert` asks POST /v1/hotlists and GET /v1/alerts, which the Conduit "
-                "now has only under a case (/v1/investigations/{id}/hotlists) and by id (/v1/alerts/{alert_id})")
 
 #: Every case of MODULE: None runs on poc; a string is why it cannot.
 DISPOSITIONS: dict[str, str | None] = {
@@ -58,10 +57,10 @@ DISPOSITIONS: dict[str, str | None] = {
     "test_b17_the_devices_location_events_are_reachable_and_windowed": NO_SEED,
     "test_b18_the_sightings_form_an_ordered_track": NO_SEED,
     "test_b16_both_event_sets_are_retrievable_for_a_shared_axis": NO_SEED,
-    # B13/B14 assert nothing seeded (the ingest makes their SIM and referents): their fixture has drifted from the API.
-    "test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule": ROUTES_MOVED,
-    "test_b13_a_hotlist_alone_fires_nothing_until_the_ingest_arrives": ROUTES_MOVED,
-    "test_b14_an_alert_opens_at_its_address_in_its_own_case_with_its_entities": ROUTES_MOVED,
+    # B13/B14 assert nothing seeded: the ingest of the uploaded seizure record makes their SIM and referents.
+    "test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule": None,
+    "test_b13_a_hotlist_alone_fires_nothing_until_the_ingest_arrives": None,
+    "test_b14_an_alert_opens_at_its_address_in_its_own_case_with_its_entities": None,
     "test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities": None,
     "test_a1_redrawing_the_grid_does_not_duplicate_its_cells": None,
     "test_a1_a_cells_geometry_reference_resolves_to_its_centroid": None,
@@ -205,9 +204,7 @@ def run(extra: list[str]) -> int:  # pragma: no cover - the live half, under a l
     import tempfile
 
     import yaml
-    from scripts.seed_ingest_folder import (
-        write_cdr_fixture,
-    )
+    from scripts.seed_ingest_folder import write_cdr_fixture, write_seizure_fixture
 
     r1 = _r1()
     claims = yaml.safe_load(r1.CONFIG.read_text())["cloud_platform"]["claims"]
@@ -221,7 +218,7 @@ def run(extra: list[str]) -> int:  # pragma: no cover - the live half, under a l
     made.raise_for_status()
     case = made.json()["id"]
     with tempfile.TemporaryDirectory() as tmp:
-        for write in (write_cdr_fixture,):  # the only fixture a running case reads (B1-B3's load)
+        for write in (write_cdr_fixture, write_seizure_fixture):  # what running cases read: B1-B3's load, B13's
             path = write(Path(tmp))
             up = c.post(f"/v1/investigations/{case}/ingest/source-files", params={"name": path.name},
                         headers={**signed, "Content-Type": "text/csv"}, content=path.read_bytes())

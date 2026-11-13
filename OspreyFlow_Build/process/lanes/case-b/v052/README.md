@@ -57,12 +57,12 @@ poc with its reason, and **stops the run** if the module (as written, whatever `
 disposition or a disposition for a gone case. The runner makes an empty case and uploads the CDR fixture through
 `POST .../ingest/source-files`, the analyst's own door.
 
-**9 of 27 cases run; 15 rest on a seed ("no seed path on poc"); 3 are broken on every shape.** The 15 rest on the
-`hmp`, `fixture-corp` and `scenarios` seed datasets, and `harness.apply`'s seed is compose-only. What runs: the
-door, the ingest root and the Studio, B1–B3 and the find-and-open case on their load, A1's grid, redraw and
-centroid. **B13 (both cases) and B14** seed nothing they assert, but their fixture `seizure_alert` asks
-`POST /v1/hotlists` and `GET /v1/alerts`, routes the Conduit now has only under a case and by id: the module has
-drifted from the API (a test pins that both routes are still gone).
+**12 of 27 cases run; 15 rest on a seed ("no seed path on poc").** The 15 rest on the `hmp`, `fixture-corp` and
+`scenarios` seed datasets, and `harness.apply`'s seed is compose-only. What runs: the door, the ingest root and the
+Studio, B1–B3 and the find-and-open case on their load, A1's grid, redraw and centroid, and B13 (both) and B14 on
+the uploaded seizure record. B13–B14 were broken on every shape until c6c6044 (their fixture asked `POST
+/v1/hotlists` and `GET /v1/alerts`, moved under the case); B12 and B19–B20 had drifted the same way. All five calls are
+fixed, and `tests/scenarios/test_over_the_wire_routes_exist.py` holds every call in the module to the Conduit's routes.
 
 `python spec08_poc.py table` prints the dispositions.
 

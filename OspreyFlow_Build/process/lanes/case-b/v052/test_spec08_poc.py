@@ -40,25 +40,13 @@ def test_every_reason_says_why() -> None:
 
 
 def test_the_counts_reported_are_the_tables() -> None:
-    """The figures the README, the friction row and the orchestrator were given (the review of 816922f,
-    item 5: they had said 8 and 19)."""
+    """The figures the README, the friction row and the orchestrator were given."""
     runs = [c for c, r in s8.DISPOSITIONS.items() if r is None]
     seeded = [c for c, r in s8.DISPOSITIONS.items() if r == s8.NO_SEED]
-    moved = [c for c, r in s8.DISPOSITIONS.items() if r == s8.ROUTES_MOVED]
-    assert (len(runs), len(seeded), len(moved)) == (9, 15, 3)
-    assert len(runs) + len(seeded) + len(moved) == len(s8.DISPOSITIONS) == 27
-    assert "test_the_analysts_own_door_opens" in runs
+    assert (len(runs), len(seeded)) == (12, 15)
+    assert len(runs) + len(seeded) == len(s8.DISPOSITIONS) == 27
+    assert "test_b14_an_alert_opens_at_its_address_in_its_own_case_with_its_entities" in runs
     assert "test_b7_a_shared_messaging_handle_is_common_to_the_second_cohort" in seeded
-
-
-def test_the_moved_routes_are_really_gone_from_the_conduit() -> None:
-    """B13/B14's fixture asks `/v1/hotlists` and `/v1/alerts`; the Conduit has them only under a case
-    (and an alert by its id). If either comes back, this fails and the disposition is wrong."""
-    app = (s8.MODULE.parents[3] / "OspreyFlow_Core" / "services" / "api" / "app.py").read_text(encoding="utf-8")
-    module = s8.MODULE.read_text(encoding="utf-8")
-    for route in ('"/v1/hotlists"', '"/v1/alerts"'):
-        assert route in module, route
-        assert route not in app, route
 
 
 class Item:
