@@ -1,0 +1,25 @@
+# glass plants at ccdbfc3, 2026-11-13T22:13:23Z; script: plant_ts.py below
+RED | engine named only with a choice | names the engine that will answer even when there is only one
+RED | Whole case enabled | offers Whole case disabled
+RED | read_from not sent | sends that choice with the question
+RED | failed list unsaid | says the engine list failed
+RED | client counts the selection | never counts in the Glass
+
+--- plant_ts.py
+import subprocess
+plants=[
+ ("src/questions/QuestionsPanel.tsx","engine named only with a choice","{will.engine_label !== null ? (","{will.engine_label !== null && engineChoice.chosen !== null ? (","names the engine that will answer even when there is only one"),
+ ("src/questions/QuestionsPanel.tsx","Whole case enabled",'const unavailable = choice.value === "case" || (choice.value === "selection" && !hasSelection);','const unavailable = choice.value === "selection" && !hasSelection;',"offers Whole case disabled"),
+ ("src/questions/questionsApi.ts","read_from not sent","    ...(scope.readFrom ? { read_from: scope.readFrom } : {}),\n","","sends that choice with the question"),
+ ("src/questions/QuestionsPanel.tsx","failed list unsaid","        {engineChoice.failed && (","        {false && (","says the engine list failed"),
+ ("src/questions/QuestionsPanel.tsx","client counts the selection","  const others = read.selected - 1;","  const others = read.selected - 1 + 0 * 0;\n  void others;\n  return `About: ${read.first_selected} and 1 other`;","never counts in the Glass"),
+]
+for f,name,a,b,t in plants:
+    orig=open(f).read(); assert orig.count(a)==1,(name,orig.count(a))
+    open(f,'w').write(orig.replace(a,b))
+    try:
+        r=subprocess.run(["npx","vitest","run","src/questions/QuestionsPanel.test.tsx","-t",t],capture_output=True,text=True)
+        ok = "failed" in r.stdout and " 0 failed" not in r.stdout
+        print(("RED " if r.returncode else "GREEN?! ")+"| "+name+" | "+t)
+    finally:
+        open(f,'w').write(orig)

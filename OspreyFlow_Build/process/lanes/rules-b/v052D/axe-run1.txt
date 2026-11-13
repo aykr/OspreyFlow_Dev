@@ -1,0 +1,454 @@
+
+Running 3 tests using 1 worker
+
+[1/3] a11y/every-harness.spec.ts:388:7 › questions-harness.html (dark) has no automated WCAG 2.2 A or AA violations
+  1) a11y/every-harness.spec.ts:388:7 › questions-harness.html (dark) has no automated WCAG 2.2 A or AA violations 
+
+    Error: [
+      {
+        "id": "target-size",
+        "impact": "serious",
+        "tags": [
+          "cat.sensory-and-visual-cues",
+          "wcag22aa",
+          "wcag258",
+          "EN-301-549v4",
+          "EN-9.2.5.8"
+        ],
+        "description": "Ensure touch targets have sufficient size and space",
+        "help": "All touch targets must be 24px large, or leave sufficient space",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/target-size?application=playwright",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "target-size",
+                "data": {
+                  "minSize": 24,
+                  "width": 13,
+                  "height": 13
+                },
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Target has insufficient size (13px by 13px, should be at least 24px by 24px)"
+              },
+              {
+                "id": "target-offset",
+                "data": {
+                  "closestOffset": 20,
+                  "minOffset": 24
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<input id=\"_r_0_-graph\" type=\"radio\" value=\"graph\" name=\"_r_0_\">",
+                    "target": [
+                      "#_r_0_-graph"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px."
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<input id=\"_r_0_-selection\" type=\"radio\" value=\"selection\" checked=\"\" name=\"_r_0_\">",
+            "target": [
+              "#_r_0_-selection"
+            ],
+            "failureSummary": "Fix any of the following:\n  Target has insufficient size (13px by 13px, should be at least 24px by 24px)\n  Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px."
+          },
+          {
+            "any": [
+              {
+                "id": "target-size",
+                "data": {
+                  "minSize": 24,
+                  "width": 13,
+                  "height": 13
+                },
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Target has insufficient size (13px by 13px, should be at least 24px by 24px)"
+              },
+              {
+                "id": "target-offset",
+                "data": {
+                  "closestOffset": 20,
+                  "minOffset": 24
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<input id=\"_r_0_-selection\" type=\"radio\" value=\"selection\" checked=\"\" name=\"_r_0_\">",
+                    "target": [
+                      "#_r_0_-selection"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px."
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<input id=\"_r_0_-graph\" type=\"radio\" value=\"graph\" name=\"_r_0_\">",
+            "target": [
+              "#_r_0_-graph"
+            ],
+            "failureSummary": "Fix any of the following:\n  Target has insufficient size (13px by 13px, should be at least 24px by 24px)\n  Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px."
+          }
+        ]
+      }
+    ]
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -   1
+    + Received  + 102
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "description": "Ensure touch targets have sufficient size and space",
+    +     "help": "All touch targets must be 24px large, or leave sufficient space",
+    +     "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/target-size?application=playwright",
+    +     "id": "target-size",
+    +     "impact": "serious",
+    +     "nodes": Array [
+    +       Object {
+    +         "all": Array [],
+    +         "any": Array [
+    +           Object {
+    +             "data": Object {
+    +               "height": 13,
+    +               "minSize": 24,
+    +               "width": 13,
+    +             },
+    +             "id": "target-size",
+    +             "impact": "serious",
+    +             "message": "Target has insufficient size (13px by 13px, should be at least 24px by 24px)",
+    +             "relatedNodes": Array [],
+    +           },
+    +           Object {
+    +             "data": Object {
+    +               "closestOffset": 20,
+    +               "minOffset": 24,
+    +             },
+    +             "id": "target-offset",
+    +             "impact": "serious",
+    +             "message": "Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px.",
+    +             "relatedNodes": Array [
+    +               Object {
+    +                 "html": "<input id=\"_r_0_-graph\" type=\"radio\" value=\"graph\" name=\"_r_0_\">",
+    +                 "target": Array [
+    +                   "#_r_0_-graph",
+    +                 ],
+    +               },
+    +             ],
+    +           },
+    +         ],
+    +         "failureSummary": "Fix any of the following:
+    +   Target has insufficient size (13px by 13px, should be at least 24px by 24px)
+    +   Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px.",
+    +         "html": "<input id=\"_r_0_-selection\" type=\"radio\" value=\"selection\" checked=\"\" name=\"_r_0_\">",
+    +         "impact": "serious",
+    +         "none": Array [],
+    +         "target": Array [
+    +           "#_r_0_-selection",
+    +         ],
+    +       },
+    +       Object {
+    +         "all": Array [],
+    +         "any": Array [
+    +           Object {
+    +             "data": Object {
+    +               "height": 13,
+    +               "minSize": 24,
+    +               "width": 13,
+    +             },
+    +             "id": "target-size",
+    +             "impact": "serious",
+    +             "message": "Target has insufficient size (13px by 13px, should be at least 24px by 24px)",
+    +             "relatedNodes": Array [],
+    +           },
+    +           Object {
+    +             "data": Object {
+    +               "closestOffset": 20,
+    +               "minOffset": 24,
+    +             },
+    +             "id": "target-offset",
+    +             "impact": "serious",
+    +             "message": "Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px.",
+    +             "relatedNodes": Array [
+    +               Object {
+    +                 "html": "<input id=\"_r_0_-selection\" type=\"radio\" value=\"selection\" checked=\"\" name=\"_r_0_\">",
+    +                 "target": Array [
+    +                   "#_r_0_-selection",
+    +                 ],
+    +               },
+    +             ],
+    +           },
+    +         ],
+    +         "failureSummary": "Fix any of the following:
+    +   Target has insufficient size (13px by 13px, should be at least 24px by 24px)
+    +   Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px.",
+    +         "html": "<input id=\"_r_0_-graph\" type=\"radio\" value=\"graph\" name=\"_r_0_\">",
+    +         "impact": "serious",
+    +         "none": Array [],
+    +         "target": Array [
+    +           "#_r_0_-graph",
+    +         ],
+    +       },
+    +     ],
+    +     "tags": Array [
+    +       "cat.sensory-and-visual-cues",
+    +       "wcag22aa",
+    +       "wcag258",
+    +       "EN-301-549v4",
+    +       "EN-9.2.5.8",
+    +     ],
+    +   },
+    + ]
+
+      412 |           .filter((v) => v.nodes.length > 0); // prettier-ignore
+      413 |         expect(overlaid.filter((c) => !dropped.has(c)), "listed under an open overlay but no longer reported: update UNDER_AN_OPEN_OVERLAY").toEqual([]);
+    > 414 |         expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+          |                                                                 ^
+      415 |         // axe's undecided colour contrast, measured here (1.4.3): a shortfall or an unmeasurable
+      416 |         // node fails, unless it is a listed finding carried by its owner, and a listed one that is
+      417 |         // gone fails too, so the list never outlives what it excuses.
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:414:65
+
+    Error Context: test-results/every-harness-questions-ha-ee2b0-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+[2/3] a11y/every-harness.spec.ts:388:7 › questions-harness.html (light) has no automated WCAG 2.2 A or AA violations
+  2) a11y/every-harness.spec.ts:388:7 › questions-harness.html (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: [
+      {
+        "id": "target-size",
+        "impact": "serious",
+        "tags": [
+          "cat.sensory-and-visual-cues",
+          "wcag22aa",
+          "wcag258",
+          "EN-301-549v4",
+          "EN-9.2.5.8"
+        ],
+        "description": "Ensure touch targets have sufficient size and space",
+        "help": "All touch targets must be 24px large, or leave sufficient space",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/target-size?application=playwright",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "target-size",
+                "data": {
+                  "minSize": 24,
+                  "width": 13,
+                  "height": 13
+                },
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Target has insufficient size (13px by 13px, should be at least 24px by 24px)"
+              },
+              {
+                "id": "target-offset",
+                "data": {
+                  "closestOffset": 20,
+                  "minOffset": 24
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<input id=\"_r_0_-graph\" type=\"radio\" value=\"graph\" name=\"_r_0_\">",
+                    "target": [
+                      "#_r_0_-graph"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px."
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<input id=\"_r_0_-selection\" type=\"radio\" value=\"selection\" checked=\"\" name=\"_r_0_\">",
+            "target": [
+              "#_r_0_-selection"
+            ],
+            "failureSummary": "Fix any of the following:\n  Target has insufficient size (13px by 13px, should be at least 24px by 24px)\n  Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px."
+          },
+          {
+            "any": [
+              {
+                "id": "target-size",
+                "data": {
+                  "minSize": 24,
+                  "width": 13,
+                  "height": 13
+                },
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Target has insufficient size (13px by 13px, should be at least 24px by 24px)"
+              },
+              {
+                "id": "target-offset",
+                "data": {
+                  "closestOffset": 20,
+                  "minOffset": 24
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<input id=\"_r_0_-selection\" type=\"radio\" value=\"selection\" checked=\"\" name=\"_r_0_\">",
+                    "target": [
+                      "#_r_0_-selection"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px."
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<input id=\"_r_0_-graph\" type=\"radio\" value=\"graph\" name=\"_r_0_\">",
+            "target": [
+              "#_r_0_-graph"
+            ],
+            "failureSummary": "Fix any of the following:\n  Target has insufficient size (13px by 13px, should be at least 24px by 24px)\n  Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px."
+          }
+        ]
+      }
+    ]
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -   1
+    + Received  + 102
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "description": "Ensure touch targets have sufficient size and space",
+    +     "help": "All touch targets must be 24px large, or leave sufficient space",
+    +     "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/target-size?application=playwright",
+    +     "id": "target-size",
+    +     "impact": "serious",
+    +     "nodes": Array [
+    +       Object {
+    +         "all": Array [],
+    +         "any": Array [
+    +           Object {
+    +             "data": Object {
+    +               "height": 13,
+    +               "minSize": 24,
+    +               "width": 13,
+    +             },
+    +             "id": "target-size",
+    +             "impact": "serious",
+    +             "message": "Target has insufficient size (13px by 13px, should be at least 24px by 24px)",
+    +             "relatedNodes": Array [],
+    +           },
+    +           Object {
+    +             "data": Object {
+    +               "closestOffset": 20,
+    +               "minOffset": 24,
+    +             },
+    +             "id": "target-offset",
+    +             "impact": "serious",
+    +             "message": "Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px.",
+    +             "relatedNodes": Array [
+    +               Object {
+    +                 "html": "<input id=\"_r_0_-graph\" type=\"radio\" value=\"graph\" name=\"_r_0_\">",
+    +                 "target": Array [
+    +                   "#_r_0_-graph",
+    +                 ],
+    +               },
+    +             ],
+    +           },
+    +         ],
+    +         "failureSummary": "Fix any of the following:
+    +   Target has insufficient size (13px by 13px, should be at least 24px by 24px)
+    +   Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px.",
+    +         "html": "<input id=\"_r_0_-selection\" type=\"radio\" value=\"selection\" checked=\"\" name=\"_r_0_\">",
+    +         "impact": "serious",
+    +         "none": Array [],
+    +         "target": Array [
+    +           "#_r_0_-selection",
+    +         ],
+    +       },
+    +       Object {
+    +         "all": Array [],
+    +         "any": Array [
+    +           Object {
+    +             "data": Object {
+    +               "height": 13,
+    +               "minSize": 24,
+    +               "width": 13,
+    +             },
+    +             "id": "target-size",
+    +             "impact": "serious",
+    +             "message": "Target has insufficient size (13px by 13px, should be at least 24px by 24px)",
+    +             "relatedNodes": Array [],
+    +           },
+    +           Object {
+    +             "data": Object {
+    +               "closestOffset": 20,
+    +               "minOffset": 24,
+    +             },
+    +             "id": "target-offset",
+    +             "impact": "serious",
+    +             "message": "Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px.",
+    +             "relatedNodes": Array [
+    +               Object {
+    +                 "html": "<input id=\"_r_0_-selection\" type=\"radio\" value=\"selection\" checked=\"\" name=\"_r_0_\">",
+    +                 "target": Array [
+    +                   "#_r_0_-selection",
+    +                 ],
+    +               },
+    +             ],
+    +           },
+    +         ],
+    +         "failureSummary": "Fix any of the following:
+    +   Target has insufficient size (13px by 13px, should be at least 24px by 24px)
+    +   Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 20px instead of at least 24px.",
+    +         "html": "<input id=\"_r_0_-graph\" type=\"radio\" value=\"graph\" name=\"_r_0_\">",
+    +         "impact": "serious",
+    +         "none": Array [],
+    +         "target": Array [
+    +           "#_r_0_-graph",
+    +         ],
+    +       },
+    +     ],
+    +     "tags": Array [
+    +       "cat.sensory-and-visual-cues",
+    +       "wcag22aa",
+    +       "wcag258",
+    +       "EN-301-549v4",
+    +       "EN-9.2.5.8",
+    +     ],
+    +   },
+    + ]
+
+      412 |           .filter((v) => v.nodes.length > 0); // prettier-ignore
+      413 |         expect(overlaid.filter((c) => !dropped.has(c)), "listed under an open overlay but no longer reported: update UNDER_AN_OPEN_OVERLAY").toEqual([]);
+    > 414 |         expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+          |                                                                 ^
+      415 |         // axe's undecided colour contrast, measured here (1.4.3): a shortfall or an unmeasurable
+      416 |         // node fails, unless it is a listed finding carried by its owner, and a listed one that is
+      417 |         // gone fails too, so the list never outlives what it excuses.
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:414:65
+
+    Error Context: test-results/every-harness-questions-ha-62cc8-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+[3/3] a11y/every-harness.spec.ts:424:5 › questions-harness.html: every labelled field's name contains its visible label (2.5.3)
+  2 failed
+    a11y/every-harness.spec.ts:388:7 › questions-harness.html (dark) has no automated WCAG 2.2 A or AA violations 
+    a11y/every-harness.spec.ts:388:7 › questions-harness.html (light) has no automated WCAG 2.2 A or AA violations 
+  1 passed (5.2s)

@@ -1,0 +1,34 @@
+# server plants at ccdbfc3, 2026-11-13T22:13:12Z; script: plant.py below
+RED  | documents not narrowed to the scope | test_selected_items_reads_the_selection_its_links_and_their_documents | E       AssertionError: assert 'Far away' not in 'You answer ...estion: Who?'
+RED  | whole case falls back to the graph | test_whole_case_is_refused_in_words_until_the_search_service_exists | E       Failed: DID NOT RAISE ReadFromUnavailableError
+RED  | selected counted from the request, not the view | test_a_hidden_document_and_item_are_not_counted_quoted_or_cited | E       assert ('Dana MERCER' == 'Dana MERCER'
+RED  | a document with no text not counted | test_a_document_with_no_text_is_counted_apart | E       assert (0, 0) == (0, 1)
+RED  | no documents still refused | test_with_no_document_the_model_answers_from_the_links_and_events_and_the_answer_says_so | E           services.api.questions.NothingToReadError: x
+RED  | will read names the engine chosen | test_will_read_names_the_engine_that_will_answer_not_the_one_chosen | E       assert ('gemini', 'Gemini') == ('local', "Th...'s own model")
+RED  | handling reason dropped | test_will_read_lists_an_engine_the_materials_own_handling_code_may_not_reach | E       ValueError: not enough values to unpack (expected 1, got 0)
+RED  | read summary not kept | test_the_read_summary_is_kept_with_the_answer_and_read_back | E       AssertionError: assert (None is not None)
+
+--- plant.py
+import subprocess, sys, shutil
+P='services/api/questions.py'
+plants = [
+ ("documents not narrowed to the scope", "await self._documents(investigation_id, principal, scope.nodes)", "await self._documents(investigation_id, principal, nodes)", "test_selected_items_reads_the_selection_its_links_and_their_documents"),
+ ("whole case falls back to the graph", "            raise ReadFromUnavailableError()\n", "            read_from = None\n", "test_whole_case_is_refused_in_words_until_the_search_service_exists"),
+ ("selected counted from the request, not the view", "selected=len(held_nodes) + len(held_links),", "selected=len(picked_nodes) + len(picked_links),", "test_a_hidden_document_and_item_are_not_counted_quoted_or_cited"),
+ ("a document with no text not counted", "                without_text += 1\n", "                pass\n", "test_a_document_with_no_text_is_counted_apart"),
+ ("no documents still refused", "        if documents:\n            numbered", "        if not documents:\n            raise NothingToReadError('x')\n        if documents:\n            numbered", "test_with_no_document_the_model_answers_from_the_links_and_events_and_the_answer_says_so"),
+ ("will read names the engine chosen", "        label = LOCAL_LABEL if choice.engine == LOCAL", "        choice = type(choice)(engine or choice.engine, choice.model)\n        label = LOCAL_LABEL if choice.engine == LOCAL", "test_will_read_names_the_engine_that_will_answer_not_the_one_chosen"),
+ ("handling reason dropped", "            elif handling.handling_code not in routes.sendable:", "            elif False:", "test_will_read_lists_an_engine_the_materials_own_handling_code_may_not_reach"),
+ ("read summary not kept", "            read=material.read,\n        )\n        await self._store.add(entry)", "        )\n        await self._store.add(entry)", "test_the_read_summary_is_kept_with_the_answer_and_read_back"),
+]
+orig=open(P).read()
+env=dict(__import__('os').environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994"); env.pop("OSPREY_LANE", None)
+try:
+  for name,a,b,test in plants:
+    assert orig.count(a)==1,(name,orig.count(a))
+    open(P,'w').write(orig.replace(a,b))
+    r=subprocess.run([".venv/bin/pytest","-c","../OspreyFlow_Build/pytest.ini","-q","-p","no:cacheprovider",f"../OspreyFlow_Build/tests/services/api/test_questions_read_from.py::{test}"],capture_output=True,text=True,env=env)
+    last=[l for l in r.stdout.splitlines() if l.startswith("E ")][:1]
+    print(f"{'RED ' if r.returncode else 'GREEN?!'} | {name} | {test} | {last[0][:150] if last else ''}")
+finally:
+  open(P,'w').write(orig)
