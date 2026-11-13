@@ -1,0 +1,71 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/OspreyFlow_Build/), logged at osprey-runs/case.meta/runs/20261113T233758Z-30041100/log: sh -c uptime; cd ../OspreyFlow_Core/apps/workspace && npx vitest run src/App.chrome.test.tsx src/App.test.tsx src/matrix/MatrixView.test.tsx; uptime
+ 23:37:59 up 18 days,  8:16, 15 users,  load average: 24.72, 38.60, 53.06
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/root/osprey-runs/case/OspreyFlow_Core/apps/workspace[39m
+
+ [32m✓[39m src/matrix/MatrixView.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 2482[2mms[22m[39m
+   [32m✓[39m MatrixView — the tables [2m(8)[22m
+     [33m[2m✓[22m[39m pages a long view and says plainly which rows are shown (rule 2)[33m 1072[2mms[22m[39m
+   [32m✓[39m MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) [2m(3)[22m
+     [33m[2m✓[22m[39m PageDown and PageUp turn the page[33m 435[2mms[22m[39m
+[90mstderr[2m | src/App.chrome.test.tsx[2m > [22m[2mthe scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4)[2m > [22m[2mthe scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+[22m[39mEach child in a list should have a unique "key" prop.
+
+Check the render method of `AlertQueue`. See https://react.dev/link/warning-keys for more information.
+
+ [32m✓[39m src/App.test.tsx [2m([22m[2m48 tests[22m[2m)[22m[33m 9566[2mms[22m[39m
+   [32m✓[39m windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) [2m(6)[22m
+     [33m[2m✓[22m[39m a token near expiry is renewed in the background, with no navigation, and the next call carries it[33m 660[2mms[22m[39m
+     [33m[2m✓[22m[39m an unattended window lets its token lapse: no renewal, and nothing asked[33m 2559[2mms[22m[39m
+ [32m✓[39m src/App.chrome.test.tsx [2m([22m[2m30 tests[22m[2m)[22m[33m 9915[2mms[22m[39m
+   [32m✓[39m the case screen's chrome, variant B (ADR-145 Amendment 2) [2m(3)[22m
+     [33m[2m✓[22m[39m 25 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15)[33m 542[2mms[22m[39m
+   [32m✓[39m the owner's navigation (ADR-145 Amendment 15) [2m(10)[22m
+     [33m[2m✓[22m[39m the case switcher's last entry is All cases, which opens the Cases panel[33m 1142[2mms[22m[39m
+   [32m✓[39m Part B after review (ADR-145 Amendment 15) [2m(9)[22m
+     [33m[2m✓[22m[39m in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel[33m 1144[2mms[22m[39m
+     [33m[2m✓[22m[39m the Cases panel opened from All cases returns focus to the case menu's button when it closes[33m 1217[2mms[22m[39m
+     [33m[2m✓[22m[39m exactly one view is current: one pressed in the switch, or none there and More views naming its own[33m 396[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m98 passed[39m[22m[90m (98)[39m
+[2m   Start at [22m 23:37:59
+[2m   Duration [22m 11.16s[2m (tests 86%, environment 9%, transform 3%, import 2%)[22m
+
+
+Slowest 30 of 98 tests:
+  2559 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > an unattended window lets its token lapse: no renewal, and nothing asked
+  1217 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > the Cases panel opened from All cases returns focus to the case menu's button when it closes
+  1144 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel
+  1142 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the case switcher's last entry is All cases, which opens the Cases panel
+  1072 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > pages a long view and says plainly which rows are shown (rule 2)
+   660 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a token near expiry is renewed in the background, with no navigation, and the next call carries it
+   542 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > 25 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15)
+   435 ms  src/matrix/MatrixView.test.tsx > MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) > PageDown and PageUp turn the page
+   396 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > exactly one view is current: one pressed in the switch, or none there and More views naming its own
+   287 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > an unauthenticated load shows the sign-in screen and issues no /v1 call
+   258 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence, then Back to the alert, returns to the same alert, still open
+   240 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > the switcher and the cross-link move between the places, and coming back returns to the view that was open
+   223 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current
+   223 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the column opens with the Inspector only, the other panels folded in their order
+   215 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current
+   210 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence says so on the alert when the view cannot be opened
+   204 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > is two real tables, each with a caption, column headers and a row header per row
+   200 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > after a reload in the Studio, Back returns to the Glass's last view on the open case
+   191 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it
+   175 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > a refresh on Home with a case in the tab lands on Home; in the case, in that case
+   152 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > an alert of another case is opened by a reload into that case, on the alert's address
+   148 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > History opens its panel without changing the view, a second press closes it, and closing returns focus to it
+   139 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it
+   135 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > a drawing board chosen before the rights arrive gives way when they say the person may not investigate
+   133 ms  src/App.chrome.test.tsx > Build a report beside Reports (ADR-145 Amendment 15) > is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab
+   127 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a failed renewal leaves the page in place and asks to sign in again there
+   126 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views
+   125 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > a case chosen on Home, carried over a full-page sign-in, opens that case, not the Home the tab kept
+   111 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name
+   109 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > two triggers at once make one renewal, and both calls are answered with its token
+ 23:38:10 up 18 days,  8:16, 14 users,  load average: 23.02, 37.53, 52.48
+Wall time: 13 s, exit 0 (no stack, no lease; set-up before it 14 s)
