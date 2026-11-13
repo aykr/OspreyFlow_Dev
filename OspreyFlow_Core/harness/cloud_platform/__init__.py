@@ -299,6 +299,38 @@ def search_index_values(
     }
 
 
+#: The POC seed path's standing Job (ADR-148 Amendment 14): spec 08's seeds, started by the install
+#: runbook's optional block with the Conduit and the worker scaled to none.
+SEED_JOB = "ospreyflow-seed"
+#: What the seed reads of the case store's (the platform's RDS secret), as the Conduit is given it.
+_SEED_POSTGRES = ("POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "OSPREY_POSTGRES_USER",
+                  "POSTGRES_PASSWORD", "OSPREY_POSTGRES_PASSWORD", "POSTGRES_DB", "OSPREY_POSTGRES_DB")  # fmt: skip
+
+
+def seed_values(config: OspreyConfig, workloads: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """The chart's `seed` (the poc shape alone): the Conduit's image and size, the case store's
+    address and credentials as the Conduit has them, the graph's and ClickHouse's passwords by name,
+    and the case's unit (the tenant's own); nothing else of ours, and no AWS identity."""
+    api = next(w for w in workloads if w["name"] == "api")
+    claims = _cp(config).claims
+    assert claims is not None  # the render refuses this profile without them
+    groups = getattr(claims.org_unit, "groups", None) or {}
+    unit = sorted(set(groups.values()))[0] if groups else "unit-1"
+    return {
+        "name": SEED_JOB,
+        "label": "seed",
+        "image": api["image"],
+        "resources": copy.deepcopy(api["resources"]),
+        "command": ["/app/.venv/bin/python", "-m", "scripts.seed_poc"],
+        "env": [
+            *(copy.deepcopy(e) for e in api.get("env", []) if e["name"] in _SEED_POSTGRES),
+            {"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"},
+            {"name": "CLICKHOUSE_PASSWORD", "secret": "CLICKHOUSE_PASSWORD"},
+            {"name": "OSPREY_ORG_UNIT", "value": unit},
+        ],
+    }
+
+
 def person_given(config: OspreyConfig) -> set[str]:
     """Our Secret's keys a person holds and gives (a model engine's, a connection's, the mail
     server's password): the namespace's Terraform takes each as a sensitive variable."""
@@ -1223,6 +1255,8 @@ def render_cloud_platform(
     }
     if config.components.search is SearchBackend.OPENSEARCH:
         out["searchIndex"] = search_index_values(platform, workloads)
+    if _cp(config).shape == "poc":
+        out["seed"] = seed_values(config, workloads)
     # Decision 13 (ADR-148 Amendment 7, P9): the backups, added to these values, and its Terraform.
     from harness.cloud_platform_backups import add_backups
 

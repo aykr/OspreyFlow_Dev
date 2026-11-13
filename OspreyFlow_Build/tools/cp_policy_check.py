@@ -282,6 +282,9 @@ NAMED_SECRET_ALLOWED: dict[str, frozenset[str]] = {
     # The search index's rebuild and drift check (ADR-150; v0.5.2 step 3a): the graph's password, to
     # read every node; the domain's address is the platform's secret's, not ours.
     "search-rebuild": frozenset({"ARCADEDB_ROOT_PASSWORD"}),
+    # The POC seed path's Job (ADR-148 Amendment 14): the graph's and ClickHouse's passwords, to
+    # write spec 08's seeds; the case store's are the platform's secret's, not ours.
+    "seed": frozenset({"ARCADEDB_ROOT_PASSWORD", "CLICKHOUSE_PASSWORD"}),
     "search-drift": frozenset({"ARCADEDB_ROOT_PASSWORD"}),
     "keycloak": frozenset({"OSPREY_KEYCLOAK_ADMIN", "OSPREY_KEYCLOAK_ADMIN_PASSWORD",
                            "OSPREY_KEYCLOAK_DB_PASSWORD"}),

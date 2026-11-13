@@ -1,0 +1,62 @@
+{{- /*
+The POC seed path's standing Job (ADR-148 Amendment 14): spec 08's three seeds into one case, its first
+Author the first administrator (`python -m scripts.seed_poc`). A CronJob held suspended, so it never runs
+on a schedule: the install runbook's optional block starts it, with the Conduit and the worker scaled to
+none, by
+
+    kubectl -n <namespace> create job --from=cronjob/ospreyflow-seed seed-<when>
+
+It runs in the Conduit's image at its size, with the settings, the case store's address and credentials
+(the platform's secret), the graph's and ClickHouse's passwords by name (never our Secret whole), and no
+service account token: it calls nothing of AWS's. Rendered for the poc shape alone.
+*/ -}}
+{{- with .Values.seed }}
+{{- $root := $ }}
+{{- $s := . }}
+{{- $ctx := dict "name" $s.label "root" $root }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $s.name }}
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+spec:
+  # Never on a schedule: a template the runbook starts by name (`create job --from=cronjob/...`).
+  schedule: "0 0 1 1 *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "ospreyflow.labels" $ctx | nindent 8 }}
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            {{- include "ospreyflow.labels" $ctx | nindent 12 }}
+            ospreyflow.io/egress: "true"
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          {{- with $root.Values.imagePullSecrets }}
+          imagePullSecrets: {{ toJson . }}
+          {{- end }}
+          {{- with $root.Values.podSecurity }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: {{ .user }}
+            runAsGroup: {{ .group }}
+            fsGroup: {{ .group }}
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+          {{- end }}
+          containers:
+            {{- include "ospreyflow.container" (dict "w" (dict "name" $s.label "image" $s.image
+                  "command" $s.command "envFrom" true "noSecret" true "env" $s.env
+                  "resources" $s.resources)
+                "root" $root) | nindent 12 }}
+{{- end }}

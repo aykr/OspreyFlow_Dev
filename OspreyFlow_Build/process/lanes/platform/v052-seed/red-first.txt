@@ -20,3 +20,28 @@ __________ test_a_failed_seed_stops_the_run_by_name_and_fails_the_job __________
 FAILED ../OspreyFlow_Build/tests/test_seed_poc.py::test_a_failed_seed_stops_the_run_by_name_and_fails_the_job
 1 failed, 4 passed in 0.76s
 Green at the change: tests/test_seed_poc.py 5 passed.
+
+The Author from the deployment's own settings (OSPREY_FIRST_ADMINISTRATORS), red first:
+FAILED tests/test_seed_poc.py::test_the_author_is_the_deployments_first_administrator_by_default
+1 failed, 5 passed
+
+The render (ADR-148 Amendment 14), red first: tests/harness/test_cloud_platform_seed.py did not collect (no SEED_JOB in harness.cloud_platform).
+The pinned list of pods outside the workloads then red as intended (seed added), updated:
+FAILED tests/harness/test_cloud_platform_egress.py::test_every_rendered_workload_has_its_row[development|production|poc]
+
+The manifest: its both-ways check did not see the new Job (its builder reads only the values keys it knows), so a guard in Helm's own output added (tests/cp_policy_check, server); the builder taught the seed, and its entry planted out:
+Plant (the seed's manifest entry removed, the builder reading it):
+FAILED tests/harness/test_poc_manifest.py::test_the_manifest_and_the_render_agree
+1 failed, 32 passed in 0.81s
+
+INSTALL.md's step 9, run as written against a stub kubectl, red first:
+_________ test_a_failed_seed_puts_the_conduit_back_then_stops_by_name __________
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5080/test_a_failed_seed_puts_the_co0')
+    def test_a_failed_seed_puts_the_conduit_back_then_stops_by_name(tmp_path) -> None:  # type: ignore[no-untyped-def]
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5080/test_a_failed_seed_puts_the_co0')
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_seed_block_is_the_pocs_alone_and_not_part_of_the_order
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_seed_runs_with_the_conduit_and_worker_at_none_then_puts_them_back
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_failed_seed_puts_the_conduit_back_then_stops_by_name
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_seed_is_refused_while_the_conduits_pods_are_still_there
+4 failed, 5 passed in 1.92s
+Green: tests/harness, tests/cp_policy_check (Helm's cases skipped on the Mac), the seed suites: 1709 passed, 448 skipped (ClickHouse's B18 parameter deselected offline). The Helm-backed cases (the seed's keys and token; every rendered CronJob listed) run on the server, with their red by the allowlist entry removed.

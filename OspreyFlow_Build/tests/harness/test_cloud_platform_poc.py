@@ -364,10 +364,15 @@ def test_the_install_ends_with_what_only_the_real_tenant_can_show(runbooks: dict
     """R1 signed in through a stand-in for Entra ID (the owner's ruling, 13 November 2026): its tokens
     were minted beside it, so nothing about the client's own tenant was shown. The install ends with a
     section, marked as such, of what the platform team checks against the real tenant, each item named,
-    and none of it in the sequence of blocks (it needs a person at a browser)."""
+    and none of it in the sequence of blocks (it needs a person at a browser). Only the poc's
+    optional seed (step 9, ADR-148 Amendment 14, `bash later`, outside the order) may follow it."""
     text = runbooks["INSTALL.md"]
     assert "## 8. Against the client's real tenant" in text
     section = text[text.index("## 8. Against the client's real tenant") :]
+    after = section[3:].split("\n## ", 1)
+    if len(after) == 2:
+        assert after[1].startswith("9. Optional: spec 08's acceptance data"), after[1][:80]
+        section = after[0]
     assert "```" not in section
     for item in ("requestedAccessTokenVersion", "AADSTS50105", "guest", "200 groups", "no role",
                  "OFFICIAL", "signing key"):

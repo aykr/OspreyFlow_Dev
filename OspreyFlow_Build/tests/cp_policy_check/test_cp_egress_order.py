@@ -411,3 +411,43 @@ def test_a_secret_of_its_own_for_clickhouse_and_p9_s_pods_passes(
     assert [(v.rule, v.detail) for v in found if v.rule == "whole-secret"] == [
         ("whole-secret", "reads ospreyflow-secrets whole")
     ]
+
+
+def test_the_seed_holds_the_graph_s_and_clickhouse_s_passwords_alone_and_no_token(
+    rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
+) -> None:
+    """The POC seed path's Job (ADR-148 Amendment 14), in Helm's own output: the graph's and
+    ClickHouse's passwords by name, no token. Given our Secret whole or another key of it, or its
+    account's token, or IRSA's account, it is refused as any pod not listed is."""
+    docs, _, registry = copy.deepcopy(rendered)
+    cronjobs = {d["metadata"]["name"]: d for d in docs if d["kind"] == "CronJob"}
+    doc = cronjobs.get("ospreyflow-seed")
+    if doc is None:
+        pytest.skip("the seed is the poc's alone")
+    assert check_manifests(docs, registry, controller_namespace=CONTROLLER) == []
+    spec = pod_spec(doc)
+    assert spec["automountServiceAccountToken"] is False and "serviceAccountName" not in spec
+    container = spec["containers"][0]
+    refs = [e.get("valueFrom", {}).get("secretKeyRef", {}) for e in container["env"]]
+    held = sorted(r["key"] for r in refs if r.get("name") == "ospreyflow-secrets")
+    assert held == ["ARCADEDB_ROOT_PASSWORD", "CLICKHOUSE_PASSWORD"]
+    another = {"name": "ospreyflow-secrets", "key": "OSPREY_OIDC_CLIENT_SECRET"}
+    given = {"name": "OSPREY_OIDC_CLIENT_SECRET", "valueFrom": {"secretKeyRef": another}}
+    container["env"].append(given)
+    spec["automountServiceAccountToken"] = True
+    found = check_manifests(docs, registry, controller_namespace=CONTROLLER)
+    assert sorted((v.rule, v.detail) for v in found) == [
+        ("token", "mounts its service account's token"),
+        ("whole-secret", "is given ospreyflow-secrets's OSPREY_OIDC_CLIENT_SECRET"),
+    ]
+
+
+def test_every_cronjob_the_poc_chart_renders_is_in_the_manifest() -> None:
+    """ADR-148 Amendment 12, rendered and not listed, read from Helm's own output rather than from
+    the values keys the manifest's builder already knows: a new standing Job (the seed's, Amendment
+    14) was invisible to the both-ways check while the manifest read only the keys it knew."""
+    from harness.cloud_platform import manifest
+
+    docs, _, _ = _render("poc")
+    rendered = {d["metadata"]["name"] for d in docs if d["kind"] == "CronJob"}
+    assert rendered - set(manifest.load()["jobs"]) == set()

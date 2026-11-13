@@ -380,7 +380,71 @@ stop and raise it with the client's Entra administrator before anyone else is to
    groups out of the token. Limit the claim to the groups assigned to the application.
 7. **Keys.** Entra rolls its signing key unannounced. The Conduit fetches the tenant's keys again
    within five minutes. A sign-in still refused for an unknown key after that is a fault: report it.
+{_seed_section(values)}"""
+
+
+#: The POC seed path's optional block (ADR-148 Amendment 14), run after step 7 if at all. Plain text,
+#: not an f-string: `<rebuild>` is the search index's rebuild where the deployment has one.
+_SEED_BLOCK = """\
+# The Conduit and the worker to none (the seed writes the stores they hold open), their copies noted.
+api=$(kubectl -n "$NS" get deployment/api -o jsonpath='{.spec.replicas}')
+worker=$(kubectl -n "$NS" get deployment/worker -o jsonpath='{.spec.replicas}')
+back() {
+  kubectl -n "$NS" scale deployment/api --replicas="$api"
+  kubectl -n "$NS" scale deployment/worker --replicas="$worker"
+  kubectl -n "$NS" rollout status deployment/api --timeout=10m
+  kubectl -n "$NS" rollout status deployment/worker --timeout=10m
+}
+kubectl -n "$NS" scale deployment/api deployment/worker --replicas=0
+kubectl -n "$NS" wait --for=delete pod -l 'app.kubernetes.io/name in (api,worker)' --timeout=10m \\
+  || { echo "the Conduit's or the worker's pods are still running: no seed beside them"; back; false; }
+J="seed-$(date -u +%Y%m%dt%H%M%S)"
+kubectl -n "$NS" create job --from=cronjob/ospreyflow-seed "$J"
+for i in $(seq 60); do   # started (or already ended) within five minutes
+  phase=$(kubectl -n "$NS" get pod -l job-name="$J" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || true)
+  case "$phase" in Running|Succeeded|Failed) break ;; esac
+  sleep 5
+done
+ok=1
+case "$phase" in Running|Succeeded|Failed) ;; *) echo "$J did not start in five minutes: kubectl -n $NS describe pod -l job-name=$J says why"; ok=0 ;; esac
+[ "$ok" = 1 ] && { kubectl -n "$NS" wait --for=jsonpath='{.status.conditions[0].status}'=True "job/$J" --timeout=30m || ok=0; }
+kubectl -n "$NS" logs "job/$J" 2>/dev/null || true   # every line the seeds report
+[ "$ok" = 1 ] && { kubectl -n "$NS" get job "$J" -o jsonpath='{.status.succeeded}' | grep -qx 1 || ok=0; }
+back
+[ "$ok" = 1 ] || { echo "$J failed: read its log above; the Conduit and the worker are back"; false; }
+<rebuild>"""
+
+_SEED_REBUILD = """\
+# The search index rebuilt from the seeded graph (the seed writes the graph alone).
+J="search-rebuild-$(date -u +%Y%m%dt%H%M%S)"
+kubectl -n "$NS" create job --from=cronjob/ospreyflow-search-rebuild "$J"
+kubectl -n "$NS" wait --for=jsonpath='{.status.conditions[0].status}'=True "job/$J" --timeout=30m
+kubectl -n "$NS" logs "job/$J" --tail=1
+kubectl -n "$NS" get job "$J" -o jsonpath='{.status.succeeded}' | grep -qx 1 \\
+  || { echo "$J failed: read its log (kubectl -n $NS logs job/$J)"; false; }
 """
+
+
+def _seed_section(values: dict[str, Any]) -> str:
+    """Step 9 of a poc's install runbook (ADR-148 Amendment 14): spec 08's acceptance data, if the
+    POC wants it. Not part of the order (`bash later`); nothing where the shape renders no seed."""
+    if "seed" not in values:
+        return ""
+    rebuild = _SEED_REBUILD if "searchIndex" in values else ""
+    return f"""
+## 9. Optional: spec 08's acceptance data (a POC alone)
+
+**Not part of the order, and never on a deployment holding real data.** For a proof of concept that is
+to be shown with spec 08's synthetic acceptance data: the HMP fixture, Fixture Corp and the acceptance
+scenarios, into one case named *Acceptance scenarios (spec 08)* whose first Author is the first
+administrator ({{first}}). Run it after step 7, once. It stops the Conduit and the worker for its length
+(a few minutes; the door answers 503 meanwhile), puts them back whether or not it succeeded, and ends
+by naming what failed, if anything. Running it again reuses the case and adds only what is missing.
+
+```bash later
+{{block}}```
+""".format(first="the first of `cloud_platform.claims.first_administrators`",
+           block=_SEED_BLOCK.replace("<rebuild>", rebuild))
 
 
 def render_decommission(
