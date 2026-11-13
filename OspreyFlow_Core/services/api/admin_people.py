@@ -636,6 +636,12 @@ def check_transfers(
     return chosen
 
 
+def _list_marking_words(marking: tuple[str, str] | None) -> dict[str, str]:
+    if marking is None:
+        return {}
+    return {"list_classification": marking[0], "list_handling_code": marking[1]}
+
+
 _TRANSFER_SQL: Mapping[str, str] = {
     "hotlist": "UPDATE hotlists SET owner_id = $2 WHERE id = $1 AND owner_id = $3",
     "monitor": "UPDATE monitors SET owner_id = $2 WHERE id = $1 AND owner_id = $3",
@@ -824,7 +830,13 @@ class AdminPeopleStore:
                     investigation_id=(
                         item.id if item.kind in ("case_author", "home_case_author") else None
                     ),
-                    resolved_query={"from": person, "to": to, "kind": item.kind, "id": item.id},
+                    resolved_query={
+                        "from": person, "to": to, "kind": item.kind, "id": item.id,
+                        # A list's marking as it was moved, which the audit's read admits its
+                        # reader by, beside the list's now (`audit_section._lists_clause`).
+                        **_list_marking_words(plan.list_marking_of.get(item.id)
+                                              if item.kind == "list_schedule" else None),
+                    },  # fmt: skip
                     conn=conn,
                 )
                 done.append((item, to))

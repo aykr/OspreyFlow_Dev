@@ -19719,6 +19719,7 @@ async def read_audit_section(
     reader: AuditSectionDep,
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
+    handling_scheme: HandlingSchemeDep,
     kind: Annotated[str | None, Query(max_length=40)] = None,
     who: Annotated[str | None, Query(max_length=200)] = None,
     case: Annotated[str | None, Query(max_length=200)] = None,
@@ -19736,16 +19737,22 @@ async def read_audit_section(
         raise AuditFiltersRefused(f"{kind!r} is not a kind of this record")
     rights = rights_for(principal.roles)
     cases = ADMIN_ROLE in principal.roles
+    # An entry naming a screening list only for a reader cleared for it, in the read (ADR-146
+    # Amendment 7; the orchestrator's re-check of lane/rules-lists at 6bfc8d6, must 3).
+    lists_cleared = ListClearance.of(principal, handling_scheme)
     people, accounts = await _people_choice(
-        principal_names, await reader.writers(principal, cases=cases), who or None
+        principal_names,
+        await reader.writers(principal, cases=cases, lists_cleared=lists_cleared),
+        who or None,
     )
     filters = audit_section_module.StreamFilters(
         who=accounts, kind=kind or None, investigation_id=case or None,
         dataset_id=dataset or None, since=since, until=until,
     )  # fmt: skip
     rows, total = await reader.stream(
-        principal, filters, offset=offset, limit=limit, rights=rights, cases=cases
-    )
+        principal, filters, offset=offset, limit=limit, rights=rights, cases=cases,
+        lists_cleared=lists_cleared,
+    )  # fmt: skip
     names = await principal_names.full_names(audit_section_module.ids_to_name(rows, rights))
     note = audit_section_module.stream_note(cases, await reader.units_from())
     return await _served_audit(

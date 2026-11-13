@@ -42,6 +42,7 @@ from schemas.rights import Right
 
 from .investigations import TEAM_GRANT_PREFIX
 from .rule_evaluation import RULE_AUDIT_ACTIONS
+from .screening import ListClearance
 
 #: Decision 10's kinds, by the actions the audit stream records under each. An action in none of
 #: them reads as `reads_and_other`; the rule audit's own actions are never read from the stream.
@@ -387,6 +388,40 @@ def _kind_clause(kind: str | None, first: int) -> tuple[str, list[Any]]:
     return f" AND a.action = ANY(${first}::text[])", [list(KIND_ACTIONS[kind])]
 
 
+#: The screening list an entry names, if any: a list's own actions write `list_name`, a transfer of
+#: a list's schedule its `id` (`admin_people.transfer`).
+_LIST_NAMED = (
+    "COALESCE(a.resolved_query->>'list_name', CASE WHEN a.action = 'transfer_owned_item' "
+    "AND a.resolved_query->>'kind' = 'list_schedule' THEN a.resolved_query->>'id' END)"
+)
+
+
+def _lists_clause(first: int) -> str:
+    """An entry naming a screening list is read only by a reader cleared for the list (ADR-146
+    Amendment 7 point 8; the orchestrator's re-check of lane/rules-lists at 6bfc8d6, must 3): its
+    marking as it stands (`screening_list_markings`, none being OFFICIAL, P) and, where the entry
+    recorded one, as it was then, each admitted by the reader's `ListClearance` (`$first`: the
+    classifications, `$first + 1`: the codes). In the `WHERE`, so an entry left out is in no row,
+    no total and no picker (rule 3)."""
+    cls, codes = f"${first}::text[]", f"${first + 1}::text[]"
+    return (
+        f" AND ({_LIST_NAMED} IS NULL OR ("
+        "    COALESCE((SELECT m.classification FROM screening_list_markings m "
+        f"              WHERE m.list_name = {_LIST_NAMED}), 'OFFICIAL') = ANY({cls}) "
+        "AND COALESCE((SELECT m.handling_code FROM screening_list_markings m "
+        f"              WHERE m.list_name = {_LIST_NAMED}), 'P') = ANY({codes}) "
+        f"AND COALESCE(a.resolved_query->>'list_classification', 'OFFICIAL') = ANY({cls}) "
+        f"AND COALESCE(a.resolved_query->>'list_handling_code', 'P') = ANY({codes})))"
+    )
+
+
+def _cleared_args(lists_cleared: ListClearance | None) -> list[Any]:
+    """None clears no list: a caller that names no clearance is shown no list's entry."""
+    if lists_cleared is None:
+        return [[], []]
+    return [list(lists_cleared.classifications), list(lists_cleared.codes)]
+
+
 class AuditSectionReader:
     """The section's reads, on the Conduit's database (where `audit_log`, `investigations` and
     `model_admin_audit` all live)."""
@@ -410,6 +445,7 @@ class AuditSectionReader:
         limit: int,
         rights: frozenset[Right] | set[Right] = frozenset(),
         cases: bool = False,
+        lists_cleared: ListClearance | None = None,
     ) -> tuple[list[StreamRow], int]:
         """The reader's unit's entries of the audit stream, newest first, and their total.
 
@@ -440,6 +476,8 @@ class AuditSectionReader:
         clause, extra = _kind_clause(filters.kind, len(args) + 1)
         where += clause
         args += extra
+        where += _lists_clause(len(args) + 1)
+        args += _cleared_args(lists_cleared)
         async with self._pool.acquire() as conn:
             total = await conn.fetchval(f"SELECT count(*) {where}", *args)
             rows = await conn.fetch(
@@ -471,17 +509,20 @@ class AuditSectionReader:
             found = await conn.fetchval("SELECT recorded_from FROM audit_log_units_from")
         return found if isinstance(found, datetime) else None
 
-    async def writers(self, reader: Principal, *, cases: bool) -> set[str]:
-        """Who wrote the entries of the stream this reader may read, under the same unit filter
-        and rule-audit exclusion as `stream` and no other: the people its picker offers, by name."""
+    async def writers(
+        self, reader: Principal, *, cases: bool, lists_cleared: ListClearance | None = None
+    ) -> set[str]:
+        """Who wrote the entries of the stream this reader may read, under the same unit filter,
+        rule-audit exclusion and lists' clearance as `stream` and no other: the people its picker
+        offers, by name."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT DISTINCT a.principal_id FROM audit_log a "
                 "LEFT JOIN investigations i ON i.id = a.investigation_id "
                 "WHERE ((a.investigation_id IS NOT NULL AND $3::boolean AND i.owning_unit = $1) "
                 "    OR (a.investigation_id IS NULL AND a.org_unit = $1)) "
-                "AND NOT (a.action = ANY($2::text[]))",
-                reader.org_unit, list(RULE_AUDIT_ACTIONS), cases,
+                "AND NOT (a.action = ANY($2::text[]))" + _lists_clause(4),
+                reader.org_unit, list(RULE_AUDIT_ACTIONS), cases, *_cleared_args(lists_cleared),
             )  # fmt: skip
         return {r["principal_id"] for r in rows}
 

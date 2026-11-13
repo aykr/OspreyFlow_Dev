@@ -415,3 +415,17 @@ async def test_a_list_schedule_the_administrator_is_cleared_for_is_not_withheld(
     owned = await ownership.owned_by("ana-1", admin=ADMIN, scheme=SCHEME)
     assert owned.withheld is False
     await refuse_if_withheld(conn, "ana-1", admin=ADMIN, scheme=SCHEME)
+
+
+async def test_a_restricted_code_list_is_not_withheld_from_an_administrator_who_receives_it(
+    conn: asyncpg.Connection, ownership: PostgresOwnershipStore
+) -> None:
+    """The code half, the other way (the orchestrator's re-check of 6bfc8d6, should 5): an OFFICIAL,
+    R list's schedule is withheld from the administrator who may not receive R (the parametrised
+    `list_schedule_of_a_restricted_code`), and not from one who may. Red with the code read for no
+    one: withheld from both."""
+    await _list_schedule(conn, "Restricted list", "ana-1", ("OFFICIAL", "R"))
+    receives = ADMIN.model_copy(update={"receivable_handling_codes": ["R"]})
+    assert (await ownership.owned_by("ana-1", admin=receives, scheme=SCHEME)).withheld is False
+    await refuse_if_withheld(conn, "ana-1", admin=receives, scheme=SCHEME)
+    assert (await ownership.owned_by("ana-1", admin=ADMIN, scheme=SCHEME)).withheld is True

@@ -535,6 +535,8 @@ async def test_an_administrator_cleared_for_the_list_transfers_its_schedule(worl
     list's to a SECRET person; nothing is then withheld from them, and the disable may go ahead.
     The audit names the list moved."""
     await _schedules(world)
+    # Nothing withheld from them before they move anything (over-withholding caught here).
+    await world.people.refuse_if_withheld("ana", admin=ADMIN, scheme=SCHEME)
     plan = await world.people.plan("ana", admin=ADMIN, scheme=SCHEME)
     assert [i.id for i in plan.items] == ["A secret list", "Plain list"]
     who = recipients([_person("bea", ENGINEER), _person("sam", ENGINEER, clearance="SECRET")], {}, {})
@@ -544,9 +546,12 @@ async def test_an_administrator_cleared_for_the_list_transfers_its_schedule(worl
     await world.people.refuse_if_withheld("ana", admin=ADMIN, scheme=SCHEME)
     assert await _owners(world) == {"Plain list": "bea", "A secret list": "sam"}
     moved = await world.raw.fetch(
-        "SELECT resolved_query->>'id' AS id FROM audit_log WHERE action = 'transfer_owned_item'"
+        "SELECT resolved_query->>'id' AS id, resolved_query->>'list_classification' AS cls "
+        "FROM audit_log WHERE action = 'transfer_owned_item' ORDER BY 1"
     )
-    assert sorted(r["id"] for r in moved) == ["A secret list", "Plain list"]
+    # Each with the list's marking as moved, which the audit's read admits its reader by
+    # (`audit_section._lists_clause`; `test_audit_section_store.py` reads it each way).
+    assert [(r["id"], r["cls"]) for r in moved] == [("A secret list", "SECRET"), ("Plain list", "OFFICIAL")]
 
 
 async def test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list(world: SimpleNamespace) -> None:
