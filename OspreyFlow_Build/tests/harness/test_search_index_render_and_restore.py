@@ -70,3 +70,18 @@ def test_the_restore_rebuilds_after_every_store_is_back() -> None:
 
     source = inspect.getsource(restore.run_restore)
     assert source.rstrip().splitlines()[-2].strip() == "rebuild_search_index(compose_file)"
+
+
+def test_the_dev_stack_runs_the_opensearch_the_harness_renders(tmp_path: Path) -> None:
+    import yaml
+
+    dev = yaml.safe_load((CORE / "deploy" / "compose" / "dev.yaml").read_text(encoding="utf-8"))
+    rendered = yaml.safe_load(
+        render(_config(tmp_path, SearchBackend.OPENSEARCH), resolver=_fake_resolver).artefacts[
+            "compose.yaml"
+        ]
+    )
+    assert dev["services"]["opensearch"]["image"] == rendered["services"]["opensearch"][
+        "image"
+    ].split("@")[0]
+    assert dev["services"]["opensearch"]["ports"] == ["127.0.0.1:9200:9200"]
