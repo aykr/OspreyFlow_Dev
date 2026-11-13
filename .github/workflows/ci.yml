@@ -534,6 +534,18 @@ jobs:
       POSTGRES_PORT: "5432"
     steps:
       - uses: actions/checkout@v4
+      # Two real Conduits run beside the suite's own stores (test_statelessness.py and its ClickHouse
+      # twin); one holds 50 Postgres connections once up, so the default 100 refused the second
+      # (TooManyConnectionsError, run 43310891764). The lane stacks allow 400 for the same reason
+      # (OspreyFlow_Build/scripts/stack_lease.sh, PG_CONNECTIONS); the same here, read back after.
+      - name: Postgres allows 400 connections, as the lane stacks' does
+        working-directory: .
+        run: |
+          pg=${{ job.services.postgres.id }}
+          docker exec "$pg" psql -U osprey -d postgres -c "ALTER SYSTEM SET max_connections = 400"
+          docker restart "$pg"
+          for i in $(seq 60); do docker exec "$pg" pg_isready -U osprey -d ospreyflow && break; sleep 1; done
+          test "$(docker exec "$pg" psql -U osprey -d postgres -tAc 'SHOW max_connections')" = 400
       - uses: astral-sh/setup-uv@v3
       - uses: actions/setup-node@v4
         with: { node-version: "22" }

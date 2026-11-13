@@ -1,0 +1,5 @@
+# stateless, red: real Conduits (main 7b664a3) against a throwaway Postgres 15 on this Mac at max_connections 100 (GitHub's postgres:16 service default), ArcadeDB a stand-in (probe_connections.py); no lane stack
+Conduit 1 up; client connections now held: 51
+Conduit 2 up; client connections now held: 
+Conduit 3 did NOT come up: http://127.0.0.1:58079 exited (3) before it came up; the Conduit's own last words:
+  asyncpg.exceptions.TooManyConnectionsError: sorry, too many clients already
