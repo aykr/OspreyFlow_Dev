@@ -779,6 +779,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 
         The gate's proof is the demo lane's scripted sign-ins plus your own sign-in at about 09:45. If either
         fails, the key prompt goes off again.
+      - **GitHub CI on f93f95b (run 43310891764): 38 of 39 green.** Only conformance is red: the statelessness tests'
+        Postgres running out of connections on GitHub's runner, now with its cause named. Platform-b fixes it after
+        the gate. My two fixes are proved.
+      - **Team testing: held for now (your word).** v0.5.1 on Tuesday is the version to hand them.
+      - **A correction:** several times I gave tonight were ahead of the clock by up to 2½ h ("23:50", "00:20" were
+        about 21:20 and 21:35 UK). The events and their order stand.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
