@@ -1,0 +1,9 @@
+# connections.spec.ts, red: the stand-in answering after 300 ms (as a Conduit does), the case tabbing at once (main's case), this Mac
+  ✓  1 keyboard/connections.spec.ts:81:1 › From and To are chosen by search, and Find connections gives the fewest degrees (2.4s)
+  ✓  2 keyboard/connections.spec.ts:105:1 › an end is taken from the node selected on the canvas (182ms)
+  ✘  3 keyboard/connections.spec.ts:119:1 › a route is put on the canvas, its nodes marked by degree, and the marks cleared (767ms)
+  ✘  4 keyboard/connections.spec.ts:143:1 › every registered Find connections action has its own proving test case above (8ms)
+    Error: Tab never reached /^Add route 1 at 2 degrees to the canvas$/
+    > 70 |   throw new Error(`Tab never reached ${String(name)}`);
+  2 failed
+  2 passed (4.7s)

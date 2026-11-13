@@ -72,6 +72,8 @@ def test_the_stream_reports_every_check_in_order_once_rendered(tmp_path: Path) -
         "basemap",
         "duckdb-lock",
         "oidc-audience",
+        # ADR-114 Amendment 41 (gate-b): last in `ALL_CHECKS`; skipped here, the deployment asks no key.
+        "access-key",
     ]
 
 
