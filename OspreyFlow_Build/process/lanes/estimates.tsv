@@ -3,7 +3,7 @@ rules	lists	third pass: the audit read filtered by list clearance (MUST 3), shou
 admin	refresh	a refresh keeps you signed in and where you were (ADR-050 Am 3)	13 Nov, late	B
 admin	pg	Small's Postgres connections (ADR-114 Am 43), after refresh	14 Nov	B
 platform-b	ci-green	the 13 Nov push's CI run proves today's fixes; the pinned-digest hardening	13 Nov, evening	A
-platform	R1	prepared on the Mac; runs on kind after the owner's demo and the memory cap	after the demo	B
+platform	R1	running on kind on the test server (the owner's demo over, osprey-small capped at 24 GiB); other lanes offline meanwhile	15 Nov	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 5 merged 12 Nov; left: marks, sleeps, the ArcadeDB waits	after v0.5.1	A
