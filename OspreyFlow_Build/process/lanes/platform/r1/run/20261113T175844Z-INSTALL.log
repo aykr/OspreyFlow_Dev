@@ -1,0 +1,360 @@
+# INSTALL.md as rendered, run from block 1 at 98891e8
+
+=== INSTALL block 1 (step 1. The settings and the namespace) ===
+  $ export NS=ospreyflow-poc RELEASE=ospreyflow FOLDER=deploy/generated/cloud-platform CHART=deploy/helm/ospreyflow REGION=eu-west-2
+  $ export CONFIG="${CONFIG:-osprey.yaml}" PY="${PY:-.venv/bin/python}" PYTHONPATH=.:packages
+  $ export WORK="${TMPDIR:-/tmp}/ospreyflow-$NS" && mkdir -p "$WORK"
+  $ test -n "$BASH_VERSION" || { echo "run these blocks in bash"; false; }
+  $ test -x "$PY" || { echo "no $PY: make the release's environment first (uv sync --frozen)"; false; }
+  $ command -v kubectl >/dev/null && command -v helm >/dev/null || { echo "kubectl and helm are needed"; false; }
+  $ test "$(kubectl config view --minify -o jsonpath='{..namespace}')" = "$NS" \
+  $   || { echo "kubectl's context is not the namespace $NS: kubectl config set-context --current --namespace=$NS"; false; }
+
+=== INSTALL block 2 (step 1. The settings and the namespace) ===
+  $ command -v ospreyflow >/dev/null || { echo "no ospreyflow command: uv tool install ./cli, and put ~/.local/bin on PATH"; false; }
+  $ docker buildx version >/dev/null || { echo "Docker's buildx is needed to build the images"; false; }
+  $ kubectl auth can-i create statefulsets -n "$NS"
+  $ kubectl auth can-i create persistentvolumeclaims -n "$NS"
+yes
+yes
+
+=== INSTALL block 3 (step 2. The namespace's resources (the platform team's pull request)) [the platform: stand-in] ===
+  (platform) echo "Raise the pull request with $FOLDER/terraform/, and wait for it to be applied."
+the Terraform's stand-in made:
+  kubernetes_service_account ospreyflow-backup (backups.tf)
+  kubernetes_service_account ospreyflow-backup-clickhouse (backups.tf)
+  kubernetes_secret ospreyflow-clickhouse-backup (backups.tf)
+  kubernetes_secret ospreyflow-backup-output (backups.tf)
+  kubernetes_secret elasticache-redis (elasticache.tf)
+  kubernetes_service_account ospreyflow (irsa.tf)
+  kubernetes_secret rds-postgresql-instance-output (rds.tf)
+  kubernetes_secret s3-bucket-output (s3.tf)
+  kubernetes_secret ospreyflow-secrets (secrets.tf)
+
+=== INSTALL block 4 (step 2. The namespace's resources (the platform team's pull request)) ===
+  $ for secret in rds-postgresql-instance-output elasticache-redis s3-bucket-output osprey-r1-tls ospreyflow-secrets; do
+  $   kubectl -n "$NS" get secret "$secret" -o name
+  $ done
+  $ kubectl -n "$NS" get serviceaccount ospreyflow -o name
+secret/rds-postgresql-instance-output
+secret/elasticache-redis
+secret/s3-bucket-output
+secret/osprey-r1-tls
+secret/ospreyflow-secrets
+serviceaccount/ospreyflow
+
+=== INSTALL block 5 (step 3. The images) ===
+  $ "$PY" -m harness.render --config "$CONFIG" --allow-unpinned
+render: cloud-platform, 13 artefact(s), 2026-11-13T17:59:22Z
+  deploy/generated/cloud-platform/DECOMMISSION.md
+  deploy/generated/cloud-platform/INSTALL.md
+  deploy/generated/cloud-platform/images.yaml
+  deploy/generated/cloud-platform/terraform/backups.tf
+  deploy/generated/cloud-platform/terraform/ecr.tf
+  deploy/generated/cloud-platform/terraform/elasticache.tf
+  deploy/generated/cloud-platform/terraform/irsa.tf
+  deploy/generated/cloud-platform/terraform/rds.tf
+  deploy/generated/cloud-platform/terraform/s3.tf
+  deploy/generated/cloud-platform/terraform/secrets.tf
+  deploy/generated/cloud-platform/terraform/variables.tf
+  deploy/generated/cloud-platform/values.yaml
+  deploy/generated/cloud-platform/versions.lock
+
+=== INSTALL block 6 (step 3. The images) [the platform: stand-in] ===
+  (platform) aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin localhost:5001
+stand-in: the cluster's registry (localhost:5001) needs no sign-in
+
+=== INSTALL block 7 (step 3. The images) ===
+  $ ospreyflow images push --registry "localhost:5001" --from "$FOLDER"
+copy arcadedata/arcadedb:26.10.1@sha256:01506549bcb4a6d16af678ee43718850eba605430a3720a6b0398cb0470c710d to localhost:5001/arcadedata/arcadedb:26.10.1
+copy ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b to localhost:5001/berriai/litellm:sha256-d295634e09c6
+copy clickhouse/clickhouse-server:25.8.33.6@sha256:0152dd511befe6a2c2ef53e930726179669b08116da78500b37c51c96ff5ee77 to localhost:5001/clickhouse/clickhouse-server:25.8.33.6
+build localhost:5001/ospreyflow/api:e18c263599e50315f46e17d946af83de497c0d4a
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+push localhost:5001/ospreyflow/api:e18c263599e50315f46e17d946af83de497c0d4a
+The push refers to repository [localhost:5001/ospreyflow/api]
+f47b65d8688e: Layer already exists
+6a1025d79bba: Layer already exists
+afd267d3a93e: Layer already exists
+3fb928cffa6b: Layer already exists
+e4d9c7507776: Layer already exists
+37fb86c2a767: Layer already exists
+35fdecf0e1bb: Layer already exists
+2d0c46a9896f: Layer already exists
+68bced9e0afa: Layer already exists
+5a5800361164: Pushed
+2dc99d2d0a39: Layer already exists
+05e0eee5572e: Layer already exists
+c340496b6723: Layer already exists
+7bd1cb6f6e8c: Layer already exists
+751dddd430c4: Layer already exists
+1fd72f46a795: Layer already exists
+44136fa355b3: Already exists
+2d5a43996154: Layer already exists
+23b5984f092b: Layer already exists
+88624b90ffd2: Layer already exists
+fbf91ceb308b: Layer already exists
+e18c263599e50315f46e17d946af83de497c0d4a: digest: sha256:2bbff6e2a46f14fb65a007ffa91fa788e4d6dd92b8be6b6d8e876edc5b9bad25 size: 856
+build localhost:5001/ospreyflow/laurium:e18c263599e50315f46e17d946af83de497c0d4a
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+push localhost:5001/ospreyflow/laurium:e18c263599e50315f46e17d946af83de497c0d4a
+The push refers to repository [localhost:5001/ospreyflow/laurium]
+44136fa355b3: Already exists
+37fb86c2a767: Layer already exists
+f79c4ceed400: Layer already exists
+09a2fb89f1f4: Pushed
+faa890a31e98: Layer already exists
+4f4fb700ef54: Layer already exists
+cf84db4af2bd: Layer already exists
+552073c54f88: Layer already exists
+1facc0de7e62: Layer already exists
+8deec5028f7d: Layer already exists
+f7a79299dedd: Layer already exists
+8fac996c4251: Layer already exists
+0d26d2b2bc17: Layer already exists
+0069ea31add0: Layer already exists
+228ef7d84b74: Layer already exists
+e18c263599e50315f46e17d946af83de497c0d4a: digest: sha256:72a87614fcbbdd87d088168f1e67125df2d1c411bdbb7d8b06d077d1d778654b size: 856
+build localhost:5001/ospreyflow/ner:e18c263599e50315f46e17d946af83de497c0d4a
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/platform/OspreyFlow_Core/deploy/generated/local-lite/deployment.env]
+
+
+
+
+
+push localhost:5001/ospreyflow/ner:e18c263599e50315f46e17d946af83de497c0d4a
+The push refers to repository [localhost:5001/ospreyflow/ner]
+44136fa355b3: Already exists
+4f4fb700ef54: Layer already exists
+44f36591fb9e: Layer already exists
+2dc99d2d0a39: Layer already exists
+37fb86c2a767: Layer already exists
+07a7aaf5e974: Layer already exists
+a716abf5a82b: Layer already exists
+68bced9e0afa: Layer already exists
+d7a53752b4ce: Pushed
+05e0eee5572e: Layer already exists
+7acd4d015ab0: Layer already exists
+80b147e52825: Layer already exists
+61362d75c5ea: Layer already exists
+be6678fbbb60: Layer already exists
+d8d862dfc7e0: Layer already exists
+4f7da00f35dc: Layer already exists
+f778c7f34c6f: Layer already exists
+a5b4fa468340: Layer already exists
+e18c263599e50315f46e17d946af83de497c0d4a: digest: sha256:f15cb1ba063c7c1b4cfe4e1a2ea611b23b9b840273b061796393d73a4fc7e480 size: 856
+build localhost:5001/ospreyflow/worker:e18c263599e50315f46e17d946af83de497c0d4a
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+push localhost:5001/ospreyflow/worker:e18c263599e50315f46e17d946af83de497c0d4a
+The push refers to repository [localhost:5001/ospreyflow/worker]
+3817d11f409e: Pushed
+37fb86c2a767: Layer already exists
+05e0eee5572e: Layer already exists
+fbf91ceb308b: Layer already exists
+35fdecf0e1bb: Layer already exists
+7c9455760106: Layer already exists
+68bced9e0afa: Layer already exists
+2dc99d2d0a39: Layer already exists
+f47b65d8688e: Layer already exists
+2269a5a44798: Layer already exists
+2e66c03e3e90: Layer already exists
+44136fa355b3: Already exists
+e18c263599e50315f46e17d946af83de497c0d4a: digest: sha256:dcc0d287fc0287e03049c0a3b62a4514da9d687406334eec95669fdcd1098718 size: 856
+build localhost:5001/ospreyflow/workspace:e18c263599e50315f46e17d946af83de497c0d4a
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+push localhost:5001/ospreyflow/workspace:e18c263599e50315f46e17d946af83de497c0d4a
+The push refers to repository [localhost:5001/ospreyflow/workspace]
+881fc932939e: Layer already exists
+77dea1aa86f4: Pushed
+163ee6b178c7: Layer already exists
+d04b4ed66a45: Layer already exists
+4fd2a979a136: Layer already exists
+2b1306e660c1: Layer already exists
+1a629766c993: Layer already exists
+44136fa355b3: Already exists
+52eb9c26a936: Layer already exists
+89fcb8c38289: Layer already exists
+0e13a8a92b02: Layer already exists
+c12ffff18732: Layer already exists
+63b6c21eed4e: Layer already exists
+06f0295c1e47: Layer already exists
+e18c263599e50315f46e17d946af83de497c0d4a: digest: sha256:cb5fcb7c3d7b7662523b94cc5bd0205b3edcafe3ab85143b4037d8a16e2869b1 size: 856
+copy postgres:16.4@sha256:e62fbf9d3e2b49816a32c400ed2dba83e3b361e6833e624024309c35d334b412 to localhost:5001/postgres:16.4
+9 images are in localhost:5001. Render again to pin ours by the digest the registry gives for its copy.
+
+=== INSTALL block 8 (step 4. The values, pinned) ===
+  $ "$PY" -m harness.render --config "$CONFIG"
+render: cloud-platform, 13 artefact(s), 2026-11-13T17:59:32Z
+  deploy/generated/cloud-platform/DECOMMISSION.md
+  deploy/generated/cloud-platform/INSTALL.md
+  deploy/generated/cloud-platform/images.yaml
+  deploy/generated/cloud-platform/terraform/backups.tf
+  deploy/generated/cloud-platform/terraform/ecr.tf
+  deploy/generated/cloud-platform/terraform/elasticache.tf
+  deploy/generated/cloud-platform/terraform/irsa.tf
+  deploy/generated/cloud-platform/terraform/rds.tf
+  deploy/generated/cloud-platform/terraform/s3.tf
+  deploy/generated/cloud-platform/terraform/secrets.tf
+  deploy/generated/cloud-platform/terraform/variables.tf
+  deploy/generated/cloud-platform/values.yaml
+  deploy/generated/cloud-platform/versions.lock
+
+=== INSTALL block 9 (step 5. The deployment) ===
+  $ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m
+  $ kubectl -n "$NS" rollout status deployment/workspace --timeout=900s
+  $ kubectl -n "$NS" rollout status deployment/api --timeout=900s
+  $ kubectl -n "$NS" rollout status deployment/ner --timeout=900s
+  $ kubectl -n "$NS" rollout status statefulset/arcadedb --timeout=900s
+  $ kubectl -n "$NS" rollout status deployment/litellm --timeout=900s
+  $ kubectl -n "$NS" rollout status statefulset/clickhouse --timeout=900s
+  $ kubectl -n "$NS" rollout status deployment/laurium --timeout=900s
+  $ kubectl -n "$NS" rollout status deployment/worker --timeout=900s
+Release "ospreyflow" has been upgraded. Happy Helming!
+NAME: ospreyflow
+LAST DEPLOYED: Fri Nov 13 17:59:32 2026
+NAMESPACE: ospreyflow-poc
+STATUS: deployed
+REVISION: 3
+TEST SUITE: None
+NOTES:
+OspreyFlow is starting in ospreyflow-poc. Its one address is the proxy's load balancer:
+
+  kubectl get service proxy -n ospreyflow-poc
+
+Point the deployment's names (the address, id. and bi.) at it. Every workload reads the Secret
+ospreyflow-secrets; a pod waiting on a missing key names it in its events.
+Waiting for deployment "workspace" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "workspace" rollout to finish: 1 old replicas are pending termination...
+deployment "workspace" successfully rolled out
+Waiting for deployment "api" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "api" rollout to finish: 1 old replicas are pending termination...
+deployment "api" successfully rolled out
+Waiting for deployment "ner" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "ner" rollout to finish: 1 old replicas are pending termination...
+deployment "ner" successfully rolled out
+partitioned roll out complete: 1 new pods have been updated...
+deployment "litellm" successfully rolled out
+partitioned roll out complete: 1 new pods have been updated...
+deployment "laurium" successfully rolled out
+deployment "worker" successfully rolled out
+
+=== INSTALL block 10 (step 6. Sign-in: Entra ID and the first administrators) ===
+  $ kubectl -n "$NS" exec deploy/api -- printenv OSPREY_IDENTITY_PROVIDER OIDC_ISSUER
+entra
+https://login.microsoftonline.com/00000000-1111-4222-8333-444444444444/v2.0
+
+=== INSTALL block 11 (step 7. Check) ===
+  $ curl -fsS ${OSPREY_CURL_OPTS:-} "https://ospreyflow.r1.test/healthz" >/dev/null && echo "the Glass answers"
+  $ kubectl -n "$NS" get pods
+the Glass answers
+NAME                                               READY   STATUS        RESTARTS      AGE
+api-559d645f59-hsnqg                               1/1     Running       0             69s
+arcadedb-0                                         1/1     Running       0             67s
+clickhouse-0                                       1/1     Running       0             65s
+laurium-894c7f67-rsq2g                             1/1     Running       0             69s
+litellm-78dc86c6f-tfkj7                            1/1     Running       0             69s
+ner-6467598975-jrwng                               1/1     Running       0             69s
+ner-6b9b889d9f-bhbh5                               1/1     Terminating   0             15m
+ospreyflow-backup-29909850-29pg6                   0/1     Completed     0             30m
+ospreyflow-backup-claims-29909850-85lnj            0/1     Completed     0             30m
+ospreyflow-restore-20261113t173000z-r4x44          0/1     Completed     0             23m
+ospreyflow-restore-claims-20261113t173000z-sn4jm   0/1     Completed     0             23m
+worker-866798dd8-2vg96                             1/1     Running       1 (35s ago)   68s
+workspace-545d5c9ff8-g6v28                         1/1     Running       0             69s
+
+=== INSTALL: every block ran ===
+
+# exit 0 after 119 s

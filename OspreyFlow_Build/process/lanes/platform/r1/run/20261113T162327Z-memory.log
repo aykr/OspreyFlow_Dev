@@ -1,0 +1,41 @@
+node osprey-r1-control-plane: docker limit 34359738368 bytes; working set 6.34 GiB
+ospreyflow-poc/arcadedb-0: 1416 MiB
+ospreyflow-poc/ner-5d8799d88d-nw97p: 630 MiB
+ospreyflow-poc/litellm-6fcf48f59f-qc8cv: 482 MiB
+kube-system/kube-apiserver-osprey-r1-control-plane: 415 MiB
+ospreyflow-poc/clickhouse-0: 249 MiB
+ospreyflow-poc/api-8d888c4cc-m6jh4: 249 MiB
+ospreyflow-poc/laurium-6f9dc585cc-9wj5v: 187 MiB
+ingress-nginx/ingress-nginx-controller-54d9445ccb-9dvct: 186 MiB
+platform-managed/postgres-0: 163 MiB
+ospreyflow-poc/worker-6ff45dcffb-4cjbn: 160 MiB
+calico-system/calico-node-mxnr8: 145 MiB
+kube-system/kube-controller-manager-osprey-r1-control-plane: 73 MiB
+kube-system/etcd-osprey-r1-control-plane: 67 MiB
+calico-apiserver/calico-apiserver-7dd6f6d5ff-tvjm8: 47 MiB
+calico-apiserver/calico-apiserver-7dd6f6d5ff-pqw5z: 37 MiB
+tigera-operator/tigera-operator-789496d6f5-d886f: 36 MiB
+kube-system/kube-scheduler-osprey-r1-control-plane: 26 MiB
+calico-system/calico-typha-6cb8994579-cbggn: 24 MiB
+platform-managed/s3-standin-75796b8d48-7wh98: 22 MiB
+calico-system/calico-kube-controllers-f96c8994-vmpc9: 18 MiB
+kube-system/kube-proxy-6996j: 18 MiB
+kube-system/coredns-87bfbd6bd-lngpq: 16 MiB
+kube-system/coredns-87bfbd6bd-m5kg8: 15 MiB
+platform-managed/irsa-webhook-655df7bbdb-xc29x: 15 MiB
+platform-managed/entra-standin-854cff6f78-rpv8n: 15 MiB
+ospreyflow-poc/workspace-8dbdc6468-r7l9n: 13 MiB
+local-path-storage/local-path-provisioner-7dc846544d-w649j: 11 MiB
+calico-system/csi-node-driver-srp58: 10 MiB
+platform-managed/valkey-0: 4 MiB
+
+requests and limits in ospreyflow-poc:
+api-8d888c4cc-m6jh4 2Gi 4Gi
+arcadedb-0 12Gi 12Gi
+clickhouse-0 8Gi 8Gi
+laurium-6f9dc585cc-9wj5v 1Gi 2Gi
+litellm-6fcf48f59f-qc8cv 512Mi 1Gi
+ner-5d8799d88d-nw97p 1Gi 2Gi
+worker-6ff45dcffb-4cjbn 2Gi 4Gi
+workspace-8dbdc6468-r7l9n 128Mi 256Mi
+

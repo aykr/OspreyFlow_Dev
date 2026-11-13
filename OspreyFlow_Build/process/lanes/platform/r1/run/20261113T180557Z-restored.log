@@ -1,0 +1,3 @@
+PASS the change after the set is gone from the graph: 0 found
+PASS the set's load is there: 1 found
+PASS the file after the set is gone from the Ingest claim; the set's is there: True (['r1-people.csv'])

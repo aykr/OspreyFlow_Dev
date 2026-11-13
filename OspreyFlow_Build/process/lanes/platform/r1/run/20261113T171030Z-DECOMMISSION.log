@@ -1,0 +1,53 @@
+# DECOMMISSION.md as rendered, run from block 1 at 51327ee
+
+=== DECOMMISSION block 1 (step 1. The settings) ===
+  $ export NS=ospreyflow-poc RELEASE=ospreyflow FOLDER=deploy/generated/cloud-platform CHART=deploy/helm/ospreyflow REGION=eu-west-2
+  $ export CONFIG="${CONFIG:-osprey.yaml}" PY="${PY:-.venv/bin/python}" PYTHONPATH=.:packages
+  $ export WORK="${TMPDIR:-/tmp}/ospreyflow-$NS" && mkdir -p "$WORK"
+  $ test -n "$BASH_VERSION" || { echo "run these blocks in bash"; false; }
+  $ test -x "$PY" || { echo "no $PY: make the release's environment first (uv sync --frozen)"; false; }
+  $ command -v kubectl >/dev/null && command -v helm >/dev/null || { echo "kubectl and helm are needed"; false; }
+  $ test "$(kubectl config view --minify -o jsonpath='{..namespace}')" = "$NS" \
+  $   || { echo "kubectl's context is not the namespace $NS: kubectl config set-context --current --namespace=$NS"; false; }
+
+=== DECOMMISSION block 2 (step 1. The settings) ===
+  $ export PREFIX="$(kubectl -n "$NS" get secret s3-bucket-output -o jsonpath='{.data.bucket_prefix}' | base64 -d)"
+  $ test -n "$PREFIX" || { echo "no bucket prefix in s3-bucket-output"; false; }
+  $ cp "$FOLDER/values.yaml" "$WORK/values.yaml" && rm -rf "$WORK/terraform" && cp -R "$FOLDER/terraform" "$WORK/terraform"
+
+=== DECOMMISSION block 3 (step 2. The last backup) ===
+  $ S=$(( $(date +%s) / 60 ))
+  $ kubectl -n "$NS" create job "ospreyflow-backup-$S" --from=cronjob/ospreyflow-backup
+  $ if kubectl -n "$NS" get cronjob ospreyflow-backup-claims >/dev/null 2>&1; then
+  $   kubectl -n "$NS" create job "ospreyflow-backup-claims-$S" --from=cronjob/ospreyflow-backup-claims
+  $ fi
+  $ kubectl -n "$NS" wait --for=jsonpath='{.status.conditions[0].status}'=True "job/ospreyflow-backup-$S" --timeout=6h
+  $ kubectl -n "$NS" get job "ospreyflow-backup-$S" -o jsonpath='{.status.succeeded}' | grep -qx 1 \
+  $   || { echo "the last backup did not finish: read its log (kubectl -n $NS logs job/ospreyflow-backup-$S)"; false; }
+  $ export LAST_BACKUP="s3://${PREFIX}backups/sets/$("$PY" -c 'import datetime, sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]) * 60, datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"))' "$S")/"
+  $ echo "the last backup: $LAST_BACKUP"
+job.batch/ospreyflow-backup-29909830 created
+job.batch/ospreyflow-backup-claims-29909830 created
+job.batch/ospreyflow-backup-29909830 condition met
+the last backup: s3://ospreyflow-poc-a1e180b8-backups/sets/20261113T171000Z/
+
+=== DECOMMISSION block 4 (step 3. The workloads) ===
+  $ helm uninstall "$RELEASE" -n "$NS" --wait --timeout 15m || helm status "$RELEASE" -n "$NS" 2>&1 | grep -q 'not found'
+These resources were kept due to the resource policy:
+[PersistentVolumeClaim] ospreyflow-shared
+[PersistentVolumeClaim] ospreyflow-ingest
+
+release "ospreyflow" uninstalled
+
+=== DECOMMISSION block 5 (step 4. The claims) ===
+  $ kubectl -n "$NS" delete pvc -l app.kubernetes.io/instance="$RELEASE" --wait --timeout=10m
+  $ kubectl -n "$NS" delete pvc ospreyflow-shared ospreyflow-ingest --ignore-not-found --wait --timeout=10m
+persistentvolumeclaim "backups-arcadedb-0" deleted
+persistentvolumeclaim "config-arcadedb-0" deleted
+persistentvolumeclaim "data-clickhouse-0" deleted
+persistentvolumeclaim "databases-arcadedb-0" deleted
+persistentvolumeclaim "ospreyflow-ingest" deleted
+persistentvolumeclaim "ospreyflow-shared" deleted
+error: timed out waiting for the condition on persistentvolumeclaims/databases-arcadedb-0
+
+# exit 1 after 607 s
