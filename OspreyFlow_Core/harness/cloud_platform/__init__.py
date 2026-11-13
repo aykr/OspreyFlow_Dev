@@ -50,6 +50,7 @@ from schemas.deployment import (
     ENGINES_AS,
     AnalyticsEngine,
     CloudPlatformConfig,
+    EntraSignInConfig,
     GraphStore,
     OspreyConfig,
     Profile,
@@ -71,7 +72,9 @@ NOT_RENDERED = frozenset(
 #: roles in the deployment's own store) and the realm's public address (Amendment 8).
 REALM_SETTINGS = frozenset(
     {"OIDC_TOKEN_EXCHANGE_URL", "OIDC_TOKEN_EXCHANGE_CLIENT_ID", "OIDC_ADMIN_USERS_URL",
-     "OSPREY_IDENTITY_ORIGIN"}
+     "OSPREY_IDENTITY_ORIGIN",
+     # Superset's sign-in through the realm (ADR-148 Amendment 9 replaces it with Entra ID's).
+     "SUPERSET_IDP_INTERNAL", "SUPERSET_IDP_PUBLIC", "SUPERSET_IDP_ISSUER"}
 )  # fmt: skip
 #: Our Secret's keys only the realm, or the Conduit's exchange with it, reads.
 REALM_SECRETS = frozenset(
@@ -170,20 +173,19 @@ def _refuse(config: OspreyConfig) -> None:
         )
     if not config.network.public_origin.startswith("https://"):
         raise CloudPlatformNotRenderable("a cloud platform is reached over HTTPS")
-    if config.reporting.sync or config.reporting.superset:
-        # The orchestrator's ruling (a), P10 part 2: both signed in through Keycloak, which this
-        # profile does not render; each gets Entra ID's sign-in in its own later step (CARRIES).
-        raise CloudPlatformNotRenderable(
-            "report sync and Superset are not on this profile yet: they signed in through "
-            "Keycloak, and people sign in with Entra ID here; their own step after P10 (reporting "
-            "on Entra ID) brings them. Set reporting.sync and reporting.superset to false"
-        )
     claims = _cp(config).claims
     if claims is None:
         raise CloudPlatformNotRenderable(
             "people sign in with Entra ID on this profile (ADR-148 decision 9): declare "
             "cloud_platform.claims (the tenant, the Glass's and the API's app registrations, where "
             "each claim comes from and the first administrators)"
+        )
+    if config.reporting.superset and claims.superset_client_id is None:
+        # ADR-148 Amendment 9: Superset signs people in as its own app registration.
+        raise CloudPlatformNotRenderable(
+            "reporting.superset is on, and people sign in to Superset with Entra ID as its own app "
+            "registration: name it in cloud_platform.claims.superset_client_id (its application id; "
+            "INSTALL.md says how to register it)"
         )
     from principal_auth import ClaimMapping
 
@@ -209,7 +211,31 @@ def entra_settings(config: OspreyConfig) -> dict[str, str]:
         "OSPREY_CLAIM_MAPPING": json.dumps(claims.claim_mapping(), sort_keys=True),
         "OSPREY_FIRST_ADMINISTRATORS": ",".join(claims.first_administrators),
         "SUPERSET_SIGN_IN": "entra",
+        **_reporting_on_entra(config, claims),
     }
+
+
+def _reporting_on_entra(config: OspreyConfig, claims: EntraSignInConfig) -> dict[str, str]:
+    """ADR-148 Amendment 9: Superset signs people in as its own app registration, at the tenant's
+    own v2.0 endpoints, asking for the API's delegated scope, and reads who signed in from the
+    Conduit. The report sync's dashboard identities ask the tenant's token endpoint for the API's
+    application permissions (`.default`; Amendment 10, admin's step)."""
+    tenant = f"https://login.microsoftonline.com/{claims.tenant_id}"
+    settings: dict[str, str] = {}
+    if config.reporting.superset:
+        assert claims.superset_client_id is not None  # `_refuse`
+        settings |= {
+            "SUPERSET_ENTRA_TENANT": claims.tenant_id,
+            "SUPERSET_OIDC_CLIENT_ID": claims.superset_client_id,
+            "SUPERSET_ENTRA_API_SCOPE": f"{claims.id_uri}/{claims.scope}",
+            "SUPERSET_CONDUIT_URL": "http://api:8000",
+        }
+    if config.reporting.sync:
+        settings |= {
+            "REPORT_SYNC_TOKEN_URL": f"{tenant}/oauth2/v2.0/token",
+            "REPORT_SYNC_SCOPE": f"{claims.id_uri}/.default",
+        }
+    return settings
 
 
 #: Each variable a workload reads that a managed store's secret gives: (store, the secret's key).
@@ -244,6 +270,14 @@ def person_given(config: OspreyConfig) -> set[str]:
     given = set(model_key_variables(config).values()) | set(connection_secret_variables(config))
     if config.mail is not None and config.mail.username:
         given.add("OSPREY_SMTP_PASSWORD")
+    # ADR-148 Amendment 11: Superset's client secret is the one the client's Entra administrator makes
+    # for its registration, never one minted here; and the report sync's dashboard identities (each
+    # an Entra registration's application id and secret, Amendment 10) are given as they are
+    # registered, so a later apply writes the list given, never a fixed `[]` over it.
+    if config.reporting.superset:
+        given.add("SUPERSET_OIDC_CLIENT_SECRET")
+    if config.reporting.sync:
+        given.add("REPORT_SYNC_DASHBOARDS")
     return given
 
 
@@ -1078,6 +1112,10 @@ def render_cloud_platform(
     environment.update({k: v for k, v in install.settings.items() if k not in REALM_SETTINGS})
     # Entra ID's, last, so nothing the cluster's realm wrote stands (ADR-148 Amendment 8).
     environment.update(entra_settings(config))
+    # Superset's rate limits in the managed cache, over TLS with its password (ADR-148 Amendment 11):
+    # `superset_config.py` builds the address from VALKEY_*, which the cache's secret gives; the
+    # cluster's `redis://valkey:6379/5` names a Valkey this profile does not run.
+    environment.pop("SUPERSET_RATELIMIT_STORAGE", None)
     sources = _cp(config).connector_sources
     if _cp(config).connector_hosts or sources.declared():
         # The Conduit's own allow-list, from the lists the egress policy allows (one list, both).

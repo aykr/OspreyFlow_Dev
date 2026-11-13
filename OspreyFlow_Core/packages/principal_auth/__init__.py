@@ -255,6 +255,10 @@ class ClaimMapping(BaseModel):
     api_client_id: str | None = None
     #: The delegated scope the Glass asks for; an Entra token's `scp` must include it.
     scope: str = DEFAULT_SCOPE
+    #: Superset's own app registration (ADR-148 Amendment 9): a delegated token issued to it is
+    #: admitted for `GET /v1/me` and `/v1/me/rights` alone, by the allowed-routes gate. Until that
+    #: gate lands it is still refused as another client's.
+    superset_client_id: str | None = None
 
     @model_validator(mode="after")
     def _entra_needs_its_tenant(self) -> ClaimMapping:
