@@ -66,7 +66,11 @@ def matches(query: dict[str, Any], doc: dict[str, Any]) -> bool:
             return False
         should = body.get("should", [])
         if should:
-            need: int = body.get("minimum_should_match", 1)
+            # OpenSearch's own default: a `should` beside a `filter` or `must` is optional (0), one
+            # alone needs a match (1). Defaulting to 1 always would accept a part that lost its
+            # `minimum_should_match` and matches everything in OpenSearch (the lane review).
+            alone = not body.get("filter") and not body.get("must")
+            need: int = body.get("minimum_should_match", 1 if alone else 0)
             return sum(matches(c, doc) for c in should) >= need
         return True
     raise AssertionError(f"the interpreter does not know {kind}")
@@ -228,3 +232,18 @@ def test_a_principal_with_no_case_limit_is_refused() -> None:
     """`datasets is None` is the Conduit's own background work, never a reader's search."""
     with pytest.raises(ValueError, match="case"):
         sa.index_access_filter(SCHEME, Principal(id="bg", clearance="SECRET", org_unit="unit-1"))
+
+
+def test_the_interpreter_reads_a_should_beside_a_filter_as_opensearch_does() -> None:
+    """The fake must refuse what OpenSearch refuses (rule 15's second worked example): a `should`
+    beside a `filter` with no `minimum_should_match` is optional, so it matches what fails it."""
+    doc = {"kind": "node", "handling_code": "R"}
+    loose = {
+        "bool": {
+            "filter": [{"term": {"kind": "node"}}],
+            "should": [{"term": {"handling_code": "P"}}],
+        }
+    }
+    assert matches(loose, doc)
+    strict = {"bool": {"should": [{"term": {"handling_code": "P"}}]}}
+    assert not matches(strict, doc)
