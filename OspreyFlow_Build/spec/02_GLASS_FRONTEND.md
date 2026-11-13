@@ -486,7 +486,9 @@ in the Studio: decision 2's "Dataset ‹name› ▾" — the Studio chooses its 
 *Dataset* select, and naming it in the banner needs a hook in the Studio's screens (Lane 1's) — and that
 dataset's "feeds n cases": no route gives a dataset's cases as the reader may see them, and a count
 over cases they cannot see would break rule 7. A person
-holding both the Glass and the Studio gets the **cross-link**: *Open ‹dataset› in the Ingest Studio ↗*
+holding both the Glass and the Studio gets the **cross-link**: *Open this case's data in the Ingest Studio ↗*
+(not naming the dataset, which the row names once in "reads …", ADR-145 Amendment 14 decision 4; nor does the case
+switcher's scope badge in the Glass)
 in the Glass, and *← Back to case ‹name› in the Glass* in the Studio, which returns to the open case
 and the Glass's view last open (this replaces the Studio rail's *Back to the investigation*). Choosing
 another case in the Studio reloads the page; the view to return to is kept in the tab's session
