@@ -498,14 +498,15 @@ def test_a_cpu_limit_below_its_request_is_refused_in_words(monkeypatch: pytest.M
         _artefacts(_config())
 
 
-def test_the_poc_shape_makes_no_opensearch_domain() -> None:
-    """The orchestrator's ruling: no pod reads the domain (`opensearch-output`), and it is a paid
-    domain on the client's own install, so the poc shape's Terraform makes none; the standard
-    shape's is carried (ADR-148 Amendment 5, "Left")."""
-    poc = _artefacts(_config())
-    assert "terraform/opensearch.tf" not in poc
-    assert not [n for n, t in poc.items() if n.startswith("terraform/") and "opensearch" in t]
-    assert "terraform/opensearch.tf" in _artefacts(_config("development"))
+def test_a_poc_that_does_not_search_with_opensearch_makes_no_domain() -> None:
+    """The owner's ruling of 13 November 2026 (v0.5.2) gives the poc shape its OpenSearch domain
+    (`test_cloud_platform_opensearch.py`); one that searches with PostgreSQL's own still makes none,
+    and no pod reads the domain's address (it supersedes Amendment 5's "the poc makes none")."""
+    plain = _artefacts(_config(components={"search": "postgres-fulltext"}))
+    assert "terraform/opensearch.tf" not in plain
+    assert not [n for n, t in plain.items() if n.startswith("terraform/") and "opensearch" in t]
+    assert "OPENSEARCH_URL" not in plain["values.yaml"]
+    assert "terraform/opensearch.tf" in _artefacts(_config())
 
 
 def test_the_lock_names_only_the_images_a_poc_pod_runs() -> None:
@@ -516,17 +517,6 @@ def test_the_lock_names_only_the_images_a_poc_pod_runs() -> None:
     assert "clickhouse-keeper" not in services and "clickhouse" in services
     standard = yaml.safe_load(_artefacts(_config("development"))["versions.lock"])
     assert "clickhouse-keeper" in {entry["service"] for entry in standard["images"]}
-
-
-def test_a_poc_naming_opensearch_is_refused_in_words() -> None:
-    """The poc shape makes no OpenSearch domain, so a deployment that names OpenSearch as its search
-    would start a Conduit reaching for a domain that is not there (the orchestrator's review)."""
-    from harness.cloud_platform import CloudPlatformNotRenderable
-
-    raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
-    raw["components"]["search"] = "opensearch"
-    with pytest.raises(CloudPlatformNotRenderable, match="postgres-fulltext"):
-        _artefacts(OspreyConfig.model_validate(raw))
 
 
 def test_the_standard_shape_leaves_the_configuration_s_copy_as_it_was() -> None:

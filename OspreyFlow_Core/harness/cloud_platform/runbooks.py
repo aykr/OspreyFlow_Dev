@@ -40,13 +40,43 @@ from harness.cloud_platform.decommission_check import DISK_NAMESPACE_TAG, KINDS
 from harness.cloud_platform.settings import PlatformSettings
 from harness.cloud_platform.terraform import BUCKETS, RDS_INSTANCE_CLASS, ecr_repositories
 from harness.cloud_platform_backups import BUCKET_SUFFIX, KEPT_AT_DECOMMISSION
-from schemas.deployment import OspreyConfig, generated_folder
+from schemas.deployment import OspreyConfig, SearchBackend, generated_folder
 
 RELEASE = "ospreyflow"
 CHART = "deploy/helm/ospreyflow"
 RENDER = '"$PY" -m harness.render --config "$CONFIG"'
 
 _FENCE = re.compile(r"^```bash( platform)?\n(.*?)^```\n", re.S | re.M)
+
+
+def _opensearch_needs(config: OspreyConfig, platform: PlatformSettings) -> str:
+    """v0.5.2 step 3a: what the namespace's OpenSearch needs of the client, where the deployment
+    searches with it."""
+    if config.components.search is not SearchBackend.OPENSEARCH:
+        return ""
+    signing = (
+        "Every request is signed with SigV4 as the namespace's IAM role (IRSA): the domain's access "
+        "policy admits that role alone, with no fine-grained access control, so there is no user or "
+        "master password to keep."
+        if platform.opensearch_signing == "sigv4"
+        else "The platform's own proxy signs the requests to it (`opensearch_signing: none`), so the "
+        "pods send them unsigned to the address its secret names."
+    )
+    return (
+        "**The OpenSearch domain** (OpenSearch 2.17, two `t3.medium.search` data nodes with 50 GiB each, "
+        "one in each of two availability zones) needs two private subnets, in two availability zones, "
+        "in `subnet_ids`, and is reached inside the VPC on 443. " + signing + " The index is not "
+        "backed up: it is rebuilt from the graph, and a restore ends with that rebuild.\n"
+    )
+
+
+def _opensearch_goes(config: OspreyConfig) -> str:
+    if config.components.search is not SearchBackend.OPENSEARCH:
+        return ""
+    return (
+        " The OpenSearch domain goes with them, and its index is not kept: it was never backed up,"
+        " and a deployment made again rebuilds it from its graph."
+    )
 
 
 def command_blocks(text: str, *, on_the_platform: bool) -> list[str]:
@@ -136,7 +166,7 @@ with `cloud-platform-terraform-rds-instance`, set it on the module:
 `db_parameter = [{{ name = "max_connections", value = "{POSTGRES_MAX_CONNECTIONS}", apply_method = "pending-reboot" }}]`.
 `max_connections` is static in PostgreSQL: it takes effect at creation, and on an existing instance only at
 its next reboot. With too few, the new Conduit of an update stops at `TooManyConnectionsError`.
-{_bare_connector_hosts(cp.connector_hosts)}
+{_opensearch_needs(config, platform)}{_bare_connector_hosts(cp.connector_hosts)}
 ## 1. The settings and the namespace
 
 {_settings(config, platform)}
@@ -424,7 +454,7 @@ backups bucket and its key are taken out of the state, so the removal keeps them
 holds only while their file is there). Give the retention, in days, as `BACKUP_RETENTION_DAYS`. Then remove the
 deployment's resources (the files from `$FOLDER/terraform/`) from the namespace's folder in the
 environments repository and raise the pull request; the folder's other resources are the
-platform's and stay.
+platform's and stay.{_opensearch_goes(config)}
 
 ```bash platform
 : "${{BACKUP_RETENTION_DAYS:?the retention you agree for the kept backups, in days}}"

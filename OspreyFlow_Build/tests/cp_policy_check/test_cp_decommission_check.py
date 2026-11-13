@@ -233,6 +233,8 @@ def test_a_volume_object_kept_after_its_claim_is_named_where_it_may_be_listed(
         'aws_s3_bucket.store["media"]',
         "aws_db_instance.postgres",
         "kubernetes_service_account.service",
+        # The poc's OpenSearch domain since v0.5.2 (step 3a): a paid domain left running is named.
+        "aws_opensearch_domain.search",
     ],
 )
 def test_a_resource_the_render_declares_left_in_the_state_is_named(
@@ -266,7 +268,8 @@ def test_the_render_s_declared_resources_are_read_from_its_files(terraform: dict
     declared = declared_resources(terraform)
     assert {"aws_iam_role.service", "aws_iam_policy.buckets", "aws_s3_bucket.store",
             "kubernetes_service_account.service"} <= declared  # fmt: skip
-    assert not [r for r in declared if r.startswith("aws_opensearch")]  # no domain in poc
+    # The poc's own OpenSearch domain and its policy since v0.5.2 (the owner, 13 Nov; step 3a).
+    assert {"aws_opensearch_domain.search", "aws_opensearch_domain_policy.search"} <= declared
 
 
 def test_a_bucket_of_this_deployment_s_is_named(

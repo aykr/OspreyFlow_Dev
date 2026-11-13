@@ -1,0 +1,10 @@
+v052-opensearch (3a), before the change:
+E   ImportError: cannot import name 'opensearch_settings' from 'harness.cloud_platform' (/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/../OspreyFlow_Core/harness/cloud_platform/__init__.py)
+ERROR tests/harness/test_cloud_platform_opensearch.py
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_the_poc_renders_its_domain_two_nodes_two_zones_iam_alone
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_the_conduit_and_the_worker_read_the_address_and_sign
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_a_platform_that_signs_for_us_says_none
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_the_rebuild_and_the_drift_check_are_standing_job_templates_under_the_role
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_the_runbooks_say_what_the_client_provides_and_what_is_not_backed_up
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_the_manifest_lists_the_domain_as_rendered
+6 failed in 0.97s
