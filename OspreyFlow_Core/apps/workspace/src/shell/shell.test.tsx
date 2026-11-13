@@ -82,9 +82,10 @@ describe("the left rail's Help", () => {
   });
 });
 
-// ADR-145 Amendment 2 (variant B): the rail's ⋯ More, and the top bar's More views.
-describe("the rail's More and the top bar's More views", () => {
-  it("lists the rail's other destinations under ⋯ More, chosen from it and closed by the choice", () => {
+// ADR-145 Amendment 12 (amending Amendment 2's variant B): the rail's ⋯ Explore Details, and the top
+// bar's More views.
+describe("the rail's Explore Details and the top bar's More views", () => {
+  it("lists the rail's other destinations under ⋯ Explore Details, chosen from it and closed by the choice", () => {
     const chose = vi.fn();
     render(
       <LeftRail
@@ -95,22 +96,32 @@ describe("the rail's More and the top bar's More views", () => {
         ]}
       />,
     );
-    // One name and no pressed state, whatever is open: the open destination is marked in the menu.
-    const more = screen.getByRole("button", { name: "More" });
+    // No pressed state; its name says which of its places is open, and the menu marks it too.
+    const more = screen.getByRole("button", { name: "Explore Details, History open" });
     expect(more.getAttribute("aria-pressed")).toBeNull();
     fireEvent.click(more);
-    const menu = within(screen.getByRole("group", { name: "More" }));
+    const menu = within(screen.getByRole("group", { name: "Explore Details" }));
     expect(menu.getAllByRole("button").map((b) => b.textContent)).toEqual(["Ownership", "History"]);
     expect(menu.getByRole("button", { name: "History" }).getAttribute("aria-current")).toBe("page");
     expect(menu.getByRole("button", { name: "Ownership" }).getAttribute("aria-current")).toBeNull();
     fireEvent.click(menu.getByRole("button", { name: "Ownership" }));
     expect(chose).toHaveBeenCalledWith("ownership");
-    expect(screen.queryByRole("group", { name: "More" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Explore Details" })).toBeNull();
   });
 
-  it("draws no More for a rail with nothing beyond it", () => {
+  it("is named Explore Details alone while none of its places is open", () => {
+    render(
+      <LeftRail
+        items={[{ id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined }]}
+        more={[{ id: "history", label: "History", icon: "history", onSelect: () => undefined, pressed: false }]}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Explore Details" })).toBeTruthy();
+  });
+
+  it("draws no Explore Details for a rail with nothing beyond it", () => {
     render(<LeftRail items={[{ id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined }]} />);
-    expect(screen.queryByRole("button", { name: /^More/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Explore Details/ })).toBeNull();
   });
 
   it("puts the views used less under More views, naming the one open", () => {

@@ -7,6 +7,10 @@
 // and choosing another is the real `openCase`, which reloads the page as the Glass does (here, back
 // into this harness with `?investigation=` and `?view=`), so a cross-link that lost the case or the
 // view across that reload would show it; what was chosen is on `window.__PLACES__`.
+import { RAIL_LABELS, splitRail } from "../src/shell/railLayout";
+import type { RailEntry } from "../src/rights/visibility";
+
+const RAIL_ENTRIES: RailEntry[] = ["cases", "explore", "questions", "dashboards", "history", "ownership", "strength"];
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -134,21 +138,11 @@ function Harness() {
       ) : (
         <div style={{ display: "flex", minHeight: 0 }}>
           {place === "glass" && (
-            // The Glass's rail as `App.tsx` splits it (ADR-145 Amendment 2): Cases and Explore, the rest
-            // under ⋯ More.
+            // The Glass's rail as `App.tsx` splits it (ADR-145 Amendment 12, `shell/railLayout.ts`).
             <LeftRail
-              items={[
-                { id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined },
-                { id: "explore", label: "Explore", icon: "explore", onSelect: () => undefined },
-              ]}
-              more={[
-                { id: "ownership", label: "Ownership", icon: "ownership", onSelect: () => undefined },
-                { id: "history", label: "History", icon: "history", onSelect: () => undefined },
-                { id: "questions", label: "Questions", icon: "questions", onSelect: () => undefined },
-                { id: "dashboards", label: "Dashboards", icon: "dashboards", onSelect: () => undefined },
-                // ADR-139: Connection strength stayed in the Glass when Monitoring left it.
-                { id: "strength", label: "Connection strength", icon: "strength", onSelect: () => setView("strength") },
-              ]}
+              {...splitRail(RAIL_ENTRIES.map((id) => ({
+                id, label: RAIL_LABELS[id], icon: id, onSelect: id === "strength" ? () => setView("strength") : () => undefined,
+              })))}
               onHelp={() => undefined}
             />
           )}
@@ -163,14 +157,14 @@ function Harness() {
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
-// `?open=more` or `?open=views`: the rail's ⋯ More or the top bar's More views drawn open, so the
+// `?open=more` or `?open=views`: the rail's ⋯ Explore Details or the top bar's More views drawn open, so the
 // accessibility scan sees the menu itself (`a11y/every-harness.spec.ts`).
 const opening = params.get("open");
 if (opening) {
   const press = () => {
     const button =
       opening === "more"
-        ? document.querySelector<HTMLButtonElement>('nav[aria-label="Workspace"] button[aria-label^="More"]')
+        ? document.querySelector<HTMLButtonElement>('nav[aria-label="Workspace"] button[aria-label^="Explore Details"]')
         : [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("More views"));
     if (button) button.click();
     else setTimeout(press, 50);

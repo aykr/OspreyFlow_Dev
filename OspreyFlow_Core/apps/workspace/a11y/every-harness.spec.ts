@@ -70,7 +70,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   ],
   // ADR-145 decision 2: the banner in the Studio, with its way back, and in Admin.
   // ADR-145 Amendment 2: Monitoring's badge (inside the GOV.UK notification banner under that
-  // brand), and the rail's ⋯ More and the top bar's More views drawn open.
+  // brand), and the rail's ⋯ Explore Details (ADR-145 Amendment 12) and the top bar's More views drawn
+  // open.
   // ADR-146 decision 2: Rules and Monitoring in the switcher with its count (inside the GOV.UK header
   // under that brand), and the place open, its banner a GOV.UK notification banner.
   "places-harness.html": [
@@ -92,6 +93,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   // ADR-145 Amendment 2: the column's fresh-page default, the Inspector alone open.
   "panel-frames-harness.html": ["defaults=1"],
   // ADR-132 Amendment 7: the deployment's own banner words, in the dark, light and GOV.UK scans.
+  // ADR-145 Amendment 12: the rail with Explore Details, and Help's keys panel open over it.
+  "top-bar-harness.html": ["help=1"],
   "shell-harness.html": ["banner=1", "banner=alone", "host=demo.service.gov.uk"],
   // L2.3 part 1: the case screen's lightening, each prototype variant (the default is variant a).
   "case-screen-options-harness.html": ["variant=today", "variant=b", "variant=c"],

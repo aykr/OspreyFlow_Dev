@@ -1,0 +1,18 @@
+# rail + Help, red: App.help.test.tsx (the real App, jsdom) with main's App.tsx, LeftRail.tsx and WorkspaceWelcome.tsx, run as CI runs it (npx vitest run from apps/workspace, its vitest.config.ts and testSetup), this Mac
+⎯⎯⎯⎯⎯⎯ Failed Tests 15 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in the graph, Help opens the panel and a second press closes it
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in the map, Help opens the panel and a second press closes it
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Dashboards, Help opens the panel and a second press closes it
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Ownership, Help opens the panel and a second press closes it
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Connection strength, Help opens the panel and a second press closes it
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in the graph, the ? key opens the panel and again closes it, and Esc closes it
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in the map, the ? key opens the panel and again closes it, and Esc closes it
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Ownership, the ? key opens the panel and again closes it, and Esc closes it
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Connection strength, the ? key opens the panel and again closes it, and Esc closes it
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Dashboards, the ? key opens the panel and again closes it, and Esc closes it
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > the panel carries the user guide's link, as Home's Glass card does
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > a panel closed by Help stays closed at the next sign-in, as one closed by its ×
+ FAIL  src/App.help.test.tsx > the rail's Help over every view the rail reaches > the panel opened at sign-in shows on the graph alone; asked for by Help, over any view
+ FAIL  src/App.help.test.tsx > the rail as the real App draws it > Cases, Explore, Ask & Chat and Dashboards on the rail; History, Ownership and Connection strength under Explore Details
+ FAIL  src/App.help.test.tsx > the rail as the real App draws it > Ask & Chat opens its drawer under its own name
+      Tests  15 failed (15)

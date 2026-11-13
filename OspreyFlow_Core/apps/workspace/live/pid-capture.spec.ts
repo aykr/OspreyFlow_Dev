@@ -20,7 +20,7 @@ import {
   monitoringTab,
   openCaseNamed,
   openQueuedAlert,
-  rail,
+  explorePlace, rail,
   reportsTab,
   runNowAndWait,
   scrollAllToTop,
@@ -655,7 +655,7 @@ test("CAP-A2-C8-a", async ({ page }) => {
   test.setTimeout(1_500_000);
   await principalStar(page);
   await canvas(page).press("Escape"); // the whole view, not one node
-  await rail(page, "Questions").click();
+  await rail(page, "Ask & Chat").click();
   const cited = page.getByRole("button", { name: /^Select \[G-/ });
   await page.getByRole("list", { name: "Questions asked" }).waitFor({ timeout: 15_000 }).catch(() => undefined);
   await page.waitForTimeout(3000); // the stored answers load after the panel opens
@@ -670,8 +670,8 @@ test("CAP-A2-C8-a", async ({ page }) => {
     for (let i = 0; i < 40 && !(await cited.first().isVisible().catch(() => false)); i++) {
       await page.waitForTimeout(30_000);
       if (await page.getByRole("button", { name: "Asking…" }).isVisible().catch(() => false)) continue;
-      await page.getByRole("button", { name: "Close Questions" }).click().catch(() => undefined);
-      await rail(page, "Questions").click();
+      await page.getByRole("button", { name: "Close Ask & Chat" }).click().catch(() => undefined);
+      await rail(page, "Ask & Chat").click();
     }
     console.log(`C8-a answered after ${Math.round((Date.now() - started) / 1000)} s`);
   }
@@ -1088,7 +1088,7 @@ test("CAP-M6", async ({ page }) => {
   // The dataset is OFFICIAL throughout (ADR-120 Amendment 16): no link is above the analyst's
   // clearance to be shown absent, so the module's trust screen is the History panel.
   await principalStar(page);
-  await rail(page, "History").click();
+  await explorePlace(page, "History");
   await page.waitForTimeout(3000);
   await shot(page, "CAP-M6");
 });

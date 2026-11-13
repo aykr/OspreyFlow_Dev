@@ -192,12 +192,15 @@ narrowed.
 ```
 
 The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 1) holds the places the
-analyst goes to most (ADR-145 Amendment 2, the owner's choice of variant B): *Cases* and *Explore* (where
-to start in the case's data, ADR-100, §3.1), then **⋯ More**, a menu of the rest, one click away:
-*Ownership* (beneficial ownership and due diligence — ADR-109, §3.3), *History*, *Questions* (the case's
-questions to the model, ADR-098, §3.1), *Dashboards* (ADR-111 Amendment 3) and *Connection strength*
-(ADR-139, a tab of Monitoring until Monitoring left the Glass). *More*'s name says which of them is open
-("More, History open"). Monitoring (the one alert queue, its rules, the watches, held rows and the rule
+analyst goes to most (ADR-145 Amendment 2's variant B, as ADR-145 Amendment 12 amends it): *Cases*,
+*Explore* (where to start in the case's data, ADR-100, §3.1), *Ask & Chat* (the case's questions to the
+model, ADR-098, §3.1; named *Questions* until Amendment 12) and *Dashboards* (ADR-111 Amendment 3), then
+**⋯ Explore Details**, a menu of the rest, one click away, in this order: *History*, *Ownership*
+(beneficial ownership and due diligence — ADR-109, §3.3) and *Connection strength* (ADR-139, a tab of
+Monitoring until Monitoring left the Glass). *Explore Details*'s name says which of them is open
+("Explore Details, History open"). The rail's **Help** (and `?`) opens the keys panel, with the user
+guide's link, over whichever view is on screen, and a second press, Esc or its × closes it (Amendment
+12). Monitoring (the one alert queue, its rules, the watches, held rows and the rule
 audit — ADR-109, ADR-133, §3.3) is no longer the Glass's: it is *Rules and Monitoring*, a place of its
 own (§2.0a; ADR-146 decision 2). The rail is the Glass's alone:
 the Ingest Studio has no rail, and *Ingest Studio*, *Admin* and *Proposed types* left it for the place
@@ -205,11 +208,13 @@ switcher (§2.0, ADR-145 decision 1). Each is an icon button whose accessible na
 *Show names* widens the rail to show the labels and *Hide names* narrows it again. The switcher's
 *Rules and Monitoring* carries the case's open, claimed and closing alerts as a count (said in its name,
 "Rules and Monitoring 3 open"), and *Help*, above *Show names*,
-reopens the **welcome panel** (ADR-115 E6): over the canvas's top left (320px, 280 below 1100; a shadow, no
-hairline) it says what the canvas holds, offers the case's three latest history steps to pick up from
+opens the **welcome panel** (ADR-115 E6) over whichever view is on screen, and closes it again (ADR-145
+Amendment 12): under the canvas toolbar's left on the graph, the map and the matrix, at the top left of
+any other view (320px, 280 below 1100; a shadow, no hairline). It says what the canvas holds, offers the case's three latest history steps to pick up from
 (each restored as the History drawer restores one) and the keys worth knowing (`/`, the arrows, Enter, F,
-Escape, `?`). It is open until the person closes it once (kept per person in this browser); `?` anywhere
-but a text field opens it again (`keyboard/welcome.spec.ts`). *Cases* opens a
+Escape, `?`) and links the user guide. At sign-in it opens on the graph alone, until the person closes it
+once (by ×, Esc, Help or `?`; kept per person in this browser); `?` anywhere in the Glass but a text field
+or a list box opens or closes it (`keyboard/shell.spec.ts`, `App.help.test.tsx`). *Cases* opens a
 drawer with the open case's *Views in this case*, every case with its views (ADR-144 decision 5), and *Browse all cases*. The
 **view toolbar** above the canvas holds what belongs to that view alone: the resolution threshold on
 the Graph, *Add site* and *Draw boundary* on the Map. The **selection bar** at the foot of the canvas
@@ -384,7 +389,7 @@ One row, 40px. From the left:
 
 While the Ingest Studio is open the bar shows a brass line under it and drops what belongs only to
 the Glass (search, the view switch, Export). Rules and Monitoring is a place of the switcher (§2.0a);
-Ownership, History and Connection strength are under the rail's ⋯ More; the resolution threshold, named **Match strictness** for what
+History, Ownership and Connection strength are under the rail's ⋯ Explore Details; the resolution threshold, named **Match strictness** for what
 the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
 wide.
 
