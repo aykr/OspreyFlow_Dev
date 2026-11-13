@@ -324,7 +324,7 @@ test("the case line's Views in this case opens the Cases panel by keyboard, and 
   const region = page.getByRole("region", { name: "You are in the Glass" });
   await expect(region.getByRole("navigation")).toHaveCount(0);
   await expect(region).not.toHaveAttribute("aria-describedby");
-  await expect(region).toContainText(/You are in the Glass\s*·\s*Case\s*Case: Kestrel\s*·\s*Views in this case\s*·\s*reads Prison intel/);
+  await expect(region).toContainText(/You are in the Glass\s*·\s*Case\s*Case: Kestrel\s*▾\s*·\s*Views in this case\s*·\s*reads Prison intel/);
   const views = region.getByRole("button", { name: "Views in this case" });
   await views.focus();
   await page.keyboard.press("Enter");
@@ -620,10 +620,6 @@ test("govuk on gov.uk: the full footer, Crown copyright reached by Tab", async (
   expect(await page.evaluate(() => document.activeElement?.textContent?.trim())).toBe("© Crown copyright");
 });
 
-test("every registered shell action has its own proving test case above", () => {
-  assertAllCovered("SHELL_ACTIONS", SHELL_ACTIONS);
-});
-
 // ADR-132 Amendment 4: GOV.UK's own chrome keeps GOV.UK's link styling. The Glass gives every link a
 // bottom border (`tokens.css`), which drew a rule under the logo at rest, where GOV.UK draws none
 // (found 1 November 2026 against www.gov.uk). The service name it also checked is gone (Amendment 5).
@@ -755,3 +751,8 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     registerCovered(REGISTRY, "build-a-report-by-keyboard");
   });
 }
+
+// Last in the file: the check reads the cases above it, run in order on one worker (CI's two-core runner).
+test("every registered shell action has its own proving test case above", () => {
+  assertAllCovered("SHELL_ACTIONS", SHELL_ACTIONS);
+});
