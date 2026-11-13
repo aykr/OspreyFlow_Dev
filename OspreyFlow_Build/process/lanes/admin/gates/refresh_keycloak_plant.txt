@@ -1,0 +1,9 @@
+PLANT: the silent round sent without prompt=none (the login page, not Keycloak's refusal)
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T122048Z-fecd573b/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py -q 2>&1 | grep -E "^E  |passed|failed" | head -8
+E       AssertionError: 200
+E       assert 200 == 302
+E        +  where 200 = <Response [200 OK]>.status_code
+E           assert 200 == 302
+E            +  where 200 = <Response [200 OK]>.status_code
+2 failed in 20.64s
+Wall time: 22 s, exit 0 (no stack, no lease; set-up before it 50 s)
