@@ -456,6 +456,25 @@ describe("Part B after review (ADR-145 Amendment 15)", () => {
     expect(more.getAllByRole("button").map((b) => b.textContent)).toEqual(["Matrix", "Connection strength"]);
   });
 
+  test("a drawing board chosen before the rights arrive gives way when they say the person may not investigate", async () => {
+    // While the rights are unknown the Glass offers what it always offered (ADR-112), the drawing board among them.
+    let answer: (rights: string[]) => void = () => undefined;
+    const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+      /\/v1\/me\/rights$/.test(String(input).split("?")[0]!)
+        ? new Promise<Response>((resolve) => (answer = (rights) => resolve(new Response(JSON.stringify({ rights })))))
+        : held(input, init),
+    );
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Drawing board" }));
+    await screen.findByRole("heading", { name: /^Drawing boards in case/ });
+    answer(["read_reports"]);
+    await vi.waitFor(() => expect(screen.queryByRole("heading", { name: /^Drawing boards in case/ })).toBeNull());
+    await vi.waitFor(() => expect(switchOf().main).toEqual(["Reports"]));
+    expect(screen.getByRole("button", { name: /^Figures/ }).className).toContain("menu-button--pressed");
+  });
+
   test("exactly one view is current: one pressed in the switch, or none there and More views naming its own", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
