@@ -134,8 +134,13 @@ The default view and `watch` show this and nothing else needs reading. One scree
    one line saying which step and why.
 2. **The route:** one row per `route.tsv` step, with:
    - its lane and planned dates;
-   - its state, from the lane's own progress row and beat: not started, running, done, or blocked. **"Done" only
-     when its tests passed**, i.e. merged with its gates;
+   - its state, from the lane's own progress row and beat: not started, running, built and waiting to merge (its
+     progress row in review), done, or blocked. **"Done" only when its tests passed**, i.e. merged with its gates;
+     the headline counts the steps built and waiting to merge beside those done;
+   - under a running or blocked step, its stages by name, one line each (✅ done, ⏳ now, ⛔ blocked, — to do), from
+     the lane's own list for that step (`lanes_heartbeat.sh stages`, one list a step). When they would not fit one
+     screen, the done stages fold to one "✅ n done" line; then the stages still to do are counted; then each step's
+     list is one line; then the steps left over are counted on a line of their own;
    - days ahead or behind against its planned end;
    - what it waits on (its `after`);
    - critical-path rows marked.
