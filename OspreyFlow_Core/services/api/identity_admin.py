@@ -221,7 +221,7 @@ class PeopleDirectory(Protocol):
     ) -> tuple[PersonAccount, OrganisationArrival]: ...
     async def list_dashboards(self) -> list[DashboardIdentity]: ...
     async def create_dashboard(
-        self, name: str, *, clearance: str, org_unit: str
+        self, name: str, *, clearance: str, org_unit: str, application_id: str | None = None
     ) -> RegisteredDashboard: ...
     async def delete_dashboard(self, client_id: str) -> None: ...
 
@@ -716,8 +716,13 @@ class IdentityAdmin:
         ]
 
     async def create_dashboard(
-        self, name: str, *, clearance: str, org_unit: str
+        self, name: str, *, clearance: str, org_unit: str, application_id: str | None = None
     ) -> RegisteredDashboard:
+        if application_id is not None:
+            raise UnknownRoleError(
+                "an application id names an Entra ID app registration; on this deployment "
+                "OspreyFlow creates the dashboard's own client: leave it out"
+            )
         client_id = f"{DASHBOARD_PREFIX}{_slug(name)}"
         made = await self._call(
             "POST",

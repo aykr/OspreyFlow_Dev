@@ -124,8 +124,9 @@ class DashboardIdentity(BaseModel):
 
 class RegisteredDashboard(BaseModel):
     dashboard: DashboardIdentity
-    #: Shown once, at registration; OspreyFlow keeps no copy.
-    secret: str
+    #: Shown once, at registration; OspreyFlow keeps no copy. None on Entra ID (ADR-148 Amendment
+    #: 10), where the identity's own app registration holds its secret.
+    secret: str | None = None
 
 
 class RolesInput(BaseModel):
@@ -159,6 +160,13 @@ class DashboardInput(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     clearance: str = Field(min_length=1)
     org_unit: str = Field(min_length=1)
+    #: ADR-148 Amendment 10: on Entra ID, the identity's own app registration's application id
+    #: (required there; refused on Keycloak, where OspreyFlow creates the client).
+    application_id: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        description="On Entra ID: the dashboard's app registration's application id, lower case",
+    )
 
 
 class ComponentHealth(BaseModel):
