@@ -2301,11 +2301,14 @@ async def get_service_identity(
     except ServiceIdentityRefused as refused:
         raise HTTPException(status_code=refused.status, detail=str(refused)) from refused
     # ADR-148 Amendment 10: a client Admin › Dashboards registered is a dashboard identity, which
-    # reads the report feed and never submits runs, whatever its token holds.
+    # reads the report feed and never submits runs, whatever its token holds. The read is bounded as
+    # a person's stored roles are; past it, the same 503.
     store = getattr(request.app.state, "people_store", None)
     if store is not None:
         try:
-            registered = await store.dashboard(store.tenant_id, client)
+            registered = await asyncio.wait_for(
+                store.dashboard(store.tenant_id, client), timeout=ROLE_LOOKUP_TIMEOUT_SECONDS
+            )
         except Exception as exc:  # noqa: BLE001 - any failure of the read is the one 503
             raise HTTPException(
                 status_code=503, detail="the dashboard identities could not be read"

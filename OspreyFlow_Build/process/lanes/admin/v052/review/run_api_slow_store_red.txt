@@ -1,0 +1,12 @@
+                setattr(app.state, key, value)
+>       assert time.monotonic() - started < 10
+E       AssertionError: assert (172860.648442416 - 172830.641793083) < 10
+E        +  where 172860.648442416 = <built-in function monotonic>()
+E        +    where <built-in function monotonic> = <module 'time' (built-in)>.monotonic
+
+../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:381: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 22:05:14] "GET /jwks.json HTTP/1.1" 200 -
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_the_run_api_door_with_a_store_answering_none_or_too_slowly[store-too-slow]
+1 failed, 1 passed, 29 deselected in 32.86s
