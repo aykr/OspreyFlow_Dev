@@ -31,6 +31,7 @@ import os
 import re
 import secrets
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -50,6 +51,7 @@ RECORDS = STATE / "records"
 NS = "ospreyflow-poc"
 FOLDER = CORE / "deploy" / "generated" / "cloud-platform"
 MANAGED = "platform-managed"
+LOCAL_BIN = Path.home() / ".local" / "bin"  # where `uv tool install` puts a command
 ACCOUNT = "123456789012"
 REGION = "eu-west-2"
 KEY_ARN = f"arn:aws:kms:{REGION}:{ACCOUNT}:key/0f9e8d7c-0011-4000-8000-000000000001"
@@ -526,16 +528,19 @@ def runbook(name: str, start: int) -> None:
     log = record(name)
     STATE.mkdir(parents=True, exist_ok=True)
     (STATE / f"{name}.sh").write_text(script_for(name, path.read_text(), start))
-    # What the operator brings, as *What it needs* says: kubectl pointed at the namespace, `.venv/bin`
-    # on PATH (block 2's own words), and curl's options for a door whose CA the machine does not trust.
+    # What the operator brings, as *What it needs* says: kubectl pointed at the namespace, the `ospreyflow`
+    # command by `uv tool install ./cli` with `~/.local/bin` on PATH (R1's finding 8: `.venv/bin` never held
+    # it), and curl's options for a door whose CA the machine does not trust.
     kubectl("config", "set-context", "--current", f"--namespace={NS}")
+    if name == "INSTALL":
+        sh(shutil.which("uv") or str(LOCAL_BIN / "uv"), "tool", "install", "--force", "./cli")
     node = sh("docker", "inspect", "-f", "{{.NetworkSettings.Networks.kind.IPAddress}}", "osprey-r1-control-plane").strip()
     env = {**os.environ, "CONFIG": str(CONFIG), "R1": str(Path(__file__)), "R1_PY": sys.executable,
-           "PATH": f"{CORE / '.venv' / 'bin'}:{os.environ['PATH']}",
+           "PATH": f"{LOCAL_BIN}:{os.environ['PATH']}",
            "OSPREY_CURL_OPTS": f"--cacert {ca() / 'ca.crt'} --resolve {GLASS}:443:{node}"}
     print(f"running {name} from block {start}; record {log}")
     with log.open("w") as out:
-        out.write(f"# {name}.md as rendered, run from block {start} at {sh('git', 'rev-parse', 'HEAD').strip()}\n")
+        out.write(f"# {name}.md as rendered, run from block {start} at {os.environ.get('R1_HEAD', 'the copy (no .git)')}\n")
         out.flush()
         started = time.monotonic()
         proc = subprocess.Popen(["bash", str(STATE / f"{name}.sh")], cwd=CORE, env=env,
@@ -725,7 +730,7 @@ def recovery_blocks() -> list[str]:
 def _run_filled(name: str, script: str) -> str:
     log = record(name)
     done = subprocess.run(["bash", "-c", "set -e\n" + script], cwd=CORE, capture_output=True, text=True,
-                          env={**os.environ, "PATH": f"{CORE / '.venv' / 'bin'}:{os.environ['PATH']}"})
+                          env={**os.environ, "PATH": f"{LOCAL_BIN}:{os.environ['PATH']}"})
     log.write_text(f"# as run, placeholders filled:\n{script}\n# output (exit {done.returncode}):\n{done.stdout}{done.stderr}")
     print(done.stdout + done.stderr)
     if done.returncode:
