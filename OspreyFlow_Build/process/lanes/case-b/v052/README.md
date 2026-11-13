@@ -46,7 +46,7 @@ platform-b's dashboards check and for anyone fitting a new stand-in):
 - **OpenSearch** (`managed.opensearch`, 3a's, no longer pending from 1d914fe): platform's domain stand-in
   (lane/platform-v052-searchkind 6998234: the domain's VPC endpoint answered by the S3/STS stand-in, SigV4 for `es`
   checked against the namespace's role, unsigned refused 403 in the domain's JSON words, the rest proxied to an
-  OpenSearch 2.17.1 pod) and **rules' search client** (`services/search_index/client.py`, lane/rules-v052-index,
+  OpenSearch 2.17.1 pod) and **rules' search client** (the search_index service's client.py, on lane/rules-v052-index,
   unmerged). `SEARCH_PROBE` runs in the api pod: the client the deployment uses, with its own `OPENSEARCH_*` settings and
   IRSA credentials, counts the alias signed, and the signed client's own transport (hosts, connection class, TLS
   settings, timeout) less its signer counts it unsigned. The reader passes when it signs, the signed count is answered
