@@ -10,8 +10,11 @@
              namespace: the stand-in CA beside the public roots, as the system's bundle and by the
              variables Python, curl and the AWS SDKs read. To a pod whose service account the
              platform's Terraform annotates with a role: what EKS's webhook adds (the projected token
-             for sts.amazonaws.com, AWS_ROLE_ARN, AWS_WEB_IDENTITY_TOKEN_FILE, the region) and the
-             S3 and STS endpoints at the stand-in. Nothing else is changed.
+             for sts.amazonaws.com, AWS_ROLE_ARN, AWS_WEB_IDENTITY_TOKEN_FILE, the region and
+             AWS_STS_REGIONAL_ENDPOINTS) and nothing more: no endpoint URL, which EKS never sets, so
+             each SDK asks the regional names CoreDNS gives the stand-in (R1: pyarrow's AWS CRT read
+             AWS_ENDPOINT_URL_STS as a host name and fell back to no credentials). Nothing else is
+             changed.
 
     python3 -I r1_kind_servers.py entra|webhook --config c.json --port 443 --tls-cert c --tls-key k
 """
@@ -100,8 +103,6 @@ def _patch_pod(pod: dict[str, Any], config: dict[str, Any]) -> list[dict[str, An
             {"name": "AWS_STS_REGIONAL_ENDPOINTS", "value": "regional"},
             {"name": "AWS_REGION", "value": config["region"]},
             {"name": "AWS_DEFAULT_REGION", "value": config["region"]},
-            {"name": "AWS_ENDPOINT_URL_S3", "value": config["endpoint"]},
-            {"name": "AWS_ENDPOINT_URL_STS", "value": config["endpoint"]},
         ]
         mounts.append({"name": "aws-iam-token", "mountPath": TOKEN_DIR, "readOnly": True})
     if "volumes" not in spec:
