@@ -52,7 +52,7 @@ The poc shape runs one of each workload.
 
 **Superset and the report sync:**
 - Their CPU limits are the poc default (`poc.cpu_limits.default`, 500m), since the profile names none for either.
-- The connection count assumes two of each, as the client page does (`connections.py`). The poc renders one of each, so the 1000 has more room on poc.
+- The owner ruled one copy of each on poc (13 November 2026), as the render gives it. The connection count takes each shape's own copies (`connections.least_for`): 834 on poc, 918 in production, both under the 1000.
 
 ## 3. CronJobs and Jobs (from the chart, in the poc render)
 
