@@ -45,15 +45,46 @@ def _client_calls(source: str) -> list[ast.Call]:
 
 def unreadable(source: str) -> set[str]:
     """Client calls whose path the reading cannot hold to a route (a variable, a keyword `url=`, a path built
-    some other way), less the known calls that are not the Conduit's."""
+    some other way, one led by a field that is not an origin before /v1, or one off /v1), less the known calls
+    that are not the Conduit's; and every WebSocket URL not of the one shape `streams` reads."""
     found = set()
     for node in _client_calls(source):
         path = _path(node.args[0]) if node.args else None
-        if path is None or path.startswith("{") or ("/v1/" in path and not path.startswith("/v1/")):
+        if path is None or not path.startswith("/v1/"):
             text = ast.unparse(node)
             if not any(text.startswith(known) for known in NOT_THE_CONDUIT):
                 found.add(f"line {node.lineno}: {text[:120]}")
+    tree = ast.parse(source)
+    prose = _prose(tree)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.JoinedStr, ast.Constant)) and id(node) not in prose:
+            text = _template(node)
+            if text is None or re.fullmatch(r"\{\}://\{\}(/v1/.*)", text):
+                continue
+            elif "://" in text and "/v1/" in text:
+                found.add(f"line {node.lineno}: a stream URL of another shape: {text[:120]}")
     return found
+
+
+def _template(node: ast.expr) -> str | None:
+    if isinstance(node, ast.Constant):
+        return node.value if isinstance(node.value, str) else None
+    if isinstance(node, ast.JoinedStr):
+        return "".join(v.value if isinstance(v, ast.Constant) else "{}" for v in node.values)
+    return None
+
+
+def _prose(tree: ast.Module) -> set[int]:
+    """Docstrings, and the pieces inside an f-string (read whole, as the f-string): not URLs anything opens."""
+    skip: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.body:
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+                skip.add(id(first.value))
+        if isinstance(node, ast.JoinedStr):
+            skip.update(id(v) for v in node.values)
+    return skip
 
 
 def calls(source: str) -> set[str]:
@@ -139,9 +170,12 @@ def test_a_client_call_whose_path_cannot_be_read_is_named() -> None:
     and the review of 6918a58: one led by a field that is not an origin before /v1."""
     source = ('def f(analyst, browser, d, path):\n    analyst.get(path)\n    analyst.post(url="/v1/x")\n'
               '    analyst.get(_paths.alerts(case))\n    d.get(path)\n    browser.get(authorize)\n'
-              '    analyst.post(f"{case_prefix}/hotlists")\n')
+              '    analyst.post(f"{case_prefix}/hotlists")\n    analyst.get("/healthz")\n'
+              '    u = f"ws://{host}/v1/investigations/{i}/stream"\n')
     assert unreadable(source) == {"line 2: analyst.get(path)", "line 3: analyst.post(url='/v1/x')",
-                                  "line 4: analyst.get(_paths.alerts(case))", "line 7: analyst.post(f'{case_prefix}/hotlists')"}
+                                  "line 4: analyst.get(_paths.alerts(case))", "line 7: analyst.post(f'{case_prefix}/hotlists')",
+                                  "line 8: analyst.get('/healthz')",
+                                  "line 9: a stream URL of another shape: ws://{}/v1/investigations/{}/stream"}
 
 
 def test_the_stream_the_module_opens_is_read_and_served() -> None:
