@@ -88,7 +88,7 @@ fixed, and `tests/scenarios/test_over_the_wire_routes_exist.py` holds every call
 
 ## Red first
 
-`plants.py`: 61 plants, each one check broken at its real call site in a copy of the driver, and 6 in the route reading (in a copy, beside a copy of its module); every one turns the
+`plants.py`: 62 plants, each one check broken at its real call site in a copy of the driver, and 8 in the route reading (in a copy, beside a copy of its module); every one turns the
 tests red and the unplanted copy stays green (`gates/plants.txt`, with the commit it ran at). Building them found
 four gaps (no test had a CronJob whose runs never succeeded; a reader test whose pod order hid the finished-pod
 plant; no test of an unobserved generation alone; none of a CronJob template still on the old release).
