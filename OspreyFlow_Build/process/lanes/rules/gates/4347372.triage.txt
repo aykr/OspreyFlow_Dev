@@ -1,0 +1,9 @@
+Triage of the gates at 4347372 (lane/rules-lists-audit on main a7bfb75, after its lane review), OspreyFlow_Core tree 8877cbc1e1f6d96c52cc73c58b15f2b65d70e72f, run offline on ospreyflow-test (no stack, no lease).
+
+make -k ci: exit 0 (4347372.ci.txt).
+make test: exit 2 (4347372.test.txt). pytest 1 failed, 13191 passed, 36 skipped; vitest 3271 passed (and 1, and 51).
+The one failure is not this lane's: tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+(assert 'pass' == 'skip'). It is known on this host and is in CARRIES (platform-b, v0.5.1): the case assumes a host with no readable GPU,
+and the test server has one.
+This step's tests: test_refresh_screening_list_script.py passed here. The live files (test_audit_section_store.py,
+test_screening_list_routes.py) are kept out of make test by the Makefile's ignore list. They were run on stack b: 41 passed (9bc74de.live-files.txt).
