@@ -10,14 +10,17 @@ stood in for (`CandidateRows`), at the driver: it keeps each row as the store's 
 column, so what is checked is the `status` the real store writes. It refuses what Postgres refuses at
 that boundary (rule 15's second worked example): values that do not match the statement's columns or
 placeholders, a NULL in a column the store's own `CREATE TABLE` declares `NOT NULL`, and a second row
-with a candidate's primary key. What it does not prove: that Postgres itself accepts the row, which is
-`tests/services/api/test_review_store.py`'s, live.
+with a table's primary key (a `BIGSERIAL` key it fills itself, as Postgres does); a transaction keeps
+all its statements or, on an exception, none. What it does not prove: that Postgres itself accepts the
+row, which is `tests/services/api/test_review_store.py`'s, live.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
+from collections.abc import AsyncIterator
 from typing import Any
 
 import asyncpg
@@ -57,11 +60,22 @@ _NOT_NULL = re.compile(r"^\s+(\w+) [A-Z ]*?(NOT NULL|PRIMARY KEY)", re.M)
 _TABLE = re.compile(r"CREATE TABLE IF NOT EXISTS (\w+) \((.*?)\n\);", re.S)
 
 
-def _not_null() -> dict[str, set[str]]:
-    out: dict[str, set[str]] = {}
+_PRIMARY_KEY = re.compile(r"^\s+(\w+) ([A-Z]+)[A-Z ]*?PRIMARY KEY", re.M)
+
+
+def _tables() -> dict[str, tuple[set[str], str, bool]]:
+    """Each table the store's own `CREATE TABLE`s declare: its NOT NULL columns a statement must
+    give, its primary key, and whether Postgres fills that key itself (a `BIGSERIAL`, as the search
+    index's text outbox, ADR-150 decision 3, has: one row per write, the same document twice)."""
+    out: dict[str, tuple[set[str], str, bool]] = {}
     for sql in (review._BOOTSTRAP_SQL, review._DOCUMENT_TEXT_BOOTSTRAP_SQL):
         for table, body in _TABLE.findall(sql):
-            out[table] = {m.group(1) for m in _NOT_NULL.finditer(body)}
+            key, key_type = _PRIMARY_KEY.search(body).groups()  # type: ignore[union-attr]
+            serial = key_type.endswith("SERIAL")
+            required = {m.group(1) for m in _NOT_NULL.finditer(body)}
+            if serial:
+                required.discard(key)
+            out[table] = (required, key, serial)
     return out
 
 
@@ -70,7 +84,8 @@ class CandidateRows:
 
     def __init__(self) -> None:
         self.rows: dict[str, list[dict[str, Any]]] = {}
-        self._not_null = _not_null()
+        self._tables = _tables()
+        self._serial = 0
 
     def acquire(self) -> CandidateRows:
         return self
@@ -80,6 +95,17 @@ class CandidateRows:
 
     async def __aexit__(self, *exc: object) -> None:
         return None
+
+    @contextlib.asynccontextmanager
+    async def transaction(self) -> AsyncIterator[None]:
+        """asyncpg's `conn.transaction()`: every statement in it kept, or, on any exception, none
+        (the text and its search outbox row are one transaction, ADR-150 decision 3)."""
+        before = {table: list(held) for table, held in self.rows.items()}
+        try:
+            yield
+        except BaseException:
+            self.rows = before
+            raise
 
     async def executemany(self, sql: str, args: list[tuple[Any, ...]]) -> None:
         for values in args:
@@ -101,13 +127,18 @@ class CandidateRows:
                 f"{len(values)} were passed"
             )
         row = dict(zip(names, values, strict=True))
-        for column in self._not_null.get(table, set()):
+        if table not in self._tables:
+            raise AssertionError(f"not a table the store creates: {table!r}")
+        required, key, serial = self._tables[table]
+        for column in required:
             if row.get(column) is None:
                 raise asyncpg.exceptions.NotNullViolationError(
                     f'null value in column "{column}" of relation "{table}"'
                 )
         held = self.rows.setdefault(table, [])
-        key = "id" if table == "extraction_candidates" else "document_id"
+        if serial and key not in row:
+            self._serial += 1
+            row[key] = self._serial
         same = [r for r in held if r[key] == row[key]]
         if same and "ON CONFLICT" not in sql:
             raise asyncpg.exceptions.UniqueViolationError(f"duplicate key in {table}")
