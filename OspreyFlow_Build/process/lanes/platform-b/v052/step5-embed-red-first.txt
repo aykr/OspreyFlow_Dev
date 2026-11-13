@@ -1,24 +1,24 @@
-# v0.5.2 step 5: an embedded board matched to its dashboard identity on Entra ID by the identity's name (ADR-148 Am 10, 11). Red first. Mac, offline, on admin's 0d97d55.
+# v0.5.2 step 5: an embedded board matched to its dashboard identity on Entra ID by the identity's name (ADR-148 Am 10, 11). Red first, each pytest with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a). Mac, offline, on v052-gate.
 
 == main's identity_for (the Keycloak client id alone):
 FAILED test_superset_embed.py::test_on_entra_a_board_is_its_identity_s_by_name_and_its_rows_the_application_s
 FAILED test_superset_embed.py::test_a_name_is_never_matched_through_another_identity_s_client_id
-2 failed, 11 passed, 1 warning in 1.81s
+2 failed, 11 passed, 1 warning in 4.36s
 
 == (a) a named identity also matched through its client id:
 FAILED test_superset_embed.py::test_a_name_is_never_matched_through_another_identity_s_client_id
-1 failed, 12 passed, 1 warning in 1.76s
+1 failed, 12 passed, 1 warning in 4.52s
 
 == (b) any Entra identity matched whatever its name (the refusals' own plant):
 FAILED test_superset_embed.py::test_on_entra_a_board_is_its_identity_s_by_name_and_its_rows_the_application_s
 FAILED test_superset_embed.py::test_on_entra_an_identity_of_another_name_opens_no_board
 FAILED test_superset_embed.py::test_a_name_is_never_matched_through_another_identity_s_client_id
-3 failed, 10 passed, 1 warning in 1.86s
+3 failed, 10 passed, 1 warning in 4.56s
 
 == (c) may_open skipping the identity's cases (the Entra refusals' second plant):
 FAILED test_superset_embed.py::test_missing_one_case_is_not_found
 FAILED test_superset_embed.py::test_on_entra_who_cannot_see_all_it_counts_is_not_shown_it[missing-one-of-its-cases]
-2 failed, 11 passed, 1 warning in 1.74s
+2 failed, 11 passed, 1 warning in 4.56s
 
 == green:
-13 passed, 1 warning in 1.72s
+13 passed, 1 warning in 4.51s

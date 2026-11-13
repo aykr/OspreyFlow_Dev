@@ -1,31 +1,31 @@
-# ADR-148 Amendment 9, the Conduit admitting Superset's client (step 4), on admin's gate (a7ec066): red first. Mac, offline.
+# ADR-148 Amendment 9, the Conduit admitting Superset's client (step 4), on admin's gate (a7ec066): red first, each pytest with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a). Mac, offline, on v052-gate.
 
 == (a) Superset's token admitted to every route (no routes named):
 FAILED test_auth_entra_superset.py::test_a_person_s_token_issued_to_superset_is_them_on_superset_s_two_routes_alone
-1 failed, 173 passed, 8 warnings in 15.09s
+1 failed, 182 passed, 8 warnings in 16.76s
 
 == (b) any client but the Glass's admitted as Superset's:
 FAILED test_auth_entra_superset.py::test_superset_s_token_is_held_to_every_check_a_glass_token_is[another-client]
 FAILED test_auth_entra_superset.py::test_without_superset_s_registration_named_its_token_is_another_client_s
-FAILED test_auth_entra_claims.py::test_a_token_issued_to_another_client_is_refused[other-azp]
 FAILED test_auth_entra_claims.py::test_a_token_issued_to_another_client_is_refused[v1-other-appid]
+FAILED test_auth_entra_claims.py::test_a_token_issued_to_another_client_is_refused[other-azp]
 FAILED test_auth_entra_claims.py::test_a_refused_token_records_nobody
-5 failed, 169 passed, 8 warnings in 13.77s
+5 failed, 178 passed, 8 warnings in 16.31s
 
 == (c) azp Superset's with appid the Glass's (two clients) admitted on azp alone:
 FAILED test_auth_entra_superset.py::test_superset_s_token_is_held_to_every_check_a_glass_token_is[two-clients]
 FAILED test_auth_entra_claims.py::test_a_v1_token_naming_the_glass_by_appid_resolves
 FAILED test_auth_entra_claims.py::test_a_token_issued_to_another_client_is_refused[azp-and-other-appid]
-3 failed, 171 passed, 8 warnings in 14.89s
+3 failed, 180 passed, 8 warnings in 17.73s
 
 == (d) Superset's registration may be the Glass's or the API's:
-FAILED test_auth_entra_superset.py::test_superset_s_registration_is_its_own[the-glass]
 FAILED test_auth_entra_superset.py::test_superset_s_registration_is_its_own[the-api]
-2 failed, 172 passed, 8 warnings in 14.69s
+FAILED test_auth_entra_superset.py::test_superset_s_registration_is_its_own[the-glass]
+2 failed, 181 passed, 8 warnings in 16.35s
 
 == (e) Superset's routes reach a case read too:
 FAILED test_auth_entra_superset.py::test_a_person_s_token_issued_to_superset_is_them_on_superset_s_two_routes_alone
-1 failed, 173 passed, 8 warnings in 14.71s
+1 failed, 182 passed, 8 warnings in 17.86s
 
 == green:
-174 passed, 8 warnings in 14.10s
+183 passed, 8 warnings in 18.59s
