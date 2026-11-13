@@ -1,0 +1,32 @@
+# v052-r1's dashboards check, offline: superset_pod.py's sign-in against Superset and Entra stand-ins that refuse as the real ones do. Red first. Mac.
+
+== (a) the person never named to Entra (no login_hint: the first administrator signs in each time):
+FAILED test_v052_dashboards_check.py::test_a_person_signs_in_and_superset_names_their_role[reader@r1.test-Gamma]
+FAILED test_v052_dashboards_check.py::test_a_person_signs_in_and_superset_names_their_role[builder@r1.test-Alpha]
+FAILED test_v052_dashboards_check.py::test_a_person_superset_refuses_is_not_signed_in
+FAILED test_v052_dashboards_check.py::test_a_person_entra_does_not_know_stops_at_entra_s_own_page
+4 failed, 3 passed in 0.25s
+
+== (b) Superset's redirect not checked against the registered one:
+FAILED test_v052_dashboards_check.py::test_a_superset_that_ignores_the_door_s_name_is_caught_before_entra
+1 failed, 6 passed in 0.23s
+
+== (c) a refused sign-in read as signed in (Superset's /api/v1/me/ not asked):
+FAILED test_v052_dashboards_check.py::test_a_person_superset_refuses_is_not_signed_in
+1 failed, 6 passed in 0.24s
+
+== (d) the door's name not forwarded (Superset builds its redirect from its own Service name):
+FAILED test_v052_dashboards_check.py::test_a_person_signs_in_and_superset_names_their_role[reader@r1.test-Gamma]
+FAILED test_v052_dashboards_check.py::test_a_person_signs_in_and_superset_names_their_role[builder@r1.test-Alpha]
+FAILED test_v052_dashboards_check.py::test_a_person_superset_refuses_is_not_signed_in
+FAILED test_v052_dashboards_check.py::test_a_person_entra_does_not_know_stops_at_entra_s_own_page
+4 failed, 3 passed in 0.23s
+
+== green:
+7 passed in 0.23s
+
+Found by plant (b) on the first pass: it stayed green, because the Superset stand-in refused any host but the door's
+own, so the wrong-door test stopped before the redirect check it claimed to test (rule 15: a fake more refusing than
+the real one). The stand-in now answers any host and builds its redirect from what is forwarded, as Superset does with
+ENABLE_PROXY_FIX, and the test simulates a lost proxy setting (its own Service's name). The run above is after that fix.
+The live run (Superset, the stand-in, the Conduit and report sync on kind) is v052-r1's, under a lease; not run yet.
