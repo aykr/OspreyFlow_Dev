@@ -6,6 +6,81 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.5.1 — 2026-11-14
+
+The release a shared Kubernetes platform installs from. The `cloud-platform` profile's proof-of-concept
+shape (`shape: poc`) was installed on a kind cluster by following its own install runbook exactly as
+written, then checked, backed up, restored and decommissioned. Sixteen places where a platform team would
+have been stuck or misled were found and fixed, and the runbooks were run again. People sign in with
+Entra ID on that profile. The workspace gains a reworked left rail, a Views menu, a one-line context row
+in the GOV.UK look, and a refresh that keeps you signed in and where you were.
+
+**Before you update.**
+- **Back up first,** as for every update: `ospreyflow update` takes its own backup and rolls back if
+  anything fails.
+- **Small and Lite deployments: the deployment's PostgreSQL restarts once** with a higher
+  `max_connections` (660 on Small), rendered by `ospreyflow apply` from what the deployment's own services
+  hold (ADR-114 Amendment 43). Nothing else to do.
+- **The `ospreyflow` command is installed with `uv tool install ./cli`** (administration guide §6a). An
+  install made earlier keeps working; if `ospreyflow --help` fails with "No module named 'httpx'", update
+  the checkout. The command loads only the standard library and PyYAML again.
+
+**The `cloud-platform` profile (ADR-148), as installed and checked on kind.**
+- The install and decommission runbooks, rendered for the deployment, were run block by block. The fixes
+  include: the decommission no longer empties the backups it was told to keep, nor sends the last backup
+  to a bucket with an empty name; a decommission can be taken up again in a new shell; a restore's Jobs
+  no longer hold the disks at the decommission; images are pinned from the cluster registry's own copies,
+  so a version not yet published can be installed; a restore waits for every service before it ends; and
+  its log ends with a line that says it succeeded.
+- **The Conduit and the workspace say when they are ready**, so the install's waits, `helm --wait` and a
+  rolling update no longer send people to a service that is not yet listening.
+- **The managed PostgreSQL (RDS) is `db.t4g.large` with `max_connections` = 1000**, set in its parameter
+  group (MoJ's module: `db_parameter`, `pending-reboot`). Two Conduits side by side in an update, the
+  worker, the gateway and, from v0.5.2, reporting fit with room to spare.
+- **Entra ID sign-in**: two app registrations (the workspace's and the API's) and the first
+  administrators named by object id (administration guide §6a.11).
+
+**Known limits on the `cloud-platform` profile in this release.**
+> With Entra ID sign-in, nothing can yet act as a person who is not present. So **loads are started by
+> hand** in the Ingest Studio: a pipeline's schedule and watched folder, *Run now* in Operations and
+> `ospreyflow run` are refused, and so are a scheduled rule, the daily check for lapsing KYC documents, a
+> screening list's refresh schedule and a watch's runs. A load judges only its own starter's rules,
+> hotlists and watches. The scheduled runs' refusals read "the identity provider could not be reached…",
+> although Entra may be answering, and they never pause the schedule. *People and roles* gives roles,
+> adds people by object id and disables them; clearance, unit and handling codes, invitations, resets and
+> removal are Entra's. RDS keeps 7 days of point-in-time restore against 35 days of backup sets. One S3
+> read takes at most 1,000 objects; SSE-KMS buckets cannot be read; Athena reads its default catalog
+> alone. A map provider the Conduit proxies must be declared in `osprey.yaml` and rendered. Reporting
+> (Superset) is not on this profile. The administration guide's §6a has the whole of it. **v0.5.2**
+> brings scheduled runs, reporting and the data-safety fixes.
+
+**The workspace.**
+- **A refresh keeps you signed in and where you were** (ADR-050 Amendment 3): it signs in again silently
+  against the identity provider's own session, and returns to Home, the case or the place you refreshed.
+- **The left rail** carries Ask & Chat (Questions renamed) and Dashboards, with History, Ownership and
+  Connection strength under Explore Details; **Help** opens its panel over any view (ADR-145 Amendment 12).
+- **A Views menu by the graph** opens a case's saved views in one click (ADR-144 Amendment 3).
+- **In the GOV.UK look, inside a case,** a slim header, a one-line banner and the context bar on one row
+  give the canvas about 100 pixels more; off gov.uk, no crown is drawn (ADR-132 Amendment 8).
+- **Home's *Your access and tasks*** spans the page with plainer words (ADR-145 Amendment 11).
+
+**Access and screening lists.**
+- **Screening lists carry markings throughout** (ADR-146 Amendment 7): one owner on two lists raises one
+  alert citing both, each citation shown only to a reader cleared for its list; Disable's plan, its
+  refusal and the audit read never show a list the administrator is not cleared for, not even its kind or
+  a count; every list's audit entry records the list's marking.
+
+**The demo and the shared key.**
+- **A banner's own text** (`appearance.banner_text`, ADR-132 Amendment 7) and, off gov.uk, a GOV.UK
+  footer without the Crown's marks.
+- **A shared key in front of a deployment** (`network.access_key`, ADR-114 Amendments 41 and 42): the
+  product's proxy asks for it on all three names, once, with `noindex` on every response.
+
+**Operations.**
+- A deployment's PostgreSQL allows what its services hold at rest (ADR-114 Amendment 43).
+- Digest-pinned images are locked from their reference, never looked up again.
+- The guides describe the cloud profile as this release is, each statement held to the code by a test.
+
 ## v0.5.0 — 2026-11-10
 
 The workspace is rebuilt around four places, branches give way to case views, analysts draw on
