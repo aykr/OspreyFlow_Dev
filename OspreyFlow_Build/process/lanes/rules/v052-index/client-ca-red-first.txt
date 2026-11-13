@@ -1,0 +1,1071 @@
+.FF.FF                                                                   [100%]
+=================================== FAILURES ===================================
+_________ test_the_bundle_a_deployment_names_is_trusted[AWS_CA_BUNDLE] _________
+
+self = <aiohttp.connector.TCPConnector object at 0x10a8dfce0>, addr_infos = []
+req = <aiohttp.client_reqrep.ClientRequest object at 0x10a9261e0>
+timeout = ClientTimeout(total=30, connect=None, sock_read=None, sock_connect=None, ceil_threshold=5)
+client_error = <class 'aiohttp.client_exceptions.ClientConnectorError'>
+args = (functools.partial(<class 'aiohttp.client_proto.ResponseHandler'>, loop=<_UnixSelectorEventLoop running=False closed=False debug=False>),)
+kwargs = {'ssl': <ssl.SSLContext object at 0x10a919d50>, 'server_hostname': 'localhost'}
+
+    async def _wrap_create_connection(
+        self,
+        *args: Any,
+        addr_infos: list[AddrInfoType],
+        req: ClientRequest,
+        timeout: "ClientTimeout",
+        client_error: type[Exception] = ClientConnectorError,
+        **kwargs: Any,
+    ) -> tuple[asyncio.Transport, ResponseHandler]:
+        try:
+            async with ceil_timeout(
+                timeout.sock_connect, ceil_threshold=timeout.ceil_threshold
+            ):
+                sock = await aiohappyeyeballs.start_connection(
+                    addr_infos=addr_infos,
+                    local_addr_infos=self._local_addr_infos,
+                    happy_eyeballs_delay=self._happy_eyeballs_delay,
+                    interleave=self._interleave,
+                    loop=self._loop,
+                    socket_factory=self._socket_factory,
+                )
+                # Add ssl_shutdown_timeout for Python 3.11+ when SSL is used
+                if (
+                    kwargs.get("ssl")
+                    and self._ssl_shutdown_timeout
+                    and sys.version_info >= (3, 11)
+                ):
+                    kwargs["ssl_shutdown_timeout"] = self._ssl_shutdown_timeout
+>               return await self._loop.create_connection(*args, **kwargs, sock=sock)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:1337: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:1159: in create_connection
+    transport, protocol = await self._create_connection_transport(
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:1192: in _create_connection_transport
+    await waiter
+../../../../miniconda3/lib/python3.12/asyncio/sslproto.py:581: in _on_handshake_complete
+    raise handshake_exc
+../../../../miniconda3/lib/python3.12/asyncio/sslproto.py:563: in _do_handshake
+    self._sslobj.do_handshake()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ssl.SSLObject object at 0x10a926480>
+
+    def do_handshake(self):
+        """Start the SSL/TLS handshake."""
+>       self._sslobj.do_handshake()
+E       ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)
+
+../../../../miniconda3/lib/python3.12/ssl.py:916: SSLCertVerificationError
+
+The above exception was the direct cause of the following exception:
+
+self = <AsyncHttpConnection: https://localhost:51087>, method = 'GET'
+url = 'https://localhost:51087/', params = {}, body = None
+timeout = ClientTimeout(total=30, connect=None, sock_read=None, sock_connect=None, ceil_threshold=5)
+ignore = (), headers = {}
+
+    async def perform_request(
+        self,
+        method: str,
+        url: str,
+        params: Optional[Mapping[str, Any]] = None,
+        body: Optional[bytes] = None,
+        timeout: Optional[Union[int, float]] = None,
+        ignore: Collection[int] = (),
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> Any:
+        if self.session is None:
+            await self._create_aiohttp_session()
+        assert self.session is not None
+        orig_body = body
+        url_path = self.url_prefix + url
+        if params:
+            query_string = urlencode(params)
+        else:
+            query_string = ""
+    
+        # Top-tier tip-toeing happening here. Basically
+        # because Pip's old resolver is bad and wipes out
+        # strict pins in favor of non-strict pins of extras
+        # our [async] extra overrides aiohttp's pin of
+        # yarl. yarl released breaking changes, aiohttp pinned
+        # defensively afterwards, but our users don't get
+        # that nice pin that aiohttp set. :( So to play around
+        # this super-defensively we try to import yarl, if we can't
+        # then we pass a string into ClientSession.request() instead.
+        url = self.url_prefix + url
+        if query_string:
+            url = f"{url}?{query_string}"
+        url = self.host + url
+    
+        timeout = aiohttp.ClientTimeout(
+            total=timeout if timeout is not None else self.timeout
+        )
+    
+        req_headers = self.headers.copy()
+        if headers:
+            req_headers.update(headers)
+    
+        if self.http_compress and body:
+            body = self._gzip_compress(body)
+            req_headers["content-encoding"] = "gzip"
+    
+        auth = (
+            self._http_auth if isinstance(self._http_auth, aiohttp.BasicAuth) else None
+        )
+        if callable(self._http_auth):
+            req_headers = {
+                **req_headers,
+                **self._http_auth(
+                    method=method, url=url, body=body, headers=req_headers
+                ),
+            }
+    
+        start = self.loop.time()
+        try:
+>           async with self.session.request(
+                method,
+                yarl.URL(url, encoded=True),
+                data=body,
+                auth=auth,
+                headers=req_headers,
+                timeout=timeout,
+                fingerprint=self.ssl_assert_fingerprint,
+            ) as response:
+
+.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py:233: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/aiohttp/client.py:1756: in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/aiohttp/client.py:900: in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/aiohttp/client.py:854: in _connect_and_send_request
+    conn = await self._connector.connect(
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:665: in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:1263: in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:1641: in _create_direct_connection
+    raise last_exc
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:1610: in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <aiohttp.connector.TCPConnector object at 0x10a8dfce0>, addr_infos = []
+req = <aiohttp.client_reqrep.ClientRequest object at 0x10a9261e0>
+timeout = ClientTimeout(total=30, connect=None, sock_read=None, sock_connect=None, ceil_threshold=5)
+client_error = <class 'aiohttp.client_exceptions.ClientConnectorError'>
+args = (functools.partial(<class 'aiohttp.client_proto.ResponseHandler'>, loop=<_UnixSelectorEventLoop running=False closed=False debug=False>),)
+kwargs = {'ssl': <ssl.SSLContext object at 0x10a919d50>, 'server_hostname': 'localhost'}
+
+    async def _wrap_create_connection(
+        self,
+        *args: Any,
+        addr_infos: list[AddrInfoType],
+        req: ClientRequest,
+        timeout: "ClientTimeout",
+        client_error: type[Exception] = ClientConnectorError,
+        **kwargs: Any,
+    ) -> tuple[asyncio.Transport, ResponseHandler]:
+        try:
+            async with ceil_timeout(
+                timeout.sock_connect, ceil_threshold=timeout.ceil_threshold
+            ):
+                sock = await aiohappyeyeballs.start_connection(
+                    addr_infos=addr_infos,
+                    local_addr_infos=self._local_addr_infos,
+                    happy_eyeballs_delay=self._happy_eyeballs_delay,
+                    interleave=self._interleave,
+                    loop=self._loop,
+                    socket_factory=self._socket_factory,
+                )
+                # Add ssl_shutdown_timeout for Python 3.11+ when SSL is used
+                if (
+                    kwargs.get("ssl")
+                    and self._ssl_shutdown_timeout
+                    and sys.version_info >= (3, 11)
+                ):
+                    kwargs["ssl_shutdown_timeout"] = self._ssl_shutdown_timeout
+                return await self._loop.create_connection(*args, **kwargs, sock=sock)
+        except cert_errors as exc:
+>           raise ClientConnectorCertificateError(req.connection_key, exc) from exc
+E           aiohttp.client_exceptions.ClientConnectorCertificateError: Cannot connect to host localhost:51087 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]
+
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:1339: ClientConnectorCertificateError
+
+During handling of the above exception, another exception occurred:
+
+variable = 'AWS_CA_BUNDLE'
+tls_server = ('https://localhost:51087', PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4746/test_the_bundle_a_deployment_n1/ca.pem'))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107c6b770>
+
+    @pytest.mark.parametrize("variable", VARIABLES)
+    async def test_the_bundle_a_deployment_names_is_trusted(
+        variable: str, tls_server: tuple[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        url, bundle = tls_server
+        _environment(monkeypatch, url, **{variable: str(bundle)})
+>       assert (await _get_root())["cluster_name"] == "fixture"  # type: ignore[index]
+                ^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/search_index/test_client_ca.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/search_index/test_client_ca.py:79: in _get_root
+    return await client.info()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/opensearchpy/_async/client/__init__.py:315: in info
+    return await self.transport.perform_request(
+.venv/lib/python3.12/site-packages/opensearchpy/_async/transport.py:427: in perform_request
+    raise e
+.venv/lib/python3.12/site-packages/opensearchpy/_async/transport.py:391: in perform_request
+    status, headers_response, data = await connection.perform_request(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AsyncHttpConnection: https://localhost:51087>, method = 'GET'
+url = 'https://localhost:51087/', params = {}, body = None
+timeout = ClientTimeout(total=30, connect=None, sock_read=None, sock_connect=None, ceil_threshold=5)
+ignore = (), headers = {}
+
+    async def perform_request(
+        self,
+        method: str,
+        url: str,
+        params: Optional[Mapping[str, Any]] = None,
+        body: Optional[bytes] = None,
+        timeout: Optional[Union[int, float]] = None,
+        ignore: Collection[int] = (),
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> Any:
+        if self.session is None:
+            await self._create_aiohttp_session()
+        assert self.session is not None
+        orig_body = body
+        url_path = self.url_prefix + url
+        if params:
+            query_string = urlencode(params)
+        else:
+            query_string = ""
+    
+        # Top-tier tip-toeing happening here. Basically
+        # because Pip's old resolver is bad and wipes out
+        # strict pins in favor of non-strict pins of extras
+        # our [async] extra overrides aiohttp's pin of
+        # yarl. yarl released breaking changes, aiohttp pinned
+        # defensively afterwards, but our users don't get
+        # that nice pin that aiohttp set. :( So to play around
+        # this super-defensively we try to import yarl, if we can't
+        # then we pass a string into ClientSession.request() instead.
+        url = self.url_prefix + url
+        if query_string:
+            url = f"{url}?{query_string}"
+        url = self.host + url
+    
+        timeout = aiohttp.ClientTimeout(
+            total=timeout if timeout is not None else self.timeout
+        )
+    
+        req_headers = self.headers.copy()
+        if headers:
+            req_headers.update(headers)
+    
+        if self.http_compress and body:
+            body = self._gzip_compress(body)
+            req_headers["content-encoding"] = "gzip"
+    
+        auth = (
+            self._http_auth if isinstance(self._http_auth, aiohttp.BasicAuth) else None
+        )
+        if callable(self._http_auth):
+            req_headers = {
+                **req_headers,
+                **self._http_auth(
+                    method=method, url=url, body=body, headers=req_headers
+                ),
+            }
+    
+        start = self.loop.time()
+        try:
+            async with self.session.request(
+                method,
+                yarl.URL(url, encoded=True),
+                data=body,
+                auth=auth,
+                headers=req_headers,
+                timeout=timeout,
+                fingerprint=self.ssl_assert_fingerprint,
+            ) as response:
+                raw_data = await response.text()
+                duration = self.loop.time() - start
+    
+        # We want to reraise a cancellation or recursion error.
+        except reraise_exceptions:
+            raise
+        except Exception as e:
+            self.log_request_fail(
+                method,
+                str(url),
+                url_path,
+                orig_body,
+                self.loop.time() - start,
+                exception=e,
+            )
+            if isinstance(e, aiohttp_exceptions.ServerFingerprintMismatch):
+                raise SSLError("N/A", str(e), e)
+            if isinstance(
+                e, (asyncio.TimeoutError, aiohttp_exceptions.ServerTimeoutError)
+            ):
+                raise ConnectionTimeout("TIMEOUT", str(e), e)
+>           raise ConnectionError("N/A", str(e), e)
+E           opensearchpy.exceptions.ConnectionError: ConnectionError(Cannot connect to host localhost:51087 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]) caused by: ClientConnectorCertificateError(Cannot connect to host localhost:51087 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')])
+
+.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py:263: ConnectionError
+------------------------------ Captured log call -------------------------------
+WARNING  opensearch:base.py:280 GET https://localhost:51087/ [status:N/A request:0.002s]
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1337, in _wrap_create_connection
+    return await self._loop.create_connection(*args, **kwargs, sock=sock)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1159, in create_connection
+    transport, protocol = await self._create_connection_transport(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1192, in _create_connection_transport
+    await waiter
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 581, in _on_handshake_complete
+    raise handshake_exc
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 563, in _do_handshake
+    self._sslobj.do_handshake()
+  File "/Users/ayankar/miniconda3/lib/python3.12/ssl.py", line 916, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py", line 233, in perform_request
+    async with self.session.request(
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1756, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 900, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 854, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 665, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1263, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1641, in _create_direct_connection
+    raise last_exc
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1610, in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1339, in _wrap_create_connection
+    raise ClientConnectorCertificateError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorCertificateError: Cannot connect to host localhost:51087 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]
+WARNING  opensearch:base.py:280 GET https://localhost:51087/ [status:N/A request:0.001s]
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1337, in _wrap_create_connection
+    return await self._loop.create_connection(*args, **kwargs, sock=sock)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1159, in create_connection
+    transport, protocol = await self._create_connection_transport(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1192, in _create_connection_transport
+    await waiter
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 581, in _on_handshake_complete
+    raise handshake_exc
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 563, in _do_handshake
+    self._sslobj.do_handshake()
+  File "/Users/ayankar/miniconda3/lib/python3.12/ssl.py", line 916, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py", line 233, in perform_request
+    async with self.session.request(
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1756, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 900, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 854, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 665, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1263, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1641, in _create_direct_connection
+    raise last_exc
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1610, in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1339, in _wrap_create_connection
+    raise ClientConnectorCertificateError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorCertificateError: Cannot connect to host localhost:51087 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]
+WARNING  opensearch:base.py:280 GET https://localhost:51087/ [status:N/A request:0.001s]
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1337, in _wrap_create_connection
+    return await self._loop.create_connection(*args, **kwargs, sock=sock)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1159, in create_connection
+    transport, protocol = await self._create_connection_transport(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1192, in _create_connection_transport
+    await waiter
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 581, in _on_handshake_complete
+    raise handshake_exc
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 563, in _do_handshake
+    self._sslobj.do_handshake()
+  File "/Users/ayankar/miniconda3/lib/python3.12/ssl.py", line 916, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py", line 233, in perform_request
+    async with self.session.request(
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1756, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 900, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 854, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 665, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1263, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1641, in _create_direct_connection
+    raise last_exc
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1610, in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1339, in _wrap_create_connection
+    raise ClientConnectorCertificateError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorCertificateError: Cannot connect to host localhost:51087 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]
+WARNING  opensearch:base.py:280 GET https://localhost:51087/ [status:N/A request:0.001s]
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1337, in _wrap_create_connection
+    return await self._loop.create_connection(*args, **kwargs, sock=sock)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1159, in create_connection
+    transport, protocol = await self._create_connection_transport(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1192, in _create_connection_transport
+    await waiter
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 581, in _on_handshake_complete
+    raise handshake_exc
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 563, in _do_handshake
+    self._sslobj.do_handshake()
+  File "/Users/ayankar/miniconda3/lib/python3.12/ssl.py", line 916, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py", line 233, in perform_request
+    async with self.session.request(
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1756, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 900, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 854, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 665, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1263, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1641, in _create_direct_connection
+    raise last_exc
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1610, in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1339, in _wrap_create_connection
+    raise ClientConnectorCertificateError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorCertificateError: Cannot connect to host localhost:51087 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]
+______ test_the_bundle_a_deployment_names_is_trusted[REQUESTS_CA_BUNDLE] _______
+
+self = <aiohttp.connector.TCPConnector object at 0x10a925d90>, addr_infos = []
+req = <aiohttp.client_reqrep.ClientRequest object at 0x10aa11910>
+timeout = ClientTimeout(total=30, connect=None, sock_read=None, sock_connect=None, ceil_threshold=5)
+client_error = <class 'aiohttp.client_exceptions.ClientConnectorError'>
+args = (functools.partial(<class 'aiohttp.client_proto.ResponseHandler'>, loop=<_UnixSelectorEventLoop running=False closed=False debug=False>),)
+kwargs = {'ssl': <ssl.SSLContext object at 0x10b823850>, 'server_hostname': 'localhost'}
+
+    async def _wrap_create_connection(
+        self,
+        *args: Any,
+        addr_infos: list[AddrInfoType],
+        req: ClientRequest,
+        timeout: "ClientTimeout",
+        client_error: type[Exception] = ClientConnectorError,
+        **kwargs: Any,
+    ) -> tuple[asyncio.Transport, ResponseHandler]:
+        try:
+            async with ceil_timeout(
+                timeout.sock_connect, ceil_threshold=timeout.ceil_threshold
+            ):
+                sock = await aiohappyeyeballs.start_connection(
+                    addr_infos=addr_infos,
+                    local_addr_infos=self._local_addr_infos,
+                    happy_eyeballs_delay=self._happy_eyeballs_delay,
+                    interleave=self._interleave,
+                    loop=self._loop,
+                    socket_factory=self._socket_factory,
+                )
+                # Add ssl_shutdown_timeout for Python 3.11+ when SSL is used
+                if (
+                    kwargs.get("ssl")
+                    and self._ssl_shutdown_timeout
+                    and sys.version_info >= (3, 11)
+                ):
+                    kwargs["ssl_shutdown_timeout"] = self._ssl_shutdown_timeout
+>               return await self._loop.create_connection(*args, **kwargs, sock=sock)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:1337: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:1159: in create_connection
+    transport, protocol = await self._create_connection_transport(
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:1192: in _create_connection_transport
+    await waiter
+../../../../miniconda3/lib/python3.12/asyncio/sslproto.py:581: in _on_handshake_complete
+    raise handshake_exc
+../../../../miniconda3/lib/python3.12/asyncio/sslproto.py:563: in _do_handshake
+    self._sslobj.do_handshake()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ssl.SSLObject object at 0x10a926090>
+
+    def do_handshake(self):
+        """Start the SSL/TLS handshake."""
+>       self._sslobj.do_handshake()
+E       ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)
+
+../../../../miniconda3/lib/python3.12/ssl.py:916: SSLCertVerificationError
+
+The above exception was the direct cause of the following exception:
+
+self = <AsyncHttpConnection: https://localhost:51094>, method = 'GET'
+url = 'https://localhost:51094/', params = {}, body = None
+timeout = ClientTimeout(total=30, connect=None, sock_read=None, sock_connect=None, ceil_threshold=5)
+ignore = (), headers = {}
+
+    async def perform_request(
+        self,
+        method: str,
+        url: str,
+        params: Optional[Mapping[str, Any]] = None,
+        body: Optional[bytes] = None,
+        timeout: Optional[Union[int, float]] = None,
+        ignore: Collection[int] = (),
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> Any:
+        if self.session is None:
+            await self._create_aiohttp_session()
+        assert self.session is not None
+        orig_body = body
+        url_path = self.url_prefix + url
+        if params:
+            query_string = urlencode(params)
+        else:
+            query_string = ""
+    
+        # Top-tier tip-toeing happening here. Basically
+        # because Pip's old resolver is bad and wipes out
+        # strict pins in favor of non-strict pins of extras
+        # our [async] extra overrides aiohttp's pin of
+        # yarl. yarl released breaking changes, aiohttp pinned
+        # defensively afterwards, but our users don't get
+        # that nice pin that aiohttp set. :( So to play around
+        # this super-defensively we try to import yarl, if we can't
+        # then we pass a string into ClientSession.request() instead.
+        url = self.url_prefix + url
+        if query_string:
+            url = f"{url}?{query_string}"
+        url = self.host + url
+    
+        timeout = aiohttp.ClientTimeout(
+            total=timeout if timeout is not None else self.timeout
+        )
+    
+        req_headers = self.headers.copy()
+        if headers:
+            req_headers.update(headers)
+    
+        if self.http_compress and body:
+            body = self._gzip_compress(body)
+            req_headers["content-encoding"] = "gzip"
+    
+        auth = (
+            self._http_auth if isinstance(self._http_auth, aiohttp.BasicAuth) else None
+        )
+        if callable(self._http_auth):
+            req_headers = {
+                **req_headers,
+                **self._http_auth(
+                    method=method, url=url, body=body, headers=req_headers
+                ),
+            }
+    
+        start = self.loop.time()
+        try:
+>           async with self.session.request(
+                method,
+                yarl.URL(url, encoded=True),
+                data=body,
+                auth=auth,
+                headers=req_headers,
+                timeout=timeout,
+                fingerprint=self.ssl_assert_fingerprint,
+            ) as response:
+
+.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py:233: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/aiohttp/client.py:1756: in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/aiohttp/client.py:900: in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/aiohttp/client.py:854: in _connect_and_send_request
+    conn = await self._connector.connect(
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:665: in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:1263: in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:1641: in _create_direct_connection
+    raise last_exc
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:1610: in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <aiohttp.connector.TCPConnector object at 0x10a925d90>, addr_infos = []
+req = <aiohttp.client_reqrep.ClientRequest object at 0x10aa11910>
+timeout = ClientTimeout(total=30, connect=None, sock_read=None, sock_connect=None, ceil_threshold=5)
+client_error = <class 'aiohttp.client_exceptions.ClientConnectorError'>
+args = (functools.partial(<class 'aiohttp.client_proto.ResponseHandler'>, loop=<_UnixSelectorEventLoop running=False closed=False debug=False>),)
+kwargs = {'ssl': <ssl.SSLContext object at 0x10b823850>, 'server_hostname': 'localhost'}
+
+    async def _wrap_create_connection(
+        self,
+        *args: Any,
+        addr_infos: list[AddrInfoType],
+        req: ClientRequest,
+        timeout: "ClientTimeout",
+        client_error: type[Exception] = ClientConnectorError,
+        **kwargs: Any,
+    ) -> tuple[asyncio.Transport, ResponseHandler]:
+        try:
+            async with ceil_timeout(
+                timeout.sock_connect, ceil_threshold=timeout.ceil_threshold
+            ):
+                sock = await aiohappyeyeballs.start_connection(
+                    addr_infos=addr_infos,
+                    local_addr_infos=self._local_addr_infos,
+                    happy_eyeballs_delay=self._happy_eyeballs_delay,
+                    interleave=self._interleave,
+                    loop=self._loop,
+                    socket_factory=self._socket_factory,
+                )
+                # Add ssl_shutdown_timeout for Python 3.11+ when SSL is used
+                if (
+                    kwargs.get("ssl")
+                    and self._ssl_shutdown_timeout
+                    and sys.version_info >= (3, 11)
+                ):
+                    kwargs["ssl_shutdown_timeout"] = self._ssl_shutdown_timeout
+                return await self._loop.create_connection(*args, **kwargs, sock=sock)
+        except cert_errors as exc:
+>           raise ClientConnectorCertificateError(req.connection_key, exc) from exc
+E           aiohttp.client_exceptions.ClientConnectorCertificateError: Cannot connect to host localhost:51094 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]
+
+.venv/lib/python3.12/site-packages/aiohttp/connector.py:1339: ClientConnectorCertificateError
+
+During handling of the above exception, another exception occurred:
+
+variable = 'REQUESTS_CA_BUNDLE'
+tls_server = ('https://localhost:51094', PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4746/test_the_bundle_a_deployment_n2/ca.pem'))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a8dfef0>
+
+    @pytest.mark.parametrize("variable", VARIABLES)
+    async def test_the_bundle_a_deployment_names_is_trusted(
+        variable: str, tls_server: tuple[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        url, bundle = tls_server
+        _environment(monkeypatch, url, **{variable: str(bundle)})
+>       assert (await _get_root())["cluster_name"] == "fixture"  # type: ignore[index]
+                ^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/search_index/test_client_ca.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/search_index/test_client_ca.py:79: in _get_root
+    return await client.info()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/opensearchpy/_async/client/__init__.py:315: in info
+    return await self.transport.perform_request(
+.venv/lib/python3.12/site-packages/opensearchpy/_async/transport.py:427: in perform_request
+    raise e
+.venv/lib/python3.12/site-packages/opensearchpy/_async/transport.py:391: in perform_request
+    status, headers_response, data = await connection.perform_request(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AsyncHttpConnection: https://localhost:51094>, method = 'GET'
+url = 'https://localhost:51094/', params = {}, body = None
+timeout = ClientTimeout(total=30, connect=None, sock_read=None, sock_connect=None, ceil_threshold=5)
+ignore = (), headers = {}
+
+    async def perform_request(
+        self,
+        method: str,
+        url: str,
+        params: Optional[Mapping[str, Any]] = None,
+        body: Optional[bytes] = None,
+        timeout: Optional[Union[int, float]] = None,
+        ignore: Collection[int] = (),
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> Any:
+        if self.session is None:
+            await self._create_aiohttp_session()
+        assert self.session is not None
+        orig_body = body
+        url_path = self.url_prefix + url
+        if params:
+            query_string = urlencode(params)
+        else:
+            query_string = ""
+    
+        # Top-tier tip-toeing happening here. Basically
+        # because Pip's old resolver is bad and wipes out
+        # strict pins in favor of non-strict pins of extras
+        # our [async] extra overrides aiohttp's pin of
+        # yarl. yarl released breaking changes, aiohttp pinned
+        # defensively afterwards, but our users don't get
+        # that nice pin that aiohttp set. :( So to play around
+        # this super-defensively we try to import yarl, if we can't
+        # then we pass a string into ClientSession.request() instead.
+        url = self.url_prefix + url
+        if query_string:
+            url = f"{url}?{query_string}"
+        url = self.host + url
+    
+        timeout = aiohttp.ClientTimeout(
+            total=timeout if timeout is not None else self.timeout
+        )
+    
+        req_headers = self.headers.copy()
+        if headers:
+            req_headers.update(headers)
+    
+        if self.http_compress and body:
+            body = self._gzip_compress(body)
+            req_headers["content-encoding"] = "gzip"
+    
+        auth = (
+            self._http_auth if isinstance(self._http_auth, aiohttp.BasicAuth) else None
+        )
+        if callable(self._http_auth):
+            req_headers = {
+                **req_headers,
+                **self._http_auth(
+                    method=method, url=url, body=body, headers=req_headers
+                ),
+            }
+    
+        start = self.loop.time()
+        try:
+            async with self.session.request(
+                method,
+                yarl.URL(url, encoded=True),
+                data=body,
+                auth=auth,
+                headers=req_headers,
+                timeout=timeout,
+                fingerprint=self.ssl_assert_fingerprint,
+            ) as response:
+                raw_data = await response.text()
+                duration = self.loop.time() - start
+    
+        # We want to reraise a cancellation or recursion error.
+        except reraise_exceptions:
+            raise
+        except Exception as e:
+            self.log_request_fail(
+                method,
+                str(url),
+                url_path,
+                orig_body,
+                self.loop.time() - start,
+                exception=e,
+            )
+            if isinstance(e, aiohttp_exceptions.ServerFingerprintMismatch):
+                raise SSLError("N/A", str(e), e)
+            if isinstance(
+                e, (asyncio.TimeoutError, aiohttp_exceptions.ServerTimeoutError)
+            ):
+                raise ConnectionTimeout("TIMEOUT", str(e), e)
+>           raise ConnectionError("N/A", str(e), e)
+E           opensearchpy.exceptions.ConnectionError: ConnectionError(Cannot connect to host localhost:51094 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]) caused by: ClientConnectorCertificateError(Cannot connect to host localhost:51094 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')])
+
+.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py:263: ConnectionError
+------------------------------ Captured log call -------------------------------
+WARNING  opensearch:base.py:280 GET https://localhost:51094/ [status:N/A request:0.002s]
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1337, in _wrap_create_connection
+    return await self._loop.create_connection(*args, **kwargs, sock=sock)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1159, in create_connection
+    transport, protocol = await self._create_connection_transport(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1192, in _create_connection_transport
+    await waiter
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 581, in _on_handshake_complete
+    raise handshake_exc
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 563, in _do_handshake
+    self._sslobj.do_handshake()
+  File "/Users/ayankar/miniconda3/lib/python3.12/ssl.py", line 916, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py", line 233, in perform_request
+    async with self.session.request(
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1756, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 900, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 854, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 665, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1263, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1641, in _create_direct_connection
+    raise last_exc
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1610, in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1339, in _wrap_create_connection
+    raise ClientConnectorCertificateError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorCertificateError: Cannot connect to host localhost:51094 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]
+WARNING  opensearch:base.py:280 GET https://localhost:51094/ [status:N/A request:0.001s]
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1337, in _wrap_create_connection
+    return await self._loop.create_connection(*args, **kwargs, sock=sock)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1159, in create_connection
+    transport, protocol = await self._create_connection_transport(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1192, in _create_connection_transport
+    await waiter
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 581, in _on_handshake_complete
+    raise handshake_exc
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 563, in _do_handshake
+    self._sslobj.do_handshake()
+  File "/Users/ayankar/miniconda3/lib/python3.12/ssl.py", line 916, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py", line 233, in perform_request
+    async with self.session.request(
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1756, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 900, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 854, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 665, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1263, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1641, in _create_direct_connection
+    raise last_exc
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1610, in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1339, in _wrap_create_connection
+    raise ClientConnectorCertificateError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorCertificateError: Cannot connect to host localhost:51094 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]
+WARNING  opensearch:base.py:280 GET https://localhost:51094/ [status:N/A request:0.001s]
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1337, in _wrap_create_connection
+    return await self._loop.create_connection(*args, **kwargs, sock=sock)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1159, in create_connection
+    transport, protocol = await self._create_connection_transport(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1192, in _create_connection_transport
+    await waiter
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 581, in _on_handshake_complete
+    raise handshake_exc
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 563, in _do_handshake
+    self._sslobj.do_handshake()
+  File "/Users/ayankar/miniconda3/lib/python3.12/ssl.py", line 916, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py", line 233, in perform_request
+    async with self.session.request(
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1756, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 900, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 854, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 665, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1263, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1641, in _create_direct_connection
+    raise last_exc
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1610, in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1339, in _wrap_create_connection
+    raise ClientConnectorCertificateError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorCertificateError: Cannot connect to host localhost:51094 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]
+WARNING  opensearch:base.py:280 GET https://localhost:51094/ [status:N/A request:0.002s]
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1337, in _wrap_create_connection
+    return await self._loop.create_connection(*args, **kwargs, sock=sock)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1159, in create_connection
+    transport, protocol = await self._create_connection_transport(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/base_events.py", line 1192, in _create_connection_transport
+    await waiter
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 581, in _on_handshake_complete
+    raise handshake_exc
+  File "/Users/ayankar/miniconda3/lib/python3.12/asyncio/sslproto.py", line 563, in _do_handshake
+    self._sslobj.do_handshake()
+  File "/Users/ayankar/miniconda3/lib/python3.12/ssl.py", line 916, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/opensearchpy/connection/http_async.py", line 233, in perform_request
+    async with self.session.request(
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1756, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 900, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 854, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 665, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1263, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1641, in _create_direct_connection
+    raise last_exc
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1610, in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/aiohttp/connector.py", line 1339, in _wrap_create_connection
+    raise ClientConnectorCertificateError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorCertificateError: Cannot connect to host localhost:51094 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')]
+__________________________ test_the_first_named_wins ___________________________
+
+tls_server = ('https://localhost:51108', PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4746/test_the_first_named_wins0/ca.pem'))
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4746/test_the_first_named_wins0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1056a8a10>
+
+    async def test_the_first_named_wins(
+        tls_server: tuple[str, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`SSL_CERT_FILE` before `AWS_CA_BUNDLE` before `REQUESTS_CA_BUNDLE`: a wrong bundle first
+        is refused even with the right one later."""
+        url, bundle = tls_server
+        other = tmp_path / "other.pem"
+        other.write_text(make_ca().pem)
+        _environment(monkeypatch, url, AWS_CA_BUNDLE=str(other), REQUESTS_CA_BUNDLE=str(bundle))
+>       assert SearchIndexConfig.from_env().ca_certs == str(other)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'SearchIndexConfig' object has no attribute 'ca_certs'
+
+../OspreyFlow_Build/tests/services/search_index/test_client_ca.py:111: AttributeError
+__________ test_a_named_bundle_that_is_not_there_is_refused_in_words ___________
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4746/test_a_named_bundle_that_is_no0')
+
+    def test_a_named_bundle_that_is_not_there_is_refused_in_words(tmp_path: Path) -> None:
+        missing = tmp_path / "absent.pem"
+>       with pytest.raises(SearchIndexConfigError, match="AWS_CA_BUNDLE"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE SearchIndexConfigError
+
+../OspreyFlow_Build/tests/services/search_index/test_client_ca.py:118: Failed
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_client_ca.py::test_the_bundle_a_deployment_names_is_trusted[AWS_CA_BUNDLE]
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_client_ca.py::test_the_bundle_a_deployment_names_is_trusted[REQUESTS_CA_BUNDLE]
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_client_ca.py::test_the_first_named_wins
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_client_ca.py::test_a_named_bundle_that_is_not_there_is_refused_in_words
+4 failed, 2 passed in 0.66s

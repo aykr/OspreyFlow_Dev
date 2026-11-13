@@ -37100,6 +37100,15 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    botocore's default chain; botocore is already a dependency), the owner's ruling for step 3a of 13 November;
    `none` or unset sends unsigned, as Lite and Small do, and as a platform's signing proxy would need. A test shows
    the `sigv4` path red against a stand-in domain that refuses an unsigned or wrongly signed request.
+   - **The CA it trusts** is the bundle a deployment names in `SSL_CERT_FILE`, `AWS_CA_BUNDLE` or
+     `REQUESTS_CA_BUNDLE`, the first set winning (OpenSSL's, then the AWS SDK's, then `requests`'s), so an OpenSearch
+     behind a private CA or a TLS-inspecting proxy is reached as the rest of the pod reaches AWS; opensearch-py on its
+     own reads only `SSL_CERT_FILE`. A variable naming a file that is not there is refused in words, never replaced
+     by the public roots; with none set, the public roots. `tests/services/search_index/test_client_ca.py` holds each
+     sentence against a TLS server on 127.0.0.1 signed by a throwaway CA, which refuses the client that names no
+     bundle; red first for `AWS_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`, the order and the absent file
+     (`process/lanes/rules/v052-index/client-ca-red-first.txt`), and its three plants each red
+     (`client-ca-plants.txt`).
 
 ### Consequences
 
