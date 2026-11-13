@@ -227,6 +227,46 @@ def entra_keys() -> dict[str, Any]:
             "jwk": {"kty": "RSA", "use": "sig", "alg": "RS256", "kid": kid, "n": b64url(numbers.n), "e": b64url(numbers.e)}}
 
 
+def entra_clients() -> dict[str, str]:
+    """Each confidential client's secret, made once per run and kept in the run's state folder (600)."""
+    path = STATE / "entra-clients.json"
+    if path.is_file():
+        return json.loads(path.read_text())
+    made = {name: secrets.token_urlsafe(32) for name in ("superset", "report-sync")}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.touch(mode=0o600)
+    path.write_text(json.dumps(made))
+    return made
+
+
+def entra_config() -> dict[str, Any]:
+    """The stand-in tenant: its API and scope, the Glass (public, PKCE), Superset (confidential, by
+    code) and the report sync (confidential, client credentials), and the one person who signs in."""
+    claims = yaml.safe_load(CONFIG.read_text())["cloud_platform"]["claims"]
+    extra = yaml.safe_load((HERE / "r1_kind_entra.yaml").read_text())
+    made = entra_clients()
+    superset, reports = extra["superset"], extra["report-sync"]
+    api = claims["api_client_id"]
+    return {
+        "tenant_id": claims["tenant_id"],
+        "jwks": [entra_keys()["jwk"]],
+        "api": {"app_id": api, "identifier": f"api://{api}", "scopes": [claims.get("scope", "access_as_user")]},
+        "clients": {
+            claims["client_id"]: {"redirect_uris": [f"https://{GLASS}/"], "delegated": [claims.get("scope", "access_as_user")]},
+            superset["client_id"]: {"secret": made["superset"], "delegated": superset["delegated"],
+                                    "redirect_uris": [f"https://bi.{GLASS}{superset['redirect_path']}"]},
+            reports["client_id"]: {"secret": made["report-sync"], "service_principal": reports["service_principal"],
+                                   "roles": reports["roles"]},
+        },
+        "user": {
+            "oid": claims["first_administrators"][0], "name": "Synthetic Administrator",
+            "preferred_username": "admin@r1.test",
+            "claims": {claims["clearance"]["claim"]: "OFFICIAL-SENSITIVE",
+                       "groups": [*claims["org_unit"]["groups"], *claims["handling_codes"]["groups"]]},
+        },
+    }
+
+
 def _server(name: str, image: str, mode: str, config: dict[str, Any], port: int, tls: str) -> list[dict[str, Any]]:
     """A stand-in server in the platform's own namespace, on the port the real one answers on."""
     labels = {"app": name}
@@ -305,10 +345,10 @@ def platform() -> None:
     for s in ("postgres", "valkey"):
         kubectl("-n", MANAGED, "rollout", "status", f"statefulset/{s}", "--timeout=300s")
     coredns()
-    # Entra ID: the tenant's discovery and keys (the tokens are minted here, never in the cluster).
-    claims = yaml.safe_load(CONFIG.read_text())["cloud_platform"]["claims"]
-    keys = entra_keys()
-    apply(_server("entra-standin", image, "entra", {"tenant_id": claims["tenant_id"], "jwks": [keys["jwk"]]}, 443, "standin-tls"))
+    # Entra ID: the tenant's discovery, keys, /authorize and /token (v0.5.2, step 8). It signs what it
+    # grants with a key it makes at start and never writes out; this driver's own key stays published
+    # beside it for the refusals it crafts (another audience, no oid, a group overage).
+    apply(_server("entra-standin", image, "entra", entra_config(), 443, "standin-tls"))
     kubectl("-n", MANAGED, "rollout", "status", "deployment/entra-standin", "--timeout=300s")
     log.write_text(f"platform stand-ins up with {image}\n")
     print(f"the platform's stand-ins are up (record {log})")

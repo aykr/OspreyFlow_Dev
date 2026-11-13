@@ -1,0 +1,15 @@
+# R1's Entra stand-in tenant (r1_kind_servers.py entra): the app registrations it knows besides the
+# Glass and the API, which r1_kind.py takes from r1_kind_osprey.yaml's claims. Synthetic ids, no secrets:
+# each confidential client's secret is made per run (r1_kind.py entra_clients) and kept in the run's
+# state folder alone. v0.5.2 (step 8): Superset signs in by authorization_code for the API's delegated
+# scope (ADR-148 Amendment 9) and the report sync takes an app-only token by client_credentials
+# (Amendment 10). Their redirect path and app role are platform-b's and admin's to render: align these
+# two lines with the render when it lands, before v0.5.2's R1.
+superset:
+  client_id: cccccccc-dddd-4eee-8fff-000000000001
+  redirect_path: /oauth-authorized/entra   # on bi.<the deployment's name>
+  delegated: [access_as_user]
+report-sync:
+  client_id: dddddddd-eeee-4fff-8000-000000000002
+  service_principal: 60000000-0000-4000-8000-000000000002
+  roles: []                                # the app role Amendment 10 checks, once it is named
