@@ -25,6 +25,7 @@ verbatim below, because they document decisions rather than location.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import logging
 import os
@@ -189,12 +190,15 @@ class _Source(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     claim: str | None = None
+    #: ADR-148 Amendment 15: set by an administrator in Admin › People, never read from the token
+    #: (the client page's fallback where Entra cannot send the value; the poc shape alone, at render).
+    administrator: bool = False
 
     @model_validator(mode="after")
     def _exactly_one(self) -> _Source:
         groups = getattr(self, "groups", None)
-        if (self.claim is None) == (groups is None):
-            raise ValueError("name exactly one of `claim` or `groups`")
+        if sum((self.claim is not None, groups is not None, self.administrator)) != 1:
+            raise ValueError("name exactly one of `claim`, `groups` or `administrator: true`")
         if self.claim is not None and not self.claim:
             raise ValueError("`claim` must name a claim")
         if groups is not None:
@@ -211,15 +215,15 @@ class _Source(BaseModel):
 
 
 class ValueSource(_Source):
-    """Where a single-valued claim (clearance, organisational unit) comes from: a token claim, or a
-    table from group id to value."""
+    """Where a single-valued claim (clearance, organisational unit) comes from: a token claim, a
+    table from group id to value, or the administrator (Amendment 15)."""
 
     groups: dict[str, str] | None = None
 
 
 class CodesSource(_Source):
     """Where the receivable handling codes come from: a token claim (a list, or one code as a
-    string), or a table from group id to the codes that group grants."""
+    string), a table from group id to the codes that group grants, or the administrator."""
 
     groups: dict[str, list[str]] | None = None
 
@@ -372,7 +376,11 @@ def _token_groups(claims: Mapping[str, Any], mapping: ClaimMapping) -> list[str]
 
 def _single_value(
     claims: Mapping[str, Any], source: ValueSource, what: str, groups: list[str]
-) -> str:
+) -> str | None:
+    """The token's value, or None for a value the administrator sets (Amendment 15), which the
+    token is never read for: the stored person's is taken, after every check of the token."""
+    if source.administrator:
+        return None
     if source.claim is not None:
         value = claims.get(source.claim)
         if value is None:
@@ -408,7 +416,11 @@ def _string_list(claims: Mapping[str, Any], claim: str, what: str) -> list[str]:
     return list(dict.fromkeys(names))
 
 
-def _handling_codes(claims: Mapping[str, Any], source: CodesSource, groups: list[str]) -> list[str]:
+def _handling_codes(
+    claims: Mapping[str, Any], source: CodesSource, groups: list[str]
+) -> list[str] | None:
+    if source.administrator:
+        return None
     if source.claim is not None:
         return _string_list(claims, source.claim, "handling codes")
     assert source.groups is not None
@@ -449,6 +461,11 @@ class StoredPerson:
 
     roles: tuple[str, ...]
     disabled: bool
+    #: ADR-148 Amendment 15: what an administrator set in Admin › People for a value the mapping
+    #: sources from the administrator; None where none was set (the person is then refused in words).
+    clearance: str | None = None
+    org_unit: str | None = None
+    receivable_handling_codes: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -460,9 +477,10 @@ class SeenPerson:
     name: str | None
     username: str | None
     email: str | None
-    clearance: str
-    org_unit: str
-    receivable_handling_codes: tuple[str, ...]
+    #: None for a value the administrator sets (Amendment 15): the token is not read for it.
+    clearance: str | None
+    org_unit: str | None
+    receivable_handling_codes: tuple[str, ...] | None
 
 
 def _text_claim(claims: Mapping[str, Any], name: str) -> str | None:
@@ -731,12 +749,36 @@ class _Verified:
     """A verified token's principal parts, before roles: built only by `_verified_parts`."""
 
     id: str
-    clearance: str
-    org_unit: str
-    codes: list[str]
+    #: None where the administrator sets the value (Amendment 15), taken from the stored person.
+    clearance: str | None
+    org_unit: str | None
+    codes: list[str] | None
     token_roles: list[str]
     #: None for the Glass's token (every route its rights allow); Superset's, `SUPERSET_ROUTES`.
     routes: list[str] | None = None
+
+
+def _with_what_the_administrator_set(
+    verified: _Verified, mapping: ClaimMapping, stored: StoredPerson
+) -> _Verified:
+    """ADR-148 Amendment 15: each value the mapping sources from the administrator, from the stored
+    person alone (the token was not read for it, so no claim can raise it); one never set is refused
+    in words, never a default."""
+    taken: dict[str, Any] = {}
+    for field, source, held, what in (
+        ("clearance", mapping.clearance, stored.clearance, "clearance"),
+        ("org_unit", mapping.org_unit, stored.org_unit, "organisational unit"),
+        ("codes", mapping.handling_codes, stored.receivable_handling_codes, "handling codes"),
+    ):
+        if not source.administrator:
+            continue
+        if held is None or (field != "codes" and not held):
+            raise PrincipalResolutionError(
+                f"your {what} has not been set in this deployment: ask an administrator to set it "
+                "in Admin › People"
+            )
+        taken[field] = list(held) if field == "codes" else held
+    return dataclasses.replace(verified, **taken) if taken else verified
 
 
 def _stored_roles(stored: StoredPerson) -> list[str]:
@@ -789,14 +831,19 @@ def principal_from_claims(
                     "this account is disabled in this deployment: ask an administrator"
                 )
             roles = _stored_roles(stored)
+            verified = _with_what_the_administrator_set(verified, mapping, stored)
         else:
             if stored is not None:
                 raise PrincipalLookupUnavailable(
                     "a stored person is read only for an Entra mapping"
                 )
             roles = verified.token_roles
-        principal_id, clearance, org_unit = verified.id, verified.clearance, verified.org_unit
-        codes, routes = verified.codes, verified.routes
+        # Every administrator-sourced value was taken from the stored person above (an Entra mapping
+        # alone may name one, `ClaimMapping`'s validator), or refused there.
+        held_clearance, held_unit, held_codes = verified.clearance, verified.org_unit, verified.codes
+        assert held_clearance is not None and held_unit is not None and held_codes is not None
+        principal_id, clearance, org_unit = verified.id, held_clearance, held_unit
+        codes, routes = held_codes, verified.routes
     return Principal(
         # Entra: the object id, one per person in the (pinned) tenant, which Graph also gives, so
         # Admin › People can assign roles before a first sign-in; Entra's `sub` is pairwise per
@@ -1370,7 +1417,7 @@ class PrincipalResolver:
             email=_text_claim(claims, "email"),
             clearance=verified.clearance,
             org_unit=verified.org_unit,
-            receivable_handling_codes=tuple(verified.codes),
+            receivable_handling_codes=None if verified.codes is None else tuple(verified.codes),
         )
         try:
             stored = await asyncio.wait_for(
