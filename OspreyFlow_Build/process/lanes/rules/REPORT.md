@@ -13,9 +13,10 @@ said, and nothing is moved by anyone who cannot see it.
 
 **Gates.** Offline plants at this tree: 54 red, none broken (`lists/AM7_RED_RECORD.txt`). The offline files changed
 pass locally (`test_alert_citations_written.py`, `test_admin_roles_routes.py`, `test_admin_routes.py`,
-`test_person_ownership_route.py`). **Not yet run, and not claimed:** the live cases above, the live plants (now 31,
-L24b new), and `make test` and `make -k ci` at this head, all on the server, which is closed from 11:30 until the
-demo is over.
+`test_person_ownership_route.py`). Then, on the orchestrator's word (the demo postponed), at 3a9f00a: the two live
+files on stack b, 42 passed (`gates/3a9f00a.live-disable.txt`); the live plants, L0 to L27 with L0b, L2b and L24b, 31
+red, built and restored green (`lists/AM7_LIVE_RECORD.txt`); `make test`, four failures, all main's and triaged
+(`gates/3a9f00a.triage.txt`); `make -k ci` exit 0, schemas-check included.
 
 **Out of map, this pass.** `services/api/person_ownership.py` (its withheld check), with
 `tests/services/api/test_person_ownership_store.py` and `test_admin_roles_routes.py` (its fake).
