@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.90** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.91** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.91 | 2026-11-13 | §6a: the managed PostgreSQL rendered as a `db.t4g.large` in every shape, the poc's too (the owner's ruling), whose RDS default allows the 750 connections the install asks for with no parameter group; a smaller class needs one, and the memory to match. PDF reprinted alone. |
 | 1.90 | 2026-11-13 | §6a, from R1 (the cloud-platform install's acceptance on kind): the `ospreyflow` command installed by `uv tool install ./cli`; the managed PostgreSQL's `max_connections` of at least 750 (ADR-114 Amendment 43), set in the RDS parameter group; and what a healthy restore's log ends with. PDF reprinted alone. |
 | 1.89 | 2026-11-13 | Appendix A: `network.access_key` (the shared key the front proxy asks for, ADR-114 Amendments 41 and 42) and `appearance.banner_text` (the banner's own words, ADR-132 Amendment 7), from the schema (`tools.admin_guide_options`), missed when they were added. PDF reprinted alone. |
 | 1.88 | 2026-11-12 | New §6a.9, the model route on a shared platform: the model gateway (LiteLLM), always rendered; an engine as your organisation's own AI gateway (by a token) or Amazon Bedrock in London (by the gateway's own IAM role, no key stored anywhere), with `kind`, `auth` and `region`, London alone and a model's own id; what is refused, in words; `gateway.tf`'s role, policy and service account, and what the platform team applies; the gateway's own way out, its engines' hosts and STS; what *Admin › Models* allows and refuses, in its own words; for a newly declared Bedrock engine, the Terraform before the new values, since only it makes the gateway's service account (also in §10.1); Laurium's key cross-referenced; what is not yet tried against AWS or your own gateway (ADR-135 Amendments 4, 7 and 8). §6a.5: an engine removed in *Admin › Models* keeps its host open while `osprey.yaml` declares it. *Coming* and the questions for the platform's team renumbered 6a.10 and 6a.11; nothing of the model route was listed as coming. PDF made by the orchestrator at merge. |
@@ -1096,8 +1097,10 @@ and the kept backups' removal when their retention ends (run with the decommissi
 the last backup it keeps). The install asks for the Entra app registrations before its first block,
 and its step 2 checks the certificate Secret `cloud_platform.tls_secret` names, when it names one.
 The install's *What it needs* names the `ospreyflow` command's own install (`uv tool install ./cli`)
-and the least `max_connections` the managed PostgreSQL must allow, set in RDS's parameter group: two
-Conduits side by side in an update, the worker, the gateway and a reserve. Its last section, *Against
+and the least `max_connections` the managed PostgreSQL must allow: two Conduits side by side in an
+update, the worker, the gateway and a reserve. The Terraform renders RDS as a `db.t4g.large` in every
+shape, whose default allows more than that, so no parameter group is needed; a smaller class needs one
+that sets it, and the memory to hold that many connections (a `db.t4g.small` allows about 190). Its last section, *Against
 the client's real tenant*, is no block to run: what only the real Entra tenant can show. The
 decommission removes a restore's Jobs before the claims, which they would otherwise keep, and its
 settings keep the bucket prefix, so it can be taken up in a new shell after step 7. **Both were run
