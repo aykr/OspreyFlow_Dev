@@ -36,6 +36,7 @@ from tests.services.api.test_auth_entra_claims import (
     OTHER_TENANT,
     TENANT,
     FakePeople,
+    _config,
     _entra_config,
     _key,
 )
@@ -121,6 +122,26 @@ def test_an_app_only_token_that_is_no_registered_dashboard_is_refused(
         _resolve(_resolver(jwks_url, dashboards), claims, keypair)
 
 
+def test_the_api_s_own_application_is_refused_where_the_audience_is_its_uri(
+    keypair, jwks_url
+) -> None:
+    """The audience may be the API's application id URI (`api://…`), not its id: then the only
+    defence naming the API's own application is the mapping's `api_client_id`, held here alone
+    (the lane review of 009a889: each own-client defence planted on its own)."""
+    audience = "api://osprey-api"
+    dashboards = FakeDashboards()
+    dashboards.rows[(TENANT, CLIENT_ID)] = StoredDashboard(CLIENT_ID, "OFFICIAL", "unit-1", ())
+    resolver = PrincipalResolver(
+        _config(jwks_url, oidc_issuer=ISSUER, oidc_audience=audience),
+        claim_mapping=BY_EXTENSION.model_copy(update={"api_client_id": CLIENT_ID}),
+        role_source=FakePeople(), dashboard_source=dashboards, role_lookup_timeout_seconds=0.2,
+    )  # fmt: skip
+    with pytest.raises(PrincipalResolutionError, match="client"):
+        _resolve(resolver, app_only_claims(CLIENT_ID, aud=audience), keypair)
+    # The same token shape from a registered dashboard is its principal: the case asks the client.
+    assert _resolve(resolver, app_only_claims(aud=audience), keypair).id == DASHBOARD
+
+
 def test_without_the_dashboard_store_every_app_only_token_is_refused_as_before(
     keypair, jwks_url
 ) -> None:
@@ -146,3 +167,52 @@ def test_a_person_s_delegated_token_is_never_read_as_a_dashboard(keypair, jwks_u
         _resolver(jwks_url, FakeDashboards()), entra_claims(**_GOOD, oid=DASHBOARD), keypair
     )
     assert principal.routes is None and principal.roles != ["reports_viewer"]
+
+
+def test_a_dashboard_store_is_refused_beside_a_keycloak_mapping(jwks_url) -> None:
+    """Read only for an Entra mapping, so given beside Keycloak's it would be ignored in silence:
+    refused at the start instead, as the people store is (the lane review of 009a889)."""
+    from principal_auth import ClaimMapping
+
+    with pytest.raises(ValueError, match="dashboard"):
+        PrincipalResolver(_entra_config(jwks_url), claim_mapping=ClaimMapping(),
+                          dashboard_source=FakeDashboards())  # fmt: skip
+
+
+def test_a_v1_token_naming_its_client_in_appid_alone_is_the_dashboard(keypair, jwks_url) -> None:
+    """Entra's v1.0 tokens name the client in `appid`, with no `azp`."""
+    claims = app_only_claims(azp=None, azpacr=None, appid=DASHBOARD, ver="1.0")
+    assert _resolve(_resolver(jwks_url, FakeDashboards()), claims, keypair).id == DASHBOARD
+
+
+@pytest.mark.parametrize("claim", ["azp", "appid"])
+def test_a_client_claim_that_is_a_list_is_refused_not_an_error(claim, keypair, jwks_url) -> None:
+    """A token is the caller's: a claim of the wrong shape is a refusal (401), never a 500."""
+    claims = app_only_claims(**{claim: [DASHBOARD]})
+    with pytest.raises(PrincipalResolutionError, match="client"):
+        _resolve(_resolver(jwks_url, FakeDashboards()), claims, keypair)
+
+
+def test_a_store_too_slow_to_answer_is_a_503_within_the_bound(keypair, jwks_url) -> None:
+    """The registration's read is bounded (0.2 s here): past it, a 503, never a wait as long as
+    the store's (the lane review of 009a889)."""
+
+    class _Slow(FakeDashboards):
+        async def dashboard(self, tenant_id: str, application_id: str) -> StoredDashboard | None:
+            await asyncio.sleep(30)
+            return None
+
+    started = time.monotonic()
+    with pytest.raises(PrincipalLookupUnavailable):
+        _resolve(_resolver(jwks_url, _Slow()), app_only_claims(), keypair)
+    assert time.monotonic() - started < 10
+
+
+def test_an_audience_that_is_a_list_is_read_as_its_members(keypair, jwks_url) -> None:
+    """PyJWT admits an `aud` list holding the configured audience: its members are the API's own, so
+    a token whose client is one of them is refused, never a 500 (the lane review of 2b42dea)."""
+    dashboards = FakeDashboards()
+    dashboards.rows[(TENANT, CLIENT_ID)] = StoredDashboard(CLIENT_ID, "OFFICIAL", "unit-1", ())
+    with pytest.raises(PrincipalResolutionError, match="client"):
+        _resolve(_resolver(jwks_url, dashboards), app_only_claims(CLIENT_ID, aud=[CLIENT_ID]), keypair)
+    assert _resolve(_resolver(jwks_url, dashboards), app_only_claims(aud=[CLIENT_ID]), keypair).id == DASHBOARD

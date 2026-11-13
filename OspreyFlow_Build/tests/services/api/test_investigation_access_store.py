@@ -136,6 +136,27 @@ async def test_removing_a_grant_removes_the_access(store: InvestigationStore) ->
         await store.get_authorized(case.id, COLLEAGUE, need=AccessLevel.VIEWER)
 
 
+async def test_an_account_removed_everywhere_holds_no_level_in_any_case(
+    store: InvestigationStore,
+) -> None:
+    """A dashboard identity removed from Admin › Dashboards (ADR-148 Amendment 10): every grant its
+    account holds goes, each recorded as a revoke; another account's grant in the same case
+    stays."""
+    first = await store.create(AUTHOR, name="First")
+    second = await store.create(AUTHOR, name="Second")
+    await store.set_grant(first.id, "bob", AccessLevel.VIEWER, by=AUTHOR)
+    await store.set_grant(second.id, "bob", AccessLevel.VIEWER, by=AUTHOR)
+    await store.set_grant(second.id, "carol", AccessLevel.VIEWER, by=AUTHOR)
+
+    assert sorted(await store.revoke_everywhere("bob", by=AUTHOR)) == sorted([first.id, second.id])
+    for case in (first, second):
+        with pytest.raises(InvestigationNotFoundError):
+            await store.get_authorized(case.id, COLLEAGUE, need=AccessLevel.VIEWER)
+    assert await store.effective_level(second.id, OUTSIDER) is AccessLevel.VIEWER
+    assert [h.action for h in await store.access_history(first.id)][-1] == "revoke"
+    assert await store.revoke_everywhere("bob", by=AUTHOR) == []
+
+
 async def test_a_case_that_does_not_exist_is_not_found_at_every_level(
     store: InvestigationStore,
 ) -> None:
@@ -739,3 +760,98 @@ async def test_replace_authors_writes_the_real_audit_entry_in_its_transaction(
         assert await store.list_grants(case.id) == {"dave": AccessLevel.AUTHOR}
     finally:
         await audit.close()
+
+
+# --- ADR-148 Amendment 10: a dashboard identity's cases, through the real get_principal ----------
+
+
+class _NoDatasets:
+    """A deployment whose cases load no dataset: every read of the dataset store answers none."""
+
+    def __getattr__(self, name: str) -> Any:
+        async def none(*_: Any, **__: Any) -> list[Any]:
+            return []
+
+        return none
+
+
+async def test_a_dashboard_reads_the_case_it_was_granted_and_no_other(
+    store: InvestigationStore,
+) -> None:
+    """Through the real `get_principal` (the route gate, the case's own level check against the real
+    store), only the resolver stood in for: a dashboard identity granted Viewer on case A lists A
+    alone, pulls A's feed, and is refused B's as a case that does not exist (rule 4; the lane review
+    of 009a889). The feed's figures are stood in for: what is asked here is who reaches them."""
+    import httpx
+    from services.api import app as app_module
+    from services.api.app import (
+        app,
+        get_alerts_store,
+        get_analytics,
+        get_audit,
+        get_compute,
+        get_explore,
+        get_export_ledger,
+        get_graph,
+        get_held_rows,
+        get_ontology,
+        get_target_models,
+    )
+
+    from principal_auth import DASHBOARD_ROUTES
+
+    dashboard = Principal(id="dddddddd-eeee-4fff-8000-111111111111", clearance="OFFICIAL",
+                          org_unit="unit-1", roles=["reports_viewer"],
+                          routes=sorted(DASHBOARD_ROUTES))  # fmt: skip
+
+    class _Resolver:
+        async def resolve_principal(self, _token: str) -> Principal:
+            return dashboard
+
+    class _Ledger:
+        async def record(self, *_: Any, **__: Any) -> None:
+            return None
+
+    async def _figures(*_: Any, **__: Any) -> Any:
+        return object()
+
+    a = await store.create(AUTHOR, name="A")
+    b = await store.create(AUTHOR, name="B")
+    await store.set_grant(a.id, dashboard.id, AccessLevel.VIEWER, by=AUTHOR)
+
+    saved = {
+        k: getattr(app.state, k, None)
+        for k in (
+            "principal_resolver", "investigations", "datasets", "people_store", "custom_roles"
+        )
+    }
+    app.state.principal_resolver, app.state.investigations = _Resolver(), store
+    app.state.datasets, app.state.people_store, app.state.custom_roles = _NoDatasets(), None, None
+    for dependency in (get_alerts_store, get_analytics, get_compute, get_explore, get_graph,
+                       get_held_rows, get_ontology, get_target_models):  # fmt: skip
+        app.dependency_overrides[dependency] = lambda: _NoDatasets()
+    app.dependency_overrides[get_audit] = lambda: _Ledger()
+    app.dependency_overrides[get_export_ledger] = lambda: _Ledger()
+    original = (app_module._case_report, app_module.reports_module.feed_rows)
+    app_module._case_report = _figures  # type: ignore[assignment]
+    app_module.reports_module.feed_rows = lambda _figures: []  # type: ignore[assignment]
+    try:
+        transport = httpx.ASGITransport(app=app)
+        bearer = {"Authorization": "Bearer x"}
+        async with httpx.AsyncClient(transport=transport, base_url="http://t", headers=bearer) as c:
+            listed = await c.get("/v1/investigations")
+            assert listed.status_code == 200, listed.text
+            assert [case["id"] for case in listed.json()] == [a.id]
+            feed = await c.get(f"/v1/investigations/{a.id}/reports/feed")
+            assert feed.status_code == 200, feed.text
+            refused = await c.get(f"/v1/investigations/{b.id}/reports/feed")
+            absent = await c.get("/v1/investigations/no-such-case/reports/feed")
+            assert refused.status_code == absent.status_code == 404
+            assert refused.json() == absent.json()
+            # The gate's own refusal beside the case's: a route it is not admitted to.
+            assert (await c.get(f"/v1/investigations/{a.id}")).status_code == 403
+    finally:
+        app_module._case_report, app_module.reports_module.feed_rows = original  # type: ignore[assignment]
+        app.dependency_overrides.clear()
+        for key, value in saved.items():
+            setattr(app.state, key, value)

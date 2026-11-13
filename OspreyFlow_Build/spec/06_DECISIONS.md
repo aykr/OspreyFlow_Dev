@@ -36951,6 +36951,31 @@ development tenant is Amendment 6's list.
   two refusals, through the real `get_service_identity`), `tests/services/report_sync/test_report_sync.py` (the scope,
   the configuration, a pass), and the Glass's `DashboardsEntra.test.tsx`.
 
+**After the lane review of the build (13 November 2026)**, each red first (`process/lanes/admin/v052/review/`):
+- **Viewer and nothing more, on Entra too.** Who may hold a level in a case reads the registrations whenever the
+  grantee is no person the directory holds. Entra's names directory holds no people, so before this a registered
+  dashboard could be made a case's Owner. `test_admin_roles_routes.py`.
+- **Its name** (agreed with platform-b, whose Superset embedding matches a board on it): required, and the slug
+  Keycloak's `osprey-dashboard-<slug>` carries. One dashboard of a name in a tenant (`UNIQUE (tenant_id, name)`, refused
+  as 409 `dashboard_exists`). `DashboardIdentity.name` on both identity providers.
+- **Removing one revokes every case grant its account holds** (`InvestigationStore.revoke_everywhere`, each a recorded
+  revoke), so one registered again finds no level waiting. The grants go first, while the registration still names
+  the account: a failure leaves it registered, and removing it again revokes. The audit row counts the grants and
+  names no case.
+- **No case stream.** The delta socket asks no `get_principal`, so it refuses a principal admitted to named routes
+  before its case is read.
+- **The deployment's own applications** (the Glass's, the API's, from the claim mapping) are refused as registrations.
+- The run API's read of the registrations is bounded as a person's stored roles are; past it, a 503. A client claim not
+  a string (`azp`, `appid`) is a refusal, never a 500, in the resolver and the run API alike; an `aud` list is read as
+  its members. A dashboard store beside a Keycloak mapping is refused at the start.
+- **Admin › Dashboards asks its own route** which identity provider signs people in
+  (`GET /v1/admin/dashboards/sign-in`, behind `manage_dashboards`), so an administrator of dashboards alone is not
+  refused People's.
+- The resolver's own-client defences are each held alone: the Glass's id, the API's id (a case whose audience is its
+  `api://` URI) and the audience. The duplicate audience check is removed, so no defence stands only behind another.
+- **Access through the real `get_principal`** against the real case store (`test_investigation_access_store.py`):
+  granted Viewer on case A, a dashboard lists A alone and pulls A's feed, and B is refused as a case that does not exist.
+
 ### ADR-148, Amendment 9 (13 November 2026) — Superset on Entra ID: its own app registration, the person read from the Conduit, its role from their rights
 
 *v0.5.2 (the owner, 13 November 2026: Superset required on the client's poc; the orchestrator's rulings R2 and R3 of

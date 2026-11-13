@@ -23,8 +23,12 @@ is the way back in (the orchestrator's ruling, amended 12 November 2026; the run
 **What Admin › People cannot do here, said in words** (`PersonActionRefused`): invite or reset a
 sign-in (Entra holds the accounts), change a person's clearance, unit or handling codes (Entra's
 claims carry them, through the deployment's claim mapping), remove a person (they would reappear,
-with no roles, at their next sign-in: disable them here instead, or in Entra), join an organisation
-account, or register a dashboard identity (a Keycloak client; Superset on Entra is a later step).
+with no roles, at their next sign-in: disable them here instead, or in Entra), or join an
+organisation account.
+
+**Dashboard identities** (ADR-148 Amendment 10) are registered here by their Entra app
+registration's application id and a slug-shaped name, one a tenant, with what they read with; Entra
+holds each one's secret. The deployment's own applications (the Glass's, the API's) are refused.
 
 **Every query names the tenant.** A row of another tenant's same object id grants nothing
 (`test_entra_people_live.py`, rule 3).
@@ -452,8 +456,11 @@ class EntraPeopleAdmin:
     Keycloak (the routes call either): roles and *Disable* written to the deployment's own store,
     everything Entra holds refused in words."""
 
-    def __init__(self, store: EntraPeopleStore) -> None:
+    def __init__(self, store: EntraPeopleStore, *, own_clients: Iterable[str | None] = ()) -> None:
         self.store = store
+        #: The Glass's and this API's own application ids, never a dashboard identity's: the
+        #: resolver refuses a token of either as a dashboard's (ADR-148 Amendment 10).
+        self.own_clients = frozenset(c.lower() for c in own_clients if c)
 
     async def aclose(self) -> None:
         """The store is the run resources' (`run_resources.py` closes it), not this admin's."""
@@ -536,6 +543,11 @@ class EntraPeopleAdmin:
             raise UnknownRoleError(
                 "on Entra ID a dashboard identity is its own app registration: give its "
                 "application id (the registration holds its secret)"
+            )
+        if application_id.lower() in self.own_clients:
+            raise UnknownRoleError(
+                f"{application_id} is this deployment's own application (the Glass's or the "
+                "API's), never a dashboard identity: give the dashboard's own app registration"
             )
         stored = await self.store.register_dashboard(
             application_id, dashboard_slug(name), clearance=clearance, org_unit=org_unit

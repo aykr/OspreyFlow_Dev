@@ -156,10 +156,11 @@ class ServiceIdentityVerifier:
         if "scp" in claims or claims.get("idtyp", "app") != "app":
             # A delegated token is a person's, whichever application asked for it.
             raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
-        clients = {claims[c] for c in ("azp", "appid") if c in claims}
-        if len(clients) != 1:
+        # A claim of any other shape than a string is no client: refused, never an error.
+        named = [claims[c] for c in ("azp", "appid") if c in claims]
+        if not named or not all(isinstance(c, str) for c in named) or len(set(named)) != 1:
             raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
-        client = clients.pop()
+        client = named[0]
         if not isinstance(client, str) or not is_object_id(client):
             raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
         if client in (

@@ -739,6 +739,23 @@ async def test_on_entra_a_dashboard_is_refused_in_words_without_its_application_
     assert refused.value.error == "no_such_dashboard"
 
 
+GLASS_APP = "aaaaaaaa-1111-4222-8333-444444444444"
+API_APP = "bbbbbbbb-1111-4222-8333-444444444444"
+
+
+@pytest.mark.parametrize("own", [GLASS_APP, API_APP, API_APP.upper()], ids=["glass", "api", "api-upper"])
+async def test_the_deployment_s_own_applications_are_never_registered_as_dashboards(own: str) -> None:
+    """The resolver would refuse their tokens as a dashboard's, so a registration of either is a
+    mistake, refused in words before anything is written (the lane review of 009a889)."""
+    from services.api.identity_admin import UnknownRoleError
+
+    store = _Store()
+    admin = EntraPeopleAdmin(store, own_clients=[GLASS_APP, API_APP, None])  # type: ignore[arg-type]
+    with pytest.raises(UnknownRoleError, match="own"):
+        await admin.create_dashboard("Board", clearance="OFFICIAL", org_unit="u", application_id=own)
+    assert await store.dashboards() == []
+
+
 async def test_on_keycloak_an_application_id_is_refused_in_words() -> None:
     """Keycloak registers its own client for a dashboard; an application id is Entra's."""
     from services.api.identity_admin import IdentityAdmin, UnknownRoleError
@@ -748,3 +765,20 @@ async def test_on_keycloak_an_application_id_is_refused_in_words() -> None:
         await admin.create_dashboard(
             "Board", clearance="OFFICIAL", org_unit="u", application_id=DASHBOARD
         )
+
+
+def test_the_app_tells_the_entra_admin_its_own_applications() -> None:
+    """The call site the app starts with (`people_directory`): on Entra ID the admin is given the
+    claim mapping's Glass and API ids, so the refusal above holds in the running app (the lane
+    review of 2b42dea)."""
+    from types import SimpleNamespace
+
+    from services.api.app import people_directory
+
+    mapping = SimpleNamespace(client_id=GLASS_APP, api_client_id=API_APP)
+    resources = SimpleNamespace(
+        people_store=_Store(), principal_resolver=SimpleNamespace(claim_mapping=mapping)
+    )
+    admin = people_directory(resources, config=None)  # type: ignore[arg-type]
+    assert isinstance(admin, EntraPeopleAdmin)
+    assert admin.own_clients == {GLASS_APP, API_APP}

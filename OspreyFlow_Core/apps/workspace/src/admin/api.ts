@@ -122,6 +122,8 @@ export const invitePerson = (api: AdminApi, invite: InviteInput) =>
   call<SignInDelivery>(api, "people", { method: "POST", body: JSON.stringify(invite) });
 // ADR-148 Amendment 8: on Entra ID sign-in, Entra holds the accounts; a person is added by object id.
 export const signInKind = (api: AdminApi) => call<SignInKind>(api, "sign-in");
+// ADR-148 Amendment 10: Admin › Dashboards' own copy, behind manage_dashboards.
+export const dashboardsSignInKind = (api: AdminApi) => call<SignInKind>(api, "dashboards/sign-in");
 export const addPersonByObjectId = (api: AdminApi, objectId: string) =>
   call<PersonAccount>(api, "people/by-object-id", { method: "POST", body: JSON.stringify({ object_id: objectId }) });
 export const setAccess = (api: AdminApi, userId: string, access: AccessInput) =>
