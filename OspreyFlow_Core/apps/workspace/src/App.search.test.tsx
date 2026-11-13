@@ -59,17 +59,22 @@ import * as ontologySchema from "./ontology/schema";
 const RIGHTS = ["investigate", "read_alert_queue", "triage_alerts", "ask_model", "read_reports", "trace_ownership"];
 
 const kestrel = { id: "p1", type: "Person", properties: { family_name: "Kestrel" }, source_system_ids: [], provenance: { sources: [] }, classification: "OFFICIAL", handling: [] };
+const invoice = { id: "d1", type: "Document", properties: { title: "Invoice 44" }, source_system_ids: [], provenance: { sources: [] }, classification: "OFFICIAL", handling: [] };
 const PAGE = {
   query: "Kestrel", source: "index", limited: false, limited_reason: null, total: 1, counts_exact: true,
   groups: [{ key: "Person", label: "People", count: 1 }], filters: { datasets: [], dates: null }, page: 1, page_size: 20, more: false,
-  nodes: [kestrel],
-  results: [{ node_ids: ["p1"], type: "Person", match: { band: "name_exact", why: "Name is 'Kestrel'", field: "Family name" }, passage: [], date: null, datasets: [], is_document: false }],
+  nodes: [kestrel, invoice],
+  results: [
+    { node_ids: ["p1"], type: "Person", match: { band: "name_exact", why: "Name is 'Kestrel'", field: "Family name" }, passage: [], date: null, datasets: [], is_document: false },
+    { node_ids: ["d1"], type: "Document", match: { band: "mention_phrase", why: "Mentions 'Kestrel'", field: null }, passage: [{ text: "Kestrel", match: true }], date: null, datasets: [], is_document: true },
+  ],
 }; // prettier-ignore
 
 const sent: { url: string; body: unknown }[] = [];
 
 beforeEach(() => {
   sent.length = 0;
+  RIGHTS.splice(0, RIGHTS.length, "investigate", "read_alert_queue", "triage_alerts", "ask_model", "read_reports", "trace_ownership");
   vi.mocked(userManager.completeSignInFromRedirect).mockResolvedValue({
     access_token: "a-token",
     profile: { sub: "analyst-1", username: "osprey-demo-analyst", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] },
@@ -180,6 +185,23 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
     expect(JSON.stringify(seed)).toContain("p1");
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Search results for 'Kestrel'" })).toBeNull());
     expect(pressed()).toEqual(["Graph"]);
+  });
+
+  test("Open reads a document over the view, the results kept beneath and shown again when it closes", async () => {
+    await openResults();
+    fireEvent.click(await screen.findByRole("button", { name: "Open Invoice 44" }));
+    // Hidden, not gone: the group, the filters and the page chosen are still there when the reader closes.
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Search results for 'Kestrel'" })).toBeNull());
+    const kept = document.querySelector("section.search-results");
+    expect(kept?.hasAttribute("hidden")).toBe(true);
+    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).toBeNull();
+  });
+
+  test("someone not offered Ask & Chat (no ask_model) has no Ask line", async () => {
+    RIGHTS.splice(0, RIGHTS.length, "investigate", "read_alert_queue");
+    await openResults();
+    await screen.findByRole("list", { name: "Results" });
+    expect(screen.queryByRole("button", { name: "Ask a question about 'Kestrel' instead" })).toBeNull();
   });
 
   test("a suggestion moved to with the arrow keys is still chosen by Enter, as before", async () => {

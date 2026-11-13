@@ -705,8 +705,6 @@ export function App() {
   }, [searching]);
   // The Ask line's words, carried into Ask & Chat's question box, not sent.
   const [questionDraft, setQuestionDraft] = useState<{ text: string; at: number } | null>(null);
-  // Another case is another search: its results are not this one's.
-  useEffect(() => setSearching(null), [investigationId]);
   // The types the map places (`placeableTypes`): read by the working-set subscription, which is
   // registered once, so a ref rather than the schema state it is worked out from.
   const placeableRef = useRef<ReadonlySet<string>>(placeableTypes(null));

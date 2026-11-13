@@ -227,3 +227,10 @@ test("a refusal is said in the Conduit's words", async () => {
   draw();
   expect((await screen.findByRole("alert")).textContent).toContain("Narrow the search: only the first 1,000 results can be paged.");
 });
+
+test("with no Ask & Chat to hand the words to, there is no Ask line", async () => {
+  serve(PAGE());
+  draw({ onAsk: undefined });
+  await screen.findByRole("list", { name: "Results" });
+  expect(screen.queryByRole("button", { name: /^Ask a question/ })).toBeNull();
+});
