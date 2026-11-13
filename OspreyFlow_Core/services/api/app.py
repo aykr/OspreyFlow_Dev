@@ -4342,19 +4342,39 @@ async def _may_hold_a_level(
             )
         return
     people = await names.people([grantee])
-    if people is None or grantee in people:
+    if people is not None and grantee in people:
         return
-    dashboards = {d.account_id for d in await get_identity_admin(request).list_dashboards()}
-    if grantee in dashboards and level is AccessLevel.VIEWER:
+    # Not a person the directory holds, so its registration is read: on Entra ID the names
+    # directory holds no people (`people` is None) and a registered dashboard is still a Viewer
+    # and nothing more (ADR-148 Amendment 10). With no directory, an identity provider that
+    # cannot answer leaves the grant as before: the deployment cannot tell.
+    try:
+        dashboards = {d.account_id for d in await get_identity_admin(request).list_dashboards()}
+    except IdentityAdminRefused:
+        if people is None:
+            return
+        raise
+    if grantee in dashboards:
+        if level is AccessLevel.VIEWER:
+            return
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "service_account",
+                "message": f"a dashboard identity may be a Viewer of a case and nothing more; "
+                f"{grantee} was asked to be {level.value}",
+            },
+        )
+    if people is None:
         return
-    words = (
-        f"a dashboard identity may be a Viewer of a case and nothing more; {grantee} was asked "
-        f"to be {level.value}"
-        if grantee in dashboards
-        else f"{grantee} is not an enabled person: a service account owns nothing and is never a "
-        "case member, and a disabled account holds no level"
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "error": "service_account",
+            "message": f"{grantee} is not an enabled person: a service account owns nothing and "
+            "is never a case member, and a disabled account holds no level",
+        },
     )
-    raise HTTPException(status_code=409, detail={"error": "service_account", "message": words})
 
 
 @app.put(

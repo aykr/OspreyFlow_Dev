@@ -752,7 +752,16 @@ class _Dashboards:
         return [SimpleNamespace(account_id="sa-board")]
 
 
-def _level(world: SimpleNamespace, grantee: str, level: str, *, configured: bool = True) -> Any:
+class _Unreachable:
+    async def list_dashboards(self) -> list[Any]:
+        from services.api.identity_admin import IdentityAdminRefused
+
+        raise IdentityAdminRefused("the identity provider could not be reached")
+
+
+def _level(
+    world: SimpleNamespace, grantee: str, level: str, *, configured: bool = True, admin: Any = None
+) -> Any:
     import asyncio
 
     from fastapi import HTTPException
@@ -760,7 +769,7 @@ def _level(world: SimpleNamespace, grantee: str, level: str, *, configured: bool
     from services.api.investigations import AccessLevel
 
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
-        custom_roles=world.roles, principal_names=_People(configured), identity_admin=_Dashboards())))  # fmt: skip
+        custom_roles=world.roles, principal_names=_People(configured), identity_admin=admin or _Dashboards())))  # fmt: skip
     try:
         asyncio.run(_may_hold_a_level(request, grantee, AccessLevel(level), _People(configured)))  # type: ignore[arg-type]
     except HTTPException as refused:
@@ -772,6 +781,18 @@ def test_a_dashboard_identity_may_be_a_viewer_and_nothing_more(world: SimpleName
     assert _level(world, "sa-board", "viewer") is None
     assert _level(world, "sa-board", "editor")["error"] == "service_account"
     assert _level(world, "sa-board", "author")["error"] == "service_account"
+
+
+def test_a_dashboard_is_held_to_viewer_where_the_directory_cannot_tell_people(
+    world: SimpleNamespace,
+) -> None:
+    """On Entra ID the names directory holds no people (`people()` is None), and a registered
+    dashboard identity is still a Viewer and nothing more: its registration is read first
+    (ADR-148 Amendment 10, the lane review's must 2)."""
+    assert _level(world, "sa-board", "viewer", configured=False) is None
+    refused = _level(world, "sa-board", "author", configured=False)
+    assert refused["error"] == "service_account" and "Viewer" in refused["message"]
+    assert _level(world, "sa-board", "editor", configured=False)["error"] == "service_account"
 
 
 def test_another_service_account_is_refused_even_as_a_viewer(world: SimpleNamespace) -> None:
@@ -789,6 +810,12 @@ def test_a_team_level_needs_a_team_that_exists(world: SimpleNamespace) -> None:
 
 def test_a_deployment_with_no_directory_grants_as_before(world: SimpleNamespace) -> None:
     assert _level(world, "robot", "author", configured=False) is None
+    # ... also when its identity provider cannot list dashboards: it cannot tell, as before.
+    assert _level(world, "robot", "author", configured=False, admin=_Unreachable()) is None
+
+
+def test_a_person_is_granted_without_asking_for_dashboards(world: SimpleNamespace) -> None:
+    assert _level(world, "ana-1", "author", admin=_Unreachable()) is None
 
 
 # --- Name an Author (R1) ----------------------------------------------------------------------------
