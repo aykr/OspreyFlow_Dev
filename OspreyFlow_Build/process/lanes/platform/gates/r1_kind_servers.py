@@ -208,9 +208,21 @@ def entra_handler(config: dict[str, Any]) -> type[BaseHTTPRequestHandler]:
                 self._redirect(redirect, {"error": "consent_required", **state, "error_description":
                                           f"AADSTS65001: The user or administrator has not consented to use the application with ID '{q['client_id']}' for {', '.join(ungranted)}."})  # fmt: skip
                 return
+            # The person signing in: the one `login_hint` names (Entra accepts it), by username, any
+            # case; no hint, the first of the tenant's people. One not in the tenant is refused on
+            # Entra's own page, never sent to the client.
+            people = config.get("users") or [config["user"]]
+            hint = q.get("login_hint")
+            person = people[0] if hint is None else next(
+                (p for p in people if p["preferred_username"].lower() == hint.lower()), None)
+            if person is None:
+                self._page(50034, f"The user account {hint} does not exist in the {tenant} directory. "
+                           "To sign into this application, the account must be added to the directory.")  # fmt: skip
+                return
             code = secrets.token_urlsafe(48)
             with lock:
                 codes[code] = {"client": q["client_id"], "redirect": redirect, "scope": q.get("scope", ""),
+                               "person": person,
                                "challenge": q.get("code_challenge"), "method": q.get("code_challenge_method", "plain"),
                                "nonce": q.get("nonce"), "expires": time.time() + CODE_SECONDS}  # fmt: skip
             self._redirect(redirect, {"code": code, **state, "session_state": secrets.token_hex(16)})
@@ -300,7 +312,7 @@ def entra_handler(config: dict[str, Any]) -> type[BaseHTTPRequestHandler]:
                                     "code_challenge supplied in the authorization request.")  # fmt: skip
                         return
                 del codes[form["code"]]  # spent, once it is redeemed by its own client
-            person = config["user"]
+            person = held["person"]  # whose sign-in the code is, never the tenant's first by default
             oidc, asked, _ = split_scopes(held["scope"])
             now = int(time.time())
             base = {"iss": issuer, "iat": now, "nbf": now, "exp": now + TOKEN_SECONDS, "ver": "2.0",

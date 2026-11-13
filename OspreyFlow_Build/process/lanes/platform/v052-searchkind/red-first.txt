@@ -110,3 +110,17 @@ FAILED tests/test_r1_kind_standins.py::test_the_terraform_stand_in_makes_the_dom
 Step 8's missing-listing message, red first (it named step 8 for the backups choice step 7 writes):
 FAILED tests/harness/test_cloud_platform_data_safety.py::test_step_8_names_the_step_that_writes_each_listing_it_lacks
 Green: the kind and domain tests 40 passed; tests/harness and tests/cp_policy_check 1685 passed, 453 skipped.
+
+=== After the round-1 fixes ===
+
+The Entra stand-in's people by login_hint (platform-b's v052-r1 dashboards check), red first (fresh PYTHONPYCACHEPREFIX):
+FAILED tests/test_r1_entra_standin.py::test_the_person_signed_in_is_the_one_the_hint_names[reader@r1.test-50000000-0000-4000-8000-0000000000b1]
+FAILED tests/test_r1_entra_standin.py::test_the_person_signed_in_is_the_one_the_hint_names[Reader@R1.test-50000000-0000-4000-8000-0000000000b1]
+FAILED tests/test_r1_entra_standin.py::test_an_unknown_hint_is_refused_on_entras_own_page
+FAILED tests/test_r1_entra_standin.py::test_r1s_tenant_has_the_four_people_the_dashboards_check_signs_in
+4 failed, 2 passed, 13 deselected in 4.06s
+Green: tests/test_r1_entra_standin.py and tests/test_r1_kind_standins.py 33 passed.
+
+The engine's base pinned by digest (sha256:1193b7c2...bcc4c, AWS's mirror's multi-platform index, 13 Nov 2026); its licence Apache-2.0 named beside it; in no product manifest (the poc's domain is AWS's).
+
+Found by make test at 7d1a074 on the server (gates/, below): seven Helm-backed tests of tests/cloud_platform_backup, red since data safety and 3a merged (main's state, my own steps' defect: their gates ran cp-policy-check on the server but not these, which skip on the Mac). The tests' P9 pods met the search index's Jobs, and the claims run and its restore now mount the shared claim (in every shape, ruling 3). The tests held to the design, P9's pods named; to be shown green on the server.

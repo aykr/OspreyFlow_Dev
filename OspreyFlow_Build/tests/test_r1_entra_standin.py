@@ -335,3 +335,92 @@ def test_each_grant_is_logged_once_and_no_refusal_is(standin: str, capfd: pytest
         f"entra-standin: granted client_credentials client={REPORTS} audience={API}",
         f"entra-standin: granted authorization_code client={GLASS} audience={API}",
     ]
+
+
+# ---- several people, by login_hint (platform-b's v052-r1 dashboards check) ----------------
+
+READER = "50000000-0000-4000-8000-0000000000b1"
+GROUPS = ["20000000-0000-4000-8000-000000000001", "30000000-0000-4000-8000-000000000001"]
+PEOPLE = {**CONFIG, "users": [
+    CONFIG["user"],
+    {"oid": READER, "name": "Synthetic Reader", "preferred_username": "reader@r1.test",
+     "claims": {CLEARANCE: "OFFICIAL-SENSITIVE", "groups": GROUPS}},
+]}  # fmt: skip
+
+
+@pytest.fixture
+def people() -> Iterator[str]:
+    server = _module().make_server("entra", PEOPLE, "127.0.0.1", 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def _superset_token(base: str, hint: str | None) -> tuple[int, dict[str, Any]]:
+    query = {"client_id": SUPERSET, "response_type": "code", "redirect_uri": SUPERSET_REDIRECT,
+             "scope": f"openid profile email {ACCESS}", "state": "s-1", "nonce": "n-1"}  # fmt: skip
+    if hint is not None:
+        query["login_hint"] = hint
+    url = f"{base}/{TENANT}/oauth2/v2.0/authorize?{urllib.parse.urlencode(query)}"
+    status, headers, body = _get(url)
+    if status != 302:
+        return status, {"page": body}
+    code = _code(headers["Location"])["code"]
+    form = {"grant_type": "authorization_code", "client_id": SUPERSET, "code": code,
+            "redirect_uri": SUPERSET_REDIRECT}  # fmt: skip
+    return _post(_token_url(base), form, basic=(SUPERSET, SUPERSET_SECRET))
+
+
+@pytest.mark.parametrize(
+    ("hint", "oid"),
+    [
+        (None, ADMIN),
+        ("admin@r1.test", ADMIN),
+        ("reader@r1.test", READER),
+        ("Reader@R1.test", READER),
+    ],
+)
+def test_the_person_signed_in_is_the_one_the_hint_names(
+    people: str, hint: str | None, oid: str
+) -> None:
+    """Entra accepts `login_hint` on /authorize: the stand-in signs in the person whose username it
+    names (no hint: the first, as before), and the code carries that person to the token, the
+    access token's and the identity token's `oid` theirs, never the first's."""
+    status, answer = _superset_token(people, hint)
+    assert status == 200, answer
+    access = _verify(people, answer["access_token"], API)
+    identity = _verify(people, answer["id_token"], SUPERSET)
+    assert access["oid"] == identity["oid"] == oid
+
+
+def test_an_unknown_hint_is_refused_on_entras_own_page(people: str) -> None:
+    status, answer = _superset_token(people, "nobody-here@r1.test")
+    assert status == 400
+    assert "AADSTS50034" in answer["page"]
+    words = f"The user account nobody-here@r1.test does not exist in the {TENANT} directory"
+    assert words in answer["page"]
+
+
+def test_r1s_tenant_has_the_four_people_the_dashboards_check_signs_in() -> None:
+    """platform-b's check: the administrator, a reader, a builder and a person with no reports
+    right, each with the administrator's clearance, unit and codes, holding no role at first
+    (Admin › People gives them theirs)."""
+    import sys
+
+    gates = Path(__file__).parents[1] / "process/lanes/platform/gates"
+    sys.path.insert(0, str(gates))
+    try:
+        import r1_kind
+    finally:
+        sys.path.remove(str(gates))
+    config = r1_kind.entra_config()
+    users = config["users"]
+    assert users[0] == config["user"]
+    assert [(u["preferred_username"], u["oid"][-2:]) for u in users[1:]] == [
+        ("reader@r1.test", "b1"), ("builder@r1.test", "b2"), ("nobody@r1.test", "b3")]
+    assert all(u["claims"] == users[0]["claims"] for u in users[1:])
+    assert all("roles" not in u["claims"] for u in users)

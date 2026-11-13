@@ -88,9 +88,9 @@ def test_the_opensearch_behind_the_domain_is_the_poc_manifests_engine() -> None:
     engine = manifest.load()["managed"]["opensearch"]["engine"]  # OpenSearch_2.17
     version = engine.removeprefix("OpenSearch_")
     assert re.fullmatch(
-        rf"public\.ecr\.aws/opensearchproject/opensearch:{re.escape(version)}\.\d+",
+        rf"public\.ecr\.aws/opensearchproject/opensearch:{re.escape(version)}\.\d+@sha256:[0-9a-f]{{64}}",
         r1_kind.OPENSEARCH_BASE,
-    )
+    ), "the engine's base is the manifest's version, pinned by digest"
     dockerfile = r1_kind.opensearch_dockerfile()
     assert dockerfile.startswith(f"FROM {r1_kind.OPENSEARCH_BASE}\n")
     assert "opensearch-plugin install --batch analysis-phonetic" in dockerfile

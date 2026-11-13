@@ -76,7 +76,12 @@ DOMAIN_NAMES = {**NAMES, SEARCH_HOST: "s3-standin"}
 #: The engine behind the domain's stand-in: the poc manifest's OpenSearch_2.17 (one tag, kept here alone),
 #: with the plugins an OpenSearch Service domain carries that the stock image does not and that the
 #: product uses (the search index's phonetic matching), built on the server into the cluster's registry.
-OPENSEARCH_BASE = "public.ecr.aws/opensearchproject/opensearch:2.17.1"
+#: Pinned by the digest of its multi-platform index, as AWS's mirror served it on 13 November 2026;
+#: OpenSearch and its analysis-phonetic plugin are Apache-2.0 (the licence register,
+#: 00_ARCHITECTURE.md). A test image of R1's kind cluster only: the poc's domain is AWS's managed
+#: service, so no manifest of the product lists it.
+OPENSEARCH_BASE = ("public.ecr.aws/opensearchproject/opensearch:2.17.1"
+                   "@sha256:1193b7c29c5d63028523728243cc4da047ac49f697a8f8105e5aeee2f89bcc4c")
 OPENSEARCH_PLUGINS = ("analysis-phonetic",)
 OPENSEARCH_IMAGE = "r1/opensearch:2.17.1-domain"
 THIRD_PARTY = {  # the managed stores' stand-ins' images, through AWS's mirror of Docker Hub's (no pull limit): Valkey is its own publisher there, not under docker/library
@@ -290,6 +295,12 @@ def entra_config() -> dict[str, Any]:
     made = entra_clients()
     superset, reports = extra["superset"], extra["report-sync"]
     api = claims["api_client_id"]
+    admin = {
+        "oid": claims["first_administrators"][0], "name": "Synthetic Administrator",
+        "preferred_username": "admin@r1.test",
+        "claims": {claims["clearance"]["claim"]: "OFFICIAL-SENSITIVE",
+                   "groups": [*claims["org_unit"]["groups"], *claims["handling_codes"]["groups"]]},
+    }
     return {
         "tenant_id": claims["tenant_id"],
         "jwks": [entra_keys()["jwk"]],
@@ -301,12 +312,14 @@ def entra_config() -> dict[str, Any]:
             reports["client_id"]: {"secret": made["report-sync"], "service_principal": reports["service_principal"],
                                    "roles": reports["roles"]},
         },
-        "user": {
-            "oid": claims["first_administrators"][0], "name": "Synthetic Administrator",
-            "preferred_username": "admin@r1.test",
-            "claims": {claims["clearance"]["claim"]: "OFFICIAL-SENSITIVE",
-                       "groups": [*claims["org_unit"]["groups"], *claims["handling_codes"]["groups"]]},
-        },
+        "user": admin,
+        # The people v052-r1's dashboards check signs in to Superset by `login_hint` (platform-b): a
+        # reader, a builder and one with no reports right, each with the administrator's clearance,
+        # unit and codes, holding no role until Admin › People gives them theirs.
+        "users": [admin, *({
+            "oid": f"50000000-0000-4000-8000-0000000000{suffix}", "name": f"Synthetic {name.title()}",
+            "preferred_username": f"{name}@r1.test", "claims": dict(admin["claims"]),
+        } for suffix, name in (("b1", "reader"), ("b2", "builder"), ("b3", "nobody")))],
     }
 
 
