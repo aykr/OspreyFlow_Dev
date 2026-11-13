@@ -10,8 +10,8 @@ count records).
    `process/lanes/rules/v052-index/v052-index_ci_yml.diff`. It adds an `opensearch:2.17.1` service (single
    node, security off, 512m heap) to the conformance job and runs `test_feed_live.py` there. Without it the
    test-file coverage check stays red on rules' branch, so 3c cannot merge to main. B does not wait on it: rules
-   loads from its branch head. Until it lands, main also fails `test_worker_isolation.py`, which reads the ignore
-   lines and expects `test_feed_live.py` to exist. That red is the Makefile and ci.yml lines from last night,
+   loads from its branch head. Until it lands, main also fails `test_worker_isolation.py` and `test_write_store_marks.py`, which read the ignore
+   lines and expect `test_feed_live.py` to exist. That red is the Makefile and ci.yml lines from last night,
    waiting for the file they name.
 
 2. **The POC seed path vs the poc's marking ceiling (platform, ADR-148 Am 14).** Spec 08's synthetic data holds
