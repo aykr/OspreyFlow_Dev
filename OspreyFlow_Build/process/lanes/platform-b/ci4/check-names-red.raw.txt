@@ -1,0 +1,5 @@
+# the console's check names, red on main 96f933a (this Mac)
+E       AssertionError: assert ['memory', 'd...ctivity', ...] == ['memory', 'd...ctivity', ...]
+E         
+E         Right contains one more item: 'access-key'
+E         Use -v to get more diff

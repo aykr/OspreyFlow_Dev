@@ -29,6 +29,8 @@ const CHECK_NAMES = [
   "basemap",
   "duckdb-lock",
   "oidc-audience",
+  // ADR-114 Amendment 41: the shared key, set before a deployment that asks for it starts.
+  "access-key",
 ] as const;
 
 function ArtefactsSection({
