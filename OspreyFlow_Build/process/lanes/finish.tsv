@@ -3,7 +3,7 @@
 # who, expected, after (ids, comma-separated, or -), status (done | building | todo). The heartbeat's default view
 # shows each step not done as "waiting on" any step in its `after` that is not done. No step here rebuilds or
 # updates osprey-small (the owner's GOV.UK demo) before step 13, which updates it to v0.5.1 (the owner, 13 Nov).
-1	R1: the client install's acceptance on kind (P7b's runbooks as written)	platform	Sun 15 Nov	-	building
+1	R1: the client install's acceptance on kind (done 13 Nov evening: every stage green, 16 findings fixed; record and gates to merge)	platform	Fri 13 Nov, evening	-	building
 2	R1's findings fixed in the runbook and the product, the affected parts run again	platform	Mon 16 Nov	1	todo
 3	Small's Postgres connections (ADR-114 Am 43): gates on the server	admin	Sat 14 Nov	1	building
 4	Rules lists' audit follow-ups: live plants and gates on the server	rules	Sat 14 Nov	1	building
