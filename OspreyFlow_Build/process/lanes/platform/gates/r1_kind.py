@@ -61,9 +61,9 @@ NAMES = {
     f"s3.{REGION}.amazonaws.com": "s3-standin",
     f"sts.{REGION}.amazonaws.com": "s3-standin",
 }
-THIRD_PARTY = {  # the managed stores' stand-ins' images, through AWS's mirror of Docker Hub's (no pull limit)
+THIRD_PARTY = {  # the managed stores' stand-ins' images, through AWS's mirror of Docker Hub's (no pull limit): Valkey is its own publisher there, not under docker/library
     "postgres:16.4": "public.ecr.aws/docker/library/postgres:16.4",
-    "valkey/valkey:8.0": "public.ecr.aws/docker/library/valkey:8.0",
+    "valkey/valkey:8.0": "public.ecr.aws/valkey/valkey:8.0",
 }
 
 
