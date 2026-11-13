@@ -77,16 +77,14 @@ workloads:
     image: ospreyflow/superset
     requests: {cpu: 250m, memory: 1Gi}
     limits: {cpu: 500m, memory: 2Gi}
-    readiness: {check: "http://127.0.0.1:8088/health", every_seconds: 10}
-    pending: v052-superset
+    readiness: {check: "http://127.0.0.1:8088/health", every_seconds: 15}
   report-sync:
     kind: Deployment
     count: 1
     image: ospreyflow/report-sync
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: 500m, memory: 512Mi}
-    readiness: none
-    pending: v052-superset
+    readiness: {check: "python -m services.report_sync --health", every_seconds: 30}
 
 # Containers that run to completion before their pod's own.
 init_containers:
@@ -146,8 +144,8 @@ images:
   ospreyflow/worker: {ours: true, built_from: services/worker/Dockerfile}
   ospreyflow/ner: {ours: true, built_from: services/ner/Dockerfile}
   ospreyflow/laurium: {ours: true, built_from: services/laurium/Dockerfile}
-  ospreyflow/superset: {ours: true, built_from: deploy/superset/Dockerfile, pending: v052-superset}
-  ospreyflow/report-sync: {ours: true, built_from: services/report_sync/Dockerfile, pending: v052-superset}
+  ospreyflow/superset: {ours: true, built_from: deploy/superset/Dockerfile}
+  ospreyflow/report-sync: {ours: true, built_from: services/report_sync/Dockerfile}
   arcadedata/arcadedb: {ours: false, upstream: "arcadedata/arcadedb:26.10.1"}
   clickhouse/clickhouse-server: {ours: false, upstream: "clickhouse/clickhouse-server:25.8.33.6"}
   berriai/litellm: {ours: false, upstream: "ghcr.io/berriai/litellm"}
@@ -163,7 +161,7 @@ managed:
     databases:
       ospreyflow: {}
       litellm: {}
-      superset: {pending: v052-superset}
+      superset: {}
   elasticache:
     engine: redis 7.1
     node_type: cache.t4g.micro
@@ -191,11 +189,9 @@ entra:
     kind: web application, with a client secret
     redirect: "https://bi.<the deployment's name>/oauth-authorized/<provider>"
     grants: [the API's access_as_user (delegated)]
-    pending: v052-superset
   report-sync:
     kind: application (client credentials), with a client secret
     grants: [the API's Dashboard.Read (application)]
-    pending: v052-superset
 
 # The hosts the namespace reaches beyond the cluster, each on 443. RDS, ElastiCache and the OpenSearch
 # domain are reached inside the VPC (the managed networks), on 5432, 6379 and 443.
