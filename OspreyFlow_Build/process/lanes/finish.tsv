@@ -6,7 +6,7 @@
 1	R1: the client install's acceptance on kind (merged 13 Nov: every stage green, 16 findings fixed)	platform	Fri 13 Nov	-	done
 2	R1's findings fixed in the runbook and the product, the affected parts run again (merged with R1)	platform	Fri 13 Nov	1	done
 3	Small's Postgres connections (ADR-114 Am 43), merged 6aa02ff	admin	Fri 13 Nov	1	done
-4	Rules lists' audit follow-ups: live plants and gates on the server	rules	Sat 14 Nov	1	building
+4	Rules lists' audit follow-ups, merged aa90de3 (live 41 passed, 42 live plants red, make -k ci 0)	rules	Fri 13 Nov	1	done
 4b	The POC's RDS at db.t4g.large, max_connections 1000 in its parameter group (ADR-114 Am 46), merged ad55522	platform	Fri 13 Nov	-	done
 5	The ADR-135 Amendment 8 correction (Amendment 10, merged)	platform-b	Fri 13 Nov	-	done
 6	GitHub CI: every failure of 13 Nov fixed on main (the budget run, the rule-editor race, the cli test fixture); proven at the next push	platform-b	Fri 13 Nov, evening	-	done
