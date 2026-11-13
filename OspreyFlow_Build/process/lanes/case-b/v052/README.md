@@ -53,9 +53,10 @@ platform-b's dashboards check and for anyone fitting a new stand-in):
   against the real client or stand-in:** neither opensearch-py nor the client is in this branch's environment, so the
   offline tests hold the parser to the probe's JSON line and the probe to compiling and naming the client; its first
   real run is the leased run after both land.
-- **The domain's egress placeholder** (`"<the namespace's OpenSearch domain endpoint>"`, pending on this branch's base):
-  3a removed it (1d914fe; the domain is reached on the managed networks, as RDS and ElastiCache are). A placeholder
-  left in the manifest fails its egress check in words, never probed.
+- **On main's manifest** (this branch rebased onto it, 13 November): 43 checks planned, the 7 pending all v052-superset;
+  `managed.opensearch` is planned and fails on a live run until platform's searchkind and rules' index both land;
+  `managed.rds.point_in_time_days` is held by the render check (only AWS shows it). The domain's egress placeholder
+  is gone from the manifest (1d914fe); a placeholder left in one fails its egress check in words, never probed.
 - **The run must exercise what it checks before `verify`:** spec 08 (sign-ins, uploads, loads), a Superset sign-in
   and a report sync (platform-b), one backup and one restore (`r1_kind.py backup|restore`), and one run of each
   held-suspended CronJob (`kubectl create job --from=cronjob/<name>`). A bucket nothing wrote fails, by design.

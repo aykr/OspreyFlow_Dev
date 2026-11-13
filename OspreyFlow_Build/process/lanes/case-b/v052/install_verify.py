@@ -21,7 +21,7 @@ bucket nobody writes, or an entry still marked `pending` (a step that has not re
 | managed.s3.buckets | holds at least one object, written by the deployment |
 | entra | the stand-in tenant granted a token to the registration (the API: a token for its audience). **Its `kind`, `redirect`, `grants`, `exposes` and `app_roles` are not checked**: the stand-in enforces its own registrations (platform's `r1_kind_entra.yaml`), not the manifest's, and hands out whatever roles it holds. They are the client administrator's words; a change to them is caught by no check here |
 | egress | a pod of the namespace reaches each host on 443 (a `<placeholder>` names no host and fails), **and is blocked from an address no entry lists**, which the kind node itself (outside the policy) does reach: a node with no route out is no evidence. A probe that cannot answer (the exec failed, a name did not resolve) fails the check, never passes it |
-| (all of it) | the deployment's own render agrees with the manifest (`manifest.differences`): what only AWS can show (an instance class, node type or engine string; built_from and upstream) is held there |
+| (all of it) | the deployment's own render agrees with the manifest (`manifest.differences`): what only AWS can show (an instance class, node type or engine string, RDS's point-in-time days; built_from and upstream) is held there |
 
 `verify(manifest, deployment)` runs the plan against anything with `Deployment`'s methods; `KindDeployment`
 reads R1's kind cluster (r1_kind.py, the platform lane's, imported and not changed). Run from OspreyFlow_Core:
@@ -55,7 +55,8 @@ RESTORE_GRAPH_KEYS = {"image", "requests", "limits"}
 JOB_STEPS = {"verify", "fetch-graph", "writers", "restore-graph", "restore-analytics", "restore-claims"}
 IMAGE_KEYS = {"ours", "built_from", "upstream", "pending"}
 MANAGED_KEYS = {
-    "rds": {"engine", "class", "max_connections", "databases", "pending"},
+    # `point_in_time_days` (the Terraform's backup_retention_period) only AWS can show: held by the render check.
+    "rds": {"engine", "class", "max_connections", "point_in_time_days", "databases", "pending"},
     "elasticache": {"engine", "node_type", "nodes", "pending"},
     "s3": {"buckets", "pending"},
     # `signing` (3a: sigv4) is exercised by the reader check (the api reaches the domain only by signing)
