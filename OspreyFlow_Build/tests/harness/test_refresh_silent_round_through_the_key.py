@@ -22,7 +22,8 @@ from pathlib import Path
 
 from .access_key_proxy_fixtures import HOST, KEY, NEEDS_CADDY, Proxy, proxy  # noqa: F401  (the fixture, by name)
 
-pytestmark = NEEDS_CADDY
+# A list, so tools/write_store_marks.py can add the live mark beside it (a bare name it cannot extend).
+pytestmark = [NEEDS_CADDY]
 
 
 #: The silent round as `oidc-client-ts` builds it (`userManager.ts`'s `renewSilently`).

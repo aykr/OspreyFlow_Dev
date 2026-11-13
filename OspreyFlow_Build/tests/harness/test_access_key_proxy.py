@@ -39,7 +39,8 @@ from .access_key_proxy_fixtures import (  # noqa: F401  (proxy: the fixture, by 
     write_caddyfile,
 )
 
-pytestmark = NEEDS_CADDY
+# A list, so tools/write_store_marks.py can add the live mark beside it (a bare name it cannot extend).
+pytestmark = [NEEDS_CADDY]
 
 
 @pytest.mark.parametrize("name", NAMES)
