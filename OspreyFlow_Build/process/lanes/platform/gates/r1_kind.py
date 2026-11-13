@@ -785,8 +785,11 @@ def restore(which: str | None) -> None:
     before, after = filled[:noted_at], filled[noted_at:]
     out = _run_filled("restore-1-3", before)
     counts = re.findall(r"^(\S+)\s+(\d+)\s*$", out, re.M)  # step 2's NAME COPIES table
-    lines = [f'kubectl -n {NS} scale deployment/{n} --replicas={c}' for n, c in counts if n != "arcadedb" and n != "NAME"]
+    noted = [(n, c) for n, c in counts if n != "arcadedb" and n != "NAME"]
+    lines = [f'kubectl -n {NS} scale deployment/{n} --replicas={c}' for n, c in noted]
     after = after.replace(f"kubectl -n {NS} scale deployment/<each one noted> --replicas=<as noted>", "\n".join(lines))
+    waits = [f'kubectl -n {NS} rollout status deployment/{n} --timeout=10m' for n, _ in noted]
+    after = re.sub(rf"kubectl -n {NS} rollout status deployment/<each one noted> --timeout=10m[^\n]*", "\n".join(waits), after)
     _run_filled("restore-4", after)
 
 
