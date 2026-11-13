@@ -43,7 +43,9 @@ import re
 import secrets
 import ssl
 import threading
+import urllib.error
 import urllib.parse
+import urllib.request
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -246,6 +248,9 @@ class StandIn:
     lock: threading.Lock = field(default_factory=threading.Lock)
     #: Every refusal given, for a test to read back (`(code, message)`).
     refusals: list[tuple[str, str]] = field(default_factory=list)
+    #: The namespace's OpenSearch domains (ADR-148 Amendment 13), by the host the pods ask: the roles
+    #: its access policy admits (`es:ESHttp*`) and the OpenSearch behind it.
+    domains: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @classmethod
     def from_config(cls, config: dict[str, Any], root: Path) -> StandIn:
@@ -285,12 +290,19 @@ class StandIn:
                 else:
                     session.policies = role.policies
         stand_in.keys = {k["arn"]: k["policy"] for k in config.get("keys", [])}
+        self.configure_domains(config.get("domains", []))
         stand_in.buckets.clear()
         for bucket in config.get("buckets", []):
             stand_in.buckets[bucket["name"]] = Bucket(
                 name=bucket["name"], policy=bucket.get("policy"), kms_key=bucket.get("kms_key")
             )
             (self.root / bucket["name"]).mkdir(parents=True, exist_ok=True)
+
+    def configure_domains(self, domains: list[dict[str, Any]]) -> None:
+        """Each OpenSearch domain: `host` (its endpoint, as the pods ask it), `roles` (the role ARNs its
+        access policy admits) and `upstream` (the OpenSearch behind it, `http://host:port`)."""
+        self.domains = {d["host"]: {"roles": list(d["roles"]), "upstream": d["upstream"].rstrip("/")}
+                        for d in domains}  # fmt: skip
 
     # -- objects on disk ------------------------------------------------------------------------
 
@@ -371,7 +383,11 @@ class StandIn:
 
     # -- who signed this ------------------------------------------------------------------------
 
-    def caller(self, method: str, raw_path: str, headers: dict[str, str], body: bytes) -> Principal:
+    def caller(
+        self, method: str, raw_path: str, headers: dict[str, str], body: bytes, *, service_of: str = ""
+    ) -> Principal:
+        """Who signed this request. `service_of`: the service it must be signed for (the domain's
+        `es`); otherwise any, as S3's own requests have always been taken."""
         auth = headers.get("authorization")
         if not auth:
             if "X-Amz-Signature" in raw_path:
@@ -385,6 +401,9 @@ class StandIn:
         if not match:
             raise Refused(400, "AuthorizationHeaderMalformed", "The authorization header is malformed")
         access_key, day, region, service, signed_headers, signature = match.groups()
+        if service_of and service != service_of:
+            raise Refused(403, "IncompleteSignature",
+                          f"Credential should be scoped to correct service: '{service_of}'.")  # fmt: skip
         if region != self.region:
             # S3's own words for a request signed for another region.
             raise Refused(400, "AuthorizationHeaderMalformed",
@@ -415,7 +434,7 @@ class StandIn:
             if self.clock() >= principal.expires:
                 raise Refused(400, "ExpiredToken", "The provided token has expired.")
         payload_hash = headers.get("x-amz-content-sha256") or hashlib.sha256(body).hexdigest()
-        if service == "s3" and not payload_hash.startswith(STREAMING) and payload_hash != UNSIGNED:
+        if service in ("s3", "es") and not payload_hash.startswith(STREAMING) and payload_hash != UNSIGNED:
             if hashlib.sha256(body).hexdigest() != payload_hash:
                 raise Refused(
                     400,
@@ -682,6 +701,57 @@ class Handler(BaseHTTPRequestHandler):
             ).encode()
         self._send(refusal.status, body, {"Content-Type": "application/xml"})
 
+    #: The domain's own words for each refusal of the signature (OpenSearch Service answers 403, in
+    #: JSON, for every one of them).
+    _DOMAIN_WORDS = {
+        "InvalidToken": "The security token included in the request is invalid.",
+        "ExpiredToken": "The security token included in the request is expired",
+        "InvalidAccessKeyId": "The security token included in the request is invalid.",
+        # The domain has no payload-hash error of its own: a body changed after signing is a signature
+        # that does not match.
+        "XAmzContentSHA256Mismatch": "The request signature we calculated does not match the signature "
+        "you provided. Check your AWS Secret Access Key and signing method.",
+    }
+
+    def _domain(self, method: str, raw_body: bytes, headers: dict[str, str], domain: dict[str, Any]) -> None:
+        """The namespace's OpenSearch domain: signed for `es` by a session of a role its access policy
+        admits, or refused 403 in its own words; then the request passed to the OpenSearch behind."""
+        stand_in = self.server.stand_in
+        host = headers.get("host", "").rsplit(":", 1)[0]
+        action = f"es:ESHttp{method.capitalize()}"
+        resource = f"arn:aws:es:{stand_in.region}:domain/{host.split('.', 1)[0]}"
+
+        def refuse(message: str) -> None:
+            stand_in.refusals.append(("es", message))
+            data = json.dumps({"message": message}).encode()
+            self._send(403, data, {"Content-Type": "application/json"})
+
+        if not headers.get("authorization"):
+            refuse(f"User: anonymous is not authorized to perform: {action} on resource: {resource}")
+            return
+        try:
+            principal = stand_in.caller(method, self.path, headers, raw_body, service_of="es")
+        except Refused as refusal:
+            if refusal.code == "AuthorizationHeaderMalformed" and "region" in refusal.message:
+                refuse(f"Credential should be scoped to a valid region. Expecting '{stand_in.region}'.")
+            else:
+                refuse(self._DOMAIN_WORDS.get(refusal.code, refusal.message))
+            return
+        if _role_of(principal.arn) not in domain["roles"]:
+            refuse(f"User: {principal.arn} is not authorized to perform: {action} on resource: {resource}")
+            return
+        passed = {k: v for k, v in headers.items() if k == "content-type"}
+        request = urllib.request.Request(domain["upstream"] + self.path, data=raw_body or None,
+                                         method=method, headers=passed)  # fmt: skip
+        try:
+            with urllib.request.urlopen(request, timeout=60) as answer:
+                status, data, kind = answer.status, answer.read(), answer.headers.get("Content-Type")
+        except urllib.error.HTTPError as error:
+            status, data, kind = error.code, error.read(), error.headers.get("Content-Type")
+        except OSError as error:
+            status, data, kind = 502, json.dumps({"message": f"upstream: {error}"}).encode(), None
+        self._send(status, data, {"Content-Type": kind or "application/json"})
+
     def _body(self) -> bytes:
         length = int(self.headers.get("Content-Length") or 0)
         if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
@@ -708,6 +778,10 @@ class Handler(BaseHTTPRequestHandler):
     def _dispatch(self, method: str, raw_body: bytes) -> None:
         stand_in = self.server.stand_in
         headers = {k.lower(): v for k, v in self.headers.items()}
+        domain = stand_in.domains.get(headers.get("host", "").rsplit(":", 1)[0])
+        if domain is not None:
+            self._domain(method, raw_body, headers, domain)
+            return
         path, _, query = self.path.partition("?")
         params = dict(urllib.parse.parse_qsl(query, keep_blank_values=True))
         # The stand-in's own lever, for a run on kind (no bucket may start with `_`): every

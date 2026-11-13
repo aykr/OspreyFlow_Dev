@@ -38,3 +38,17 @@ E       AttributeError: module 'r1_kind' has no attribute 'standins_text'
 FAILED tests/test_r1_kind_standins.py::test_the_rds_stand_in_allows_what_the_parameter_group_sets
 1 failed in 0.23s
 After: 14 passed in 8.12s
+
+The OpenSearch domain stand-in (the orchestrator's yes, 13 Nov), before the change:
+ERROR tests/test_r1_opensearch_standin.py::test_a_request_signed_by_the_namespace_s_role_reaches_opensearch
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[unsigned-is not authorized]
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another secret-signature we calculated does not match]
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[signed for s3-Credential should be scoped to correct service: 'es']
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another region-eu-west-2]
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[no session token-security token included in the request is invalid]
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[the body changed after signing-signature we calculated does not match]
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another role's session-is not authorized to perform: es:ESHttpGet]
+ERROR tests/test_r1_opensearch_standin.py::test_an_expired_session_is_refused
+ERROR tests/test_r1_opensearch_standin.py::test_s3_on_the_same_stand_in_is_as_it_was
+10 errors in 0.40s
+After: tests/test_r1_opensearch_standin.py with tests/cloud_platform_backup: 181 passed, 51 skipped.
