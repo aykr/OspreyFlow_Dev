@@ -204,7 +204,7 @@ def build_search_body(
         "collapse": {"field": "node_id"},
         "from": (page - 1) * page_size,
         "size": page_size + 1,
-        "_source": ["node_id", "kind"],
+        "_source": ["node_id", "kind", "date"],
         "highlight": {
             "pre_tags": [HIGHLIGHT_OPEN],
             "post_tags": [HIGHLIGHT_CLOSE],
@@ -311,6 +311,9 @@ class IndexHit:
     node_id: str
     band: str
     snippet: list[SnippetPart] = field(default_factory=list)
+    #: The document's `date` as the index holds it (ADR-150: the type's event or sent time, else
+    #: its making); `None` if undated.
+    date: str | None = None
 
 
 @dataclass(frozen=True)
@@ -378,6 +381,7 @@ def read_search_response(reply: dict[str, Any], *, page_size: int) -> IndexSearc
                 node_id=hit["_source"]["node_id"],
                 band=_band(hit["_score"]),
                 snippet=_snippet(fragments[0]) if fragments else [],
+                date=hit["_source"].get("date"),
             )
         )
     aggs = reply["aggregations"]
