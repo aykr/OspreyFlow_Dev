@@ -7,7 +7,7 @@
 3	Small's Postgres connections (ADR-114 Am 43): gates on the server	admin	Sat 14 Nov	1	building
 4	Rules lists' audit follow-ups: live plants and gates on the server	rules	Sat 14 Nov	1	building
 5	The ADR-135 Amendment 8 correction	platform-b	Sat 14 Nov	-	todo
-6	GitHub's test job on 0a55054 confirmed (run 43437345111)	platform-b	Fri 13 Nov, evening	-	building
+6	GitHub's test job: the budget test run alone (merged); confirmed at the next push	platform-b	Fri 13 Nov, evening	-	building
 7	GitHub CI fully green at the release candidate	platform-b	Mon 16 Nov	2, 3, 4, 5, 6	todo
 8	The release candidate: the commit that passes R1, cut	orchestrator	Mon 16 Nov	2, 7	todo
 9	The upgrade from v0.5.0 rehearsed on the test server, at the candidate	rules	Mon 16 Nov	8	todo
