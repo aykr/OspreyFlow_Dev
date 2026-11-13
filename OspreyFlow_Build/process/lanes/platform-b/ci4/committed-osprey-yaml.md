@@ -5,7 +5,7 @@ Branch `lane/platform-b-yaml`, from main a68c710.
 ## What the test read
 
 Not the main checkout. `test_the_committed_osprey_yaml_still_validates` reads its own worktree's
-`OspreyFlow_Core/osprey.yaml` (`tools.layout.REPO / "osprey.yaml"`). But `scripts/lanes_launch.sh`'s
+`OspreyFlow_Core/osprey.yaml` (`tools.layout.REPO / "osprey.yaml"`). But `OspreyFlow_Build/scripts/lanes_launch.sh`'s
 `setup` (lines 124–126) copies the owner's uncommitted `osprey.yaml` from the main checkout into every
 lane worktree and marks it `--skip-worktree`. `git ls-files -v` shows `S`, and `git status` shows
 nothing. Here the copy is byte-identical to the main checkout's (`default: osm-local-great-britain`);
