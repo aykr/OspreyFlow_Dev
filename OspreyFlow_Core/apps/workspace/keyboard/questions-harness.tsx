@@ -37,7 +37,7 @@ const inView = new URLSearchParams(window.location.search).get("view") === "1";
 
 function Panel() {
   const [view, setView] = useState<{ id: string; name: string } | null>(
-    inView ? { id: "v-q", name: "Questions on 1 document" } : null,
+    inView ? { id: "v-q", name: "Questions on 2 items" } : null,
   );
   return (
     <QuestionsPanel

@@ -45,11 +45,15 @@ export interface EngineChoice {
   /** The engine chosen; `null` while there is no choice to make (one engine or none offered). */
   chosen: string | null;
   choose: (name: string) => void;
+  /** The engines could not be read (ADR-135 Amendment 12): said as a failure, never as none. */
+  failed: boolean;
 }
 
 /** The engines offered for `role` and the one chosen. With fewer than two there is nothing to
  * choose, and the request names no engine: the role's default is the Conduit's to apply. A failure
- * to read the engines is the same as none offered — Ask still works, on the role's default. */
+ * to read the engines offers no choice — Ask still works, on the role's default — and is marked
+ * `failed`, so the caller says the list failed rather than that there is none (ADR-135 Amendment
+ * 12). */
 export function useEngineChoice(
   apiBaseUrl: string,
   bearerToken: string,
@@ -58,15 +62,19 @@ export function useEngineChoice(
 ): EngineChoice {
   const [engines, setEngines] = useState<OfferedEngine[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setFailed(false);
     fetchOfferedEngines(apiBaseUrl, bearerToken, investigationId)
       .then((found) => {
         if (!cancelled) setEngines(found);
       })
       .catch(() => {
-        if (!cancelled) setEngines([]);
+        if (cancelled) return;
+        setEngines([]);
+        setFailed(true);
       });
     return () => {
       cancelled = true;
@@ -83,7 +91,7 @@ export function useEngineChoice(
     offered.length < 2 || fallback === undefined
       ? null
       : (usable.find((engine) => engine.name === picked) ?? fallback).name;
-  return { engines, offered, chosen, choose: setPicked };
+  return { engines, offered, chosen, choose: setPicked, failed };
 }
 
 /** ADR-136: an engine is available unless the Conduit says the case's data may not reach it. */
@@ -96,11 +104,35 @@ export function engineOptionText(engine: OfferedEngine): string {
   return `${engine.label}${mark}${isAvailable(engine) ? "" : " — not available"}`;
 }
 
+/** An engine that cannot be used, and why, in words. */
+export interface EngineReason {
+  name: string;
+  label: string;
+  reason: string;
+}
+
 /** The choice itself, with its visible label: hidden unless there are two or more engines to
- * choose between. `id` ties the label to the select, so it must be unique on the page. */
-export function EnginePicker({ choice, id, disabled }: { choice: EngineChoice; id: string; disabled?: boolean }) {
+ * choose between. `id` ties the label to the select, so it must be unique on the page. `reasons`,
+ * when given, are the engines that cannot be used and why, as the caller was told them (Ask the
+ * case's *will read*, which judges the question's own material); otherwise those the case's engine
+ * list marks unavailable. */
+export function EnginePicker({
+  choice,
+  id,
+  disabled,
+  reasons: given,
+}: {
+  choice: EngineChoice;
+  id: string;
+  disabled?: boolean;
+  reasons?: readonly EngineReason[];
+}) {
   if (choice.chosen === null) return null;
-  const unavailable = choice.offered.filter((engine) => !isAvailable(engine));
+  const unavailable: readonly EngineReason[] =
+    given ??
+    choice.offered
+      .filter((engine) => !isAvailable(engine))
+      .map((engine) => ({ name: engine.name, label: engine.label, reason: engine.reason ?? "Not available for this case." }));
   const reasons = `${id}-reasons`;
   return (
     <div style={{ display: "grid", gap: "var(--sp-4)" }}>
@@ -127,7 +159,7 @@ export function EnginePicker({ choice, id, disabled }: { choice: EngineChoice; i
         <div id={reasons} style={{ display: "grid", gap: "var(--sp-2)" }}>
           {unavailable.map((engine) => (
             <p key={engine.name} style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
-              {`${engine.label}: ${engine.reason ?? "Not available for this case."}`}
+              {`${engine.label}: ${engine.reason}`}
             </p>
           ))}
         </div>

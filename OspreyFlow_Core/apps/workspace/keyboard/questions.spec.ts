@@ -22,16 +22,35 @@ const ANSWER = {
   created_at: "2026-10-07T10:00:00Z",
 };
 
+/** What the Conduit says will be read (ADR-098 Amendment 7), for the scope the panel sent. */
+function willRead(posted: { read_from?: string }) {
+  const selection = posted.read_from === "selection";
+  return {
+    read: {
+      read_from: selection ? "selection" : "graph", documents: selection ? 1 : 2, documents_without_text: 0,
+      items: selection ? 2 : 5, links: selection ? 1 : 4, events: 0, selected: selection ? 1 : 0,
+      first_selected: selection ? "Dana Mercer" : null,
+    },
+    engine: "local", engine_label: "This deployment's own model", model: "qwen2.5:7b-instruct", unusable: [], refused: null,
+  };  // prettier-ignore
+}
+
 async function serve(page: Page, history: unknown[] = [], answer: unknown = ANSWER, harness = "/keyboard/questions-harness.html") {
   const asked: string[] = [];
   const scopes: unknown[] = [];
   const decided: string[] = [];
+  const willReads: { read_from?: string }[] = [];
   await page.route("**/*/v1/investigations/*/questions**", async (route) => {
     const request = route.request();
     const url = request.url();
     const json = (status: number, body: unknown) =>
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
     if (request.method() === "GET") return json(200, history);
+    if (url.endsWith("/will-read")) {
+      const posted = request.postDataJSON() as { read_from?: string };
+      willReads.push(posted);
+      return json(200, willRead(posted));
+    }
     if (url.endsWith("/questions")) {
       const posted = request.postDataJSON() as { question: string };
       asked.push(posted.question);
@@ -43,7 +62,7 @@ async function serve(page: Page, history: unknown[] = [], answer: unknown = ANSW
     return json(200, { rejected: true });
   });
   await page.goto(harness);
-  return { asked, decided, scopes };
+  return { asked, decided, scopes, willReads };
 }
 
 test("Ctrl+Enter in the question asks it, and the answer joins the conversation", async ({ page }) => {
@@ -209,7 +228,7 @@ test("asked in a view, the questions go through it, and Ask about the whole case
     if (request.method() === "GET" && /\/v1\/investigations\/[^/]+\/questions/.test(request.url())) lists.push(new URL(request.url()).search);
   });
   const { scopes } = await serve(page, [], ANSWER, "/keyboard/questions-harness.html?view=1");
-  await expect(page.getByRole("status")).toContainText("Asking in the view Questions on 1 document");
+  await expect(page.getByRole("status")).toContainText("Asking in the view Questions on 2 items");
   await expect.poll(() => lists).toEqual(["?view_id=v-q"]);
   await page.getByLabel("Your question").focus();
   await page.keyboard.type("Who wrote about the plant?");
@@ -228,6 +247,34 @@ test("asked in a view, the questions go through it, and Ask about the whole case
   await expect.poll(() => scopes.length).toBe(2);
   expect((scopes[1] as { view_id?: string }).view_id).toBeUndefined();
   registerCovered(REGISTRY, "ask-in-a-view-then-about-the-whole-case-by-keyboard");
+});
+
+test("what to read from is chosen by arrow keys, the Conduit says what will be read, and the question sends the choice (ADR-098 Amendment 7)", async ({ page }) => {
+  const { scopes, willReads } = await serve(page);
+  const selected = page.getByRole("radio", { name: "Selected items" });
+  const everything = page.getByRole("radio", { name: "Everything on the graph" });
+  await expect(selected).toBeChecked(); // the harness has Dana selected
+  await expect(page.getByText("About: Dana Mercer")).toBeVisible();
+  await expect(page.getByText("Will read: 1 document, 2 items and 1 link")).toBeVisible();
+  await expect(page.getByText("Will be answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Whole case" })).toBeDisabled();
+  await selected.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(everything).toBeChecked();
+  await expect(everything).toBeFocused();
+  await expect(page.getByText("About: everything on the graph")).toBeVisible();
+  await expect.poll(() => willReads.at(-1)?.read_from).toBe("graph");
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.type("Who wrote about the plant?");
+  await page.keyboard.press("Control+Enter");
+  await expect.poll(() => scopes.length).toBe(1);
+  expect((scopes[0] as { read_from?: string; selected_node_ids?: string[] }).read_from).toBe("graph");
+  expect((scopes[0] as { selected_node_ids?: string[] }).selected_node_ids).toEqual([]);
+  await everything.focus();
+  await page.keyboard.press("ArrowUp");
+  await expect(selected).toBeChecked();
+  await expect.poll(() => willReads.at(-1)?.read_from).toBe("selection");
+  registerCovered(REGISTRY, "choose-what-to-read-from-by-keyboard");
 });
 
 test("every registered questions action has its own proving test case above", () => {
