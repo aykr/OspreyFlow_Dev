@@ -101,7 +101,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   "case-screen-options-harness.html": ["variant=today", "variant=b", "variant=c"],
   // ADR-144 (L3.2b): case views as another member sees them, the Save as a view form, and the banner
   // over an opened view.
-  "views-harness.html": ["as=bob", "show=form", "show=lens", "show=merged", "show=merged&notes=open", "asking=delete"],
+  // ADR-144 Amendment 3: the graph's *Views ▾*, closed, open on the case's views, and open on none.
+  "views-harness.html": ["as=bob", "show=form", "show=lens", "show=merged", "show=merged&notes=open", "asking=delete", "show=menu", "show=menu&open=1", "show=menu&open=1&empty=1"],
   // ADR-143 decisions 4 to 7 (L3.3): a board open with its drawn and loaded items, its inspector, its
   // item and link forms and the withdrawal's question; another member's read-only view; a blank board;
   // the boards list with a board from a view chosen, the edit form and an item's menu open, a drawing
@@ -368,12 +369,11 @@ test("the scan found the harness pages", () => {
 // state. axe's target-size counts a target a menu covers all but a sliver of as too small (it skips one
 // covered wholly); in the browser the menu is on top (`elementFromPoint` at every sampled point of its
 // items). GOV.UK's context row is one row under the top bar since Amendment 8, so *More views*, drawn open,
-// lies over its sections and leaves 4 px of *Boards (coming)* showing. Every other rule still runs on those
+// lay over its sections and left 4 px of *Boards (coming)* showing. Since ADR-145 Amendment 13 renamed them
+// *Graph · Drawing board* nothing is reported there, so the list is empty and kept for the next such state. Every other rule still runs on those
 // nodes, and each entry must still be reported, so it fails once the menu no longer lies over them. Keyed by
 // a scanned title; each value a class the dropped nodes' markup carries.
-const UNDER_AN_OPEN_OVERLAY: Record<string, readonly string[]> = {
-  "places-harness.html open=views (govuk)": ["context-banner__section"],
-};
+const UNDER_AN_OPEN_OVERLAY: Record<string, readonly string[]> = {};
 
 // Every look's title, as each test below is named, so a listed finding under a mistyped title fails.
 const TITLES = new Set<string>();

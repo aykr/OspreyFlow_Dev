@@ -121,7 +121,7 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
       "Osprey, go to Home", "The Glass", "Ingest Studio", "Rules and Monitoring 3 open", "Admin",
       expect.stringMatching(/Search entities/), "Add many from a list", "Filters",
       "Graph", "Map", "More views▾", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
-      "Case", "Boards", expect.stringMatching(/^Case: Kestrel/), "Open Prison intel in the Ingest Studio ↗",
+      "Graph", "Drawing board", expect.stringMatching(/^Case: Kestrel/), "Open Prison intel in the Ingest Studio ↗",
       // The rail, then the Graph's own toolbar over the canvas.
       // ADR-145 Amendment 12: Ask & Chat and Dashboards on the rail, then its Explore Details.
       "Cases", "Explore", "Ask & Chat", "Dashboards", "Explore Details", "Help", "Show names",
@@ -129,16 +129,31 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
     ]); // prettier-ignore
   });
 
-  test("the banner's Boards opens the case's drawing boards and is the current section (ADR-143, L3.3)", async () => {
+  test("the banner's Drawing board opens the case's drawing boards and is the current section (ADR-143, L3.3; ADR-145 Amendment 13)", async () => {
     render(<App />);
     const sections = await screen.findByRole("navigation", { name: "In the Glass" });
-    const boards = await within(sections).findByRole("button", { name: "Boards" });
+    const boards = await within(sections).findByRole("button", { name: "Drawing board" });
     expect(boards.getAttribute("aria-disabled")).toBeNull();
     boards.focus();
     fireEvent.click(boards);
     await screen.findByRole("heading", { name: /^Drawing boards in case/ });
     expect(boards.getAttribute("aria-current")).toBe("page");
-    expect(within(sections).getByRole("button", { name: "Case" }).getAttribute("aria-current")).toBeNull();
+    expect(within(sections).getByRole("button", { name: "Graph" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  // ADR-145 Amendment 13 (the owner, 13 November 2026): each mode says what it is in one line, inside the
+  // context region and as its description, so a screen reader reads it with the region.
+  test("each mode's one-line note is the context region's, and changes with the mode", async () => {
+    render(<App />);
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    expect(screen.getByRole("region", { name: "You are in the Glass", description: "Graph: the case's data. Saved views are under Views or Cases." })).toBe(region);
+    expect(within(region).getByText("Graph: the case's data. Saved views are under Views or Cases.")).toBeTruthy();
+    fireEvent.click(within(within(region).getByRole("navigation", { name: "In the Glass" })).getByRole("button", { name: "Drawing board" }));
+    await screen.findByRole("heading", { name: /^Drawing boards in case/ });
+    expect(screen.getByRole("region", { name: "You are in the Glass", description: "Drawing board: your sketch; it does not change the case's data." })).toBe(region);
+    expect(within(region).queryByText(/^Graph: the case's data/)).toBeNull();
+    fireEvent.click(within(within(region).getByRole("navigation", { name: "In the Glass" })).getByRole("button", { name: "Graph" }));
+    await vi.waitFor(() => expect(within(region).getByText("Graph: the case's data. Saved views are under Views or Cases.")).toBeTruthy());
   });
 
   test("the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name", async () => {

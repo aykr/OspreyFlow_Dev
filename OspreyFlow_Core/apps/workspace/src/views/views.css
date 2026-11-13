@@ -47,3 +47,13 @@
 }
 .save-view-anchor .save-view { padding: var(--sp-12); background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-panel); box-shadow: var(--overlay-shadow); }
 .save-view--govuk { background: var(--surface-raised); }
+
+/* *Views ▾* by the graph (ADR-144 Amendment 3): the case's saved views over the canvas, each a row naming
+   the view and whether it is shared. */
+.views-menu {
+  display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-8); max-width: 360px;
+  background: var(--surface-raised); border: 1px solid var(--border-subtle); color: var(--text-primary);
+}
+.views-menu__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2, 2px); max-height: 280px; overflow-y: auto; }
+.views-menu__item { display: flex; align-items: center; gap: var(--sp-8); width: 100%; min-height: 24px; }
+.views-menu__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

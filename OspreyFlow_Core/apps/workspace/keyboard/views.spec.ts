@@ -76,6 +76,46 @@ test("Back to the case is reached from the banner over an opened view by keyboar
   registerCovered("VIEW_ACTIONS", "go-back-to-the-case-from-an-open-view-by-keyboard");
 });
 
+// ADR-144 Amendment 3 (the owner, 13 November 2026): the graph's *Views ▾*, opened, a view chosen, the lens
+// open on it, and *Back to the case*, each by keyboard alone.
+test("a view is opened from Views by the graph by keyboard, and Back to the case closes it", async ({ page }) => {
+  await open(page, "?show=menu");
+  const views = page.getByRole("toolbar", { name: "Canvas tools" }).getByRole("button", { name: "Views" });
+  await views.focus();
+  await page.keyboard.press("Enter");
+  const menu = page.getByRole("group", { name: "Saved views in this case" });
+  await expect(menu.getByRole("button")).toHaveText(["Alice's ownPrivate", "Payments in MarchShared"]);
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(menu.getByRole("button", { name: /^Payments in March/ })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await state(page)).opened).toBe("v-shared");
+  await expect(menu).toHaveCount(0);
+  const lens = page.getByRole("region", { name: "Open view" });
+  await expect(lens).toContainText("Payments in March");
+  // The open view is marked in the menu when it is opened again.
+  await views.focus();
+  await page.keyboard.press("Enter");
+  await expect(menu.getByRole("button", { name: /^Payments in March/ })).toHaveAttribute("aria-current", "true");
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(views).toBeFocused();
+  await press(page, "Back to the case");
+  await expect(lens).toHaveCount(0);
+  await expect.poll(async () => (await state(page)).back).toBe(true);
+  registerCovered("VIEW_ACTIONS", "open-a-view-from-views-by-the-graph-by-keyboard");
+});
+
+test("Views by the graph says how to make one when the case has none, by keyboard", async ({ page }) => {
+  await page.goto("/keyboard/views-harness.html?show=menu&empty=1");
+  const views = page.getByRole("toolbar", { name: "Canvas tools" }).getByRole("button", { name: "Views" });
+  await views.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("group", { name: "Saved views in this case" })).toHaveText(
+    "No saved views yet. Select nodes and choose Save as a view.",
+  );
+});
+
 test("a merged drawing's notes are opened and closed from its view's banner by keyboard", async ({ page }) => {
   await page.goto("/keyboard/views-harness.html?show=merged");
   const toggle = page.getByRole("button", { name: "Notes from the drawing (2)" });

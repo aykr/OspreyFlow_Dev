@@ -1054,6 +1054,38 @@
    "reason": "hidden at every point, under an opaque element over the words or clipped",
    "own": 18.34,
    "owner": "shell"
+  },
+  ".context-banner__section.govuk-link:nth-child(2)": {
+   "text": "Drawing board",
+   "ratio": "unmeasurable",
+   "reason": "hidden at every point, under an opaque element over the words or clipped",
+   "own": 19.59,
+   "owner": "shell"
+  },
+  ".context-banner__sep:nth-child(6)": {
+   "text": "·",
+   "ratio": "unmeasurable",
+   "reason": "hidden at every point, under an opaque element over the words or clipped",
+   "own": 19.59,
+   "owner": "shell"
+  }
+ },
+ "places-harness.html open=views (dark)": {
+  ".context-banner__sep:nth-child(8)": {
+   "text": "·",
+   "ratio": "unmeasurable",
+   "reason": "hidden at every point, under an opaque element over the words or clipped",
+   "own": 10.08,
+   "owner": "shell"
+  }
+ },
+ "places-harness.html open=views (light)": {
+  ".context-banner__sep:nth-child(8)": {
+   "text": "·",
+   "ratio": "unmeasurable",
+   "reason": "hidden at every point, under an opaque element over the words or clipped",
+   "own": 7.6,
+   "owner": "shell"
   }
  }
 }

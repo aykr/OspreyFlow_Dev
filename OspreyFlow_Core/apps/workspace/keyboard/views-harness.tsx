@@ -1,9 +1,11 @@
 // Case views keyboard harness (ADR-144; the owner's ruling of 8 November 2026, Amendment 2): the Cases
 // drawer's *Views in this case* and the cases list with their views, the *Save as a view* form, and
-// the banner over an opened view. The Conduit is a stand-in kept here, so that the axe scan of every
+// the banner over an opened view. `?show=menu` (Amendment 3): the graph's *Views ▾*, a view chosen there
+// opening the lens banner as `App.tsx`'s `openLens` does, and *Back to the case* closing it. The Conduit is a stand-in kept here, so that the axe scan of every
 // harness (`a11y/every-harness.spec.ts`) sees the panel filled: it answers each reader as the store
 // does, Alice's private view to Alice alone (`?as=bob` reads as another member of the case). What was
 // sent and what was opened are on `window.__VIEWS__`.
+import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
@@ -11,6 +13,7 @@ import "../src/design/primitives.css";
 import { CaseList } from "../src/investigation/CaseList";
 import { SaveViewForm } from "../src/views/SaveViewForm";
 import { ViewLensBanner } from "../src/views/ViewLensBanner";
+import { ViewsMenu } from "../src/views/ViewsMenu";
 import { ViewsPanel } from "../src/views/ViewsPanel";
 import { applyHarnessBrand } from "./brandHarness";
 
@@ -51,6 +54,8 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   window.__VIEWS__!.sent.push({ method, path });
   if (path === "/v1/investigations") return json(200, CASES);
   const listed = /^\/v1\/investigations\/([^/]+)\/views$/.exec(path);
+  // `?empty=1`: a case with no views yet (the menu's empty state).
+  if (listed && method === "GET" && params.get("empty") === "1") return json(200, []);
   if (listed && method === "GET") {
     // The store's own rule: a private view is its creator's alone.
     return json(200, (views[listed[1]!] ?? []).filter((v) => v.shared || v.created_by === reader));
@@ -88,8 +93,55 @@ if (params.get("asking") === "delete") {
   requestAnimationFrame(ask);
 }
 
+/** The graph's *Views ▾* in its toolbar's View group, and the lens a chosen view opens (`?show=menu`). */
+function ByTheGraph() {
+  const [lens, setLens] = useState<{ id: string; name: string; shared: boolean } | null>(null);
+  return (
+    <>
+      {lens && (
+        <ViewLensBanner
+          name={lens.name}
+          shared={lens.shared}
+          missing={0}
+          onBack={() => {
+            window.__VIEWS__!.back = true;
+            setLens(null);
+          }}
+        />
+      )}
+      <div role="toolbar" aria-label="Canvas tools" className="canvas-toolbar">
+        <div role="group" aria-label="View" className="canvas-toolbar__group canvas-toolbar__group--end">
+          <ViewsMenu
+            apiBaseUrl="http://keyboard-test.invalid"
+            bearerToken="unused"
+            caseId="c1"
+            openViewId={lens?.id ?? null}
+            onOpen={(view) => {
+              window.__VIEWS__!.opened = view.id;
+              setLens({ id: view.id, name: view.name, shared: view.shared });
+            }}
+          />
+        </div>
+      </div>
+      {/* Room under the toolbar for the menu's panel, laid over the canvas in the Glass. */}
+      <div style={{ height: 160 }} />
+    </>
+  );
+}
+
+// `?show=menu&open=1`: the menu drawn open, for the axe scan.
+if (show === "menu" && params.get("open") === "1") {
+  const press = () => {
+    const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("Views"));
+    if (button) button.click();
+    else requestAnimationFrame(press);
+  };
+  requestAnimationFrame(press);
+}
+
 createRoot(container).render(
   <div style={{ display: "grid", gap: "var(--sp-16)", padding: "var(--sp-12)", background: "var(--surface-panel)" }}>
+    {show === "menu" && <ByTheGraph />}
     {show === "lens" && (
       <ViewLensBanner name="Payments in March" shared missing={2} onBack={() => (window.__VIEWS__!.back = true)} />
     )}

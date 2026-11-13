@@ -1,0 +1,73 @@
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/contrastFindings.json b/OspreyFlow_Core/apps/workspace/a11y/contrastFindings.json
+index dfdc153..786f7e5 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/contrastFindings.json
++++ b/OspreyFlow_Core/apps/workspace/a11y/contrastFindings.json
+@@ -1054,6 +1054,38 @@
+    "reason": "hidden at every point, under an opaque element over the words or clipped",
+    "own": 18.34,
+    "owner": "shell"
++  },
++  ".context-banner__section.govuk-link:nth-child(2)": {
++   "text": "Drawing board",
++   "ratio": "unmeasurable",
++   "reason": "hidden at every point, under an opaque element over the words or clipped",
++   "own": 19.59,
++   "owner": "shell"
++  },
++  ".context-banner__sep:nth-child(6)": {
++   "text": "·",
++   "ratio": "unmeasurable",
++   "reason": "hidden at every point, under an opaque element over the words or clipped",
++   "own": 19.59,
++   "owner": "shell"
++  }
++ },
++ "places-harness.html open=views (dark)": {
++  ".context-banner__sep:nth-child(8)": {
++   "text": "·",
++   "ratio": "unmeasurable",
++   "reason": "hidden at every point, under an opaque element over the words or clipped",
++   "own": 10.08,
++   "owner": "shell"
++  }
++ },
++ "places-harness.html open=views (light)": {
++  ".context-banner__sep:nth-child(8)": {
++   "text": "·",
++   "ratio": "unmeasurable",
++   "reason": "hidden at every point, under an opaque element over the words or clipped",
++   "own": 7.6,
++   "owner": "shell"
+   }
+  }
+ }
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+index f9368a4..7fd7441 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+@@ -101,7 +101,8 @@ const EXTRA_STATES: Record<string, string[]> = {
+   "case-screen-options-harness.html": ["variant=today", "variant=b", "variant=c"],
+   // ADR-144 (L3.2b): case views as another member sees them, the Save as a view form, and the banner
+   // over an opened view.
+-  "views-harness.html": ["as=bob", "show=form", "show=lens", "show=merged", "show=merged&notes=open", "asking=delete"],
++  // ADR-144 Amendment 3: the graph's *Views ▾*, closed, open on the case's views, and open on none.
++  "views-harness.html": ["as=bob", "show=form", "show=lens", "show=merged", "show=merged&notes=open", "asking=delete", "show=menu", "show=menu&open=1", "show=menu&open=1&empty=1"],
+   // ADR-143 decisions 4 to 7 (L3.3): a board open with its drawn and loaded items, its inspector, its
+   // item and link forms and the withdrawal's question; another member's read-only view; a blank board;
+   // the boards list with a board from a view chosen, the edit form and an item's menu open, a drawing
+@@ -368,12 +369,11 @@ test("the scan found the harness pages", () => {
+ // state. axe's target-size counts a target a menu covers all but a sliver of as too small (it skips one
+ // covered wholly); in the browser the menu is on top (`elementFromPoint` at every sampled point of its
+ // items). GOV.UK's context row is one row under the top bar since Amendment 8, so *More views*, drawn open,
+-// lies over its sections and leaves 4 px of *Boards (coming)* showing. Every other rule still runs on those
++// lay over its sections and left 4 px of *Boards (coming)* showing. Since ADR-145 Amendment 13 renamed them
++// *Graph · Drawing board* nothing is reported there, so the list is empty and kept for the next such state. Every other rule still runs on those
+ // nodes, and each entry must still be reported, so it fails once the menu no longer lies over them. Keyed by
+ // a scanned title; each value a class the dropped nodes' markup carries.
+-const UNDER_AN_OPEN_OVERLAY: Record<string, readonly string[]> = {
+-  "places-harness.html open=views (govuk)": ["context-banner__section"],
+-};
++const UNDER_AN_OPEN_OVERLAY: Record<string, readonly string[]> = {};
+ 
+ // Every look's title, as each test below is named, so a listed finding under a mistyped title fails.
+ const TITLES = new Set<string>();

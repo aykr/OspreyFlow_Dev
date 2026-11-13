@@ -299,21 +299,32 @@ test("from Messages, the cross-link and a case change in the Studio come Back to
   await expect(page.getByText("glass, map, on case harrier")).toBeVisible();
 });
 
-// ADR-145 decision 1 (rule 13): the Glass's sections in the banner, Case · Boards; Boards is coming and
-// does nothing. Monitoring left for Rules and Monitoring (ADR-146 decision 2).
-test("the banner's sections are Case and Boards, Case reached by keyboard and Boards coming", async ({ page }) => {
+// ADR-145 decision 1 and Amendment 13 (rule 13): the Glass's mode toggle in the banner, Graph · Drawing board,
+// each chosen by keyboard, and the open mode's one-line note the region's own, read with it (its
+// description). Monitoring left for Rules and Monitoring (ADR-146 decision 2).
+test("the banner's toggle is Graph and Drawing board, each chosen by keyboard, its note read with the region", async ({ page }) => {
   await page.goto("/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts");
-  const sections = page.getByRole("navigation", { name: "In the Glass" });
-  await expect(sections.getByRole("button")).toHaveText(["Case", "Boards (coming)"]);
-  await expect(sections.getByRole("button", { name: "Boards (coming)" })).toHaveAttribute("aria-disabled", "true");
+  const region = page.getByRole("region", { name: "You are in the Glass" });
+  const sections = region.getByRole("navigation", { name: "In the Glass" });
+  await expect(sections.getByRole("button")).toHaveText(["Graph", "Drawing board"]);
+  const GRAPH = "Graph: the case's data. Saved views are under Views or Cases.";
+  const BOARD = "Drawing board: your sketch; it does not change the case's data.";
+  await expect(region).toHaveAccessibleDescription(GRAPH);
+  await expect(region).toContainText(GRAPH);
   await page.getByRole("button", { name: "Map", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await sections.getByRole("button", { name: "Boards (coming)" }).focus();
-  await page.keyboard.press("Enter");
   await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
-  await sections.getByRole("button", { name: "Case" }).focus();
+  await sections.getByRole("button", { name: "Drawing board" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("glass, boards, on case kestrel")).toBeVisible();
+  await expect(sections.getByRole("button", { name: "Drawing board" })).toHaveAttribute("aria-current", "page");
+  await expect(region).toHaveAccessibleDescription(BOARD);
+  await expect(region).not.toContainText(GRAPH);
+  await sections.getByRole("button", { name: "Graph" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("glass, graph, on case kestrel")).toBeVisible();
+  await expect(sections.getByRole("button", { name: "Graph" })).toHaveAttribute("aria-current", "page");
+  await expect(region).toHaveAccessibleDescription(GRAPH);
   registerCovered(REGISTRY, "banner-sections-by-keyboard");
 });
 
@@ -430,12 +441,36 @@ for (const place of ["glass", "ingest", "rules", "admin"] as const) {
     expect.soft(await heading.evaluate(size), "the title at the row's size").toBe(rowSize);
     if (place === "glass") {
       const title = await heading.boundingBox();
-      const caseSection = await region.getByRole("button", { name: "Case", exact: true }).boundingBox();
-      expect.soft(Math.abs(title!.y + title!.height / 2 - (caseSection!.y + caseSection!.height / 2)), "on the same row as Case").toBeLessThan(6);
+      const caseSection = await region.getByRole("button", { name: "Graph", exact: true }).boundingBox();
+      expect.soft(Math.abs(title!.y + title!.height / 2 - (caseSection!.y + caseSection!.height / 2)), "on the same row as Graph").toBeLessThan(6);
       expect.soft(title!.x, "at the row's start").toBeLessThan(caseSection!.x);
-      expect.soft(await region.getByRole("button", { name: "Case", exact: true }).evaluate(size), "Case at the row's size").toBe(rowSize);
+      expect.soft(await region.getByRole("button", { name: "Graph", exact: true }).evaluate(size), "Graph at the row's size").toBe(rowSize);
     }
   });
+}
+
+// ADR-145 Amendment 13 against ADR-132 Amendment 8's slim row: at 1440 the open mode's note is in the row,
+// which stays one row (32 px measured); at 1024 it does not fit there and is on the line under it, still in
+// the region (66 px measured, the cross-link on that line too). Each mode's note, as each is a different length.
+for (const [width, most, inRow] of [[1440, 40, true], [1024, 72, false]] as const) {
+  for (const mode of ["Graph", "Drawing board"] as const) {
+    test(`govuk ${width}: the context row with ${mode}'s note is ${inRow ? "one row" : "at most two lines, the note under the row"}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto("/keyboard/places-harness.html?banner=1&brand=govuk");
+      const region = page.getByRole("region", { name: "You are in the Glass" });
+      await region.getByRole("button", { name: mode, exact: true }).focus();
+      await page.keyboard.press("Enter");
+      const note = region.locator(".context-banner__note");
+      await expect(note).toHaveText(mode === "Graph" ? /^Graph: the case's data/ : /^Drawing board: your sketch/);
+      const box = (await region.boundingBox())!;
+      const title = (await region.getByRole("heading", { level: 2 }).boundingBox())!;
+      const line = (await note.boundingBox())!;
+      expect.soft(box.height, "the region's height").toBeLessThanOrEqual(most);
+      expect.soft(line.y >= box.y && line.y + line.height <= box.y + box.height, "the note inside the region").toBe(true);
+      if (inRow) expect.soft(Math.abs(line.y + line.height / 2 - (title.y + title.height / 2)), "the note on the title's row").toBeLessThan(6);
+      else expect.soft(line.y, "the note under the title's row").toBeGreaterThanOrEqual(title.y + title.height);
+    });
+  }
 }
 
 for (const theme of ["dark", "light"] as const) {

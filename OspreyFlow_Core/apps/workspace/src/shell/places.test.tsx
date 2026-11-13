@@ -25,8 +25,8 @@ describe("the places' table", () => {
       ["rules", "Rules and Monitoring"],
       ["admin", "Admin"],
     ]);
-    // ADR-146 decision 2: Monitoring left the Glass.
-    expect(PLACES[0]!.sections).toEqual(["Case", "Boards"]);
+    // ADR-146 decision 2: Monitoring left the Glass. ADR-145 Amendment 13: the toggle is Graph · Drawing board.
+    expect(PLACES[0]!.sections).toEqual(["Graph", "Drawing board"]);
     expect(PLACES[1]!.sections).toEqual(["1 Model", "2 Sources", "3 Pipelines", "4 Runs"]);
     // The owner's M1: the place's tabs.
     expect(PLACES[2]!.sections).toEqual(["Alerts", "What raises alerts", "Held rows", "Changes"]);
@@ -155,22 +155,22 @@ describe("the context banner", () => {
 });
 
 describe("the banner's sections", () => {
-  it("draws the Glass's Case · Boards · Monitoring, Boards as coming, and goes to the one chosen", () => {
+  it("draws each section, one without its screens as coming, and goes to the one chosen", () => {
     const monitoring = vi.fn();
     render(
       <ContextBanner
         place="glass"
         sections={[
-          { id: "case", label: "Case", current: true, onSelect: () => {} },
-          { id: "boards", label: "Boards", current: false },
+          { id: "case", label: "Graph", current: true, onSelect: () => {} },
+          { id: "boards", label: "Drawing board", current: false },
           { id: "monitoring", label: "Monitoring", current: false, onSelect: monitoring },
         ]}
       />,
     );
     const nav = within(screen.getByRole("navigation", { name: "In the Glass" }));
-    expect(nav.getAllByRole("button").map((b) => b.textContent)).toEqual(["Case", "Boards (coming)", "Monitoring"]);
-    expect(nav.getByRole("button", { name: "Case" }).getAttribute("aria-current")).toBe("page");
-    expect(nav.getByRole("button", { name: "Boards (coming)" }).getAttribute("aria-disabled")).toBe("true");
+    expect(nav.getAllByRole("button").map((b) => b.textContent)).toEqual(["Graph", "Drawing board (coming)", "Monitoring"]);
+    expect(nav.getByRole("button", { name: "Graph" }).getAttribute("aria-current")).toBe("page");
+    expect(nav.getByRole("button", { name: "Drawing board (coming)" }).getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(nav.getByRole("button", { name: "Monitoring" }));
     expect(monitoring).toHaveBeenCalled();
   });

@@ -6,8 +6,8 @@
       "name": "The Glass",
       "key": "g",
       "sections": [
-        "Case",
-        "Boards"
+        "Graph",
+        "Drawing board"
       ],
       "rights": [
         "ask_model",

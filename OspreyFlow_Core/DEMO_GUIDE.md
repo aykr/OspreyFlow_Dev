@@ -754,7 +754,10 @@ types* left the rail too: it is a section of Admin, under *Data*. The Studio has
 where you are ("You are in the Glass · Case … · reads …"), and for an account holding both the Glass
 and the Studio it carries the way across, *Open … in the Ingest Studio ↗* and *← Back to case … in the
 Glass*, which replaces the Studio rail's *Back to the investigation*. In the Glass the same line carries
-*Case · Boards · Monitoring*; *Boards* says "(coming)" and does nothing yet. Since ADR-145 Amendment 2
+*Case · Boards · Monitoring*, renamed *Graph · Drawing board* on 13 November 2026 (ADR-145 Amendment
+13), with a line under it saying which is open: "Graph: the case's data. Saved views are under Views or
+Cases." or "Drawing board: your sketch; it does not change the case's data."; the graph's toolbar has
+**Views ▾**, the case's saved views one click away (ADR-144 Amendment 3). Since ADR-145 Amendment 2
 (the case screen lightened, 7 November 2026) *Monitoring*, with its open-alert count, is reached from
 that line; the rail keeps *Cases*, *Explore*, *Ask & Chat* and *Dashboards*, with *History*,
 *Ownership* and *Connection strength* under its ⋯ *Explore Details* (ADR-145 Amendment 12); the view switch keeps *Graph* and *Map*, with *Matrix* and *Reports*

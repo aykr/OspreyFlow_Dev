@@ -479,6 +479,8 @@ export const VIEW_ACTIONS = defineActionRegistry("VIEW_ACTIONS", [
   "go-back-to-the-case-from-an-open-view-by-keyboard",
   // ADR-143 Amendment 2 decision 7 (L3.9).
   "open-a-merged-drawings-notes-by-keyboard",
+  // ADR-144 Amendment 3: the graph's *Views ▾*, a view chosen there, the lens open on it, and Back.
+  "open-a-view-from-views-by-the-graph-by-keyboard",
 ] as const);
 
 /** Drawing boards (ADR-143 decisions 4 to 7; Amendment 2 decision 5; L3.3): a board opened, made
@@ -852,6 +854,7 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   // sections, and Home's cards.
   "switch-place-by-keyboard",
   "banner-cross-link-by-keyboard",
+  // ADR-145 Amendment 13: the sections are the mode toggle, Graph · Drawing board, with each mode's note.
   "banner-sections-by-keyboard",
   "home-place-cards-by-keyboard",
   // ADR-145 Amendment 2 (variant B): the rail's More and each destination under it, More views, and a
