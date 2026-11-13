@@ -1584,6 +1584,17 @@ def _render_env(config: OspreyConfig) -> str:
             if _uses_clickhouse(config)
             else []
         ),
+        # ADR-150 decision 7: where the worker's indexer and the search service find OpenSearch,
+        # and the deployment's own index alias, so two deployments on one server never meet.
+        *(
+            [
+                "OPENSEARCH_HOST=opensearch",
+                "OPENSEARCH_PORT=9200",
+                f"OSPREY_SEARCH_INDEX_ALIAS=ospreyflow-{compose_project(config)}",
+            ]
+            if config.components.search is SearchBackend.OPENSEARCH
+            else []
+        ),
         f"OSPREY_IDENTITY_PROVIDER={config.governance.identity_provider}",
         f"OSPREY_HANDLING_SCHEME={config.governance.handling_scheme}",
         # ADR-148 decision 10: the deployment's marking ceiling, the scheme's highest when unset.

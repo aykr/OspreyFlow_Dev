@@ -23,6 +23,7 @@ DOC = f"{B}/services/search_index/test_document.py"
 CLIENT = f"{B}/services/search_index/test_client.py"
 REACH = f"{B}/services/search_index/test_index_feed_reach.py"
 RUN = f"{B}/services/search_index/test_run.py"
+HARNESS = f"{B}/harness/test_search_index_render_and_restore.py"
 ADAPTER = "OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py"
 INDEXER = "OspreyFlow_Core/services/search_index/indexer.py"
 DOCUMENT = "OspreyFlow_Core/services/search_index/document.py"
@@ -128,6 +129,12 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ("V25 a prefix longer than 20 characters matches nothing", "OspreyFlow_Core/services/search_index/mapping.py",
      "PREFIX_MAX_CHARS = 50\n", "PREFIX_MAX_CHARS = 20\n",
      [f"{FEED}::test_a_long_typed_prefix_still_finds_the_name"]),
+    ("V26 the render tells no service where OpenSearch is", "OspreyFlow_Core/harness/render.py",
+     "                \"OPENSEARCH_HOST=opensearch\",\n", "",
+     [f"{HARNESS}::test_a_deployment_with_opensearch_tells_the_conduit_and_worker_where_it_is"]),
+    ("V27 a restore leaves the index empty", "OspreyFlow_Core/harness/restore.py",
+     "    rebuild_search_index(compose_file)\n", "",
+     [f"{HARNESS}::test_the_restore_rebuilds_after_every_store_is_back"]),
     ("V23 the host and port win over the URL", "OspreyFlow_Core/services/search_index/client.py",
      "        url = (env.get(\"OPENSEARCH_URL\") or \"\").strip()\n", "        url = \"\"\n",
      [f"{CLIENT}::test_the_url_wins_over_host_and_port"]),
@@ -154,7 +161,7 @@ def _run(tests: list[str]) -> tuple[str, str]:
 
 
 def main() -> int:
-    every = [OUTBOX, FEED, DOC, CLIENT, REACH, RUN]
+    every = [OUTBOX, FEED, DOC, CLIENT, REACH, RUN, HARNESS]
     state, line = _run(every)
     print(f"built: {state} - {line}")
     if state != "GREEN":

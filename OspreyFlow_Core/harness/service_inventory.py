@@ -143,6 +143,18 @@ INVENTORY: tuple[ServiceEntry, ...] = (
         ),
     ),
     ServiceEntry(
+        directory="services/search_index",
+        kind=Kind.LIBRARY,
+        entrypoint=None,
+        imported_by=("services/api",),
+        created_in="v0.5.2 (ADR-150)",
+        note=(
+            "The search index feed: run by services/api/worker_main.py where an OpenSearch is "
+            "configured, and by scripts/rebuild_search_index.py and scripts/search_index_drift.py. "
+            "Ships inside the api image."
+        ),
+    ),
+    ServiceEntry(
         directory="services/geocoder",
         kind=Kind.LIBRARY,
         entrypoint=None,
