@@ -19,13 +19,16 @@ import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { createWorkingSet } from "../src/workingset/store";
 import { guideUrl } from "../src/home/guides";
-import { MORE_VIEWS, ON_THE_RAIL, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS, VIEW_SWITCH } from "../src/shell/railLayout";
+import { offeredViews, ON_THE_RAIL, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS } from "../src/shell/railLayout";
 import type { RailEntry } from "../src/rights/visibility";
 
 // The rail and the view switch as `App.tsx` lays them out (the owner's navigation decision, ADR-145 Amendment 15).
 const RAIL_ENTRIES: readonly RailEntry[] = ON_THE_RAIL;
+// The views offered as `App.tsx` offers them (`offeredViews`): `?rights=` gives the person's rights, by default an
+// investigator who reads reports and traces ownership, offered every view.
+const harnessRights = new URLSearchParams(window.location.search).get("rights") ?? "investigate,read_reports,trace_ownership";
 const SWITCHED = splitViews(
-  [...VIEW_SWITCH, ...MORE_VIEWS].map((id) => ({ id, label: VIEW_LABELS[id], pressed: id === "graph", onSelect: () => window.__TOPBAR__!.views.push(id) })),
+  offeredViews(new Set(harnessRights.split(","))).map((id) => ({ id, label: VIEW_LABELS[id], pressed: id === "graph", onSelect: () => window.__TOPBAR__!.views.push(id) })),
 );
 import { useHelpKey, WorkspaceWelcome } from "../src/welcome/WorkspaceWelcome";
 import type { OntologySchema } from "../../../packages/schemas/generated";

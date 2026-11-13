@@ -3,7 +3,7 @@
 // marked, and the top bar's one view switch and its More views, with the names people see. `App.tsx` draws it from these, and the keyboard
 // harnesses read the same lists, so a change here is what their cases see. Which entries a person sees
 // at all is `rights/visibility.ts`'s `railEntries`, unchanged.
-import type { RailEntry } from "../rights/visibility";
+import { landingView, railEntries, viewsFor, type RailEntry, type Rights } from "../rights/visibility";
 
 /** On the rail itself, in this order: the panel openers alone (the owner's navigation decision of 13 November 2026,
  * ADR-145 Amendment 15). Cases is reached from the case line (its switcher's *All cases*, and *Views in this case*);
@@ -70,4 +70,23 @@ export function splitViews<T extends { id: string }>(offered: readonly T[]): { m
   const main = inOrder(VIEW_SWITCH);
   const more = inOrder(MORE_VIEWS);
   return main.length > 0 ? { main, more } : { main: more, more: [] };
+}
+
+/** The views this person is offered, in the switch's order then More views': each by the rights that offered it
+ * before Amendment 15 (`viewsFor`, `railEntries`), the drawing board by `investigate` as its routes ask (offered with
+ * the graph). `App.tsx` and the keyboard harnesses read this one list, so a harness cannot offer what the App would
+ * not. While the rights are unknown (`null`) it offers what the Glass always offered (ADR-112). */
+export function offeredViews(rights: Rights): SwitchView[] {
+  const views = viewsFor(rights);
+  const offered = new Set<string>([...views, ...railEntries(rights), ...(views.includes("graph") ? ["boards"] : [])]);
+  return [...VIEW_SWITCH, ...MORE_VIEWS].filter((id) => offered.has(id));
+}
+
+/** The view to give way to when the one open is not offered (exactly one view current, Amendment 15): the Glass's
+ * landing view (`landingView`) where it is offered, else the first offered (the built-in Administrator's Connection
+ * strength), else the landing view. */
+export function viewToLandOn(rights: Rights): string {
+  const offered: readonly string[] = offeredViews(rights);
+  const landing = landingView(rights);
+  return offered.includes(landing) ? landing : (offered[0] ?? landing);
 }

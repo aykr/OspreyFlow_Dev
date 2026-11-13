@@ -203,6 +203,8 @@ test("the rail's Help opens and closes the keys panel by keyboard, as ? and Esc 
   await expect(panel).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
+  // ADR-145 Amendment 15: closing returns focus to the entry that opened it.
+  await expect(help).toBeFocused();
   await page.locator("body").focus();
   await page.keyboard.press("?");
   await expect(panel).toBeVisible();
@@ -362,7 +364,7 @@ test("the case menu's All cases opens the Cases panel by keyboard, and focus ret
 // changes none of it.
 for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
   test(`${brand} ${theme}: exactly one view is current, and a rail panel changes none of it`, async ({ page }) => {
-    await page.goto(`/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts&brand=${brand}`);
+    await page.goto(`/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts,read_reports,trace_ownership&brand=${brand}`);
     await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
     const group = page.getByRole("group", { name: "View" });
     const pressed = group.locator('[aria-pressed="true"]');

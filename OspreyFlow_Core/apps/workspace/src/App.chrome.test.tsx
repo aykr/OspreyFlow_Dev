@@ -475,6 +475,38 @@ describe("Part B after review (ADR-145 Amendment 15)", () => {
     expect(screen.getByRole("button", { name: /^Figures/ }).className).toContain("menu-button--pressed");
   });
 
+  test("Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current", async () => {
+    let answer: (rights: string[]) => void = () => undefined;
+    const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+      /\/v1\/me\/rights$/.test(String(input).split("?")[0]!)
+        ? new Promise<Response>((resolve) => (answer = (rights) => resolve(new Response(JSON.stringify({ rights })))))
+        : held(input, init),
+    );
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    fireEvent.click(await within(await screen.findByRole("group", { name: "More views" })).findByRole("button", { name: "Ownership" }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: /^Ownership/ }).className).toContain("menu-button--pressed"));
+    answer(["investigate"]);
+    await vi.waitFor(() => expect(switchOf().main).toEqual(["Graph", "Map", "Drawing board"]));
+    await vi.waitFor(() =>
+      expect(within(screen.getByRole("group", { name: "View" })).queryAllByRole("button", { pressed: true }).map((b) => b.textContent)).toEqual(["Graph"]),
+    );
+  });
+
+  test("the built-in Administrator, offered Connection strength alone, has it in the switch and current", async () => {
+    // rights.py's Administrator: manage_dashboards and manage_strength_influencers, neither investigate nor read_reports.
+    withRights(["manage_dashboards", "manage_strength_influencers", "manage_people"]);
+    render(<App />);
+    await vi.waitFor(() => expect(switchOf().main).toEqual(["Connection strength"]));
+    await vi.waitFor(() =>
+      expect(within(screen.getByRole("group", { name: "View" })).queryAllByRole("button", { pressed: true }).map((b) => b.textContent)).toEqual([
+        "Connection strength",
+      ]),
+    );
+  });
+
   test("exactly one view is current: one pressed in the switch, or none there and More views naming its own", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });

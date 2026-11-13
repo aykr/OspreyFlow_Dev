@@ -55,7 +55,9 @@ import { requestOpening, takeOpening } from "./admin/needsYou/openings";
 import { AccountMenu } from "./auth/AccountMenu";
 import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
 import { LeftRail } from "./shell/LeftRail";
-import { MORE_VIEWS, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS, VIEW_SWITCH } from "./shell/railLayout";
+import { MORE_VIEWS, offeredViews, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS, VIEW_SWITCH, viewToLandOn } from "./shell/railLayout";
+
+const ALL_SWITCH_VIEWS = [...VIEW_SWITCH, ...MORE_VIEWS];
 import { Drawer } from "./design/primitives/Drawer";
 import { BuildAReportLink, TopBar } from "./shell/TopBar";
 import { ContextBanner, crossLinkFor, useCaseContext } from "./shell/ContextBanner";
@@ -153,7 +155,6 @@ import {
   landingView,
   railEntries,
   showsInspector,
-  viewsFor,
   type RailEntry,
   type StartPlace,
   startPlaces,
@@ -995,13 +996,13 @@ export function App() {
   }, [rights, rightsSettled, view]);
   // ADR-145 decision 2: the banner's case and the datasets it reads, as this person may see them.
   const caseContext = useCaseContext(API_BASE_URL, bearerToken, investigationId);
-  // ADR-112: someone who may not investigate (a Reports Viewer) lands where they may look.
+  // ADR-112: someone who may not investigate (a Reports Viewer) lands where they may look. ADR-145 Amendment 15: any
+  // view of the switch this person is not offered gives way (one chosen before the rights arrived, or a refresh's),
+  // so exactly one view stays current, the Administrator's Connection strength among them.
   useEffect(() => {
-    const views: string[] = viewsFor(rights);
-    // ADR-145 Amendment 15: the drawing board is offered with the graph (`investigate`), so a view kept from an earlier
-    // load that this person is not offered gives way too, and exactly one view stays current.
-    if (((view === "graph" || view === "map" || view === "matrix" || view === "reports") && !views.includes(view)) || (view === "boards" && !views.includes("graph"))) {
-      setView(landingView(rights));
+    const offered: readonly string[] = offeredViews(rights);
+    if ((ALL_SWITCH_VIEWS as readonly string[]).includes(view) && !offered.includes(view)) {
+      setView(viewToLandOn(rights) as typeof view);
     }
   }, [rights, view]);
   const [dossierNodeId, setDossierNodeId] = useState<string | null>(null);
@@ -1725,14 +1726,11 @@ export function App() {
   const railSplit = splitRail(railTools);
   // Amendment 15: one view switch in the top bar, Graph · Map · Drawing board · Reports, then More views with Matrix,
   // Figures, Ownership and Connection strength; exactly one view is current. *Reports* is ADR-111 Amendment 3's
-  // dashboards view, unchanged inside. Someone offered none of the four (a Reports Viewer offered Figures alone) has
-  // theirs in the switch itself. Each is offered by the rights that offered it before (`viewsFor`, `railEntries`);
-  // the drawing board by `investigate`, as its routes ask.
+  // dashboards view, unchanged inside. Someone offered none of the four (the built-in Administrator, offered Connection
+  // strength alone) has theirs in the switch itself. What is offered is `offeredViews`, which the harnesses read too.
   const reportsUrl = deploymentReportsUrl();
-  const offered = new Set<string>([...viewsFor(rights), ...railEntries(rights), ...(viewsFor(rights).includes("graph") ? ["boards"] : [])]);
   const { main: mainViews, more: otherViews } = splitViews(
-    [...VIEW_SWITCH, ...MORE_VIEWS]
-      .filter((id) => offered.has(id))
+    offeredViews(rights)
       .map((id) => ({
         id,
         label: VIEW_LABELS[id],
