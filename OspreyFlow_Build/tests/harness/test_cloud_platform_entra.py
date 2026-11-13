@@ -299,3 +299,12 @@ def test_the_set_up_console_is_no_part_of_the_render(fixture: str) -> None:
         assert "harness" not in command, container["name"]
     served = {p["service"] for rule in values["ingress"]["rules"] for p in rule["paths"]}
     assert served <= {w["name"] for w in values["workloads"]}
+
+
+def test_a_restore_stops_superset_and_the_report_sync_with_the_other_writers() -> None:
+    """ADR-148 Amendment 11: both write to the managed PostgreSQL the restore points in time (the mart,
+    Superset's own settings), so neither runs while it is switched; by the writers' own rule (each
+    calls the Conduit, `egress.paths`), not by a list."""
+    writers = _values(_reporting())["backups"]["writers"]
+    assert {"report-sync", "superset"} <= set(writers)
+    assert not {"report-sync", "superset"} & set(_values(_config())["backups"]["writers"])

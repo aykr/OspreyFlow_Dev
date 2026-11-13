@@ -673,7 +673,7 @@ def test_with_reporting_on_the_managed_postgresql_counts_superset_and_the_report
     install = _artefacts(reporting)["INSTALL.md"]
     needs = install[install.index("**What it needs.**") : install.index("## 1.")]
     assert f"`max_connections` of at least {rb.postgres_max_connections(reporting)}" in needs
-    assert "Superset and the report sync" in needs
+    assert "the gateway, Superset, the report sync and a reserve" in needs
 
 def test_the_decommission_s_settings_hold_after_step_7_removes_their_secret(
     runbooks: dict[str, str], tmp_path: Any
@@ -714,3 +714,43 @@ def test_the_decommission_s_settings_hold_after_step_7_removes_their_secret(
     (tmp_path / "work" / "prefix").unlink()
     neither = run(None)
     assert neither.returncode != 0 and "PREFIX=" in neither.stdout + neither.stderr
+
+
+SUPERSET_APP = "cccccccc-dddd-4eee-8fff-000000000000"
+
+
+def _reporting_on() -> OspreyConfig:
+    raw = _config().model_dump(mode="json", exclude_none=True)
+    raw["reporting"] = {"sync": True, "superset": True}
+    raw["cloud_platform"]["claims"]["superset_client_id"] = SUPERSET_APP
+    return OspreyConfig.model_validate(raw)
+
+
+def test_with_reporting_on_the_install_says_what_entra_s_administrator_registers_and_where_secrets_go() -> None:
+    """ADR-148 Amendments 9-11: Superset's registration (its redirect, its secret, the API's scope) and
+    the API's Dashboard.Read app role, before step 2, whose Terraform asks for their secrets; the
+    reports section after sign-in, its restart a later block; Power BI an option, not a step."""
+    artefacts = _artefacts(_reporting_on())
+    install = artefacts["INSTALL.md"]
+    before = install[: install.index("## 1.")]
+    bi = next(line for line in install.splitlines() if "/oauth-authorized/entra" in line)
+    assert "https://bi." in bi
+    assert SUPERSET_APP in before and "superset_oidc_client_secret" in before
+    assert "`Dashboard.Read`" in before and "`report_sync_dashboards` is `[]`" in before
+    reports = install[install.index("## 6a. Reports") : install.index("## 7. Check")]
+    assert "Admin › Dashboards" in reports and "report_sync_dashboards" in reports
+    assert "an option, not a step" in reports and "osprey_reports" in reports
+    assert "`superset`" in reports and "`litellm`" in reports
+    ordered = "\n".join(command_blocks(install, on_the_platform=True))
+    assert "rollout restart deploy/report-sync" not in ordered  # a `bash later` block
+    secrets = artefacts["terraform/secrets.tf"]
+    for given in ("superset_oidc_client_secret", "report_sync_dashboards"):
+        assert f'variable "{given}"' in secrets and f'random_password" "{given}"' not in secrets
+    assert "REPORT_SYNC_DASHBOARDS        = var.report_sync_dashboards" in secrets
+
+
+def test_without_reporting_the_install_says_nothing_of_it() -> None:
+    install = _artefacts(_config())["INSTALL.md"]
+    assert "## 6a. Reports" not in install and "oauth-authorized" not in install
+    assert "Dashboard.Read" not in install and "Power BI" not in install
+

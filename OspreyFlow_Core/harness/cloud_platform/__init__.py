@@ -270,6 +270,14 @@ def person_given(config: OspreyConfig) -> set[str]:
     given = set(model_key_variables(config).values()) | set(connection_secret_variables(config))
     if config.mail is not None and config.mail.username:
         given.add("OSPREY_SMTP_PASSWORD")
+    # ADR-148 Amendment 11: Superset's client secret is the one the client's Entra administrator makes
+    # for its registration, never one minted here; and the report sync's dashboard identities (each
+    # an Entra registration's application id and secret, Amendment 10) are given as they are
+    # registered, so a later apply writes the list given, never a fixed `[]` over it.
+    if config.reporting.superset:
+        given.add("SUPERSET_OIDC_CLIENT_SECRET")
+    if config.reporting.sync:
+        given.add("REPORT_SYNC_DASHBOARDS")
     return given
 
 
