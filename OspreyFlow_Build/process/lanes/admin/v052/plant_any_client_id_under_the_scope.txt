@@ -1,0 +1,26 @@
+# plant: any_client_id_under_the_scope (OspreyFlow_Core/services/report_sync/__main__.py)
+# replaced: '        if scope is not None and (not _APPLICATION_ID.match(client_id) or not secret):'
+# with: '        if scope is not None and not secret:'
+# run: pytest -k 'names_the_scope'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_on_entra_the_configuration_names_the_scope_and_an_application_id _____
+
+    def test_on_entra_the_configuration_names_the_scope_and_an_application_id() -> None:
+        from services.report_sync.__main__ import dashboards_from_env
+    
+        env = {"REPORT_SYNC_TOKEN_URL": "https://login.microsoftonline.com/t/oauth2/v2.0/token",
+               "REPORT_SYNC_CONDUIT_URL": "http://api:8000", "REPORT_SYNC_SCOPE": API_SCOPE,
+               "REPORT_SYNC_DASHBOARDS": f'[{{"client_id": "{DASHBOARD_APP}", "secret": "s"}}]'}  # fmt: skip
+        (board,) = dashboards_from_env(env)
+        assert (board.client_id, board.scope) == (DASHBOARD_APP, API_SCOPE)
+        keycloak_named = '[{"client_id": "osprey-dashboard-board", "secret": "s"}]'
+>       with pytest.raises(SystemExit, match="application id"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE SystemExit
+
+../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py:259: Failed
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py::test_on_entra_the_configuration_names_the_scope_and_an_application_id
+1 failed, 109 deselected in 1.87s

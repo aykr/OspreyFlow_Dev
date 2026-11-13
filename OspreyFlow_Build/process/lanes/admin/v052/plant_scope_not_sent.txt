@@ -1,0 +1,48 @@
+# plant: scope_not_sent (OspreyFlow_Core/services/report_sync/sync.py)
+# replaced: '                      **({"scope": self._scope} if self._scope else {})},'
+# with: '                      },'
+# run: pytest -k 'api_s_scope'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________ test_on_entra_the_token_asks_for_the_api_s_scope _______________
+
+world = ('http://127.0.0.1:49696', <tests.services.report_sync.test_report_sync._World object at 0x1233dbad0>)
+
+    async def test_on_entra_the_token_asks_for_the_api_s_scope(world: tuple[str, _World]) -> None:
+        """Entra's v2.0 endpoint refuses a client-credentials request without the API's scope."""
+        base, w = world
+        w.scope = API_SCOPE
+        asked = TokenSource(f"{base}/token", DASHBOARD_APP, "right-secret", scope=API_SCOPE)
+        unasked = TokenSource(f"{base}/token", DASHBOARD_APP, "right-secret")
+        try:
+>           assert (await asked.get()).startswith("t-")
+                    ^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py:242: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <services.report_sync.sync.TokenSource object at 0x12345c0b0>
+
+    async def get(self) -> str:
+        if self._token is not None and self._clock() < self._expires - self._margin:
+            return self._token
+        try:
+            response = await self._http.post(
+                self._url,
+                data={"grant_type": "client_credentials", "client_id": self._client_id,
+                      "client_secret": self._secret,
+                      },
+            )  # fmt: skip
+        except httpx.HTTPError as e:
+            raise SyncRefused(f"the identity provider could not be reached: {e}") from e
+        if response.status_code != 200:
+>           raise SyncRefused(
+                f"the identity provider refused {self._client_id} ({response.status_code})"
+            )
+E           services.report_sync.sync.SyncRefused: the identity provider refused dddddddd-eeee-4fff-8000-111111111111 (400)
+
+services/report_sync/sync.py:85: SyncRefused
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py::test_on_entra_the_token_asks_for_the_api_s_scope
+1 failed, 109 deselected in 2.27s

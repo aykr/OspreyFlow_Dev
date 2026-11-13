@@ -1,0 +1,45 @@
+# plant: own_clients_admitted (OspreyFlow_Core/packages/principal_auth/__init__.py)
+# replaced: '    if not isinstance(client, str) or not _GUID.match(client) or client in own:'
+# with: '    if not isinstance(client, str) or not _GUID.match(client):'
+# run: pytest -k 'no_registered_dashboard and (glass or itself)'
+
+F.                                                                       [100%]
+=================================== FAILURES ===================================
+_ test_an_app_only_token_that_is_no_registered_dashboard_is_refused[the-glass] _
+
+claims = {'aud': 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'iss': 'https://login.microsoftonline.com/00000000-1111-4222-8333-444444444444/v2.0', 'iat': 1794602860, 'nbf': 1794602860, ...}
+why = 'client'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x106db1230>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x106db0f90>)
+jwks_url = 'http://127.0.0.1:49632/jwks.json'
+
+    @pytest.mark.parametrize(
+        ("claims", "why"),
+        [
+            (app_only_claims(roles=None), "Dashboard.Read"),
+            (app_only_claims(roles=["Something.Else"]), "Dashboard.Read"),
+            (app_only_claims(UNREGISTERED), "registered"),
+            (app_only_claims(tid=OTHER_TENANT), "tenant"),
+            (app_only_claims(GLASS), "client"),
+            (app_only_claims(CLIENT_ID), "client"),
+            (app_only_claims("not-a-guid"), "client"),
+            (app_only_claims(appid=UNREGISTERED), "client"),
+        ],
+        ids=["no-role", "another-role", "unregistered", "another-tenant", "the-glass",
+             "this-api-itself", "not-an-application-id", "two-clients"],
+    )  # fmt: skip
+    def test_an_app_only_token_that_is_no_registered_dashboard_is_refused(
+        claims: dict[str, object], why: str, keypair, jwks_url
+    ) -> None:
+        dashboards = FakeDashboards()
+        for own in (GLASS, CLIENT_ID):  # even if registered
+            dashboards.rows[(TENANT, own)] = StoredDashboard(own, "OFFICIAL", "unit-1", ())
+>       with pytest.raises(PrincipalResolutionError, match=why):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE PrincipalResolutionError
+
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:120: Failed
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:47:41] "GET /jwks.json HTTP/1.1" 200 -
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[the-glass]
+1 failed, 1 passed, 108 deselected in 2.89s
