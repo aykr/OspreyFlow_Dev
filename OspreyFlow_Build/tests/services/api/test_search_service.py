@@ -24,7 +24,7 @@ import pytest
 from services.api import search_index_query as q
 from services.api import search_service as s
 
-from schemas.domain import Node, Principal
+from schemas.domain import NOT_SAME_AS, SAME_AS, Edge, Node, Principal
 from tests.services.api.test_search_route import _node
 
 ANALYST = Principal(
@@ -46,10 +46,23 @@ def _typed(node_id: str, type_: str = "Person", **props: Any) -> Node:
 
 
 class _Graph:
-    def __init__(self, nodes: Sequence[Node] = (), exact: Sequence[Node] = ()) -> None:
+    def __init__(
+        self, nodes: Sequence[Node] = (), exact: Sequence[Node] = (), links: Sequence[Edge] = ()
+    ) -> None:
         self.nodes = {n.id: n for n in nodes}
         self.exact = list(exact)
+        self.links = list(links)
         self.asked: list[list[str]] = []
+        self.among: list[list[str]] = []
+
+    async def edges_among(
+        self, node_ids: Sequence[str], principal: Principal, *, edge_types: Sequence[str]
+    ) -> list[Edge]:
+        self.among.append(list(node_ids))
+        ids = set(node_ids)
+        return [
+            e for e in self.links if e.type in edge_types and e.source in ids and e.target in ids
+        ]
 
     async def get_nodes(self, node_ids: Sequence[str], principal: Principal) -> list[Node]:
         self.asked.append(list(node_ids))
@@ -113,6 +126,7 @@ def _ask(
     graph: _Graph,
     index: _Index | None,
     access: dict[str, Any] | None = ACCESS,
+    tau: float | None = None,
 ) -> s.SearchPageResponse:
     return asyncio.run(
         s.search_page(
@@ -124,6 +138,7 @@ def _ask(
             phonetic_codes=lambda w: [],
             types=TYPES,
             case_datasets=CASE,
+            tau=tau,
         )
     )
 
@@ -269,3 +284,76 @@ def test_the_fallback_pages_today_s_results() -> None:
     out = _ask(s.SearchPageRequest(query="x", page=2, page_size=2), graph, None)
     assert [r.node_ids for r in out.results] == [["p2"], ["p3"]]
     assert out.more is True
+
+
+# --- merged entities (page A §2, as ruled) --------------------------------------------------------
+
+
+def _link(kind: str, a: str, b: str, score: float = 0.97) -> Edge:
+    from tests.services.api.test_search_route import _node as _n
+
+    base = _n("x")
+    return Edge(
+        id=f"{kind}:{a}:{b}",
+        type=kind,
+        source=a,
+        target=b,
+        properties={"score": score},
+        provenance=base.provenance,
+        handling=base.handling,
+        audit=base.audit,
+    )
+
+
+def test_visible_hits_the_case_reads_as_one_are_one_result() -> None:
+    graph = _Graph([_typed("a"), _typed("b"), _typed("c")], links=[_link(SAME_AS, "a", "b")])
+    reply = _reply([_hit("a", 3000), _hit("c", 2900), _hit("b", 2500)])
+    out = _ask(s.SearchPageRequest(query="x"), graph, _Index(reply), tau=0.95)
+    assert [(r.node_ids, r.match.band) for r in out.results] == [
+        (["a", "b"], "identifier"),
+        (["c"], "name_exact"),
+    ]
+    assert [n.id for n in out.nodes] == ["a", "b", "c"]
+
+
+def test_a_merge_below_the_cases_threshold_or_split_is_not_made() -> None:
+    reply = _reply([_hit("a", 3000), _hit("b", 2500)])
+    below = _Graph([_typed("a"), _typed("b")], links=[_link(SAME_AS, "a", "b", 0.90)])
+    assert len(_ask(s.SearchPageRequest(query="x"), below, _Index(reply), tau=0.95).results) == 2
+    split = _Graph(
+        [_typed("a"), _typed("b")], links=[_link(SAME_AS, "a", "b"), _link(NOT_SAME_AS, "a", "b")]
+    )
+    assert len(_ask(s.SearchPageRequest(query="x"), split, _Index(reply), tau=0.95).results) == 2
+
+
+def test_a_member_the_reader_may_not_see_adds_nothing() -> None:
+    """The hidden member is a hit the graph does not return: it is never asked for links, so it
+    joins nothing and names nothing."""
+    graph = _Graph([_typed("a")], links=[_link(SAME_AS, "a", "hidden")])
+    reply = _reply([_hit("a", 3000), _hit("hidden", 2900)])
+    out = _ask(s.SearchPageRequest(query="x"), graph, _Index(reply), tau=0.95)
+    assert graph.among == []  # one visible hit: nothing to join
+    assert [r.node_ids for r in out.results] == [["a"]]
+    graph = _Graph([_typed("a"), _typed("b")], links=[_link(SAME_AS, "a", "hidden")])
+    _ask(
+        s.SearchPageRequest(query="x"),
+        graph,
+        _Index(_reply([_hit("a", 3000), _hit("hidden", 2900), _hit("b", 2500)])),
+        tau=0.95,
+    )
+    assert graph.among == [["a", "b"]]
+
+
+def test_with_no_threshold_nothing_is_merged_and_no_link_is_read() -> None:
+    graph = _Graph([_typed("a"), _typed("b")], links=[_link(SAME_AS, "a", "b")])
+    out = _ask(
+        s.SearchPageRequest(query="x"), graph, _Index(_reply([_hit("a", 3000), _hit("b", 3000)]))
+    )
+    assert len(out.results) == 2
+    assert graph.among == []
+
+
+def test_the_fallback_merges_the_same_way() -> None:
+    graph = _Graph(exact=[_typed("a"), _typed("b")], links=[_link(SAME_AS, "a", "b")])
+    out = _ask(s.SearchPageRequest(query="x"), graph, None, tau=0.95)
+    assert [r.node_ids for r in out.results] == [["a", "b"]]

@@ -22,9 +22,10 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+from services.resolve.projection import compute_clusters
 
 from ports.graph import GraphPort
-from schemas.domain import Node, Principal
+from schemas.domain import NOT_SAME_AS, SAME_AS, Node, Principal
 
 from . import search_index_query as q
 from .identifier_reading import search_alternative
@@ -193,9 +194,11 @@ async def search_page(
     phonetic_codes: q.PhoneticCodes,
     types: Sequence[str],
     case_datasets: Mapping[str, str],
+    tau: float | None = None,
 ) -> SearchPageResponse:
-    """`case_datasets` maps each of the case's datasets to its name. A `ValueError` is the caller's
-    mistake (a dataset outside the case, a page too deep) and becomes a 422."""
+    """`case_datasets` maps each of the case's datasets to its name, and `tau` is the case's
+    resolution threshold (`None`: nothing is merged). A `ValueError` is the caller's mistake (a
+    dataset outside the case, a page too deep) and becomes a 422."""
     _check_datasets(request, principal)
     if searcher is not None and access_filter is not None:
         try:
@@ -208,10 +211,43 @@ async def search_page(
                 phonetic_codes,
                 types,
                 case_datasets,
+                tau,
             )
         except IndexUnavailable:
             pass
-    return await _from_graph(request, principal, graph, case_datasets)
+    return await _from_graph(request, principal, graph, case_datasets, tau)
+
+
+async def _merged(
+    graph: GraphPort,
+    results: list[SearchResult],
+    principal: Principal,
+    tau: float | None,
+) -> list[SearchResult]:
+    """Page A §2, as ruled: the visible hits on this page that the case reads as one entity at
+    `tau` become one result, in the place of its best member. Only visible hits are asked for
+    links, and only the links the reader may see come back (the adapter's filter), so a member the
+    reader may not see joins nothing and adds nothing."""
+    if tau is None or len(results) < 2:
+        return results
+    ids = [r.node_ids[0] for r in results]
+    links = await graph.edges_among(ids, principal, edge_types=[SAME_AS, NOT_SAME_AS])
+    cluster = compute_clusters(
+        ids,
+        [e for e in links if e.type == SAME_AS],
+        [e for e in links if e.type == NOT_SAME_AS],
+        tau,
+    )
+    first: dict[str, SearchResult] = {}
+    for result in results:
+        key = cluster[result.node_ids[0]]
+        lead = first.get(key)
+        if lead is None:
+            first[key] = result.model_copy(deep=True)
+            continue
+        lead.node_ids.append(result.node_ids[0])
+        lead.datasets = sorted(set(lead.datasets) | set(result.datasets))
+    return list(first.values())
 
 
 async def _from_index(
@@ -223,6 +259,7 @@ async def _from_index(
     phonetic_codes: q.PhoneticCodes,
     types: Sequence[str],
     case_datasets: Mapping[str, str],
+    tau: float | None,
 ) -> SearchPageResponse:
     size = _page_size(request)
     body = q.build_search_body(
@@ -255,6 +292,8 @@ async def _from_index(
         for hit in found.hits
         if hit.node_id in visible
     ]
+    shown = len(results)
+    results = await _merged(graph, results, principal, tau)
     groups = [
         SearchGroup(key=k, label=k, count=c)
         for k, c in sorted(found.counts.items(), key=lambda kv: (-kv[1], kv[0]))
@@ -269,7 +308,7 @@ async def _from_index(
         limited=False,
         limited_reason=None,
         total=sum(g.count for g in groups),
-        counts_exact=found.counts_exact and len(results) == len(found.hits),
+        counts_exact=found.counts_exact and shown == len(found.hits),
         groups=groups,
         filters=OfferedFilters(
             datasets=[
@@ -283,7 +322,7 @@ async def _from_index(
         page_size=size,
         more=found.more,
         results=results,
-        nodes=[visible[r.node_ids[0]] for r in results],
+        nodes=[visible[i] for r in results for i in r.node_ids],
     )
 
 
@@ -292,6 +331,7 @@ async def _from_graph(
     principal: Principal,
     graph: GraphPort,
     case_datasets: Mapping[str, str],
+    tau: float | None,
 ) -> SearchPageResponse:
     """Today's exact search, paged over what it returns (at most `FALLBACK_DEPTH`)."""
     size = _page_size(request)
@@ -322,6 +362,11 @@ async def _from_graph(
         page=request.page,
         page_size=size,
         more=len(found) > start + size,
-        results=[_result(node, "identifier", request.query, principal) for node in page],
+        results=await _merged(
+            graph,
+            [_result(node, "identifier", request.query, principal) for node in page],
+            principal,
+            tau,
+        ),
         nodes=page,
     )
