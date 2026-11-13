@@ -227,6 +227,16 @@ def entra_keys() -> dict[str, Any]:
             "jwk": {"kty": "RSA", "use": "sig", "alg": "RS256", "kid": kid, "n": b64url(numbers.n), "e": b64url(numbers.e)}}
 
 
+def standins_text(password: str) -> str:
+    """The managed stores' stand-ins as the cluster is given them: the run's password, and the RDS
+    stand-in's max_connections the render's own (ADR-114 Amendment 46), so kind's PostgreSQL allows
+    what the client's parameter group sets."""
+    from harness.cloud_platform.connections import POSTGRES_MAX_CONNECTIONS
+
+    text = (HERE / "r1_kind_standins.yaml").read_text()
+    return text.replace("${PASSWORD}", password).replace("${MAX_CONNECTIONS}", str(POSTGRES_MAX_CONNECTIONS))
+
+
 def entra_clients() -> dict[str, str]:
     """Each confidential client's secret, made once per run and kept in the run's state folder (600)."""
     path = STATE / "entra-clients.json"
@@ -341,7 +351,7 @@ def platform() -> None:
         {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "r1-trust", "namespace": NS},
          "data": {"ca-bundle.crt": bundle()}},
     ])
-    apply([d for d in yaml.safe_load_all((HERE / "r1_kind_standins.yaml").read_text().replace("${PASSWORD}", PASSWORD)) if d])
+    apply([d for d in yaml.safe_load_all(standins_text(PASSWORD)) if d])
     for s in ("postgres", "valkey"):
         kubectl("-n", MANAGED, "rollout", "status", f"statefulset/{s}", "--timeout=300s")
     coredns()

@@ -32,3 +32,9 @@ case-b's ask (one log line per token granted), before the change:
 FAILED tests/test_r1_entra_standin.py::test_each_grant_is_logged_once_and_no_refusal_is
 1 failed, 12 deselected in 1.29s
 After: 13 passed in 8.00s
+
+The RDS stand-in's max_connections from the render's constant (case-b, 13 Nov), before the change:
+E       AttributeError: module 'r1_kind' has no attribute 'standins_text'
+FAILED tests/test_r1_kind_standins.py::test_the_rds_stand_in_allows_what_the_parameter_group_sets
+1 failed in 0.23s
+After: 14 passed in 8.12s
