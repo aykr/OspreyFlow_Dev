@@ -18,12 +18,16 @@ const BANNER = "Demonstration only: this is not a government service, and all da
 const asked = new URLSearchParams(window.location.search).get("banner");
 const bannerText = asked === "1" || asked === "alone" ? BANNER : undefined;
 const phase = asked === "alone" ? "none" : "beta";
+// ADR-132 Amendment 7: `?host=` stands for the page's own address (a harness is served on localhost,
+// which is not gov.uk), so the footer on gov.uk can be shown too.
+const hostname = new URLSearchParams(window.location.search).get("host") ?? window.location.hostname;
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
 createRoot(container).render(
   <BrandFrame
+    hostname={hostname}
     appearance={
       brand === "govuk"
         ? { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase, bannerText }

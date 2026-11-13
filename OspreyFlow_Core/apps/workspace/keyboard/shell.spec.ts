@@ -400,6 +400,31 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
   });
 }
 
+// ADR-132 Amendment 7 (the owner's ruling of 13 November 2026): off gov.uk the workspace's footer is one
+// line, its two links still reached by Tab and nothing of the Crown in it; on gov.uk, the full footer.
+test("govuk off gov.uk: the one-line footer's links are reached by Tab, and nothing of the Crown is drawn", async ({ page }) => {
+  await page.goto("/keyboard/shell-harness.html?brand=govuk");
+  const footer = page.locator(".govuk-footer");
+  await expect(footer).toHaveClass(/govuk-footer--slim/);
+  await expect(footer).not.toContainText("Crown copyright");
+  await expect(footer).not.toContainText("Open Government Licence");
+  await expect(footer.locator(".govuk-footer__crown")).toHaveCount(0);
+  await footer.getByRole("link", { name: "Accessibility statement" }).focus();
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => document.activeElement?.textContent?.trim())).toBe("Cookies");
+});
+
+test("govuk on gov.uk: the full footer, Crown copyright reached by Tab", async ({ page }) => {
+  await page.goto("/keyboard/shell-harness.html?brand=govuk&host=demo.service.gov.uk");
+  const footer = page.locator(".govuk-footer");
+  await expect(footer).not.toHaveClass(/govuk-footer--slim/);
+  await expect(footer.locator(".govuk-footer__crown")).toHaveCount(1);
+  await footer.getByRole("link", { name: "Cookies" }).focus();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => document.activeElement?.textContent?.trim())).toBe("© Crown copyright");
+});
+
 test("every registered shell action has its own proving test case above", () => {
   assertAllCovered("SHELL_ACTIONS", SHELL_ACTIONS);
 });

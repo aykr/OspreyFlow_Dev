@@ -35806,6 +35806,18 @@ synthetic."**
    (`keyboard/shell.spec.ts`, `a11y/every-harness.spec.ts`'s `shell-harness.html?banner=1` and
    `?banner=alone`, the demonstration's own GOV.UK shape with no phase); each red first
    (`process/lanes/platform-b/gate/A*`). Superset's own pages are not covered.
+5. **The footer off gov.uk** (the owner's ruling of 13 November 2026, added to this amendment): a page
+   whose own address is not gov.uk or a name under it (`isGovUkHost`: `gov.uk`, `*.gov.uk`) shows **no
+   crown, no "© Crown copyright" and no Open Government Licence line**, in the Glass (`GovukFooter`,
+   `onGovUk`) and on the GOV.UK sign-in page (`govuk_chrome.js` removes them from the same markup).
+   "Run by …", "Built with OspreyFlow, open source." and the accessibility statement and cookies links
+   stay. Off gov.uk the footer on the workspace's own screens is **one line** of those words and links
+   (`slim`); **Home and the sign-in page keep the full footer** (`useFullFooter`, claimed while they are
+   shown). **On gov.uk nothing changes**: the full footer, crown and all, on every page, its markup
+   identical to before (`GovukFooter.test.tsx`, `govukChrome.test.tsx`, `govuk_sign_in.test.mjs`). By
+   keyboard and axe in the dark, light and GOV.UK themes (`keyboard/shell.spec.ts`,
+   `shell-harness.html?host=demo.service.gov.uk` for the gov.uk side); red first
+   (`process/lanes/platform-b/gate/D-*`).
 
 ### ADR-114, Amendment 41 (12 November 2026) — A shared key asked by the front proxy, on all three names, against a bcrypt hash set on the server
 

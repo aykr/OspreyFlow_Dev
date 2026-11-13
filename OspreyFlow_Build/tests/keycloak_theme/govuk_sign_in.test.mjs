@@ -13,10 +13,10 @@ const THEME = readFileSync(new URL("../../../OspreyFlow_Core/harness/theme_cooki
 const CHROME = readFileSync(new URL("../../../OspreyFlow_Core/harness/govuk_chrome.js", import.meta.url), "utf8");
 
 /** A page like Keycloak's sign-in page, with the scripts run in the order the theme loads them. */
-function page({ brand, cookie = "ospreyflow_theme=dark", settings } = {}) {
+function page({ brand, cookie = "ospreyflow_theme=dark", settings, url = "http://id.govuk.ospreyflow.localhost:8081/realms/osprey/" } = {}) {
   const dom = new JSDOM(
     '<!doctype html><html><head><title>Sign in to OspreyFlow</title></head><body><main><form id="kc-form-login"><input name="username"></form></main></body></html>',
-    { url: "http://id.govuk.ospreyflow.localhost:8081/realms/osprey/", runScripts: "outside-only" },
+    { url, runScripts: "outside-only" },
   );
   dom.window.document.cookie = cookie;
   if (brand) dom.window.eval(`document.documentElement.setAttribute("data-brand", "${brand}");`);
@@ -164,4 +164,27 @@ test("with no phase the banner text is shown alone, as text, never markup", () =
 test("with no phase and no banner text there is no banner", () => {
   const win = page({ brand: "govuk", settings: { ...SETTINGS, phase: "none" } });
   assert.equal(win.document.querySelector('[aria-label="Service phase"]'), null);
+});
+
+
+// ADR-132 Amendment 7 (the owner, 13 November 2026): off gov.uk the sign-in page's footer has no crown,
+// no Crown copyright and no Open Government Licence line; on gov.uk it is as it was.
+test("off gov.uk the footer keeps its words and links and drops everything of the Crown", () => {
+  const win = page({ brand: "govuk", settings: { ...SETTINGS, organisation: "Ministry of Examples" } });
+  const footer = win.document.querySelector(".govuk-footer");
+  assert.equal(footer.querySelector(".govuk-footer__crown"), null);
+  assert.equal(footer.querySelector(".govuk-footer__licence-logo"), null);
+  assert.ok(!/Crown copyright|Open Government Licence/.test(footer.textContent));
+  assert.ok(footer.textContent.includes("Run by Ministry of Examples"));
+  assert.ok(footer.textContent.includes("Built with OspreyFlow, open source."));
+  assert.ok(footer.querySelector('a[href$="/accessibility-statement.html"]'));
+  assert.ok(footer.querySelector('a[href$="/cookies.html"]'));
+});
+
+test("on gov.uk the footer is as it was, Crown and all", () => {
+  const win = page({ brand: "govuk", settings: SETTINGS, url: "https://id.prison-intelligence.service.gov.uk/realms/osprey/" });
+  const footer = win.document.querySelector(".govuk-footer");
+  assert.ok(footer.querySelector(".govuk-footer__crown"));
+  assert.ok(/Crown copyright/.test(footer.textContent));
+  assert.ok(/Open Government Licence/.test(footer.textContent));
 });

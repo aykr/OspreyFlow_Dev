@@ -1,0 +1,20 @@
+# gate-b footer (ADR-132 Amendment 7, the owner's 13 November ruling), red first: the tests before the code, this Mac
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  apps/workspace/src/brand/BrandFrame.test.tsx > the footer on and off gov.uk > is one line on the workspace's screens off gov.uk
+ FAIL  apps/workspace/src/brand/BrandFrame.test.tsx > the footer on and off gov.uk > is full on a screen that claims it, still with nothing of the Crown off gov.uk
+ FAIL  apps/workspace/src/brand/brand.test.tsx > an address on gov.uk (ADR-132 Amendment 7) > gov.uk is on gov.uk: true
+ FAIL  apps/workspace/src/brand/brand.test.tsx > an address on gov.uk (ADR-132 Amendment 7) > www.gov.uk is on gov.uk: true
+ FAIL  apps/workspace/src/brand/brand.test.tsx > an address on gov.uk (ADR-132 Amendment 7) > prison-intelligence.service.gov.uk is on gov.uk: true
+ FAIL  apps/workspace/src/brand/brand.test.tsx > an address on gov.uk (ADR-132 Amendment 7) > id.prison-intelligence.service.gov.uk is on gov.uk: true
+ FAIL  apps/workspace/src/brand/brand.test.tsx > an address on gov.uk (ADR-132 Amendment 7) > GOV.UK is on gov.uk: true
+ FAIL  apps/workspace/src/brand/brand.test.tsx > an address on gov.uk (ADR-132 Amendment 7) > notgov.uk is on gov.uk: false
+ FAIL  apps/workspace/src/brand/brand.test.tsx > an address on gov.uk (ADR-132 Amendment 7) > gov.uk.example.org is on gov.uk: false
+ FAIL  apps/workspace/src/brand/brand.test.tsx > an address on gov.uk (ADR-132 Amendment 7) > demo.ospreyflow.app is on gov.uk: false
+ FAIL  apps/workspace/src/brand/brand.test.tsx > an address on gov.uk (ADR-132 Amendment 7) > localhost is on gov.uk: false
+ FAIL  apps/workspace/src/brand/govuk/GovukFooter.test.tsx > GovukFooter off gov.uk > drops the crown, the Crown copyright and the licence, and keeps the rest
+ FAIL  apps/workspace/src/brand/govuk/GovukFooter.test.tsx > GovukFooter off gov.uk > is one line when slim, with the same words and links and nothing of the Crown
+      Tests  13 failed | 54 passed (67)
+ℹ fail 1
+✖ failing tests:
+✖ off gov.uk the footer keeps its words and links and drops everything of the Crown (5.684375ms)
+ℹ pass 15

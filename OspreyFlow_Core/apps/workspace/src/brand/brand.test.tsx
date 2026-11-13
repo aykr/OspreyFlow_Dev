@@ -16,6 +16,7 @@ import {
   GOVUK_STYLESHEET,
   loadBrandStylesheet,
   PLAIN_APPEARANCE,
+  isGovUkHost,
   readAppearance,
 } from "./brand";
 
@@ -152,5 +153,21 @@ describe("the GOV.UK stylesheet", () => {
     link!.dispatchEvent(new Event("load"));
     await loading;
     expect(settled).toBe(true);
+  });
+});
+
+describe("an address on gov.uk (ADR-132 Amendment 7)", () => {
+  it.each([
+    ["gov.uk", true],
+    ["www.gov.uk", true],
+    ["prison-intelligence.service.gov.uk", true],
+    ["id.prison-intelligence.service.gov.uk", true],
+    ["GOV.UK", true],
+    ["notgov.uk", false],
+    ["gov.uk.example.org", false],
+    ["demo.ospreyflow.app", false],
+    ["localhost", false],
+  ])("%s is on gov.uk: %s", (host, expected) => {
+    expect(isGovUkHost(host)).toBe(expected);
   });
 });

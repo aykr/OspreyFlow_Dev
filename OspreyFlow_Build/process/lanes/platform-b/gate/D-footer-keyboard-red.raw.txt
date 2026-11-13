@@ -1,0 +1,12 @@
+# gate-b footer, the keyboard cases red: BrandFrame planted to treat every address as gov.uk, this Mac
+  ✘  1 keyboard/shell.spec.ts:405:1 › govuk off gov.uk: the one-line footer's links are reached by Tab, and nothing of the Crown is drawn (5.2s)
+  ✓  2 keyboard/shell.spec.ts:417:1 › govuk on gov.uk: the full footer, Crown copyright reached by Tab (154ms)
+  ✓  3 keyboard/shell.spec.ts:435:1 › govuk: the GOV.UK logo is not underlined at rest (121ms)
+  ✓  4 keyboard/shell.spec.ts:463:5 › govuk: the sign-in page's content lines up with the GOV.UK header at 1440px (158ms)
+  ✓  5 keyboard/shell.spec.ts:463:5 › govuk: the sign-in page's content lines up with the GOV.UK header at 800px (150ms)
+  ✓  6 keyboard/shell.spec.ts:463:5 › govuk: the sign-in page's content lines up with the GOV.UK header at 375px (149ms)
+  ✓  7 keyboard/shell.spec.ts:463:5 › govuk: the start page's content lines up with the GOV.UK header at 1440px (227ms)
+  ✓  8 keyboard/shell.spec.ts:463:5 › govuk: the start page's content lines up with the GOV.UK header at 800px (158ms)
+  ✓  9 keyboard/shell.spec.ts:463:5 › govuk: the start page's content lines up with the GOV.UK header at 375px (160ms)
+  1 failed
+  8 passed (7.8s)

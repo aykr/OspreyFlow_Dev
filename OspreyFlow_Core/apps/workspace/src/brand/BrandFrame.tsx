@@ -2,8 +2,8 @@
 // brand only), the phase banner (either brand, when the deployment is in alpha or beta or names its
 // own banner text, ADR-132 Amendment 7), the Glass
 // itself in `#main-content` (the skip link's target), and the GOV.UK footer (GOV.UK brand only).
-// Under the OspreyFlow brand with no phase only the skip link is added, and it is out of the page's
-// flow until it has focus, so the Glass is laid out exactly as before.
+// Under the OspreyFlow brand with no phase and no banner words only the skip link is added, and it is
+// out of the page's flow until it has focus, so the Glass is laid out exactly as before.
 //
 // No service-name band stands under the GOV.UK header (ADR-132 Amendment 5, the owner's ruling of
 // 4 November 2026: it took too much of the workspace's height). The frame names the service in the
@@ -12,9 +12,9 @@
 // The workspace and the Admin area fill the window (`--workspace-height`, default `100vh`). When
 // something stands above them, the frame measures it and sets that height to what is left, so the
 // status bar stays in view; the footer is below, reached by scrolling, as on any GOV.UK page.
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-import { brandTitle, type Appearance } from "./brand";
+import { brandTitle, isGovUkHost, type Appearance } from "./brand";
 import { GovukFooter } from "./govuk/GovukFooter";
 import { GovukHeader } from "./govuk/GovukHeader";
 import { PhaseBanner } from "./govuk/PhaseBanner";
@@ -22,8 +22,33 @@ import { SkipLink } from "./govuk/SkipLink";
 
 export const MAIN_CONTENT_ID = "main-content";
 
-export function BrandFrame({ appearance, children }: { appearance: Appearance; children: ReactNode }) {
+// ADR-132 Amendment 7 (the owner's ruling of 13 November 2026): off gov.uk the footer on the
+// workspace's own screens is one line; a screen that wants the full footer (Home, the sign-in page)
+// says so while it is shown.
+const FullFooter = createContext<(wanted: boolean) => void>(() => {});
+
+/** Called by Home and the sign-in page: while mounted, the frame draws the full footer. */
+export function useFullFooter(): void {
+  const claim = useContext(FullFooter);
+  useEffect(() => {
+    claim(true);
+    return () => claim(false);
+  }, [claim]);
+}
+
+export function BrandFrame({
+  appearance,
+  children,
+  hostname = typeof window === "undefined" ? "" : window.location.hostname,
+}: {
+  appearance: Appearance;
+  children: ReactNode;
+  /** The page's own address; for tests. */
+  hostname?: string;
+}) {
   const above = useRef<HTMLDivElement>(null);
+  const [claims, setClaims] = useState(0);
+  const [claim] = useState(() => (wanted: boolean) => setClaims((count) => count + (wanted ? 1 : -1)));
 
   // Under GOV.UK the page title is "<service> – GOV.UK"; under OspreyFlow it is left as it is.
   useLayoutEffect(() => {
@@ -59,9 +84,9 @@ export function BrandFrame({ appearance, children }: { appearance: Appearance; c
       </div>
       {/* Focused by the skip link; not itself a control, so it is not in the Tab order. */}
       <div id={MAIN_CONTENT_ID} tabIndex={-1} className="main-content">
-        {children}
+        <FullFooter.Provider value={claim}>{children}</FullFooter.Provider>
       </div>
-      <GovukFooter organisation={appearance.organisation} />
+      <GovukFooter organisation={appearance.organisation} onGovUk={isGovUkHost(hostname)} slim={claims === 0} />
     </>
   );
 }

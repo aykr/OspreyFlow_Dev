@@ -43,6 +43,14 @@ export function readAppearance(section: unknown): Appearance {
   };
 }
 
+/** Whether an address is on gov.uk (gov.uk itself or a name under it, such as `*.service.gov.uk`):
+ * only there may a page carry the crown, Crown copyright and the Open Government Licence (ADR-132
+ * Amendment 7, the owner's ruling of 13 November 2026). */
+export function isGovUkHost(hostname: string): boolean {
+  const name = hostname.toLowerCase().replace(/\.$/, "");
+  return name === "gov.uk" || name.endsWith(".gov.uk");
+}
+
 /** `?brand=govuk` or `?brand=ospreyflow`, so a tester sees either brand without a redeploy. Only in
  * a development build: `dev` is `import.meta.env.DEV` at the one call site, never true in production. */
 export function brandFromUrl(search: string, dev: boolean): Brand | null {

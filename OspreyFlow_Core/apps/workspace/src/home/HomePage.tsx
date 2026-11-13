@@ -16,6 +16,7 @@ import type { StartPlace } from "../rights/visibility";
 import { GUIDE_FOR_PLACE, WORDS as GUIDE_WORDS, guideUrl, type GuideId } from "./guides";
 import { whenLabel, type AttentionRow, type Fact, type HomeSummary, type Place } from "./homeData";
 import { TIPS, TipPicture } from "./tips";
+import { useFullFooter } from "../brand/BrandFrame";
 import "./home.css";
 
 export interface HomePerson {
@@ -199,6 +200,8 @@ function JourneyRow({ row, now, onJourney }: { row: AttentionRow; now: Date; onJ
 }
 
 export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers, onReadGuide, apiBaseUrl = "" }: HomePageProps) {
+  // ADR-132 Amendment 7: Home has the full footer; the workspace's screens a one-line one.
+  useFullFooter();
   const panels = useMemo(() => startPlaces(rights), [rights]);
   const allowed = useMemo(() => new Set(panels), [panels]);
   const primary = panels[0];

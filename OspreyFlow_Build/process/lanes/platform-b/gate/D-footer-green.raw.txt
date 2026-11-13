@@ -1,0 +1,45 @@
+# gate-b footer (ADR-132 Amendment 7, the owner's 13 November ruling), green, this Mac
+      Tests  67 passed (67)
+ℹ pass 16
+ℹ fail 0
+  ✓  27 keyboard/shell.spec.ts:405:1 › govuk off gov.uk: the one-line footer's links are reached by Tab, and nothing of the Crown is drawn (123ms)
+  ✓  28 keyboard/shell.spec.ts:417:1 › govuk on gov.uk: the full footer, Crown copyright reached by Tab (122ms)
+  37 passed (7.2s)
+  ✓   1 a11y/every-harness.spec.ts:371:7 › shell-harness.html (dark) has no automated WCAG 2.2 A or AA violations (885ms)
+  ✓   2 a11y/every-harness.spec.ts:371:7 › shell-harness.html (light) has no automated WCAG 2.2 A or AA violations (802ms)
+  ✓   3 a11y/every-harness.spec.ts:371:7 › shell-harness.html (govuk) has no automated WCAG 2.2 A or AA violations (858ms)
+  ✓   4 a11y/every-harness.spec.ts:395:5 › shell-harness.html: every labelled field's name contains its visible label (2.5.3) (572ms)
+  ✓   5 a11y/every-harness.spec.ts:371:7 › shell-harness.html banner=1 (dark) has no automated WCAG 2.2 A or AA violations (801ms)
+  ✓   6 a11y/every-harness.spec.ts:371:7 › shell-harness.html banner=1 (light) has no automated WCAG 2.2 A or AA violations (801ms)
+  ✓   7 a11y/every-harness.spec.ts:371:7 › shell-harness.html banner=1 (govuk) has no automated WCAG 2.2 A or AA violations (850ms)
+  ✓   8 a11y/every-harness.spec.ts:395:5 › shell-harness.html banner=1: every labelled field's name contains its visible label (2.5.3) (572ms)
+  ✓   9 a11y/every-harness.spec.ts:371:7 › shell-harness.html banner=alone (dark) has no automated WCAG 2.2 A or AA violations (801ms)
+  ✓  10 a11y/every-harness.spec.ts:371:7 › shell-harness.html banner=alone (light) has no automated WCAG 2.2 A or AA violations (810ms)
+  ✓  11 a11y/every-harness.spec.ts:371:7 › shell-harness.html banner=alone (govuk) has no automated WCAG 2.2 A or AA violations (847ms)
+  ✓  12 a11y/every-harness.spec.ts:395:5 › shell-harness.html banner=alone: every labelled field's name contains its visible label (2.5.3) (573ms)
+  ✓  13 a11y/every-harness.spec.ts:371:7 › shell-harness.html host=demo.service.gov.uk (dark) has no automated WCAG 2.2 A or AA violations (796ms)
+  ✓  14 a11y/every-harness.spec.ts:371:7 › shell-harness.html host=demo.service.gov.uk (light) has no automated WCAG 2.2 A or AA violations (797ms)
+  ✓  15 a11y/every-harness.spec.ts:371:7 › shell-harness.html host=demo.service.gov.uk (govuk) has no automated WCAG 2.2 A or AA violations (864ms)
+  ✓  16 a11y/every-harness.spec.ts:395:5 › shell-harness.html host=demo.service.gov.uk: every labelled field's name contains its visible label (2.5.3) (575ms)
+  ✓  17 a11y/every-harness.spec.ts:371:7 › sign-in-harness.html (dark) has no automated WCAG 2.2 A or AA violations (983ms)
+  ✓  18 a11y/every-harness.spec.ts:371:7 › sign-in-harness.html (light) has no automated WCAG 2.2 A or AA violations (980ms)
+  ✓  19 a11y/every-harness.spec.ts:371:7 › sign-in-harness.html (govuk) has no automated WCAG 2.2 A or AA violations (995ms)
+  ✓  20 a11y/every-harness.spec.ts:395:5 › sign-in-harness.html: every labelled field's name contains its visible label (2.5.3) (629ms)
+  ✓  21 a11y/every-harness.spec.ts:371:7 › start-harness.html (dark) has no automated WCAG 2.2 A or AA violations (914ms)
+  ✓  22 a11y/every-harness.spec.ts:371:7 › start-harness.html (light) has no automated WCAG 2.2 A or AA violations (847ms)
+  ✓  23 a11y/every-harness.spec.ts:371:7 › start-harness.html (govuk) has no automated WCAG 2.2 A or AA violations (937ms)
+  ✓  24 a11y/every-harness.spec.ts:395:5 › start-harness.html: every labelled field's name contains its visible label (2.5.3) (590ms)
+  ✓  25 a11y/every-harness.spec.ts:371:7 › start-harness.html rights=investigate (dark) has no automated WCAG 2.2 A or AA violations (851ms)
+  ✓  26 a11y/every-harness.spec.ts:371:7 › start-harness.html rights=investigate (light) has no automated WCAG 2.2 A or AA violations (845ms)
+  ✓  27 a11y/every-harness.spec.ts:371:7 › start-harness.html rights=investigate (govuk) has no automated WCAG 2.2 A or AA violations (909ms)
+  ✓  28 a11y/every-harness.spec.ts:395:5 › start-harness.html rights=investigate: every labelled field's name contains its visible label (2.5.3) (587ms)
+  ✓  29 a11y/every-harness.spec.ts:371:7 › start-harness.html figures=1&rights=investigate,triage_alerts,read_alert_queue (dark) has no automated WCAG 2.2 A or 
+  ✓  30 a11y/every-harness.spec.ts:371:7 › start-harness.html figures=1&rights=investigate,triage_alerts,read_alert_queue (light) has no automated WCAG 2.2 A or
+  ✓  31 a11y/every-harness.spec.ts:371:7 › start-harness.html figures=1&rights=investigate,triage_alerts,read_alert_queue (govuk) has no automated WCAG 2.2 A or
+  ✓  32 a11y/every-harness.spec.ts:395:5 › start-harness.html figures=1&rights=investigate,triage_alerts,read_alert_queue: every labelled field's name contains 
+  ✓  33 a11y/every-harness.spec.ts:371:7 › start-harness.html guide=refused (dark) has no automated WCAG 2.2 A or AA violations (852ms)
+  ✓  34 a11y/every-harness.spec.ts:371:7 › start-harness.html guide=refused (light) has no automated WCAG 2.2 A or AA violations (851ms)
+  ✓  35 a11y/every-harness.spec.ts:371:7 › start-harness.html guide=refused (govuk) has no automated WCAG 2.2 A or AA violations (937ms)
+  ✓  36 a11y/every-harness.spec.ts:395:5 › start-harness.html guide=refused: every labelled field's name contains its visible label (2.5.3) (582ms)
+  36 passed (29.9s)
+# PanelFrames.test.tsx and App.chrome.test.tsx fail on this Mac with and without the footer change (7-8 of 17, load average about 20 from the plant runs); not this change's
