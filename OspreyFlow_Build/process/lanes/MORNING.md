@@ -790,6 +790,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         Option B taken: keep decision 3; httpx imported only where used, `release`/`run` through the checkout's
         environment; rather than option A (amend ADR-114 to admit httpx). The owner may overrule.
 
+        **Late afternoon, 13 Nov:** the demo deployed from main 15c7fed after a backup (20261113T165914Z): Graph ·
+        Drawing board, the Views menu, and v0.5.1's other work (rules lists) — the owner's word; all checks pass.
+        The heartbeat reorganised (d40e9de): needs you first, the path to v0.5.1, lanes now with stages. R1: install
+        done, 28 of 28 checks pass; backup, restore and decommission next. Push and publish wait for the owner's word.
+
         **The owner's word, about 07:45:** once both demo fixes land (one key prompt, ADR-114 Am 42, platform-b; Home's
         "Your access and tasks", ADR-145 Am 11, platform), push main to the dev repo and publish the product repo
         again from the same commit (no tag), each recorded in PUSH_LOG.
