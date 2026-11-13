@@ -268,7 +268,8 @@ restore refuses part-way for space.
 **The managed database with the stores.** The stores and PostgreSQL must agree: restoring ArcadeDB and
 ClickHouse to a set while PostgreSQL stays as it is now would bring back, visible under today's grants,
 anything withdrawn or deleted since the set. So PostgreSQL (RDS) is restored point in time to the set's finish
-time (`sets` prints it), by the platform team's own RDS procedure. The new instance may be started at once,
+time (`sets` prints it), by the platform team's own RDS procedure. RDS keeps point in time for 35 days
+(`backup_retention_period`), the sets' own expiry, so every set kept in the bucket can be met by it. The new instance may be started at once,
 since restoring it takes a while; **the deployment is pointed at it only after step 2**, once nothing that
 writes runs:
 
@@ -313,13 +314,26 @@ kubectl -n <namespace> rollout status deployment/<each one noted> --timeout=10m 
 for c in ospreyflow-backup ospreyflow-backup-claims; do
   kubectl -n <namespace> patch cronjob "$c" -p '{"spec":{"suspend":false}}' 2>/dev/null
 done
+# 5. Where the deployment searches with OpenSearch: the search index is not backed up (it is rebuilt from
+#    the graph, ADR-150), so the restore ends with its rebuild, then the drift check, each a Job started from
+#    its standing template (under the namespace's own service account, signing as its role).
+kubectl -n <namespace> create job --from=cronjob/ospreyflow-search-rebuild search-rebuild-$(date -u +%Y%m%dt%H%M%S)
+kubectl -n <namespace> wait --for=condition=complete job -l app.kubernetes.io/name=search-rebuild --timeout=6h
+kubectl -n <namespace> logs -l app.kubernetes.io/name=search-rebuild --tail=1
+kubectl -n <namespace> create job --from=cronjob/ospreyflow-search-drift search-drift-$(date -u +%Y%m%dt%H%M%S)
+kubectl -n <namespace> wait --for=condition=complete job -l app.kubernetes.io/name=search-drift --timeout=1h
+kubectl -n <namespace> logs -l app.kubernetes.io/name=search-drift --tail=1
 ```
 
 **A healthy restore.** Each step's log ends in plain words, and none holds a stack trace: the restore Job's
 `restore: set <set> verified, every part; nothing writing`, then
 `restore-graph: <database> restored from the set, checked and put in place; the old one removed` (or `there
 was no live database`) and `restore: ClickHouse restored from set <set>`; the claims Job's
-`restore: ingest put back from set <set>`. A step whose words say `refused:` (`restore-graph refused: …`,
+`restore: ingest put back from set <set>`; where the deployment searches with OpenSearch, step 5's
+`search index rebuilt: <N> documents from <N> nodes, alias <alias> -> <index>` and
+`search index drift: none (<N> nodes in the graph, <N> documents in the index)`. The search index is not
+backed up: until the rebuild has finished, the search bar finds what it found before the restore, or
+nothing. A step whose words say `refused:` (`restore-graph refused: …`,
 `fetch-graph refused: …`), or a Job that did not finish, is not a restore: read *If it fails*, below.
 
 **Where the data is if a restore stopped part-way.** Each store keeps its live data until the restored copy

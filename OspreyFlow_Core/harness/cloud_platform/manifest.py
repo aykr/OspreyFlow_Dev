@@ -120,6 +120,22 @@ def rendered(config: Any, *, resolver: Any = None) -> dict[str, Any]:
             if claims:
                 jobs["ospreyflow-restore-claims-<set>"] = {"kind": "Job", **own}
 
+    search = values.get("searchIndex")
+    if search:
+        started = {
+            "ospreyflow-search-rebuild": (
+                "suspended, started by the runbooks (a restore ends with it)"
+            ),
+            "ospreyflow-search-drift": "suspended, started by the runbooks",
+        }
+        for job in search["jobs"]:
+            jobs[job["name"]] = {
+                "kind": "CronJob",
+                "schedule": started.get(job["name"], "suspended"),
+                "image": _repository(search["image"], registry),
+                **_sizes(search["resources"]),
+            }
+
     listed_images: dict[str, Any] = {}
     for image in images["images"]:
         name = _repository(image["target"], registry)
@@ -148,6 +164,7 @@ def rendered(config: Any, *, resolver: Any = None) -> dict[str, Any]:
             "engine": f"postgres {rds('engine_version')}",
             "class": rds("instance_class"),
             "max_connections": int(parameter.group(1)) if parameter else None,
+            "point_in_time_days": int(rds("backup_retention_period") or 0),
             "databases": databases,
         },
         "elasticache": {
@@ -162,6 +179,7 @@ def rendered(config: Any, *, resolver: Any = None) -> dict[str, Any]:
             "engine": _terraform_value(terraform, "aws_opensearch_domain", "engine_version"),
             "instance_type": re.search(r'instance_type\s*=\s*"([^"]+)"', terraform).group(1),  # type: ignore[union-attr]
             "data_nodes": int(re.search(r"instance_count\s*=\s*(\d+)", terraform).group(1)),  # type: ignore[union-attr]
+            "signing": values["environment"].get("OPENSEARCH_SIGNING"),
         }
     egress: dict[str, Any] = {h["host"]: {} for h in values["egress"]["hosts"]}
     return {

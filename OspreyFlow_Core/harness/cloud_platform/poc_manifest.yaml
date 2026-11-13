@@ -126,6 +126,19 @@ jobs:
     limits: {cpu: "2", memory: 4Gi}
     steps: [verify, restore-claims]
 
+  ospreyflow-search-rebuild:
+    kind: CronJob
+    schedule: suspended, started by the runbooks (a restore ends with it)
+    image: ospreyflow/api
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
+  ospreyflow-search-drift:
+    kind: CronJob
+    schedule: suspended, started by the runbooks
+    image: ospreyflow/api
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
+
 # Each image's repository in the client's ECR, which `ospreyflow images push` fills.
 images:
   ospreyflow/workspace: {ours: true, built_from: apps/workspace/Dockerfile}
@@ -146,6 +159,7 @@ managed:
     engine: postgres 16
     class: db.t4g.large
     max_connections: 1000  # ADR-114 Amendment 46, in its parameter group (pending-reboot)
+    point_in_time_days: 35  # the sets' own expiry (the ADR-148 audit's ruling 3)
     databases:
       ospreyflow: {}
       litellm: {}
@@ -159,8 +173,9 @@ managed:
   opensearch:
     engine: OpenSearch_2.17
     instance_type: t3.medium.search
-    data_nodes: 2
-    pending: v052-opensearch
+    data_nodes: 2          # one in each of two availability zones; 50 GiB each
+    signing: sigv4         # the namespace's IAM role (IRSA); no fine-grained access control
+    # Not backed up: the index is rebuilt from the graph (ADR-150), after every restore.
 
 # The client's Entra ID: what its administrator registers (ADR-148 Amendments 8, 9 and 10).
 entra:
@@ -182,9 +197,9 @@ entra:
     grants: [the API's Dashboard.Read (application)]
     pending: v052-superset
 
-# The hosts the namespace reaches beyond the cluster, each on 443.
+# The hosts the namespace reaches beyond the cluster, each on 443. RDS, ElastiCache and the OpenSearch
+# domain are reached inside the VPC (the managed networks), on 5432, 6379 and 443.
 egress:
   login.microsoftonline.com: {}
   s3.eu-west-2.amazonaws.com: {}
   sts.eu-west-2.amazonaws.com: {}
-  "<the namespace's OpenSearch domain endpoint>": {pending: v052-opensearch}

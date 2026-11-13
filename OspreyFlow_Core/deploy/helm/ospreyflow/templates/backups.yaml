@@ -31,8 +31,14 @@ unfinished and never restored from. Its restore is a Job of its own, with the sh
 {{- range ($root.Values.storage | default dict).claims }}{{ $claims = append $claims .name }}{{ end }}
 {{- /* Each run names its set by its Job's name: the CronJob's schedule slot. */}}
 {{- $env := append ($b.env | default list) (dict "name" "OSPREY_BACKUP_JOB" "field" "metadata.labels['batch.kubernetes.io/job-name']") }}
-{{- if $claims }}
-{{- $env = append $env (dict "name" "OSPREY_BACKUP_CLAIMS" "value" (join "," $claims)) }}
+{{- /* The ADR-148 audit's ruling 3 (v0.5.2): the shared claim's folders the deployment cannot make
+       again (the published pipelines, the model and map settings with the map key file), each a part
+       of the claims part beside the claims of their own. */}}
+{{- $shared := ($b.shared | default list) }}
+{{- $parts := $claims }}
+{{- range $shared }}{{ $parts = append $parts .name }}{{ end }}
+{{- if $parts }}
+{{- $env = append $env (dict "name" "OSPREY_BACKUP_CLAIMS" "value" (join "," $parts)) }}
 {{- end }}
 {{- /* A restore refuses while any of these runs (Amendment 7): it lists the pods by its own Role. */}}
 {{- $writers := required "backups.writers: the pods a restore refuses to run beside (ADR-148 Amendment 7)" $b.writers }}
@@ -119,7 +125,7 @@ spec:
                     matchLabels:
                       statefulset.kubernetes.io/pod-name: {{ $b.arcadedb.pod }}
                   topologyKey: kubernetes.io/hostname
-{{- if $claims }}
+{{- if $parts }}
 ---
 # The claims part of each set (the poc shape's Ingest root), on the node of the pods that mount the
 # claims (ReadWriteOnce), read-only: it never writes to what it backs up.
@@ -155,6 +161,7 @@ spec:
           containers:
             {{- $mounts := list }}
             {{- range $claims }}{{ $mounts = append $mounts (dict "name" (printf "claim-%s" .) "mountPath" (printf "/claims/%s" .)) }}{{ end }}
+            {{- range $shared }}{{ $mounts = append $mounts (dict "name" "shared" "mountPath" (printf "/claims/%s" .name) "subPath" .subPath "readOnly" true) }}{{ end }}
             {{- include "ospreyflow.container" (dict "w" (dict "name" "backup-claims" "image" $b.image
                   "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "backup-claims")
                   "env" $env "resources" $b.resources "claims" $mounts)
@@ -164,6 +171,12 @@ spec:
             - name: {{ printf "claim-%s" . }}
               persistentVolumeClaim:
                 claimName: {{ printf "ospreyflow-%s" . }}
+                readOnly: true
+            {{- end }}
+            {{- if $shared }}
+            - name: shared
+              persistentVolumeClaim:
+                claimName: ospreyflow-shared
                 readOnly: true
             {{- end }}
           affinity:
@@ -245,7 +258,7 @@ spec:
         - name: arcadedb-databases
           persistentVolumeClaim:
             claimName: {{ $b.arcadedb.databasesClaim }}
-{{- if $claims }}
+{{- if $parts }}
 ---
 # The set's claims put back (Amendment 7), applied by hand with every pod that mounts them stopped
 # (the Conduit, the workers and the report sync at no copies): nothing may write to a claim while
@@ -275,6 +288,7 @@ spec:
       containers:
         {{- $mounts := list }}
         {{- range $claims }}{{ $mounts = append $mounts (dict "name" (printf "claim-%s" .) "mountPath" (printf "/claims/%s" .)) }}{{ end }}
+        {{- range $shared }}{{ $mounts = append $mounts (dict "name" "shared" "mountPath" (printf "/claims/%s" .name) "subPath" .subPath) }}{{ end }}
         {{- include "ospreyflow.container" (dict "w" (dict "name" "restore-claims" "image" $b.image
               "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "restore-claims" "--set" .set)
               "env" $restoreEnv "resources" $b.resources "claims" $mounts)
@@ -284,6 +298,11 @@ spec:
         - name: {{ printf "claim-%s" . }}
           persistentVolumeClaim:
             claimName: {{ printf "ospreyflow-%s" . }}
+        {{- end }}
+        {{- if $shared }}
+        - name: shared
+          persistentVolumeClaim:
+            claimName: ospreyflow-shared
         {{- end }}
 {{- end }}
 {{- end }}

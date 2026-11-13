@@ -138,6 +138,11 @@ class PlatformSecrets(_Strict):
 class PlatformSettings(_Strict):
     name: str
     aws_region: str
+    #: v0.5.2 step 3a (the owner, 13 November 2026): how the namespace's pods reach its OpenSearch
+    #: domain. `sigv4`: the domain itself, every request signed with the namespace's IAM role
+    #: (IRSA), no fine-grained access control. `none`: a platform whose own module fronts the
+    #: domain with a proxy that signs for us (its secret's key `proxy_url`), so ours must not.
+    opensearch_signing: Literal["sigv4", "none"] = "sigv4"
     ingress: IngressSettings
     storage: StorageSettings
     egress: EgressSettings

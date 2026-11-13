@@ -146,7 +146,7 @@ def test_every_pending_entry_names_a_v052_step(listed: dict[str, Any]) -> None:
                 walk(value)
 
     walk(listed)
-    assert steps == {"v052-superset", "v052-opensearch"}
+    assert steps == {"v052-superset"}  # v052-opensearch rendered at 3a
 
 
 def test_the_tables_are_printed_from_the_manifest_alone(listed: dict[str, Any]) -> None:

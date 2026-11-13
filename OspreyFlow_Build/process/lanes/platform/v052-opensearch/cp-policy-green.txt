@@ -1,0 +1,71 @@
+Running on ospreyflow-test (stack offline, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform.meta/runs/20261113T210742Z-4aa05258/log: make cp-policy-check
+cd ../OspreyFlow_Core && PYTHONPATH=.:packages:/root/osprey-runs/platform/OspreyFlow_Build .venv/bin/python -m tools.cp_policy_check
+development-sources.yaml: 64 manifests, 0 violation(s)
+development.yaml: 60 manifests, 0 violation(s)
+poc.yaml: 58 manifests, 0 violation(s)
+production-bedrock.yaml: 64 manifests, 0 violation(s)
+production.yaml: 60 manifests, 0 violation(s)
+cp-policy-check: 0 violation(s)
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/platform/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/cp_policy_check ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/platform/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 392 items
+
+../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py . [  0%]
+.............................................                            [ 11%]
+../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py ...... [ 13%]
+ss..........ss..........ss....                                           [ 20%]
+../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py ...... [ 22%]
+........................................................................ [ 40%]
+........................................................................ [ 59%]
+........................................................                 [ 73%]
+../OspreyFlow_Build/tests/cp_policy_check/test_rendered_terraform.py ... [ 74%]
+.......                                                                  [ 76%]
+../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py ........ [ 78%]
+........................................................................ [ 96%]
+..............                                                           [100%]
+
+=============================== warnings summary ===============================
+tests/harness/test_cloud_platform_render.py::test_with_bedrock_enabled_the_gateway_runs_as_its_own_account
+  /root/osprey-runs/platform/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+16.73s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production+opensearch]
+16.32s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[poc]
+16.26s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production-bedrock]
+15.73s call     tests/cp_policy_check/test_rendered_terraform.py::test_a_reference_to_nothing_is_refused
+14.83s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production]
+14.82s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[development]
+6.20s call     tests/harness/test_cloud_platform_render.py::test_with_bedrock_enabled_the_gateway_runs_as_its_own_account
+5.21s call     tests/cp_policy_check/test_cp_policy_check.py::test_main_passes_on_the_fixtures
+4.22s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_widened_ingress_policy_is_refused[poc]
+3.51s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_never_runs_as_the_bucket_role
+3.37s call     tests/cp_policy_check/test_cp_policy_check.py::test_an_ingress_peer_this_check_cannot_name_is_refused[poc-instance]
+3.11s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_supplementary_group_outside_its_allowance_is_refused[poc]
+3.07s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_render_is_valid_kubernetes[development]
+2.87s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_p9_pod_under_the_default_account_is_refused[poc-named]
+2.80s call     tests/cp_policy_check/test_cp_policy_check.py::test_an_iam_role_engine_s_held_key_is_refused_to_the_gateway
+2.71s call     tests/cp_policy_check/test_cp_policy_check.py::test_an_ingress_peer_this_check_cannot_name_is_refused[poc-every-pod]
+2.60s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_new_workload_given_one_key_of_ours_is_refused[production]
+2.35s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_widened_ingress_policy_is_refused[development]
+2.34s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_render_is_valid_kubernetes[poc]
+2.30s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_p9_pod_under_the_default_account_is_refused[poc-none]
+2.25s call     tests/cp_policy_check/test_cp_policy_check.py::test_an_ingress_peer_this_check_cannot_name_is_refused[poc-part-of]
+2.22s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_keyless_single_provider_s_key_is_refused_to_the_gateway
+2.19s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_s_account_on_another_pod_is_refused
+2.16s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_render_is_valid_kubernetes[production]
+2.09s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_selector_this_check_cannot_narrow_is_refused[poc-rule-has]
+1.95s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_selector_this_check_cannot_narrow_is_refused[poc-policy-has]
+1.85s call     tests/cp_policy_check/test_cp_policy_check.py::test_run_as_non_root_false_with_a_numeric_user_is_refused[poc]
+1.80s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_read_write_many_claim_is_refused[poc]
+1.75s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_cron_job_s_pod_is_held_to_the_rules[poc]
+1.71s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_token_in_a_job_is_refused[poc]
+============ 386 passed, 6 skipped, 1 warning in 368.04s (0:06:08) =============
+Wall time: 377 s, exit 0 (no stack, no lease; set-up before it 17 s)

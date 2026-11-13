@@ -118,6 +118,12 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
     {{- range .w.claims }}
     - name: {{ .name }}
       mountPath: {{ .mountPath }}
+      {{- with .subPath }}
+      subPath: {{ . }}
+      {{- end }}
+      {{- if .readOnly }}
+      readOnly: true
+      {{- end }}
     {{- end }}
     {{- range $i, $s := .w.scratch }}
     - name: {{ printf "scratch-%d" $i }}
