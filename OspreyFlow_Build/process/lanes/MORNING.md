@@ -795,6 +795,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         The heartbeat reorganised (d40e9de): needs you first, the path to v0.5.1, lanes now with stages. R1: install
         done, 28 of 28 checks pass; backup, restore and decommission next. Push and publish wait for the owner's word.
 
+        **The owner, about 19:35:** push and publish (done, 9c1fdfe); **yes to admin pg's ci-pg.diff** (ci.yml: a
+        postgres-connections-test job; the Makefile and test_file_coverage_check: the live file), applied at its
+        merge; **"carry on with the post-0.5.1 steps as well"**: Part 3 (ospreyflow.app beside the GOV.UK demo), the
+        CARRIES backlog, T1's rest, then P7a/P8/P9b after the client's install.
+
         **The owner's word, about 07:45:** once both demo fixes land (one key prompt, ADR-114 Am 42, platform-b; Home's
         "Your access and tasks", ADR-145 Am 11, platform), push main to the dev repo and publish the product repo
         again from the same commit (no tag), each recorded in PUSH_LOG.
