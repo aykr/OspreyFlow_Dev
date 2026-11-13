@@ -1470,17 +1470,19 @@ case, counted as the reader — Home adds no read path; a case that refuses (403
 fails is said. *The Glass* goes to *Choose a case*, *Ingest Studio* to *Choose the case to load into*,
 *Admin* to the Admin place with no case; the mark returns to Home from anywhere.
 
-**What you can do, and what you answer for** (ADR-145 Amendment 4 decision 12; L2.7;
-`home/answersFor.ts`, `home/AnswersForSection.tsx`) is worked out from the person's own reads alone:
+**Your access and tasks** (ADR-145 Amendment 4 decision 12, Amendment 11; L2.7;
+`home/answersFor.ts`, `home/AnswersForSection.tsx`) spans the full width of Home below the two columns, its
+sub-headings set beneath its own title in every look. It is worked out from the person's own reads alone:
 their rights, their roles, their case list and `GET /v1/me/needs-you`. It holds four things:
-- the places their rights open;
+- *Places you can open*: the places their rights open;
 - what they can do, by place, in `help/roles.ts`'s words, each with *Why can I do this?* naming their own
   role that gives it (or "a right given to you alone", or "a role your administrator made");
-- their level in each case;
-- what they answer for, with what waits. That is: *Author of* each case they author; each promotion
-  overdue to them (opening Admin › Operations for a holder of `operate_schedules`); and each dataset's
-  proposed link types to decide (opening that dataset's Model tab). A dataset whose proposals they may not
-  read is not mentioned.
+- *Your access to each case*: one line a case, "<Level>: <case name>" ("Editor: Operation Ledger (synthetic
+  demo)");
+- *Waiting for you* ("Nothing is waiting for you." when nothing is). That is: *Author of* each case they
+  author; each promotion overdue to them (opening Admin › Operations for a holder of `operate_schedules`);
+  and each dataset's proposed link types to decide (opening that dataset's Model tab). A dataset whose
+  proposals they may not read is not mentioned.
 
 **Not drawn yet, for want of a source Home may read** (said nowhere rather than invented):
 - a level given "through" a team, which the case list does not carry;

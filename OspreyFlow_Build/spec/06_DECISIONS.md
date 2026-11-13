@@ -32104,6 +32104,51 @@ if it stops being true (rule 12); every red named here is recorded with its diff
 route table) go as patches to their owners (`process/lanes/rules-b/PATCHES.md`). A guide newer than the image
 reaches Home only with a new image, which is what "the version it was built with" means.
 
+### ADR-145, Amendment 11 (13 November 2026) — Home's *Your access and tasks*: below the two columns, its headings beneath its title, its words plainer
+
+Status: written 13 November 2026 by the platform lane under the orchestrator's reservation of the same day.
+This is the owner's ruling of 13 November, on what they saw at 1440 wide in the GOV.UK look. Amendment 4
+decision 12's section sat in Home's left column under *Needs your attention*, with its sub-headings larger
+than its own title, while *Ways of working* stood alone on the right above empty space. Decision 12 stands in
+what the section holds and where each line opens; this amendment changes its place, its type and its words.
+Each point names the test that fails if it stops being true (rule 12). The reds are recorded in
+`process/lanes/platform/home-access/red-first.txt`.
+
+1. **Its place.** The section spans the full width of Home below the two columns (*Needs your attention* with
+   *Recent cases*, and *Ways of working*), never inside either.
+   - Test: `keyboard/needs-you.spec.ts`, *Home's access and tasks spans both columns below them*, in the
+     dark, light and GOV.UK looks at 1440 wide: its left and right edges are the columns' outer edges and its
+     top is below both. It was red at a3df0f4 in all three: the right edge stopped 608 px short (500 px under
+     GOV.UK).
+2. **Its headings.** Its sub-headings (*Places you can open*, *Waiting for you*, *Your access to each case*,
+   the folded *What you can do, by place* and each place within it) are set beneath its own title in every
+   look (`home.css`'s `.home-access`, the scale's `--fs-12` under the title's `--fs-16`). An unstyled `h3` is
+   1.17em, which on GOV.UK's 19px scale stood above the title.
+   - Test: the same case, by each heading's computed size against the title's. It was red under GOV.UK
+     with the section moved and the rule absent: 22.23 px against 19.
+3. **Its words**, exactly as the owner chose:
+   - the title is *Your access and tasks*;
+   - *What you answer for* is *Waiting for you*;
+   - "Nothing waits for you." is "Nothing is waiting for you.";
+   - *Your level in each case* is *Your access to each case*;
+   - each line of that list is "<Level>: <case name>", for example "Editor: Operation Ledger (synthetic
+     demo)".
+
+   The lines under *Waiting for you* ("Author of …", "Reviewer of promotions: …", "Data engineer of …: …")
+   are tasks, not access, and keep their words.
+   - Test: `answersFor.test.tsx`, *is titled and worded as the owner chose* and *says nothing is waiting, in
+     the owner's words, once both reads are in*, each red against a3df0f4; and the browser case above, by
+     the title and "Editor: Operation Ledger (synthetic demo)".
+4. **Unchanged.** The lists keep 2b088f9's plain variant (`home-facts--plain`, `homeKey.test.ts`); what is
+   listed, from the reader's own reads alone, and where each line opens are decision 12's.
+5. **Keyboard and axe.** Every line's keyboard case stands (`needs-you.spec.ts`, rule 13). The whole of Home
+   with the section, `answers-harness.html?home=1`, is scanned by `every-harness.spec.ts` in the dark, light
+   and GOV.UK looks.
+
+**The words elsewhere.** The user guide's §3 (1.48, its PDF reprinted), `02_GLASS_FRONTEND.md`'s Home, the
+marketing site's *Three places* page and the code's comments say the new words. Earlier ADRs and amendments,
+the changelog and the build record keep the words of their day.
+
 ## ADR-148 — Deploying into a namespace on a shared Kubernetes platform: the `cloud-platform` profile, first for the UK public sector client's Cloud Platform — ACCEPTED (design)
 
 *9 November 2026. **Accepted (design): the owner's decision of 9 November 2026** (the client call of 9 November), written from the owner's record checked against the UK public sector client's Cloud Platform's user guide and this repository at `8e74fc8`. Open questions 1 to 3 stay open for the owner; question 1 waits for P8's report.*
