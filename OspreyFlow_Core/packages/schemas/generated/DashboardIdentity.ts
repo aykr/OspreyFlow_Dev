@@ -2,6 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type ClientId = string;
 export type AccountId = string;
+export type Name = string | null;
 export type Clearance = string | null;
 export type OrgUnit = string | null;
 export type ReceivableHandlingCodes = string[];
@@ -13,6 +14,7 @@ export type CasesPulled = number;
 export interface DashboardIdentity {
   client_id: ClientId;
   account_id: AccountId;
+  name?: Name;
   clearance?: Clearance;
   org_unit?: OrgUnit;
   receivable_handling_codes?: ReceivableHandlingCodes;

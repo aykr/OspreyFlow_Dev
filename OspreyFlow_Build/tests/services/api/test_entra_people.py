@@ -117,8 +117,11 @@ class _Store:
         rows = self.dashboard_rows
         if (self.tenant_id, application_id) in rows:
             raise DashboardExistsError(application_id)
+        # UNIQUE (tenant_id, name), as the real table refuses a second board of one name.
+        if any(t == self.tenant_id and d.name == name for (t, _), d in rows.items()):
+            raise DashboardExistsError(name)
         rows[(self.tenant_id, application_id)] = StoredDashboard(
-            application_id, clearance, org_unit, ("P",)
+            application_id, clearance, org_unit, ("P",), name
         )
         return rows[(self.tenant_id, application_id)]
 
@@ -691,6 +694,27 @@ async def test_a_dashboard_identity_is_registered_listed_and_removed_by_applicat
     assert [d.client_id for d in await admin.list_dashboards()] == [DASHBOARD]
     await admin.delete_dashboard(DASHBOARD)
     assert await admin.list_dashboards() == []
+
+
+async def test_on_entra_a_dashboard_is_named_as_keycloak_names_one_and_once_a_tenant() -> None:
+    """The name Superset's embedding matches a board on (platform-b's agreement): required, the
+    slug Keycloak's `osprey-dashboard-<slug>` carries, one dashboard of a name in a tenant."""
+    from services.api.identity_admin import DashboardExistsError, UnknownRoleError
+
+    store = _Store()
+    admin = EntraPeopleAdmin(store)  # type: ignore[arg-type]
+    made = await admin.create_dashboard(
+        "Compliance board", clearance="OFFICIAL", org_unit="u", application_id=DASHBOARD
+    )
+    assert made.dashboard.name == "compliance-board"
+    assert [d.name for d in await admin.list_dashboards()] == ["compliance-board"]
+    with pytest.raises(DashboardExistsError):
+        await admin.create_dashboard("COMPLIANCE  Board!", clearance="OFFICIAL", org_unit="u",
+                                     application_id="ffffffff-0000-4111-8222-333333333333")  # fmt: skip
+    with pytest.raises(UnknownRoleError, match="name"):
+        await admin.create_dashboard("!!!", clearance="OFFICIAL", org_unit="u",
+                                     application_id="ffffffff-0000-4111-8222-333333333333")  # fmt: skip
+    assert len(await admin.list_dashboards()) == 1
 
 
 async def test_on_entra_a_dashboard_is_refused_in_words_without_its_application_id() -> None:

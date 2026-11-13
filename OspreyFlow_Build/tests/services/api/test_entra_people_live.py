@@ -398,16 +398,34 @@ async def test_a_dashboard_identity_is_registered_read_listed_and_removed(world)
     from principal_auth import StoredDashboard
 
     await world.store.register_dashboard(
-        DASHBOARD, "Compliance board", clearance="OFFICIAL-SENSITIVE", org_unit="unit-2"
+        DASHBOARD, "compliance-board", clearance="OFFICIAL-SENSITIVE", org_unit="unit-2"
     )
-    wanted = StoredDashboard(DASHBOARD, "OFFICIAL-SENSITIVE", "unit-2", ("P",))
+    wanted = StoredDashboard(DASHBOARD, "OFFICIAL-SENSITIVE", "unit-2", ("P",), "compliance-board")
     assert await world.store.dashboard(TENANT, DASHBOARD) == wanted
     assert await world.store.dashboards() == [wanted]
     # Bound to its tenant: the other tenant's store sees none, and this one answers for no other.
     assert await world.other.dashboard(OTHER_TENANT, DASHBOARD) is None
     assert await world.store.dashboard(OTHER_TENANT, DASHBOARD) is None
     with pytest.raises(DashboardExistsError):
-        await world.store.register_dashboard(DASHBOARD, "Again", clearance="OFFICIAL", org_unit="u")
+        await world.store.register_dashboard(DASHBOARD, "again", clearance="OFFICIAL", org_unit="u")
+    # UNIQUE (tenant_id, name): another application id of the same name is refused, the same 409;
+    # the other tenant may use the name.
+    with pytest.raises(DashboardExistsError):
+        await world.store.register_dashboard(
+            "ffffffff-0000-4111-8222-333333333333", "compliance-board",
+            clearance="OFFICIAL", org_unit="u",
+        )  # fmt: skip
+    await world.other.register_dashboard(
+        "ffffffff-0000-4111-8222-333333333333", "compliance-board", clearance="OFFICIAL",
+        org_unit="u",
+    )  # fmt: skip
+    assert [d.application_id for d in await world.store.dashboards()] == [DASHBOARD]
+    # A name not slug-shaped never reaches the table (the admin slugs it first).
+    with pytest.raises(ValueError, match="name"):
+        await world.store.register_dashboard(
+            "aaaaaaaa-0000-4111-8222-333333333333", "Compliance board", clearance="OFFICIAL",
+            org_unit="u",
+        )  # fmt: skip
     assert await world.store.remove_dashboard(DASHBOARD) is True
     assert await world.store.dashboard(TENANT, DASHBOARD) is None
     assert await world.store.remove_dashboard(DASHBOARD) is False
@@ -419,7 +437,7 @@ async def test_the_resolver_reads_a_registered_dashboard_with_a_real_token(
     from principal_auth import DASHBOARD_APP_ROLE, DASHBOARD_ROUTES
 
     await world.store.register_dashboard(
-        DASHBOARD, "Compliance board", clearance="OFFICIAL", org_unit="unit-2"
+        DASHBOARD, "compliance-board", clearance="OFFICIAL", org_unit="unit-2"
     )
     resolver = PrincipalResolver(
         _config(jwks_url, oidc_issuer=ISSUER, oidc_audience=API),
