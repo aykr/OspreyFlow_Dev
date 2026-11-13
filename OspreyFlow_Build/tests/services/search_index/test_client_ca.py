@@ -1,8 +1,8 @@
 """ADR-150 decision 7, offline: the one client trusts the CA bundle a deployment names in
 `SSL_CERT_FILE`, `AWS_CA_BUNDLE` or `REQUESTS_CA_BUNDLE` (first set wins, in that order), as the
 AWS SDK and `requests` do, so an OpenSearch behind a private CA (a cluster's own, or a TLS-inspecting
-proxy's) is reached; a named bundle that is not there is refused in words, never quietly replaced by
-the public roots.
+proxy's) is reached, beside the system's own roots; a named bundle that is not there is refused in
+words, never quietly dropped.
 
 Against a real TLS server on 127.0.0.1 whose certificate a throwaway CA signed (`tls_fixture`, made
 fresh per test): with no bundle named, the handshake is refused, as any client trusting only the
@@ -108,6 +108,18 @@ async def test_the_first_named_wins(
     other = tmp_path / "other.pem"
     other.write_text(make_ca().pem)
     _environment(monkeypatch, url, AWS_CA_BUNDLE=str(other), REQUESTS_CA_BUNDLE=str(bundle))
+    assert SearchIndexConfig.from_env().ca_certs == str(other)
+    with pytest.raises(OpenSearchConnectionError):
+        await _get_root()
+
+
+async def test_ssl_cert_file_wins_over_the_others(
+    tls_server: tuple[str, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    url, bundle = tls_server
+    other = tmp_path / "other.pem"
+    other.write_text(make_ca().pem)
+    _environment(monkeypatch, url, SSL_CERT_FILE=str(other), AWS_CA_BUNDLE=str(bundle))
     assert SearchIndexConfig.from_env().ca_certs == str(other)
     with pytest.raises(OpenSearchConnectionError):
         await _get_root()

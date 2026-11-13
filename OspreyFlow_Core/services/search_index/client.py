@@ -8,7 +8,8 @@ identity through botocore's chain; the owner's ruling for step 3a, 13 November 2
 unset sends unsigned. The index alias is per deployment (`OSPREY_SEARCH_INDEX_ALIAS`, default
 `ospreyflow-<OSPREY_DEPLOYMENT_NAME or "default">`), so two installs on one domain never meet.
 A private CA bundle named in `SSL_CERT_FILE`, `AWS_CA_BUNDLE` or `REQUESTS_CA_BUNDLE` (first set
-wins) is the one the client trusts; one named but absent is refused in words."""
+wins) is trusted beside the system's own roots (opensearch-py's context loads both); one named but
+absent is refused in words."""
 
 from __future__ import annotations
 
@@ -69,7 +70,7 @@ class SearchIndexConfig:
                 if not os.path.isfile(named):
                     raise SearchIndexConfigError(
                         f"{variable} names {named!r}, which is not a file: the search index's "
-                        "client trusts the CA bundle it names and no other."
+                        "client cannot trust the CA bundle it names."
                     )
                 ca_certs = named
                 break

@@ -41,9 +41,30 @@ def test_names_match_by_trigrams_edge_ngrams_and_the_conduits_phonetic_key() -> 
     assert MAPPING["properties"]["names_phonetic"]["type"] == "keyword"
 
 
-def test_no_phonetic_or_fuzzy_analysis_inside_opensearch() -> None:
-    kinds = {f["type"] for f in SETTINGS["analysis"]["filter"].values()}
-    assert kinds <= {"ngram", "edge_ngram"}, kinds
-    text = repr(SETTINGS) + repr(MAPPING)
-    for word in ("phonetic\"", "'phonetic'", "fuzzy", "double_metaphone", "synonym", "stemmer"):
-        assert word not in text, word
+#: Everything the analysis may be built of: an allow-list, so a built-in stemmer, a language
+#: analyser, a phonetic tokenizer or a synonym filter named anywhere is refused, not missed.
+TOKENIZERS = {"whole", "standard"}
+FILTERS = {"lowercase", "asciifolding", "edge_prefix", "tri"}
+CUSTOM_FILTER_TYPES = {"ngram", "edge_ngram"}
+CUSTOM_TOKENIZER_TYPES = {"keyword"}
+NORMALIZER_FILTERS = {"lowercase", "asciifolding"}
+
+
+def test_no_phonetic_fuzzy_synonym_or_stemming_analysis_inside_opensearch() -> None:
+    analysis = SETTINGS["analysis"]
+    assert set(analysis) <= {"analyzer", "filter", "tokenizer", "normalizer"}
+    assert {f["type"] for f in analysis["filter"].values()} <= CUSTOM_FILTER_TYPES
+    assert {t["type"] for t in analysis["tokenizer"].values()} <= CUSTOM_TOKENIZER_TYPES
+    for name, analyzer in analysis["analyzer"].items():
+        assert analyzer["type"] == "custom", name
+        assert analyzer["tokenizer"] in TOKENIZERS, name
+        assert set(analyzer["filter"]) <= FILTERS, name
+    for normalizer in analysis["normalizer"].values():
+        assert set(normalizer["filter"]) <= NORMALIZER_FILTERS
+    # Every field names one of these analysers, or none (a keyword); never a built-in one.
+    for path, spec in _fields(MAPPING["properties"]):
+        for key in ("analyzer", "search_analyzer"):
+            if key in spec:
+                assert spec[key] in analysis["analyzer"], (path, spec[key])
+        if "normalizer" in spec:
+            assert spec["normalizer"] in analysis["normalizer"], path

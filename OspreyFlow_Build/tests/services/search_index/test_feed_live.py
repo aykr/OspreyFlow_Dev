@@ -4,7 +4,8 @@ outbox, and the drift check finds each kind of difference the rebuild then mends
 
 Needs a lease: ArcadeDB, Postgres and OpenSearch of the leased stack, its ports pinned
 (`stack_lease.sh remote`). Each case has its own ArcadeDB database and its own index alias, removed
-after it.
+after it, and sees only its own documents' rows of the shared text outbox (`CaseTexts`), removing
+those alone.
 """
 
 from __future__ import annotations
@@ -49,10 +50,45 @@ DATASET = "Z3001ZZ"
 WRITER = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-5")
 
 
+class CaseTexts:
+    """The real text store, its outbox seen only for this case's own documents: the shared
+    Postgres's other rows (another case's, another test's) are neither drained nor removed."""
+
+    def __init__(self, store: ExtractionCandidateStore) -> None:
+        self.store = store
+        self.documents: set[str] = set()
+
+    async def store_document_text(self, document_id: str, text: str, principal: Principal) -> None:
+        self.documents.add(document_id)
+        await self.store.store_document_text(document_id, text, principal)
+
+    async def pending_text_index(self, limit: int) -> list[tuple[int, str]]:
+        async with self.store._pool.acquire() as conn:  # noqa: SLF001 - the case's rows alone
+            rows = await conn.fetch(
+                "SELECT ref, document_id FROM search_text_pending WHERE document_id = ANY($1) "
+                "ORDER BY ref LIMIT $2",
+                sorted(self.documents),
+                limit,
+            )
+        return [(int(r["ref"]), str(r["document_id"])) for r in rows]
+
+    async def clear_pending_text_index(self, refs: Sequence[int]) -> None:
+        await self.store.clear_pending_text_index(refs)
+
+    async def texts_for_index(self, document_ids: Sequence[str]) -> dict[str, tuple[str, str]]:
+        return await self.store.texts_for_index(document_ids)
+
+    async def remove_own(self) -> None:
+        async with self.store._pool.acquire() as conn:  # noqa: SLF001
+            await conn.execute(
+                "DELETE FROM search_text_pending WHERE document_id = ANY($1)", sorted(self.documents)
+            )
+
+
 @dataclass
 class World:
     graph: GraphArcadeDBAdapter
-    texts: ExtractionCandidateStore
+    texts: CaseTexts
     client: AsyncOpenSearch
     alias: str
     indexer: SearchIndexer
@@ -73,18 +109,18 @@ class World:
 async def world() -> AsyncIterator[World]:
     alias = f"test-feed-{uuid.uuid4().hex[:10]}"
     client = search_client(SearchIndexConfig.from_env({**os.environ, "OSPREY_SEARCH_INDEX_ALIAS": alias}))
-    texts = await ExtractionCandidateStore.connect(PostgresConfig.from_env().dsn)
+    store = await ExtractionCandidateStore.connect(PostgresConfig.from_env().dsn)
+    texts = CaseTexts(store)
     try:
         async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
-            async with texts._pool.acquire() as conn:  # noqa: SLF001 - each case's outbox its own
-                await conn.execute("DELETE FROM search_text_pending")
             indexer = SearchIndexer(graph, texts, client, alias, ONTOLOGY)
             await ensure_index(client, alias)
             yield World(graph, texts, client, alias, indexer)
     finally:
+        await texts.remove_own()
         await client.indices.delete(index=f"{alias}*", ignore_unavailable=True)
         await client.close()
-        await texts.close()
+        await store.close()
 
 
 def _person(family_name: str, datasets: Sequence[str] = (DATASET,)) -> NodeWrite:

@@ -19,9 +19,12 @@ NAMES = {
     "pending_text_index",
     "clear_pending_text_index",
 }
-#: The feed's own modules, and the two stores that implement its reads.
+#: The feed's own modules, and the two stores that implement its reads. By file, not by folder:
+#: ADR-149's query side, wherever it lands, is not exempt.
 ALLOWED = {
     "packages/ports/index_feed.py",
+    "services/search_index/indexer.py",
+    "services/search_index/rebuild.py",
     "packages/adapters/graph_arcadedb/adapter.py",
     "services/api/review.py",
     "scripts/rebuild_search_index.py",
@@ -43,12 +46,12 @@ def _named(source: str) -> set[str]:
     return found
 
 
-def offenders() -> dict[str, set[str]]:
+def offenders(core: Path = CORE) -> dict[str, set[str]]:
     out: dict[str, set[str]] = {}
     for root in ("services", "packages", "scripts", "cli"):
-        for path in sorted((CORE / root).rglob("*.py")):
-            rel = path.relative_to(CORE).as_posix()
-            if rel in ALLOWED or rel.startswith("services/search_index/") or "/node_modules/" in rel:
+        for path in sorted((core / root).rglob("*.py")):
+            rel = path.relative_to(core).as_posix()
+            if rel in ALLOWED or "/node_modules/" in rel:
                 continue
             if names := _named(path.read_text(encoding="utf-8")):
                 out[rel] = names
@@ -68,3 +71,18 @@ async def search(request, graph):
     assert _named(planted) == {"nodes_for_index"}
     assert _named("x = getattr(store, 'texts_for_index')") == {"texts_for_index"}
     assert _named("from ports.index_feed import IndexFeedSource") == {"IndexFeedSource"}
+
+
+def test_the_walk_names_a_planted_route_and_a_query_module_beside_the_feed(tmp_path: Path) -> None:
+    """Through `offenders()` itself, over a tree with the planted uses where they would be: a route,
+    and a search query module beside the feed's own (not exempt by its folder)."""
+    route = tmp_path / "services/api/search.py"
+    query = tmp_path / "services/search_index/query.py"
+    allowed = tmp_path / "services/search_index/indexer.py"
+    for path in (route, query, allowed):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("async def f(graph):\n    return await graph.nodes_for_index([])\n")
+    assert offenders(tmp_path) == {
+        "services/api/search.py": {"nodes_for_index"},
+        "services/search_index/query.py": {"nodes_for_index"},
+    }
