@@ -16,10 +16,11 @@ installs and runs OspreyFlow, the [user guide](user-guide.md), for analysts, and
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.2** · 2026-11-10 · For OspreyFlow v0.5.0 · Issued
+**Version 1.3** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.3 | 2026-11-13 | §1: on a shared platform the identity provider is the organisation's Entra ID, in Keycloak's place (docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
 | 1.2 | 2026-11-10 | Describes v0.5.0. §4: releases between environments and the rule editor as built, no longer *coming*. |
 | 1.1 | 2026-11-10 | Promotion as built (case lane's L3.4). One door in: Small on your own server publishes 443 alone. |
 | 1.0 | 2026-11-09 | First issue: the two architecture levels, the tiers and ports, the four places, cases and datasets (one dataset per case, home cases, the analyst layer, views instead of branches), access control in the store, where the data lives, every interface, the licence register's traps, and the limits. |
@@ -45,7 +46,8 @@ a person do):
 | **Rule author** | Writes the rules that raise alerts, and works the alerts in the queue. |
 
 Around the three tiers sit the **identity provider** (Keycloak, which says who someone is; it can
-hand sign-in to the organisation's own provider), **reporting** (a feed the Conduit serves, pulled
+hand sign-in to the organisation's own provider; on a shared platform, the organisation's Entra ID
+in its place), **reporting** (a feed the Conduit serves, pulled
 into a reporting database that Superset or another BI tool reads), **data in** (files, a watched
 ingest folder and connectors to SQL databases, HTTP APIs and screening lists), and the **outside
 services** a deployment may switch on: a hosted model provider, mail, online map tiles, the
