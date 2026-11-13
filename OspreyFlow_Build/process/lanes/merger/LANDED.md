@@ -48,3 +48,4 @@ e0445ac e85e294 platform-b pin
 5c862eb 3e701b7 rules lists (ADR-146 Am 7)
 45dc4a3 9a90aa8 admin refresh (ADR-050 Am 3)
 5e632a8 ad4fb4e platform-b budget-run
+ddeb7d3 3f801b2 platform-b rule-editor race
