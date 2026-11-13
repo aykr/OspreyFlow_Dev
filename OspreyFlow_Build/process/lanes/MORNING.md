@@ -40,6 +40,14 @@ count records).
    platform-b's window (or allow `stack_lease.sh acquire` for that lane), or run it yourself. 4c is otherwise built
    (A–E, ea0c7ba, red first). Every other lane's leases work.
 
+5. **The data-safety edge case (docs' finding, ADR-148 Am 13 decision 5).** The ADR says every kept backup set can
+   be met by RDS's point-in-time restore, with both at 35 days. At the edge that is optimistic: RDS's earliest
+   restorable point lags its retention by up to about a day, and S3 expiry rounds up to midnight UTC, so a set in
+   its last day may fall outside RDS's window. RDS cannot go above 35 days (AWS's maximum). Your choice:
+   (a) the sets expire at 34 days, so every kept set is always matched; (b) keep 35 and amend the ADR and the guide
+   to say a set in its last day may not be restorable with its database; (c) something else. The guide follows the
+   ADR as it stands until then.
+
 ## Done overnight
 
 - Landed and pushed: deps-opensearch, step 2 (the manifest), step 3a with data safety and docs' D2/D3/D8,
