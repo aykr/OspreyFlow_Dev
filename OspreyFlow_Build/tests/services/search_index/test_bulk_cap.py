@@ -23,6 +23,7 @@ from ontology.loader import load_default_ontology
 from ports.index_feed import PendingIndex
 from services.search_index import indexer as indexer_module
 from services.search_index.indexer import SearchIndexer, building_alias, write_actions
+from services.search_index.mapping import index_body
 from services.search_index.rebuild import rebuild
 from tests.services.search_index.fake_opensearch import FakeOpenSearch
 
@@ -139,7 +140,7 @@ async def test_a_413_is_raised_and_the_outbox_keeps_the_batch(
     client = _OpenSearch(limit=CAP // 4)
     source = _Source([f"node-{i:04d}" for i in range(60)])
     indexer = SearchIndexer(source, _Texts(), client, "a", load_default_ontology())  # type: ignore[arg-type]
-    await client.indices.create(index="a-initial", body={})
+    await client.indices.create(index="a-initial", body=index_body())
     await client.indices.put_alias(index="a-initial", name="a")
     with pytest.raises(TransportError) as raised:
         await indexer.drain_once()
@@ -152,7 +153,7 @@ async def test_the_indexer_drains_a_batch_over_the_cap(monkeypatch: pytest.Monke
     client = _OpenSearch(limit=CAP)
     source = _Source([f"node-{i:04d}" for i in range(200)])
     indexer = SearchIndexer(source, _Texts(), client, "a", load_default_ontology())  # type: ignore[arg-type]
-    await client.indices.create(index="a-initial", body={})
+    await client.indices.create(index="a-initial", body=index_body())
     await client.indices.put_alias(index="a-initial", name="a")
     assert await indexer.drain_once() == 200
     assert len(client.requests) > 1 and all(len(r) <= CAP for r in client.requests)
@@ -174,7 +175,7 @@ async def test_a_413_in_the_rebuild_is_raised_and_leaves_nothing_behind(
 ) -> None:
     monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
     client = _OpenSearch(limit=CAP // 4)
-    await client.indices.create(index="a-initial", body={})
+    await client.indices.create(index="a-initial", body=index_body())
     await client.indices.put_alias(index="a-initial", name="a")
     source = _Source([f"node-{i:04d}" for i in range(300)])
     with pytest.raises(TransportError) as raised:

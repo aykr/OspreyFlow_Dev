@@ -59,6 +59,9 @@ class _Indices:
         for table in (self._s.docs, self._s.aliases, self._s.mappings):
             table.pop(index, None)
 
+    async def get_mapping(self, *, index: str) -> dict[str, Any]:
+        return {i: {"mappings": self._s.mappings[i]} for i in self._s.resolve(index)}
+
     async def put_alias(self, *, index: str, name: str) -> None:
         self._s.aliases[index].add(name)
 
@@ -182,7 +185,10 @@ class FakeOpenSearch:
                 continue
             held = self.docs[targets[0]]
             if op == "delete":
-                result["status"] = 200 if held.pop(meta["_id"], None) is not None else 404
+                if held.pop(meta["_id"], None) is not None:
+                    result.update(status=200, result="deleted")
+                else:
+                    result.update(status=404, result="not_found")  # no error: done
                 continue
             assert source is not None
             refusal = self._refusal(targets[0], source)

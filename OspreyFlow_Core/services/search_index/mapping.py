@@ -5,6 +5,8 @@ cannot see."""
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 _BOOLEAN = {"similarity": "boolean"}
@@ -104,5 +106,18 @@ MAPPING: dict[str, Any] = {
 }
 
 
+#: The settings and mapping this code builds documents for, as one digest. Written into each index's
+#: `_meta` when it is made, and checked before every write (`indexer.check_mapping`): an index made
+#: by other code (before an upgrade that changed either, or by an older replica in a rolling one)
+#: would refuse or misread this code's documents, so the indexer stops and says a rebuild is needed
+#: rather than setting every document aside.
+MAPPING_FINGERPRINT = hashlib.sha256(
+    json.dumps({"settings": SETTINGS, "mappings": MAPPING}, sort_keys=True).encode()
+).hexdigest()
+
+
 def index_body() -> dict[str, Any]:
-    return {"settings": SETTINGS, "mappings": MAPPING}
+    return {
+        "settings": SETTINGS,
+        "mappings": {**MAPPING, "_meta": {"mapping_fingerprint": MAPPING_FINGERPRINT}},
+    }

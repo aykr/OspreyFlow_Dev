@@ -25,6 +25,7 @@ from schemas.domain import Node
 from services.search_index import indexer as indexer_module
 from services.search_index.indexer import (
     IndexWriteError,
+    MappingOutOfDate,
     SearchIndexer,
     building_alias,
     ensure_index,
@@ -127,7 +128,9 @@ async def test_a_permanent_refusal_of_one_item_is_set_aside() -> None:
     refused = await write_actions(client, body)  # type: ignore[arg-type]
     assert [r.doc_id for r in refused] == ["bad"]
     # Its type and the field, never the value OpenSearch's reason quotes.
-    assert refused[0].reason == "400 strict_dynamic_mapping_exception in field not_in_the_mapping"
+    assert refused[0].reason == (
+        "400 strict_dynamic_mapping_exception in a field the mapping does not hold"
+    )
     assert "good" in _indexed(client)
 
 
@@ -223,7 +226,7 @@ async def test_a_refused_update_deletes_the_older_version_so_it_fails_closed() -
 async def test_the_clusters_own_refusal_is_raised_whatever_its_status(state: str) -> None:
     """A write block's 403, a closed index's 400, a 429, the flood-stage block that refuses writes
     and lets deletes through: the cluster's state, not the document's. Raised, the outbox kept,
-    nothing set aside, and the document already indexed left as it is."""
+    nothing set aside; once the cluster takes writes again, the document is indexed."""
     client, graph, indexer = await _setup([_person("p-1", "Lovelace")])
     await indexer.drain_once()
     graph.pending = ["p-1"]
@@ -235,8 +238,11 @@ async def test_the_clusters_own_refusal_is_raised_whatever_its_status(state: str
         await indexer.drain_once()
     assert graph.pending == ["p-1"]
     assert not await client.indices.exists(index=refused_index(ALIAS))
+    # A lasting block that still takes deletes (the flood stage): the older version is deleted, so a
+    # narrowing change is never left unapplied while the block lasts; any other: left as it is.
+    assert ("p-1" in _indexed(client)) is (state != "flood_stage")
     client.closed, client.blocked, client.busy, client.flood_stage = set(), False, False, False
-    assert "p-1" in _indexed(client)
+    assert await indexer.drain_once() == 1 and "p-1" in _indexed(client)
 
 
 async def test_a_refused_delete_is_raised_never_set_aside() -> None:
@@ -261,10 +267,14 @@ async def test_an_alias_over_two_indexes_is_raised_not_set_aside() -> None:
     assert graph.pending == ["p-1"]
 
 
-async def test_a_write_to_a_missing_alias_makes_no_index_of_its_name() -> None:
+async def test_a_write_to_a_missing_alias_makes_no_index_of_its_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """`require_alias`: the alias gone, the write is refused and raised; no unmapped index named
-    after the alias appears in its place."""
+    after the alias appears in its place. The mapping check, which would also stop it, is stepped
+    past, so this holds `require_alias` itself (the alias can go between the check and the write)."""
     client, graph, indexer = await _setup([_person("p-1", "Lovelace")])
+    monkeypatch.setattr(indexer_module, "check_mapping", _no_check)
     await client.indices.delete(index="a-initial")
     with pytest.raises(IndexWriteError):
         await indexer.drain_once()
@@ -292,3 +302,75 @@ async def test_one_rebuild_at_a_time() -> None:
     await client.indices.delete(index=rebuild_lock(ALIAS))
     await rebuild(graph, _Texts(), client, ALIAS, SCHEMA)  # type: ignore[arg-type]
     assert not await client.indices.exists(index=rebuild_lock(ALIAS))
+
+
+async def test_a_delete_to_an_index_that_is_gone_is_raised_not_done(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The building alias read as there, then moved by the rebuild's swap before the delete reaches
+    it: an `index_not_found_exception` 404 is not "already gone", so the withdrawn node's outbox
+    row is kept and the delete is sent again to wherever the alias now points."""
+    client, graph, indexer = await _setup([_person("p-1", "Lovelace")])
+    await indexer.drain_once()
+    del graph.nodes["p-1"]
+    graph.pending = ["p-1"]
+    real = client.indices.exists_alias
+
+    async def building_seen(*, name: str) -> bool:
+        return True if name == building_alias(ALIAS) else await real(name=name)
+
+    monkeypatch.setattr(client.indices, "exists_alias", building_seen)
+    monkeypatch.setattr(indexer_module, "check_mapping", _no_check)
+    with pytest.raises(IndexWriteError, match="index_not_found_exception"):
+        await indexer.drain_once()
+    assert graph.pending == ["p-1"]
+
+
+async def _no_check(client: Any, target: str) -> None:
+    return None
+
+
+async def test_an_index_made_for_another_mapping_is_never_written() -> None:
+    """An upgrade that changed the mapping, not yet rebuilt (or an older replica in a rolling one):
+    nothing is set aside or deleted, the outbox is kept, and a rebuild is asked for in words."""
+    client = FakeOpenSearch()
+    old = index_body()
+    old["mappings"] = {**old["mappings"], "_meta": {"mapping_fingerprint": "an-older-mapping"}}
+    await client.indices.create(index="a-old", body=old)
+    await client.indices.put_alias(index="a-old", name=ALIAS)
+    graph = _Graph([_person("p-1", "Lovelace")])
+    indexer = SearchIndexer(graph, _Texts(), client, ALIAS, SCHEMA)  # type: ignore[arg-type]
+    with pytest.raises(MappingOutOfDate, match="rebuild_search_index"):
+        await ensure_index(client, ALIAS)  # type: ignore[arg-type]
+    with pytest.raises(MappingOutOfDate):
+        await indexer.drain_once()
+    assert graph.pending == ["p-1"] and client.docs["a-old"] == {}
+    assert not await client.indices.exists(index=refused_index(ALIAS))
+    built = await rebuild(graph, _Texts(), client, ALIAS, SCHEMA)  # type: ignore[arg-type]
+    assert client.resolve(ALIAS) == [built.index]
+    assert await indexer.drain_once() == 1
+
+
+@pytest.mark.parametrize(
+    ("reason", "said"),
+    [
+        ("failed to parse field [date] of type [date] in document with id 'p-1'. Preview of "
+         "field's value: 'Ada Lovelace 1815'", "400 mapper_parsing_exception in field date"),
+        ("mapping set to strict, dynamic introduction of [x] within [_doc] is not allowed. "
+         "Preview of field's value: '[secret value]'",
+         "400 mapper_parsing_exception in a field the mapping does not hold"),
+        ("Document contains at least one immense term in field=\"names\" (whose UTF8 encoding "
+         "is longer than the max length 32766), all of which were skipped. The prefix of the "
+         "first immense term is: '[Ada field [Lovelace]...'", "400 mapper_parsing_exception in field names"),
+        ("the value 'field [Lovelace]' could not be read",
+         "400 mapper_parsing_exception in a field the mapping does not hold"),
+        ("no field named in it at all: 'Ada Lovelace'", "400 mapper_parsing_exception"),
+    ],
+)  # fmt: skip
+def test_the_reason_keeps_the_type_and_field_never_the_value(reason: str, said: str) -> None:
+    """The field is the first `field [..]`, `field="..."` or `introduction of [..]`, kept only when
+    it is one of the mapping's own fields: a value shaped like a field name (the fourth case) is
+    never copied out."""
+    got = indexer_module._reason(400, {"type": "mapper_parsing_exception", "reason": reason})
+    assert got == said
+    assert not any(w in got for w in ("Ada", "secret", "1815", "Lovelace"))

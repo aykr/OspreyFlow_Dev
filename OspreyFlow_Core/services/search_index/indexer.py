@@ -16,13 +16,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from opensearchpy import AsyncOpenSearch
+from opensearchpy import AsyncOpenSearch, NotFoundError
 
 from ports.index_feed import IndexFeedSource
 from schemas.domain import Node, OntologySchema
 
 from .document import node_document, text_document, text_document_id
-from .mapping import index_body
+from .mapping import MAPPING, MAPPING_FINGERPRINT, index_body
 
 log = logging.getLogger(__name__)
 
@@ -171,6 +171,17 @@ def _permanent(op: str, error: Any) -> bool:
     return bool(kinds & _DOCUMENT_REFUSALS)
 
 
+def _mapped(properties: dict[str, Any], prefix: str = "") -> set[str]:
+    out: set[str] = set()
+    for name, spec in properties.items():
+        out.add(prefix + name)
+        out |= _mapped(spec.get("fields", {}), f"{prefix}{name}.")
+    return out
+
+
+_MAPPED_FIELDS = frozenset(_mapped(MAPPING["properties"]))
+
+
 def _reason(status: int, error: dict[str, Any]) -> str:
     """The refusal's type and the field it names, never its words: OpenSearch's reason quotes the
     value (a preview of the field, a term's bytes), which is a record's content."""
@@ -180,56 +191,104 @@ def _reason(status: int, error: dict[str, Any]) -> str:
         kinds.append(str(caused["type"]))
     found = _FIELD.search(str(error.get("reason", "")))
     field = next((g for g in found.groups() if g), None) if found else None
-    return f"{status} {' / '.join(kinds)}" + (f" in field {field}" if field else "")
+    if field is None:
+        return f"{status} {' / '.join(kinds)}"
+    # Kept only when it is one of the mapping's own fields: a value shaped like a field name, or a
+    # field the mapping does not hold, is never copied out.
+    named = field if field in _MAPPED_FIELDS else "a field the mapping does not hold"
+    return f"{status} {' / '.join(kinds)} in {'field ' if named == field else ''}{named}"
+
+
+#: A refusal by a block the cluster keeps until someone lifts it (a write block, an ISM read-only
+#: state, the flood-stage watermark, a security refusal): unlike a 429's rejection, no retry soon
+#: ends it, so the document's older version is deleted where the cluster still takes deletes.
+_LASTING = frozenset({"cluster_block_exception", "security_exception"})
+
+
+@dataclass(frozen=True)
+class _Passing:
+    op: str
+    status: int
+    kind: str
+    doc_id: str
+    index: str
 
 
 async def write_actions(client: AsyncOpenSearch, body: list[dict[str, Any]]) -> list[Refused]:
-    """The body in requests of at most `MAX_BULK_BYTES`; a delete of a document that was never
-    there is not a failure. A document refused for good (over the cap alone, or refused for its own
-    content) is returned for the caller to record, and whatever that index already held for it is
-    deleted in the same pass, so an older version never stays searchable with older access fields
-    (it fails closed). Any other refusal is raised, a 413 for the whole request too (never
-    swallowed), so the caller clears nothing of the batch and sends it again."""
+    """The body in requests of at most `MAX_BULK_BYTES`; a delete of a document that is not there
+    (`not_found`, no error) is done. A document refused for good (over the cap alone, or refused
+    for its own content) is returned for the caller to record, and whatever that index already held
+    for it is deleted in the same pass, so an older version never stays searchable with older
+    access fields (it fails closed). Any other refusal is raised, a 413 for the whole request too
+    (never swallowed), so the caller clears nothing of the batch and sends it again; a write refused
+    by a lasting block first has its older version deleted, where the cluster still takes deletes,
+    so a narrowing change is never left unapplied while the block lasts."""
     if not body:
         return []
     requests, refused = _requests(client, body)
+    passing: list[_Passing] = []
     for request in requests:
-        refused += await _write_one(client, request)
+        done, still = await _write_one(client, request)
+        refused += done
+        passing += still
     if refused:
         removal = [{"delete": {"_index": r.index, "_id": r.doc_id}} for r in refused]
-        removed, still_refused = _requests(client, removal)
-        assert not still_refused  # a delete line is never over the cap
-        for request in removed:
-            if await _write_one(client, request):
+        for request in _requests(client, removal)[0]:
+            if any(await _write_one(client, request)):
                 raise IndexWriteError("a refused document's older version could not be deleted")
+    if passing:
+        lasting = [p for p in passing if p.op != "delete" and p.kind in _LASTING]
+        if lasting:
+            removal = [{"delete": {"_index": p.index, "_id": p.doc_id}} for p in lasting]
+            for request in _requests(client, removal)[0]:
+                await _write_one(client, request)  # where deletes are refused too, nothing more
+        said = [(p.op, p.status, p.kind) for p in passing[:3]]
+        raise IndexWriteError(f"{len(passing)} of the batch's writes were refused: {said}")
     return refused
 
 
-async def _write_one(client: AsyncOpenSearch, request: str) -> list[Refused]:
+async def _write_one(client: AsyncOpenSearch, request: str) -> tuple[list[Refused], list[_Passing]]:
     answer = await client.bulk(body=request)
     if not answer.get("errors"):
-        return []
+        return [], []
     refused: list[Refused] = []
-    passing = []
+    passing: list[_Passing] = []
     for item in answer["items"]:
         for op, result in item.items():
             status = int(result.get("status", 200))
-            if status < 300 or (op == "delete" and status == 404):
-                continue
             error = result.get("error")
+            # A delete of a document that is not there is done; one whose index is not there (an
+            # alias moved or gone between reading it and writing) is not: its document may be
+            # wherever the alias now points.
+            if status < 300 or (op == "delete" and status == 404 and error is None):
+                continue
+            doc_id, index = str(result.get("_id")), str(result.get("_index"))
             if _permanent(op, error):
-                refused.append(
-                    Refused(
-                        str(result.get("_id")), _reason(status, error), str(result.get("_index"))
-                    )
-                )
+                refused.append(Refused(doc_id, _reason(status, error), index))
             else:
-                passing.append(
-                    (op, status, error.get("type") if isinstance(error, dict) else error)
-                )
-    if passing:
-        raise IndexWriteError(f"{len(passing)} of the batch's writes were refused: {passing[:3]}")
-    return refused
+                kind = str(error.get("type")) if isinstance(error, dict) else str(error)
+                passing.append(_Passing(op, status, kind, doc_id, index))
+    return refused, passing
+
+
+class MappingOutOfDate(IndexWriteError):
+    """The index was made for another mapping than this code's (`mapping.MAPPING_FINGERPRINT`):
+    nothing is written to it, the outbox is kept, and a rebuild is needed."""
+
+
+async def check_mapping(client: AsyncOpenSearch, target: str) -> None:
+    """Every index behind `target` made for this code's mapping, or `MappingOutOfDate`."""
+    try:
+        found = await client.indices.get_mapping(index=target)
+    except NotFoundError as e:
+        raise IndexWriteError(f"the search index {target} is not there: nothing is written") from e
+    for index, held in found.items():
+        meta = (held.get("mappings") or {}).get("_meta") or {}
+        if meta.get("mapping_fingerprint") != MAPPING_FINGERPRINT:
+            raise MappingOutOfDate(
+                f"the search index {index} was made for another mapping than this version's: "
+                "nothing is written to it until python -m scripts.rebuild_search_index rebuilds it"
+            )
 
 
 def refused_index(alias: str) -> str:
@@ -275,13 +334,14 @@ async def clear_refused(client: AsyncOpenSearch, alias: str, doc_ids: Sequence[s
         return
     requests, _ = _requests(client, [{"delete": {"_index": index, "_id": d}} for d in doc_ids])
     for request in requests:
-        await _write_one(client, request)
+        await _write_one(client, request)  # a record left behind is reported, never harmful
 
 
 async def ensure_index(client: AsyncOpenSearch, alias: str) -> None:
     """The alias's index, made with the mapping if there is none yet (a first start); the rebuild
-    replaces it under the alias."""
+    replaces it under the alias. An existing one made for another mapping is `MappingOutOfDate`."""
     if await client.indices.exists_alias(name=alias):
+        await check_mapping(client, alias)
         return
     index = f"{alias}-initial"
     if not await client.indices.exists(index=index):
@@ -332,6 +392,9 @@ class SearchIndexer:
             name=building_alias(self._alias)
         ):
             targets.append(building_alias(self._alias))
+        if index is None:
+            for target in targets:
+                await check_mapping(self._client, target)
         refused: dict[str, Refused] = {}
         sent: set[str] = set()
         for target in targets:

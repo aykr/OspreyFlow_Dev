@@ -37045,11 +37045,18 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
      or caused by `max_bytes_length_exceeded_exception` (a term over Lucene's 32,766 bytes). It is decided by the
      error's type, never its status. Every other refusal is the cluster's state, not the document's, and is raised
      with the batch kept: a write block's 403, `read_only_allow_delete` at the flood-stage watermark, a closed index,
-     an alias over two indexes, a 429, a 5xx. A delete is never set aside. A document set aside is recorded in the
+     an alias over two indexes, a 429, a 5xx. A delete is never set aside, and is done only when the document is
+     not there (`not_found`, no error): a delete whose index is not there (an alias moved by a rebuild's swap
+     between reading it and writing) is raised and sent again. A write refused by a lasting block (a
+     `cluster_block_exception` or a `security_exception`, which no retry soon ends) first has its older version
+     deleted where the cluster still takes deletes (the flood-stage block does), so a change that narrows access is
+     never left unapplied while the block lasts: the document is missing from search until the block is lifted,
+     never exposed (a 429's rejection is retried, its lag bounded by the retry). A document set aside is recorded in the
      deployment's refused index (`<alias>-refused`, outside the alias, so no search reads it) and an error naming it
      is logged; whatever the index already held for it is deleted in the same pass, so an older version never stays
      searchable with older access fields; the rest of the batch is written and the outbox cleared. Its reason is the
-     error's type and the field it names, never OpenSearch's words, which quote the value. A later write or delete of
+     error's type and the field it names, and that field only when it is one of the mapping's own fields; never
+     OpenSearch's words, which quote the value. A later write or delete of
      the same document removes its record, so a record names only what is still set aside. A name or an identifier
      indexes at most `KEYWORD_MAX_CHARS` (8,191) characters as a keyword (`ignore_above`), so a long name is never
      refused for its length; an access field (datasets, handling, units) has no `ignore_above`, so an over-long
@@ -37117,8 +37124,16 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    `test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them`. A restore run end to end and then
    searched is not run by this step: CARRIES' row, for platform-b's restore exit test.
    - **One rebuild at a time:** a rebuild holds a lock index (`<alias>-rebuild-lock`, made atomically: a second
-     create is refused) and is refused in words while another holds it; a crashed rebuild's lock is deleted by hand,
-     as the refusal says (`test_one_rebuild_at_a_time`).
+     create is refused) and is refused in words while another holds it (`test_one_rebuild_at_a_time`). A rebuild
+     killed outright (SIGKILL, out of memory) leaves the lock, and every later rebuild, the restore's included, is
+     refused until an operator deletes that index, as the refusal says.
+   - **An index is written only by the code its mapping was made for.** Each index's `_meta` holds
+     `MAPPING_FINGERPRINT`, a digest of the settings and mapping it was made with; the indexer checks it on every
+     target before each write and at start (`check_mapping`). An index made for another mapping (an upgrade that
+     changed it, not yet rebuilt, or an older replica in a rolling upgrade) is never written: the indexer raises
+     `MappingOutOfDate`, keeps the outbox and says a rebuild is needed, rather than setting every document aside.
+     So an upgrade that changes the mapping runs the rebuild (CARRIES' row, for the upgrade's owner);
+     `test_an_index_made_for_another_mapping_is_never_written`.
    - **A failed rebuild leaves nothing behind:** its index is deleted, and the building alias with it, and the alias
      stays where it was. A rebuild first deletes any index a crashed one left under `<alias>-building` (otherwise
      every change goes to that stray index too, and a second index under the alias refuses every write). Held by
