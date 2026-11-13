@@ -308,3 +308,27 @@ def test_a_restore_stops_superset_and_the_report_sync_with_the_other_writers() -
     writers = _values(_reporting())["backups"]["writers"]
     assert {"report-sync", "superset"} <= set(writers)
     assert not {"report-sync", "superset"} & set(_values(_config())["backups"]["writers"])
+
+
+# --- ADR-148 Amendment 15: the administrator fallback, poc alone ---------------------------------------
+
+
+def _poc_with(**sources: object) -> dict[str, object]:
+    raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
+    raw["cloud_platform"]["claims"] |= sources
+    return raw
+
+
+@pytest.mark.parametrize("field", ["clearance", "org_unit", "handling_codes"])
+def test_the_administrator_fallback_renders_on_poc(field: str) -> None:
+    environment = _values(OspreyConfig.model_validate(_poc_with(**{field: {"administrator": True}})))["environment"]
+    assert json.loads(environment["OSPREY_CLAIM_MAPPING"])[field] == {"administrator": True}
+
+
+@pytest.mark.parametrize("field", ["clearance", "org_unit", "handling_codes"])
+def test_the_administrator_fallback_is_refused_on_any_other_shape(field: str) -> None:
+    raw = _raw()
+    raw["cloud_platform"]["claims"] |= {field: {"administrator": True}}
+    assert raw["cloud_platform"].get("shape", "standard") != "poc"
+    with pytest.raises(CloudPlatformNotRenderable, match=f"sets {field} by the administrator.*only the poc shape"):
+        _artefacts(OspreyConfig.model_validate(raw))

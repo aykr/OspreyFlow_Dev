@@ -182,11 +182,25 @@ def _refuse(config: OspreyConfig) -> None:
     from principal_auth import ClaimMapping
 
     try:
-        ClaimMapping.model_validate(claims.claim_mapping())
+        mapping = ClaimMapping.model_validate(claims.claim_mapping())
     except ValueError as error:
         raise CloudPlatformNotRenderable(
             f"cloud_platform.claims cannot be read as a claim mapping: {error}"
         ) from None
+    by_administrator = [
+        name
+        for name, source in (("clearance", mapping.clearance), ("org_unit", mapping.org_unit),
+                             ("handling_codes", mapping.handling_codes))
+        if source.administrator
+    ]  # fmt: skip
+    if by_administrator and _cp(config).shape != "poc":
+        # ADR-148 Amendment 15: the fallback is the proof of concept's, while the client's Entra
+        # cannot yet send the values; a production namespace reads every one from Entra ID.
+        raise CloudPlatformNotRenderable(
+            f"cloud_platform.claims sets {', '.join(by_administrator)} by the administrator "
+            "(administrator: true), which only the poc shape allows: name the claim or the group "
+            "table Entra ID sends each in"
+        )
 
 
 def entra_settings(config: OspreyConfig) -> dict[str, str]:

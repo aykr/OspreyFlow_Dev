@@ -1,0 +1,10 @@
+# 4c step B (ADR-148 Am 15): the render refuses the administrator fallback off the poc shape. Red first, fresh PYTHONPYCACHEPREFIX per pytest. Mac, offline.
+
+== plant: the shape not asked:
+FAILED test_cloud_platform_entra.py::test_the_administrator_fallback_is_refused_on_any_other_shape[clearance]
+FAILED test_cloud_platform_entra.py::test_the_administrator_fallback_is_refused_on_any_other_shape[org_unit]
+FAILED test_cloud_platform_entra.py::test_the_administrator_fallback_is_refused_on_any_other_shape[handling_codes]
+3 failed, 24 passed in 6.16s
+
+== green:
+27 passed in 5.81s
