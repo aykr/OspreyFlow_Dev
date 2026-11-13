@@ -14,7 +14,7 @@ a stand-in answering every command with an empty result, since start-up asks it 
 - at 400 (`green-400.raw.txt`): three Conduits up, 151 held.
 
 Fifty is the Conduit's stores' pools at their minimum (about 45 pools at `min_size=1`, two at 2). The lane stacks have
-allowed 400 since 10 November for exactly this (`scripts/stack_lease.sh`, `PG_CONNECTIONS`, "one Conduit's asyncpg pools
+allowed 400 since 10 November for exactly this (`OspreyFlow_Build/scripts/stack_lease.sh`, `PG_CONNECTIONS`, "one Conduit's asyncpg pools
 open 47 connections at their minimum"); CI never followed. That is why the same tests pass on the server.
 
 **Fix (the owner's, `.github/`):** `ci-postgres-connections.diff`: the `conformance` job raises its Postgres to 400
