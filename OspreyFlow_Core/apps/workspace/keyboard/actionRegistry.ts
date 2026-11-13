@@ -1009,7 +1009,7 @@ export const NEEDS_YOU_ACTIONS = defineActionRegistry("NEEDS_YOU_ACTIONS", [
   "open-operations-from-needs-you-by-keyboard",
   "open-a-datasets-model-tab-from-needs-you-by-keyboard",
   "open-the-model-tab-from-the-studios-reminder-by-keyboard",
-  // ADR-145 Amendment 4 decision 12: Home's Your access and tasks (Amendment 11).
+  // ADR-145 Amendment 4 decision 12: Home's What you can do, and what you answer for.
   "open-what-you-answer-for-by-keyboard",
   "read-why-i-can-do-this-by-keyboard",
 ] as const);

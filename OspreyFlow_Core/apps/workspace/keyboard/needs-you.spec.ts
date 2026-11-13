@@ -106,7 +106,7 @@ test("a Needs you request opens the Studio on its dataset's Model tab, and not o
 
 // ADR-145 Amendment 4 decision 12 (L2.7): Home's Your access and tasks (Amendment 11), by keyboard:
 // each line's why read with it, a case, a Model tab and Operations opened, and Why can I do this? opened.
-test("what you answer for opens where to act, its why read with each line, by keyboard", async ({ page }) => {
+test("your access and tasks opens where to act, its why read with each line, by keyboard", async ({ page }) => {
   await page.goto("/keyboard/answers-harness.html");
   const author = page.getByRole("button", { name: "Author of Harbour wing review" });
   await author.focus();
@@ -149,11 +149,13 @@ for (const look of ["dark", "light", "govuk"] as const) {
     const [left, right] = [(await columns.nth(0).boundingBox())!, (await columns.nth(1).boundingBox())!];
     expect(Math.abs(box.x - left.x)).toBeLessThan(2);
     expect(Math.abs(box.x + box.width - (right.x + right.width))).toBeLessThan(2);
-    expect(box.y).toBeGreaterThanOrEqual(Math.max(left.y + left.height, right.y + right.height));
+    // Set apart from the columns as their own sections are from each other (`--sp-32`), never flush.
+    expect(box.y - Math.max(left.y + left.height, right.y + right.height)).toBeGreaterThanOrEqual(24);
     expect(await page.locator(".home-column section[aria-labelledby='answers-for']").count()).toBe(0);
     const size = (selector: string) => section.locator(selector).first().evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
     const title = await size("h2");
-    for (const sub of ["h3", "h4", "summary"]) expect(await size(sub)).toBeLessThan(title);
+    // Each kind of sub-heading judged on its own, so each is shown red alone (rule 15).
+    for (const sub of ["h3", "h4", "summary"]) expect.soft(await size(sub), `${sub} beneath the title`).toBeLessThan(title);
   });
 }
 

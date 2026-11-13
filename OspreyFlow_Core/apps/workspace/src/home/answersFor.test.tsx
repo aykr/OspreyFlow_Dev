@@ -78,7 +78,7 @@ describe("the Home section", () => {
       <AnswersForSection apiBaseUrl="x" bearerToken="t" rights={ENGINEER} roles={["data_engineer"]} onOpenCase={vi.fn()}
         read={{ cases: async () => CASES, needs: async () => { throw new Error("503"); } }} />,
     ); // prettier-ignore
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Could not read what waits for you/));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Could not read what is waiting for you/));
   });
 
   it("says it is reading, then why a line did not open", async () => {

@@ -26,3 +26,19 @@ is titled and worded as the owner chose: FAIL; says nothing is waiting, in the o
     Received:   22.23
   1 failed
   2 passed (1.4s)
+## 5. after the lane-reviewer: the gap above the section, the section moved and no margin (all three looks)
+    Expected: >= 24
+    Received:    0
+## 6. each sub-heading alone, the margin in: the h4's selector taken out of the rule, then the summary's (GOV.UK)
+    Error: h4 beneath the title
+    Received:   19
+    > 158 |     for (const sub of ["h3", "h4", "summary"]) expect.soft(await size(sub), `${sub} beneath the title`).toBeLessThan(title);
+  1 failed
+  2 passed (1.4s)
+    Error: summary beneath the title
+    Received:   19
+    > 158 |     for (const sub of ["h3", "h4", "summary"]) expect.soft(await size(sub), `${sub} beneath the title`).toBeLessThan(title);
+  1 failed
+  2 passed (1.4s)
+## 7. restored
+  3 passed (1.4s)

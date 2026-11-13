@@ -37,7 +37,7 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
     reads
       .needs()
       .then((n) => !cancelled && setNeeds(n))
-      .catch(() => !cancelled && setUnread((u) => [...u, "what waits for you"]))
+      .catch(() => !cancelled && setUnread((u) => [...u, "what is waiting for you"]))
       .finally(() => !cancelled && setNeedsRead(true));
     return () => {
       cancelled = true;

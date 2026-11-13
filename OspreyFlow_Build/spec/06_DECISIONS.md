@@ -32115,17 +32115,19 @@ Each point names the test that fails if it stops being true (rule 12). The reds 
 `process/lanes/platform/home-access/red-first.txt`.
 
 1. **Its place.** The section spans the full width of Home below the two columns (*Needs your attention* with
-   *Recent cases*, and *Ways of working*), never inside either.
+   *Recent cases*, and *Ways of working*), never inside either, set apart from them as their own sections are
+   from each other (`--sp-32`).
    - Test: `keyboard/needs-you.spec.ts`, *Home's access and tasks spans both columns below them*, in the
      dark, light and GOV.UK looks at 1440 wide: its left and right edges are the columns' outer edges and its
-     top is below both. It was red at a3df0f4 in all three: the right edge stopped 608 px short (500 px under
-     GOV.UK).
+     top is at least 24 px below both. It was red at a3df0f4 in all three: the right edge stopped 608 px short
+     (500 px under GOV.UK); and, moved but with no margin, flush against the columns (0 px).
 2. **Its headings.** Its sub-headings (*Places you can open*, *Waiting for you*, *Your access to each case*,
    the folded *What you can do, by place* and each place within it) are set beneath its own title in every
    look (`home.css`'s `.home-access`, the scale's `--fs-12` under the title's `--fs-16`). An unstyled `h3` is
    1.17em, which on GOV.UK's 19px scale stood above the title.
-   - Test: the same case, by each heading's computed size against the title's. It was red under GOV.UK
-     with the section moved and the rule absent: 22.23 px against 19.
+   - Test: the same case, each kind of sub-heading's computed size against the title's, judged one by one.
+     Each was red alone under GOV.UK: the `h3` with the rule absent (22.23 px against 19), the `h4` and the
+     `summary` each with only its own selector taken out of the rule (19 against 19).
 3. **Its words**, exactly as the owner chose:
    - the title is *Your access and tasks*;
    - *What you answer for* is *Waiting for you*;
@@ -32135,7 +32137,10 @@ Each point names the test that fails if it stops being true (rule 12). The reds 
      demo)".
 
    The lines under *Waiting for you* ("Author of …", "Reviewer of promotions: …", "Data engineer of …: …")
-   are tasks, not access, and keep their words.
+   are tasks, not access, and keep their words: the lane's reading of the ruling, confirmed by the
+   orchestrator on 13 November. A case the person authors therefore appears in both lists, once as their
+   access ("Author: …") and once as a task ("Author of …"). The words when a read fails follow the new
+   ones ("Could not read what is waiting for you").
    - Test: `answersFor.test.tsx`, *is titled and worded as the owner chose* and *says nothing is waiting, in
      the owner's words, once both reads are in*, each red against a3df0f4; and the browser case above, by
      the title and "Editor: Operation Ledger (synthetic demo)".
