@@ -7,9 +7,10 @@
 2	R1's findings fixed in the runbook and the product, the affected parts run again (merged with R1)	platform	Fri 13 Nov	1	done
 3	Small's Postgres connections (ADR-114 Am 43), merged 6aa02ff	admin	Fri 13 Nov	1	done
 4	Rules lists' audit follow-ups: live plants and gates on the server	rules	Sat 14 Nov	1	building
+4b	The POC's RDS sized for its connections: db.t4g.large, whose default allows the 750 (the owner, 13 Nov)	platform	Sat 14 Nov	-	todo
 5	The ADR-135 Amendment 8 correction (Amendment 10, merged)	platform-b	Fri 13 Nov	-	done
 6	GitHub CI: every failure of 13 Nov fixed on main (the budget run, the rule-editor race, the cli test fixture); proven at the next push	platform-b	Fri 13 Nov, evening	-	done
-7	GitHub CI fully green at the release candidate	platform-b	Mon 16 Nov	2, 3, 4, 5, 6	todo
+7	GitHub CI fully green at the release candidate	platform-b	Mon 16 Nov	2, 3, 4, 4b, 5, 6	todo
 8	The release candidate: the commit that passes R1, cut	orchestrator	Mon 16 Nov	2, 7	todo
 9	The upgrade from v0.5.0 rehearsed on a throwaway deployment (never osprey-small), at the candidate	rules	Mon 16 Nov	8	todo
 10	v0.5.1's CHANGELOG and release notes	orchestrator	Mon 16 Nov	8	todo
