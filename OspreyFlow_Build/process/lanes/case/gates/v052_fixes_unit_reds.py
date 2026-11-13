@@ -83,6 +83,16 @@ PLANTS = [
     ("no All cases in the switcher (its order before Part B is red in v052-navigation-app-reds.log)",
      "src/investigation/CaseSwitcher.tsx", "          {onBrowse && (", "          {false && onBrowse && (",
      "src/App.chrome.test.tsx", "the case switcher's last entry is All cases"),
+    # Build a report (the owner's ruling, Q2; Amendment 15)
+    ("no Build a report at all (4599f58's)",
+     "src/App.tsx", '? <BuildAReportLink href={reportsUrl} /> : undefined', "? undefined : undefined",
+     "src/App.chrome.test.tsx", "is offered to a builder where Superset is deployed"),
+    ("Build a report offered without manage_dashboards",
+     "src/App.tsx", 'reportsUrl && rights?.has("manage_dashboards") ?', "reportsUrl ?",
+     "src/App.chrome.test.tsx", "is not offered to a Reports Viewer"),
+    ("Build a report offered where there is no Superset",
+     "src/App.tsx", "const reportsUrl = deploymentReportsUrl();", 'const reportsUrl = deploymentReportsUrl() ?? "https://bi.fallback.test";',
+     "src/App.chrome.test.tsx", "is not offered, even to a builder, where there is no Superset"),
 ]
 
 

@@ -42,6 +42,9 @@ PLANTS = [
     ("the case line without Views in this case",
      [("src/shell/ContextBanner.tsx", "      {place === \"glass\" && caseSwitcher && (\n", "      {place === \"glass\" && caseSwitcher && false && (\n")],
      "keyboard/shell.spec.ts", "the case line's Views in this case opens the Cases panel"),
+    ("Build a report not drawn beside the switch (TopBar ignoring besideViews)",
+     [("src/shell/TopBar.tsx", "      {besideViews}\n", "")],
+     "keyboard/shell.spec.ts", "Build a report follows Reports by keyboard"),
 
 ]
 

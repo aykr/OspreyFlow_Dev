@@ -36843,7 +36843,24 @@ beside the current view, and there is one route to cases and one place to manage
    - *Views in this case* opens the same panel with its *Views in this case* list focused (open, share, delete).
    - The graph toolbar's *Views ▾* (ADR-144 Amendment 3) stays.
    - Rules and Monitoring keeps its switcher without the word, and the Studio its "for ‹switcher›".
-5. **Tests**, each red first (`v052-navigation-app-reds.log`; plants 11 to 19 in `v052-fixes-unit-reds.log`; the browser
+5. ***Build a report*** (the owner's ruling of 13 November 2026, Q2). A link beside *Reports*, before *More views*: "Build
+   a report (opens in new tab)".
+   - It opens Superset's address, the deployment's `bi.` origin (`deploymentReportsUrl()` in `auth/oidcConfig.ts`,
+     platform-b's reader, taken as written so the two branches merge as one change), in a new tab
+     (`rel="noopener noreferrer"`).
+   - It is shown only where Superset is deployed and to a holder of `manage_dashboards`; Superset's builder role refuses
+     anyone else.
+   - It is a link out of the Glass, never a view, so it stands outside the switch's group (`TopBar`'s `besideViews`,
+     `BuildAReportLink`).
+
+   Tests:
+   - `App.chrome.test.tsx` *Build a report beside Reports*, on the real App: offered to a builder where Superset is
+     deployed, with its address, new tab and place; not offered to a Reports Viewer; not offered, even to a builder,
+     without Superset. Each is red by its plant (`v052-fixes-unit-reds.log`, plants 20 to 22).
+   - `keyboard/shell.spec.ts` *‹look›: Build a report follows Reports by keyboard, a link to Superset in a new tab*, in
+     dark, light and GOV.UK (registry `build-a-report-by-keyboard`).
+   - `every-harness` scans `top-bar-harness.html?reports=1`.
+6. **Tests**, each red first (`v052-navigation-app-reds.log`; plants 11 to 19 in `v052-fixes-unit-reds.log`; the browser
    plants in `v052-fixes-browser-reds.log`).
    - `App.chrome.test.tsx`'s *the owner's navigation* block, on the real App: the switch's order and its one current
      view; the drawing board's line; the strip without modes; the rail's five buttons; each opener opening without
