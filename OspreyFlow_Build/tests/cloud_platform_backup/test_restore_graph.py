@@ -26,7 +26,7 @@ def _image() -> str:
     return str(found[0])
 
 
-def _run(tmp_path: Path, script: str) -> dict[str, str]:
+def _run(tmp_path: Path, script: str, *docker: str) -> dict[str, str]:
     src = tmp_path / "src"
     src.mkdir()
     for name in ("restore-graph.sh", "CheckDatabase.java"):
@@ -37,8 +37,8 @@ def _run(tmp_path: Path, script: str) -> dict[str, str]:
     work.mkdir()
     work.chmod(0o777)  # the image's own user writes there
     done = subprocess.run(
-        ["docker", "run", "--rm", "-v", f"{src}:/src:ro", "-v", f"{work}:/work", "--entrypoint", "sh",
-         _image(), f"/src/{script}"],
+        ["docker", "run", "--rm", *docker, "-v", f"{src}:/src:ro", "-v", f"{work}:/work",
+         "--entrypoint", "sh", _image(), f"/src/{script}"],
         capture_output=True, text=True, timeout=900, check=False,
     )  # fmt: skip
     assert done.returncode == 0, done.stdout + done.stderr
@@ -132,3 +132,14 @@ def test_the_check_refuses_every_damage_arcadedb_itself_opens_with_a_warning(tmp
                         "empty-zip": "the set's zip holds no file"}.items():  # fmt: skip
         assert found[case].startswith("exit=1 | does not open:"), (case, found[case])
         assert words in found[case], (case, found[case])
+
+
+def test_a_restore_as_the_job_s_own_user_prints_no_stack_trace(tmp_path: Path) -> None:
+    """R1 on kind, finding 11: the restore Job runs as the chart's user (`runAsUser` 10001), not the
+    image's, and the check ran in /home/arcadedb, whose ./log that user cannot write: an
+    AccessDeniedException and its stack trace in a restore that succeeded, which a platform team reads
+    as the restore having failed. (A read-only root alone, as the image's user, did not show it.)"""
+    found = _run(tmp_path, "readonly_scenario.sh", "--user", "10001:10001")
+    line = found["readonly"]
+    assert line.startswith("exit=0 denied=0 traces=0 "), line
+    assert "checked and put in place" in line

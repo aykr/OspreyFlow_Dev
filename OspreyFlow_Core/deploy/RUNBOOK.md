@@ -314,6 +314,13 @@ for c in ospreyflow-backup ospreyflow-backup-claims; do
 done
 ```
 
+**A healthy restore.** Each step's log ends in plain words, and none holds a stack trace: the restore Job's
+`restore: set <set> verified, every part; nothing writing`, then
+`restore-graph: <database> restored from the set, checked and put in place; the old one removed` (or `there
+was no live database`) and `restore: ClickHouse restored from set <set>`; the claims Job's
+`restore: ingest put back from set <set>`. A step whose words say `refused:` (`restore-graph refused: …`,
+`fetch-graph refused: …`), or a Job that did not finish, is not a restore: read *If it fails*, below.
+
 **Where the data is if a restore stopped part-way.** Each store keeps its live data until the restored copy
 is in place, and its refusal says where each copy is. **Start nothing while a store's database is missing**:
 the Conduit and the workers create an empty database where they find none (`create_database_if_absent`), and
