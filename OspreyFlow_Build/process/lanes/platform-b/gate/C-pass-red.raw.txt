@@ -1,0 +1,9 @@
+# gate-b C (the orchestrator's four points on the pass), red first: the new cases before the change, at 0e1ccaa, the real Caddy 2.11.4, this Mac
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_refusal_says_nothing_more[demo.gate.localhost]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_refusal_says_nothing_more[id.demo.gate.localhost]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_refusal_says_nothing_more[bi.demo.gate.localhost]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_every_attempt_is_logged_and_the_log_holds_no_key_and_no_pass
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[demo.gate.localhost]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[id.demo.gate.localhost]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[bi.demo.gate.localhost]
+7 failed, 32 passed in 78.31s (0:01:18)

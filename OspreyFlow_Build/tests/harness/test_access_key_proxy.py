@@ -30,6 +30,11 @@ from harness.site import CERT_IN_PROXY, KEY_IN_PROXY, render_caddyfile
 from schemas.deployment import OspreyConfig
 
 HOST = "demo.gate.localhost"
+OPEN_PATHS = {
+    "/realms/osprey/protocol/openid-connect/token",
+    "/realms/osprey/protocol/openid-connect/certs",
+    "/realms/osprey/.well-known/openid-configuration",
+}
 NAMES = (HOST, f"id.{HOST}", f"bi.{HOST}")
 KEY = "a long shared demonstration key"
 CADDY = os.environ.get("OSPREY_TEST_CADDY") or shutil.which("caddy")
@@ -84,6 +89,12 @@ class _Proxy:
     port: int
     stand_in: _StandIn
     token: str
+    folder: Path | None = None
+
+    body: bytes = b""
+
+    def body_file(self) -> Path:
+        return Path(os.environ.get("TMPDIR", "/tmp")) / f"osprey-proxy-body-{self.port}"
 
     def ask(self, name: str, path: str = "/", *, method: str = "GET",
             user: str | None = None, key: str | None = None,
@@ -91,7 +102,7 @@ class _Proxy:
         """One request through the proxy by `curl`, as a browser sends it: the name in the TLS
         handshake and the `Host`, resolved to this machine. Returns the status and the headers."""
         argv = [
-            "curl", "-sk", "-o", "/dev/null", "-D", "-", "--path-as-is", "-X", method,
+            "curl", "-sk", "-o", str(self.body_file()), "-D", "-", "--path-as-is", "-X", method,
             "--resolve", f"{name}:{self.port}:127.0.0.1", f"https://{name}:{self.port}{path}",
         ]  # fmt: skip
         if user is not None:
@@ -99,6 +110,7 @@ class _Proxy:
         for field, value in (headers or {}).items():
             argv += ["-H", f"{field}: {value}"]
         out = subprocess.run(argv, capture_output=True, text=True, timeout=30, check=True).stdout
+        self.body = self.body_file().read_bytes()
         lines = [line.strip() for line in out.splitlines() if line.strip()]
         status = int(lines[0].split()[1])
         fields: dict[str, list[str]] = {}
@@ -156,12 +168,13 @@ def _caddyfile(folder: Path, port: int, plain: int, stand_in: int, *, ask: bool 
 def _run(caddyfile: Path, port: int) -> subprocess.Popen[bytes]:
     env = {**os.environ, "XDG_DATA_HOME": str(caddyfile.parent / "data"),
            "XDG_CONFIG_HOME": str(caddyfile.parent / "config")}  # fmt: skip
+    log = (caddyfile.parent / "caddy.log").open("ab")
     process = subprocess.Popen([str(CADDY), "run", "--config", str(caddyfile), "--adapter", "caddyfile"],
-                               env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)  # fmt: skip
+                               env=env, stdout=subprocess.DEVNULL, stderr=log)  # fmt: skip
     deadline = time.monotonic() + 20
     while time.monotonic() < deadline:
         if process.poll() is not None:
-            raise AssertionError(process.stderr.read().decode() if process.stderr else "exited")
+            raise AssertionError((caddyfile.parent / "caddy.log").read_text(errors="replace"))
         try:
             socket.create_connection(("127.0.0.1", port), timeout=0.5).close()
             return process
@@ -169,6 +182,19 @@ def _run(caddyfile: Path, port: int) -> subprocess.Popen[bytes]:
             time.sleep(0.2)
     process.kill()
     raise AssertionError("Caddy did not start listening")
+
+
+_RUNNING: dict[Path, subprocess.Popen[bytes]] = {}
+
+
+def _run_again(folder: Path, port: int) -> subprocess.Popen[bytes]:
+    """The proxy restarted on the same files, as `ospreyflow apply` restarts it."""
+    running = _RUNNING.pop(folder)
+    running.kill()
+    running.wait(timeout=10)
+    process = _run(folder / "Caddyfile", port)
+    _RUNNING[folder] = process
+    return process
 
 
 @pytest.fixture
@@ -180,12 +206,14 @@ def proxy(tmp_path: Path) -> Iterator[_Proxy]:
     access_key.carry_into(tmp_path, tmp_path)
     token = access_key.pass_token(tmp_path)
     assert token is not None
-    process = _run(caddyfile, port)
+    _RUNNING[tmp_path] = _run(caddyfile, port)
     try:
-        yield _Proxy(port, stand_in, token)
+        yield _Proxy(port, stand_in, token, tmp_path)
     finally:
-        process.kill()
-        process.wait(timeout=10)
+        process = _RUNNING.pop(tmp_path, None)
+        if process is not None:
+            process.kill()
+            process.wait(timeout=10)
         stand_in.shutdown()
 
 
@@ -203,10 +231,46 @@ def test_without_the_key_nothing_behind_the_proxy_answers(proxy: _Proxy, name: s
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_a_wrong_key_or_user_is_refused(proxy: _Proxy, name: str) -> None:
-    assert proxy.ask(name, "/", user="demo", key="not the shared key")[0] == 401
-    assert proxy.ask(name, "/", user="someone", key=KEY)[0] == 401
+def test_a_wrong_key_or_user_is_refused_and_given_no_pass(proxy: _Proxy, name: str) -> None:
+    for user, key in (("demo", "not the shared key"), ("someone", KEY), (None, None)):
+        status, fields = proxy.ask(name, "/", user=user, key=key)
+        assert status == 401
+        assert "set-cookie" not in fields
     assert proxy.stand_in.seen == []
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_a_refusal_says_nothing_more(proxy: _Proxy, name: str) -> None:
+    """The 401 has no body and a realm that names only the product: the box asks, and nothing of
+    the deployment, its services or why is told. (Caddy's own `Server: Caddy` stays: a refusal is
+    written by its error path, which a deferred header deletion does not reach.)"""
+    status, fields = proxy.ask(name, "/v1/anything", user="demo", key="not the shared key")
+    assert status == 401
+    assert proxy.body == b""
+    assert fields["www-authenticate"] == ['Basic realm="OspreyFlow"']
+    assert set(fields) <= {"www-authenticate", "x-robots-tag", "server", "alt-svc", "date",
+                           "content-length"}, fields  # fmt: skip
+
+
+def test_every_attempt_is_logged_and_the_log_holds_no_key_and_no_pass(proxy: _Proxy) -> None:
+    """Each answer, a refusal included, is in the proxy's own log (`docker compose logs proxy`),
+    with Caddy's redaction of `Authorization` and `Cookie`: never the key, nor the pass."""
+    assert proxy.folder is not None
+    proxy.ask(HOST, "/attempt", user="demo", key="a wrong guess at the key")
+    proxy.ask(HOST, "/with-pass", headers=_pass(proxy))
+    proxy.ask(HOST, "/with-key", user="demo", key=KEY)
+    deadline = time.monotonic() + 5
+    log = ""
+    while time.monotonic() < deadline and "/with-key" not in log:
+        log = (proxy.folder / "caddy.log").read_text(errors="replace")
+        time.sleep(0.1)
+    attempt = [line for line in log.splitlines() if '"/attempt"' in line]
+    assert attempt and '"status":401' in attempt[0]
+    for secret in (KEY, "a wrong guess at the key", proxy.token):
+        assert secret not in log
+    import base64
+
+    assert base64.b64encode(f"demo:{KEY}".encode()).decode() not in log
 
 
 @pytest.mark.parametrize("name", NAMES)
@@ -217,7 +281,9 @@ def test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind(
     assert status == 200
     assert fields["x-robots-tag"] == ["noindex, nofollow"]
     (given,) = [c for c in fields["set-cookie"] if c.startswith(f"{access_key.PASS_COOKIE}=")]
-    assert given == (f"{access_key.PASS_COOKIE}={proxy.token}; Domain={HOST}; Path=/; Secure; "
+    # Host-only (no Domain): it is sent back to this one name alone, never to another subdomain of
+    # the deployment's domain; each of the three names asks once. Eight hours at most.
+    assert given == (f"{access_key.PASS_COOKIE}={proxy.token}; Path=/; Max-Age=28800; Secure; "
                      "HttpOnly; SameSite=Lax")  # fmt: skip
     (seen,) = proxy.stand_in.seen
     assert seen.authorization is None, "the key reached the service behind the proxy"
@@ -236,20 +302,56 @@ def test_the_pass_lets_in_a_request_with_a_token_of_its_own(proxy: _Proxy, name:
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_a_pass_that_is_not_this_one_is_refused(proxy: _Proxy, name: str) -> None:
-    other = {"Cookie": f"{access_key.PASS_COOKIE}={'x' * 43}"}
-    assert proxy.ask(name, "/", headers=other)[0] == 401
+def test_a_forged_pass_is_refused(proxy: _Proxy, name: str) -> None:
+    forged = [
+        f"{access_key.PASS_COOKIE}={'x' * 43}",
+        f"{access_key.PASS_COOKIE}=",
+        f"{access_key.PASS_COOKIE}={proxy.token[:-1]}",
+        f"other={proxy.token}",
+    ]
+    for cookie in forged:
+        assert proxy.ask(name, "/", headers={"Cookie": cookie})[0] == 401, cookie
     assert proxy.stand_in.seen == []
+
+
+def test_setting_the_key_again_refuses_the_old_pass_and_the_old_key(proxy: _Proxy, tmp_path: Path) -> None:
+    """The helper and `ospreyflow apply`: a new hash and a new pass, and the proxy restarted with
+    them; the browser holding the old pass, or the old key, is asked again."""
+    old = proxy.token
+    assert proxy.ask(HOST, "/", headers=_pass(proxy))[0] == 200
+    access_key.set_key(tmp_path, user="demo", ask=lambda _prompt: KEY + " renewed", hasher=_hash)
+    access_key.carry_into(tmp_path, tmp_path)
+    access_key.settle(tmp_path)
+    new = access_key.pass_token(tmp_path)
+    assert new is not None and new != old
+    caddy = _run_again(tmp_path, proxy.port)
+    try:
+        assert proxy.ask(HOST, "/", headers={"Cookie": f"{access_key.PASS_COOKIE}={old}"})[0] == 401
+        assert proxy.ask(HOST, "/", user="demo", key=KEY)[0] == 401
+        assert proxy.ask(HOST, "/", user="demo", key=KEY + " renewed")[0] == 200
+        assert proxy.ask(HOST, "/", headers={"Cookie": f"{access_key.PASS_COOKIE}={new}"})[0] == 200
+    finally:
+        caddy.kill()
+        caddy.wait(timeout=10)
+
+
+PREFLIGHT = {"Origin": f"https://{HOST}", "Access-Control-Request-Method": "POST"}
 
 
 @pytest.mark.parametrize("name", NAMES)
 def test_a_cors_preflight_is_answered_without_the_key_and_given_no_pass(
     proxy: _Proxy, name: str
 ) -> None:
-    status, fields = proxy.ask(name, "/v1/x", method="OPTIONS")
+    status, fields = proxy.ask(name, "/v1/x", method="OPTIONS", headers=PREFLIGHT)
     assert status == 200
     assert "set-cookie" not in fields
     assert fields["x-robots-tag"] == ["noindex, nofollow"]
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_an_options_that_is_not_a_preflight_asks_for_the_key(proxy: _Proxy, name: str) -> None:
+    assert proxy.ask(name, "/v1/x", method="OPTIONS")[0] == 401
+    assert proxy.stand_in.seen == []
 
 
 @pytest.mark.parametrize(
@@ -282,13 +384,60 @@ def test_the_open_answers_never_give_the_pass_for_an_unchecked_key(
 ) -> None:
     """A request to an answer that goes without the key is not checked, whatever Basic credential it
     carries, so it is never given the pass for one; at the token endpoint the credential reaches
-    Keycloak, since a client may sign in with Basic there."""
-    status, fields = proxy.ask(name, path, method=method, user="demo", key="anything at all")
+    Keycloak never: no Basic credential, of any client, passes the proxy."""
+    headers = PREFLIGHT if method == "OPTIONS" else None
+    status, fields = proxy.ask(name, path, method=method, user="demo", key="anything at all",
+                               headers=headers)  # fmt: skip
     assert status == 200
     assert "set-cookie" not in fields
-    if path.endswith("/token"):
+    (seen,) = proxy.stand_in.seen
+    assert seen.authorization is None, "a Basic credential reached the service behind the proxy"
+
+
+@pytest.mark.parametrize("name", NAMES)
+@pytest.mark.parametrize("path", ["/", "/realms/osprey/protocol/openid-connect/auth", "/v1/x"])
+def test_a_browser_that_has_answered_never_sends_the_key_behind(proxy: _Proxy, name: str, path: str) -> None:
+    """After the first answer a browser sends the pass and the key together with every request;
+    the key is taken off, whatever the scheme's case, on every name and path."""
+    import base64
+
+    credential = base64.b64encode(f"demo:{KEY}".encode()).decode()
+    for scheme in ("Basic", "basic", "BASIC"):
+        headers = {**_pass(proxy), "Authorization": f"{scheme} {credential}"}
+        assert proxy.ask(name, path, headers=headers)[0] == 200
+    assert [seen.authorization for seen in proxy.stand_in.seen] == [None, None, None]
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other(proxy: _Proxy, name: str) -> None:
+    import base64
+
+    for key, expected in (("not the shared key", 401), (KEY, 200)):
+        credential = base64.b64encode(f"demo:{key}".encode()).decode()
+        assert proxy.ask(name, "/", headers={"Authorization": f"basic {credential}"})[0] == expected
+    assert [seen.authorization for seen in proxy.stand_in.seen] == [None]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/realms/osprey/protocol/openid-connect/auth%2F..%2Ftoken",
+        "/realms/osprey/protocol/openid-connect/%2e%2e/openid-connect/auth",
+        "/realms/osprey/protocol/openid-connect/token;/../auth",
+        "/realms/osprey/protocol/openid-connect/auth%2Ftoken",
+        "/REALMS/osprey/protocol/openid-connect/auth",
+        "/realms/osprey/protocol/openid-connect/token/../auth",
+    ],
+)
+def test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key(
+    proxy: _Proxy, path: str
+) -> None:
+    """Caddy matches the cleaned path; whatever it lets through as an open answer must reach the
+    identity provider as that open answer itself, never another page."""
+    status, _fields = proxy.ask(f"id.{HOST}", path)
+    if status != 401:
         (seen,) = proxy.stand_in.seen
-        assert seen.authorization is not None
+        assert seen.path in OPEN_PATHS, (path, seen.path)
 
 
 @pytest.mark.parametrize(

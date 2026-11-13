@@ -12,7 +12,7 @@ SITE = Path("harness/site.py")
 SCHEMA = Path("packages/schemas/deployment.py")
 PLANTS = [
     ("the key file written readable by every account (644)", KEY,
-     "os.fchmod(handle.fileno(), 0o600)", "os.fchmod(handle.fileno(), 0o644)"),
+     '.encode("utf-8"), mode=0o600)', '.encode("utf-8"), mode=0o644)'),
     ("the helper says the hash it wrote", KEY,
      '        f"The key\'s hash is written to {target}', '        f"The key\'s hash {hashed} is written to {target}'),
     ("the two answers never compared", KEY, "    if first != again:\n", "    if False:\n"),
@@ -27,8 +27,21 @@ PLANTS = [
      "        if self.network.access_key and self.profile is not Profile.SMALL:",
      "        if False:"),
     ("a set key never carried into place", KEY,
-     "    for source in (out_dir / PENDING_FILE, out_dir / ACCESS_KEY_FILE):",
-     "    for source in (out_dir / ACCESS_KEY_FILE,):"),
+     "    for source in (out_dir / PENDING_FILE, in_place):",
+     "    for source in (in_place,):"),
+]
+PLANTS += [
+    ("the hand-edit check removed (the third snippet imported unchecked)", KEY,
+     '    if text != snippet(user, hashed, token):\n        raise KeyRefused(f"{path} has been edited by hand; set the key again")\n',
+     ""),
+    ("preflight never asks whose the file is", CHECK,
+     "    if owner is not None and held.st_uid != owner[0]:", "    if False:"),
+    ("the key file never handed to the proxy's account", KEY,
+     "            _give(stage / ACCESS_KEY_FILE, owner)\n", ""),
+    ("a folder in the key's place carried as if it were the key", KEY,
+     "    if in_place.is_dir():", "    if False:"),
+    ("the mount creating a folder where the key is missing", SITE,
+     '            "bind": {"create_host_path": False},\n', ""),
 ]
 TEST = "../OspreyFlow_Build/tests/harness/test_access_key.py"
 for what, path, old, new in PLANTS:

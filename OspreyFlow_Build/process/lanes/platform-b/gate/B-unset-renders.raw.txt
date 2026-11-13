@@ -1,6 +1,7 @@
-# gate-b: every profile's and fixture's render (gate/B-unset-renders.py), main beb2208's code against the branch's, setting neither
+# gate-b: every profile's and fixture's render (gate/B-unset-renders.py), main df6557f's code against the branch's, setting neither
 # banner_text nor access_key; SHA-256 per artefact, each tree's own commit stamp normalised; this Mac. The first run
-# (B-unset-renders-first.raw.txt) found the cluster's and cloud platform's values.yaml carrying `access_key: false`; fixed by exclude_if
+# (B-unset-renders-first.raw.txt) found the cluster's and cloud platform's values.yaml carrying `access_key: false`; fixed by exclude_if.
+# After the lane review: the cluster profile (AWS and Azure, as test_cluster_render.py builds it) added.
 same  OspreyFlow_Build/process/lanes/case/gates/p9_kind_osprey.yaml: refused alike: CloudPlatformNotRenderable: people sign in with Entra ID on this profile (ADR-148 decision
 same  OspreyFlow_Build/process/lanes/platform/gates/p7_kind_osprey.yaml: refused alike: CloudPlatformNotRenderable: people sign in with Entra ID on this profile (ADR-148 decision
 same  OspreyFlow_Build/tests/fixtures/cloud_platform/development-sources.yaml: 13 artefacts: images.yaml, terraform/backups.tf, terraform/connector_sources.tf, terraform/ecr.tf, terraform/elasticache.tf, terraform/irsa.tf, terraform/opensearch.tf, terraform/rds.tf, terraform/s3.tf, terraform/secrets.tf, terraform/variables.tf, values.yaml, versions.lock
@@ -10,9 +11,11 @@ same  OspreyFlow_Build/tests/fixtures/cloud_platform/production-bedrock.yaml: 13
 same  OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml: 12 artefacts: images.yaml, terraform/backups.tf, terraform/ecr.tf, terraform/elasticache.tf, terraform/irsa.tf, terraform/opensearch.tf, terraform/rds.tf, terraform/s3.tf, terraform/secrets.tf, terraform/variables.tf, values.yaml, versions.lock
 same  OspreyFlow_Build/tests/fixtures/deployment_v0_4_12/osprey.yaml: 6 artefacts: Caddyfile, RUNBOOK.md, compose.yaml, deployment.env, glass.json, versions.lock
 same  OspreyFlow_Core/osprey.yaml: 6 artefacts: Caddyfile, RUNBOOK.md, compose.yaml, deployment.env, glass.json, versions.lock
+same  cluster (aws): 2 artefacts: values.yaml, versions.lock
+same  cluster (azure): 2 artefacts: values.yaml, versions.lock
 same  default (local-lite): 6 artefacts: Caddyfile, RUNBOOK.md, compose.yaml, deployment.env, glass.json, versions.lock
 same  local-lite, govuk alpha: 6 artefacts: Caddyfile, RUNBOOK.md, compose.yaml, deployment.env, glass.json, versions.lock
 same  small: 6 artefacts: Caddyfile, RUNBOOK.md, compose.yaml, deployment.env, glass.json, versions.lock
 same  small, govuk beta: 6 artefacts: Caddyfile, RUNBOOK.md, compose.yaml, deployment.env, glass.json, versions.lock
 same  small, own tls, redirect, superset: 6 artefacts: Caddyfile, RUNBOOK.md, compose.yaml, deployment.env, glass.json, versions.lock
-# 14 cases, 107 artefacts; 0 different
+# 16 cases, 109 artefacts compared; 0 different

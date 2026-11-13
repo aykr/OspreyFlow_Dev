@@ -108,8 +108,7 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
         else:
             handlers = [f"\treverse_proxy {upstream}"]
         if gate:
-            handlers = _behind_the_key(names.host, identity=name == f"id.{names.host}",
-                                       handlers=handlers)  # fmt: skip
+            handlers = _behind_the_key(identity=name == f"id.{names.host}", handlers=handlers)
         lines += ["", f"{names.scheme}://{name} {{", *given, *handlers, "}"]
     # ADR-114 Amendment 7: the doors this machine alone uses, through the proxy, so the services
     # behind them need no published port — and so no route out (measured: a published port needs
@@ -128,7 +127,8 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
             lines += ["", f"http://{name} {{", *([NOINDEX] if gate else []),
                       f"\tredir https://{name}{suffix}{{uri}} 308", "}"]  # fmt: skip
     catch_all = f":{PROXY_HTTP_PORT}" if plain or own else "http://:80"
-    lines += ["", f"{catch_all} {{", "\trespond /healthz 200", "\trespond 404", "}", ""]
+    lines += ["", f"{catch_all} {{", *([NOINDEX] if gate else []), "\trespond /healthz 200",
+              "\trespond 404", "}", ""]  # fmt: skip
     return "\n".join(lines)
 
 
@@ -145,29 +145,39 @@ OPEN_ON_THE_IDENTITY_PROVIDER = (
 )
 
 
-def _behind_the_key(host: str, *, identity: bool, handlers: list[str]) -> list[str]:
+def _behind_the_key(*, identity: bool, handlers: list[str]) -> list[str]:
     """One name's handlers behind the shared key (ADR-114 Amendment 41), in this order: a request
-    that has no pass, is not a CORS preflight (which never carries a credential) and, on the
-    identity provider, is not one of its open answers, is asked for the key (`basic_auth`); once it
-    has answered, it is given the pass for the host and its `id.` and `bi.` names, and the key's
-    `Authorization` is taken off before anything behind the proxy sees it (on the identity provider,
-    except at a token endpoint, where a client may sign in with Basic). The file's three snippets,
+    that has no pass, is not a CORS preflight (an `OPTIONS` naming the method it asks about, which
+    never carries a credential) and, on the identity provider, is not one of its open answers, is
+    asked for the key (`basic_auth`); once it has answered, it is given the pass for this name alone
+    (host-only). **Any Basic `Authorization`, whatever its case, is taken off** before anything
+    behind the proxy sees it, so the key never reaches a service. The file's three snippets,
     `harness.access_key.snippet`, carry the hash and the pass."""
-    unasked = ["\t\tnot method OPTIONS"]
+    unasked = [
+        "\t\tnot {",
+        "\t\t\tmethod OPTIONS",
+        "\t\t\theader Access-Control-Request-Method *",
+        "\t\t}",
+    ]
     if identity:
-        unasked.append(f"\t\tnot path {' '.join(OPEN_ON_THE_IDENTITY_PROVIDER)}")
+        # Exactly these paths as asked, decoded but not cleaned: Caddy's own `path` matcher cleans
+        # first, so `.../auth%2F..%2Ftoken` matched the token and went on raw (found by
+        # `test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key`).
+        listed = ", ".join(f'"{path}"' for path in OPEN_ON_THE_IDENTITY_PROVIDER)
+        unasked.append(f"\t\tnot expression `{{http.request.orig_uri.path}} in [{listed}]`")
     unasked += ["\t\tnot {", "\t\t\timport osprey_access_pass", "\t\t}"]
-    basic = ['\t\theader Authorization "Basic *"']
-    if identity:
-        basic.append("\t\tnot path /realms/*/protocol/openid-connect/token")
+    basic = ["\t\theader_regexp Authorization (?i)^basic\\s"]
     return [
         NOINDEX,
+        # Every answer, a refusal included, is in the proxy's own log (Caddy redacts
+        # `Authorization` and `Cookie` there): an attempt at the key is seen.
+        "\tlog",
         "\t@osprey_locked {",
         *unasked,
         "\t}",
         "\t@osprey_answered {",
         *unasked,
-        '\t\theader Authorization "Basic *"',
+        *basic,
         "\t}",
         "\t@osprey_basic {",
         *basic,
@@ -176,7 +186,7 @@ def _behind_the_key(host: str, *, identity: bool, handlers: list[str]) -> list[s
         "\t\tbasic_auth @osprey_locked bcrypt OspreyFlow {",
         "\t\t\timport osprey_access_key",
         "\t\t}",
-        f"\t\timport osprey_access_pass_set {host}",
+        "\t\timport osprey_access_pass_set",
         "\t\trequest_header @osprey_basic -Authorization",
         *("\t" + line for line in handlers),
         "\t}",
@@ -303,8 +313,16 @@ def proxy_service(config: OspreyConfig) -> dict[str, Any]:
     if config.network.access_key:
         from harness.access_key import ACCESS_KEY_FILE, IN_PROXY
 
-        # ADR-114 Amendment 41: the key's hash and the pass, to the proxy alone; read-only.
-        service["volumes"].insert(1, f"./{ACCESS_KEY_FILE}:{IN_PROXY}:ro")
+        # ADR-114 Amendment 41: the key's hash and the pass, to the proxy alone; read-only. The long
+        # form, never creating its source: Docker's short form makes a folder where a file is
+        # missing, which then stands in the key's place; this way a missing key stops the start.
+        service["volumes"].insert(1, {
+            "type": "bind",
+            "source": f"./{ACCESS_KEY_FILE}",
+            "target": IN_PROXY,
+            "read_only": True,
+            "bind": {"create_host_path": False},
+        })  # fmt: skip
     service["healthcheck"] = {
         "test": ["CMD", "wget", "-q", "-O", "/dev/null", health],
         "interval": "10s",
@@ -557,20 +575,29 @@ def carry_the_pass(config: OspreyConfig, directory: Path) -> None:
     urllib.request.HTTPSHandler.https_request = do_request_  # type: ignore[method-assign]
 
 
-def carry_the_pass_in(directory: Path) -> None:
-    """`carry_the_pass` for the rendered deployment in `directory`, from the `osprey.yaml` copy its
-    render writes beside `compose.yaml`; nothing when there is none or it does not ask."""
+def _installed(directory: Path) -> OspreyConfig | None:
+    """The settings of the rendered deployment in `directory`, from the `osprey.yaml` copy its
+    render writes beside `compose.yaml`; None when there is none."""
     path = directory / "osprey.yaml"
     if not path.is_file():
-        return
+        return None
+    import yaml
+
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return OspreyConfig.model_validate(loaded)
+
+
+def carry_the_pass_in(directory: Path) -> None:
+    """`carry_the_pass` for the rendered deployment in `directory`; nothing when it has no settings,
+    they cannot be read, or it does not ask."""
     import yaml
 
     try:
-        loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        config = OspreyConfig.model_validate(loaded)
+        config = _installed(directory)
     except (OSError, ValueError, yaml.YAMLError):
         return
-    carry_the_pass(config, directory)
+    if config is not None:
+        carry_the_pass(config, directory)
 
 
 def forget_the_passes() -> None:
@@ -581,13 +608,9 @@ def forget_the_passes() -> None:
 def answer_the_deployment_in(directory: Path) -> None:
     """`answer_the_deployment_here` for the rendered deployment in `directory`, from the
     `osprey.yaml` copy its render writes beside `compose.yaml`; nothing when there is none."""
-    path = directory / "osprey.yaml"
-    if not path.is_file():
-        return
-    import yaml
-
-    loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    answer_the_deployment_here(OspreyConfig.model_validate(loaded))
+    config = _installed(directory)
+    if config is not None:
+        answer_the_deployment_here(config)
 
 
 def deployment_origins(env_file: Path) -> tuple[str, str]:

@@ -32,6 +32,18 @@ SYNTHETIC = {
 }
 out = {}
 cases = {name: raw for name, raw in SYNTHETIC.items()}
+# The cluster profile (Enterprise), as `tests/harness/test_cluster_render.py` builds it: its values
+# carry `osprey.yaml` as dumped.
+sys.path.insert(0, str(BUILD))
+from tests.harness.test_cluster_render import AWS, AZURE  # noqa: E402
+
+for cloud, external in (("aws", AWS), ("azure", AZURE)):
+    cases[f"cluster ({cloud})"] = {
+        "profile": "cluster", "components": {"analytics_engine": "clickhouse"},
+        "network": {"public_origin": "https://osprey.example.org"},
+        "reporting": {"sync": True, "superset": True}, "external": external,
+        "cluster": {"shared_storage_class": "efs-sc"},
+    }
 for path in FIXTURES:
     cases[str(path)] = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 for name, raw in cases.items():

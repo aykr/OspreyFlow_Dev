@@ -127,6 +127,15 @@ class ApplyFailed(RuntimeError):
         super().__init__(f"{stage}: {detail}")
 
 
+def _carry_the_key(stage: Path, out_dir: Path, config: OspreyConfig) -> None:
+    """ADR-114 Amendment 41: the shared key, newly set or in place, carried into the stage for
+    preflight and the move, the proxy's account's; a folder in its place refused in words."""
+    try:
+        access_key.carry_into(stage, out_dir, access_key.proxy_owner(config))
+    except access_key.KeyRefused as refused:
+        raise ApplyFailed("access-key", str(refused)) from None
+
+
 def move_into_place(stage: Path, out_dir: Path) -> None:
     """The staged files copied over the deployment's folder, which keeps its own mode: `copytree`
     also copies the stage folder's mode onto it, so a named deployment's folder, made `700` by the
@@ -1176,7 +1185,7 @@ def reapply(
         )
         _keep_the_version(stage, out_dir, held)
         # ADR-114 Amendment 41: the shared key, newly set or in place, moved with the rest.
-        access_key.carry_into(stage, out_dir)
+        _carry_the_key(stage, out_dir, config)
         preflight(
             PreflightContext(
                 config=config, out_dir=stage, own_ports=frozenset(own_published_ports(compose_file))
@@ -1201,7 +1210,7 @@ def reapply(
         # `copytree` copies each file's mode with it, so `deployment.env` arrives `600` (ADR-137
         # decision 2) over a file that was looser.
         move_into_place(stage, out_dir)
-        access_key.settle(out_dir)
+        access_key.settle(out_dir, access_key.proxy_owner(config))
     finally:
         shutil.rmtree(stage, ignore_errors=True)
     # Whether or not anything restarts: a deployment installed before the upload folder was made the
@@ -1607,7 +1616,7 @@ def main(
         )
         rendered, env_path = staged.rendered, out_dir / SECRETS_FILE
         # ADR-114 Amendment 41: the shared key, newly set or in place, moved with the rest.
-        access_key.carry_into(stage, out_dir)
+        _carry_the_key(stage, out_dir, config)
         secret, admin_password = staged.client_secret, staged.admin_password
         demo_analyst_password = staged.demo_analyst_password
         demo_admin_password = staged.demo_admin_password
@@ -1620,7 +1629,7 @@ def main(
             # ADR-114 Amendment 35 point 7: held, so a refused move of the stores puts them back.
             held = store_volumes.FilesHeld(out_dir)
             move_into_place(stage, out_dir)
-            access_key.settle(out_dir)
+            access_key.settle(out_dir, access_key.proxy_owner(config))
         finally:
             shutil.rmtree(stage, ignore_errors=True)
         result.record("preflight", "all checks pass or skip")

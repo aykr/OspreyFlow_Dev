@@ -105,7 +105,8 @@ def test_each_of_the_three_names_asks_for_the_key_and_says_noindex(name: str) ->
         "\t\tbasic_auth @osprey_locked bcrypt OspreyFlow {\n\t\t\timport osprey_access_key\n"
         in block
     )
-    assert f"\t\timport osprey_access_pass_set {config.network.public_origin[8:]}\n" in block
+    assert "\t\timport osprey_access_pass_set\n" in block
+    assert "\tlog\n" in block
 
 
 def test_only_the_identity_providers_cross_origin_answers_go_without_the_key() -> None:
@@ -116,11 +117,11 @@ def test_only_the_identity_providers_cross_origin_answers_go_without_the_key() -
     identity = blocks["https://id.demo.example.org {"]
     glass = blocks["https://demo.example.org {"]
     open_paths = (
-        "/realms/osprey/protocol/openid-connect/token /realms/osprey/protocol/openid-connect/certs "
-        "/realms/osprey/.well-known/openid-configuration"
+        '"/realms/osprey/protocol/openid-connect/token", "/realms/osprey/protocol/openid-connect/certs", '
+        '"/realms/osprey/.well-known/openid-configuration"'
     )
-    assert f"\t\tnot path {open_paths}\n" in identity
-    assert "not path" not in glass
+    assert f"\t\tnot expression `{{http.request.orig_uri.path}} in [{open_paths}]`\n" in identity
+    assert "not expression" not in glass
     assert "/protocol/openid-connect/auth" not in identity
 
 
@@ -145,9 +146,12 @@ def test_the_key_file_is_mounted_into_the_proxy_alone(tmp_path: Path) -> None:
 
     rendered = render(_config(access_key=True), allow_unpinned=True)
     services = yaml.safe_load(rendered.artefacts["compose.yaml"])["services"]
-    mount = f"./{access_key.ACCESS_KEY_FILE}:{access_key.IN_PROXY}:ro"
+    mount = {
+        "type": "bind", "source": f"./{access_key.ACCESS_KEY_FILE}", "target": access_key.IN_PROXY,
+        "read_only": True, "bind": {"create_host_path": False},
+    }  # fmt: skip
     holders = [name for name, svc in services.items() if mount in (svc.get("volumes") or [])]
-    assert holders == ["proxy"]
+    assert holders == ["proxy"], "mounted to the proxy alone, never creating a folder in its place"
     assert not any(access_key.ACCESS_KEY_FILE in name for name in rendered.artefacts)
 
 
@@ -419,3 +423,55 @@ def test_unset_no_dump_of_the_settings_names_it() -> None:
     that does not ask renders byte for byte what it did (found by `gate/B-unset-renders.py`)."""
     assert "access_key" not in _config().model_dump(mode="json", exclude_none=True)["network"]
     assert _config(access_key=True).model_dump(mode="json")["network"]["access_key"] is True
+
+
+def test_the_catch_all_says_noindex_too() -> None:
+    blocks = _sites(render_caddyfile(_config(access_key=True)))
+    (catch_all,) = [b for b in blocks.values() if "respond /healthz 200" in b]
+    assert '\theader X-Robots-Tag "noindex, nofollow"\n' in catch_all
+
+
+def test_a_file_in_the_helpers_shape_edited_by_hand_is_refused(tmp_path: Path) -> None:
+    """The third snippet is imported whole, so its cookie's attributes are the proxy's: a file in
+    the helper's own shape with a changed Set-Cookie, or another block added, is refused."""
+    path = _written(tmp_path)
+    text = path.read_text(encoding="utf-8")
+    for edited in (
+        text.replace("HttpOnly; ", ""),
+        text.replace("Path=/;", "Domain=example.org; Path=/;"),
+        text + "(anything) {\n\trespond 200\n}\n",
+    ):
+        path.write_text(edited, encoding="utf-8")
+        with pytest.raises(access_key.KeyRefused, match="edited by hand"):
+            access_key.read(path)
+
+
+def test_the_key_file_is_handed_to_the_account_the_proxy_runs_as(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Small with its own certificate runs the proxy as the owner of `network.tls.key`; the key
+    file, `600`, is carried into the stage and settled in place as that account's."""
+    given: list[tuple[str, int, int]] = []
+    monkeypatch.setattr(access_key.os, "chown", lambda path, uid, gid: given.append((Path(path).name, uid, gid)))
+    live, stage = tmp_path / "live", tmp_path / "stage"
+    stage.mkdir()
+    access_key.set_key(live, user="demo", ask=_Asked("a long shared key", "a long shared key"),
+                       hasher=_hasher)  # fmt: skip
+    owner = (os.getuid() + 1, os.getgid() + 1)
+    access_key.carry_into(stage, live, owner)
+    access_key.settle(live, owner)  # nothing in place yet to settle
+    assert given == [(access_key.ACCESS_KEY_FILE, *owner)]
+
+
+def test_preflight_refuses_a_key_file_the_proxys_account_cannot_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _written(tmp_path)
+    monkeypatch.setattr(access_key_check, "proxy_owner", lambda _config: (os.getuid() + 1, 0))
+    result = _preflight(tmp_path, _config(access_key=True))
+    assert result.status is Status.FAIL
+    assert f"uid {os.getuid() + 1}" in result.what_is_wrong and "chown" in result.what_to_do
+
+
+def test_a_folder_in_the_key_files_place_is_refused_in_words(tmp_path: Path) -> None:
+    live, stage = tmp_path / "live", tmp_path / "stage"
+    stage.mkdir()
+    (live / access_key.ACCESS_KEY_FILE).mkdir(parents=True)
+    with pytest.raises(access_key.KeyRefused, match="is a folder"):
+        access_key.carry_into(stage, live)

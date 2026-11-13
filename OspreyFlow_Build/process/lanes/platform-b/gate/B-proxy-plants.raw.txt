@@ -1,54 +1,134 @@
-# gate-b B, the real proxy (Caddy 2.11.4, checksum-verified release binary) against each planted defect, after widening the open-answers case (the first run, B-proxy-plants-first.raw.txt, missed the second plant), this Mac, at 4f6cf60 + the uncommitted change
+# gate-b B, the real proxy (Caddy 2.11.4, checksum-verified release binary) against each planted defect, after the lane review (round 1) and the orchestrator's four points, this Mac, at 0e1ccaa + the uncommitted change. Earlier runs: B-proxy-plants-first.raw.txt (missed the second plant, the test widened), B-proxy-plants-round0.raw.txt
 ## no gate: the key's handlers never added: RED
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_without_the_key_nothing_behind_the_proxy_answers[demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_without_the_key_nothing_behind_the_proxy_answers[id.demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_without_the_key_nothing_behind_the_proxy_answers[bi.demo.gate.localhost]
-  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused[demo.gate.localhost]
-  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused[id.demo.gate.localhost]
-  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_wrong_key_or_user_is_refused_and_given_no_pass[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_refusal_says_nothing_more[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_refusal_says_nothing_more[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_refusal_says_nothing_more[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_every_attempt_is_logged_and_the_log_holds_no_key_and_no_pass
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[id.demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[bi.demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_lets_in_a_request_with_a_token_of_its_own[demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_lets_in_a_request_with_a_token_of_its_own[id.demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_lets_in_a_request_with_a_token_of_its_own[bi.demo.gate.localhost]
-  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_pass_that_is_not_this_one_is_refused[demo.gate.localhost]
-  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_pass_that_is_not_this_one_is_refused[id.demo.gate.localhost]
-  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_pass_that_is_not_this_one_is_refused[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_forged_pass_is_refused[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_forged_pass_is_refused[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_forged_pass_is_refused[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_setting_the_key_again_refuses_the_old_pass_and_the_old_key
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_cors_preflight_is_answered_without_the_key_and_given_no_pass[demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_cors_preflight_is_answered_without_the_key_and_given_no_pass[id.demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_cors_preflight_is_answered_without_the_key_and_given_no_pass[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_options_that_is_not_a_preflight_asks_for_the_key[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_options_that_is_not_a_preflight_asks_for_the_key[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_options_that_is_not_a_preflight_asks_for_the_key[bi.demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_identity_providers_cross_origin_answers_go_without_the_key[/realms/osprey/protocol/openid-connect/token]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_identity_providers_cross_origin_answers_go_without_the_key[/realms/osprey/protocol/openid-connect/certs]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_identity_providers_cross_origin_answers_go_without_the_key[/realms/osprey/.well-known/openid-configuration]
-  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/protocol/openid-connect/auth]
-  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/protocol/openid-connect/token/../auth]
-  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/master/protocol/openid-connect/token]
-  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/admin/master/console/]
-  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/account/]
-  26 failed, 8 passed in 53.80s
-## the pass given for any Basic, checked or not: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-POST-/realms/osprey/protocol/openid-connect/token]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-GET-/realms/osprey/protocol/openid-connect/certs]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-GET-/realms/osprey/.well-known/openid-configuration]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[demo.gate.localhost-OPTIONS-/v1/x]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-OPTIONS-/v1/x]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[bi.demo.gate.localhost-OPTIONS-/v1/x]
-  5 failed, 29 passed in 58.67s
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/realms/osprey/protocol/openid-connect/auth-demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/realms/osprey/protocol/openid-connect/auth-id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/realms/osprey/protocol/openid-connect/auth-bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/realms/osprey/protocol/openid-connect/auth%2F..%2Ftoken]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/realms/osprey/protocol/openid-connect/%2e%2e/openid-connect/auth]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/realms/osprey/protocol/openid-connect/token;/../auth]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/realms/osprey/protocol/openid-connect/auth%2Ftoken]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/REALMS/osprey/protocol/openid-connect/auth]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/realms/osprey/protocol/openid-connect/token/../auth]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/protocol/openid-connect/auth]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/protocol/openid-connect/token/../auth]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/master/protocol/openid-connect/token]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/admin/master/console/]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/account/]
+  58 failed, 2 passed in 102.88s (0:01:42)
+## the pass given for any Basic, checked or not: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-POST-/realms/osprey/protocol/openid-connect/token]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-GET-/realms/osprey/protocol/openid-connect/certs]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-GET-/realms/osprey/.well-known/openid-configuration]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[demo.gate.localhost-OPTIONS-/v1/x]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-OPTIONS-/v1/x]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[bi.demo.gate.localhost-OPTIONS-/v1/x]
+  6 failed, 54 passed in 111.94s (0:01:51)
 ## the key left on the request to the service behind: RED
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[id.demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[bi.demo.gate.localhost]
-  3 failed, 31 passed in 58.76s
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-POST-/realms/osprey/protocol/openid-connect/token]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-GET-/realms/osprey/protocol/openid-connect/certs]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-GET-/realms/osprey/.well-known/openid-configuration]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[demo.gate.localhost-OPTIONS-/v1/x]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-OPTIONS-/v1/x]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[bi.demo.gate.localhost-OPTIONS-/v1/x]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/realms/osprey/protocol/openid-connect/auth-demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/realms/osprey/protocol/openid-connect/auth-id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/realms/osprey/protocol/openid-connect/auth-bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[bi.demo.gate.localhost]
+  21 failed, 39 passed in 125.28s (0:02:05)
 ## the pass ignored: RED
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_lets_in_a_request_with_a_token_of_its_own[demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_lets_in_a_request_with_a_token_of_its_own[id.demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_lets_in_a_request_with_a_token_of_its_own[bi.demo.gate.localhost]
-  3 failed, 31 passed in 58.59s
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_setting_the_key_again_refuses_the_old_pass_and_the_old_key
+  4 failed, 56 passed in 120.81s (0:02:00)
 ## the whole realm left open on the identity provider: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/realms/osprey/protocol/openid-connect/auth%2F..%2Ftoken]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/realms/osprey/protocol/openid-connect/%2e%2e/openid-connect/auth]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/realms/osprey/protocol/openid-connect/token;/../auth]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/realms/osprey/protocol/openid-connect/auth%2Ftoken]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/REALMS/osprey/protocol/openid-connect/auth]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/realms/osprey/protocol/openid-connect/token/../auth]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/protocol/openid-connect/auth]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/protocol/openid-connect/token/../auth]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_sign_in_page_and_everything_else_on_the_identity_provider_asks[/realms/osprey/account/]
-  3 failed, 31 passed in 59.05s
+  9 failed, 51 passed in 114.72s (0:01:54)
+## the open answers matched on the cleaned path: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key[/realms/osprey/protocol/openid-connect/auth%2F..%2Ftoken]
+  1 failed, 59 passed in 111.31s (0:01:51)
+## Basic left on the request when its scheme is lower case: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/-bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/realms/osprey/protocol/openid-connect/auth-demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/realms/osprey/protocol/openid-connect/auth-id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/realms/osprey/protocol/openid-connect/auth-bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_browser_that_has_answered_never_sends_the_key_behind[/v1/x-bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_lower_case_scheme_is_checked_and_taken_off_like_any_other[bi.demo.gate.localhost]
+  12 failed, 48 passed in 111.22s (0:01:51)
+## any OPTIONS let in, not only a CORS preflight: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_options_that_is_not_a_preflight_asks_for_the_key[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_options_that_is_not_a_preflight_asks_for_the_key[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_an_options_that_is_not_a_preflight_asks_for_the_key[bi.demo.gate.localhost]
+  3 failed, 57 passed in 111.90s (0:01:51)
 ## a CORS preflight asked for the key: RED
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_cors_preflight_is_answered_without_the_key_and_given_no_pass[demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_cors_preflight_is_answered_without_the_key_and_given_no_pass[id.demo.gate.localhost]
@@ -56,7 +136,7 @@
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[demo.gate.localhost-OPTIONS-/v1/x]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[id.demo.gate.localhost-OPTIONS-/v1/x]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_open_answers_never_give_the_pass_for_an_unchecked_key[bi.demo.gate.localhost-OPTIONS-/v1/x]
-  6 failed, 28 passed in 59.77s
+  6 failed, 53 passed, 1 error in 111.89s (0:01:51)
 ## no noindex: RED
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_without_the_key_nothing_behind_the_proxy_answers[demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_without_the_key_nothing_behind_the_proxy_answers[id.demo.gate.localhost]
@@ -64,6 +144,7 @@
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[id.demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_lets_in_a_request_with_a_token_of_its_own[demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_lets_in_a_request_with_a_token_of_its_own[id.demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_pass_lets_in_a_request_with_a_token_of_its_own[bi.demo.gate.localhost]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_cors_preflight_is_answered_without_the_key_and_given_no_pass[demo.gate.localhost]
@@ -72,6 +153,22 @@
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_identity_providers_cross_origin_answers_go_without_the_key[/realms/osprey/protocol/openid-connect/token]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_identity_providers_cross_origin_answers_go_without_the_key[/realms/osprey/protocol/openid-connect/certs]
   FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_identity_providers_cross_origin_answers_go_without_the_key[/realms/osprey/.well-known/openid-configuration]
-  14 failed, 18 passed, 2 errors in 58.26s
+  15 failed, 45 passed in 111.86s (0:01:51)
+## a forged pass let in: any value of the cookie: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_forged_pass_is_refused[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_forged_pass_is_refused[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_a_forged_pass_is_refused[bi.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_setting_the_key_again_refuses_the_old_pass_and_the_old_key
+  4 failed, 56 passed in 110.08s (0:01:50)
+## the pass sent to every subdomain of the deployment's domain: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[id.demo.gate.localhost]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind[bi.demo.gate.localhost]
+  3 failed, 57 passed in 111.68s (0:01:51)
+## no log of the attempts: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py::test_every_attempt_is_logged_and_the_log_holds_no_key_and_no_pass
+  1 failed, 59 passed in 117.53s (0:01:57)
+## a refusal that says why, in its body: RED
+  2 passed, 58 errors in 66.50s (0:01:06)
 ## the code as it is
-34 passed in 59.02s
+60 passed in 112.64s (0:01:52)

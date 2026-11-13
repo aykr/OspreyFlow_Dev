@@ -13,12 +13,12 @@ holds the user name, the hash and a new random pass, never the key. `ospreyflow 
 it into place as `access-key.caddy` and restarts the proxy, which imports it
 (`harness.site.render_caddyfile`) and mounts it alone.
 
-**The pass.** A browser that has answered with the key is given a session cookie for the
-deployment's host and its `id.` and `bi.` names (`osprey_pass`, HttpOnly, Secure, SameSite=Lax), so
-it is asked once, and its own requests that carry a token of their own (the Glass's API, its
-WebSocket) or come from a frame still pass. The pass is a random value of its own, replaced each
-time the key is set; it is not the key. The tools on the server that reach the deployment by name
-read it from the same file (`harness.site.carry_the_pass`), as the owner who can read the file.
+**The pass.** A browser that has answered with the key is given a cookie for that name alone
+(`osprey_pass`, host-only, HttpOnly, Secure, SameSite=Lax, eight hours), so it is asked once a
+name, and its own requests that carry a token of their own (the Glass's API, its WebSocket) or come
+from a frame still pass. The pass is a random value of its own, replaced each time the key is set;
+it is not the key. The tools on the server that reach the deployment by name read it from the same
+file (`harness.site.carry_the_pass`), as the owner who can read the file.
 
 Nothing here prints the key or the hash.
 """
@@ -34,6 +34,10 @@ import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from schemas.deployment import OspreyConfig
 
 #: In the deployment's own folder, beside `compose.yaml`: the file the proxy imports.
 ACCESS_KEY_FILE = "access-key.caddy"
@@ -43,6 +47,9 @@ PENDING_FILE = f"{ACCESS_KEY_FILE}.pending"
 IN_PROXY = "/etc/caddy/access-key.caddy"
 #: The session cookie a browser is given once it has answered with the key.
 PASS_COOKIE = "osprey_pass"
+#: How long a pass lasts in a browser: a working day. Host-only (no `Domain`), so it is sent back to
+#: the one name that gave it, never to another subdomain; each of the three names asks once.
+PASS_SECONDS = 8 * 60 * 60
 #: The fewest characters a key may have.
 SHORTEST = 12
 
@@ -72,7 +79,8 @@ def snippet(user: str, hashed: str, token: str) -> str:
         + f"\theader Cookie *{cookie}*\n"
         + "}\n"
         + "(osprey_access_pass_set) {\n"
-        + f'\theader @osprey_answered +Set-Cookie "{cookie}; Domain={{args[0]}}; Path=/; Secure; '
+        + f'\theader @osprey_answered +Set-Cookie "{cookie}; Path=/; Max-Age={PASS_SECONDS}; '
+        + "Secure; "
         + 'HttpOnly; SameSite=Lax"\n'
         + "}\n"
     )
@@ -113,23 +121,60 @@ def pass_token(directory: Path) -> str | None:
         return None
 
 
-def carry_into(stage: Path, out_dir: Path) -> None:
+def proxy_owner(config: OspreyConfig) -> tuple[int, int] | None:
+    """The account the front proxy runs as, when it is not root: on a Small with the organisation's
+    own certificate, the owner of `network.tls.key` (ADR-114 Amendment 33, `OSPREY_PROXY_UID`). The
+    key file, `600`, must be that account's, or the proxy cannot read it and does not start. None
+    when the proxy runs as root (Caddy's own certificates), which reads it whoever owns it."""
+    tls = config.network.tls
+    if tls is None:
+        return None
+    owner = Path(tls.key).stat()
+    return owner.st_uid, owner.st_gid
+
+
+def _give(path: Path, owner: tuple[int, int] | None) -> None:
+    """`path` handed to `owner`, when it is not already theirs: possible as root (`sudo ospreyflow
+    apply`) or as that account itself; otherwise left, and preflight says so in words."""
+    if owner is None or not path.is_file():
+        return
+    held = path.stat()
+    if (held.st_uid, held.st_gid) == owner:
+        return
+    try:
+        os.chown(path, *owner)
+    except PermissionError:
+        pass
+
+
+def carry_into(stage: Path, out_dir: Path, owner: tuple[int, int] | None = None) -> None:
     """`ospreyflow apply`'s half: the key newly set in the deployment's folder (the pending file),
     else the one in place, copied into the staging folder as the file the proxy imports, its mode
-    with it. Preflight then reads it there, and moving the stage into place puts it beside
-    `compose.yaml`, in place (the proxy mounts it); a key newly set differs from the one in place,
-    so the proxy is restarted and reads it. Nothing when neither exists."""
+    with it, and handed to the account the proxy runs as (`proxy_owner`). Preflight then reads it
+    there, and moving the stage into place puts it beside `compose.yaml`, in place (the proxy mounts
+    it); a key newly set differs from the one in place, so the proxy is restarted and reads it.
+    Nothing when neither exists. Refused, in words, when a folder stands where the file should be
+    (left by an older start without the key)."""
     import shutil
 
-    for source in (out_dir / PENDING_FILE, out_dir / ACCESS_KEY_FILE):
+    in_place = out_dir / ACCESS_KEY_FILE
+    if in_place.is_dir():
+        raise KeyRefused(
+            f"{in_place} is a folder, not the key file (left by a start without the key); remove "
+            "it, set the key again and run `ospreyflow apply`"
+        )
+    for source in (out_dir / PENDING_FILE, in_place):
         if source.is_file():
             shutil.copy2(source, stage / ACCESS_KEY_FILE)
+            _give(stage / ACCESS_KEY_FILE, owner)
             return
 
 
-def settle(out_dir: Path) -> None:
-    """Once the stage is in place, the pending key is the key in place: the pending file goes."""
+def settle(out_dir: Path, owner: tuple[int, int] | None = None) -> None:
+    """Once the stage is in place, the pending key is the key in place: the pending file goes, and
+    the key in place is the proxy's account's (a file the move made new is the runner's)."""
     (out_dir / PENDING_FILE).unlink(missing_ok=True)
+    _give(out_dir / ACCESS_KEY_FILE, owner)
 
 
 Runner = Callable[..., "subprocess.CompletedProcess[str]"]
@@ -198,22 +243,17 @@ def set_key(
         raise KeyRefused("the hasher did not answer with a bcrypt hash; nothing was written")
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     target = directory / PENDING_FILE
-    _write_private_in_place(target, snippet(user, hashed, secrets.token_urlsafe(32)))
+    from harness.atomic import replace_whole
+
+    # Whole or not at all, `600` from the start; nothing mounts the pending file.
+    text = snippet(user, hashed, secrets.token_urlsafe(32))
+    replace_whole(target, text.encode("utf-8"), mode=0o600)
     print(
         f"The key's hash is written to {target} (readable by its owner alone).\n"
         "Now run `ospreyflow apply`: it puts the key in place and restarts the front proxy. Give "
         f"people the user name {user!r} and the key, by a route other than this deployment."
     )
     return target
-
-
-def _write_private_in_place(path: Path, text: str) -> None:
-    """`text` into `path`, `600` from the moment the file exists, in place (the proxy mounts the
-    file on its own, so it keeps its inode)."""
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        os.fchmod(handle.fileno(), 0o600)
-        handle.write(text)
 
 
 def main(

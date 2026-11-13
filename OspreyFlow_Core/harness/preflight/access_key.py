@@ -9,7 +9,7 @@ It never quotes the file: what it holds is the key's hash and the pass.
 
 from __future__ import annotations
 
-from harness.access_key import ACCESS_KEY_FILE, KeyRefused, read
+from harness.access_key import ACCESS_KEY_FILE, KeyRefused, proxy_owner, read
 from harness.preflight.context import PreflightContext
 from harness.preflight.result import CheckResult, failed, passed, skipped
 
@@ -38,4 +38,22 @@ def check(context: PreflightContext) -> CheckResult:
         user, _hash, _pass = read(path)
     except KeyRefused as refused:
         return failed(NAME, what_is_wrong=str(refused), what_to_do=_SET)
-    return passed(NAME, detail=(f"the front proxy asks for the shared key (user name {user!r})",))
+    owner = proxy_owner(context.config)
+    held = path.stat()
+    if owner is not None and held.st_uid != owner[0]:
+        return failed(
+            NAME,
+            what_is_wrong=(
+                f"the front proxy runs as uid {owner[0]} (the owner of network.tls.key), and "
+                f"the key file belongs to uid {held.st_uid}: readable by its owner alone, the "
+                "proxy could not read it and would not start"
+            ),
+            what_to_do=(
+                "Run `ospreyflow apply` with sudo, which hands the file to the proxy's account, "
+                "or "
+                f"run `chown {owner[0]}:{owner[1]}` on {ACCESS_KEY_FILE} in the deployment's "
+                "folder."
+            ),
+        )
+    said = f"the front proxy asks for the shared key (user name {user!r})"
+    return passed(NAME, detail=(said,))
