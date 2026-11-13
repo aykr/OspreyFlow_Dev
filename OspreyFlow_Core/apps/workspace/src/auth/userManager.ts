@@ -173,12 +173,12 @@ export function completeSignInFromRedirect(): Promise<User> {
  * provider said no" distinction ADR-050 carries to the Glass — a network failure here is left to
  * propagate, a `login_required` is not.
  */
-export async function renewSilently(): Promise<User | null> {
+export async function renewSilently(args: { silentRequestTimeoutInSeconds?: number } = {}): Promise<User | null> {
   try {
     // `forceIframeAuth`: always the `prompt=none` round against the identity provider's cookie,
     // never a refresh token (ADR-050 objection 5's ruling: none is used by the browser), even though
     // Keycloak puts one in the code exchange's answer.
-    return await getUserManager().signinSilent({ forceIframeAuth: true });
+    return await getUserManager().signinSilent({ forceIframeAuth: true, ...args });
   } catch (error) {
     if (error instanceof Error && error.name === "ErrorResponse") {
       return null;

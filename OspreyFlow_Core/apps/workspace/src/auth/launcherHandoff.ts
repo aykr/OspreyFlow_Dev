@@ -87,3 +87,19 @@ export function clearHandoff(storage: Storage): void {
     /* nothing to clear */
   }
 }
+
+/** Called once a sign-in has completed without leaving the page (ADR-050 Amendment 3's silent sign-in
+ * at load): takes the hand-off's `from`, `view` and `investigation` out of the address, as the
+ * identity provider's return to the root used to, so a later refresh is a refresh and not the same
+ * hand-off again. The case stays open: it is already in this tab's session storage. */
+export function clearHandoffFromAddress(win: Pick<Window, "location" | "history"> = window): void {
+  const url = new URL(win.location.href);
+  let changed = false;
+  for (const param of ["from", "view", "investigation"]) {
+    if (url.searchParams.has(param)) {
+      url.searchParams.delete(param);
+      changed = true;
+    }
+  }
+  if (changed) win.history.replaceState(win.history.state, "", url.toString());
+}
