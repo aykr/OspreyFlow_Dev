@@ -1,12 +1,15 @@
-# rail + Help after the lane review, green: the branch, this Mac
-      Tests  119 passed (119)
-  ✘    8 keyboard/admin-models.spec.ts:59:1 › Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for (5.4s)
-  ✘  144 keyboard/admin-models.spec.ts:200:1 › every registered Models action has its own proving test case above (184ms)
+# rail + Help after the lane review, green, run as CI runs it (from apps/workspace), this Mac
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+      Tests  1 failed | 3213 passed (3214)
+# MatrixView.budget: the known first-frame carry (CARRIES), not this change's
+  ✘   11 keyboard/admin-models.spec.ts:59:1 › Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for (5.5s)
+  ✘  135 keyboard/admin-models.spec.ts:200:1 › every registered Models action has its own proving test case above (322ms)
   2 failed
   1 skipped
-  782 passed (3.1m)
-# the two keyboard failures are admin-models' Bedrock case (Mac only: End on a closed <select>, a CARRIES row) and its registry case after it
-  ✘  23 a11y/every-harness.spec.ts:376:7 › places-harness.html open=views (govuk) has no automated WCAG 2.2 A or AA violations (976ms)
+  782 passed (3.5m)
+# the two keyboard failures: admin-models' Bedrock case (Mac only, a CARRIES row) and its registry case after it
+  ✘  23 a11y/every-harness.spec.ts:376:7 › places-harness.html open=views (govuk) has no automated WCAG 2.2 A or AA violations (1.0s)
   1 failed
-  39 passed (35.2s)
-# places-harness open=views (govuk) fails with main's own places-harness too (recorded before)
+  39 passed (36.5s)
+# places-harness open=views (govuk) fails with main's own places-harness too

@@ -17,6 +17,9 @@ vi.mock("./canvas/GlassCanvas", () => ({ GlassCanvas: () => null }));
 vi.mock("./map/MapView", () => ({ MapView: () => null }));
 // The timeline draws with ECharts, which needs a real canvas that jsdom has none of.
 vi.mock("./timeline/Timeline", () => ({ Timeline: () => null }));
+// The right-hand column's panels (judgements, the map's bins, …) each read the Conduit at start; with
+// a resolved principal they draw, and none is what these cases test: the rail and the keys panel.
+vi.mock("./layout/SidePanelStack", () => ({ SidePanelStack: () => null }));
 
 let App!: typeof AppComponent;
 beforeAll(async () => {
@@ -112,8 +115,8 @@ describe("the rail's Help over every view the rail reaches", () => {
                 ? { monitors: [] }
                 : url.endsWith("/v1/alerts")
                   ? { alerts: [] }
-                  : [];
-      return Promise.resolve(new Response(JSON.stringify(body)));
+                  : null;
+      return Promise.resolve(new Response(JSON.stringify(body ?? [])));
     });
   });
 
@@ -223,8 +226,8 @@ describe("the rail as the real App draws it", () => {
         ? { rights: ["investigate", "trace_ownership", "ask_model", "read_reports"] }
         : url.endsWith("/v1/ontology")
           ? { entity_types: [], edge_types: [] }
-          : [];
-      return Promise.resolve(new Response(JSON.stringify(body)));
+          : null;
+      return Promise.resolve(new Response(JSON.stringify(body ?? [])));
     });
   });
 
