@@ -1,70 +1,71 @@
-ADR-146 Amendment 7's offline plants after the orchestrator's verification of 7a1c760, at f9055f5 (lane/rules-lists on main e41d712), 2026-11-13T11:16:42Z, stack-free, closed ports pinned, the working tree clean. Exit 0: P1 to P51 with P3b, P49b and P51b, 54 RED, none BROKEN; the seven files green built and restored.
-Code identity: OspreyFlow_Core tree 2431612baa0a433c4e329322d5634c285be61ea9. At any later head, `git rev-parse HEAD:OspreyFlow_Core` giving this id is the same code.
-built, test_alert_citations_per_list.py: GREEN - 30 passed in 1.38s
-built, test_screening.py: GREEN - 17 passed in 1.20s
-built, test_alert_citations_written.py: GREEN - 15 passed in 1.08s
-built, test_alert_citations_closing.py: GREEN - 14 passed in 2.15s
-built, test_screening_clearance.py: GREEN - 12 passed in 1.88s
-built, test_analytics_clickhouse_migration.py: GREEN - 5 passed in 0.27s
-built, test_alert_fact_sets_migration.py: GREEN - 2 passed in 0.60s
-P1 the queue serves the alert as stored (no as_read) [services/api/alert_queue.py; -k test_the_queue_shows or test_what_the_queue_serves]: RED - 2 failed, 28 deselected in 0.52s
-P2 a single alert's read (explain, canvas, triage) serves it as stored [services/api/alert_queue.py; -k test_the_explanation or test_the_canvas or test_each_triage or test_a_pack_item_added]: RED - 9 failed, 21 deselected in 0.62s
-P3 a triage returns the stored row as the store gave it [services/api/alert_queue.py; -k test_each_triage]: RED - 6 failed, 24 deselected in 0.65s
-P3b a suppression returns the stored row as the store gave it [services/api/alert_queue.py; -k test_a_suppression_returns]: RED - 1 failed, 29 deselected in 1.48s
-P4 an alert with citations shown with none readable [services/api/alerts.py; -k test_a_reader_cleared_for_neither or test_each_path_refuses_a_reader_cleared_for_neither]: RED - 8 failed, 22 deselected in 1.98s
-P5 all or nothing over the citations too (the old check) [services/api/alerts.py; -k test_the_queue_shows or test_the_explanation or test_each_triage or test_a_pack_item_is]: RED - 9 failed, 21 deselected in 1.87s
-P6 a citation read by its party alone, not its SAME_AS [services/api/alerts.py; -k test_a_citation_is_read_whole]: RED - 1 failed, 29 deselected in 1.76s
-P7 the served words name every list (the hidden list's name leaks) [services/api/alerts.py; -k test_the_queue_shows or test_what_the_queue_serves or test_each_triage]: RED - 8 failed, 22 deselected in 1.05s
-P8 a hidden citation's ids kept in what is served (the count leaks) [services/api/alerts.py; -k test_the_queue_shows or test_what_the_queue_serves or test_each_triage]: RED - 8 failed, 22 deselected in 1.40s
-P9 a pack item asks its reader for every citation (its own adder cannot read it back) [services/api/packs.py; -k test_a_pack_item_is_read]: RED - 1 failed, 29 deselected in 0.82s
-P10 a pack item asks only for what is outside the citations (B's match not asked) [services/api/alerts.py; -k test_a_pack_item_asks]: RED - 1 failed, 29 deselected in 1.39s
-P11 a list's marking not read from its file [scripts/load_screening_list.py; -k test_a_lists_marking]: RED - 1 failed, 16 deselected in 1.40s
-P12 a classification the scheme does not define taken [scripts/load_screening_list.py; -k test_a_marking_the_scheme]: RED - 1 failed, 5 passed, 11 deselected in 1.32s
-P13 a re-marked entry read as unchanged [services/api/screening.py; -k test_a_change_of_marking]: RED - 1 failed, 16 deselected in 0.98s
-P14 a rule screens against every list, its deployer cleared or not [services/api/kyc_rules.py; -k test_a_rule_screens_only]: RED - 1 failed, 16 deselected in 2.37s
-P15 the Alert node's sources name every list's entry (review item 1) [services/api/rule_evaluation.py; -k test_the_alert_node_names_no_list]: RED - 1 failed, 14 deselected in 1.52s
-P16 every pending write dropped once one merges (review item 5) [services/api/rule_evaluation.py; -k test_a_match_merged_on_one_list]: RED - 1 failed, 14 deselected in 1.86s
-P17 each ALERTED_ON marked as the node, not by its citation [services/api/rule_evaluation.py; -k test_each_cited_partys_alerted_on]: RED - 1 failed, 14 deselected in 1.91s
-P18 an ALERTED_ON written where no single marking joins [services/api/rule_evaluation.py; -k test_a_cited_party_no_single_marking]: RED - 1 failed, 14 deselected in 2.58s
-P19 a re-mark reads the citations too [services/api/alerts.py; -k test_a_re_mark_reads_only]: RED - 1 failed, 14 deselected in 2.13s
-P20 an alert with citations saved without each citation's handlings (review 2, item 6) [services/api/rule_evaluation.py; -k test_what_the_trends_count]: RED - 1 failed, 14 deselected in 2.12s
-P21 the rule audit reads a cited firing all or nothing (review 2, item 4; flipped) [services/api/rule_holds.py; -k test_the_rule_audit_reads_a_firing]: RED - 1 failed, 29 deselected in 2.48s
-P22 a unit-restricted code taken for a list (review item 11) [scripts/load_screening_list.py; -k test_a_marking_the_scheme]: RED - 1 failed, 5 passed, 11 deselected in 1.00s
-P23 a marking above the deployment's ceiling taken (review item 11) [scripts/load_screening_list.py; -k test_a_marking_above]: RED - 1 failed, 16 deselected in 1.29s
-P24 the listed party looked up by its name and list alone (review 2, item 9) [services/api/kyc_rules.py; -k test_a_match_reuses_its_own_entrys_party]: RED - 1 failed, 14 deselected in 2.27s
-P25 the KYC gate asks the store for every list (item 1) [services/api/kyc_rules.py; -k test_the_kyc_gate_screens_only]: RED - 2 failed, 10 deselected in 2.42s
-P26 a sentence rule asks the store for every list (item 1) [services/api/sentence_rules.py; -k test_a_sentence_rule_screens_only]: RED - 1 failed, 11 deselected in 3.12s
-P27 a sentence's preview asks the store for every list (item 1) [services/api/app.py; -k test_a_sentences_preview_screens_only]: RED - 1 failed, 11 deselected in 6.43s
-P28 a sentence's words name its list (item 1) [services/api/rule_sentences.py; -k test_a_sentences_words_name_no_list]: RED - 1 failed, 11 deselected in 3.30s
-P29 a list clearance admits a restricted code the reader may not receive (item 1) [services/api/screening.py; -k test_a_list_clearance_admits_exactly]: RED - 1 failed, 11 deselected in 2.84s
-P30 the rule audit names a list's re-screening to every reader (item 2) [services/api/rule_holds.py; -k test_the_rule_audit_names_a_lists_re_screening]: RED - 1 failed, 29 deselected in 2.44s
-P31 a close decides every citation, not the closer's own (the owner's ruling) [services/api/alerts.py; -k test_an_a_only_false_positive or test_an_approver_cleared or test_a_proposer_cleared]: RED - 3 failed, 11 deselected in 1.27s
-P32 an alert with citations served with its stored status (the owner's ruling) [services/api/alerts.py; -k test_an_a_only_false_positive or test_a_b_cleared or test_homes_counts or test_the_reports_figures or test_the_alerts_address]: RED - 5 failed, 9 deselected in 6.05s
-P33 the queue's status and assignee filters left to the stored row (the owner's ruling) [services/api/alert_queue.py; -k test_the_queues_filters or test_homes_counts]: RED - 1 failed, 1 passed, 12 deselected in 4.81s
-P34 a claim by a reader shown the alert closed (the owner's ruling) [services/api/alert_queue.py; -k test_a_reader_shown_the_alert_closed]: RED - 1 failed, 13 deselected, 2 warnings in 0.56s
-P35 an approval decides the approver's open citations too (the ruling, item 10's point 6) [services/api/alerts.py; -k test_a_proposer_cleared_for_one_list]: RED - 1 failed, 13 deselected in 0.44s
-P36 a trend's row counted for a reader who may read a citation outside it (item 6) [services/api/alerts.py; -k test_the_trends_count_a_cited_alert]: RED - 1 failed, 13 deselected in 0.89s
-P37 the adapters' predicate without its hidden groups (item 6) [packages/adapters/analytics_duckdb/alert_facts.py; -k test_the_trends_count_a_cited_alert]: RED - 1 failed, 13 deselected in 0.95s
+ADR-146 Amendment 7's offline plants after the orchestrator's re-check of 6bfc8d6, at 9b3d07f (lane/rules-lists on main 7ac372f), 2026-11-13T12:38:47Z, stack-free, closed ports pinned, the working tree clean. Exit 0: P1 to P52 with P3b, P49b and P51b, 55 RED, none BROKEN; the seven files green built and restored.
+Code identity: OspreyFlow_Core tree 209a0570326f9fea110a3e7265a411c447ad9625. At any later head, `git rev-parse HEAD:OspreyFlow_Core` giving this id is the same code.
+built, test_alert_citations_per_list.py: GREEN - 30 passed in 1.14s
+built, test_screening.py: GREEN - 17 passed in 0.86s
+built, test_alert_citations_written.py: GREEN - 15 passed in 0.89s
+built, test_alert_citations_closing.py: GREEN - 14 passed in 1.76s
+built, test_screening_clearance.py: GREEN - 12 passed in 1.75s
+built, test_analytics_clickhouse_migration.py: GREEN - 5 passed in 0.26s
+built, test_alert_fact_sets_migration.py: GREEN - 2 passed in 0.53s
+P1 the queue serves the alert as stored (no as_read) [services/api/alert_queue.py; -k test_the_queue_shows or test_what_the_queue_serves]: RED - 2 failed, 28 deselected in 0.44s
+P2 a single alert's read (explain, canvas, triage) serves it as stored [services/api/alert_queue.py; -k test_the_explanation or test_the_canvas or test_each_triage or test_a_pack_item_added]: RED - 9 failed, 21 deselected in 0.57s
+P3 a triage returns the stored row as the store gave it [services/api/alert_queue.py; -k test_each_triage]: RED - 6 failed, 24 deselected in 0.46s
+P3b a suppression returns the stored row as the store gave it [services/api/alert_queue.py; -k test_a_suppression_returns]: RED - 1 failed, 29 deselected in 0.46s
+P4 an alert with citations shown with none readable [services/api/alerts.py; -k test_a_reader_cleared_for_neither or test_each_path_refuses_a_reader_cleared_for_neither]: RED - 8 failed, 22 deselected in 0.54s
+P5 all or nothing over the citations too (the old check) [services/api/alerts.py; -k test_the_queue_shows or test_the_explanation or test_each_triage or test_a_pack_item_is]: RED - 9 failed, 21 deselected in 0.57s
+P6 a citation read by its party alone, not its SAME_AS [services/api/alerts.py; -k test_a_citation_is_read_whole]: RED - 1 failed, 29 deselected in 0.46s
+P7 the served words name every list (the hidden list's name leaks) [services/api/alerts.py; -k test_the_queue_shows or test_what_the_queue_serves or test_each_triage]: RED - 8 failed, 22 deselected in 0.50s
+P8 a hidden citation's ids kept in what is served (the count leaks) [services/api/alerts.py; -k test_the_queue_shows or test_what_the_queue_serves or test_each_triage]: RED - 8 failed, 22 deselected in 0.48s
+P9 a pack item asks its reader for every citation (its own adder cannot read it back) [services/api/packs.py; -k test_a_pack_item_is_read]: RED - 1 failed, 29 deselected in 0.46s
+P10 a pack item asks only for what is outside the citations (B's match not asked) [services/api/alerts.py; -k test_a_pack_item_asks]: RED - 1 failed, 29 deselected in 0.45s
+P11 a list's marking not read from its file [scripts/load_screening_list.py; -k test_a_lists_marking]: RED - 1 failed, 16 deselected in 0.46s
+P12 a classification the scheme does not define taken [scripts/load_screening_list.py; -k test_a_marking_the_scheme]: RED - 1 failed, 5 passed, 11 deselected in 0.47s
+P13 a re-marked entry read as unchanged [services/api/screening.py; -k test_a_change_of_marking]: RED - 1 failed, 16 deselected in 0.45s
+P14 a rule screens against every list, its deployer cleared or not [services/api/kyc_rules.py; -k test_a_rule_screens_only]: RED - 1 failed, 16 deselected in 0.88s
+P15 the Alert node's sources name every list's entry (review item 1) [services/api/rule_evaluation.py; -k test_the_alert_node_names_no_list]: RED - 1 failed, 14 deselected in 0.93s
+P16 every pending write dropped once one merges (review item 5) [services/api/rule_evaluation.py; -k test_a_match_merged_on_one_list]: RED - 1 failed, 14 deselected in 0.90s
+P17 each ALERTED_ON marked as the node, not by its citation [services/api/rule_evaluation.py; -k test_each_cited_partys_alerted_on]: RED - 1 failed, 14 deselected in 0.88s
+P18 an ALERTED_ON written where no single marking joins [services/api/rule_evaluation.py; -k test_a_cited_party_no_single_marking]: RED - 1 failed, 14 deselected in 0.92s
+P19 a re-mark reads the citations too [services/api/alerts.py; -k test_a_re_mark_reads_only]: RED - 1 failed, 14 deselected in 0.95s
+P20 an alert with citations saved without each citation's handlings (review 2, item 6) [services/api/rule_evaluation.py; -k test_what_the_trends_count]: RED - 1 failed, 14 deselected in 0.94s
+P21 the rule audit reads a cited firing all or nothing (review 2, item 4; flipped) [services/api/rule_holds.py; -k test_the_rule_audit_reads_a_firing]: RED - 1 failed, 29 deselected in 0.96s
+P22 a unit-restricted code taken for a list (review item 11) [scripts/load_screening_list.py; -k test_a_marking_the_scheme]: RED - 1 failed, 5 passed, 11 deselected in 0.47s
+P23 a marking above the deployment's ceiling taken (review item 11) [scripts/load_screening_list.py; -k test_a_marking_above]: RED - 1 failed, 16 deselected in 0.47s
+P24 the listed party looked up by its name and list alone (review 2, item 9) [services/api/kyc_rules.py; -k test_a_match_reuses_its_own_entrys_party]: RED - 1 failed, 14 deselected in 0.94s
+P25 the KYC gate asks the store for every list (item 1) [services/api/kyc_rules.py; -k test_the_kyc_gate_screens_only]: RED - 2 failed, 10 deselected in 0.92s
+P26 a sentence rule asks the store for every list (item 1) [services/api/sentence_rules.py; -k test_a_sentence_rule_screens_only]: RED - 1 failed, 11 deselected in 0.91s
+P27 a sentence's preview asks the store for every list (item 1) [services/api/app.py; -k test_a_sentences_preview_screens_only]: RED - 1 failed, 11 deselected in 1.92s
+P28 a sentence's words name its list (item 1) [services/api/rule_sentences.py; -k test_a_sentences_words_name_no_list]: RED - 1 failed, 11 deselected in 0.93s
+P29 a list clearance admits a restricted code the reader may not receive (item 1) [services/api/screening.py; -k test_a_list_clearance_admits_exactly]: RED - 1 failed, 11 deselected in 0.89s
+P30 the rule audit names a list's re-screening to every reader (item 2) [services/api/rule_holds.py; -k test_the_rule_audit_names_a_lists_re_screening]: RED - 1 failed, 29 deselected in 0.96s
+P31 a close decides every citation, not the closer's own (the owner's ruling) [services/api/alerts.py; -k test_an_a_only_false_positive or test_an_approver_cleared or test_a_proposer_cleared]: RED - 3 failed, 11 deselected in 0.48s
+P32 an alert with citations served with its stored status (the owner's ruling) [services/api/alerts.py; -k test_an_a_only_false_positive or test_a_b_cleared or test_homes_counts or test_the_reports_figures or test_the_alerts_address]: RED - 5 failed, 9 deselected in 1.77s
+P33 the queue's status and assignee filters left to the stored row (the owner's ruling) [services/api/alert_queue.py; -k test_the_queues_filters or test_homes_counts]: RED - 1 failed, 1 passed, 12 deselected in 1.67s
+P34 a claim by a reader shown the alert closed (the owner's ruling) [services/api/alert_queue.py; -k test_a_reader_shown_the_alert_closed]: RED - 1 failed, 13 deselected, 2 warnings in 0.47s
+P35 an approval decides the approver's open citations too (the ruling, item 10's point 6) [services/api/alerts.py; -k test_a_proposer_cleared_for_one_list]: RED - 1 failed, 13 deselected in 0.49s
+P36 a trend's row counted for a reader who may read a citation outside it (item 6) [services/api/alerts.py; -k test_the_trends_count_a_cited_alert]: RED - 1 failed, 13 deselected in 0.78s
+P37 the adapters' predicate without its hidden groups (item 6) [packages/adapters/analytics_duckdb/alert_facts.py; -k test_the_trends_count_a_cited_alert]: RED - 1 failed, 13 deselected in 0.81s
 P38 a trend's marking read from a hidden citation's handlings too (item 6) [packages/adapters/analytics_duckdb/alert_facts.py; -k test_the_trends_count_a_cited_alert]: RED - 1 failed, 13 deselected in 0.77s
-P39 a load's report counts an alert its loader may not read (item 7) [services/api/rule_evaluation.py; -k test_a_loads_report_counts_only]: RED - 1 failed, 11 deselected in 0.88s
-P41 a listed party written with a property the ontology does not declare (defect 1) [services/api/kyc_rules.py; -k test_a_written_party_is_one_the_ontology_declares]: RED - 1 failed, 14 deselected in 1.00s
-P42 the lookup's bound failing the rule (item 9) [services/api/kyc_rules.py; -k test_a_match_on_a_name_more_parties]: RED - 1 failed, 14 deselected in 0.93s
-P43 an approver approving their own proposal beside another's (defect 3) [services/api/alerts.py; -k test_no_one_approves]: RED - 1 failed, 13 deselected in 0.52s
-P44 a partial close letting go of another reader's claim (defect 5) [services/api/alerts.py; -k test_a_close_on_one_list_leaves_a_claim]: RED - 1 failed, 13 deselected in 0.51s
-P45 a close refused for a member shown the alert closing, an open citation of theirs left (the ruling) [services/api/alert_queue.py; -k test_a_proposal_on_one_list_leaves]: RED - 1 failed, 13 deselected in 0.55s
-P46 a sentence alert not marked by the list it rests on (defect 6) [services/api/rule_evaluation.py; -k test_a_sentence_alert_resting]: RED - 1 failed, 11 deselected in 0.99s
-P47 a sentence's match not kept for its alert's marking (defect 6, at its source) [services/api/rule_sentences.py; -k test_a_sentence_alert_resting]: RED - 1 failed, 11 deselected in 0.98s
-P48 the rule audit reading a list's re-screening by its recorded marking alone (defect 10) [services/api/rule_holds.py; -k test_the_rule_audit_reads_a_lists_re_screening_by_its_marking]: RED - 1 failed, 29 deselected in 0.98s
-P40 a reload lowering a list's marking taken (item 8) [services/api/screening.py; -k test_a_reload_that_would_lower]: RED - 2 failed, 2 passed, 8 deselected in 0.88s
-P49 a listed party reused whatever its marking (verification item 1) [services/api/kyc_rules.py; -k test_a_party_held_below_its_lists_marking_now_is_not_reused]: RED - 1 failed, 14 deselected in 0.92s
-P49b a listed party reused under another handling code (verification of 7a1c760, should 3) [services/api/kyc_rules.py; -k test_a_party_held_at_its_lists_classification_under_another_code_is_not_reused]: RED - 1 failed, 14 deselected in 0.95s
-P50 the alert facts' ALTERs issued at every start (verification item 5, its own red) [packages/adapters/analytics_clickhouse/schema.py; -k test_a_store_made_before_the_alert_facts_sets or test_a_store_that_has_the_column]: RED - 2 failed, 3 deselected in 0.31s
-P51 a DuckDB file made before the sets left without them (verification item 3) [packages/adapters/analytics_duckdb/schema.py; -k test_an_old_file_gains_the_sets]: RED - 1 failed, 1 deselected in 0.59s
+P39 a load's report counts an alert its loader may not read (item 7) [services/api/rule_evaluation.py; -k test_a_loads_report_counts_only]: RED - 1 failed, 11 deselected in 0.86s
+P41 a listed party written with a property the ontology does not declare (defect 1) [services/api/kyc_rules.py; -k test_a_written_party_is_one_the_ontology_declares]: RED - 1 failed, 14 deselected in 0.94s
+P42 the lookup's bound failing the rule (item 9) [services/api/kyc_rules.py; -k test_a_match_on_a_name_more_parties]: RED - 1 failed, 14 deselected in 0.94s
+P43 an approver approving their own proposal beside another's (defect 3) [services/api/alerts.py; -k test_no_one_approves]: RED - 1 failed, 13 deselected in 0.49s
+P44 a partial close letting go of another reader's claim (defect 5) [services/api/alerts.py; -k test_a_close_on_one_list_leaves_a_claim]: RED - 1 failed, 13 deselected in 0.49s
+P45 a close refused for a member shown the alert closing, an open citation of theirs left (the ruling) [services/api/alert_queue.py; -k test_a_proposal_on_one_list_leaves]: RED - 1 failed, 13 deselected in 0.49s
+P46 a sentence alert not marked by the list it rests on (defect 6) [services/api/rule_evaluation.py; -k test_a_sentence_alert_resting]: RED - 1 failed, 11 deselected in 1.00s
+P47 a sentence's match not kept for its alert's marking (defect 6, at its source) [services/api/rule_sentences.py; -k test_a_sentence_alert_resting]: RED - 1 failed, 11 deselected in 1.02s
+P48 the rule audit reading a list's re-screening by its recorded marking alone (defect 10) [services/api/rule_holds.py; -k test_the_rule_audit_reads_a_lists_re_screening_by_its_marking]: RED - 1 failed, 29 deselected in 0.95s
+P40 a reload lowering a list's marking taken (item 8) [services/api/screening.py; -k test_a_reload_that_would_lower]: RED - 2 failed, 2 passed, 8 deselected in 0.87s
+P52 the audit stream asked with no list clearance, or another's (the re-check of 6bfc8d6, must 3) [services/api/app.py; -k test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance]: RED - 1 failed, 26 deselected in 1.82s
+P49 a listed party reused whatever its marking (verification item 1) [services/api/kyc_rules.py; -k test_a_party_held_below_its_lists_marking_now_is_not_reused]: RED - 1 failed, 14 deselected in 0.88s
+P49b a listed party reused under another handling code (verification of 7a1c760, should 3) [services/api/kyc_rules.py; -k test_a_party_held_at_its_lists_classification_under_another_code_is_not_reused]: RED - 1 failed, 14 deselected in 0.91s
+P50 the alert facts' ALTERs issued at every start (verification item 5, its own red) [packages/adapters/analytics_clickhouse/schema.py; -k test_a_store_made_before_the_alert_facts_sets or test_a_store_that_has_the_column]: RED - 2 failed, 3 deselected in 0.27s
+P51 a DuckDB file made before the sets left without them (verification item 3) [packages/adapters/analytics_duckdb/schema.py; -k test_an_old_file_gains_the_sets]: RED - 1 failed, 1 deselected in 0.54s
 P51b a DuckDB file's old rows left without their set (verification item 3) [packages/adapters/analytics_duckdb/schema.py; -k test_an_old_file_gains_the_sets]: RED - 1 failed, 1 deselected in 0.57s
-restored, test_alert_citations_per_list.py: GREEN - 30 passed in 0.93s
-restored, test_screening.py: GREEN - 17 passed in 0.98s
-restored, test_alert_citations_written.py: GREEN - 15 passed in 0.90s
-restored, test_alert_citations_closing.py: GREEN - 14 passed in 1.76s
-restored, test_screening_clearance.py: GREEN - 12 passed in 1.88s
-restored, test_analytics_clickhouse_migration.py: GREEN - 5 passed in 0.30s
-restored, test_alert_fact_sets_migration.py: GREEN - 2 passed in 0.53s
+restored, test_alert_citations_per_list.py: GREEN - 30 passed in 0.96s
+restored, test_screening.py: GREEN - 17 passed in 0.87s
+restored, test_alert_citations_written.py: GREEN - 15 passed in 0.89s
+restored, test_alert_citations_closing.py: GREEN - 14 passed in 1.71s
+restored, test_screening_clearance.py: GREEN - 12 passed in 1.72s
+restored, test_analytics_clickhouse_migration.py: GREEN - 5 passed in 0.25s
+restored, test_alert_fact_sets_migration.py: GREEN - 2 passed in 0.54s

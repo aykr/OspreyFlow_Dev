@@ -1,0 +1,58 @@
+test_custom_roles_store.py, test_person_ownership_store.py and test_audit_section_store.py live at 9b3d07f (OspreyFlow_Core tree 209a0570326f9fea110a3e7265a411c447ad9625), stack b under the rules lane's lease (taken 2026-11-13T12:38:56Z). Exit 0.
+Running on ospreyflow-test (stack b, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261113T123915Z-f9a4499e/log: .venv/bin/python -m pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py
+.................................................................        [100%]
+--------------------- 64 unmarked test(s) reached a store ----------------------
+tests/services/api/test_audit_section_store.py::test_a_page_and_its_total: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_reader_of_one_unit_sees_that_units_entries_alone: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_second_start_does_not_wait_behind_a_read_of_the_audit: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_start_never_waits_on_or_drops_a_build_under_way: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_start_returns_before_its_own_build: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_start_that_left_the_indexes_builds_them_once_free: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_system_unit_is_never_a_real_units: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_an_alert_is_served_only_while_its_reader_is_still_a_recipient: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_an_index_left_invalid_by_a_crashed_build_is_built_again: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_an_overdue_alert_is_raised_once_by_the_database: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_audit_writes_go_on_while_the_indexes_build: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_filters_never_widen_the_read: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_no_case_entry_without_the_safety_net: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_the_alert_setting_defaults_to_three_and_is_kept: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_the_build_survives_any_failure_and_close_still_closes: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_the_dataset_filter_reads_only_words_the_reader_is_shown: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_the_engines_history_pages_with_its_true_total: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_the_indexes_are_built_concurrently_and_valid: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_the_pickers_writers_are_the_readers_units_alone: Postgres on port 55434
+… and 44 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+1.23s setup    tests/services/api/test_custom_roles_store.py::test_a_lead_is_handed_to_a_member_only
+0.74s setup    tests/services/api/test_custom_roles_store.py::test_a_role_is_versioned_and_its_rights_are_read_as_they_are_now
+0.65s setup    tests/services/api/test_custom_roles_store.py::test_a_refused_transfer_changes_nothing
+0.60s setup    tests/services/api/test_custom_roles_store.py::test_the_people_lock_lets_one_holder_in_at_a_time
+0.58s setup    tests/services/api/test_custom_roles_store.py::test_disable_moves_every_item_and_audits_each
+0.57s setup    tests/services/api/test_custom_roles_store.py::test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list
+0.57s setup    tests/services/api/test_custom_roles_store.py::test_a_write_that_finds_its_item_changed_rolls_every_transfer_back
+0.57s setup    tests/services/api/test_custom_roles_store.py::test_a_teams_level_is_gained_and_lost_with_membership
+0.56s setup    tests/services/api/test_custom_roles_store.py::test_the_plan_lists_every_kind_owned_today_and_not_a_shared_case
+0.56s setup    tests/services/api/test_custom_roles_store.py::test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace
+0.56s setup    tests/services/api/test_custom_roles_store.py::test_a_rule_goes_only_to_an_author_of_its_case
+0.56s setup    tests/services/api/test_custom_roles_store.py::test_two_units_each_transfer_their_share_and_only_then_is_nothing_left
+0.56s setup    tests/services/api/test_custom_roles_store.py::test_a_persons_level_is_the_highest_they_hold_in_their_name_or_a_teams
+0.56s setup    tests/services/api/test_custom_roles_store.py::test_two_teams_never_share_a_name
+0.56s setup    tests/services/api/test_custom_roles_store.py::test_an_administrator_cleared_for_the_list_transfers_its_schedule
+0.55s setup    tests/services/api/test_custom_roles_store.py::test_a_case_whose_other_author_answers_for_nothing_is_still_the_persons_to_transfer
+0.55s setup    tests/services/api/test_custom_roles_store.py::test_a_watch_never_goes_to_someone_already_watching_its_pattern
+0.55s setup    tests/services/api/test_custom_roles_store.py::test_the_rows_name_levels_through_a_team_and_cases_with_no_author
+0.55s setup    tests/services/api/test_custom_roles_store.py::test_the_cover_ends_on_its_day_and_the_lead_acts_again
+0.54s setup    tests/services/api/test_custom_roles_store.py::test_the_store_refuses_a_second_role_of_the_same_name
+0.54s setup    tests/services/api/test_custom_roles_store.py::test_the_persons_covers_end_with_the_disable_and_are_audited
+0.37s call     tests/services/api/test_audit_section_store.py::test_the_build_survives_any_failure_and_close_still_closes
+0.36s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[view_elsewhere]
+0.36s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[watch_above]
+0.36s setup    tests/services/api/test_person_ownership_store.py::test_a_list_schedule_the_administrator_is_cleared_for_is_not_withheld
+0.36s setup    tests/services/api/test_person_ownership_store.py::test_an_item_above_the_administrators_clearance_is_never_named_nor_counted
+0.36s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[list_schedule_above]
+0.36s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[watch_on_no_dataset]
+0.36s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[proposal_above]
+0.36s setup    tests/services/api/test_person_ownership_store.py::test_each_item_left_out_is_said_to_be_withheld_and_never_named[proposal_of_another_unit_on_this_units_case]
+65 passed in 33.86s
+Wall time: 35 s, exit 0 (stack b, the lease rules took at 2026-11-13T12:38:56Z; set-up before it 16 s)

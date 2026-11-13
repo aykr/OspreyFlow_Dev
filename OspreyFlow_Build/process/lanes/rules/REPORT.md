@@ -1,3 +1,19 @@
+# rules lane · report · rules-lists, fifth pass: the orchestrator's re-check of 6bfc8d6 (13 November 2026)
+
+| Item | State | Proving test |
+| --- | --- | --- |
+| MUST 3. Admin › Audit naming a hidden list (the transfer's entry, to any administrator of the unit) | done: an entry naming a list (`list_name`, or a transfer's `list_schedule` id) is read, counted and offered in the picker only by a reader cleared for the list's marking now and as recorded (the transfer records it), in the read's `WHERE` (`audit_section._lists_clause`); none given clears no list; the subscribe, schedule and refresh entries the same | live `test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list` (L28); route `test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance` (P52) |
+| S4. The code half alone; every list withheld | done, both red | L24c (`[list_schedule_of_a_restricted_code]`), L24d (the cleared cases) |
+| S5. A reader of R not withheld; `refuse_if_withheld` before the cleared transfer | done | `test_a_restricted_code_list_is_not_withheld_from_an_administrator_who_receives_it`; the cleared transfer case |
+| S6. Am 7 point 1: the withheld cases named, the audit sentence | done | — |
+| S7. The live records at the new head with its tree | done | below |
+
+**Gates at 9b3d07f** (on main 68568c3; `gates/9b3d07f.triage.txt`): offline plants 55 red; the three live files 65
+passed; live plants 34 red, built and restored green (147); `make test` the GPU preflight alone; `make -k ci` exit 0.
+
+**Out of map, this pass.** `services/api/audit_section.py`, `tests/services/api/test_audit_section_store.py` and
+`test_audit_section_routes.py`.
+
 # rules lane · report · rules-lists, fourth pass: the orchestrator's review of 7a1c760 (13 November 2026)
 
 MUST 1 was confirmed fixed. MUST 2 is redone to the owner's ruling of 9 November 2026: nothing of a withheld item is
