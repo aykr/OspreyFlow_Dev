@@ -2,7 +2,7 @@
 # The path to the next release, kept by the orchestrator (the owner, 13 November 2026). Tab-separated: id, step,
 # who, expected, after (ids, comma-separated, or -), status (done | building | todo). The heartbeat's default view
 # shows each step not done as "waiting on" any step in its `after` that is not done. No step here rebuilds or
-# updates osprey-small (the owner's GOV.UK demo): updating it to v0.5.1 is a separate step, on the owner's word.
+# updates osprey-small (the owner's GOV.UK demo) before step 13, which updates it to v0.5.1 (the owner, 13 Nov).
 1	R1: the client install's acceptance on kind (P7b's runbooks as written)	platform	Sun 15 Nov	-	building
 2	R1's findings fixed in the runbook and the product, the affected parts run again	platform	Mon 16 Nov	1	todo
 3	Small's Postgres connections (ADR-114 Am 43): gates on the server	admin	Sat 14 Nov	1	building
@@ -15,3 +15,4 @@
 10	v0.5.1's CHANGELOG and release notes	orchestrator	Mon 16 Nov	8	todo
 11	The owner's word to publish	owner	Tue 17 Nov	9, 10	todo
 12	v0.5.1 published: the tag, the product repository, the release workflow	orchestrator	Tue 17 Nov	11	todo
+13	osprey-small (the GOV.UK demo) updated to v0.5.1 by `ospreyflow update`: a backup first, the data, key prompt and GOV.UK look kept, then the checks (gate, four sign-ins, health)	orchestrator	Tue 17 Nov	12	todo
