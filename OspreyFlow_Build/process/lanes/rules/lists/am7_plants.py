@@ -424,6 +424,14 @@ PLANTS: list[tuple[str, ...]] = [
         "test_a_reload_that_would_lower",
         CLEARANCE,
     ),
+    (
+        "P52 the audit stream asked with no list clearance, or another's (the re-check of 6bfc8d6, must 3)",
+        "services/api/app.py",
+        "    lists_cleared = ListClearance.of(principal, handling_scheme)\n",
+        "    lists_cleared = None\n",
+        "test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance",
+        "../OspreyFlow_Build/tests/services/api/test_audit_section_routes.py",
+    ),
     # --- after the orchestrator's verification of e911b90 -----------------------------------------
     (
         "P49 a listed party reused whatever its marking (verification item 1)",

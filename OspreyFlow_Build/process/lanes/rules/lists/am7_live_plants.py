@@ -71,6 +71,7 @@ ROUTE_CASES = [f"{ROUTES}::{n}" for n in (
 )]  # fmt: skip
 REFRESH_SECRET = f"{REFRESH}::test_a_marked_lists_match_found_by_a_cleared_deployer_carries_the_lists_marking"
 DISABLE = f"{B}/services/api/test_custom_roles_store.py"
+OWNERSHIP = f"{B}/services/api/test_person_ownership_store.py"
 TRENDS = f"{B}/conformance/analytics_port/test_suite.py::test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader"
 
 #: (name, file under the worktree, built text, planted text, the tests, in order)
@@ -303,6 +304,22 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         [f"{DISABLE}::test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace"],
     ),
     (
+        "L24c the withheld check reading a list's classification alone (the re-check of 6bfc8d6, should 4)",
+        "OspreyFlow_Core/services/api/person_ownership.py",
+        "        AND COALESCE(m.handling_code, '{DEFAULT_HANDLING_CODE}') = ANY($5::text[]))",
+        "        AND $5::text[] = $5)",
+        [f"{OWNERSHIP}::test_each_item_left_out_is_said_to_be_withheld_and_never_named[list_schedule_of_a_restricted_code]"],
+    ),
+    (
+        "L24d every list's schedule withheld, its administrator cleared or not (the re-check of 6bfc8d6, should 4)",
+        "OspreyFlow_Core/services/api/person_ownership.py",
+        "        AND COALESCE(m.handling_code, '{DEFAULT_HANDLING_CODE}') = ANY($5::text[]))",
+        "        AND COALESCE(m.handling_code, '{DEFAULT_HANDLING_CODE}') = ANY($5::text[]) AND FALSE)",
+        [f"{OWNERSHIP}::test_a_list_schedule_the_administrator_is_cleared_for_is_not_withheld",
+         f"{OWNERSHIP}::test_a_restricted_code_list_is_not_withheld_from_an_administrator_who_receives_it",
+         f"{DISABLE}::test_an_administrator_cleared_for_the_list_transfers_its_schedule"],
+    ),
+    (
         "L25 a list's schedule given whatever the recipient's clearance (verification of e911b90, item 2)",
         "OspreyFlow_Core/services/api/admin_people.py",
         '        if item.kind == "list_schedule" and list_markings is not None:\n',
@@ -322,6 +339,13 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         "        if not await _has_column(client, table, column):\n            await client.command(statement)",
         "        pass",
         [f"{B}/test_analytics_clickhouse.py::test_a_store_made_before_the_alert_facts_sets_is_brought_forward_and_keeps_its_rows"],
+    ),
+    (
+        "L28 an audit entry naming a list read by a reader not cleared for it (the re-check of 6bfc8d6, must 3)",
+        "OspreyFlow_Core/services/api/audit_section.py",
+        '        f" AND ({_LIST_NAMED} IS NULL OR ("',
+        '        " AND (TRUE OR ("',
+        [f"{B}/services/api/test_audit_section_store.py::test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list"],
     ),
 ]
 
@@ -349,7 +373,8 @@ def _run(tests: list[str]) -> tuple[str, str]:
 def main() -> int:
     every = [CROSS, *AM7, *REVIEW, STORE, ALERTS, ROUTES, TRENDS, DISABLE,
              f"{B}/services/api/test_list_refresh_schedule.py", f"{B}/test_analytics_clickhouse.py",
-             f"{B}/services/api/test_custom_roles_store.py"]
+             f"{B}/services/api/test_custom_roles_store.py", OWNERSHIP,
+             f"{B}/services/api/test_audit_section_store.py"]
     state, line = _run([REFRESH, *every])
     print(f"built: {state} - {line}")
     if state != "GREEN":
