@@ -2,7 +2,7 @@
 site, runs the tests that claim to catch it, expects them red, and puts the file back (in a
 `finally`). Live: run under the rules lane's lease on its stack (`stack_lease.sh remote rules -- …`,
 from OspreyFlow_Core, the stack's ports pinned by `remote`); the offline tests among them need no
-store.
+store, and `--offline` runs those alone (no lease: the live files and their plants left out).
 
 Prints each plant's raw pytest summary line and RED, GREEN or BROKEN (a collection error, an error in
 a set-up, or nothing run: never read as red); exits 1 if any was not RED or the built tree is not
@@ -30,6 +30,18 @@ ADAPTER = "OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py"
 INDEXER = "OspreyFlow_Core/services/search_index/indexer.py"
 DOCUMENT = "OspreyFlow_Core/services/search_index/document.py"
 REBUILD = "OspreyFlow_Core/services/search_index/rebuild.py"
+MAPPING = "OspreyFlow_Core/services/search_index/mapping.py"
+CLIENTPY = "OspreyFlow_Core/services/search_index/client.py"
+REVIEW = "OspreyFlow_Core/services/api/review.py"
+BULK = f"{B}/services/search_index/test_bulk_cap.py"
+REFUSED = f"{B}/services/search_index/test_refused.py"
+CA = f"{B}/services/search_index/test_client_ca.py"
+RANK = f"{B}/services/search_index/test_mapping_strict_ranking.py"
+LAURIUM = f"{B}/adapters/extract_laurium/test_findings_inferred.py"
+STAND_IN = "OspreyFlow_Build/tests/adapters/extract_laurium/review_queue.py"
+REACH_TEST = "OspreyFlow_Build/tests/services/search_index/test_index_feed_reach.py"
+#: Tests that need the leased stack; `--offline` leaves them, and every plant that names one, out.
+LIVE = (OUTBOX, FEED)
 
 PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     # --- decision 1: the outbox, by event type, each at its own write --------------------------
@@ -153,6 +165,116 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ("V23 the host and port win over the URL", "OspreyFlow_Core/services/search_index/client.py",
      "        url = (env.get(\"OPENSEARCH_URL\") or \"\").strip()\n", "        url = \"\"\n",
      [f"{CLIENT}::test_the_url_wins_over_host_and_port"]),
+    # --- decision 2: the request cap, at the bytes sent ------------------------------------------
+    ("V32 a batch over the cap goes as one request", INDEXER,
+     "        if size + n > MAX_BULK_BYTES:\n", "        if False:\n",
+     [f"{BULK}::test_a_batch_over_the_cap_goes_as_several_requests_each_within_it",
+      f"{BULK}::test_the_indexer_drains_a_batch_over_the_cap",
+      f"{BULK}::test_the_rebuild_sends_within_the_cap"]),
+    ("V33 one action over the cap alone is sent", INDEXER,
+     "        if n > MAX_BULK_BYTES:\n", "        if False:\n",
+     [f"{BULK}::test_one_action_alone_over_the_cap_is_set_aside_and_the_rest_sent",
+      f"{REFUSED}::test_a_document_over_the_cap_is_set_aside_and_the_outbox_moves_on"]),
+    ("V34 the cap counts characters", INDEXER,
+     "        n = len(_encoded(lines))\n", "        n = len(lines)\n",
+     [f"{BULK}::test_the_cap_counts_bytes_not_characters"]),
+    ("V35 a 413 swallowed", INDEXER,
+     "    for request in requests:\n        refused += await _write_one(client, request)\n",
+     "    for request in requests:\n        try:\n            refused += await _write_one(client, request)\n"
+     "        except Exception:\n            pass\n",
+     [f"{BULK}::test_a_413_is_raised_and_the_outbox_keeps_the_batch",
+      f"{BULK}::test_a_413_in_the_rebuild_is_raised_and_leaves_nothing_behind"]),
+    ("V36 the cap at 20 MiB", INDEXER,
+     "MAX_BULK_BYTES = 10 * 1024 * 1024\n", "MAX_BULK_BYTES = 20 * 1024 * 1024\n",
+     [f"{BULK}::test_the_cap_is_ten_mib"]),
+    ("V37 measured with strict encoding", INDEXER,
+     '    return text.encode("utf-8", "surrogatepass")\n', '    return text.encode("utf-8")\n',
+     [f"{BULK}::test_a_lone_surrogate_is_measured_as_the_client_sends_it"]),
+    # --- decision 2: a document refused for good is set aside --------------------------------------
+    ("V38 a permanent refusal holds the outbox", INDEXER,
+     "    return 400 <= status < 500 and status not in (404, 408, 409, 429)\n", "    return False\n",
+     [f"{REFUSED}::test_a_permanent_refusal_of_one_item_is_set_aside"]),
+    ("V39 a refusal set aside unrecorded", INDEXER,
+     "    if not refused:\n        return\n    index = refused_index(alias)\n",
+     "    return\n    index = refused_index(alias)\n",
+     [f"{REFUSED}::test_a_document_over_the_cap_is_set_aside_and_the_outbox_moves_on"]),
+    ("V40 a long name refused for its length", MAPPING,
+     "            \"ignore_above\": KEYWORD_MAX_CHARS,\n", "",
+     [f"{REFUSED}::test_a_keyword_over_the_term_limit_is_indexed_not_refused"]),
+    # --- decision 4: a failed or crashed rebuild leaves nothing ------------------------------------
+    ("V41 a failed rebuild leaves its index", REBUILD,
+     "        await client.indices.delete(index=index, ignore_unavailable=True)\n        raise\n",
+     "        raise\n",
+     [f"{REFUSED}::test_a_rebuild_that_fails_leaves_nothing_and_keeps_the_refusal_record",
+      f"{BULK}::test_a_413_in_the_rebuild_is_raised_and_leaves_nothing_behind"]),
+    ("V42 a crashed rebuild's index kept", REBUILD,
+     "            await client.indices.delete(index=left, ignore_unavailable=True)\n", "            pass\n",
+     [f"{REFUSED}::test_a_rebuild_removes_the_index_a_crashed_rebuild_left"]),
+    ("V43 a rebuild keeps the older refusal records", REBUILD,
+     "    if await client.indices.exists(index=refused_index(alias)):\n", "    if False:\n",
+     [f"{REFUSED}::test_a_rebuild_keeps_only_its_own_refusal_records"]),
+    # --- decision 5: the drift check's refused and pending -----------------------------------------
+    ("V44 the drift check reports a refused document as missing", REBUILD,
+     "    report.refused = {d: set_aside[d] for d in sorted(report.missing) if d in set_aside}\n",
+     "    report.refused = {}\n",
+     [f"{REFUSED}::test_a_document_over_the_cap_is_set_aside_and_the_outbox_moves_on"]),
+    ("V45 the drift check never says the outboxes are pending", REBUILD,
+     "    pending = bool(await source.pending_index(1)) or bool(await texts.pending_text_index(1))\n",
+     "    pending = False\n",
+     [f"{REFUSED}::test_the_drift_check_says_the_outboxes_still_hold_changes"]),
+    # --- decision 3: the text and its outbox row, one transaction ----------------------------------
+    ("V46 the text's outbox row outside its transaction", REVIEW,
+     "        async with self._pool.acquire() as conn, conn.transaction():\n            await conn.execute(\n"
+     "                \"INSERT INTO document_texts",
+     "        async with self._pool.acquire() as conn:\n            await conn.execute(\n"
+     "                \"INSERT INTO document_texts",
+     [f"{LAURIUM}::test_a_documents_text_and_its_outbox_row_are_one_transaction"]),
+    ("V47 the stand-in takes a string for a TIMESTAMPTZ", STAND_IN,
+     '    "TIMESTAMPTZ": (datetime,),\n', '    "TIMESTAMPTZ": (datetime, str),\n',
+     [f"{LAURIUM}::test_the_pools_stand_in_refuses_what_postgres_refuses"]),
+    ("V48 the stand-in goes on after a failed statement", STAND_IN,
+     "            self._aborted = self._in_transaction\n", "            self._aborted = False\n",
+     [f"{LAURIUM}::test_the_pools_stand_in_keeps_a_transaction_whole"]),
+    # --- decision 3: strict ranking -----------------------------------------------------------------
+    ("V49 a name's words scored by BM25", MAPPING,
+     '                "words": {"type": "text", "analyzer": "words", **_BOOLEAN},\n',
+     '                "words": {"type": "text", "analyzer": "words"},\n',
+     [f"{RANK}::test_every_scored_field_is_boolean_so_no_word_rarity_ranks"]),
+    ("V50 the text scored by BM25", MAPPING,
+     '            "index_options": "offsets",\n            **_BOOLEAN,\n',
+     '            "index_options": "offsets",\n',
+     [f"{RANK}::test_every_scored_field_is_boolean_so_no_word_rarity_ranks"]),
+    ("V51 a built-in stemmer on the words", MAPPING,
+     '                "tokenizer": "standard",\n                "filter": ["lowercase", "asciifolding"],\n',
+     '                "tokenizer": "standard",\n                "filter": ["lowercase", "asciifolding", "porter_stem"],\n',
+     [f"{RANK}::test_no_phonetic_fuzzy_synonym_or_stemming_analysis_inside_opensearch"]),
+    ("V52 a language analyser on the text", MAPPING,
+     '            "type": "text",\n            "analyzer": "words",\n            "index_options": "offsets",\n',
+     '            "type": "text",\n            "analyzer": "english",\n            "index_options": "offsets",\n',
+     [f"{RANK}::test_no_phonetic_fuzzy_synonym_or_stemming_analysis_inside_opensearch"]),
+    ("V53 no trigrams on a name", MAPPING,
+     '                "filter": ["lowercase", "asciifolding", "tri"],\n',
+     '                "filter": ["lowercase", "asciifolding"],\n',
+     [f"{RANK}::test_names_match_by_trigrams_edge_ngrams_and_the_conduits_phonetic_key"]),
+    # --- decision 7: the CA bundle ------------------------------------------------------------------
+    ("V54 the named bundle not passed to the client", CLIENTPY,
+     '        kwargs["ca_certs"] = config.ca_certs\n', "        pass\n",
+     [f"{CA}::test_the_bundle_a_deployment_names_is_trusted"]),
+    ("V55 the last bundle named wins", CLIENTPY,
+     "                ca_certs = named\n                break\n", "                ca_certs = named\n",
+     [f"{CA}::test_the_first_named_wins", f"{CA}::test_ssl_cert_file_wins_over_the_others"]),
+    ("V56 SSL_CERT_FILE read last", CLIENTPY,
+     'CA_BUNDLE_VARIABLES = ("SSL_CERT_FILE", "AWS_CA_BUNDLE", "REQUESTS_CA_BUNDLE")\n',
+     'CA_BUNDLE_VARIABLES = ("AWS_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE")\n',
+     [f"{CA}::test_ssl_cert_file_wins_over_the_others"]),
+    ("V57 a named bundle that is not there accepted", CLIENTPY,
+     "                if not os.path.isfile(named):\n", "                if False:\n",
+     [f"{CA}::test_a_named_bundle_that_is_not_there_is_refused_in_words"]),
+    # --- rule 4: the exemption by file, not by folder -----------------------------------------------
+    ("V58 the feed's folder exempt whole", REACH_TEST,
+     '            if rel in ALLOWED or "/node_modules/" in rel:\n',
+     '            if rel in ALLOWED or rel.startswith("services/search_index/") or "/node_modules/" in rel:\n',
+     [f"{REACH}::test_the_walk_names_a_planted_route_and_a_query_module_beside_the_feed"]),
 ]
 
 
@@ -165,7 +287,7 @@ def _run(tests: list[str]) -> tuple[str, str]:
         cwd=CORE, capture_output=True, text=True, check=False,
     )  # fmt: skip
     lines = [line for line in done.stdout.splitlines() if line.strip()]
-    failed = [line for line in lines if line.startswith(("FAILED", "ERROR"))]
+    failed = [line for line in lines if line.startswith(("FAILED ", "ERROR ../"))]
     summary = lines[-1] if lines else done.stderr.strip()
     said = " | ".join([*failed, summary])
     if done.returncode == 0:
@@ -176,14 +298,21 @@ def _run(tests: list[str]) -> tuple[str, str]:
 
 
 def main() -> int:
-    every = [OUTBOX, FEED, DOC, CLIENT, REACH, RUN, HARNESS, SIGV4, SEEDS]
+    offline = "--offline" in sys.argv[1:]
+    every = [OUTBOX, FEED, DOC, CLIENT, REACH, RUN, HARNESS, SIGV4, SEEDS, BULK, REFUSED, CA, RANK,
+             LAURIUM]  # fmt: skip
+    plants = PLANTS
+    if offline:
+        every = [t for t in every if t not in LIVE]
+        plants = [p for p in PLANTS if not any(t.startswith(LIVE) for t in p[4])]
+        print(f"offline: {len(plants)} of {len(PLANTS)} plants, the live files left out")
     state, line = _run(every)
     print(f"built: {state} - {line}")
     if state != "GREEN":
         return 1
     green_left = 0
     root = CORE.parent
-    for name, rel, built, planted, tests in PLANTS:
+    for name, rel, built, planted, tests in plants:
         path = root / rel
         source = path.read_text(encoding="utf-8")
         if source.count(built) != 1:
