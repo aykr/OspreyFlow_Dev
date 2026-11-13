@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 import yaml
 from pydantic import ValidationError
+from tools.layout import REPO as REPO_ROOT
 
 from schemas.deployment import (
     ComponentsConfig,
@@ -17,7 +18,7 @@ from schemas.deployment import (
     Profile,
     SearchBackend,
 )
-from tools.layout import REPO as REPO_ROOT
+from tests.committed import committed_text
 
 COMMITTED_CONFIG = REPO_ROOT / "osprey.yaml"
 #: S11: Small and Enterprise are HTTPS (the owner's ruling of 2 November 2026).
@@ -28,7 +29,8 @@ def test_the_committed_osprey_yaml_still_validates() -> None:
     """The constraint the review imposed on this schema, as a test rather than a promise. This is
     the real file, not a copy of its shape — a copy would keep passing after someone edited the
     original."""
-    raw = yaml.safe_load(COMMITTED_CONFIG.read_text(encoding="utf-8"))
+    # The commit's text, not the working copy: a lane's copy is the owner's (`tests/committed.py`).
+    raw = yaml.safe_load(committed_text(COMMITTED_CONFIG))
     config = OspreyConfig.model_validate(raw)
 
     # It began as a map-only file; since 39a80d0 it is the described example of every option, so
