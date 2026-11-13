@@ -191,7 +191,8 @@ class _Source(BaseModel):
 
     claim: str | None = None
     #: ADR-148 Amendment 15: set by an administrator in Admin › People, never read from the token
-    #: (the client page's fallback where Entra cannot send the value; the poc shape alone, at render).
+    #: (the client page's fallback where Entra cannot send the value; the poc shape alone, at
+    #: render).
     administrator: bool = False
 
     @model_validator(mode="after")
@@ -462,7 +463,8 @@ class StoredPerson:
     roles: tuple[str, ...]
     disabled: bool
     #: ADR-148 Amendment 15: what an administrator set in Admin › People for a value the mapping
-    #: sources from the administrator; None where none was set (the person is then refused in words).
+    #: sources from the administrator; None where none was set (the person is then refused in
+    #: words).
     clearance: str | None = None
     org_unit: str | None = None
     receivable_handling_codes: tuple[str, ...] | None = None
@@ -840,7 +842,8 @@ def principal_from_claims(
             roles = verified.token_roles
         # Every administrator-sourced value was taken from the stored person above (an Entra mapping
         # alone may name one, `ClaimMapping`'s validator), or refused there.
-        held_clearance, held_unit, held_codes = verified.clearance, verified.org_unit, verified.codes
+        held_clearance, held_unit = verified.clearance, verified.org_unit
+        held_codes = verified.codes
         assert held_clearance is not None and held_unit is not None and held_codes is not None
         principal_id, clearance, org_unit = verified.id, held_clearance, held_unit
         codes, routes = held_codes, verified.routes
