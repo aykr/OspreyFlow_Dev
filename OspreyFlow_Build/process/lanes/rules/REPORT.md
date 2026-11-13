@@ -1,3 +1,13 @@
+# rules lane · report · rules-lists-audit: the CARRIES rows of the verification of lists at 5c862eb (13 November 2026)
+
+| Row | State | Proving test |
+| --- | --- | --- |
+| (a) Each half of the audit's list clause planted alone; a live case recorded above the list's marking and an R list; P52 with another reader; the route file in the red record's green files | done | live `test_an_entry_is_read_by_its_lists_marking_as_recorded_and_by_its_handling_code` (L28b recorded half, L28c code now, L28d code as recorded); route `test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance`, two readers (P52, P52b) |
+| (b) The subscription, schedule and refresh entries recording no marking | done: each records the list's marking as it stood (`ScreeningListStore.audit_marking`), the scheduled refresh's too | live `test_each_audit_entry_about_a_list_records_the_lists_marking` (L29); the scheduled refresh's entry has no test of its own (its closure needs the whole refresh), logged in Am 7 |
+
+**Gates.** Offline plants: 56 red, none broken (`lists/AM7_RED_RECORD.txt`). **Not yet run, and not claimed:** the
+live cases, the live plants (now 38) and `make test` and `make -k ci`: R1 holds the test server.
+
 # rules lane · report · rules-lists, fifth pass: the orchestrator's re-check of 6bfc8d6 (13 November 2026)
 
 | Item | State | Proving test |
