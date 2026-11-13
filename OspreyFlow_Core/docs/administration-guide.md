@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.90** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.91** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.91 | 2026-11-13 | §6a, v0.5.2's reporting on the cloud-platform profile (ADR-148 Amendments 9 to 11): Superset and the report sync rendered when switched on, one copy each in development; Superset signing in with Entra ID as its own registration, its role from the person's rights; the dashboard identities' app-only tokens; their egress, copies and secrets; the `superset` database beside `ospreyflow` and `litellm`; Power BI reading the mart as an option. Appendix A: `cloud_platform.claims.superset_client_id`. PDF reprinted alone. |
 | 1.90 | 2026-11-13 | §6a, from R1 (the cloud-platform install's acceptance on kind): the `ospreyflow` command installed by `uv tool install ./cli`; the managed PostgreSQL's `max_connections` of at least 750 (ADR-114 Amendment 43), set in the RDS parameter group; and what a healthy restore's log ends with. PDF reprinted alone. |
 | 1.89 | 2026-11-13 | Appendix A: `network.access_key` (the shared key the front proxy asks for, ADR-114 Amendments 41 and 42) and `appearance.banner_text` (the banner's own words, ADR-132 Amendment 7), from the schema (`tools.admin_guide_options`), missed when they were added. PDF reprinted alone. |
 | 1.88 | 2026-11-12 | New §6a.9, the model route on a shared platform: the model gateway (LiteLLM), always rendered; an engine as your organisation's own AI gateway (by a token) or Amazon Bedrock in London (by the gateway's own IAM role, no key stored anywhere), with `kind`, `auth` and `region`, London alone and a model's own id; what is refused, in words; `gateway.tf`'s role, policy and service account, and what the platform team applies; the gateway's own way out, its engines' hosts and STS; what *Admin › Models* allows and refuses, in its own words; for a newly declared Bedrock engine, the Terraform before the new values, since only it makes the gateway's service account (also in §10.1); Laurium's key cross-referenced; what is not yet tried against AWS or your own gateway (ADR-135 Amendments 4, 7 and 8). §6a.5: an engine removed in *Admin › Models* keeps its host open while `osprey.yaml` declares it. *Coming* and the questions for the platform's team renumbered 6a.10 and 6a.11; nothing of the model route was listed as coming. PDF made by the orchestrator at merge. |
@@ -1121,11 +1122,14 @@ address yet, so it is unused. Caddy is not rendered: the platform's NGINX ingres
 with ModSecurity on and the IP allow-list from `allow_from`. Local models and Whisper are not
 rendered, since the platform has no GPU. The model gateway (LiteLLM) is rendered always, with or
 without an engine (section 6a.3 says which identity it runs as; section 6a.9 is the model
-route). **Reporting is not rendered**:
-Superset and the report sync signed in through Keycloak, and a render setting `reporting.sync` or
-`reporting.superset` is refused ("report sync and Superset are not on this profile yet: they signed
-in through Keycloak, and people sign in with Entra ID here; their own step after P10 (reporting on
-Entra ID) brings them. Set reporting.sync and reporting.superset to false"). The Conduit's image is
+route). **Reporting is rendered when it is switched on** (`reporting.superset`, `reporting.sync`;
+ADR-148 Amendments 9 to 11): Superset, at the `bi.` name, signs people in with Entra ID as its own
+app registration (`cloud_platform.claims.superset_client_id`; a render without it is refused in
+words), and the report sync's dashboard identities get their tokens from Entra ID (section 6a.7).
+Superset's settings are its own database, `superset`, which it makes on the managed PostgreSQL at its
+first start, beside `ospreyflow` and the gateway's `litellm`; the reports are the schema
+`osprey_reports` inside `ospreyflow`, as on Small, which Power BI may read through a read-only login
+of its own (an option the install's runbook describes). The Conduit's image is
 built without Java on this profile, so *Admin › Maps*' **Build** says that the basemap cannot be
 built here; there is no way yet to bring a basemap built elsewhere onto the platform (*coming*), so
 the map uses its providers alone.
@@ -1176,6 +1180,8 @@ on the platform.
 | ClickHouse | 1 | 2 | 1 | 8 GiB | 8 GiB |
 | ClickHouse Keeper (standard shape) | 1 | 3 | 0.1 | 512 MiB | 512 MiB |
 | The model gateway (LiteLLM) | 1 | 1 | 0.25 | 512 MiB | 1 GiB |
+| Superset, when reporting is on | 1 | 2 | 0.25 | 1 GiB | 2 GiB |
+| The report sync, when reporting is on | 1 | 2 | 0.1 | 256 MiB | 512 MiB |
 | Laurium, when it is the extraction engine | 1 | 1 | 0.25 | 1 GiB | 2 GiB |
 | The backups' and the restore's Jobs | — | — | 0.5 | 2 GiB | 4 GiB |
 | The restore's ArcadeDB step | — | — | 1 | 12 GiB | 12 GiB |
@@ -1214,7 +1220,7 @@ leaves it unchanged and `tofu validate` accepts it.
 | `gateway.tf` | Only while a Bedrock engine is declared in `osprey.yaml`: the model gateway's own service account and IAM role, allowed to invoke Bedrock's models in eu-west-2 (`bedrock:InvokeModel`, `bedrock:InvokeModelWithResponseStream`) and nothing else, no S3 included, and trusted by the gateway's service account alone |
 | `backups.tf` | The backups' bucket and its own KMS key, their two roles and service accounts, ClickHouse's backup user's password and the Secrets `ospreyflow-clickhouse-backup` and `ospreyflow-backup-output` (section 6a.8) |
 | `ecr.tf` | A repository for each image, scanned on push |
-| `secrets.tf` | Our own Secret, `ospreyflow-secrets`: each password made here (`random_password`), and each key a person holds (a model engine's, a connection's, the mail server's password) as a sensitive variable |
+| `secrets.tf` | Our own Secret, `ospreyflow-secrets`: each password made here (`random_password`), and each key a person holds (a model engine's, a connection's, the mail server's password; with reporting on, Superset's client secret, `superset_oidc_client_secret`, and the report sync's dashboard identities, `report_sync_dashboards`) as a sensitive variable |
 
 **The platform's Terraform state holds every secret here**: the passwords it makes, and each key a
 person holds, which is a sensitive variable with no default written into the Secret's data. How the
@@ -1303,6 +1309,8 @@ single ports, never a range:
 | ClickHouse | Its own copies and, in the standard shape, ClickHouse Keeper; S3 and STS, for its backups |
 | The backups' runs and the restore | S3 and STS; ArcadeDB and ClickHouse, or the cluster's API, as each needs (section 6a.8) |
 | The Glass | The Conduit |
+| Superset, when reporting is on | The Conduit (who signed in); the managed stores' networks (its database and the mart, its rate limits); Entra ID's sign-in host |
+| The report sync, when reporting is on | The Conduit; the managed stores' networks (the mart); S3 and STS; Entra ID's sign-in host (its token) |
 | Named-entity extraction | Nothing beyond DNS |
 
 **An engine's way out is made at render.** With no engine declared, no engine's host is allowed. An
@@ -1540,9 +1548,18 @@ assigned in *Admin › People*, which keeps them in the deployment's own Postgre
   pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
   registration.
 
+- **Superset** (ADR-148 Amendment 9) signs a person in as its own app registration and asks Entra ID
+  for a token for this API's scope, issued to Superset, which the Conduit admits for `GET /v1/me` and
+  `GET /v1/me/rights` alone (any other route answers 403 `route_not_admitted`). Superset's role is
+  the person's rights here, read again at each sign-in: `administer_system` is its Admin,
+  `read_reports` its read-only Gamma, and a person with neither is not let in.
+- **A dashboard identity** (ADR-148 Amendment 10), registered in *Admin › Dashboards* by its app
+  registration's application id, signs the report sync in with an app-only token carrying the app
+  role `Dashboard.Read`; it reads the case list and the report feed alone, within its registration's
+  clearance, unit and codes.
+
 **Not available on Entra yet**: a scheduled run acting as its owner (the owner cannot be resolved
-without Keycloak's users), and reporting (Superset and the report sync are refused at render on
-this profile until Superset signs in through Entra ID).
+without Keycloak's users).
 
 **Not yet tried against a real tenant.** The token shapes above are as Microsoft documents them, and
 one real token from the organisation's development tenant is to settle each:
@@ -1787,7 +1804,7 @@ first install:
 ### 6a.10 Coming
 
 - **On Entra ID**: a scheduled run acting as its owner (until then such a run is marked stopped),
-  reporting (Superset and the report sync signing in through Entra ID), display names (a person is
+  display names (a person is
   shown by object id until then), and one real token from the organisation's tenant to settle the
   shapes section 6a.7 lists as untried.
 - **The backups' alert** on a failed or missing run, the production shape's restore, the restore
@@ -3024,6 +3041,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `cloud_platform.claims.tenant_id` | str | required | The client's Entra tenant id |
 | `cloud_platform.claims.client_id` | str | required | The Glass's own app registration (application id) |
 | `cloud_platform.claims.api_client_id` | str | required | This API's app registration (application id): the token's audience |
+| `cloud_platform.claims.superset_client_id` | str or none | none | Superset's own app registration (application id), when reporting.superset is on: people sign in to Superset with it, and its delegated token reads the Conduit's GET /v1/me and /v1/me/rights alone |
 | `cloud_platform.claims.api_id_uri` | str or none | none | The API's application id URI, which the Glass's scope names |
 | `cloud_platform.claims.token_version` | `2.0` \| `1.0` | `2.0` | The access token version the API's registration is issued (accessTokenAcceptedVersion): the issuer and audience the Conduit checks follow it |
 | `cloud_platform.claims.scope` | str | `access_as_user` | The delegated scope the Glass asks the API for |
