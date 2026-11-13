@@ -39,6 +39,12 @@ export const SUGGEST_MIN_CHARS = 2;
 /** The pause after the last keystroke before the Conduit is asked. */
 export const SUGGEST_PAUSE_MS = 250;
 const SUGGEST_LIMIT = 10;
+/** ADR-059 Amendment 1, the owner's requirement c: the one line the box shows under its suggestions
+ * when the Conduit answered them without the search index (from today's prefix read). It does not
+ * fade: it is a fact about every answer while it stands. */
+export const LIMITED_SUGGESTIONS =
+  "Suggestions are limited just now: only the exact start of a name or identifier matches.";
+
 /** How long the "more match" hint stays in view before it fades. It is not a state to act on, only
  * a nudge, so it should not sit over the page for as long as the list is open. */
 export const SEARCH_HINT_MS = 4000;
@@ -64,6 +70,7 @@ export function GlobalSearch({
   const [results, setResults] = useState<Node[]>([]);
   const [query, setQuery] = useState("");
   const [more, setMore] = useState(false);
+  const [limited, setLimited] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const latest = useRef(0);
@@ -75,10 +82,11 @@ export function GlobalSearch({
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  function settle(next: Outcome, nodes: Node[], hasMore: boolean): void {
+  function settle(next: Outcome, nodes: Node[], hasMore: boolean, isLimited = false): void {
     setOutcome(next);
     setResults(nodes);
     setMore(hasMore);
+    setLimited(isLimited);
   }
 
   async function ask(value: string, mine: number, using: SearchOptions): Promise<void> {
@@ -93,9 +101,9 @@ export function GlobalSearch({
         settle("unavailable", [], false);
         return;
       }
-      const body = (await response.json()) as { nodes: Node[]; more: boolean };
+      const body = (await response.json()) as { nodes: Node[]; more: boolean; limited?: boolean };
       if (mine !== latest.current) return;
-      settle(body.nodes.length > 0 ? "found" : "none", body.nodes, body.more);
+      settle(body.nodes.length > 0 ? "found" : "none", body.nodes, body.more, body.limited === true);
     } catch {
       if (mine === latest.current) settle("unavailable", [], false);
     }
@@ -239,8 +247,14 @@ export function GlobalSearch({
           />
         </div>
       )}
-      {status && (
-        <div role="status" className="global-search__status" data-faded={nudge && faded ? "true" : undefined}>
+      {(status || limited) && (
+        <div
+          role="status"
+          className="global-search__status"
+          data-faded={nudge && faded && !limited ? "true" : undefined}
+        >
+          {limited && <span className="global-search__limited">{LIMITED_SUGGESTIONS}</span>}
+          {limited && status && " "}
           {status}
         </div>
       )}

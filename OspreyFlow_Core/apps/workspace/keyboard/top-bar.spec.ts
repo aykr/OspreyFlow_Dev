@@ -1,6 +1,7 @@
 // The top bar (ADR-065), in a real browser. Two things a unit test cannot see: that the menus can
 // be clicked (nothing sits over them) and that the bar stays on one line with Filters inside the
 // search box. The keyboard routes are the rule 13 proof for the case menu and the account menu.
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 declare global {
@@ -170,4 +171,36 @@ test("at 1440 wide, a long case name and its scope badge never push the account 
   expect(box.x + box.width).toBeLessThanOrEqual(1440);
   const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
   expect(widths[0]).toBeLessThanOrEqual(widths[1]);
+});
+
+// ADR-059 Amendment 1, the owner's requirement c (v0.5.2 step 3d): when the suggestions came from today's
+// prefix read rather than the search index, the box says so in one line under them, and keeps saying it
+// (it does not fade), in each of the three looks, with no automated WCAG 2.2 A or AA violation.
+for (const look of ["dark", "light", "govuk"] as const) {
+  test(`the box says its suggestions are limited when the index did not answer (${look})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`/keyboard/top-bar-harness.html?limited=1${look === "govuk" ? "&brand=govuk" : ""}`);
+    if (look === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+    if (look === "govuk") await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
+    await page.getByRole("combobox").fill("per");
+    const line = page.locator(".global-search__limited");
+    await expect(line).toHaveText("Suggestions are limited just now: only the exact start of a name or identifier matches.");
+    await expect(page.getByRole("status")).toContainText("more match");
+    const results = await new AxeBuilder({ page })
+      .include(".global-search")
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+    // It is a fact about every answer while it stands, so unlike the "more match" nudge it never fades.
+    await page.waitForTimeout(5000);
+    await expect(page.getByRole("status")).not.toHaveAttribute("data-faded", "true");
+    await expect(line).toBeVisible();
+  });
+}
+
+test("with the index answering, the box shows no limited line", async ({ page }) => {
+  await page.goto("/keyboard/top-bar-harness.html");
+  await page.getByRole("combobox").fill("per");
+  await expect(page.getByRole("status")).toContainText("more match");
+  await expect(page.locator(".global-search__limited")).toHaveCount(0);
 });
