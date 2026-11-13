@@ -32,7 +32,14 @@ from schemas.domain import NOT_SAME_AS, SAME_AS, Node, Principal
 
 from . import search_index_query as q
 from .identifier_reading import search_alternative
-from .search import SearchRequest, SearchResponse, search
+from .search import (
+    SearchRequest,
+    SearchResponse,
+    SuggestRequest,
+    SuggestResponse,
+    search,
+    suggest,
+)
 
 #: The words the screen shows when the fallback answers.
 LIMITED_REASON = (
@@ -410,3 +417,64 @@ async def _from_graph(
         ),
         nodes=page,
     )
+
+
+#: A case-sensitive suggestion asks the index this many times its page, at most `_WIDEST`, so the
+#: page still fills once the matches in another case are left out.
+_WIDER = 4
+_WIDEST = 100
+
+
+async def suggest_page(
+    request: SuggestRequest,
+    principal: Principal,
+    graph: GraphPort,
+    *,
+    searcher: Searcher | None,
+    access_filter: dict[str, Any] | None,
+) -> SuggestResponse:
+    """Suggestions as the analyst types (ADR-059 Amendment 1, reserved): the index answers a
+    "starts with" suggestion when there is one and an access filter to ask it with; "contains"
+    and "exact", no index, or an index that cannot answer go to the graph's prefix read, as before.
+
+    The index's stored prefixes ignore case. A case-sensitive request (the box's default) keeps
+    only the nodes holding a value that starts with the prefix as typed, read from the graph, and
+    says `more` whenever the index had more than it was asked (rule 2)."""
+    if searcher is not None and access_filter is not None and request.mode == "starts_with":
+        try:
+            return await _suggest_from_index(request, principal, graph, searcher, access_filter)
+        except IndexUnavailable:
+            pass
+    return await suggest(graph, request, principal)
+
+
+def _starts_with(node: Node, prefix: str) -> bool:
+    return any(isinstance(v, str) and v.startswith(prefix) for v in node.properties.values())
+
+
+async def _suggest_from_index(
+    request: SuggestRequest,
+    principal: Principal,
+    graph: GraphPort,
+    searcher: Searcher,
+    access_filter: dict[str, Any],
+) -> SuggestResponse:
+    asked = request.limit if request.ignore_case else min(_WIDEST, request.limit * _WIDER)
+    prefixes = [request.query]
+    alternative = search_alternative(request.query)
+    if alternative is not None and alternative != request.query:
+        prefixes.append(alternative)  # ADR-128 decision 1, as today's suggestion
+    ids: list[str] = []
+    more = False
+    for prefix in prefixes:
+        body = q.build_suggest_body(
+            prefix, access_filter=access_filter, limit=asked, types=request.types
+        )
+        found, had_more = q.read_suggest_response(await searcher(body), limit=asked)
+        ids += [i for i in found if i not in ids]
+        more = more or had_more
+    read = {n.id: n for n in await graph.get_nodes(ids, principal)} if ids else {}
+    nodes = [read[i] for i in ids if i in read]
+    if not request.ignore_case:
+        nodes = [n for n in nodes if any(_starts_with(n, p) for p in prefixes)]
+    return SuggestResponse(nodes=nodes[: request.limit], more=more or len(nodes) > request.limit)

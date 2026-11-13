@@ -404,3 +404,80 @@ def test_a_query_the_index_refuses_is_raised_as_it_is() -> None:
     error = opensearchpy.RequestError(400, "parsing_exception", {})
     with pytest.raises(opensearchpy.RequestError):
         asyncio.run(_run(s.opensearch_searcher(_Client(error), "a"), {}))
+
+
+# --- suggestions from the index (ADR-059 Amendment 1, reserved) -----------------------------------
+
+
+def _suggest_reply(ids: list[str]) -> dict[str, Any]:
+    return {"hits": {"hits": [_hit(i, 2900) for i in ids]}}
+
+
+class _SuggestGraph(_Graph):
+    def __init__(self, nodes: Sequence[Node] = ()) -> None:
+        super().__init__(nodes)
+        self.suggested: list[str] = []
+
+    async def suggest_nodes(
+        self, prefix: str, principal: Principal, *, limit: int = 10, options: Any = None
+    ) -> Any:
+        from ports.graph import NodeSuggestions
+
+        self.suggested.append(prefix)
+        return NodeSuggestions(nodes=[], more=False)
+
+
+def _suggest(
+    request: Any, graph: _SuggestGraph, index: _Index | None, access: dict[str, Any] | None = ACCESS
+) -> Any:
+    return asyncio.run(
+        s.suggest_page(request, ANALYST, graph, searcher=index, access_filter=access)  # type: ignore[arg-type]
+    )
+
+
+def test_a_suggestion_is_answered_by_the_index_in_its_order() -> None:
+    from services.api.search import SuggestRequest
+
+    graph = _SuggestGraph([_typed("a", family_name="Smythe"), _typed("b", family_name="smyth")])
+    index = _Index(_suggest_reply(["b", "a"]))
+    out = _suggest(SuggestRequest(query="Smy", ignore_case=True), graph, index)
+    assert [n.id for n in out.nodes] == ["b", "a"] and out.more is False
+    assert graph.suggested == []
+    (body,) = index.bodies
+    assert body["query"]["bool"]["filter"][0] == ACCESS
+
+
+def test_a_case_sensitive_suggestion_is_narrowed_and_says_there_may_be_more() -> None:
+    """The index's stored prefixes ignore case; a case-sensitive request keeps only the nodes whose
+    value starts with the prefix as typed, asks one page wider so the page fills, and says `more`
+    whenever the index had more than it was asked."""
+    from services.api.search import SuggestRequest
+
+    graph = _SuggestGraph([_typed("a", family_name="Smythe"), _typed("b", family_name="smyth")])
+    out = _suggest(SuggestRequest(query="Smy", limit=1), graph, _Index(_suggest_reply(["b", "a"])))
+    assert [n.id for n in out.nodes] == ["a"]
+    index = _Index({"hits": {"hits": [_hit(f"x{i}", 2900) for i in range(9)]}})
+    out = _suggest(SuggestRequest(query="Smy", limit=2), _SuggestGraph(), index)
+    assert out.nodes == [] and out.more is True  # the index had more than asked; none kept
+
+
+def test_contains_and_exact_stay_on_the_graph() -> None:
+    from services.api.search import SuggestRequest
+
+    for mode in ("contains", "exact"):
+        graph, index = _SuggestGraph(), _Index(_suggest_reply([]))
+        _suggest(SuggestRequest(query="Smy", mode=mode), graph, index)
+        assert graph.suggested == ["Smy"] and index.bodies == []
+
+
+def test_with_no_index_or_no_filter_or_an_unreachable_index_the_graph_suggests() -> None:
+    from services.api.search import SuggestRequest
+
+    for index, access in (
+        (None, ACCESS),
+        (_Index(_suggest_reply([])), None),
+        (_Index(error=s.IndexUnavailable("down")), ACCESS),
+    ):
+        graph = _SuggestGraph()
+        _suggest(SuggestRequest(query="Smy"), graph, index, access)
+        assert graph.suggested == ["Smy"]

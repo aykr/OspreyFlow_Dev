@@ -551,7 +551,6 @@ from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import risk as risk_module
 from . import rules_place as rules_place_clock
-from . import search as search_module
 from .add_by_identifiers import (
     MAX_IDENTIFIERS,
     AddByIdentifiersRequest,
@@ -6185,8 +6184,19 @@ async def suggest_route(
     principal: PrincipalDep,
     graph: GraphDep,
     audit: AuditDep,
+    index: SearchIndexDep,
 ) -> SuggestResponse:
-    result = await search_module.suggest(graph, body, principal)
+    """ADR-059 Amendment 1 (reserved): from the index when there is one, with the reader's own
+    access filter in its query; from the graph's prefix read otherwise, as before."""
+    from .search_access import index_access_filter
+
+    result = await search_service.suggest_page(
+        body,
+        principal,
+        graph,
+        searcher=index.searcher if index is not None else None,
+        access_filter=index_access_filter(index.scheme, principal) if index is not None else None,
+    )
     await audit.record(
         principal=principal,
         action="suggest",

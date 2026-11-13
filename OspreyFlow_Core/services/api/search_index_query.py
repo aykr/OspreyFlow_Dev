@@ -256,7 +256,13 @@ def build_search_body(
     return body
 
 
-def build_suggest_body(prefix: str, *, access_filter: dict[str, Any], limit: int) -> dict[str, Any]:
+def build_suggest_body(
+    prefix: str,
+    *,
+    access_filter: dict[str, Any],
+    limit: int,
+    types: Sequence[str] | None = None,
+) -> dict[str, Any]:
     """Suggestions as the analyst types (ADR-059 Amendment 1, reserved): the stored prefixes of
     node documents' identifiers and names, never a prefix query (rule 2 above)."""
     access = _require_filter(access_filter)
@@ -279,7 +285,11 @@ def build_suggest_body(prefix: str, *, access_filter: dict[str, Any], limit: int
     return {
         "query": {
             "bool": {
-                "filter": [access, {"term": {"kind": "node"}}],
+                "filter": [
+                    access,
+                    {"term": {"kind": "node"}},
+                    *([{"terms": {"type": list(types)}}] if types else []),
+                ],
                 "must": [
                     {
                         "dis_max": {

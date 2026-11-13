@@ -369,3 +369,9 @@ def test_a_suggestion_reply_says_more_when_one_past_the_limit_came_back() -> Non
     hits = [_hit(f"n{i}", 1900) for i in range(3)]
     assert q.read_suggest_response({"hits": {"hits": hits}}, limit=2) == (["n0", "n1"], True)
     assert q.read_suggest_response({"hits": {"hits": hits}}, limit=3) == (["n0", "n1", "n2"], False)
+
+
+def test_a_suggestion_can_be_limited_to_types() -> None:
+    body = q.build_suggest_body("Smy", access_filter=ACCESS, limit=10, types=["Person"])
+    assert {"terms": {"type": ["Person"]}} in body["query"]["bool"]["filter"]
+    assert body["query"]["bool"]["filter"][0] == ACCESS

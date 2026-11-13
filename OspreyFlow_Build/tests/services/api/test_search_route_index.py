@@ -126,3 +126,13 @@ def test_with_no_index_configured_the_route_falls_back_and_says_so(client: TestC
     payload = response.json()
     assert (payload["source"], payload["limited"]) == ("fallback", True)
     assert [n["id"] for n in payload["nodes"]] == ["hit-1"]
+
+
+def test_a_suggestion_asks_the_index_with_the_readers_own_access_filter(client: TestClient) -> None:
+    response = client.post(
+        "/v1/investigations/inv-1/suggest", json={"query": "Smy", "ignore_case": True}
+    )
+    assert response.status_code == 200, response.text
+    (body,) = client.searcher.bodies  # type: ignore[attr-defined]
+    assert body["query"]["bool"]["filter"][0] == index_access_filter(SCHEME, READER)
+    assert {"term": {"kind": "node"}} in body["query"]["bool"]["filter"]
