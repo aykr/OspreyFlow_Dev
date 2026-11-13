@@ -1,7 +1,8 @@
 // The left rail (ADR-097 step 1, design review item 1): 44px of icons, each named for assistive
-// technology and on hover, and expandable to show the names. The places the analyst goes to rather
-// than works in. ADR-145 Amendment 12 (amending Amendment 2's variant B): the rail keeps Cases,
-// Explore, Ask & Chat and Dashboards, and the rest are one click away under its ⋯ *Explore Details*.
+// technology and on hover, and expandable to show the names. ADR-145 Amendment 15 (the owner's navigation
+// decision of 13 November 2026): the rail only opens panels beside the view (Explore, Ask & Chat, History),
+// then Help and Show names. Its ⋯ *Explore Details* menu (Amendment 12) is drawn only when given entries,
+// and since Amendment 15 it is given none (`railLayout.ts`'s EXPLORE_DETAILS).
 // Monitoring left the Glass for Rules and Monitoring, a place of its own (ADR-146 decision 2).
 import { useEffect, useId, useRef, useState } from "react";
 

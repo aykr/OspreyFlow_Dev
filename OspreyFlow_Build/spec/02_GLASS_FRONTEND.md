@@ -172,9 +172,9 @@ narrowed.
 ┌────────────────────────────────────────────────────────────────────────────────────┐
 │                     OFFICIAL — the highest marking in view                         │ strip, 20px
 ├────────────────────────────────────────────────────────────────────────────────────┤
-│ ◆ Osprey  The Glass|Ingest Studio|Admin  [ Search…  / ]  [Graph|Map]  Export  👤  │ top bar, 44px
+│ ◆ Osprey  Glass|Studio|Admin [Search… /] Graph·Map·Drawing board·Reports·More ▾ 👤 │ top bar, 44px
 ├────────────────────────────────────────────────────────────────────────────────────┤
-│ You are in the Glass · Case 4471 — layering ▾ · reads Prison intel   Open … ↗     │ banner, 32px
+│ You are in the Glass · Case 4471 ▾ · Views in this case · reads Prison intel  ↗    │ banner, 32px
 ├──┬───────────────────────────────────────────────────┬─────────────────────────────┤
 │▣ │ Resolution: ●Balanced            (view toolbar)   │ ▾ Inspector              ⋯  │ header, 28px
 │◷ ├───────────────────────────────────────────────────┤ ▸ Properties                │
@@ -1129,7 +1129,8 @@ one open now marked current; choosing one is the drawer's own *Open* (`openLens`
 saved views yet. Select nodes and choose Save as a view."; a refused list is said in words. Sharing and
 deleting stay in the drawer.
 
-**Where views are listed (ADR-144 decision 5).** The left rail's **Cases** drawer shows, first, the open
+**Where views are listed (ADR-144 decision 5).** The **Cases** panel (opened by the case switcher's *All cases*, or
+at its views by the case line's *Views in this case*, ADR-145 Amendment 15) shows, first, the open
 case's **Views in this case**: each view the reader may see (their own, and those shared with the case)
 with its *Private* or *Shared* tag and *Open*; its creator alone is offered *Share with the case* (while
 it is private) and *Delete*, which asks once — "Delete this view? Nothing on the case is deleted with
@@ -1291,8 +1292,8 @@ alert…* (the query builder, on the selected items: title, severity, why, and *
 dataset*, refused in the Conduit's words for a drawn item). Each has its case in
 `keyboard/alerts.spec.ts` or `keyboard/watch-panels.spec.ts` (rule 13).
 
-**Ultimate beneficial ownership: the *Ownership* place (ADR-109 phase C).** After *Alerts* on the
-left rail. An organisation or account is found by name (the case's own suggest), and traced: a line
+**Ultimate beneficial ownership: the *Ownership* place (ADR-109 phase C).** Under the view switch's
+*More views* (ADR-145 Amendment 15). An organisation or account is found by name (the case's own suggest), and traced: a line
 naming the beneficial owners at the threshold (25% unless changed; a person holding control is one
 whatever the share; a person whose share is partly unknown is "possibly more"), a warning for each
 circle of cross-holdings ("traced once, not round and round"), and a table of every party with a
@@ -1389,15 +1390,16 @@ the view switch itself, never proved by keyboard before, in `keyboard/shell.spec
 **The Glass follows the person's rights (ADR-112).** It reads `GET /v1/me/rights` at sign-in and
 leaves out what it would only be refused — never in place of the Conduit's check
 (`rights/visibility.ts`): the rail shows no alerts (Rules and Monitoring is a place, §2.0a; ADR-146
-decision 2), *Connection strength* for investigate or manage_strength_influencers,
-*Ownership* for trace_ownership, *History* and *Explore* for investigate, *Questions* for ask_model,
-*Dashboards* for read_reports (the Ingest Studio, Admin and Proposed types are no longer on the rail:
-the place switcher offers the places, `shell/places.ts`, §2.0a); the view switch offers Graph and Map for
-investigate and Figures for read_reports, and a person who may not investigate (a Reports Viewer)
-lands on Figures; the Figures' download is offered only to holders of read_report_feed.
+decision 2), *History* and *Explore* for investigate, *Ask & Chat* for ask_model (the Ingest Studio,
+Admin and Proposed types are no longer on the rail: the place switcher offers the places,
+`shell/places.ts`, §2.0a); the view switch offers Graph, Map and Drawing board for investigate and
+*Reports* for read_reports, and its *More views* Matrix for investigate, Figures for read_reports,
+*Ownership* for trace_ownership and *Connection strength* for investigate or
+manage_strength_influencers (ADR-145 Amendment 15); a person who may not investigate (a Reports Viewer)
+has Reports in the switch with Figures under *More views*, and lands on Figures; the Figures' download is offered only to holders of read_report_feed.
 
 **Superset dashboards inside the Glass (ADR-111 Amendment 3; ADR-145 Amendment 4 decision 8).** The
-rail's *Dashboards* is the one door: the case's Figures have no *Dashboards* tab since L2.12. It lists
+view switch's *Reports* (the rail's *Dashboards* until ADR-145 Amendment 15) is the one door: the case's Figures have no *Dashboards* tab since L2.12. It lists
 only the boards the Conduit says this person may open
 (`GET /v1/reports/dashboards`) — those whose every figure they could count themselves — and draw the
 chosen one through Superset's embedded SDK (`@superset-ui/embedded-sdk` 0.4.0) in a frame, with a
@@ -1407,8 +1409,8 @@ Superset's theme generated from `tokens.css`, in the Glass's current mode and fo
 (ADR-111 Amendment 4); a refusal is said in words; with none to open, the panel says why one would
 appear (`reports/EmbeddedDashboards.tsx`; `keyboard/alert-figures.spec.ts`).
 
-**The *Alert monitoring* board (ADR-145 Amendment 4 decision 9, D2).** First among the boards on the rail's
-*Dashboards*, drawn by the Glass itself from the open case's report (no Superset token is asked for it):
+**The *Alert monitoring* board (ADR-145 Amendment 4 decision 9, D2).** First among the boards under the view
+switch's *Reports*, drawn by the Glass itself from the open case's report (no Superset token is asked for it):
 alerts raised each week and by rule, closed by outcome, time to close, hotlist matches, and the team view
 (unassigned, mine, older than seven days, and the share closed as not of interest, False positive or No
 further action), with the Alerts panel. *Rule* (every rule, or one rule group) and *Period* filter it;

@@ -1871,13 +1871,11 @@ export function App() {
         })}
       />
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-      {/* ADR-097 step 1: the places the analyst goes to, on the left rail. ADR-145 decision 1: the
-          Glass's alone; the Studio has none. */}
+      {/* ADR-097 step 1: the left rail, the Glass's alone (ADR-145 decision 1); the Studio has none. */}
       {app === "glass" && (
       <LeftRail
-        // ADR-145 Amendment 12 (amending Amendment 2's variant B): Cases, Explore, Ask & Chat and
-        // Dashboards on the rail; History, Ownership and Connection strength one click away under
-        // its Explore Details; Monitoring, with its open count, is the banner's section.
+        // ADR-145 Amendment 15: the panel openers alone (Explore, Ask & Chat, History), then Help and
+        // Show names; the views are the top bar's view switch, and Cases is reached from the case line.
         items={railSplit.items}
         more={railSplit.more}
         onHelp={toggleWelcome}

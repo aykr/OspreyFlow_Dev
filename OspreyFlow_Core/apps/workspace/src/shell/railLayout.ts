@@ -1,6 +1,6 @@
-// The Glass's left rail as ADR-145 Amendment 12 lays it out (amending Amendment 2's variant B): which
-// places stand on the rail itself, in what order, and which are one click away under its ⋯ Explore
-// Details, in what order, with the names people see. `App.tsx` draws it from these, and the keyboard
+// The Glass's left rail and its views as ADR-145 Amendment 15 lays them out (the owner's navigation decision of
+// 13 November 2026, amending Amendments 2 and 12): the panel openers on the rail, in what order, how each is
+// marked, and the top bar's one view switch and its More views, with the names people see. `App.tsx` draws it from these, and the keyboard
 // harnesses read the same lists, so a change here is what their cases see. Which entries a person sees
 // at all is `rights/visibility.ts`'s `railEntries`, unchanged.
 import type { RailEntry } from "../rights/visibility";
