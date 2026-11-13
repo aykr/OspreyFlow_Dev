@@ -3,6 +3,9 @@
    GOV.UK brand the forms use the package's own govuk-* classes; these rules only lay them out. Every
    control is at least 24 by 24 pixels (axe target-size). */
 .boards, .board { display: grid; gap: var(--sp-12); padding: var(--sp-16); min-width: 0; flex: 1; overflow: auto; background: var(--surface-app); color: var(--text-primary); }
+/* An open board and its sketch line (ADR-145 Amendment 15): one column filling the view, the line above the board. */
+.board-open { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; background: var(--surface-app); }
+.board__sketch { margin: 0; padding: var(--sp-8) var(--sp-16) 0; }
 .board__title { margin: 0; font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 600; }
 .boards__columns { display: flex; flex-wrap: wrap; gap: var(--sp-16); align-items: flex-start; }
 .boards__list-column { flex: 999 1 420px; min-width: 0; }

@@ -82,20 +82,21 @@ export function BoardsPlace({
   const sketch = "Drawing board: your sketch; it does not change the case's data.";
   if (caseId && open) {
     return (
-      <>
-      <p className="caption board__sketch">{sketch}</p>
-      <BoardEditor
-        apiBaseUrl={apiBaseUrl}
-        bearerToken={bearerToken}
-        caseId={caseId}
-        boardId={open}
-        entityTypes={entityTypes}
-        onBack={() => {
-          setOpen(null);
-          void reload();
-        }}
-      />
-      </>
+      // One column, the line above the board and across it: the view's row lays its children side by side.
+      <div className="board-open">
+        <p className="caption board__sketch">{sketch}</p>
+        <BoardEditor
+          apiBaseUrl={apiBaseUrl}
+          bearerToken={bearerToken}
+          caseId={caseId}
+          boardId={open}
+          entityTypes={entityTypes}
+          onBack={() => {
+            setOpen(null);
+            void reload();
+          }}
+        />
+      </div>
     );
   }
 
