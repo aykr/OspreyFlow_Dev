@@ -1,0 +1,14 @@
+Red first (offline on the Mac, closed ports, no OSPREY_LANE; the ClickHouse cases need the live server and run in make test):
+E       AssertionError: seed_hmp_fixture opens DuckDB itself, whatever the deployment names
+../OspreyFlow_Build/tests/test_seed_analytics.py:44: AssertionError
+E       AssertionError: seed_scenarios opens DuckDB itself, whatever the deployment names
+../OspreyFlow_Build/tests/test_seed_analytics.py:44: AssertionError
+        graph) passed while the Glass, reading the analytics store, drew nothing — measured in a real
+E       AttributeError: 'AnalyticsDuckDBAdapter' object has no attribute 'execute'
+packages/adapters/analytics_duckdb/schema.py:181: AttributeError
+FAILED ../OspreyFlow_Build/tests/test_seed_analytics.py::test_the_seed_opens_the_deployments_store_never_duckdb_by_path[seed_hmp_fixture]
+FAILED ../OspreyFlow_Build/tests/test_seed_analytics.py::test_the_seed_opens_the_deployments_store_never_duckdb_by_path[seed_scenarios]
+FAILED ../OspreyFlow_Build/tests/test_seed_scenarios.py::test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads[duckdb]
+3 failed, 15 passed, 1 deselected in 0.80s
+
+Green at the change: test_seed_analytics, test_seed_scenarios, test_demo_fixtures_are_product, test_data_folder 55 passed (the ClickHouse parameter of B18 deselected offline: it needs the live ClickHouse; test_case_seed needs the live Postgres).

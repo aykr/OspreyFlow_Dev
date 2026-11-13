@@ -39,16 +39,13 @@ import argparse
 import asyncio
 import os
 import sys
-from pathlib import Path
 from typing import cast
 
-import duckdb
 from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
+from scripts.seed_analytics import seed_analytics
 from scripts.seed_support import KNOWN_STRAY_ADVICE, report_ids_stored_twice
 from services.api.dataset_scope import stamping
 
-from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
-from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
@@ -64,7 +61,6 @@ from demo_fixtures.hmp_network import (
 from demo_fixtures.hmp_population import PRINCIPAL_SUBJECT_PRISON_NUMBER
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
-from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.analytics import EventRecord
 from schemas.domain import Principal
@@ -106,9 +102,7 @@ async def _run(args: argparse.Namespace) -> int:
     database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     await client.create_database_if_absent()
-    graph = cast(
-        GraphPort, stamping(GraphArcadeDBAdapter(client, scheme), dataset=HMP.id)
-    )
+    graph = cast(GraphPort, stamping(GraphArcadeDBAdapter(client, scheme), dataset=HMP.id))
     await graph.apply_schema(ontology)
 
     principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
@@ -162,12 +156,9 @@ async def _run(args: argparse.Namespace) -> int:
     finally:
         await client.aclose()
 
-    Path(args.analytics_db_path).parent.mkdir(parents=True, exist_ok=True)
-    analytics_con = duckdb.connect(args.analytics_db_path)
-    try:
-        create_events_table(analytics_con)
-        create_geometries_table(analytics_con)
-        analytics: AnalyticsPort = AnalyticsDuckDBAdapter(analytics_con, scheme)
+    # The deployment's own analytics store (ADR-148 Amendment 14): DuckDB at this path, ClickHouse
+    # where the deployment names it; never a file of the seed's own that no Conduit reads.
+    async with seed_analytics(args.analytics_db_path, scheme) as analytics:
         await analytics.load_events(events)
         # Insert-only, keyed by ref: a point already in the partition is not loaded twice.
         wanted = geometry_records()
@@ -178,8 +169,6 @@ async def _run(args: argparse.Namespace) -> int:
             )
         }
         await analytics.load_geometries([r for r in wanted if r.geometry_ref not in held])
-    finally:
-        analytics_con.close()
 
     print(
         f"Loaded {len(network_events)} network events (calls, visits, payments, custody, "
