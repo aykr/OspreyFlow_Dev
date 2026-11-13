@@ -84,23 +84,39 @@ merge, as before: `test_docs_pdf` fails until then.
 - Release notes: "Scheduled and triggered loads, scheduled rules, list refreshes, the daily KYC check and watches run on
   Entra ID".
 
-**D2 · The decommission's choice (audit ruling 3).** In AG §6a.1's runbook paragraph, replace "the backups kept for
-their retention" with:
+**D2 and D3 · Data safety and the decommission (audit ruling 3), now designed.** These are ADR-148 Amendment 13
+(lane/platform-v052-datasafety, 89816c8), as platform gave them on 13 Nov. The wording is quoted from the rendered
+`INSTALL.md`, `DECOMMISSION.md` and `deploy/RUNBOOK.md` as they merge, never from the message. When they merge:
+- **§6a.8's backup set:** ArcadeDB, ClickHouse, the Ingest claim, and three folders of the shared claim (the published
+  pipelines, i.e. the recipes repository; the model settings; the map settings with the map key file), backed up
+  read-only and put back by the claims restore. The tiles and upload scratch stay out (made again, or Ingest's).
+  "The shared volume … is not backed up" is replaced by that.
+- **§6a.8's point in time:** RDS keeps point-in-time recovery for 35 days in every shape, the sets' own expiry, so
+  every kept set can be paired. The v0.5.1 sentence "RDS keeps its point-in-time restore for 7 days … against the
+  sets' 35" becomes that. `test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days` reads the rendered
+  number and turns red until the sentence changes: the right signal.
+- **§6a.1's decommission:** no default for the backups. Step 7 refuses until `BACKUPS=keep` or `BACKUPS=destroy`.
+  - keep: the agreed `BACKUP_RETENTION_DAYS` on the bucket, the sets readable, step 9 removes them at its end.
+  - destroy: every set gone now, the bucket emptied and removed, the key's deletion scheduled for 30 days and
+    cancellable with `aws kms cancel-key-deletion`.
+  - Step 8's check records `backups: kept (the operator chose keep)` or `backups: destroyed (the operator chose
+    destroy)`.
+  "the backups kept for their retention" is replaced by that.
+- **Tests:** a test holding the step-8 words to `harness/cloud_platform/runbooks.py` (or wherever they merge), red first.
 
-> the backups kept or destroyed, as the operator chooses at the step that asks: kept, the bucket and its key stay for
-> their retention and are removed later (fenced `bash later`); destroyed, the sets, the bucket and the key's
-> scheduled deletion go with the namespace, and `decommission_check` names nothing left behind.
-
-Add the matching sentence to §6a.8's opening, and a row to `test_guides_cloud_platform.py` holding the runbook's own
-question words, once the runbook asks it.
-
-**D3 · Data safety (audit ruling 3).**
-- Replace §6a.8's "The shared volume, `ospreyflow-shared`, is not backed up…" with the set's new part, by its name in
-  the manifest. Keep the sentence on the settings files only if they are still left out.
-- Replace the new "RDS keeps its point-in-time restore for 7 days" sentence with what the fix makes: either the
-  rendered `backup_retention_period` equal to the sets' 35, or each set paired with an RDS snapshot.
-- `test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days` reads the number from the render and needs no
-  change if the sentence keeps its shape.
+**D8 · OpenSearch on the poc shape (Tue 24's sweep, with search; Amendment 13).** Replace every §6a line saying the poc
+makes no OpenSearch domain (§6a.1 "It makes no OpenSearch domain, and refuses…"; §6a.3 `opensearch.tf` "The standard
+shape alone"; §6a.1 "no pod is given its address yet"). Use the merged facts:
+- every shape has its own domain: OpenSearch 2.17, two `t3.medium.search` data nodes of 50 GiB in two zones, in the
+  VPC on 443, TLS 1.2, encrypted at rest and node to node;
+- each request signed (SigV4) by the namespace's IRSA role, the access policy admitting that role alone, no
+  fine-grained access control (no OpenSearch user or password), dataset access in OspreyFlow's own queries;
+- `opensearch_signing: none` for a platform whose module puts a signing proxy in front;
+- the client provides two private subnets in two zones, and egress to the domain, and is asked about an IAM-only
+  policy (a new §6a.11 question);
+- no index backup: a restore ends with the rebuild and then the drift check, each from a standing suspended CronJob
+  (`ospreyflow-search-rebuild`, `ospreyflow-search-drift`), quoted with their healthy last lines from the RUNBOOK;
+- the domain goes with the namespace's Terraform at decommission, its index not kept.
 
 **D4 · Superset and report sync on Entra (ROUTE_052 scope; #47).**
 - Strike AG §6a.1's "Reporting is not rendered" paragraph, and replace it with what is rendered: Superset and the
