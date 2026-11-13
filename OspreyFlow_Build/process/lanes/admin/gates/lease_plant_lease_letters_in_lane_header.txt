@@ -1,0 +1,24 @@
+# plant: lease_letters_in_lane_header
+# replaced: 'return "waiting for a test stack" if $n =~ /(?<![[:alpha:]])[Ll]ease(?![[:alpha:]])/;'
+# with: 'return "waiting for a test stack" if $n =~ /lease/;'
+# run: pytest -k 'word_of_its_own'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_the_default_view_reads_release_as_a_word_of_its_own ___________
+
+hb = <function hb.<locals>.run at 0x106e99b20>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3934/test_the_default_view_reads_re0')
+
+    def test_the_default_view_reads_release_as_a_word_of_its_own(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        assert hb("beat", "admin", "waiting-for-owner", "A1: the owner's word on the release notes").returncode == 0
+        out = hb(**env).stdout
+>       assert "  ADMIN · A1 · waiting for you · last heard 0m ago" in _section(out, "LANES NOW")
+E       assert '  ADMIN · A1 · waiting for you · last heard 0m ago' in ['  STUDIO · L2 · working · last heard 0m ago', '    L2: wiring the drawers', '  CASE · C1 · working · last heard 0m a...', '  ADMIN · A1 · waiting for a test stack · last heard 0m ago', "    A1: the owner's word on the release notes", ...]
+E        +  where ['  STUDIO · L2 · working · last heard 0m ago', '    L2: wiring the drawers', '  CASE · C1 · working · last heard 0m a...', '  ADMIN · A1 · waiting for a test stack · last heard 0m ago', "    A1: the owner's word on the release notes", ...] = _section('OSPREYFLOW · Fri 13 Nov 2026, 17:05 UTC (17:05 UK time)\nClient-install chain expected to finish merging: 14 Nov (est...                     H3\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n', 'LANES NOW')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:1020: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_reads_release_as_a_word_of_its_own
+1 failed, 68 deselected in 1.24s

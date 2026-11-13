@@ -1,0 +1,24 @@
+# plant: lease_letters_in_group_state
+# replaced: 'return "waiting for a test stack" if $bn =~ /(?<![[:alpha:]])[Ll]ease(?![[:alpha:]])/;'
+# with: 'return "waiting for a test stack" if $bn =~ /lease/;'
+# run: pytest -k 'word_of_its_own'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_the_default_view_reads_release_as_a_word_of_its_own ___________
+
+hb = <function hb.<locals>.run at 0x104561b20>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3933/test_the_default_view_reads_re0')
+
+    def test_the_default_view_reads_release_as_a_word_of_its_own(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        assert hb("beat", "admin", "waiting-for-owner", "A1: the owner's word on the release notes").returncode == 0
+        out = hb(**env).stdout
+        assert "  ADMIN · A1 · waiting for you · last heard 0m ago" in _section(out, "LANES NOW")
+>       assert "A1 (admin, needs you)" in out and "waiting for a test stack" not in out
+E       AssertionError: assert ('A1 (admin, needs you)' in 'OSPREYFLOW · Fri 13 Nov 2026, 17:05 UTC (17:05 UK time)\nClient-install chain expected to finish merging: 14 Nov (est...                     H3\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:1021: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_reads_release_as_a_word_of_its_own
+1 failed, 68 deselected in 1.16s
