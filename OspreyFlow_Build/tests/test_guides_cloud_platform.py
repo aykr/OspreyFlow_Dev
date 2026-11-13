@@ -123,17 +123,35 @@ def test_the_people_check_flags_a_refusal_left_out() -> None:
 # ---------------------------------------------------------------- the code's numbers
 
 
-def _terraform(name: str) -> str:
-    source = (CORE / "harness/cloud_platform/terraform.py").read_text(encoding="utf-8")
-    m = re.search(rf'\("{name}",\s*"(\d+)"\)', source)
-    assert m, f"{name} not found in terraform.py"
-    return m.group(1)
+def _rendered(setting: str, file: str) -> str:
+    """`setting`'s value in the rendered Terraform's `file`, the one value every fixture renders: read from what
+    the `cloud-platform` profile renders, never from a literal in the renderer's source (an argument built from a
+    constant, as `str(EXPIRE_DAYS)` is, has no literal to read)."""
+    import yaml
+    from harness.render import render
+    from tools.cp_policy_check import FIXTURES, _resolver
+
+    from schemas.deployment import OspreyConfig
+
+    values: set[str] = set()
+    for fixture in sorted(FIXTURES.glob("*.yaml")):
+        config = OspreyConfig.model_validate(yaml.safe_load(fixture.read_text(encoding="utf-8")))
+        text = render(config, resolver=_resolver).artefacts[f"terraform/{file}"]
+        values |= set(re.findall(rf"^\s*{setting}\s*=\s*(\d+)\s*$", text, re.MULTILINE))
+    assert len(values) == 1, f"{setting} in {file}: rendered as {sorted(values) or 'nothing'}"
+    return values.pop()
 
 
 def test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days() -> None:
-    days = _terraform("backup_retention_period")
+    days = _rendered("backup_retention_period", "rds.tf")
     text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.8"))
     assert f"point-in-time restore for {days} days" in text
+    sets = _rendered("days", "backups.tf")  # the sets' own expiry, the bucket's lifecycle rule
+    assert f"against the sets' {sets}" in text
+    # A set outliving RDS's window cannot be restored with its database, and §6a.8 must say which; one that does not
+    # outlive it can, and §6a.8 must not warn of a window that does not exist.
+    caveat = f"only a set finished in the last {days} days"
+    assert (caveat in text) if int(days) < int(sets) else ("only a set finished in the last" not in text)
 
 
 def test_section_6a5_gives_one_s3_reads_cap_as_the_connector_holds_it() -> None:

@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.94** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.95** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.95 | 2026-11-13 | §6a.8: RDS's point-in-time restore of 35 days, as the Terraform renders it since ADR-148 Amendment 13, the same as the sets' 35, so every set still kept can be restored with its database; the 7 days and the older set's warning struck. Held by `tests/test_guides_cloud_platform.py`, which reads the rendered Terraform. PDF made by the orchestrator at merge. |
 | 1.94 | 2026-11-13 | The `cloud-platform` profile against the ADR-148 audit of 13 November (docs' v0.5.2 sweep, part one). §6a.7: nothing acts as its owner on Entra ID, so loads are started by hand: a pipeline's schedule and watched folder, *Run now* in Operations, `ospreyflow run`, a scheduled rule, the daily check for lapsing KYC documents, a list's refresh schedule, a watch's runs and anyone else's rules, hotlists and watches at a load, each as built, with the scheduler's own words and why they never pause a schedule; §6a.10's "marked stopped" struck, as untrue. §6a.5: one S3 read's 1,000 objects, no SSE-KMS bucket, Athena's default catalog alone. §6a.8: RDS's point-in-time restore of 7 days against the sets' 35. §6a.11: two app registrations, not one; volume encryption by the storage class, a new question. §8, §9.5, §9.11: the same Entra limit where each runs as its owner. §9: *People and roles* on Entra ID, each refusal in its own words, no administrator's fallback for clearance or unit. §10a: on a shared platform, a proxied map provider added in Admin has no way out. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 1.93 | 2026-11-13 | §6a: the least connections counted from the copies each shape renders (the owner's ruling: one Superset and one report sync in poc and development), 834 there and 918 in production, so the 1000 leaves 166 and 82 to spare. PDF reprinted alone. |
 | 1.92 | 2026-11-13 | §6a: the managed PostgreSQL's `max_connections` set to 1000 in its RDS parameter group (the owner's decisions), not left to the class's default; the least it must allow, 918, with Superset and the report sync (from v0.5.2) and an upgrade in progress, so 82 to spare; the `db_parameter` line for MoJ's RDS module, and that the setting takes effect at creation or the next reboot. PDF reprinted alone. |
@@ -1647,10 +1648,9 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
 2. **The managed database with the stores.** PostgreSQL must agree with the stores, or anything
    withdrawn or deleted since the set comes back under today's grants. The platform team restores RDS
    to the set's finish time by its own point-in-time procedure; the deployment is pointed at it only
-   once nothing that writes runs (step 4). **RDS keeps its point-in-time restore for 7 days**, as the
-   Terraform renders it (`backup_retention_period`), against the sets' 35: only a set finished in
-   the last 7 days can be restored with its database. An older set has no database to pair with it,
-   and is not to be restored.
+   once nothing that writes runs (step 4). **RDS keeps its point-in-time restore for 35 days**, as the
+   Terraform renders it (`backup_retention_period`), against the sets' 35: every set still kept can
+   be restored with its database.
 3. **No backup during the restore**: both CronJobs suspended, and any backup still running left to
    finish.
 4. **Everything that writes stopped**: the render's own list, `backups.writers` in `values.yaml`, each
