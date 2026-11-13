@@ -1,3 +1,38 @@
+# rules lane · report · rules-lists, third pass: the orchestrator's verification of e911b90 (12–13 November 2026)
+
+The verification confirmed the first review's items and found two more rule-3 reads, both fixed with tests
+each way and plants. Gated on stack b under the rules lane's lease, then offline; head in "ready".
+
+| Item | State | Proving test |
+| --- | --- | --- |
+| MUST 1. A listed party reused at its list's old marking after a raise | done: reused only where its marking holds the list's now (`kyc_rules._holds`); else a party of its own at the list's marking | `test_a_party_held_below_its_lists_marking_now_is_not_reused`, `test_a_party_held_at_its_lists_marking_is_reused` (P49) |
+| MUST 2. *Disable…*'s plan naming a hidden list's schedule and handing it on | done: read through `_admitted_sql`; a hidden one shown as "a list you can't see" under `hidden-list-N`; `markings_hold` checks the list's classification and code; `ListRefreshExecutor` refuses an owner not cleared, in words | `test_custom_roles_store.py`: `test_the_plan_names_only_the_lists_its_administrator_is_cleared_for`, `test_a_hidden_lists_schedule_goes_only_to_someone_cleared_for_it`, `test_a_lists_schedule_a_cleared_administrator_sees_still_goes_only_to_someone_cleared` (L24, L25); `test_list_refresh_schedule.py`: `test_an_owner_not_cleared_for_the_list_is_refused_in_words_and_nothing_is_read`, `test_an_owner_cleared_for_a_marked_list_refreshes_it` (L26) |
+| 3. A DuckDB migration test | done | `tests/adapters/analytics_duckdb/test_alert_fact_sets_migration.py` (P51, P51b) |
+| 4. Am 7 point 1 true; the unfiltered reads named; "lowering is removing" corrected | done | `spec/06_DECISIONS.md` ADR-146 Am 7 |
+| 5. ClickHouse: the offline case's own red, the live red's raw output, `_has_column` one | done | P50 (`AM7_RED_RECORD.txt`); L27 (`AM7_LIVE_RECORD.txt`, raw) |
+| 6. The friction fragment one row, current counts | done | `process/friction/2026-11-12-rules-lists.md` |
+| 7. Stale text: this report, `app.py`'s subscribe docstring, ClickHouse `load_alert_facts` | done | — |
+| 8. Plant records at the final tree, headed by its id | done | `lists/AM7_RED_RECORD.txt` (53 red), `lists/AM7_LIVE_RECORD.txt` (30 red) |
+| NOTE. The confirm commits before `triage_citations`' `FOR UPDATE` | carried (row text sent) | — |
+
+**Gates.** Offline plants: P1 to P51, P3b and P51b, 53 red, none broken. Live plants: L0 to L27, L0b and L2b, 30
+red, built and restored green (103). One earlier built red, intermittent, is kept raw (`verification-1`). Broad
+live run at d7f7f29 (`gates/d7f7f29.live.txt`): 35 failed, the same environmental 35 as at 00b24cc, none in a
+file this branch changes. `make test` at 8a07144 errored on the new list-schedule file, which needs Postgres;
+its cases moved into `test_custom_roles_store.py` (live), and the live plants were re-run after the move.
+Final `make test` and `make -k ci`: `gates/<head>.{test,ci}.txt`.
+
+**Out of map, this pass, for ratification.** `services/api/admin_people.py` and `services/api/list_schedule.py`
+(item 2), `tests/services/api/test_custom_roles_store.py`, `tests/adapters/analytics_duckdb/test_alert_fact_sets_migration.py`.
+
+**Decisions taken.** A hidden list's item id is its ordinal among the person's hidden lists (`hidden-list-N`):
+stable while the plan and the transfer read the same lists, and checked again inside the transfer's
+transaction; a list gained or lost between the two can move the ordinal, which the recipient's clearance check
+at the list actually moved still holds (rule 3), logged. `needs_clearance` is left empty for a list, so *Transfer
+to…* does not name a hidden list's level; the refusal names neither list nor marking. After a raise, a new party
+may be written at each match while the old one is found first (the lookup returns the first carrying the name):
+more nodes for one entry, never a leak, logged in Am 7.
+
 # rules lane · report · rules-lists, second pass: the orchestrator's review and the owner's ruling on every close (12 November 2026, evening)
 
 The review of 97826d0 found four rule-3 leaks and the owner ruled at about 15:30 that a close decides only the
@@ -42,7 +77,7 @@ then offline.** Final head 5203481 (schemas last) on main 524b96a.
 | 10. Point 6 with a differing approver; Home's counts, Reports figures, the address; risk with a hidden factor | done | `test_an_approver_cleared_for_one_list_approves_only_that_lists_proposal`; `test_homes_counts_…`, `test_the_reports_figures_…`, `test_the_alerts_address_…`; live `test_a_reader_not_cleared_for_a_list_is_given_a_risk_its_hidden_match_takes_no_part_in` |
 | 11. Out-of-map files listed for ratification | done | below |
 | Notes: removal before close; the plants' code identity; collection error apart from red | done | the five fixtures; each record's header; the runners' BROKEN |
-| Gates (`make test`, `make -k ci`, live) at the head | **waiting: the server's heavy slot, and nothing on the server from 12:00 UK on 13 November until the demo is over** | — |
+| Gates (`make test`, `make -k ci`, live) at the head | done on 12 November evening (above), and again after the third pass | `gates/` |
 
 **Out of the rules lane's map, for ratification (item 11).** `services/api/packs.py` (a pack item read by the
 citations it shows); `services/api/screening_refresh.py` and `scripts/load_screening_list.py`, with

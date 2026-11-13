@@ -1,0 +1,13 @@
+Triage of the third pass's offline gates at 999860a (lane/rules-lists on main 19c22fb), 13 Nov 2026.
+None of the failures is in a file this branch changes (`git diff --name-only main...HEAD`), and each
+follows main's own 19c22fb (the access key: harness/access_key.py, schemas/deployment.py) or older:
+- 999860a.test.txt, exit 2:
+  - test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass: the server has a
+    GPU ('pass' == 'skip'); fails at main alike (086ed55.triage.txt).
+  - test_webapp_preflight.py::test_the_stream_reports_every_check_in_order_once_rendered: the stream has
+    main's new 'access-key' check.
+  - test_admin_guide.py::test_the_settings_appendix_is_the_schemas_own (x2): the guides lack main's new
+    `network.access_key` setting.
+  - test_doc_citations_check.py::test_the_repository_itself_is_clean, and in
+- 999860a.ci.txt, exit 2: citation-check alone failed: process/lanes/platform-b/stateless/REPORT.md:17 cites
+  'scripts/stack_lease.sh' (main's file). schemas-check: 603 generated types match committed output.
