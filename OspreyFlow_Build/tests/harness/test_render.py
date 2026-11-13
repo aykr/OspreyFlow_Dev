@@ -134,7 +134,11 @@ def test_resolved_source_label_names_how_a_digest_was_actually_obtained(
     result = render(config, resolver=_fake_resolver, resolved_source_label="registry")
     lock = yaml.safe_load(result.artefacts["versions.lock"])
 
-    third_party_rows = [row for row in lock["images"] if row["source"] != "local-build"]
+    # A reference pinned by digest is never resolved, so it carries `reference`, not the label
+    # (`test_a_reference_pinned_by_digest_is_locked_from_the_reference_never_the_registry`).
+    third_party_rows = [
+        row for row in lock["images"] if row["source"] not in ("local-build", "reference")
+    ]
     assert third_party_rows, "fixture renders no third-party image to check the label against"
     for row in third_party_rows:
         assert row["source"] == "registry", (
@@ -149,7 +153,10 @@ def test_resolved_source_label_defaults_to_local_docker_daemon(config: OspreyCon
     result = render(config, resolver=_fake_resolver)
     lock = yaml.safe_load(result.artefacts["versions.lock"])
 
-    third_party_rows = [row for row in lock["images"] if row["source"] != "local-build"]
+    third_party_rows = [
+        row for row in lock["images"] if row["source"] not in ("local-build", "reference")
+    ]
+    assert third_party_rows
     assert all(row["source"] == "local-docker-daemon" for row in third_party_rows)
 
 
@@ -198,7 +205,9 @@ def test_versions_lock_names_every_image_in_the_compose_file_with_a_digest(
             assert row["built_from_git_sha"]
         else:
             assert row["digest"].startswith("sha256:"), f"{row['repository']} has no pinned digest"
-            assert row["source"] == "local-docker-daemon"
+            # `reference` only where the compose file's own reference names that digest.
+            pinned_here = f"{row['repository']}@{row['digest']}" in compose_images
+            assert row["source"] == ("reference" if pinned_here else "local-docker-daemon")
 
 
 def test_pull_mode_renders_owned_images_with_no_build_stanza_and_a_locked_digest(
@@ -585,8 +594,14 @@ def test_strict_mode_refuses_to_write_an_unpinned_lock_and_names_the_images(
         render(config, resolver=lambda _image: None)
 
     # Owned images are never in the refusal: they are not resolved against a registry at all, so
-    # there is no digest for them to be missing.
-    expected = {image.image for image in service_images(config) if not image.owned}
+    # there is no digest for them to be missing. Nor is a reference pinned by digest: it names its
+    # own.
+    expected = {
+        image.image
+        for image in service_images(config)
+        if not image.owned and "@sha256:" not in image.image
+    }
+    assert expected, "this fixture must declare an image that is not pinned by digest"
     assert set(raised.value.images) == expected
     for image in expected:
         assert image in str(raised.value)
@@ -602,7 +617,9 @@ def test_allow_unpinned_marks_them_explicitly_rather_than_omitting_them(
     lock = yaml.safe_load(result.artefacts["versions.lock"])
 
     assert len(lock["images"]) == len(service_images(config))
-    third_party = [row for row in lock["images"] if row["source"] != "local-build"]
+    third_party = [
+        row for row in lock["images"] if row["source"] not in ("local-build", "reference")
+    ]
     assert third_party, "this fixture must declare at least one third-party image"
     assert {row["digest"] for row in third_party} == {"unresolved"}
     assert {row["source"] for row in third_party} == {"unresolved"}
@@ -620,6 +637,63 @@ def test_a_partially_resolvable_set_still_refuses_and_names_only_the_missing_one
         render(config, resolver=lambda image: None if image in missing else _fake_resolver(image))
 
     assert set(raised.value.images) == missing
+
+
+def _ghcr_unreachable(asked: list[str]):
+    """The registry lookup as CI run 43413711132 met it (13 November 2026): every image on ghcr.io
+    unanswerable, every other one resolved. `asked` records each reference the resolver was given,
+    so a case can tell "resolved without asking" from "asked and answered"."""
+
+    def resolve(image: ImageRef) -> str | None:
+        asked.append(image)
+        return None if image.startswith("ghcr.io/") else _fake_resolver(image)
+
+    return resolve
+
+
+def test_a_reference_pinned_by_digest_is_locked_from_the_reference_never_the_registry(
+    config: OspreyConfig,
+) -> None:
+    """`ghcr.io/berriai/litellm@sha256:…` already names its digest, and a digest names one image
+    forever, so asking a registry for it adds nothing but a way to fail: CI run 43413711132 refused
+    to render because ghcr.io did not answer in time for two references that carried their own
+    digests. The lock takes the digest from the reference, records `source: reference`, and never
+    passes the reference to the resolver."""
+    pinned = [i for i in service_images(config) if "@sha256:" in i.image]
+    assert any(i.image.startswith("ghcr.io/") for i in pinned), (
+        "this fixture must render a ghcr.io image pinned by digest"
+    )
+    asked: list[str] = []
+
+    result = render(config, resolver=_ghcr_unreachable(asked))
+
+    lock = {row["service"]: row for row in yaml.safe_load(result.artefacts["versions.lock"])["images"]}
+    for image in pinned:
+        assert lock[image.service]["digest"] == image.image.partition("@")[2]
+        assert lock[image.service]["source"] == "reference"
+        assert image.image not in asked, f"{image.image} was looked up, though it names its digest"
+
+
+def test_an_unpinned_reference_the_registry_cannot_resolve_is_still_refused(
+    config: OspreyConfig,
+) -> None:
+    """The other half, so the refusal is still proven (`CLAUDE.md` rule 15): a pull-mode owned
+    image, `ghcr.io/ospreyflow/<service>:<sha>`, names a tag and no digest. With ghcr.io
+    unreachable it is refused by name; the digest-pinned references beside it are not."""
+    pull_config = config.model_copy(
+        update={"components": config.components.model_copy(update={"source_path": None})}
+    )
+    unpinned_ghcr = {
+        i.image
+        for i in service_images(pull_config)
+        if i.image.startswith("ghcr.io/") and "@sha256:" not in i.image
+    }
+    assert unpinned_ghcr, "pull mode must render owned images as ghcr.io tags"
+
+    with pytest.raises(UnpinnedImagesError) as raised:
+        render(pull_config, resolver=_ghcr_unreachable([]))
+
+    assert set(raised.value.images) == unpinned_ghcr
 
 
 # --- Stage 2 §5a: owned images build, third-party images pull --------------------

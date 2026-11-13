@@ -1706,6 +1706,24 @@ def _render_versions_lock(
                 }
             )
             continue
+        # A reference pinned by digest (`ghcr.io/berriai/litellm@sha256:…`) already names the one
+        # image it can ever be, so its digest is read from the reference and no registry is asked:
+        # asking added only a way to fail. CI run 43413711132 (13 November 2026) refused to render
+        # because ghcr.io did not answer in time for two such references.
+        # `source: reference` says where the digest came from, as every other row's `source` does.
+        _, at, pinned = entry.image.partition("@")
+        if at and pinned.startswith("sha256:"):
+            repository, tag = _repository_and_tag(entry.image)
+            entries.append(
+                {
+                    "service": entry.service,
+                    "repository": repository,
+                    "tag": tag,
+                    "digest": pinned,
+                    "source": "reference",
+                }
+            )
+            continue
         # Round 07: a pull-mode owned image is locked exactly like a third-party one — resolved
         # by digest, refused by name (below) if it cannot be. `owned` no longer exempts it; only
         # `building` does, above.
