@@ -3,6 +3,7 @@
 // the case's view the analyst can see) and what the reader sees of the conversation; nothing here
 // widens either.
 import type { EmailCandidate } from "../inspector/linkEventsApi";
+import type { ReadSummary, UnusableEngine, WillRead } from "../../../../packages/schemas/generated";
 import type { GraphCitation } from "./graphFacts";
 
 export type { GraphCitation };
@@ -11,37 +12,7 @@ export type { GraphCitation };
  * or *Whole case* (refused by the Conduit in words until the case's search is called). */
 export type ReadFrom = "selection" | "graph" | "case";
 
-/** `services/api/questions.py`'s `ReadSummary`: what a question read, or will read, counted by the
- * Conduit as the asker. Never counted here: the Glass is the principal, and its own count of what
- * it holds is not what the Conduit sends. */
-export interface ReadSummary {
-  read_from: "selection" | "graph";
-  documents: number;
-  documents_without_text: number;
-  items: number;
-  links: number;
-  events: number;
-  selected: number;
-  first_selected: string | null;
-}
-
-/** An engine the deployment has that cannot answer this question, with its reason in words. */
-export interface UnusableEngine {
-  name: string;
-  label: string;
-  reason: string;
-}
-
-/** `POST …/questions/will-read` (ADR-135 Amendment 12): what will be read, and the engine the
- * routing will use on it; `engine` is null when none may answer, and `refused` says why. */
-export interface WillRead {
-  read: ReadSummary;
-  engine: string | null;
-  engine_label: string | null;
-  model: string | null;
-  unusable: UnusableEngine[];
-  refused: string | null;
-}
+export type { ReadSummary, UnusableEngine, WillRead };
 
 export interface Citation {
   document_id: string;

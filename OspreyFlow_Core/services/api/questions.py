@@ -62,6 +62,7 @@ from schemas.domain import (
     SourceRef,
 )
 from schemas.model import ExtractionRequest
+from schemas.questions import ReadSummary, UnusableEngine, WillRead
 
 from .dataset_scope import refuse_writing_in_an_unconverted_case
 from .datasets import DatasetStore
@@ -183,50 +184,6 @@ class GraphCitation(BaseModel):
 #: What a question reads from (ADR-098 Amendment 7). `case` is *Whole case*, refused until the
 #: case's search service is called (part D(iii)).
 ReadFrom = Literal["selection", "graph", "case"]
-
-
-class ReadSummary(BaseModel):
-    """What a question read, or will read (ADR-098 Amendment 7), counted as the asker from their own
-    view: nothing they may not see moves a figure (rule 3). Kept with the answer, which a later
-    reader is shown only if they may see every node, link and Document counted."""
-
-    read_from: Literal["selection", "graph"]
-    #: Documents in scope with text, every one read whole.
-    documents: int
-    #: Documents in scope with no text to read (an image, say): counted, never read.
-    documents_without_text: int = 0
-    #: The other items in scope (every node that is not a Document).
-    items: int
-    links: int
-    #: The events counted per month on the links in scope.
-    events: int = 0
-    #: How many of the selected nodes and links the asker's view holds; 0 for *Everything on the
-    #: graph*. A selected id they may not see is not counted, as one that does not exist is not.
-    selected: int = 0
-    #: The first selected node's display name, for "About: <name> and N others".
-    first_selected: str | None = None
-
-
-class UnusableEngine(BaseModel):
-    """An engine the deployment has that cannot answer this question, and why, in words."""
-
-    name: str
-    label: str
-    reason: str
-
-
-class WillRead(BaseModel):
-    """`POST …/questions/will-read`: what the question would read, and the engine that would answer
-    it as the routing decides (ADR-135 Amendment 12), before anything is sent."""
-
-    read: ReadSummary
-    #: The engine and model that will answer; `None` when no engine may (`refused` says why).
-    engine: str | None = None
-    engine_label: str | None = None
-    model: str | None = None
-    #: The engines that exist but cannot answer this question, each with its reason.
-    unusable: list[UnusableEngine] = Field(default_factory=list)
-    refused: str | None = None
 
 
 class QuestionEntry(BaseModel):
@@ -813,7 +770,7 @@ class QuestionsService:
         if routed is None:
             return WillRead(
                 read=material.read, engine=LOCAL, engine_label=LOCAL_LABEL,
-                model=self._default_model,
+                model=self._default_model, unusable=[], refused=None,
             )  # fmt: skip
         datasets = await self._datasets.ids_of_case(investigation_id)
         routes = routed.routes
@@ -824,7 +781,10 @@ class QuestionsService:
                 await routed.held(datasets),
             )  # fmt: skip
         except (EngineRefused, ModelEgressRefused) as refused:
-            return WillRead(read=material.read, unusable=unusable, refused=str(refused))
+            return WillRead(
+                read=material.read, engine=None, engine_label=None, model=None,
+                unusable=unusable, refused=str(refused),
+            )  # fmt: skip
         label = LOCAL_LABEL if choice.engine == LOCAL else routes.engines[choice.engine].label
         return WillRead(
             read=material.read,
@@ -832,6 +792,7 @@ class QuestionsService:
             engine_label=label,
             model=choice.model,
             unusable=[u for u in unusable if u.name != choice.engine],
+            refused=None,
         )
 
     async def _unusable(
