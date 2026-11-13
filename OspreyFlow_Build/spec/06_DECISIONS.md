@@ -36930,3 +36930,57 @@ client sizes its namespace and its quotas from that page.
 plant on each side for each kind of entry (a workload, an init container, a Job, an image, an egress host, a
 database); fifteen size and setting plants; an entry rendered while marked pending; every pending mark naming a
 v0.5.2 step; the tables printed from the manifest alone. Red first: `process/lanes/platform/v052-manifest/red-first.txt`.
+
+### ADR-148, Amendment 13 (13 November 2026) — OpenSearch on the poc shape, and data safety: the shared claim in the backups, RDS's point in time matching the sets, and the decommission's keep or destroy
+
+**The findings.** Amendment 5 made the poc shape refuse OpenSearch ("the poc makes no domain"), and its search was
+PostgreSQL's own; v0.5.2 brings search on OpenSearch to every shape (`process/lanes/ROUTE_052.md`). The ADR-148 audit
+found three defaults in Amendment 7's backups nobody had chosen: the set held the stores and the Ingest claim but not the
+shared claim's published pipelines and settings, so a restore brought data back without the recipes that made it; RDS
+kept point in time for 7 days while the sets are kept 35, so PostgreSQL could not be brought to the moment of a set more
+than a week old; and a decommission kept the backups bucket and its key because nothing asked.
+
+**Decision (the owner's rulings of 13 November 2026), amending Amendment 5's refusal and Amendment 7's backups and
+decommission:**
+
+1. **The poc shape's own OpenSearch domain**, as the standard shape's: OpenSearch 2.17, **two data nodes in two
+   availability zones** (`t3.medium.search`, 50 GiB each; two in every shape), inside the VPC on 443, HTTPS only (TLS
+   1.2), encrypted at rest and node to node. The poc refusal is removed.
+2. **Signed with the namespace's IAM role (IRSA, SigV4), with no fine-grained access control**: the domain's access
+   policy admits that role alone (`es:ESHttp*`); no internal users, no master password. Dataset access and handling codes
+   stay in our query (CLAUDE.md rule 3), not in a second policy in the domain. The pods that search or index (the
+   Conduit, the worker, and the index's rebuild and drift check) are given `OPENSEARCH_URL` from the platform's secret,
+   `OPENSEARCH_SIGNING` and `OPENSEARCH_REGION`, ADR-150 decision 7's one client contract. A platform whose own module
+   fronts the domain with a proxy that signs for us sets `opensearch_signing: none` in its platform file.
+3. **No index backup of our own**: the index is rebuilt from the graph (ADR-150). The rebuild and the drift check are
+   rendered as CronJobs held suspended, started by the runbooks (`kubectl create job --from=cronjob/<name>`), in the
+   Conduit's image under the namespace's own service account, holding the settings, the graph's password by name and the
+   domain's address alone. The recovery runbook's restore ends with the rebuild and the drift check, with their healthy
+   last lines. The domain is removed with the namespace's Terraform at decommission, and named if left in the state.
+4. **The shared claim's parts join the backup set and its restore**: the published pipelines (`data/recipes`), the model
+   settings and the map settings with the map key file (ADR-147), each a part of the set's claims part beside the Ingest
+   root, read-only to the backup; the pods that mount them are writers a restore refuses to run beside. The tiles and the
+   uploads' scratch are made again or are the Ingest's, and are not.
+5. **RDS keeps point in time for 35 days** (`backup_retention_period`), the sets' own expiry
+   (`cloud_platform_backups.EXPIRE_DAYS`), in every shape, so every kept set can be met by a point-in-time restore.
+6. **The decommission has no default for the backups.** Its step 7 refuses until `BACKUPS=keep` or `BACKUPS=destroy` is
+   given, and touches nothing before. `keep` sets the agreed retention on the bucket (Amendment 7's path, unchanged);
+   `destroy` empties and removes the bucket and schedules the key's deletion (thirty days, cancellable) there and then,
+   by the same text as step 9's removal when a kept retention ends. The choice is written to the run's folder; the
+   leftover check requires it and states it in its record (`backups: kept (the operator chose keep)` or `backups:
+   destroyed (the operator chose destroy)`), and with `destroy` a bucket or key still there is left behind. R1's
+   finding-6 guard (no removal of the backups in the run-in-order sequence) holds but for the `destroy` branch of a block
+   that refuses without the choice.
+
+**What the client provides:** two private subnets in two availability zones for the domain, and the egress networks
+reaching it; their platform team's answer on whether their OpenSearch module allows an IAM-only access policy without
+fine-grained access control (the owner's question to them).
+
+**Tests that fail if it is violated:** `tests/harness/test_cloud_platform_opensearch.py` (the domain, two nodes, two
+zones, IAM alone, no FGAC; the pods' address and signing; a platform that signs for us; the standing Jobs under the
+role; the runbooks' words; the manifest), `tests/harness/test_cloud_platform_data_safety.py` (the shared parts; RDS's 35
+days in every fixture; step 7 refusing without the choice, and keep and destroy run under bash with stand-in `aws` and
+`tofu`), `tests/cp_policy_check/test_cp_decommission_check.py` (the choice required and stated; destroy naming what is
+left), and in Helm's own output `tests/cp_policy_check/test_cp_egress_order.py` (the claims backup's read-only shared
+mounts; the search Jobs refused our Secret whole). Red first: `process/lanes/platform/v052-opensearch/` and
+`v052-datasafety/`; the policy check's first run red on the server (`cp-policy-red.txt`), then green.
