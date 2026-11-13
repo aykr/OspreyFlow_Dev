@@ -771,6 +771,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
            least 12 characters, no spaces at either end; the person's user name is `demo`);
         4. the demo lane switches the key prompt on and checks it, by 10:30.
 
+        **Done early, about 07:20:** you set the key at about 07:10; the lane switched the prompt on (one apply, which
+        restarted api and proxy, both healthy). All three names answer 401 with the browser's prompt and noindex, and
+        the four sign-ins pass. Also deployed: the banner, the footer, and the Home layout fix (2b088f9). The way back
+        from the key prompt: osprey.yaml.before-access-key, then one apply. **At 09:30: open govuk.ospreyflow.app in a
+        private window, give `demo` and your key, then sign in.**
+
         If the key isn't set by 11:00, the demo runs with the banner alone, behind your address allowlist.
       - **Your rulings (about 00:20):**
         - the session pass beside the hash, accepted;
