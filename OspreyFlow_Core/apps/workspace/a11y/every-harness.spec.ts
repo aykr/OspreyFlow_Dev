@@ -82,6 +82,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   // monitoring board first on the Dashboards and as the journey opens it, a Reports Viewer's Home with
   // an alert's two ways on, and the Roles, teams and Authors page.
   "alert-figures-harness.html": ["from=alert", "board=1", "board=1&rule=hotlists&from=alert", "home=1", "help=1"],
+  // ADR-145 Amendment 11: Home's *Your access and tasks* where Home draws it, below the two columns.
+  "answers-harness.html": ["home=1"],
   // ADR-146 decisions 2 and 6: Rules and Monitoring at an alert's address, and at one the reader may
   // not see.
   "rules-place-harness.html": ["address=a1", "address=not-yours", "evidence=1"],

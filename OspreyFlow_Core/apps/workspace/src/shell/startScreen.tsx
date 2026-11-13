@@ -46,7 +46,7 @@ export interface StartScreenInput {
   openCaseOnRules: (id: string) => void;
   /** The Reports Viewer's journey from an alert on Home (ADR-145 Amendment 4 decision 10). */
   openAlertJourney?: (alert: AlertJourneyStart, to: "figures" | "board") => void;
-  /** Home's *What you can do, and what you answer for* (ADR-145 Amendment 4 decision 12, L2.7). */
+  /** Home's *Your access and tasks* (ADR-145 Amendment 4 decision 12, Amendment 11; L2.7). */
   answers?: ReactNode;
 }
 

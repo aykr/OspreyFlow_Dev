@@ -69,7 +69,7 @@ describe("Home's key cap on the primary button", () => {
   }
 });
 
-// 13 November 2026: Home's "What you can do, and what you answer for" lists have no glyph; the Facts grid put
+// 13 November 2026: Home's "Your access and tasks" lists have no glyph; the Facts grid put
 // their text in the narrow glyph column, one word a line (answersFor.test.tsx holds that they use this variant).
 describe("the plain facts list", () => {
   it("lays its items out as text, not as the glyph grid", () => {

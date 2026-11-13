@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Home's *What you can do, and what you answer for* (ADR-145 Amendment 4 decision 12; L2.7). Red if the
+// Home's *Your access and tasks* (ADR-145 Amendment 4 decision 12, Amendment 11; L2.7). Red if the
 // section lists anything the reader cannot see (a case not theirs, a count of a proposal above their
 // clearance), a place their rights do not open, or a *Why* that names anyone but their own roles; or if
 // a line does not open where to act.
@@ -78,7 +78,7 @@ describe("the Home section", () => {
       <AnswersForSection apiBaseUrl="x" bearerToken="t" rights={ENGINEER} roles={["data_engineer"]} onOpenCase={vi.fn()}
         read={{ cases: async () => CASES, needs: async () => { throw new Error("503"); } }} />,
     ); // prettier-ignore
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Could not read what waits for you/));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Could not read what is waiting for you/));
   });
 
   it("says it is reading, then why a line did not open", async () => {
@@ -92,7 +92,7 @@ describe("the Home section", () => {
         onOpenModel={onOpenModel} read={{ cases: async () => [], needs: () => pending }} />,
     ); // prettier-ignore
     expect(await screen.findByText("Reading…")).toBeTruthy();
-    expect(screen.queryByText("Nothing waits for you.")).toBeNull();
+    expect(screen.queryByText("Nothing is waiting for you.")).toBeNull();
     release(NEEDS);
     fireEvent.click(await screen.findByRole("button", { name: /2 proposed link types to decide/ }));
     expect((await screen.findByRole("alert")).textContent).toMatch(/None of your cases loads into that dataset/);
@@ -114,6 +114,31 @@ describe("the Home section", () => {
       if (list.querySelector(".home-glyph") === null) expect(list.classList).toContain("home-facts--plain");
     }
     // That the plain variant's items are not a grid is held in homeKey.test.ts, which reads home.css.
+  });
+
+  // ADR-145 Amendment 11 (the owner's ruling, 13 November 2026): the section's words.
+  it("is titled and worded as the owner chose", async () => {
+    render(
+      <AnswersForSection apiBaseUrl="x" bearerToken="t" rights={ENGINEER} roles={["data_engineer"]}
+        onOpenCase={vi.fn()} read={{ cases: async () => CASES, needs: async () => NEEDS }} />,
+    ); // prettier-ignore
+    expect(screen.getByRole("heading", { level: 2, name: "Your access and tasks" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 3, name: "Places you can open" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 3, name: "Waiting for you" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 3, name: "Your access to each case" })).toBeTruthy();
+    expect(screen.getByText("Author: Prison intel")).toBeTruthy();
+    expect(screen.getByText("Viewer: Op Heron")).toBeTruthy();
+    for (const old of ["What you can do, and what you answer for", "What you answer for", "Your level in each case", "Author of Op Heron", "Viewer of Op Heron"])
+      expect(screen.queryByText(old)).toBeNull();
+  });
+
+  it("says nothing is waiting, in the owner's words, once both reads are in", async () => {
+    render(
+      <AnswersForSection apiBaseUrl="x" bearerToken="t" rights={ENGINEER} roles={["data_engineer"]}
+        onOpenCase={vi.fn()} read={{ cases: async () => [], needs: async () => ({ promotions_overdue: [], proposals: [] }) }} />,
+    ); // prettier-ignore
+    expect(await screen.findByText("Nothing is waiting for you.")).toBeTruthy();
+    expect(screen.queryByText("Nothing waits for you.")).toBeNull();
   });
 
   it("says why an administrator answers for a promotion by their Administrator role", () => {
