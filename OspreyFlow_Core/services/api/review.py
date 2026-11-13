@@ -97,6 +97,12 @@ CREATE TABLE IF NOT EXISTS document_texts (
     owning_unit TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL
 );
+-- The search index feed's outbox for a Document's text (ADR-150 decision 3): written in the text's
+-- own transaction, drained by the indexer.
+CREATE TABLE IF NOT EXISTS search_text_pending (
+    ref BIGSERIAL PRIMARY KEY,
+    document_id TEXT NOT NULL
+);
 """
 
 
@@ -359,7 +365,7 @@ class ExtractionCandidateStore:
         """Upsert, not insert-only — `run_extraction` re-run against the same `document_id` (a
         different profile, a second model) re-stores the same text rather than failing on a
         primary-key conflict a caller has no reason to expect from an idempotent-looking action."""
-        async with self._pool.acquire() as conn:
+        async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 "INSERT INTO document_texts (document_id, text, owning_unit, created_at) "
                 "VALUES ($1, $2, $3, $4) ON CONFLICT (document_id) DO UPDATE SET "
@@ -370,6 +376,35 @@ class ExtractionCandidateStore:
                 principal.org_unit,
                 datetime.now(UTC),
             )
+            # ADR-150 decision 3: the text's own search document follows, in this transaction.
+            await conn.execute(
+                "INSERT INTO search_text_pending (document_id) VALUES ($1)", document_id
+            )
+
+    # --- the search index feed's reads (ADR-150): the indexer's alone, never a route's ----------
+
+    async def pending_text_index(self, limit: int) -> list[tuple[int, str]]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT ref, document_id FROM search_text_pending ORDER BY ref LIMIT $1", limit
+            )
+        return [(int(r["ref"]), str(r["document_id"])) for r in rows]
+
+    async def clear_pending_text_index(self, refs: Sequence[int]) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute("DELETE FROM search_text_pending WHERE ref = ANY($1)", list(refs))
+
+    async def texts_for_index(self, document_ids: Sequence[str]) -> dict[str, tuple[str, str]]:
+        """Each Document's text and the unit that may read it, unfiltered, for the indexer alone
+        (ADR-150 decision 3): the text's document carries the unit, and the query side filters by
+        it as `get_document_text` does."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT document_id, text, owning_unit FROM document_texts "
+                "WHERE document_id = ANY($1)",
+                list(document_ids),
+            )
+        return {str(r["document_id"]): (str(r["text"]), str(r["owning_unit"])) for r in rows}
 
     async def get_document_text(self, document_id: str, principal: Principal) -> str:
         """`WHERE owning_unit = $2` in the query itself, the same `get_authorized` shape —
