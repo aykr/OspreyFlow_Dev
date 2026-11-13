@@ -777,6 +777,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         from the key prompt: osprey.yaml.before-access-key, then one apply. **At 09:30: open govuk.ospreyflow.app in a
         private window, give `demo` and your key, then sign in.**
 
+        **The owner's word, about 07:45:** once both demo fixes land (one key prompt, ADR-114 Am 42, platform-b; Home's
+        "Your access and tasks", ADR-145 Am 11, platform), push main to the dev repo and publish the product repo
+        again from the same commit (no tag), each recorded in PUSH_LOG.
+
         If the key isn't set by 11:00, the demo runs with the banner alone, behind your address allowlist.
       - **Your rulings (about 00:20):**
         - the session pass beside the hash, accepted;
