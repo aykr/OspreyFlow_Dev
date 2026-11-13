@@ -14,7 +14,14 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from services.api.app import app, get_audit, get_graph, get_investigations, get_principal
+from services.api.app import (
+    app,
+    get_audit,
+    get_graph,
+    get_investigations,
+    get_principal,
+    get_search_index,
+)
 
 from schemas.domain import AuditStub, Node, Principal, Provenance, ProvenanceState, SourceRef
 from tests.services.api.any_case import AnyCase
@@ -68,6 +75,9 @@ def client() -> Iterator[TestClient]:
     app.dependency_overrides[get_graph] = lambda: graph
     app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_audit] = lambda: audit
+    # Today's route, with no index: run on a leased stack with an OpenSearch configured, it must not
+    # reach a real index (the lane review of d2b207a).
+    app.dependency_overrides[get_search_index] = lambda: None
 
     test_client = TestClient(app)
     test_client.graph = graph  # type: ignore[attr-defined]
@@ -83,8 +93,9 @@ def test_search_returns_hits_from_the_graph_port(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert [n["id"] for n in response.json()["nodes"]] == ["hit-1"]
-    # One past the page, so the route knows whether there is more (ADR-149, reserved).
-    assert client.graph.calls == [("AB123456C", PRINCIPAL, 21)]  # type: ignore[attr-defined]
+    # Its whole depth, so the fallback counts its groups and knows when there is more (ADR-149
+    # decision 9).
+    assert client.graph.calls == [("AB123456C", PRINCIPAL, 100)]  # type: ignore[attr-defined]
     assert client.audit.records[-1]["action"] == "search"  # type: ignore[attr-defined]
 
 

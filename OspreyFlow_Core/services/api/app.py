@@ -107,6 +107,7 @@ from services.ingest.staging_catalogue import DEPLOYMENT_WIDE
 from services.ingest.transforms import STRUCTURED_PARTS
 from services.ingest.watermark import RefreshRead
 from services.resolve.trigger import service_principal
+from services.search_index.pending import PendingIds, pending_node_ids
 from valkey.asyncio import Valkey
 
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
@@ -478,6 +479,7 @@ from schemas.screening import (
     ScreeningListUpdate,
     ScreeningSubscriptionInput,
 )
+from schemas.search import SearchPageRequest, SearchPageResponse
 from schemas.sentences import (
     RULE_TEST_DAYS,
     RulePreview,
@@ -6091,26 +6093,68 @@ async def restore_history_step(
 
 
 def get_search_index(request: Request) -> search_service.SearchIndexSetup | None:
-    """ADR-149 (reserved): the index search asks, made once per process, or `None` where no
-    OpenSearch is configured (`OPENSEARCH_URL` or `OPENSEARCH_HOST`), and then every search takes
-    the fallback and says so. The client and the alias are the index's own (ADR-150 decision 7)."""
-    if not hasattr(request.app.state, "search_index"):
-        from services.search_index.client import SearchIndexConfig, search_client
-        from services.search_index.run import configured
+    """ADR-149: the index search asks, made once per process, or `None` where no OpenSearch is
+    configured (`OPENSEARCH_URL` or `OPENSEARCH_HOST`), and then every search takes the fallback
+    and says so. The client and the alias are the index's own (ADR-150 decision 7). A setting the
+    client refuses (no signing credentials, a malformed address) is logged and searched without
+    the index, never a 500 on every search; it is tried again after a minute."""
+    held = getattr(request.app.state, "search_index", None)
+    now = time.monotonic()
+    if held is not None and (held[0] is not None or now - held[1] < 60):
+        return held[0]  # type: ignore[no-any-return]
+    from services.search_index.client import SearchIndexConfig, search_client
+    from services.search_index.run import configured
 
-        setup = None
-        if configured():
+    setup = None
+    if configured():
+        try:
             config = SearchIndexConfig.from_env()
             setup = search_service.SearchIndexSetup(
-                searcher=search_service.opensearch_searcher(search_client(config), config.alias),
-                types=[t.name for t in request.app.state.ontology.entity_types],
+                # No retries: an unreachable index costs one short timeout, then the fallback.
+                searcher=search_service.opensearch_searcher(
+                    search_client(config, max_retries=0), config.alias
+                ),
+                schema=request.app.state.ontology,
                 scheme=request.app.state.handling_scheme,
             )
-        request.app.state.search_index = setup
-    return request.app.state.search_index  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("the search index is configured but its client could not be made")
+    request.app.state.search_index = (setup, now)
+    return setup
 
 
 SearchIndexDep = Annotated[search_service.SearchIndexSetup | None, Depends(get_search_index)]
+
+
+async def get_search_pending(request: Request, index: SearchIndexDep) -> PendingIds:
+    """ADR-149 decision 2 (the orchestrator's ruling on page A): the nodes the index may hold at
+    older facts, from both of ADR-150's outboxes, which every index query leaves out in its own
+    filter. Read only where there is an index to ask; ids alone, never shown."""
+    if index is None:
+        return PendingIds(ids=frozenset(), complete=True)
+    return await pending_node_ids(
+        request.app.state.graph,
+        request.app.state.extraction_candidates,
+        limit=search_service.PENDING_LIMIT,
+    )
+
+
+SearchPendingDep = Annotated[PendingIds, Depends(get_search_pending)]
+
+
+def get_search_working_set(request: Request) -> WorkingSetService | None:
+    """The working set search reads the case's resolution threshold from (page A §2). The lifespan
+    always sets it; a test app without one merges nothing, and a test overrides this to merge."""
+    return getattr(request.app.state, "working_set", None)
+
+
+SearchWorkingSetDep = Annotated[WorkingSetService | None, Depends(get_search_working_set)]
+
+
+async def _search_tau(working_set: WorkingSetService | None, investigation_id: str) -> float | None:
+    if working_set is None:
+        return None
+    return await working_set.get_resolution_threshold(investigation_id)
 
 
 @app.post(
@@ -6119,29 +6163,24 @@ SearchIndexDep = Annotated[search_service.SearchIndexSetup | None, Depends(get_s
 )
 async def search_route(
     investigation: InvestigationViewerDep,
-    body: search_service.SearchPageRequest,
+    body: SearchPageRequest,
     principal: PrincipalDep,
     graph: GraphDep,
     audit: AuditDep,
     datasets: DatasetsDep,
+    working_set: SearchWorkingSetDep,
     index: SearchIndexDep,
-    request: Request,
-) -> search_service.SearchPageResponse:
-    """ADR-149 (reserved): the index when there is one, today's exact search otherwise, saying so.
-    The reader's access filter is built here from their own principal (page A §1) and goes into
-    the index's query; the case's threshold merges the visible hits (page A §2)."""
+    pending: SearchPendingDep,
+) -> SearchPageResponse:
+    """ADR-149: the index when there is one, today's exact search otherwise, saying so. The
+    reader's access filter is built here from their own principal (page A §1) and goes into the
+    index's query; the case's threshold merges the visible hits (page A §2)."""
     from services.search_index.document import phonetic_codes
 
     from .search_access import index_access_filter
 
     case = set(principal.datasets or ())
     names = {d.id: d.name for d in await datasets.list_for(principal) if d.id in case}
-    working_set = getattr(request.app.state, "working_set", None)
-    tau = (
-        await working_set.get_resolution_threshold(investigation.id)
-        if working_set is not None
-        else None
-    )
     try:
         result = await search_service.search_page(
             body,
@@ -6154,7 +6193,10 @@ async def search_route(
             phonetic_codes=phonetic_codes,
             types=index.types if index is not None else (),
             case_datasets=names,
-            tau=tau,
+            tau=await _search_tau(working_set, investigation.id),
+            pending=sorted(pending.ids),
+            pending_complete=pending.complete,
+            schema=index.schema if index is not None else None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -6164,12 +6206,12 @@ async def search_route(
         resolved_query={
             "query": body.query,
             "group": body.group,
-            "filters": body.filters.model_dump(),
+            "filters": body.filters.model_dump(mode="json"),
             "page": body.page,
             "page_size": result.page_size,
             "source": result.source,
         },
-        result_cardinality=len(result.results),
+        result_cardinality=len(result.nodes),
     )
     return result
 
@@ -6185,18 +6227,29 @@ async def suggest_route(
     graph: GraphDep,
     audit: AuditDep,
     index: SearchIndexDep,
+    pending: SearchPendingDep,
 ) -> SuggestResponse:
-    """ADR-059 Amendment 1 (reserved): from the index when there is one, with the reader's own
-    access filter in its query; from the graph's prefix read otherwise, as before."""
+    """ADR-059 Amendment 1: from the index when there is one, with the reader's own access filter
+    in its query; from the graph's prefix read otherwise, as before, saying a "starts with"
+    suggestion is limited. A prefix the index cannot ask (longer than its stored prefixes) or an
+    entity type the ontology does not have is refused with 422, never cut."""
     from .search_access import index_access_filter
 
-    result = await search_service.suggest_page(
-        body,
-        principal,
-        graph,
-        searcher=index.searcher if index is not None else None,
-        access_filter=index_access_filter(index.scheme, principal) if index is not None else None,
-    )
+    try:
+        result = await search_service.suggest_page(
+            body,
+            principal,
+            graph,
+            searcher=index.searcher if index is not None else None,
+            access_filter=index_access_filter(index.scheme, principal)
+            if index is not None
+            else None,
+            schema=index.schema if index is not None else None,
+            pending=sorted(pending.ids),
+            pending_complete=pending.complete,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     await audit.record(
         principal=principal,
         action="suggest",
@@ -6205,6 +6258,7 @@ async def suggest_route(
             "mode": body.mode,
             "ignore_case": body.ignore_case,
             "types": body.types,
+            "source": result.source,
         },
         result_cardinality=len(result.nodes),
     )
