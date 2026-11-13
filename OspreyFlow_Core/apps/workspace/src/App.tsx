@@ -55,7 +55,7 @@ import { requestOpening, takeOpening } from "./admin/needsYou/openings";
 import { AccountMenu } from "./auth/AccountMenu";
 import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
 import { LeftRail } from "./shell/LeftRail";
-import { RAIL_LABELS, splitRail } from "./shell/railLayout";
+import { RAIL_LABELS, railMark, splitRail } from "./shell/railLayout";
 import { Drawer } from "./design/primitives/Drawer";
 import { TopBar } from "./shell/TopBar";
 import { ContextBanner, crossLinkFor, glassMode, MODE_NOTE, useCaseContext } from "./shell/ContextBanner";
@@ -154,6 +154,7 @@ import {
   railEntries,
   showsInspector,
   viewsFor,
+  type RailEntry,
   type StartPlace,
   startPlaces,
 } from "./rights/visibility";
@@ -1704,17 +1705,25 @@ export function App() {
   );
   // ADR-145 Amendment 12: the rail's places, split and ordered by `shell/railLayout.ts` (Cases, Explore,
   // Ask & Chat and Dashboards on it; History, Ownership and Connection strength under Explore Details).
+  // ADR-145 Amendment 14 decision 3: one place, one marker, as `railMark` says. A panel's opener toggles its
+  // panel, so a second press closes what its `aria-expanded` says is open.
+  const railOpen = new Set<RailEntry>(
+    ([["cases", casesOpen], ["explore", exploreOpen], ["questions", questionsOpen], ["history", historyOpen]] as const)
+      .filter(([, open]) => open)
+      .map(([id]) => id),
+  );
+  const mark = (id: RailEntry) => railMark(id, { view, open: railOpen });
   const railTools = [
-    { id: "cases", label: RAIL_LABELS.cases, icon: "cases" as const, onSelect: () => setCasesOpen(true), expanded: casesOpen },
-    { id: "explore", label: RAIL_LABELS.explore, icon: "explore" as const, onSelect: () => setExploreOpen(true), expanded: exploreOpen },
-    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: () => setQuestionsOpen(true), expanded: questionsOpen },
+    { id: "cases", label: RAIL_LABELS.cases, icon: "cases" as const, onSelect: () => setCasesOpen((open) => !open), ...mark("cases") },
+    { id: "explore", label: RAIL_LABELS.explore, icon: "explore" as const, onSelect: () => setExploreOpen((open) => !open), ...mark("explore") },
+    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: () => setQuestionsOpen((open) => !open), ...mark("questions") },
     // ADR-111 Amendment 3: Superset dashboards, drawn inside the Glass.
-    { id: "dashboards", label: RAIL_LABELS.dashboards, icon: "dashboards" as const, onSelect: () => setView("dashboards"), pressed: view === "dashboards" },
-    { id: "history", label: RAIL_LABELS.history, icon: "history" as const, onSelect: () => setHistoryOpen(true), expanded: historyOpen },
+    { id: "dashboards", label: RAIL_LABELS.dashboards, icon: "dashboards" as const, onSelect: () => setView("dashboards"), ...mark("dashboards") },
+    { id: "history", label: RAIL_LABELS.history, icon: "history" as const, onSelect: () => setHistoryOpen((open) => !open), ...mark("history") },
     // ADR-109 ruling 5: enhanced due diligence — ultimate beneficial ownership.
-    { id: "ownership", label: RAIL_LABELS.ownership, icon: "ownership" as const, onSelect: () => setView("ownership"), pressed: view === "ownership" },
+    { id: "ownership", label: RAIL_LABELS.ownership, icon: "ownership" as const, onSelect: () => setView("ownership"), ...mark("ownership") },
     // ADR-139: Connection strength, which stayed in the Glass when Monitoring left (ADR-146 decision 2).
-    { id: "strength", label: RAIL_LABELS.strength, icon: "strength" as const, onSelect: () => setView("strength"), pressed: view === "strength" },
+    { id: "strength", label: RAIL_LABELS.strength, icon: "strength" as const, onSelect: () => setView("strength"), ...mark("strength") },
   ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id));
   const railSplit = splitRail(railTools);
   // ADR-145 Amendment 2: the view switch keeps Graph and Map; Matrix and Reports are under More views.
@@ -1846,9 +1855,10 @@ export function App() {
             currentId={investigationId}
             onBrowse={() => setBrowsingCases(true)}
             onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
-            // ADR-145 Amendment 14 decision 4: in the Glass the banner says what the case reads ("reads …"),
-            // so the switcher's scope badge (ADR-115 Amendment 1 point 5) would name it again.
-            showScope={app !== "glass"}
+            // ADR-145 Amendment 14 decision 4: where the Glass's banner says what the case reads ("reads …", or
+            // "reads no dataset"), the switcher's scope badge (ADR-115 Amendment 1 point 5) would say it again;
+            // while the case's datasets are read or refused the banner says nothing, and the badge stays.
+            showScope={!(app === "glass" && caseContext.datasets !== null)}
           />
         }
         // ADR-145 Amendment 13: the open mode's one line, read with the region.

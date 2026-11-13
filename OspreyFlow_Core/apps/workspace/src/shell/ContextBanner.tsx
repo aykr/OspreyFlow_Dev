@@ -150,10 +150,12 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
           {caseSwitcher}
         </>
       )}
-      {place === "glass" && datasets && datasets.length > 0 && (
+      {/* ADR-145 Amendment 14 decision 4: a case reading none says so here, as the scope badge's NO DATA did
+          (ADR-115 Amendment 1 point 5); while the datasets are read or refused, nothing, and the badge stays. */}
+      {place === "glass" && datasets && (
         <>
           {next()}
-          <span>reads {names(datasets)}</span>
+          <span>{datasets.length > 0 ? `reads ${names(datasets)}` : "reads no dataset"}</span>
         </>
       )}
       {place === "ingest" && caseSwitcher && (

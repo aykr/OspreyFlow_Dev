@@ -84,6 +84,74 @@ it("opens under the top bar, never over the navigation above it", () => {
   }
 });
 
+function placed(className: string, bottom: () => number): HTMLElement {
+  const el = document.createElement("div");
+  el.className = className;
+  el.getBoundingClientRect = () => {
+    const b = bottom();
+    return { top: b - 40, bottom: b, left: 0, right: 1440, width: 1440, height: 40, x: 0, y: b - 40, toJSON: () => ({}) };
+  };
+  document.body.append(el);
+  return el;
+}
+
+// ADR-145 Amendment 14 decision 2, after the orchestrator's review: the context row under the top bar carries the
+// case switcher and the cross-link at its right end, which a drawer at the top bar's edge still covered.
+it("opens under the context row too, under GOV.UK's banner and OspreyFlow's alike", () => {
+  for (const banner of ["context-banner", "govuk-notification-banner context-banner--govuk"]) {
+    const bar = placed("top-bar", () => 112);
+    const row = placed(banner, () => 153);
+    try {
+      render(
+        <Drawer open onClose={() => undefined} title="Cases">
+          <p>body</p>
+        </Drawer>,
+      );
+      expect(screen.getByRole("dialog", { name: "Cases" }).style.top).toBe("153px");
+    } finally {
+      cleanup();
+      bar.remove();
+      row.remove();
+    }
+  }
+});
+
+it("is measured again when the window is resized and when the page scrolls", () => {
+  let bottom = 112;
+  const bar = placed("top-bar", () => bottom);
+  try {
+    render(
+      <Drawer open onClose={() => undefined} title="Cases">
+        <p>body</p>
+      </Drawer>,
+    );
+    const drawer = screen.getByRole("dialog", { name: "Cases" });
+    expect(drawer.style.top).toBe("112px");
+    bottom = 152; // the bar wraps at a narrower window
+    act(() => void window.dispatchEvent(new Event("resize")));
+    expect(drawer.style.top).toBe("152px");
+    bottom = 40; // the page scrolled towards the GOV.UK footer
+    act(() => void window.dispatchEvent(new Event("scroll")));
+    expect(drawer.style.top).toBe("40px");
+    bottom = -20; // scrolled past it: never above the window
+    act(() => void window.dispatchEvent(new Event("scroll")));
+    expect(drawer.style.top).toBe("0px");
+  } finally {
+    bar.remove();
+  }
+});
+
+// The drawer neither traps focus nor makes the page behind it inert, and the navigation beside it stays usable
+// (decision 2), so it does not tell assistive technology that the rest of the page is inert.
+it("is not announced as modal", () => {
+  render(
+    <Drawer open onClose={() => undefined} title="Cases">
+      <p>body</p>
+    </Drawer>,
+  );
+  expect(screen.getByRole("dialog", { name: "Cases" }).getAttribute("aria-modal")).toBeNull();
+});
+
 it("starts at the top where there is no top bar", () => {
   render(
     <Drawer open onClose={() => undefined} title="Cases">

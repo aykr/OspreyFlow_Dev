@@ -198,7 +198,13 @@ model, ADR-098, §3.1; named *Questions* until Amendment 12) and *Dashboards* (A
 **⋯ Explore Details**, a menu of the rest, one click away, in this order: *History*, *Ownership*
 (beneficial ownership and due diligence — ADR-109, §3.3) and *Connection strength* (ADR-139, a tab of
 Monitoring until Monitoring left the Glass). *Explore Details*'s name says which of them is open
-("Explore Details, History open"). The rail's **Help** (and `?`) opens the keys panel, with the user
+("Explore Details, History open"). **One place, one marker** (ADR-145 Amendment 14 decision 3): the rail marks
+the place open (*Dashboards*, *Ownership*, *Connection strength*: `aria-pressed`, or on *Explore Details* itself
+when the place is under it), and only that. *Cases*, *Explore*, *Ask & Chat* and *History* open a panel over the
+place; they are never pressed, they are expanded while the panel is open (`aria-expanded`), and a second press
+closes it (`shell/railLayout.ts`'s `railMark`, which `App.tsx` and the places harness both read). Every drawer
+opens under the top bar and the context row, never over the navigation they carry (decision 2,
+`design/primitives/Drawer.tsx`). The rail's **Help** (and `?`) opens the keys panel, with the user
 guide's link, over whichever view is on screen, and a second press, Esc or its × closes it (Amendment
 12). Monitoring (the one alert queue, its rules, the watches, held rows and the rule
 audit — ADR-109, ADR-133, §3.3) is no longer the Glass's: it is *Rules and Monitoring*, a place of its
@@ -473,7 +479,12 @@ under the OspreyFlow brand, its controls 32), a region named by its first words:
 - in the Glass: "You are in the Glass · Graph · Drawing board · ‹case menu› · reads ‹the case's datasets› ·
   ‹the mode's note›", the sections a navigation named *In the Glass* (*Graph* the case's data and its
   views, *Drawing board* the case's drawing boards, §2.0b; ADR-145 Amendment 13 renamed them from *Case ·
-  Boards*), and the open mode's one line: "Graph: the case's data. Saved views are under Views or
+  Boards*), and the open mode's one line. *Graph* is current, with its note, only on a view of the case's data
+  (graph, map, matrix, Figures, Messages); on a place of the rail's own (Dashboards with its Alert monitoring
+  board, Ownership, Connection strength) neither section is current and no note is said (ADR-145 Amendment 14
+  decision 3). "reads …" names the case's datasets once in the row ("reads no dataset" for a case reading none):
+  the case menu draws no scope badge beside it and the cross-link does not name them (decision 4); while the
+  datasets are read or refused, "reads" is not drawn and the badge stays. The notes: "Graph: the case's data. Saved views are under Views or
   Cases." or "Drawing board: your sketch; it does not change the case's data.", part of the region and its
   description. It stays in the row at 1440 wide (GOV.UK's row 32 pixels, OspreyFlow's 41); at 1024 it is on
   a line under the row, with the cross-link (GOV.UK 66, OspreyFlow 81);
@@ -487,8 +498,7 @@ in the Studio: decision 2's "Dataset ‹name› ▾" — the Studio chooses its 
 dataset's "feeds n cases": no route gives a dataset's cases as the reader may see them, and a count
 over cases they cannot see would break rule 7. A person
 holding both the Glass and the Studio gets the **cross-link**: *Open this case's data in the Ingest Studio ↗*
-(not naming the dataset, which the row names once in "reads …", ADR-145 Amendment 14 decision 4; nor does the case
-switcher's scope badge in the Glass)
+(it does not name the dataset: the row names it once, in "reads …", ADR-145 Amendment 14 decision 4)
 in the Glass, and *← Back to case ‹name› in the Glass* in the Studio, which returns to the open case
 and the Glass's view last open (this replaces the Studio rail's *Back to the investigation*). Choosing
 another case in the Studio reloads the page; the view to return to is kept in the tab's session

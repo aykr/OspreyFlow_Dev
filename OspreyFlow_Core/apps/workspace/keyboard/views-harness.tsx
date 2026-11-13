@@ -39,7 +39,9 @@ const CASES = [
 ];
 const views: Record<string, { id: string; case_id: string; name: string; created_by: string; created_at: string; shared: boolean; chosen: number }[]> = {
   c1: [
-    { id: "v-private", case_id: "c1", name: "Alice's own", created_by: "alice", created_at: at, shared: false, chosen: 3 },
+    // `?long=1`: a view with a long name, which must wrap beside its tag rather than push it out (ADR-145 Amendment 14).
+    { id: "v-private", case_id: "c1", name: params.get("long") === "1" ? "Alice's own: every payment between the three Ledger accounts in March and April" : "Alice's own",
+      created_by: "alice", created_at: at, shared: false, chosen: 3 },
     { id: "v-shared", case_id: "c1", name: "Payments in March", created_by: "alice", created_at: at, shared: true, chosen: 4 },
   ],
   c2: [{ id: "v-hmp", case_id: "c2", name: "Visits this week", created_by: "alice", created_at: at, shared: true, chosen: 2 }],
@@ -84,7 +86,7 @@ const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 const show = params.get("show");
 
-// `?asking=delete`: the panel drawn asking "Delete this view?", for the axe scan; no spec uses it.
+// `?asking=delete`: the panel drawn asking "Delete this view?", for the axe scan and the drawer-fit case (`views.spec.ts`).
 if (params.get("asking") === "delete") {
   const ask = () => {
     const button = document.querySelector<HTMLButtonElement>('button[aria-label="Delete Alice\'s own"]');

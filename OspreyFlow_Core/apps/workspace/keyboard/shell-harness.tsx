@@ -10,6 +10,7 @@ import { PLAIN_APPEARANCE } from "../src/brand/brand";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { TopBar } from "../src/shell/TopBar";
 import { Drawer } from "../src/design/primitives/Drawer";
+import { ContextBanner, MODE_NOTE } from "../src/shell/ContextBanner";
 
 const brand = await applyHarnessBrand();
 // ADR-132 Amendment 7: `?banner=1` gives the deployment's own banner words (the owner's wording for
@@ -44,6 +45,21 @@ createRoot(container).render(
       caseSwitcher={<button type="button" className="btn">Case: Example</button>}
       account={null}
     />
+    {drawer && (
+      // The Glass's context row as `App.tsx` draws it, its case switcher and cross-link at its end, which the
+      // drawer must not cover either (ADR-145 Amendment 14 decision 2).
+      <ContextBanner
+        place="glass"
+        sections={[
+          { id: "case", label: "Graph", current: true, onSelect: () => undefined },
+          { id: "boards", label: "Drawing board", current: false, onSelect: () => undefined },
+        ]}
+        note={MODE_NOTE.graph}
+        caseSwitcher={<button type="button" className="btn">Case: Example</button>}
+        datasets={["Prison intel"]}
+        crossLink={{ label: "Open this case's data in the Ingest Studio ↗", onFollow: () => undefined }}
+      />
+    )}
     <button type="button" className="btn">Workspace control</button>
     {drawer && (
       <Drawer open onClose={() => undefined} title="Cases">

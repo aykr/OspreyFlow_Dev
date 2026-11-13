@@ -40,7 +40,8 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
   // ADR-145 Amendment 12: named Explore Details, and, while one of its places is open, which
   // ("Explore Details, History open"); the destination open is marked inside the menu too.
   const name = "Explore Details";
-  const current = items.find((item) => item.pressed || item.expanded);
+  // ADR-145 Amendment 14 decision 3: the place first; a panel (History's drawer) only when no place of its own is open.
+  const current = items.find((item) => item.pressed) ?? items.find((item) => item.expanded);
   const label = current ? `${name}, ${current.label} open` : name;
   return (
     <div
@@ -63,6 +64,10 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
         type="button"
         className="left-rail__item"
         aria-label={label}
+        // ADR-145 Amendment 14 decision 3: when the place open is one of its own (Ownership, Connection strength),
+        // the trigger carries the rail's one marker, drawn as a pressed item's; its name says which. Not
+        // `aria-pressed`: it is a menu's button (`aria-expanded`), and its name already says the place.
+        data-current={current?.pressed ? "true" : undefined}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         title={expanded ? undefined : label}
@@ -78,7 +83,7 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
               key={item.id}
               type="button"
               className="menu-panel__item"
-              aria-current={item.pressed ? "page" : undefined}
+              aria-current={item === current ? "page" : undefined}
               onClick={() => {
                 setOpen(false);
                 item.onSelect();

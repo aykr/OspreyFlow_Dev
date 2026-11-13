@@ -437,7 +437,7 @@
   font: inherit; font-size: var(--fs-12); cursor: pointer; text-align: left;
 }
 .left-rail__item:hover, .left-rail__item:focus-visible { background: var(--surface-hover); color: var(--text-primary); }
-.left-rail__item[aria-pressed="true"] { background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 2px 0 0 var(--text-primary); }
+.left-rail__item[aria-pressed="true"], .left-rail__item[data-current="true"] { background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 2px 0 0 var(--text-primary); }
 .left-rail__help { margin-top: auto; }
 .left-rail__help + .left-rail__toggle { margin-top: 0; }
 .left-rail__toggle { margin-top: auto; }

@@ -28,3 +28,17 @@ export function splitRail<T extends { id: string }>(entries: readonly T[]): { it
     order.flatMap((id) => entries.filter((entry) => entry.id === id));
   return { items: inOrder(ON_THE_RAIL), more: inOrder(EXPLORE_DETAILS) };
 }
+
+/** The rail's entries that open a panel over the place (a drawer), not a place of their own (ADR-145
+ * Amendment 14 decision 3). */
+export const PANEL_OPENERS: readonly RailEntry[] = ["cases", "explore", "questions", "history"];
+
+/** How the rail marks an entry, one place, one marker (Amendment 14 decision 3): a place is pressed while it is
+ * the view open; a panel's opener is never pressed, only expanded while its panel is open. `App.tsx` and the
+ * places harness both read it, so the harness cannot agree with a copy. */
+export function railMark(
+  id: RailEntry,
+  state: { view: string; open: ReadonlySet<RailEntry> },
+): { pressed: boolean } | { expanded: boolean } {
+  return PANEL_OPENERS.includes(id) ? { expanded: state.open.has(id) } : { pressed: state.view === id };
+}

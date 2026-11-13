@@ -8,17 +8,23 @@ export interface DrawerProps {
   children: ReactNode;
 }
 
-/** An overlay: shadow, no hairline (`spec/02_GLASS_FRONTEND.md` §8). Used
- * for the Inspector and named-step history panel. */
-/** Where a drawer starts: under the workspace's top bar (`shell/TopBar.tsx`), and so under the GOV.UK
- * header above it, never over the navigation they carry (ADR-145 Amendment 14 decision 2, the owner's "the
- * Cases panel covers the top navigation"). `null` where there is no top bar: the stylesheet's top, 0. */
-function underTheTopBar(): number | null {
-  const bar = document.querySelector(".top-bar");
-  if (!bar) return null;
-  return Math.max(0, Math.round(bar.getBoundingClientRect().bottom));
+/** The chrome a drawer opens under: the workspace's top bar (`shell/TopBar.tsx`), so the GOV.UK header above it
+ * too, and the context row under it (`shell/ContextBanner.tsx`, its case switcher and cross-link at its right
+ * end), in either brand. */
+const CHROME_ABOVE = ".top-bar, .context-banner, .context-banner--govuk";
+
+/** Where a drawer starts: under the chrome above the workspace, never over the navigation it carries (ADR-145
+ * Amendment 14 decision 2, the owner's "the Cases panel covers the top navigation"); never above the window.
+ * `null` where there is no such chrome: the stylesheet's top, 0. */
+function underTheChrome(): number | null {
+  const chrome = [...document.querySelectorAll(CHROME_ABOVE)];
+  if (chrome.length === 0) return null;
+  return Math.max(0, ...chrome.map((el) => Math.round(el.getBoundingClientRect().bottom)));
 }
 
+/** An overlay: shadow, no hairline (`spec/02_GLASS_FRONTEND.md` §8). Used
+ * for the Inspector and named-step history panel. Not modal (ADR-145 Amendment 14 decision 2): it neither
+ * traps focus nor makes the page behind it inert, and the navigation beside it stays usable. */
 export function Drawer({ open, onClose, title, children }: DrawerProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState<number | null>(null);
@@ -39,16 +45,15 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
-  // Measured before the first paint, and again whenever the bar or the window changes size (the bar
+  // Measured before the first paint, and again whenever the chrome or the window changes size (the bar
   // wraps on a narrow window, ADR-115 Amendment 3) or the page scrolls (the GOV.UK footer is below).
   useLayoutEffect(() => {
     if (!open) return;
-    const fit = () => setTop(underTheTopBar());
+    const fit = () => setTop(underTheChrome());
     fit();
-    const bar = document.querySelector(".top-bar");
     // jsdom has no ResizeObserver.
-    const observer = bar && typeof ResizeObserver !== "undefined" ? new ResizeObserver(fit) : null;
-    if (bar) observer?.observe(bar);
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(fit) : null;
+    for (const el of document.querySelectorAll(CHROME_ABOVE)) observer?.observe(el);
     window.addEventListener("resize", fit);
     window.addEventListener("scroll", fit, { passive: true });
     return () => {
@@ -64,7 +69,6 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
       className="drawer"
       role="dialog"
       aria-label={title}
-      aria-modal="true"
       tabIndex={-1}
       ref={ref}
       style={top === null ? undefined : { top }}

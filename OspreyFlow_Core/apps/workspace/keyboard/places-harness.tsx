@@ -7,7 +7,7 @@
 // and choosing another is the real `openCase`, which reloads the page as the Glass does (here, back
 // into this harness with `?investigation=` and `?view=`), so a cross-link that lost the case or the
 // view across that reload would show it; what was chosen is on `window.__PLACES__`.
-import { RAIL_LABELS, splitRail } from "../src/shell/railLayout";
+import { PANEL_OPENERS, RAIL_LABELS, railMark, splitRail } from "../src/shell/railLayout";
 import type { RailEntry } from "../src/rights/visibility";
 
 const RAIL_ENTRIES: RailEntry[] = ["cases", "explore", "questions", "dashboards", "history", "ownership", "strength"];
@@ -47,12 +47,20 @@ const params = new URLSearchParams(location.search);
 const rights = new Set((params.get("rights") ?? "investigate,read_alert_queue,edit_pipelines,manage_people").split(","));
 const places = placesFor(rights);
 const CASES: Record<string, string> = { kestrel: "Kestrel", harrier: "Harrier" };
-type View = "graph" | "map" | "dossier" | "matrix" | "reports" | "strength" | "alerts" | "ingest" | "boards";
+type View = "graph" | "map" | "dossier" | "matrix" | "reports" | "strength" | "ownership" | "dashboards" | "alerts" | "ingest" | "boards";
 
 function Harness() {
   const start = (params.get("place") as PlaceId | null) ?? (params.get("view") === "ingest" ? "ingest" : null) ?? places[0] ?? "glass";
   const [admin, setAdmin] = useState(start === "admin");
   const [view, setView] = useState<View>(start === "ingest" ? "ingest" : start === "rules" ? "alerts" : "graph");
+  // The rail's panels, open or not (ADR-145 Amendment 14): each opener toggles its own, as `App.tsx`'s do.
+  const [panels, setPanels] = useState<ReadonlySet<RailEntry>>(new Set());
+  const toggle = (id: RailEntry) =>
+    setPanels((open) => {
+      const next = new Set(open);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
   const caseId = initialInvestigationId() ?? "kestrel";
   // The same kept-view list as `App.tsx` (`KEPT_GLASS_VIEWS`), so the Messages case tests the Glass's.
   const lastGlassView = useLastGlassView(view, "ingest", "graph");
@@ -144,9 +152,10 @@ function Harness() {
             // The Glass's rail as `App.tsx` splits it (ADR-145 Amendment 12, `shell/railLayout.ts`).
             <LeftRail
               {...splitRail(RAIL_ENTRIES.map((id) => ({
-                id, label: RAIL_LABELS[id], icon: id, onSelect: id === "strength" ? () => setView("strength") : () => undefined,
-                // As `App.tsx` marks them: the place open now pressed; a panel's opener never pressed (Amendment 14).
-                ...(id === "strength" || id === "ownership" || id === "dashboards" ? { pressed: view === id } : { expanded: false }),
+                id, label: RAIL_LABELS[id], icon: id,
+                onSelect: PANEL_OPENERS.includes(id) ? () => toggle(id) : () => setView(id as View),
+                // ADR-145 Amendment 14 decision 3: marked by the same `railMark` as `App.tsx`, never a copy.
+                ...railMark(id, { view, open: panels }),
               })))}
               onHelp={() => undefined}
             />

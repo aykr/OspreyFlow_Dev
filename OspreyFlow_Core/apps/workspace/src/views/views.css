@@ -27,13 +27,14 @@
 .case-views--govuk .govuk-summary-list .govuk-summary-list__value { justify-self: end; }
 .case-views--govuk .govuk-summary-list .govuk-summary-list__value .govuk-tag { margin: 0; white-space: nowrap; }
 .case-views--govuk .govuk-summary-list .govuk-summary-list__actions { grid-column: 1 / -1; }
-.case-views--govuk .case-views__actions { flex-wrap: nowrap; gap: var(--sp-16); }
+/* One line at the drawer's width and GOV.UK's type; they wrap rather than overflow with the text enlarged (WCAG 1.4.4). */
+.case-views--govuk .case-views__actions { flex-wrap: wrap; column-gap: var(--sp-16); row-gap: var(--sp-4); }
 .case-views--govuk .case-views__confirm { gap: var(--sp-8); }
 .case-views--govuk .case-views__button { margin-bottom: 0; }
 /* A button drawn as a GOV.UK link (its colour and underline are `govuk-link`'s); GOV.UK's small type, 16 px,
    named outright as the banner's is (`shell/places.css`), with a 24 px target (WCAG 2.2, 2.5.8). */
 .case-views__link {
-  background: none; border: 0; margin: 0; padding: 0; cursor: pointer; white-space: nowrap;
+  background: none; border: 0; margin: 0; padding: 0; cursor: pointer;
   font: inherit; font-size: 16px; line-height: 24px; min-height: 24px; min-width: 24px;
 }
 

@@ -328,12 +328,56 @@ test("the banner's toggle is Graph and Drawing board, each chosen by keyboard, i
   registerCovered(REGISTRY, "banner-sections-by-keyboard");
 });
 
-// ADR-145 Amendment 14 decision 3 (the owner's screen fixes, 13 November 2026: one place, one marker): a place
-// of the rail's own, chosen by keyboard from Explore Details, is the one thing marked. The banner's Graph is
-// not current there and its note is not said; back on a view of the case's data, both return.
-test("a rail place chosen by keyboard is the only marker: no Glass mode current, no mode's note", async ({ page }) => {
-  await page.goto("/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts");
-  const region = page.getByRole("region", { name: "You are in the Glass" });
+// ADR-145 Amendment 14 decision 3 (the owner's screen fixes, 13 November 2026: one place, one marker), in the
+// dark, light and GOV.UK looks. A place of the rail's own chosen by keyboard from Explore Details is the one thing
+// marked, on the trigger; the banner's Graph is not current there and its note is not said. The owner's own case:
+// the Cases panel opened over Dashboards leaves Dashboards the one marker, Cases expanded, and a second Enter
+// closes it.
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  const marked = '[aria-pressed="true"], [data-current="true"]';
+
+  test(`${brand} ${theme}: a rail place chosen by keyboard is the only marker: no Glass mode current, no mode's note`, async ({ page }) => {
+    await page.goto(`/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts&brand=${brand}`);
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    const region = page.getByRole("region", { name: "You are in the Glass" });
+    const sections = region.getByRole("navigation", { name: "In the Glass" });
+    const rail = page.getByRole("navigation", { name: "Workspace" });
+    await rail.getByRole("button", { name: "Explore Details" }).focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("group", { name: "Explore Details" }).getByRole("button", { name: "Connection strength" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("glass, strength, on case kestrel")).toBeVisible();
+    for (const name of ["Graph", "Drawing board"]) await expect(sections.getByRole("button", { name })).not.toHaveAttribute("aria-current", "page");
+    await expect(region).not.toContainText("Graph: the case's data");
+    await expect(region).not.toHaveAttribute("aria-describedby");
+    await expect(rail.locator(marked)).toHaveCount(1);
+    await expect(rail.locator(marked)).toHaveAccessibleName("Explore Details, Connection strength open");
+    await sections.getByRole("button", { name: "Graph" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("glass, graph, on case kestrel")).toBeVisible();
+    await expect(sections.getByRole("button", { name: "Graph" })).toHaveAttribute("aria-current", "page");
+    await expect(region).toHaveAccessibleDescription("Graph: the case's data. Saved views are under Views or Cases.");
+    await expect(rail.locator(marked)).toHaveCount(0);
+  });
+
+  test(`${brand} ${theme}: the Cases panel opened over Dashboards leaves Dashboards the one marker, Cases expanded`, async ({ page }) => {
+    await page.goto(`/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts&brand=${brand}`);
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    const rail = page.getByRole("navigation", { name: "Workspace" });
+    await rail.getByRole("button", { name: "Dashboards" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("glass, dashboards, on case kestrel")).toBeVisible();
+    const cases = rail.getByRole("button", { name: "Cases" });
+    await cases.focus();
+    await page.keyboard.press("Enter");
+    await expect(cases).toHaveAttribute("aria-expanded", "true");
+    await expect(rail.locator(marked)).toHaveCount(1);
+    await expect(rail.locator(marked)).toHaveAccessibleName("Dashboards");
+    await expect(page.getByRole("region", { name: "You are in the Glass" })).not.toContainText("Graph: the case's data");
+    await page.keyboard.press("Enter");
+    await expect(cases).toHaveAttribute("aria-expanded", "false");
+  });
+}
   const sections = region.getByRole("navigation", { name: "In the Glass" });
   const rail = page.getByRole("navigation", { name: "Workspace" });
   await rail.getByRole("button", { name: "Explore Details" }).focus();
@@ -665,36 +709,46 @@ for (const shown of GOVUK_PAGES) {
 }
 
 // ADR-145 Amendment 14 decision 2 (the owner, 13 November 2026: "the Cases panel covers the top navigation"):
-// a drawer opens under the top bar, so the places, the top bar's controls and, under GOV.UK, the GOV.UK
-// header's navigation stay in view and can be clicked while it is open. In each look the scans use.
+// a drawer opens under the top bar and the context row, so the places, the top bar's controls, the GOV.UK header's
+// navigation and the row's case switcher and cross-link stay in view and can be clicked while it is open. In each
+// look the scans use, at 1440 and again after the window narrows to 900, where the bar and the row wrap and the
+// drawer is measured again.
 for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
-  test(`${brand} ${theme}: an open drawer starts under the top bar, the navigation above it uncovered`, async ({ page }) => {
+  test(`${brand} ${theme}: an open drawer starts under the top bar and the context row, the navigation above it uncovered`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/keyboard/shell-harness.html?brand=${brand}&drawer=1`);
     await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
     const drawer = page.getByRole("dialog", { name: "Cases" });
     await expect(drawer).toBeVisible();
-    const bar = await page.locator(".top-bar").boundingBox();
-    const box = await drawer.boundingBox();
-    expect(box!.y).toBeGreaterThanOrEqual(Math.floor(bar!.y + bar!.height));
-    // Every control above the drawer's top and inside its columns is the topmost thing at its own centre.
-    const covered = await page.evaluate(() => {
-      const top = document.querySelector<HTMLElement>("[role='dialog']")!.getBoundingClientRect();
-      return [...document.querySelectorAll<HTMLElement>("header a, header button, .top-bar a, .top-bar button")]
-        .filter((el) => {
-          const r = el.getBoundingClientRect();
-          return r.width > 0 && r.height > 0 && r.right > top.left;
-        })
-        .filter((el) => {
-          const r = el.getBoundingClientRect();
-          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-          return !(hit && (hit === el || el.contains(hit)));
-        })
-        .map((el) => el.getAttribute("aria-label") ?? el.textContent?.trim());
-    });
-    expect(covered).toEqual([]);
-    // Its own way out is still reached.
-    await drawer.getByRole("button", { name: "Close Cases" }).focus();
+    const check = async () => {
+      const row = (await page.getByRole("region", { name: "You are in the Glass" }).boundingBox())!;
+      const bar = (await page.locator(".top-bar").boundingBox())!;
+      const box = (await drawer.boundingBox())!;
+      expect(box.y).toBeGreaterThanOrEqual(Math.floor(Math.max(bar.y + bar.height, row.y + row.height)));
+      // Every control above the drawer's top and inside its columns is the topmost thing at its own centre.
+      const covered = await page.evaluate(() => {
+        const top = document.querySelector<HTMLElement>("[role='dialog']")!.getBoundingClientRect();
+        return [...document.querySelectorAll<HTMLElement>("header a, header button, .top-bar a, .top-bar button, [aria-labelledby='context-banner-title'] button")]
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && r.right > top.left;
+          })
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+            return !(hit && (hit === el || el.contains(hit)));
+          })
+          .map((el) => el.getAttribute("aria-label") ?? el.textContent?.trim());
+      });
+      expect(covered).toEqual([]);
+      return box.y;
+    };
+    const wide = await check();
+    await page.setViewportSize({ width: 900, height: 900 });
+    await expect.poll(check).toBeGreaterThan(wide);
+    // Its own way out is reached by keyboard: the drawer takes focus as it opens, and Tab reaches Close.
+    await drawer.focus();
+    await page.keyboard.press("Tab");
     await expect(drawer.getByRole("button", { name: "Close Cases" })).toBeFocused();
   });
 }

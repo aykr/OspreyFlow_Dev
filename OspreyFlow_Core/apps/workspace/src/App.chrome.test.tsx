@@ -196,7 +196,7 @@ describe("one place, one marker; the dataset named once (ADR-145 Amendment 14)",
     expect(region.getAttribute("aria-describedby")).toBeNull();
   });
 
-  test("a view of the case's data keeps Graph current with its note (Map, Matrix, Figures)", async () => {
+  test("a view of the case's data keeps Graph current with its note (Map)", async () => {
     render(<App />);
     const region = await screen.findByRole("region", { name: "You are in the Glass" });
     await screen.findByRole("application", { name: "Network canvas" });
@@ -234,4 +234,101 @@ describe("one place, one marker; the dataset named once (ADR-145 Amendment 14)",
     await within(region).findByRole("button", { name: /^Case: Kestrel/ });
     expect((region.textContent ?? "").match(/prison intel/gi)).toHaveLength(1);
   });
+
+  // ADR-115 Amendment 1 point 5's two cases kept: a case reading no dataset is still marked (in the banner's
+  // words, "reads no dataset"), and the badge still names the scope when the case's datasets cannot be read.
+  for (const [what, listed, datasets] of [
+    ["a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it", [] as string[], "empty"],
+    ["the badge names the scope when the case's datasets cannot be read", ["Prison intel"], "refused"],
+  ] as const) {
+    test(what, async () => {
+      const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+      vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+        const path = String(input).split("?")[0]!;
+        if (/\/v1\/investigations$/.test(path))
+          return Promise.resolve(new Response(JSON.stringify([{ id: "inv-1", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a", datasets: listed }])));
+        if (/\/inv-1\/datasets$/.test(path))
+          return Promise.resolve(datasets === "empty" ? new Response("[]") : new Response("{}", { status: 403 }));
+        return held(input, init);
+      }); // prettier-ignore
+      render(<App />);
+      const region = await screen.findByRole("region", { name: "You are in the Glass" });
+      await within(region).findByRole("button", { name: /^Case: Kestrel/ });
+      if (datasets === "empty") {
+        expect(await within(region).findByText("reads no dataset")).toBeTruthy();
+        expect(within(region).queryByText("NO DATA")).toBeNull();
+      } else {
+        expect(await within(region).findByText("PRISON INTEL")).toBeTruthy();
+        expect(within(region).queryByText(/^reads /)).toBeNull();
+      }
+    });
+  }
+});
+
+describe("the rail's panel openers and the views of the case's data (ADR-145 Amendment 14, the review's items)", () => {
+  const rail = () => screen.getByRole("navigation", { name: "Workspace" });
+
+  for (const name of ["Cases", "Explore", "Ask & Chat"]) {
+    test(`${name} is expanded while its panel is open, never pressed, and a second press closes it`, async () => {
+      render(<App />);
+      await screen.findByRole("application", { name: "Network canvas" });
+      const opener = within(rail()).getByRole("button", { name });
+      expect(opener.getAttribute("aria-expanded")).toBe("false");
+      expect(opener.getAttribute("aria-haspopup")).toBe("dialog");
+      fireEvent.click(opener);
+      await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("true"));
+      expect(screen.getAllByRole("dialog").length).toBeGreaterThan(0);
+      expect(opener.getAttribute("aria-pressed")).toBeNull();
+      fireEvent.click(opener);
+      await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("false"));
+    });
+  }
+
+  test("History, under Explore Details, is named on the trigger while open, without the place's marker", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(within(rail()).getByRole("button", { name: "Explore Details" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Explore Details" })).getByRole("button", { name: "History" }));
+    const trigger = await within(rail()).findByRole("button", { name: "Explore Details, History open" });
+    expect(trigger.getAttribute("data-current")).toBeNull();
+    expect(rail().querySelectorAll('[aria-pressed="true"], [data-current="true"]')).toHaveLength(0);
+  });
+
+  test("Ownership, under Explore Details, is the one marker, on the trigger", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(within(rail()).getByRole("button", { name: "Explore Details" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Explore Details" })).getByRole("button", { name: "Ownership" }));
+    const trigger = await within(rail()).findByRole("button", { name: "Explore Details, Ownership open" });
+    expect([...rail().querySelectorAll('[aria-pressed="true"], [data-current="true"]')]).toEqual([trigger]);
+  });
+
+  for (const name of ["Matrix", "Figures"]) {
+    test(`${name}, a view of the case's data under More views, keeps Graph current with its note`, async () => {
+      render(<App />);
+      const region = await screen.findByRole("region", { name: "You are in the Glass" });
+      await screen.findByRole("application", { name: "Network canvas" });
+      fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+      fireEvent.click(await screen.findByRole("button", { name }));
+      const graph = within(within(region).getByRole("navigation", { name: "In the Glass" })).getByRole("button", { name: "Graph" });
+      await vi.waitFor(() => expect(graph.getAttribute("aria-current")).toBe("page"));
+      expect(within(region).getByText(/^Graph: the case's data/)).toBeTruthy();
+    });
+  }
+
+  for (const [place, region] of [["Rules and Monitoring 3 open", "You are in Rules and Monitoring"], ["Ingest Studio", "You are in the Ingest Studio"]] as const) {
+    test(`the scope badge stays where the banner names no dataset: ${region}`, async () => {
+      const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+      vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+        /\/v1\/investigations$/.test(String(input).split("?")[0]!)
+          ? Promise.resolve(new Response(JSON.stringify([{ id: "inv-1", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a", datasets: ["Prison intel"] }])))
+          : held(input, init),
+      ); // prettier-ignore
+      render(<App />);
+      await screen.findByRole("application", { name: "Network canvas" });
+      fireEvent.click(within(screen.getByRole("navigation", { name: "Places" })).getByRole("button", { name: place }));
+      const there = await screen.findByRole("region", { name: region });
+      expect(await within(there).findByText("PRISON INTEL")).toBeTruthy();
+    });
+  }
 });
