@@ -11,16 +11,27 @@ import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { TopBar } from "../src/shell/TopBar";
 
 const brand = await applyHarnessBrand();
+// ADR-132 Amendment 7: `?banner=1` gives the deployment's own banner words (the owner's wording for
+// the demonstration), under GOV.UK beside the beta tag and under OspreyFlow alone; `?banner=alone`
+// is the demonstration's own deployment, GOV.UK with no phase, the words alone.
+const BANNER = "Demonstration only: this is not a government service, and all data is synthetic.";
+const asked = new URLSearchParams(window.location.search).get("banner");
+const bannerText = asked === "1" || asked === "alone" ? BANNER : undefined;
+const phase = asked === "alone" ? "none" : "beta";
+// ADR-132 Amendment 7: `?host=` stands for the page's own address (a harness is served on localhost,
+// which is not gov.uk), so the footer on gov.uk can be shown too.
+const hostname = new URLSearchParams(window.location.search).get("host") ?? window.location.hostname;
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
 createRoot(container).render(
   <BrandFrame
+    hostname={hostname}
     appearance={
       brand === "govuk"
-        ? { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" }
-        : PLAIN_APPEARANCE
+        ? { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase, bannerText }
+        : { ...PLAIN_APPEARANCE, bannerText }
     }
   >
     <ClassificationStrip marking="OFFICIAL" />

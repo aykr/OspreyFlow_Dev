@@ -1,9 +1,75 @@
 // The GOV.UK footer (ADR-132). Markup follows GOV.UK Frontend 6.6.0's `footer` component, with the
 // default Open Government Licence statement and two support links. Drawn only under the `govuk` brand.
+//
+// ADR-132 Amendment 7 (the owner's ruling of 13 November 2026): off gov.uk (`onGovUk` false) there is
+// no crown, no Crown copyright and no Open Government Licence line, and on the workspace's own screens
+// (`slim`) the footer is one line of the same words and links. On gov.uk it is the full footer as
+// before, wherever it is drawn.
 import { currentBrand } from "../brand";
 
-export function GovukFooter({ organisation }: { organisation: string | null }) {
+function SupportLinks() {
+  return (
+    <>
+      <a className="govuk-footer__link" href="/accessibility-statement.html">
+        Accessibility statement
+      </a>
+      {" · "}
+      <a className="govuk-footer__link" href="/cookies.html">
+        Cookies
+      </a>
+    </>
+  );
+}
+
+export function GovukFooter({
+  organisation,
+  onGovUk = true,
+  slim = false,
+}: {
+  organisation: string | null;
+  onGovUk?: boolean;
+  slim?: boolean;
+}) {
   if (currentBrand() !== "govuk") return null;
+  if (!onGovUk && slim) {
+    return (
+      <div className="govuk-footer govuk-footer--slim">
+        <div className="govuk-width-container">
+          <p className="govuk-body-s govuk-!-margin-bottom-0">
+            {organisation !== null && <>Run by {organisation} · </>}
+            Built with OspreyFlow, open source. · <SupportLinks />
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (!onGovUk) {
+    return (
+      <div className="govuk-footer">
+        <div className="govuk-width-container">
+          <div className="govuk-footer__meta">
+            <div className="govuk-footer__meta-item govuk-footer__meta-item--grow">
+              <h2 className="govuk-visually-hidden">Support links</h2>
+              <ul className="govuk-footer__inline-list">
+                <li className="govuk-footer__inline-list-item">
+                  <a className="govuk-footer__link" href="/accessibility-statement.html">
+                    Accessibility statement
+                  </a>
+                </li>
+                <li className="govuk-footer__inline-list-item">
+                  <a className="govuk-footer__link" href="/cookies.html">
+                    Cookies
+                  </a>
+                </li>
+              </ul>
+              {organisation !== null && <p className="govuk-body-s">Run by {organisation}</p>}
+              <p className="govuk-body-s">Built with OspreyFlow, open source.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="govuk-footer">
       <div className="govuk-width-container">

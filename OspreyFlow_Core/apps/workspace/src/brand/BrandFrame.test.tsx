@@ -6,7 +6,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { applyBrand, PLAIN_APPEARANCE, type Appearance } from "./brand";
-import { BrandFrame, MAIN_CONTENT_ID } from "./BrandFrame";
+import { BrandFrame, MAIN_CONTENT_ID, useFullFooter } from "./BrandFrame";
 
 const GOVUK: Appearance = { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" };
 
@@ -43,6 +43,14 @@ describe("under the OspreyFlow brand", () => {
     frame({ ...PLAIN_APPEARANCE, phase: "beta" });
     expect(screen.getByRole("region", { name: "Service phase" }).textContent).toContain("Beta");
   });
+
+  it("shows the deployment's banner text with no phase (ADR-132 Amendment 7)", () => {
+    applyBrand("ospreyflow");
+    frame({ ...PLAIN_APPEARANCE, bannerText: "Demonstration only: all data is synthetic." });
+    expect(screen.getByRole("region", { name: "Service phase" }).textContent).toBe(
+      "Demonstration only: all data is synthetic.",
+    );
+  });
 });
 
 describe("under the GOV.UK brand", () => {
@@ -67,5 +75,50 @@ describe("under the GOV.UK brand", () => {
     expect(container.querySelector(".govuk-service-navigation")).toBeNull();
     expect(screen.queryByRole("link", { name: "Prison Intelligence" })).toBeNull();
     expect(document.title).toBe("Prison Intelligence – GOV.UK");
+  });
+});
+
+// ADR-132 Amendment 7 (the owner, 13 November 2026): off gov.uk, the footer on the workspace's screens
+// is one line; Home and the sign-in page claim the full one (`useFullFooter`), still with nothing of
+// the Crown. On gov.uk the footer is the full one everywhere, as before.
+describe("the footer on and off gov.uk", () => {
+  function Home() {
+    useFullFooter();
+    return <p>Home</p>;
+  }
+
+  it("is one line on the workspace's screens off gov.uk", () => {
+    applyBrand("govuk");
+    const { container } = render(
+      <BrandFrame appearance={GOVUK} hostname="demo.ospreyflow.app">
+        <button type="button">Inside the Glass</button>
+      </BrandFrame>,
+    );
+    const footer = container.querySelector(".govuk-footer")!;
+    expect(footer.querySelectorAll("p").length).toBe(1);
+    expect(footer.textContent).not.toMatch(/Crown copyright|Open Government Licence/);
+  });
+
+  it("is full on a screen that claims it, still with nothing of the Crown off gov.uk", () => {
+    applyBrand("govuk");
+    const { container } = render(
+      <BrandFrame appearance={GOVUK} hostname="demo.ospreyflow.app">
+        <Home />
+      </BrandFrame>,
+    );
+    const footer = container.querySelector(".govuk-footer")!;
+    expect(footer.querySelectorAll("p").length).toBe(2);
+    expect(footer.querySelector(".govuk-footer__crown")).toBeNull();
+  });
+
+  it("is the full footer, Crown and all, on gov.uk", () => {
+    applyBrand("govuk");
+    const { container } = render(
+      <BrandFrame appearance={GOVUK} hostname="prison-intelligence.service.gov.uk">
+        <button type="button">Inside the Glass</button>
+      </BrandFrame>,
+    );
+    expect(container.querySelector(".govuk-footer__crown")).not.toBeNull();
+    expect(screen.getByText(/Crown copyright/)).toBeTruthy();
   });
 });

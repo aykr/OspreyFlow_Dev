@@ -435,6 +435,8 @@ def _load(
         "bundle-install-exit-test",
         "sustained-load-exit-test",
         "harness-image-exit-test",
+        # ADR-114 Amendment 41: the real front proxy against the shared key, on every name.
+        "access-key-proxy-test",
         "six-screen-live-exit-test",
         # Ruling R5's own closing-pass job (27 September 2026). Added here in the same change
         # that added the job, which is what this list's own cost above asks for — the gate

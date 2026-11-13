@@ -53,20 +53,26 @@
     var header = fragment(HEADER);
     while (header.firstChild) top.appendChild(header.firstChild);
 
-    if (settings.phase === "alpha" || settings.phase === "beta") {
+    // ADR-132 Amendment 7: the deployment's own words replace the default ones, and with no phase
+    // they are shown alone. Set as text, never as markup.
+    var phased = settings.phase === "alpha" || settings.phase === "beta";
+    var own = typeof settings.bannerText === "string" && settings.bannerText.trim() ? settings.bannerText : null;
+    if (phased || own) {
       var banner = document.createElement("div");
       banner.className = "govuk-phase-banner govuk-width-container";
       banner.setAttribute("role", "region");
       banner.setAttribute("aria-label", "Service phase");
       var content = document.createElement("p");
       content.className = "govuk-phase-banner__content";
-      var tag = document.createElement("strong");
-      tag.className = "govuk-tag govuk-phase-banner__content__tag";
-      tag.textContent = settings.phase === "alpha" ? "Alpha" : "Beta";
+      if (phased) {
+        var tag = document.createElement("strong");
+        tag.className = "govuk-tag govuk-phase-banner__content__tag";
+        tag.textContent = settings.phase === "alpha" ? "Alpha" : "Beta";
+        content.appendChild(tag);
+      }
       var words = document.createElement("span");
       words.className = "govuk-phase-banner__text";
-      words.textContent = "This is a new service.";
-      content.appendChild(tag);
+      words.textContent = own || "This is a new service.";
       content.appendChild(words);
       banner.appendChild(content);
       top.appendChild(banner);
@@ -74,6 +80,20 @@
     body.insertBefore(top, body.firstChild);
 
     var footer = fragment(FOOTER);
+    // ADR-132 Amendment 7 (the owner's ruling of 13 November 2026): off gov.uk, nothing of the Crown:
+    // no crown, no Open Government Licence line and no Crown copyright. On gov.uk, as it was.
+    var host = window.location.hostname.toLowerCase();
+    if (host !== "gov.uk" && host.slice(-7) !== ".gov.uk") {
+      var crownly = footer.querySelectorAll(
+        ".govuk-footer__crown, .govuk-footer__licence-logo, .govuk-footer__licence-description"
+      );
+      for (var c = 0; c < crownly.length; c++) crownly[c].parentNode.removeChild(crownly[c]);
+      var copyright = footer.querySelector(".govuk-footer__copyright-logo");
+      if (copyright) {
+        var item = copyright.closest(".govuk-footer__meta-item") || copyright;
+        item.parentNode.removeChild(item);
+      }
+    }
     var links = footer.querySelectorAll("a[href]");
     for (var i = 0; i < links.length; i++) onGlass(links[i]);
     if (settings.organisation) {

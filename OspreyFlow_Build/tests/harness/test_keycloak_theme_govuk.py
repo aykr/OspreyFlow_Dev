@@ -116,3 +116,28 @@ def test_under_govuk_the_words_name_no_product_and_the_title_is_not_repeated() -
     css = render_login_theme(TOKENS, appearance=GOVUK, glass_origin=GLASS)[THEME_STYLESHEET]
     assert '[data-brand="govuk"] #kc-header { display: none; }' in css
 
+
+# ADR-132 Amendment 7: the deployment's own banner text, on the sign-in page as in the Glass.
+DISCLAIMER = "Demonstration only: this is not a government service, and all data is synthetic."
+
+
+def _chrome_settings(appearance: AppearanceConfig) -> dict[str, object]:
+    chrome = render_login_theme(TOKENS, appearance=appearance, glass_origin=GLASS)[
+        GOVUK_CHROME_SCRIPT
+    ]
+    first = chrome.split("\n", 1)[0]
+    return json.loads(first.removeprefix("window.OSPREY_GOVUK = ").rstrip(";"))
+
+
+def test_the_banner_text_reaches_the_sign_in_page_when_set() -> None:
+    told = _chrome_settings(GOVUK.model_copy(update={"banner_text": DISCLAIMER, "phase": "none"}))
+    assert told["bannerText"] == DISCLAIMER
+    assert told["phase"] == "none"
+
+
+def test_unset_banner_text_leaves_the_sign_in_page_byte_for_byte_as_it_was() -> None:
+    """Nothing changes for a deployment that names none: not even a `bannerText: null`."""
+    assert "bannerText" not in _chrome_settings(GOVUK)
+    assert render_login_theme(TOKENS, appearance=GOVUK, glass_origin=GLASS) == render_login_theme(
+        TOKENS, appearance=AppearanceConfig(**GOVUK.model_dump()), glass_origin=GLASS
+    )

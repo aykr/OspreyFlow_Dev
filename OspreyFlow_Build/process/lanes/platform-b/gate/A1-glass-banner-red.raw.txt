@@ -1,0 +1,11 @@
+# gate-b A1, the Glass's banner, red first: the tests before the code, at df6557f + the tests, this Mac
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  apps/workspace/src/brand/BrandFrame.test.tsx > under the OspreyFlow brand > shows the deployment's banner text with no phase (ADR-132 Amendment 7)
+ FAIL  apps/workspace/src/brand/brand.test.tsx > reading the deployment's appearance > takes the deployment's banner text when it names one, and adds nothing when it does not (ADR-132 Amendment 7)
+ FAIL  apps/workspace/src/brand/govuk/PhaseBanner.test.tsx > PhaseBanner under ospreyflow > says the deployment's own words after the phase's tag
+ FAIL  apps/workspace/src/brand/govuk/PhaseBanner.test.tsx > PhaseBanner under ospreyflow > says the deployment's own words alone at none, with no tag
+ FAIL  apps/workspace/src/brand/govuk/PhaseBanner.test.tsx > PhaseBanner under ospreyflow > says the deployment's own words alone at live, with no tag
+ FAIL  apps/workspace/src/brand/govuk/PhaseBanner.test.tsx > PhaseBanner under govuk > says the deployment's own words alone at none, with no tag
+ FAIL  apps/workspace/src/brand/govuk/PhaseBanner.test.tsx > PhaseBanner under govuk > says the deployment's own words alone at live, with no tag
+ FAIL  apps/workspace/src/brand/govuk/PhaseBanner.test.tsx > PhaseBanner under govuk > says the deployment's own words after the phase's tag
+      Tests  8 failed | 43 passed (51)

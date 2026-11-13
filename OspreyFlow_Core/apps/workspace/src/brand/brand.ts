@@ -15,6 +15,9 @@ export interface Appearance {
   serviceName: string | null;
   organisation: string | null;
   phase: Phase;
+  /** ADR-132 Amendment 7: the deployment's own words for the banner, in place of "This is a new
+   * service."; with no phase, shown alone. Absent when the deployment names none. */
+  bannerText?: string;
 }
 
 export const PLAIN_APPEARANCE: Appearance = { brand: "ospreyflow", serviceName: null, organisation: null, phase: "none" };
@@ -30,12 +33,22 @@ function text(value: unknown): string | null {
 export function readAppearance(section: unknown): Appearance {
   if (typeof section !== "object" || section === null) return PLAIN_APPEARANCE;
   const given = section as Record<string, unknown>;
+  const bannerText = text(given.banner_text);
   return {
     brand: given.brand === "govuk" ? "govuk" : "ospreyflow",
     serviceName: text(given.service_name),
     organisation: text(given.organisation),
     phase: PHASES.includes(given.phase as Phase) ? (given.phase as Phase) : "none",
+    ...(bannerText ? { bannerText } : {}),
   };
+}
+
+/** Whether an address is on gov.uk (gov.uk itself or a name under it, such as `*.service.gov.uk`):
+ * only there may a page carry the crown, Crown copyright and the Open Government Licence (ADR-132
+ * Amendment 7, the owner's ruling of 13 November 2026). */
+export function isGovUkHost(hostname: string): boolean {
+  const name = hostname.toLowerCase().replace(/\.$/, "");
+  return name === "gov.uk" || name.endsWith(".gov.uk");
 }
 
 /** `?brand=govuk` or `?brand=ospreyflow`, so a tester sees either brand without a redeploy. Only in

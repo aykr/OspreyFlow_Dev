@@ -446,6 +446,9 @@ def render_login_theme(
         "phase": appearance.phase,
         "glassOrigin": (glass_origin or "").rstrip("/"),
     }
+    if appearance.banner_text is not None:
+        # ADR-132 Amendment 7; absent when unset, so the theme is byte for byte as it was.
+        settings["bannerText"] = appearance.banner_text
     files[THEME_PROPERTIES] = _PROPERTIES.replace(
         "js/osprey-sign-in.js", "js/osprey-sign-in.js js/govuk-chrome.js"
     )

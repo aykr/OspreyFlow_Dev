@@ -85,25 +85,31 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
             f"\thttps_port {PROXY_HTTPS_PORT}",
         ]
     lines.append("}")
+    gate = config.network.access_key
+    if gate:
+        # ADR-114 Amendment 41: the shared key's hash and the pass, written on the server by
+        # `python -m harness.access_key set` and mounted into the proxy alone; never rendered here.
+        from harness.access_key import IN_PROXY
+
+        lines += ["", f"import {IN_PROXY}"]
     given = [f"\ttls {CERT_IN_PROXY} {KEY_IN_PROXY}"] if own else []
     for name, upstream in routes:
         if name == f"id.{names.host}" and config.appearance.brand == "govuk":
             # ADR-132 Amendment 2: the sign-in page's GOV.UK stylesheet and fonts come from the
             # Glass, on the sign-in page's own name, so they are same-origin there.
-            lines += [
-                "",
-                f"{names.scheme}://{name} {{",
-                *given,
+            handlers = [
                 "\thandle /assets/govuk/* {",
                 "\t\treverse_proxy workspace:8080",
                 "\t}",
                 "\thandle {",
                 f"\t\treverse_proxy {upstream}",
                 "\t}",
-                "}",
             ]
-            continue
-        lines += ["", f"{names.scheme}://{name} {{", *given, f"\treverse_proxy {upstream}", "}"]
+        else:
+            handlers = [f"\treverse_proxy {upstream}"]
+        if gate:
+            handlers = _behind_the_key(identity=name == f"id.{names.host}", handlers=handlers)
+        lines += ["", f"{names.scheme}://{name} {{", *given, *handlers, "}"]
     # ADR-114 Amendment 7: the doors this machine alone uses, through the proxy, so the services
     # behind them need no published port — and so no route out (measured: a published port needs
     # a network that reaches the internet).
@@ -118,10 +124,73 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
         # address (on the origin's own port, if it has one).
         suffix = "" if names.port == 443 else f":{names.port}"
         for name, _upstream in routes:
-            lines += ["", f"http://{name} {{", f"\tredir https://{name}{suffix}{{uri}} 308", "}"]
+            lines += ["", f"http://{name} {{", *([NOINDEX] if gate else []),
+                      f"\tredir https://{name}{suffix}{{uri}} 308", "}"]  # fmt: skip
     catch_all = f":{PROXY_HTTP_PORT}" if plain or own else "http://:80"
-    lines += ["", f"{catch_all} {{", "\trespond /healthz 200", "\trespond 404", "}", ""]
+    lines += ["", f"{catch_all} {{", *([NOINDEX] if gate else []), "\trespond /healthz 200",
+              "\trespond 404", "}", ""]  # fmt: skip
     return "\n".join(lines)
+
+
+#: ADR-114 Amendment 41: every answer of a deployment that asks for the key says so to a crawler.
+NOINDEX = '\theader X-Robots-Tag "noindex, nofollow"'
+#: What the Glass asks its identity provider from its own origin, where a browser sends no stored
+#: credential and no cookie: its discovery document, its keys and its token. Each answers nothing
+#: without a code, a refresh token or a signature to check against; the sign-in page itself is
+#: behind the key.
+OPEN_ON_THE_IDENTITY_PROVIDER = (
+    f"/realms/{REALM}/protocol/openid-connect/token",
+    f"/realms/{REALM}/protocol/openid-connect/certs",
+    f"/realms/{REALM}/.well-known/openid-configuration",
+)
+
+
+def _behind_the_key(*, identity: bool, handlers: list[str]) -> list[str]:
+    """One name's handlers behind the shared key (ADR-114 Amendment 41), in this order: a request
+    that has no pass, is not a CORS preflight (an `OPTIONS` naming the method it asks about, which
+    never carries a credential) and, on the identity provider, is not one of its open answers, is
+    asked for the key (`basic_auth`); once it has answered, it is given the pass for this name alone
+    (host-only). **Any Basic `Authorization`, whatever its case, is taken off** before anything
+    behind the proxy sees it, so the key never reaches a service. The file's three snippets,
+    `harness.access_key.snippet`, carry the hash and the pass."""
+    unasked = [
+        "\t\tnot {",
+        "\t\t\tmethod OPTIONS",
+        "\t\t\theader Access-Control-Request-Method *",
+        "\t\t}",
+    ]
+    if identity:
+        # Exactly these paths as asked, decoded but not cleaned: Caddy's own `path` matcher cleans
+        # first, so `.../auth%2F..%2Ftoken` matched the token and went on raw (found by
+        # `test_an_encoded_or_disguised_path_never_reaches_the_sign_in_page_without_the_key`).
+        listed = ", ".join(f'"{path}"' for path in OPEN_ON_THE_IDENTITY_PROVIDER)
+        unasked.append(f"\t\tnot expression `{{http.request.orig_uri.path}} in [{listed}]`")
+    unasked += ["\t\tnot {", "\t\t\timport osprey_access_pass", "\t\t}"]
+    basic = ["\t\theader_regexp Authorization (?i)^basic\\s"]
+    return [
+        NOINDEX,
+        # Every answer, a refusal included, is in the proxy's own log (Caddy redacts
+        # `Authorization` and `Cookie` there): an attempt at the key is seen.
+        "\tlog",
+        "\t@osprey_locked {",
+        *unasked,
+        "\t}",
+        "\t@osprey_answered {",
+        *unasked,
+        *basic,
+        "\t}",
+        "\t@osprey_basic {",
+        *basic,
+        "\t}",
+        "\troute {",
+        "\t\tbasic_auth @osprey_locked bcrypt OspreyFlow {",
+        "\t\t\timport osprey_access_key",
+        "\t\t}",
+        "\t\timport osprey_access_pass_set",
+        "\t\trequest_header @osprey_basic -Authorization",
+        *("\t" + line for line in handlers),
+        "\t}",
+    ]
 
 
 #: A site named by host; a bare `:port` door (`loopback_doors`) is not a name and is not listed.
@@ -241,6 +310,19 @@ def proxy_service(config: OspreyConfig) -> dict[str, Any]:
         **extra,
     }
     service.setdefault("volumes", []).insert(0, "./Caddyfile:/etc/caddy/Caddyfile:ro")
+    if config.network.access_key:
+        from harness.access_key import ACCESS_KEY_FILE, IN_PROXY
+
+        # ADR-114 Amendment 41: the key's hash and the pass, to the proxy alone; read-only. The long
+        # form, never creating its source: Docker's short form makes a folder where a file is
+        # missing, which then stands in the key's place; this way a missing key stops the start.
+        service["volumes"].insert(1, {
+            "type": "bind",
+            "source": f"./{ACCESS_KEY_FILE}",
+            "target": IN_PROXY,
+            "read_only": True,
+            "bind": {"create_host_path": False},
+        })  # fmt: skip
     service["healthcheck"] = {
         "test": ["CMD", "wget", "-q", "-O", "/dev/null", health],
         "interval": "10s",
@@ -347,7 +429,7 @@ def render_glass_settings(config: OspreyConfig, *, entra: EntraSignInConfig | No
         "organisation_label": organisation_label(config),
         "welcome": {"about": welcome.about, "links": links},
         # ADR-132: the deployment's brand and what its page title, GOV.UK footer and banner name.
-        "appearance": config.appearance.model_dump(),
+        "appearance": config.appearance.told(),
         "version": deployment_version(),
     }
     if entra is not None:
@@ -450,22 +532,94 @@ def answer_the_deployment_here(config: OspreyConfig) -> None:
     _trust([tls.certificate, *([tls.ca] if tls.ca else [])])
 
 
-def answer_the_deployment_in(directory: Path) -> None:
-    """`answer_the_deployment_here` for the rendered deployment in `directory`, from the
-    `osprey.yaml` copy its render writes beside `compose.yaml`; nothing when there is none."""
+#: ADR-114 Amendment 41: each deployment name a tool on this server reaches with the pass, and the
+#: deployment's folder its key file is read from (at each request, so a key set again mid-run is
+#: followed).
+_PASSES: dict[str, Path] = {}
+
+
+def carry_the_pass(config: OspreyConfig, directory: Path) -> None:
+    """The tools on the server (`harness.apply`, `harness.register_sign_in`, backup and restore)
+    reach a deployment that asks for the shared key as a browser that has answered does: with the
+    pass from its key file, which only the file's owner can read. On `urllib`'s requests to the
+    deployment's three names alone, never elsewhere. Nothing for a deployment that does not ask."""
+    if not config.network.access_key:
+        return
+    host = sites(config).host.lower()
+    for name in (host, f"id.{host}", f"bi.{host}"):
+        _PASSES[name] = directory
+    import urllib.request
+
+    handler = urllib.request.AbstractHTTPHandler
+    if getattr(handler.do_request_, "_osprey_pass", False):
+        return
+    underlying = handler.do_request_
+
+    def do_request_(self: Any, request: Any) -> Any:
+        request = underlying(self, request)
+        name = (urlparse(request.full_url).hostname or "").lower()
+        directory = _PASSES.get(name)
+        if directory is not None and not request.has_header("Cookie"):
+            from harness.access_key import PASS_COOKIE, pass_token
+
+            token = pass_token(directory)
+            if token is not None:
+                request.add_unredirected_header("Cookie", f"{PASS_COOKIE}={token}")
+        return request
+
+    do_request_._osprey_pass = True  # type: ignore[attr-defined]
+    # `HTTPHandler.http_request` and `HTTPSHandler.https_request` are the function itself, bound
+    # when `urllib.request` was imported, so each is replaced as well.
+    handler.do_request_ = do_request_  # type: ignore[method-assign]
+    urllib.request.HTTPHandler.http_request = do_request_  # type: ignore[method-assign]
+    urllib.request.HTTPSHandler.https_request = do_request_  # type: ignore[method-assign]
+
+
+def _installed(directory: Path) -> OspreyConfig | None:
+    """The settings of the rendered deployment in `directory`, from the `osprey.yaml` copy its
+    render writes beside `compose.yaml`; None when there is none."""
     path = directory / "osprey.yaml"
     if not path.is_file():
-        return
+        return None
     import yaml
 
     loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    answer_the_deployment_here(OspreyConfig.model_validate(loaded))
+    return OspreyConfig.model_validate(loaded)
+
+
+def carry_the_pass_in(directory: Path) -> None:
+    """`carry_the_pass` for the rendered deployment in `directory`; nothing when it has no settings,
+    they cannot be read, or it does not ask."""
+    import yaml
+
+    try:
+        config = _installed(directory)
+    except (OSError, ValueError, yaml.YAMLError):
+        return
+    if config is not None:
+        carry_the_pass(config, directory)
+
+
+def forget_the_passes() -> None:
+    """For tests: no deployment's pass is carried any more."""
+    _PASSES.clear()
+
+
+def answer_the_deployment_in(directory: Path) -> None:
+    """`answer_the_deployment_here` for the rendered deployment in `directory`, from the
+    `osprey.yaml` copy its render writes beside `compose.yaml`; nothing when there is none."""
+    config = _installed(directory)
+    if config is not None:
+        answer_the_deployment_here(config)
 
 
 def deployment_origins(env_file: Path) -> tuple[str, str]:
     """`(glass, identity)` as a rendered deployment's `deployment.env` names them — what every tool
     on the host reaches the deployment at. A deployment rendered before B3 names neither, and is
     answered with its old published ports, so a tool still reaches it until it is reinstalled."""
+    # ADR-114 Amendment 41: every tool on the host that reaches the deployment by these names
+    # (backup, restore, the sign-in registration) does so with its pass, if it asks for the key.
+    carry_the_pass_in(env_file.parent)
     values: dict[str, str] = {}
     try:
         for line in env_file.read_text(encoding="utf-8").splitlines():

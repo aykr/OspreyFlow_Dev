@@ -16,6 +16,7 @@ import { MeshMark, SolidMark } from "../shell/BrandMark";
 import { WelcomeAbout } from "../welcome/WelcomeAbout";
 import { WelcomeFigure } from "../welcome/WelcomeFigure";
 import type { WelcomeLink, WelcomeSettingsRead } from "./oidcConfig";
+import { useFullFooter } from "../brand/BrandFrame";
 import "../welcome/welcome.css";
 
 export type WelcomeSettings = WelcomeSettingsRead;
@@ -153,6 +154,8 @@ function SignInCard({ reason, intent, onSignIn, welcome }: Required<Pick<SignInS
 } // prettier-ignore
 
 export function SignInScreen({ reason, intent, onSignIn, marking = null, welcome = PLAIN }: SignInScreenProps) {
+  // ADR-132 Amendment 7: the sign-in page has the full footer; the workspace's screens a one-line one.
+  useFullFooter();
   return (
     <div className="welcome">
       {marking && <ClassificationStrip marking={marking} />}

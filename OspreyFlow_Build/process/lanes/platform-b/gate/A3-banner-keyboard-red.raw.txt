@@ -1,0 +1,5 @@
+# gate-b A3, the banner's keyboard cases, red: BrandFrame planted to drop the deployment's words, this Mac
+  ✘  1 keyboard/shell.spec.ts:391:3 › ospreyflow dark: the deployment's banner words add no Tab stop and are read in their region (5.2s)
+  ✘  2 keyboard/shell.spec.ts:391:3 › ospreyflow light: the deployment's banner words add no Tab stop and are read in their region (5.1s)
+  ✘  3 keyboard/shell.spec.ts:391:3 › govuk light: the deployment's banner words add no Tab stop and are read in their region (5.1s)
+  3 failed

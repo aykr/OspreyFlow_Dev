@@ -316,6 +316,10 @@ export type RedirectHttp = boolean;
  */
 export type ListenAddress = string | null;
 /**
+ * Small over https:// only: the front proxy asks every browser for a shared key (the browser's own user name and key box) on all three names before anything loads, and every answer says noindex. The key's bcrypt hash is set on the server by `python -m harness.access_key set <the deployment's folder>`, never here. Default: false (ADR-114 Amendment 41).
+ */
+export type AccessKey = boolean;
+/**
  * The provider the map opens on, by its id
  */
 export type Default = string;
@@ -526,6 +530,10 @@ export type Organisation = string | null;
  * Default: none. The phase banner shows at alpha or beta.
  */
 export type Phase = "alpha" | "beta" | "live" | "none";
+/**
+ * Default: none. The banner's own words, in place of "This is a new service.", in the Glass and on the sign-in page: after the phase's tag at alpha or beta, alone at live or none. One line of at most 200 characters (ADR-132 Amendment 7).
+ */
+export type BannerText = string | null;
 /**
  * Default: 5x5x5. The scheme drawn items are graded in: 5x5x5; 3x5x2, whose handling code (P or C) is part of the grade and never merged with the marking; or the path of a scheme file (.yaml, beside this file unless absolute) naming its own scheme and each part's grades.
  */
@@ -897,6 +905,7 @@ export interface NetworkConfig {
   tls?: TlsFiles | null;
   redirect_http?: RedirectHttp;
   listen_address?: ListenAddress;
+  access_key?: AccessKey;
 }
 /**
  * ADR-114 Amendment 33 decision 3: the organisation's own certificate for a Small on a server
@@ -1044,6 +1053,7 @@ export interface AppearanceConfig {
   service_name?: ServiceName;
   organisation?: Organisation;
   phase?: Phase;
+  banner_text?: BannerText;
 }
 /**
  * The deployment's grading scheme (`06_DECISIONS.md` ADR-143 decision 11 and Amendment 6): the

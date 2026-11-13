@@ -1,0 +1,40 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 037e2b5..ac30b7b 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1038,6 +1038,7 @@ jobs:
+           --ignore=../OspreyFlow_Build/tests/conformance/model_port --ignore=../OspreyFlow_Build/tests/golden --ignore=../OspreyFlow_Build/tests/ingest
+           --ignore=../OspreyFlow_Build/tests/services/api/test_valkey_store.py
+           --ignore=../OspreyFlow_Build/tests/services/api/test_ws_ticket.py
++          --ignore=../OspreyFlow_Build/tests/harness/test_access_key_proxy.py
+           --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness.py
+           --ignore=../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py
+           --ignore=../OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py
+@@ -1324,6 +1325,27 @@ jobs:
+   # memory-check discrepancy this comparison excludes and why). A separate job from both above:
+   # it builds its own image and runs no compose stack at all, so it neither needs nor risks the
+   # port/project-name collisions the other two jobs' own comments already explain.
++  # ADR-114 Amendment 41: the shared key the Small's front proxy asks for, against the real proxy:
++  # the rendered Caddyfile run by the very Caddy the product pins (`harness.site.PROXY_IMAGE`), its
++  # binary copied out of that image, on all three names (the access-control test of each).
++  access-key-proxy-test:
++    runs-on: ubuntu-latest
++    timeout-minutes: 15
++    steps:
++      - uses: actions/checkout@v4
++      - uses: astral-sh/setup-uv@v3
++      - run: uv sync
++      - name: Take the proxy image's own Caddy
++        run: |
++          docker create --name proxy-caddy caddy:2.11.4-alpine
++          docker cp proxy-caddy:/usr/bin/caddy "$RUNNER_TEMP/caddy"
++          docker rm proxy-caddy
++          "$RUNNER_TEMP/caddy" version
++      - name: The shared key, on every name, against the real proxy
++        run: >-
++          OSPREY_TEST_CADDY="$RUNNER_TEMP/caddy" PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest
++          -c ../OspreyFlow_Build/pytest.ini -p no:randomly ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py
++
+   harness-image-exit-test:
+     runs-on: ubuntu-latest
+     timeout-minutes: 20

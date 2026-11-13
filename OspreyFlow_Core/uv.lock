@@ -2228,7 +2228,7 @@ requires-dist = [
     { name = "networkx", specifier = ">=3.4" },
     { name = "phonenumbers", specifier = ">=8.13" },
     { name = "pyarrow", specifier = ">=25.0.1" },
-    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pydantic", specifier = ">=2.12" },
     { name = "pyjwt", specifier = ">=2.14.0" },
     { name = "pyproj", specifier = ">=3.6" },
     { name = "python-dateutil", specifier = ">=2.9" },

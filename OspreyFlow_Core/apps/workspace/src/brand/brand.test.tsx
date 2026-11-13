@@ -16,6 +16,7 @@ import {
   GOVUK_STYLESHEET,
   loadBrandStylesheet,
   PLAIN_APPEARANCE,
+  isGovUkHost,
   readAppearance,
 } from "./brand";
 
@@ -96,6 +97,16 @@ describe("reading the deployment's appearance", () => {
     ).toEqual({ brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" });
   });
 
+  it("takes the deployment's banner text when it names one, and adds nothing when it does not (ADR-132 Amendment 7)", () => {
+    expect(readAppearance({ brand: "govuk", phase: "none", banner_text: "Demonstration only." })).toEqual({
+      ...PLAIN_APPEARANCE,
+      brand: "govuk",
+      bannerText: "Demonstration only.",
+    });
+    expect(readAppearance({ brand: "govuk", phase: "none", banner_text: "  " })).not.toHaveProperty("bannerText");
+    expect(readAppearance({ brand: "govuk", phase: "none" })).not.toHaveProperty("bannerText");
+  });
+
   it("falls back to the OspreyFlow brand for anything it does not recognise", () => {
     expect(readAppearance(undefined)).toEqual(PLAIN_APPEARANCE);
     expect(readAppearance({ brand: "gov.uk", phase: "gamma", service_name: "  " })).toEqual(PLAIN_APPEARANCE);
@@ -142,5 +153,21 @@ describe("the GOV.UK stylesheet", () => {
     link!.dispatchEvent(new Event("load"));
     await loading;
     expect(settled).toBe(true);
+  });
+});
+
+describe("an address on gov.uk (ADR-132 Amendment 7)", () => {
+  it.each([
+    ["gov.uk", true],
+    ["www.gov.uk", true],
+    ["prison-intelligence.service.gov.uk", true],
+    ["id.prison-intelligence.service.gov.uk", true],
+    ["GOV.UK", true],
+    ["notgov.uk", false],
+    ["gov.uk.example.org", false],
+    ["demo.ospreyflow.app", false],
+    ["localhost", false],
+  ])("%s is on gov.uk: %s", (host, expected) => {
+    expect(isGovUkHost(host)).toBe(expected);
   });
 });

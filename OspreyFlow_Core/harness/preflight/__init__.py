@@ -36,6 +36,7 @@ which is what makes Re-check a real operation rather than a full re-run with the
 from __future__ import annotations
 
 from harness.preflight import (
+    access_key,
     basemap,
     bind_address,
     cluster,
@@ -66,6 +67,7 @@ ALL_CHECKS = (
     basemap,
     duckdb_lock,
     oidc_audience,
+    access_key,
 )
 
 CHECKS_BY_NAME = {module.NAME: module for module in ALL_CHECKS}
