@@ -36021,14 +36021,32 @@ the rest of Amendment 41 stands.
 4. **How it is set:** the key file's third snippet takes the base name from the Caddyfile's import
    (`import osprey_access_pass_set <host>`, `{args[0]}`), so the render, which never reads the file,
    supplies it. Test: `test_each_of_the_three_names_asks_for_the_key_and_says_noindex`.
-5. **No key is set again.** A key file written under Amendment 41 is still read
-   (`test_a_key_set_before_the_amendment_is_still_read`), and `ospreyflow apply` carries it into place in
-   the new shape with the same user, hash and pass
-   (`test_apply_carries_a_key_set_before_the_amendment_into_the_new_shape_unchanged`); the changed file
-   restarts the proxy, as any new key does (`test_a_key_set_again_restarts_the_proxy`).
+5. **No key is set again.** A key file written under Amendment 41, its text frozen in the code as the
+   helper then wrote it (not derived from today's), is still read
+   (`test_a_key_set_before_the_amendment_is_still_read`); `ospreyflow apply` carries it into place in
+   the new shape with the same user, hash and pass, from the deployment's folder
+   (`test_apply_carries_a_key_set_before_the_amendment_into_the_new_shape_unchanged`) or a pending key
+   (`test_a_key_set_before_the_amendment_and_pending_is_carried_into_the_new_shape`); the changed file
+   restarts the proxy (`test_a_key_set_before_the_amendment_restarts_the_proxy_when_carried`); an old file
+   edited by hand is refused (`test_a_key_file_in_the_old_shape_edited_by_hand_is_refused`).
+6. **A whole domain is warned of.** When the deployment's address is itself an organisation's
+   registrable domain (`example.org`, `example.co.uk`; a short list of two-label suffixes, not the public
+   suffix list), the pass reaches every name under it, including names other services answer, any of
+   which could pass it on: preflight warns and says to give the deployment an address of its own under
+   the domain. Test: `test_preflight_warns_when_the_address_is_a_whole_domain` (red with the check
+   removed, `onepass/whole-domain-red.raw.txt`).
 
 Red first: the cases above before the code (`onepass/red.raw.txt`), the browser on main's code
 (`onepass/chromium.raw.txt`), and five planted defects (`onepass/plants.raw.txt`).
 
-**Cost.** A pass taken from one of the three names now opens the other two for its eight hours, as one
-key opens all three.
+**Cost.**
+- A pass taken from one of the three names opens the other two. The browser keeps it eight hours, but
+  the proxy accepts it until the key is set again: a copied pass works until then.
+- A deployment at a whole domain (decision 6) sends the pass to every name under it, which preflight
+  warns of but does not refuse.
+- **Going back is one way.** After `apply` has carried the key into the new shape, code from before this
+  amendment refuses the file ("edited by hand") and imports it without its base name: going back to it
+  means setting the key again (`python -m harness.access_key set`), or setting `network.access_key` to
+  false.
+- A host with no dot (a bare `localhost`-style name) cannot take a `Domain`; a browser keeps the pass for
+  that one name and asks again on the others.

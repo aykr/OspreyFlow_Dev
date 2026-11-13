@@ -11,7 +11,23 @@ from __future__ import annotations
 
 from harness.access_key import ACCESS_KEY_FILE, KeyRefused, proxy_owner, read
 from harness.preflight.context import PreflightContext
-from harness.preflight.result import CheckResult, failed, passed, skipped
+from harness.preflight.result import CheckResult, failed, passed, skipped, warned
+from harness.site import sites
+
+#: Second-level names under which a registrable domain has three labels (a short list, not the
+#: public suffix list: enough to tell `demo.example.co.uk` from `example.co.uk`).
+_TWO_LABEL_SUFFIXES = {"co.uk", "org.uk", "gov.uk", "ac.uk", "ltd.uk", "plc.uk", "nhs.uk",
+                       "police.uk", "com.au", "co.nz"}  # fmt: skip
+
+
+def registrable(host: str) -> bool:
+    """Whether `host` is itself an organisation's registrable domain (`example.org`,
+    `example.co.uk`), so a cookie for it reaches every name the organisation has under it."""
+    labels = host.lower().rstrip(".").split(".")
+    if len(labels) <= 2:
+        return True
+    return len(labels) == 3 and ".".join(labels[1:]) in _TWO_LABEL_SUFFIXES
+
 
 NAME = "access-key"
 
@@ -56,4 +72,21 @@ def check(context: PreflightContext) -> CheckResult:
             ),
         )
     said = f"the front proxy asks for the shared key (user name {user!r})"
+    host = sites(context.config).host
+    if registrable(host):
+        # ADR-114 Amendment 42: the pass is kept for the deployment's base name, and here that is
+        # the organisation's whole domain.
+        return warned(
+            NAME,
+            what_is_wrong=(
+                f"the deployment's address, {host}, is a whole domain: the pass a browser is given "
+                f"once it has answered the key is sent to every name under {host}, including names "
+                "other services answer, any of which could pass it on"
+            ),
+            what_to_do=(
+                "Give this deployment an address of its own under the domain (for example "
+                f"demo.{host}), or accept that every name under {host} is trusted with the pass."
+            ),
+            detail=(said,),
+        )
     return passed(NAME, detail=(said,))

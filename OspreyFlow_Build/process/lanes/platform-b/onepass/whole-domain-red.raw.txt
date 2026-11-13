@@ -1,0 +1,5 @@
+# onepass after review: the whole-domain warning planted away (if False), this Mac
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_preflight_warns_when_the_address_is_a_whole_domain[example.org-True]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_preflight_warns_when_the_address_is_a_whole_domain[ospreyflow.app-True]
+FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_preflight_warns_when_the_address_is_a_whole_domain[example.co.uk-True]
+3 failed, 3 passed, 44 deselected in 0.34s
