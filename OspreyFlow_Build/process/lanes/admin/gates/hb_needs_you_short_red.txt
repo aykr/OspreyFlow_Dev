@@ -1,0 +1,23 @@
+# red: the needs-you item before it is shortened, 2026-11-13T16:27:27Z
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_the_views_are_one_line_a_group_naming_only_its_open_steps ________
+
+hb = <function hb.<locals>.run at 0x104368e00>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3826/test_the_views_are_one_line_a_0')
+
+    def test_the_views_are_one_line_a_group_naming_only_its_open_steps(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        out = hb(**env).stdout
+        lines = out.splitlines()
+        assert "  Models and maps: 1 of 1 done" in lines
+        assert "  Ingest Studio: 1 of 3 done · open: L2 (studio, building), L3 (studio, not started)" in lines
+        assert "  Local-lite: 0 of 1 done · open: C2 (case, not started)" in lines
+        # A step waiting on the owner says so in two words here; its note is under NEEDS YOU and LANES NOW.
+>       assert "  Four places, the Glass and Admin: 0 of 2 done · open: A1 (admin, needs you), A2 (admin, not started)" in lines
+E       assert '  Four places, the Glass and Admin: 0 of 2 done · open: A1 (admin, needs you), A2 (admin, not started)' in ['OSPREYFLOW · Fri 13 Nov 2026, 16:27 UTC (16:27 UK time)', 'Client-install chain expected to finish merging: 14 Nov (...not started', '', 'NEEDS YOU:', "  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b", ...]
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:821: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_views_are_one_line_a_group_naming_only_its_open_steps
+1 failed, 52 deselected in 1.52s

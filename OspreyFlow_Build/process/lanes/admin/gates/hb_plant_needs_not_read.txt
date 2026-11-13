@@ -1,0 +1,35 @@
+# plant: needs_not_read
+# replaced: '@n = grep { /\\S/ } map { s/\\s+$//r } <$h>'
+# with: '@n = ()'
+# run: pytest -k 'what_needs_you'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_the_default_view_opens_with_what_needs_you_and_only_that _________
+
+hb = <function hb.<locals>.run at 0x10944ccc0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3816/test_the_default_view_opens_wi0')
+
+    def test_the_default_view_opens_with_what_needs_you_and_only_that(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)  # admin waits on the owner; rules is ready to merge
+        assert hb("beat", "case", "waiting-for-owner", "C1: waiting for C0 to merge").returncode == 0  # the orchestrator's
+        out = hb(**env).stdout
+>       assert _section(out, "NEEDS YOU:") == ["  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b"]
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:805: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Fri 13 Nov 2026, 16:23 UTC (16:23 UK time)\nClient-install chain expected to finish merging: 14 Nov (est...                     H3\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
+heading = 'NEEDS YOU:'
+
+    def _section(out: str, heading: str) -> list[str]:
+        """The lines under a heading, up to the next blank line."""
+>       return out.split(f"\n{heading}\n", 1)[1].split("\n\n", 1)[0].splitlines()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:760: IndexError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_opens_with_what_needs_you_and_only_that
+1 failed, 52 deselected in 1.37s

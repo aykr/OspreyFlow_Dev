@@ -1,0 +1,27 @@
+# plant: needs_every_waiting_beat (NEEDS YOU from every waiting-for-owner beat, not show's reading)
+# replaced: '@n = grep { /\\S/ } map { s/\\s+$//r } <$h>'
+# with: '@n = map { "$_->[0] is waiting for you: $_->[2]" } grep { $_->[1] eq "waiting-for-owner" } @lanes'
+# run: pytest -k 'what_needs_you'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_the_default_view_opens_with_what_needs_you_and_only_that _________
+
+hb = <function hb.<locals>.run at 0x10ca4ccc0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3821/test_the_default_view_opens_wi0')
+
+    def test_the_default_view_opens_with_what_needs_you_and_only_that(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)  # admin waits on the owner; rules is ready to merge
+        assert hb("beat", "case", "waiting-for-owner", "C1: waiting for C0 to merge").returncode == 0  # the orchestrator's
+        out = hb(**env).stdout
+>       assert _section(out, "NEEDS YOU:") == ["  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b"]
+E       assert ['  - case is...ames, a or b'] == ['  - admin i...ames, a or b']
+E         
+E         At index 0 diff: '  - case is waiting for you: C1: waiting for C0 to merge' != "  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b"
+E         Left contains one more item: "  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b"
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:805: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_opens_with_what_needs_you_and_only_that
+1 failed, 52 deselected in 3.22s

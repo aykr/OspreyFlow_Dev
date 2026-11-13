@@ -1,0 +1,35 @@
+# plant: stage_state
+# replaced: 'case " $STAGE_STATES " in *" $st "*) ;; *) echo "Unknown stage state'
+# with: ': ; case " $STAGE_STATES " in *) ;; x) echo "Unknown stage state'
+# run: pytest -k 'bad_stage and started'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|started|Build-Unknown stage state 'started'] _
+
+hb = <function hb.<locals>.run at 0x10b44ccc0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3809/test_a_bad_stage_is_refused_in0')
+bad = '2|started|Build', said = "Unknown stage state 'started'"
+
+    @pytest.mark.parametrize(
+        ("bad", "said"),
+        [
+            ("2|started|Build", "Unknown stage state 'started'"),
+            ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+        ],
+    )
+    def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+        path = tmp_path / "lanes" / "studio.stages"
+        assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+        before = path.read_text()
+        refused = hb("stages", "studio", "L2", "1|done|Plan", "2|now|Build", bad)
+>       assert refused.returncode == 2
+E       AssertionError: assert 0 == 2
+E        +  where 0 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...', '1|done|Plan', '2|now|Build', '2|started|Build'], returncode=0, stdout='Stages: studio, L2, 3 stages.\n', stderr='').returncode
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:753: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|started|Build-Unknown stage state 'started']
+1 failed, 52 deselected in 0.47s

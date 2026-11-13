@@ -1,0 +1,60 @@
+# The new default view on the test fixture (brief hb's sample; no real lane's data)
+
+OSPREYFLOW · Fri 13 Nov 2026, 16:29 UTC (16:29 UK time)
+Client-install chain expected to finish merging: 14 Nov (estimates as of 15:00 UTC)
+OVERALL: 3 of 14 steps done · 1 in review · 5 building · 5 not started
+
+NEEDS YOU:
+  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b
+
+LANES NOW
+  STUDIO · L2 · working · last heard 0m ago · stage 3 of 5
+    ✅ 1. Plan · ratified
+    ✅ 2. Red tests
+    ⏳ 3. Build · the drawers
+    ⛔ 4. Live run · waiting for a stack
+    — 5. Merge
+  CASE · C1 · working · last heard 0m ago
+    C1 review fixes
+  ADMIN · A1 · waiting for you · last heard 0m ago
+    A1: the owner's ruling on the claim names, a or b
+  RULES · R1 · ready to merge · last heard 0m ago
+    R1 gates green
+  PLATFORM · X1 · working · last heard 0m ago
+    X1 part 1 live run
+  Paused: docs
+
+VIEW 1 · FOUNDATION FEATURES
+  Ingest Studio: 1 of 3 done · open: L2 (studio, building), L3 (studio, not started)
+  Four places, the Glass and Admin: 0 of 2 done · open: A1 (admin, needs you), A2 (admin, not started)
+  Cases and drawing boards: 0 of 2 done · open: C1 (case, in review), C2 (case, not started)
+  Rules and alerting: 0 of 2 done · open: R1 (rules, waiting to merge), R2 (rules, not started)
+  Models and maps: 1 of 1 done
+  Laurium: 0 of 1 done · open: X1 (platform, building)
+
+VIEW 2 · DEPLOYMENT
+  Local-lite: 0 of 1 done · open: C2 (case, not started)
+  Small (osprey-small runs v0.5.0): 2 of 6 done · open: L2 (studio, building), C1 (case, in review), A2 (admin, not…
+  Client install: 0 of 4 done · open: L3 (studio, not started), A1 (admin, needs you), X1 (platform, building), H3…
+  After the client's install: 0 of 1 done · open: R2 (rules, not started)
+
+RELEASE
+  Last: v0.5.0, published 2026-11-11 06:35 UTC · merges since: not known (the release cut 0000000 is not in this repository)
+  Next: v0.5.1: the chain merged
+
+HOUSEKEEPING
+
+  Housekeeping
+    1 of 2 steps done
+    Tidy two (H2, docs) · building · no estimate
+
+LANES
+  Lane        Account  Session      On now                                                         Next
+  studio      default  not running  L2 (Ingest Studio / Small)                                     L3
+  case        default  this Mac     C1 (Cases and drawing boards / Small)                          C2
+  admin       default  not running  A1 (Four places, the Glass and Admin / Client install)         A2
+  rules       sol      not running  R1 (Rules and alerting / Small)                                R2
+  platform    default  not running  X1 (Laurium / Client install)                                  free
+  docs        default  not running  H2 (Housekeeping / Housekeeping)                               H3
+
+Every block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes

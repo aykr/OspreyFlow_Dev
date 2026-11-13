@@ -1,0 +1,34 @@
+# plant: marks_wrong
+# replaced: 'blocked => "⛔"'
+# with: 'blocked => "⏳"'
+# run: pytest -k 'marks'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____ test_lanes_now_shows_a_lanes_stages_with_their_marks_and_where_it_is _____
+
+hb = <function hb.<locals>.run at 0x112f4cd60>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3815/test_lanes_now_shows_a_lanes_s0')
+
+    def test_lanes_now_shows_a_lanes_stages_with_their_marks_and_where_it_is(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        assert hb("stages", "studio", "L2", "1|done|Plan|ratified", "2|done|Red tests", "3|now|Build|the drawers",
+                  "4|blocked|Live run|waiting for a stack", "5|todo|Merge").returncode == 0
+        now = _section(hb(**env).stdout, "LANES NOW")
+        at = now.index("  STUDIO · L2 · working · last heard 0m ago · stage 3 of 5")
+>       assert now[at + 1 : at + 6] == [
+            "    ✅ 1. Plan · ratified",
+            "    ✅ 2. Red tests",
+            "    ⏳ 3. Build · the drawers",
+            "    ⛔ 4. Live run · waiting for a stack",
+            "    — 5. Merge",
+        ]
+E       AssertionError: assert ['    ✅ 1. Pl...  — 5. Merge'] == ['    ✅ 1. Pl...  — 5. Merge']
+E         
+E         At index 3 diff: '    ⏳ 4. Live run · waiting for a stack' != '    ⛔ 4. Live run · waiting for a stack'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:769: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_lanes_now_shows_a_lanes_stages_with_their_marks_and_where_it_is
+1 failed, 52 deselected in 1.46s

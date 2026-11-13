@@ -1,0 +1,141 @@
+# plant: stages_written_before_checked
+# replaced: '  local s n st name rest\n'
+# with: '  { printf \'step=%s\\nat=%s\\n\' "$step" "$(iso)"; printf \'stage=%s\\n\' "$@"; } > "$DIR/$lane.stages"\n  local s n st name rest\n'
+# run: pytest -k 'bad_stage'
+
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+_ test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|started|Build-Unknown stage state 'started'] _
+
+hb = <function hb.<locals>.run at 0x11284ccc0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3810/test_a_bad_stage_is_refused_in0')
+bad = '2|started|Build', said = "Unknown stage state 'started'"
+
+    @pytest.mark.parametrize(
+        ("bad", "said"),
+        [
+            ("2|started|Build", "Unknown stage state 'started'"),
+            ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+        ],
+    )
+    def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+        path = tmp_path / "lanes" / "studio.stages"
+        assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+        before = path.read_text()
+        refused = hb("stages", "studio", "L2", "1|done|Plan", "2|now|Build", bad)
+        assert refused.returncode == 2
+        assert said in refused.stderr, refused.stderr
+>       assert path.read_text() == before  # the earlier list stands, untouched
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'step=L2\nat=...arted|Build\n' == 'step=L2\nat=...1|done|Plan\n'
+E         
+E         Skipping 39 identical leading characters in diff, use -v to show
+E           |done|Plan
+E         + stage=2|now|Build
+E         + stage=2|started|Build
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:755: AssertionError
+_ test_a_bad_stage_is_refused_in_words_and_nothing_is_written[x|now|Build-A stage is <n>|<state>|<name>[|<note>]] _
+
+hb = <function hb.<locals>.run at 0x112863240>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3810/test_a_bad_stage_is_refused_in1')
+bad = 'x|now|Build', said = 'A stage is <n>|<state>|<name>[|<note>]'
+
+    @pytest.mark.parametrize(
+        ("bad", "said"),
+        [
+            ("2|started|Build", "Unknown stage state 'started'"),
+            ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+        ],
+    )
+    def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+        path = tmp_path / "lanes" / "studio.stages"
+        assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+        before = path.read_text()
+        refused = hb("stages", "studio", "L2", "1|done|Plan", "2|now|Build", bad)
+        assert refused.returncode == 2
+        assert said in refused.stderr, refused.stderr
+>       assert path.read_text() == before  # the earlier list stands, untouched
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'step=L2\nat=...x|now|Build\n' == 'step=L2\nat=...1|done|Plan\n'
+E         
+E         Skipping 39 identical leading characters in diff, use -v to show
+E           |done|Plan
+E         + stage=2|now|Build
+E         + stage=x|now|Build
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:755: AssertionError
+_ test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|now|-A stage is <n>|<state>|<name>[|<note>]] _
+
+hb = <function hb.<locals>.run at 0x112863ba0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3810/test_a_bad_stage_is_refused_in2')
+bad = '2|now|', said = 'A stage is <n>|<state>|<name>[|<note>]'
+
+    @pytest.mark.parametrize(
+        ("bad", "said"),
+        [
+            ("2|started|Build", "Unknown stage state 'started'"),
+            ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+        ],
+    )
+    def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+        path = tmp_path / "lanes" / "studio.stages"
+        assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+        before = path.read_text()
+        refused = hb("stages", "studio", "L2", "1|done|Plan", "2|now|Build", bad)
+        assert refused.returncode == 2
+        assert said in refused.stderr, refused.stderr
+>       assert path.read_text() == before  # the earlier list stands, untouched
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'step=L2\nat=...tage=2|now|\n' == 'step=L2\nat=...1|done|Plan\n'
+E         
+E         Skipping 39 identical leading characters in diff, use -v to show
+E           |done|Plan
+E         + stage=2|now|Build
+E         + stage=2|now|
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:755: AssertionError
+_ test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|now-A stage is <n>|<state>|<name>[|<note>]] _
+
+hb = <function hb.<locals>.run at 0x110b382c0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3810/test_a_bad_stage_is_refused_in3')
+bad = '2|now', said = 'A stage is <n>|<state>|<name>[|<note>]'
+
+    @pytest.mark.parametrize(
+        ("bad", "said"),
+        [
+            ("2|started|Build", "Unknown stage state 'started'"),
+            ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+        ],
+    )
+    def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+        path = tmp_path / "lanes" / "studio.stages"
+        assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+        before = path.read_text()
+        refused = hb("stages", "studio", "L2", "1|done|Plan", "2|now|Build", bad)
+        assert refused.returncode == 2
+        assert said in refused.stderr, refused.stderr
+>       assert path.read_text() == before  # the earlier list stands, untouched
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'step=L2\nat=...stage=2|now\n' == 'step=L2\nat=...1|done|Plan\n'
+E         
+E         Skipping 39 identical leading characters in diff, use -v to show
+E           |done|Plan
+E         + stage=2|now|Build
+E         + stage=2|now
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:755: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|started|Build-Unknown stage state 'started']
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[x|now|Build-A stage is <n>|<state>|<name>[|<note>]]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|now|-A stage is <n>|<state>|<name>[|<note>]]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|now-A stage is <n>|<state>|<name>[|<note>]]
+4 failed, 49 deselected in 0.76s

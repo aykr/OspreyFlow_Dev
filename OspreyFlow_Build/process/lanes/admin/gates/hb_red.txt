@@ -1,0 +1,352 @@
+# red first: this branch's tests against main's lanes_heartbeat.sh (152542c), 2026-11-13T16:24:30Z
+..............................FFF......FFFFFFFFFFFFFF                    [100%]
+=================================== FAILURES ===================================
+__________ test_the_default_view_shows_its_blocks_in_the_owners_order __________
+
+hb = <function hb.<locals>.run at 0x10764e160>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_the_default_view_shows_it0')
+
+    def test_the_default_view_shows_its_blocks_in_the_owners_order(hb, tmp_path) -> None:
+        """Adapted 13 November 2026 (brief hb): today's full blocks are kept under --full, in today's order."""
+        out = hb("--full", **_overview_fixture(hb, tmp_path)).stdout
+>       assert out.splitlines()[1] == "Client-install chain expected to finish merging: 14 Nov (estimates as of 15:00 UTC)"
+               ^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:579: IndexError
+_________ test_the_default_view_lists_only_steps_not_done_with_counts __________
+
+hb = <function hb.<locals>.run at 0x107699bc0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_the_default_view_lists_on0')
+
+    def test_the_default_view_lists_only_steps_not_done_with_counts(hb, tmp_path) -> None:
+        """Adapted 13 November 2026 (brief hb): the full blocks, under --full."""
+        out = hb("--full", **_overview_fixture(hb, tmp_path)).stdout
+        blocks = _blocks(out)
+        for done in ("(L1, studio)", "(M1, platform)", "(H1, docs)"):
+            assert done not in out, done
+>       assert blocks["Ingest Studio"] == [
+               ^^^^^^^^^^^^^^^^^^^^^^^
+            "1 of 3 steps done",
+            "Ingest two (L2, studio) · building · 12 Nov",
+            "Ingest three (L3, studio) · not started · no estimate",
+        ]
+E       KeyError: 'Ingest Studio'
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:592: KeyError
+_____________ test_the_default_view_says_each_state_in_plain_words _____________
+
+hb = <function hb.<locals>.run at 0x1076984a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_the_default_view_says_eac0')
+
+    def test_the_default_view_says_each_state_in_plain_words(hb, tmp_path) -> None:
+        """Adapted 13 November 2026 (brief hb): the states are read from the full blocks (--full), and the codes are
+        looked for in both views, leaving out LANES NOW's note lines, which are each lane's own words ("C1 review
+        fixes"); its headings, which carry the states, are kept."""
+        import re
+    
+        codes = r"\btodo\b|(?<!in )\breview\b|ready-to-merge|waiting-for-owner|being built"
+        env = _overview_fixture(hb, tmp_path)
+    
+        def without_notes(out: str) -> str:
+            before, rest = out.split("\nLANES NOW\n", 1)
+            section, after = rest.split("\n\n", 1)
+            return before + "\n".join(line for line in section.splitlines() if not line.startswith("    ")) + after
+    
+>       assert not re.search(codes, without_notes(hb(**env).stdout))
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:617: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Fri 13 Nov 2026, 16:25 UTC (16:25 UK time)\nClient-install chain expected to finish merging: 14 Nov (est...nning  H2 (Housekeeping / Housekeeping)                               H3\n\nLane by lane: lanes_heartbeat.sh --lanes\n'
+
+    def without_notes(out: str) -> str:
+>       before, rest = out.split("\nLANES NOW\n", 1)
+        ^^^^^^^^^^^^
+E       ValueError: not enough values to unpack (expected 2, got 1)
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:613: ValueError
+________ test_stages_are_written_whole_and_a_second_call_replaces_them _________
+
+hb = <function hb.<locals>.run at 0x107698c20>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_stages_are_written_whole_0')
+
+    def test_stages_are_written_whole_and_a_second_call_replaces_them(hb, tmp_path) -> None:
+        lanes = tmp_path / "lanes"
+        made = hb("stages", "studio", "L2", "1|done|Plan|ratified", "2|now|Build", "3|todo|Gate")
+>       assert made.returncode == 0, made.stderr
+E       AssertionError: usage: lanes_heartbeat.sh [--lanes [--full]] | beat <lane> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]
+E         
+E       assert 2 == 0
+E        +  where 2 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n').returncode
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:723: AssertionError
+______________________ test_stages_clear_removes_the_list ______________________
+
+hb = <function hb.<locals>.run at 0x107698fe0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_stages_clear_removes_the_0')
+
+    def test_stages_clear_removes_the_list(hb, tmp_path) -> None:
+        hb("stages", "studio", "L2", "1|now|Build")
+        cleared = hb("stages", "studio", "--clear")
+>       assert cleared.returncode == 0
+E       assert 2 == 0
+E        +  where 2 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n').returncode
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:735: AssertionError
+_ test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|started|Build-Unknown stage state 'started'] _
+
+hb = <function hb.<locals>.run at 0x1076994e0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_a_bad_stage_is_refused_in0')
+bad = '2|started|Build', said = "Unknown stage state 'started'"
+
+    @pytest.mark.parametrize(
+        ("bad", "said"),
+        [
+            ("2|started|Build", "Unknown stage state 'started'"),
+            ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+        ],
+    )
+    def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+        path = tmp_path / "lanes" / "studio.stages"
+>       assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+E       assert 2 == 0
+E        +  where 2 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n').returncode
+E        +    where CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n') = <function hb.<locals>.run at 0x1076994e0>('stages', 'studio', 'L2', '1|done|Plan')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:750: AssertionError
+_ test_a_bad_stage_is_refused_in_words_and_nothing_is_written[x|now|Build-A stage is <n>|<state>|<name>[|<note>]] _
+
+hb = <function hb.<locals>.run at 0x107699a80>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_a_bad_stage_is_refused_in1')
+bad = 'x|now|Build', said = 'A stage is <n>|<state>|<name>[|<note>]'
+
+    @pytest.mark.parametrize(
+        ("bad", "said"),
+        [
+            ("2|started|Build", "Unknown stage state 'started'"),
+            ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+        ],
+    )
+    def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+        path = tmp_path / "lanes" / "studio.stages"
+>       assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+E       assert 2 == 0
+E        +  where 2 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n').returncode
+E        +    where CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n') = <function hb.<locals>.run at 0x107699a80>('stages', 'studio', 'L2', '1|done|Plan')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:750: AssertionError
+_ test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|now|-A stage is <n>|<state>|<name>[|<note>]] _
+
+hb = <function hb.<locals>.run at 0x10769a160>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_a_bad_stage_is_refused_in2')
+bad = '2|now|', said = 'A stage is <n>|<state>|<name>[|<note>]'
+
+    @pytest.mark.parametrize(
+        ("bad", "said"),
+        [
+            ("2|started|Build", "Unknown stage state 'started'"),
+            ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+        ],
+    )
+    def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+        path = tmp_path / "lanes" / "studio.stages"
+>       assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+E       assert 2 == 0
+E        +  where 2 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n').returncode
+E        +    where CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n') = <function hb.<locals>.run at 0x10769a160>('stages', 'studio', 'L2', '1|done|Plan')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:750: AssertionError
+_ test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|now-A stage is <n>|<state>|<name>[|<note>]] _
+
+hb = <function hb.<locals>.run at 0x10769a840>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_a_bad_stage_is_refused_in3')
+bad = '2|now', said = 'A stage is <n>|<state>|<name>[|<note>]'
+
+    @pytest.mark.parametrize(
+        ("bad", "said"),
+        [
+            ("2|started|Build", "Unknown stage state 'started'"),
+            ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+        ],
+    )
+    def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+        path = tmp_path / "lanes" / "studio.stages"
+>       assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+E       assert 2 == 0
+E        +  where 2 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n').returncode
+E        +    where CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n') = <function hb.<locals>.run at 0x10769a840>('stages', 'studio', 'L2', '1|done|Plan')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:750: AssertionError
+_____ test_lanes_now_shows_a_lanes_stages_with_their_marks_and_where_it_is _____
+
+hb = <function hb.<locals>.run at 0x10769afc0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_lanes_now_shows_a_lanes_s0')
+
+    def test_lanes_now_shows_a_lanes_stages_with_their_marks_and_where_it_is(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+>       assert hb("stages", "studio", "L2", "1|done|Plan|ratified", "2|done|Red tests", "3|now|Build|the drawers",
+                  "4|blocked|Live run|waiting for a stack", "5|todo|Merge").returncode == 0
+E       assert 2 == 0
+E        +  where 2 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n').returncode
+E        +    where CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n') = <function hb.<locals>.run at 0x10769afc0>('stages', 'studio', 'L2', '1|done|Plan|ratified', '2|done|Red tests', '3|now|Build|the drawers', '4|blocked|Live run|waiting for a stack', '5|todo|Merge')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:765: AssertionError
+______________ test_a_stages_list_from_another_step_is_not_shown _______________
+
+hb = <function hb.<locals>.run at 0x10769b600>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_a_stages_list_from_anothe0')
+
+    def test_a_stages_list_from_another_step_is_not_shown(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)  # studio's beat names L2
+>       assert hb("stages", "studio", "L1", "1|done|Plan", "2|now|Build").returncode == 0
+E       assert 2 == 0
+E        +  where 2 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n').returncode
+E        +    where CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...e> <state> "<note>" | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n') = <function hb.<locals>.run at 0x10769b600>('stages', 'studio', 'L1', '1|done|Plan', '2|now|Build')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:785: AssertionError
+________ test_a_paused_or_idle_lane_is_one_line_at_the_end_not_a_block _________
+
+hb = <function hb.<locals>.run at 0x10769bd80>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_a_paused_or_idle_lane_is_0')
+
+    def test_a_paused_or_idle_lane_is_one_line_at_the_end_not_a_block(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        assert hb("beat", "docs", "paused", "paused at H2").returncode == 0
+        assert hb("beat", "case", "idle", "nothing assigned").returncode == 0
+>       now = _section(hb(**env).stdout, "LANES NOW")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:796: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Fri 13 Nov 2026, 16:25 UTC (16:25 UK time)\nClient-install chain expected to finish merging: 14 Nov (est...nning  H2 (Housekeeping / Housekeeping)                               H3\n\nLane by lane: lanes_heartbeat.sh --lanes\n'
+heading = 'LANES NOW'
+
+    def _section(out: str, heading: str) -> list[str]:
+        """The lines under a heading, up to the next blank line."""
+>       return out.split(f"\n{heading}\n", 1)[1].split("\n\n", 1)[0].splitlines()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:760: IndexError
+________ test_the_default_view_opens_with_what_needs_you_and_only_that _________
+
+hb = <function hb.<locals>.run at 0x10769ba60>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_the_default_view_opens_wi1')
+
+    def test_the_default_view_opens_with_what_needs_you_and_only_that(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)  # admin waits on the owner; rules is ready to merge
+        assert hb("beat", "case", "waiting-for-owner", "C1: waiting for C0 to merge").returncode == 0  # the orchestrator's
+        out = hb(**env).stdout
+>       assert _section(out, "NEEDS YOU:") == ["  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b"]
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:805: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Fri 13 Nov 2026, 16:25 UTC (16:25 UK time)\nClient-install chain expected to finish merging: 14 Nov (est...nning  H2 (Housekeeping / Housekeeping)                               H3\n\nLane by lane: lanes_heartbeat.sh --lanes\n'
+heading = 'NEEDS YOU:'
+
+    def _section(out: str, heading: str) -> list[str]:
+        """The lines under a heading, up to the next blank line."""
+>       return out.split(f"\n{heading}\n", 1)[1].split("\n\n", 1)[0].splitlines()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:760: IndexError
+________ test_the_views_are_one_line_a_group_naming_only_its_open_steps ________
+
+hb = <function hb.<locals>.run at 0x10769bba0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_the_views_are_one_line_a_0')
+
+    def test_the_views_are_one_line_a_group_naming_only_its_open_steps(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        out = hb(**env).stdout
+        lines = out.splitlines()
+>       assert "  Models and maps: 1 of 1 done" in lines
+E       AssertionError: assert '  Models and maps: 1 of 1 done' in ['OSPREYFLOW · Fri 13 Nov 2026, 16:25 UTC (16:25 UK time)', 'Client-install chain expected to finish merging: 14 Nov (... 'OVERALL: 3 of 14 steps done · 1 in review · 5 building · 5 not started', '', 'VIEW 1 · FOUNDATION FEATURES', '', ...]
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:817: AssertionError
+________ test_open_steps_side_by_side_with_one_lane_and_state_share_it _________
+
+hb = <function hb.<locals>.run at 0x10769b060>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_open_steps_side_by_side_w0')
+
+    def test_open_steps_side_by_side_with_one_lane_and_state_share_it(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        for name, row in (("progress.tsv", "platform\tP8\tL\ttodo\tNothing shared\nplatform\tP9\tM\ttodo\tAlerts\n"),
+                          ("groups.tsv", "platform\tP8\tLaurium\tAfter the client's install\n"
+                                         "platform\tP9\tLaurium\tAfter the client's install\n")):
+            with (tmp_path / name).open("a") as f:
+                f.write(row)
+        lines = hb(**env).stdout.splitlines()
+>       assert "  After the client's install: 0 of 3 done · open: R2 (rules, not started), P8, P9 (platform, not started)" in lines
+E       assert "  After the client's install: 0 of 3 done · open: R2 (rules, not started), P8, P9 (platform, not started)" in ['OSPREYFLOW · Fri 13 Nov 2026, 16:25 UTC (16:25 UK time)', 'Client-install chain expected to finish merging: 14 Nov (... 'OVERALL: 3 of 16 steps done · 1 in review · 5 building · 7 not started', '', 'VIEW 1 · FOUNDATION FEATURES', '', ...]
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:836: AssertionError
+__ test_release_is_one_line_with_its_merge_count_and_the_list_only_under_full __
+
+hb = <function hb.<locals>.run at 0x107699800>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_release_is_one_line_with_0')
+
+    def test_release_is_one_line_with_its_merge_count_and_the_list_only_under_full(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        repo, cut = _repo_with_merges(tmp_path, 3)
+        release = (tmp_path / "release.tsv").read_text().replace("cut\t0000000", f"cut\t{cut}")
+        (tmp_path / "release.tsv").write_text(release)
+        env = {**env, "OSPREY_REPO": str(repo)}
+        out = hb(**env).stdout
+>       assert _section(out, "RELEASE") == [
+            f"  Last: v0.5.0, published 2026-11-11 06:35 UTC · 3 merges since {cut}",
+            "  Next: v0.5.1: the chain merged",
+        ]
+E       AssertionError: assert ['  Last: v0....chain merged'] == ['  Last: v0....chain merged']
+E         
+E         At index 0 diff: '  Last: v0.5.0, published 2026-11-11 06:35 UTC' != '  Last: v0.5.0, published 2026-11-11 06:35 UTC · 3 merges since f94e270'
+E         Left contains one more item: '  Next: v0.5.1: the chain merged'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:867: AssertionError
+______________ test_the_default_view_says_where_the_full_view_is _______________
+
+hb = <function hb.<locals>.run at 0x107699a80>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3822/test_the_default_view_says_whe0')
+
+    def test_the_default_view_says_where_the_full_view_is(hb, tmp_path) -> None:
+        out = hb(**_overview_fixture(hb, tmp_path)).stdout
+>       assert out.splitlines()[-1] == "Every block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes"
+E       AssertionError: assert 'Lane by lane...at.sh --lanes' == 'Every block ...at.sh --lanes'
+E         
+E         - Every block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes
+E         + Lane by lane: lanes_heartbeat.sh --lanes
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:878: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_shows_its_blocks_in_the_owners_order
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_lists_only_steps_not_done_with_counts
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_says_each_state_in_plain_words
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_stages_are_written_whole_and_a_second_call_replaces_them
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_stages_clear_removes_the_list
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|started|Build-Unknown stage state 'started']
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[x|now|Build-A stage is <n>|<state>|<name>[|<note>]]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|now|-A stage is <n>|<state>|<name>[|<note>]]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[2|now-A stage is <n>|<state>|<name>[|<note>]]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_lanes_now_shows_a_lanes_stages_with_their_marks_and_where_it_is
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_stages_list_from_another_step_is_not_shown
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_paused_or_idle_lane_is_one_line_at_the_end_not_a_block
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_opens_with_what_needs_you_and_only_that
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_views_are_one_line_a_group_naming_only_its_open_steps
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_open_steps_side_by_side_with_one_lane_and_state_share_it
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_release_is_one_line_with_its_merge_count_and_the_list_only_under_full
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_says_where_the_full_view_is
+17 failed, 36 passed in 66.87s (0:01:06)

@@ -1,0 +1,4 @@
+# The default view, line counts on the real lanes (13 November 2026; the lanes' notes are not copied here)
+before (main 152542c, lanes_heartbeat.sh): 133 lines
+after (this branch): 73 lines
+after, --full: 146 lines
