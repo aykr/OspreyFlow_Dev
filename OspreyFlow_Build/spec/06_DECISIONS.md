@@ -37019,9 +37019,11 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    A write that changes no node's document records nothing: an edge other than `SAME_AS`,
    `restore_link_state` (a link's state) and `regrade_drawn` (a drawn item's grading, in its provenance, which
    no document holds). `bulk_load_edges` commits in chunks of its own, so its `SAME_AS` ends are recorded after
-   them. Writes that bypass the
-   adapter (the seed scripts' raw deletes and resets, `scripts/stamp_datasets.py`) are not in the outbox; the drift
-   check (decision 5) finds them and the rebuild (decision 4) mends them, and every seed reset runs the rebuild.
+   them. Writes that bypass the adapter: a seed's scoped clean-up
+   (`seed_support.clear_seeded_graph`) names each node to the outbox before it deletes it; a reset of the whole
+   graph (`reset_graph_database`) loses its outbox with it, so it runs the rebuild; anything else
+   (`scripts/stamp_datasets.py`, a hand-run statement) the drift check (decision 5) finds and the rebuild
+   (decision 4) mends.
 2. **The indexer drains the outbox.** In batches, it reads each id's node as stored through a narrow port,
    `IndexFeedSource.nodes_for_index(ids)` — a separate `Protocol` from `GraphPort`, implemented by the adapter,
    unfiltered by design and called by the indexer alone (no route reaches it: a test holds that, rule 4). A node
