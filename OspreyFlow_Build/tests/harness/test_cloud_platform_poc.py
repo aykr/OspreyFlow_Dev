@@ -16,6 +16,8 @@ What a mistake would do, and the case that catches it (rule 12):
 from __future__ import annotations
 
 import re
+import tomllib
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -329,6 +331,23 @@ def test_the_install_check_says_what_its_curl_options_are(runbooks: dict[str, st
     step = text[text.index("## 7.") :]
     prose = step[: step.index("```")]
     assert "OSPREY_CURL_OPTS" in prose and "--cacert" in prose
+
+
+def test_the_install_says_how_the_ospreyflow_command_is_installed(runbooks: dict[str, str]) -> None:
+    """R1 on kind, install block 2: "no ospreyflow command: put .venv/bin on PATH". `uv sync --frozen`
+    makes `.venv` from the checkout's own project, and the command is another package (`cli/`, which
+    `install.sh` installs with `uv tool install`), so `.venv/bin/ospreyflow` never exists and the
+    runbook's own remedy could not work."""
+    core = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
+    root = tomllib.loads((core / "pyproject.toml").read_text())
+    assert "ospreyflow" not in root.get("project", {}).get("scripts", {})  # the premise: not in .venv
+    text = runbooks["INSTALL.md"]
+    assert ".venv/bin/ospreyflow" not in text
+    assert "put .venv/bin on PATH" not in text
+    needs = text[text.index("**What it needs.**") : text.index("## 1.")]
+    block = command_blocks(text, on_the_platform=False)[1]
+    for words in (needs, block):
+        assert "uv tool install ./cli" in words and "~/.local/bin" in words
 
 
 def test_the_install_ends_with_what_only_the_real_tenant_can_show(runbooks: dict[str, str]) -> None:

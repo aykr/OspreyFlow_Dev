@@ -99,8 +99,8 @@ renders it again, pinned.
 **What it needs.** The release's `OspreyFlow_Core` folder, at the release's tag: `ospreyflow images
 push` builds our images from its Dockerfiles and source, so it must be the release these files were
 rendered from (`git describe --tags` names it). In it: the release's environment (`uv sync
---frozen`, which makes `.venv`), the `ospreyflow` command (`.venv/bin/ospreyflow`, or the release's
-own install of it), and the deployment's `osprey.yaml` (or `CONFIG` naming it). Then `kubectl`
+--frozen`, which makes `.venv`), the `ospreyflow` command (its own package: `uv tool install ./cli`
+from that folder puts it in `~/.local/bin`, which must be on `PATH`), and the deployment's `osprey.yaml` (or `CONFIG` naming it). Then `kubectl`
 pointed at the namespace, `helm` 3.16 or later, Docker with `buildx`, the AWS command line (v2)
 signed in to the namespace's account, and bash. Run each block in order, in one bash shell, from
 that folder. If a command fails, stop there: put right what it says, then run its block again.
@@ -115,7 +115,7 @@ granted), with the claims `cloud_platform.claims` names.
 
 {_settings(config, platform)}
 ```bash
-command -v ospreyflow >/dev/null || {{ echo "no ospreyflow command: put .venv/bin on PATH"; false; }}
+command -v ospreyflow >/dev/null || {{ echo "no ospreyflow command: uv tool install ./cli, and put ~/.local/bin on PATH"; false; }}
 docker buildx version >/dev/null || {{ echo "Docker's buildx is needed to build the images"; false; }}
 kubectl auth can-i create statefulsets -n "$NS"
 kubectl auth can-i create persistentvolumeclaims -n "$NS"

@@ -34,3 +34,9 @@ E       AssertionError: assert 'ospreyflow-poc-certificate' in 'for secret in rd
 # gains section 8, what only the client's real tenant can show. Red before the section was written:
 FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_ends_with_what_only_the_real_tenant_can_show
 1 failed, 31 deselected in 0.56s
+
+# 13 November 2026, R1 on kind, install block 2 stopped: "no ospreyflow command: put .venv/bin on PATH". The
+# command is its own package (cli/), never in .venv. Red at the runbook as rendered:
+>       assert ".venv/bin/ospreyflow" not in text
+E       AssertionError: assert '.venv/bin/ospreyflow' not in '# Install: ...report it.\n'
+1 failed, 32 deselected in 0.52s
