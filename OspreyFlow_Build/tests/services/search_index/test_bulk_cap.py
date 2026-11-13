@@ -126,7 +126,8 @@ async def test_one_action_alone_over_the_cap_is_set_aside_and_the_rest_sent(
     body = _index_pair(0, 10) + _index_pair(1, CAP) + _index_pair(2, 10)
     refused = await write_actions(client, body)  # type: ignore[arg-type]
     assert [r.doc_id for r in refused] == ["n1"] and "over the" in refused[0].reason
-    assert _lines(client.requests) == body[:2] + body[4:]
+    # The rest sent; then whatever the index held for n1 deleted (it fails closed).
+    assert _lines(client.requests) == body[:2] + body[4:] + [{"delete": {"_index": "a", "_id": "n1"}}]
 
 
 async def test_a_413_is_raised_and_the_outbox_keeps_the_batch(

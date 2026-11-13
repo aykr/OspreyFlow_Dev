@@ -3,8 +3,10 @@ outbox behind it. It is set aside (recorded in the deployment's refused index, a
 rest of the batch is written and the outbox cleared, and the drift check reports it as refused, not
 missing; a passing refusal (a 429) is raised and the batch kept. A rebuild that fails leaves no index
 behind, a rebuild finds and removes one a crashed rebuild left, and a rebuild that completes keeps
-only its own refusal records. A keyword value over Lucene's term limit is indexed (`ignore_above`),
-never refused.
+only its own refusal records. A name over Lucene's term limit is indexed (`ignore_above`), never
+refused; an access field over it is refused, and the older document deleted (it fails closed). A
+refusal by the cluster's own state, whatever its status, is raised; a refused delete is never set
+aside; a write to a missing alias never makes an index of its name; one rebuild at a time.
 
 Against `FakeOpenSearch`, which refuses what OpenSearch refuses (its docstring lists them).
 """
@@ -30,7 +32,7 @@ from services.search_index.indexer import (
     write_actions,
 )
 from services.search_index.mapping import index_body
-from services.search_index.rebuild import drift, rebuild
+from services.search_index.rebuild import RebuildRunning, drift, rebuild, rebuild_lock
 from tests.services.search_index.fake_opensearch import FakeOpenSearch
 from tests.services.search_index.test_document import _node
 
@@ -39,8 +41,8 @@ CAP = 4096
 ALIAS = "a"
 
 
-def _person(node_id: str, family_name: str) -> Node:
-    node = _node("Person", {"family_name": family_name, "given_names": "Ada"}, ["ds-1"])
+def _person(node_id: str, family_name: str, datasets: Sequence[str] = ("ds-1",)) -> Node:
+    node = _node("Person", {"family_name": family_name, "given_names": "Ada"}, list(datasets))
     return node.model_copy(update={"id": node_id})
 
 
@@ -124,7 +126,8 @@ async def test_a_permanent_refusal_of_one_item_is_set_aside() -> None:
     ]
     refused = await write_actions(client, body)  # type: ignore[arg-type]
     assert [r.doc_id for r in refused] == ["bad"]
-    assert "strict_dynamic_mapping_exception" in refused[0].reason
+    # Its type and the field, never the value OpenSearch's reason quotes.
+    assert refused[0].reason == "400 strict_dynamic_mapping_exception in field not_in_the_mapping"
     assert "good" in _indexed(client)
 
 
@@ -194,3 +197,98 @@ async def test_the_drift_check_says_the_outboxes_still_hold_changes() -> None:
     await indexer.drain_once()
     report = await drift(graph, _Texts(), client, ALIAS, SCHEMA)  # type: ignore[arg-type]
     assert report.none and not report.pending
+
+
+async def test_a_refused_update_deletes_the_older_version_so_it_fails_closed() -> None:
+    """A node indexed, then changed so its document is refused (here an access field over Lucene's
+    term limit, which no `ignore_above` hides): its older document, with its older access fields,
+    is deleted, never left searchable; the drift check reports it refused."""
+    client, graph, indexer = await _setup([_person("p-1", "Lovelace")], limit=1024 * 1024)
+    await indexer.drain_once()
+    assert "p-1" in _indexed(client)
+    graph.nodes["p-1"] = _person("p-1", "Lovelace", datasets=["d" * 40000])
+    graph.pending = ["p-1"]
+    assert await indexer.drain_once() == 1
+    assert "p-1" not in _indexed(client)
+    record = client.docs[refused_index(ALIAS)]["p-1"]
+    assert record["reason"] == (
+        "400 illegal_argument_exception / max_bytes_length_exceeded_exception in field datasets"
+    )
+    assert "ddd" not in str(record)
+    report = await drift(graph, _Texts(), client, ALIAS, SCHEMA)  # type: ignore[arg-type]
+    assert list(report.refused) == ["p-1"]
+
+
+@pytest.mark.parametrize("state", ["blocked", "closed", "busy", "flood_stage"])
+async def test_the_clusters_own_refusal_is_raised_whatever_its_status(state: str) -> None:
+    """A write block's 403, a closed index's 400, a 429, the flood-stage block that refuses writes
+    and lets deletes through: the cluster's state, not the document's. Raised, the outbox kept,
+    nothing set aside, and the document already indexed left as it is."""
+    client, graph, indexer = await _setup([_person("p-1", "Lovelace")])
+    await indexer.drain_once()
+    graph.pending = ["p-1"]
+    if state == "closed":
+        client.closed = set(client.resolve(ALIAS))
+    else:
+        setattr(client, state, True)
+    with pytest.raises(IndexWriteError):
+        await indexer.drain_once()
+    assert graph.pending == ["p-1"]
+    assert not await client.indices.exists(index=refused_index(ALIAS))
+    client.closed, client.blocked, client.busy, client.flood_stage = set(), False, False, False
+    assert "p-1" in _indexed(client)
+
+
+async def test_a_refused_delete_is_raised_never_set_aside() -> None:
+    """A node no longer live whose delete is refused (a write block): never cleared from the
+    outbox, so its document cannot stay searchable unsaid."""
+    client, graph, indexer = await _setup([_person("p-1", "Lovelace")])
+    await indexer.drain_once()
+    del graph.nodes["p-1"]
+    graph.pending = ["p-1"]
+    client.blocked = True
+    with pytest.raises(IndexWriteError):
+        await indexer.drain_once()
+    assert graph.pending == ["p-1"] and "p-1" in _indexed(client)
+
+
+async def test_an_alias_over_two_indexes_is_raised_not_set_aside() -> None:
+    client, graph, indexer = await _setup([_person("p-1", "Lovelace")])
+    await client.indices.create(index="a-second", body=index_body())
+    await client.indices.put_alias(index="a-second", name=ALIAS)
+    with pytest.raises(IndexWriteError, match="illegal_argument_exception"):
+        await indexer.drain_once()
+    assert graph.pending == ["p-1"]
+
+
+async def test_a_write_to_a_missing_alias_makes_no_index_of_its_name() -> None:
+    """`require_alias`: the alias gone, the write is refused and raised; no unmapped index named
+    after the alias appears in its place."""
+    client, graph, indexer = await _setup([_person("p-1", "Lovelace")])
+    await client.indices.delete(index="a-initial")
+    with pytest.raises(IndexWriteError):
+        await indexer.drain_once()
+    assert ALIAS not in client.docs and graph.pending == ["p-1"]
+
+
+async def test_a_record_is_removed_once_its_document_is_written(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
+    client, graph, indexer = await _setup([_person("p-1", "x" * CAP)])
+    await indexer.drain_once()
+    assert set(client.docs[refused_index(ALIAS)]) == {"p-1"}
+    graph.nodes["p-1"] = _person("p-1", "Lovelace")
+    graph.pending = ["p-1"]
+    await indexer.drain_once()
+    assert client.docs[refused_index(ALIAS)] == {} and "p-1" in _indexed(client)
+
+
+async def test_one_rebuild_at_a_time() -> None:
+    client, graph, indexer = await _setup([_person("p-1", "Lovelace")])
+    await client.indices.create(index=rebuild_lock(ALIAS), body={})
+    with pytest.raises(RebuildRunning, match="already running"):
+        await rebuild(graph, _Texts(), client, ALIAS, SCHEMA)  # type: ignore[arg-type]
+    await client.indices.delete(index=rebuild_lock(ALIAS))
+    await rebuild(graph, _Texts(), client, ALIAS, SCHEMA)  # type: ignore[arg-type]
+    assert not await client.indices.exists(index=rebuild_lock(ALIAS))

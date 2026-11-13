@@ -12,11 +12,14 @@ _BOOLEAN = {"similarity": "boolean"}
 #: The longest prefix the type-ahead matches (edge n-grams up to it, at index time). The query side
 #: refuses a longer one in words (ADR-149; rule 2), importing this same constant.
 PREFIX_MAX_CHARS = 50
-#: The longest keyword value indexed, in characters: at four bytes a character at most, under
-#: Lucene's 32,766-byte term, which refuses the whole document otherwise. A longer value is kept in
-#: the document's source but not indexed as a keyword (its sub-fields still are).
+#: The longest name or identifier indexed as a keyword, in characters: at four bytes a character
+#: at most, under Lucene's 32,766-byte term, which refuses the whole document otherwise. A longer
+#: value is kept in the document's source but not indexed as a keyword (its sub-fields still are).
+#: Never on an access field (datasets, handling, units): a value there left unindexed would let a
+#: query's filter pass it unseen, so an over-long one is refused and set aside (it fails closed).
 KEYWORD_MAX_CHARS = 8191
-_KEYWORD = {"type": "keyword", "ignore_above": KEYWORD_MAX_CHARS, **_BOOLEAN}
+_KEYWORD = {"type": "keyword", **_BOOLEAN}
+_LONG_KEYWORD = {"type": "keyword", "ignore_above": KEYWORD_MAX_CHARS, **_BOOLEAN}
 
 SETTINGS: dict[str, Any] = {
     # An edge n-gram filter's min and max may differ by at most `index.max_ngram_diff`.
@@ -77,7 +80,7 @@ MAPPING: dict[str, Any] = {
         "owning_unit": _KEYWORD,
         "originator": _KEYWORD,
         "text_owning_unit": _KEYWORD,
-        "identifiers": {**_KEYWORD, "fields": {"prefix": _PREFIX}},
+        "identifiers": {**_LONG_KEYWORD, "fields": {"prefix": _PREFIX}},
         "names": {
             "type": "keyword",
             "normalizer": "folded",

@@ -9,8 +9,8 @@ once and each write is idempotent (a document is its node's current state, keyed
 
 from __future__ import annotations
 
-import json
 import logging
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -46,10 +46,21 @@ def actions_for(
     nodes: dict[str, Node | None],
     texts: dict[str, tuple[str, str]],
     schema: OntologySchema,
+    *,
+    require_alias: bool = False,
 ) -> list[dict[str, Any]]:
     """The bulk request's lines for these nodes: a document for each live node and its text, a
-    delete for each one not live and for a live node's text that is no longer there."""
+    delete for each one not live and for a live node's text that is no longer there. Written to an
+    alias, each write says `require_alias`, so an alias that is gone is a refusal, never a new
+    unmapped index of its name."""
     body: list[dict[str, Any]] = []
+
+    def write(doc_id: str) -> dict[str, Any]:
+        meta: dict[str, Any] = {"_index": index, "_id": doc_id}
+        if require_alias:
+            meta["require_alias"] = True
+        return {"index": meta}
+
     for node_id in dict.fromkeys(node_ids):
         node = nodes.get(node_id)
         if node is None:
@@ -57,11 +68,11 @@ def actions_for(
             body.append({"delete": {"_index": index, "_id": text_document_id(node_id)}})
             continue
         document = node_document(node, schema)
-        body += [{"index": {"_index": index, "_id": node_id}}, document]
+        body += [write(node_id), document]
         if node_id in texts:
             text, unit = texts[node_id]
             body += [
-                {"index": {"_index": index, "_id": text_document_id(node_id)}},
+                write(text_document_id(node_id)),
                 text_document(node, text, unit, schema),
             ]
         else:
@@ -85,6 +96,7 @@ class Refused:
 
     doc_id: str
     reason: str
+    index: str
 
 
 def _encoded(text: str) -> bytes:
@@ -100,22 +112,26 @@ def _requests(
     `MAX_BULK_BYTES` encoded, each action kept with its document (an `index` is two lines, a
     `delete` one); and each action over the cap on its own, set aside."""
     dumps = client.transport.serializer.dumps
-    actions: list[tuple[str, str]] = []
+    actions: list[tuple[str, str, str]] = []
     i = 0
     while i < len(body):
         ((op, meta),) = body[i].items()
         width = 2 if op in ("index", "create", "update") else 1
         lines = "".join(dumps(line) + "\n" for line in body[i : i + width])
-        actions.append((str(meta.get("_id")), lines))
+        actions.append((str(meta.get("_id")), str(meta.get("_index")), lines))
         i += width
     requests: list[str] = []
     refused: list[Refused] = []
     current, size = "", 0
-    for doc_id, lines in actions:
+    for doc_id, index, lines in actions:
         n = len(_encoded(lines))
         if n > MAX_BULK_BYTES:
             refused.append(
-                Refused(doc_id, f"{n} bytes, over the {MAX_BULK_BYTES}-byte request cap on its own")
+                Refused(
+                    doc_id,
+                    f"{n} bytes, over the {MAX_BULK_BYTES}-byte request cap on its own",
+                    index,
+                )
             )
             continue
         if size + n > MAX_BULK_BYTES:
@@ -128,24 +144,64 @@ def _requests(
     return requests, refused
 
 
-def _permanent(op: str, status: int) -> bool:
-    """A refusal that sending the same document again cannot change: a 4xx other than a delete's
-    404 (already gone, not a failure), a 404 on a write (the index is missing: retried), a 408, a
-    409 or a 429 (each passing)."""
-    return 400 <= status < 500 and status not in (404, 408, 409, 429)
+#: The refusals a document earns by its own content, which sending it again cannot change: its
+#: shape against the mapping, or a term over Lucene's limit. Every other refusal, whatever its
+#: status (a write block's 403, a closed index's 400, an alias over two indexes, a 429, a 5xx), is
+#: the cluster's state, not the document's: raised, and the batch sent again.
+_DOCUMENT_REFUSALS = frozenset(
+    {
+        "mapper_parsing_exception",
+        "strict_dynamic_mapping_exception",
+        "document_parsing_exception",
+        "max_bytes_length_exceeded_exception",
+    }
+)
+_FIELD = re.compile(
+    r'field \[([\w.]{1,200})\]|field="([\w.]{1,200})"|introduction of \[([\w.]{1,200})\]'
+)
+
+
+def _permanent(op: str, error: Any) -> bool:
+    """Only a write (never a delete: a document that should be gone is never left set aside), and
+    only for the document's own content."""
+    if op not in ("index", "create", "update") or not isinstance(error, dict):
+        return False
+    caused = error.get("caused_by")
+    kinds = {error.get("type"), caused.get("type") if isinstance(caused, dict) else None}
+    return bool(kinds & _DOCUMENT_REFUSALS)
+
+
+def _reason(status: int, error: dict[str, Any]) -> str:
+    """The refusal's type and the field it names, never its words: OpenSearch's reason quotes the
+    value (a preview of the field, a term's bytes), which is a record's content."""
+    kinds = [str(error.get("type"))]
+    caused = error.get("caused_by")
+    if isinstance(caused, dict) and caused.get("type"):
+        kinds.append(str(caused["type"]))
+    found = _FIELD.search(str(error.get("reason", "")))
+    field = next((g for g in found.groups() if g), None) if found else None
+    return f"{status} {' / '.join(kinds)}" + (f" in field {field}" if field else "")
 
 
 async def write_actions(client: AsyncOpenSearch, body: list[dict[str, Any]]) -> list[Refused]:
     """The body in requests of at most `MAX_BULK_BYTES`; a delete of a document that was never
-    there is not a failure. A document refused for good (over the cap alone, or a permanent 4xx
-    for its item) is returned, never dropped unsaid, for the caller to record; any other refusal
-    is raised, a 413 for the whole request too (never swallowed), so the caller clears nothing of
-    the batch and sends it again."""
+    there is not a failure. A document refused for good (over the cap alone, or refused for its own
+    content) is returned for the caller to record, and whatever that index already held for it is
+    deleted in the same pass, so an older version never stays searchable with older access fields
+    (it fails closed). Any other refusal is raised, a 413 for the whole request too (never
+    swallowed), so the caller clears nothing of the batch and sends it again."""
     if not body:
         return []
     requests, refused = _requests(client, body)
     for request in requests:
         refused += await _write_one(client, request)
+    if refused:
+        removal = [{"delete": {"_index": r.index, "_id": r.doc_id}} for r in refused]
+        removed, still_refused = _requests(client, removal)
+        assert not still_refused  # a delete line is never over the cap
+        for request in removed:
+            if await _write_one(client, request):
+                raise IndexWriteError("a refused document's older version could not be deleted")
     return refused
 
 
@@ -160,11 +216,17 @@ async def _write_one(client: AsyncOpenSearch, request: str) -> list[Refused]:
             status = int(result.get("status", 200))
             if status < 300 or (op == "delete" and status == 404):
                 continue
-            if _permanent(op, status):
-                reason = f"{status} {json.dumps(result.get('error'), default=str)}"
-                refused.append(Refused(str(result.get("_id")), reason[:_REASON_CHARS]))
+            error = result.get("error")
+            if _permanent(op, error):
+                refused.append(
+                    Refused(
+                        str(result.get("_id")), _reason(status, error), str(result.get("_index"))
+                    )
+                )
             else:
-                passing.append((op, result))
+                passing.append(
+                    (op, status, error.get("type") if isinstance(error, dict) else error)
+                )
     if passing:
         raise IndexWriteError(f"{len(passing)} of the batch's writes were refused: {passing[:3]}")
     return refused
@@ -172,7 +234,8 @@ async def _write_one(client: AsyncOpenSearch, request: str) -> list[Refused]:
 
 def refused_index(alias: str) -> str:
     """The deployment's record of the documents set aside (ADR-150 decision 2), outside the alias
-    so no search reads it; the drift check reports it and a rebuild starts it afresh."""
+    so no search reads it; the drift check reports it, and a later write or delete of the same
+    document removes its record."""
     return f"{alias}-refused"
 
 
@@ -202,6 +265,17 @@ async def record_refused(client: AsyncOpenSearch, alias: str, refused: Sequence[
         await client.index(
             index=index, id=r.doc_id, body={"doc_id": r.doc_id, "reason": r.reason, "at": at}
         )
+
+
+async def clear_refused(client: AsyncOpenSearch, alias: str, doc_ids: Sequence[str]) -> None:
+    """The records of documents now written or deleted: a record names only what is still set
+    aside."""
+    index = refused_index(alias)
+    if not doc_ids or not await client.indices.exists(index=index):
+        return
+    requests, _ = _requests(client, [{"delete": {"_index": index, "_id": d}} for d in doc_ids])
+    for request in requests:
+        await _write_one(client, request)
 
 
 async def ensure_index(client: AsyncOpenSearch, alias: str) -> None:
@@ -259,10 +333,20 @@ class SearchIndexer:
         ):
             targets.append(building_alias(self._alias))
         refused: dict[str, Refused] = {}
+        sent: set[str] = set()
         for target in targets:
-            body = actions_for(target, node_ids, nodes, texts, self._schema)
+            body = actions_for(
+                target, node_ids, nodes, texts, self._schema, require_alias=index is None
+            )
+            sent |= {
+                str(meta["_id"])
+                for line in body
+                for op, meta in line.items()
+                if op in ("index", "delete")
+            }
             refused.update((r.doc_id, r) for r in await write_actions(self._client, body))
         await record_refused(self._client, self._alias, list(refused.values()))
+        await clear_refused(self._client, self._alias, sorted(sent - set(refused)))
 
     async def drain_once(self) -> int:
         """One batch of each outbox; the number of outbox rows it cleared."""

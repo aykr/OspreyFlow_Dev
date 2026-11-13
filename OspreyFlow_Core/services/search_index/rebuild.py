@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from opensearchpy import AsyncOpenSearch
+from opensearchpy import AsyncOpenSearch, TransportError
 
 from ports.index_feed import IndexFeedSource
 from schemas.domain import OntologySchema
@@ -14,6 +14,15 @@ from schemas.domain import OntologySchema
 from .document import fingerprint, node_document, text_document, text_document_id
 from .indexer import SearchIndexer, TextFeedSource, building_alias, refused_index
 from .mapping import index_body
+
+
+class RebuildRunning(RuntimeError):
+    """Another rebuild of the same alias holds the lock: said in words, never run beside it (two
+    under one building alias would refuse every write, and one would delete the other's index)."""
+
+
+def rebuild_lock(alias: str) -> str:
+    return f"{alias}-rebuild-lock"
 
 
 @dataclass(frozen=True)
@@ -35,14 +44,39 @@ async def rebuild(
     """Every live node into a new index named with its build time, then the alias moved onto it and
     the old indexes deleted, so a reader never sees a half-built index. The outboxes are left alone:
     their rows are re-applied after the move, idempotently."""
+    # One rebuild at a time: the lock is an index, made atomically (a second create is refused).
+    lock = rebuild_lock(alias)
+    try:
+        await client.indices.create(index=lock, body={"settings": {"number_of_shards": 1}})
+    except TransportError as e:
+        if e.status_code == 400 and "resource_already_exists" in str(e.error):
+            raise RebuildRunning(
+                f"a rebuild of {alias} is already running (the index {lock} holds it); if none is "
+                f"(one that crashed), delete that index and run the rebuild again"
+            ) from e
+        raise
+    try:
+        return await _rebuild(source, texts, client, alias, schema, page=page)
+    finally:
+        await client.indices.delete(index=lock, ignore_unavailable=True)
+
+
+async def _rebuild(
+    source: IndexFeedSource,
+    texts: TextFeedSource,
+    client: AsyncOpenSearch,
+    alias: str,
+    schema: OntologySchema,
+    *,
+    page: int,
+) -> Rebuilt:
     # An index a rebuild that crashed left under the building alias would take every change too,
     # and a second one under it refuses every write (an alias of two indexes with no write index).
     building = building_alias(alias)
     if await client.indices.exists_alias(name=building):
         for left in (await client.indices.get_alias(name=building)).keys():
             await client.indices.delete(index=left, ignore_unavailable=True)
-    started = datetime.now(UTC)
-    index = f"{alias}-{started.strftime('%Y%m%dt%H%M%S%f')}"
+    index = f"{alias}-{datetime.now(UTC).strftime('%Y%m%dt%H%M%S%f')}"
     await client.indices.create(index=index, body=index_body())
     try:
         await client.indices.put_alias(index=index, name=building)
@@ -75,15 +109,6 @@ async def rebuild(
     for o in old:
         if o != index:
             await client.indices.delete(index=o)
-    # The record of documents set aside is now this rebuild's: what it refused, and what the
-    # indexer refused while it ran. Older records, of documents since rebuilt, go; a failed
-    # rebuild never reaches here, so it loses no record.
-    if await client.indices.exists(index=refused_index(alias)):
-        await client.delete_by_query(
-            index=refused_index(alias),
-            body={"query": {"range": {"at": {"lt": started.isoformat()}}}},
-            refresh=True,
-        )
     documents = int((await client.count(index=index))["count"])
     return Rebuilt(index=index, nodes=nodes, documents=documents)
 

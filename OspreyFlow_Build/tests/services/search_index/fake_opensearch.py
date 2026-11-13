@@ -8,10 +8,16 @@ refusals, not only the grants):
 - an item whose document names a field a `dynamic: strict` mapping does not hold, with a 400
   `strict_dynamic_mapping_exception`;
 - an item whose keyword value is over Lucene's 32,766-byte term, unless the field's `ignore_above`
-  leaves it unindexed, with a 400 `max_bytes_length_exceeded_exception`;
+  leaves it unindexed, with a 400 `illegal_argument_exception` ("immense term") caused by
+  `max_bytes_length_exceeded_exception`, the shape OpenSearch answers;
 - a write to an alias over two indexes with no write index, with a 400 `illegal_argument_exception`;
-- every item with a 429 while `busy` is set (a passing refusal).
-A write to an index that is not there makes it, unmapped, as `action.auto_create_index` does.
+- every item with a 429 while `busy` is set, a 403 `cluster_block_exception` while `blocked` is
+  set (a write block, an ISM read-only state), a 429 `cluster_block_exception` for a write but not
+  a delete while `flood_stage` is set (`read_only_allow_delete`), and a 400
+  `index_closed_exception` for an index in `closed` (each the cluster's state, not the document's);
+- a write saying `require_alias` to a name that is no alias, with a 404 `index_not_found_exception`.
+A write to an index that is not there otherwise makes it, unmapped, as `action.auto_create_index`
+does; a delete there is a 404 and makes nothing. A refusal's reason quotes the value, as OpenSearch's does ("Preview of field's value").
 It does not prove what a real cluster's analysers make of a document: `test_feed_live.py`'s.
 """
 
@@ -79,6 +85,9 @@ class FakeOpenSearch:
     def __init__(self, limit: int = 100 * 1024 * 1024) -> None:
         self.limit = limit
         self.busy = False
+        self.blocked = False
+        self.flood_stage = False
+        self.closed: set[str] = set()
         self.transport = type("T", (), {"serializer": JSONSerializer()})()
         self.docs: dict[str, dict[str, dict[str, Any]]] = {}
         self.aliases: dict[str, set[str]] = {}
@@ -102,7 +111,11 @@ class FakeOpenSearch:
             spec = properties.get(name)
             if spec is None:
                 if self.mappings[index].get("dynamic") == "strict":
-                    return {"type": "strict_dynamic_mapping_exception", "reason": name}
+                    return {
+                        "type": "strict_dynamic_mapping_exception",
+                        "reason": f"mapping set to strict, dynamic introduction of [{name}] within "
+                        f"[_doc] is not allowed. Preview of field's value: '{value!s:.30}'",
+                    }
                 continue
             if spec.get("type") != "keyword":
                 continue
@@ -111,7 +124,13 @@ class FakeOpenSearch:
                     continue
                 ignored = "ignore_above" in spec and len(v) > spec["ignore_above"]
                 if len(v.encode("utf-8", "surrogatepass")) > MAX_TERM_BYTES and not ignored:
-                    return {"type": "max_bytes_length_exceeded_exception", "reason": name}
+                    return {
+                        "type": "illegal_argument_exception",
+                        "reason": f'Document contains at least one immense term in field="{name}" '
+                        f"(whose UTF8 encoding is longer than the max length 32766), all of which "
+                        f"were skipped. The prefix of the first immense term is: '{v[:30]}...'",
+                        "caused_by": {"type": "max_bytes_length_exceeded_exception"},
+                    }
         return None
 
     async def bulk(self, *, body: Any) -> dict[str, Any]:
@@ -132,15 +151,34 @@ class FakeOpenSearch:
             if self.busy:
                 result.update(status=429, error={"type": "es_rejected_execution_exception"})
                 continue
+            if self.blocked:
+                result.update(status=403, error={"type": "cluster_block_exception",
+                                                 "reason": "index [x] blocked by: [FORBIDDEN/8/index write (api)]"})  # fmt: skip
+                continue
+            if self.flood_stage and op != "delete":
+                # `read_only_allow_delete`, set at the flood-stage disk watermark: deletes pass.
+                result.update(status=429, error={"type": "cluster_block_exception",
+                                                 "reason": "index [x] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded flood-stage watermark, index has read-only-allow-delete block]"})  # fmt: skip
+                continue
+            if meta.get("require_alias") and not await self.indices.exists_alias(name=meta["_index"]):
+                result.update(status=404, error={"type": "index_not_found_exception",
+                                                 "reason": "[require_alias] request flag is [true]"})  # fmt: skip
+                continue
             try:
                 targets = self.resolve(meta["_index"])
             except NotFoundError:
+                if op == "delete":
+                    result.update(status=404, error={"type": "index_not_found_exception"})
+                    continue
                 # `action.auto_create_index`, on by default: a write makes the index, unmapped.
                 await self.indices.create(index=meta["_index"], body={})
                 targets = [meta["_index"]]
             if len(targets) > 1:
                 result.update(status=400, error={"type": "illegal_argument_exception",
                                                  "reason": "no write index"})  # fmt: skip
+                continue
+            if targets[0] in self.closed:
+                result.update(status=400, error={"type": "index_closed_exception"})
                 continue
             held = self.docs[targets[0]]
             if op == "delete":
