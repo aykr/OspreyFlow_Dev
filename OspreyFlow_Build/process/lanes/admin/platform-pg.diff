@@ -1,0 +1,139 @@
+diff --git a/OspreyFlow_Build/tests/test_refresh.py b/OspreyFlow_Build/tests/test_refresh.py
+index bb8811f..bc2dabe 100644
+--- a/OspreyFlow_Build/tests/test_refresh.py
++++ b/OspreyFlow_Build/tests/test_refresh.py
+@@ -934,3 +934,35 @@ def test_a_refused_move_puts_back_a_symlinked_file_through_its_link(
+     assert "the deployment's files are as they were" in str(refused.value)
+     assert (out / linked).is_symlink() and (out / linked).resolve() == real.resolve()
+     assert real.read_bytes() == before
++
++
++# --- ADR-114 Amendment 43: PostgreSQL's connections reach a deployment rendered before them ------
++
++
++def test_postgres_connections_reach_a_deployment_rendered_before_them(repo: Path) -> None:
++    """`update` and `start --build` keep the deployment's compose file; without this a deployed
++    Small would keep the image's 100 connections however often it was updated, while its gateway's
++    pool (in `litellm.yaml`, written whole) moved on."""
++    import yaml
++
++    out = _rendered(repo)
++    rendered = yaml.safe_load((out / "compose.yaml").read_text())
++    text = (out / "compose.yaml").read_text()
++    banner = text[: text.index("\nname:") + 1]
++    document = yaml.safe_load(text)
++    del document["services"]["postgres"]["command"]
++    del document["services"]["keycloak"]["environment"]["KC_DB_POOL_MAX_SIZE"]
++    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
++
++    refresh.files_up_to_date(repo)
++    after = yaml.safe_load((out / "compose.yaml").read_text())
++    assert after["services"]["postgres"]["command"] == rendered["services"]["postgres"]["command"]
++    assert (
++        after["services"]["keycloak"]["environment"]["KC_DB_POOL_MAX_SIZE"]
++        == rendered["services"]["keycloak"]["environment"]["KC_DB_POOL_MAX_SIZE"]
++    )
++    assert (out / "compose.yaml").read_text().startswith(banner)
++    # Safe to repeat: a deployment already as rendered is not written again.
++    before = (out / "compose.yaml").read_bytes()
++    refresh.files_up_to_date(repo)
++    assert (out / "compose.yaml").read_bytes() == before
+diff --git a/OspreyFlow_Core/scripts/refresh.py b/OspreyFlow_Core/scripts/refresh.py
+index e79fdea..2e55d14 100644
+--- a/OspreyFlow_Core/scripts/refresh.py
++++ b/OspreyFlow_Core/scripts/refresh.py
+@@ -73,6 +73,7 @@ from harness.keycloak_theme import (
+     render_login_theme,
+     write_login_theme,
+ )
++from harness.profiles import postgres_connections_up_to_date
+ from harness.render import (
+     STATE_CONTAINER_PATH,
+     STORE_VOLUMES,
+@@ -668,6 +669,21 @@ def _stores_named(directory: Path) -> bool:
+     return changed
+ 
+ 
++def _postgres_connections_named(directory: Path) -> bool:
++    """ADR-114 Amendment 43: PostgreSQL's `max_connections` and Keycloak's pool, as the render
++    gives them (`harness.profiles.postgres_connections_up_to_date`), on a deployment rendered
++    before them. Says whether anything changed."""
++    compose_path = directory / "compose.yaml"
++    text = compose_path.read_text(encoding="utf-8")
++    header_end = text.find("\nname:") + 1
++    document = yaml.safe_load(text) or {}
++    if not postgres_connections_up_to_date(document.get("services") or {}):
++        return False
++    body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
++    compose_path.write_text(text[:header_end] + body, encoding="utf-8")
++    return True
++
++
+ def files_up_to_date(repo_root: Path = REPO_ROOT) -> dict[str, bool]:
+     """Every file of the deployment as this checkout writes it, and nothing run: `update` uses this
+     from the new checkout (ADR-114 Amendment 8 point 6a). Says which services must restart."""
+@@ -855,6 +871,7 @@ def _files_up_to_date_in(directory: Path, repo_root: Path) -> dict[str, bool]:
+     routing_changed = _routing_up_to_date(directory)
+     _release_up_to_date(directory)
+     _stores_named(directory)
++    _postgres_connections_named(directory)
+     return {
+         "proxy_changed": proxy_changed,
+         "theme_changed": theme_changed,
+diff --git a/OspreyFlow_Build/tests/harness/test_model_engines.py b/OspreyFlow_Build/tests/harness/test_model_engines.py
+index 6e689d9..e5ba36a 100644
+--- a/OspreyFlow_Build/tests/harness/test_model_engines.py
++++ b/OspreyFlow_Build/tests/harness/test_model_engines.py
+@@ -26,6 +26,7 @@ from pathlib import Path
+ import pytest
+ import yaml
+ from harness.apply import ApplyFailed, keep_existing_secrets, provider_secret_lines
++from harness.profiles import GATEWAY_POOL_MAX
+ from harness.render import load_config, render, render_litellm_config
+ from pydantic import ValidationError
+ from tools.layout import CORE
+@@ -145,6 +146,8 @@ def test_hosted_engines_are_not_rendered_but_held_in_the_gateway_s_database(
+     assert table["general_settings"] == {
+         "master_key": "os.environ/LITELLM_MASTER_KEY",
+         "store_model_in_db": True,
++        # ADR-114 Amendment 43: the gateway's share of PostgreSQL.
++        "database_connection_pool_limit": GATEWAY_POOL_MAX,
+     }
+     compose = yaml.safe_load(render(_config(tmp_path, TWO), resolver=_fake_resolver)
+                              .artefacts["compose.yaml"])  # fmt: skip
+diff --git a/OspreyFlow_Build/tests/harness/test_render_memory.py b/OspreyFlow_Build/tests/harness/test_render_memory.py
+index ea0bdcf..848056c 100644
+--- a/OspreyFlow_Build/tests/harness/test_render_memory.py
++++ b/OspreyFlow_Build/tests/harness/test_render_memory.py
+@@ -21,7 +21,7 @@ import uuid
+ from typing import Any
+ 
+ import yaml
+-from harness.profiles import StoreMemory, postgres_command
++from harness.profiles import POSTGRES_MAX_CONNECTIONS, StoreMemory, postgres_command
+ from harness.render import render
+ 
+ from schemas.deployment import OspreyConfig
+@@ -56,8 +56,10 @@ def test_the_rendered_compose_and_env_carry_the_sized_values() -> None:
+         "${OSPREY_ARCADEDB_HEAP:--Xms1G -Xmx25G -XX:+ExitOnOutOfMemoryError}"
+     )
+     assert services["opensearch"]["environment"]["OPENSEARCH_JAVA_OPTS"] == "-Xms4096m -Xmx4096m"
++    # ADR-114 Amendment 43: `max_connections` first, on every owned PostgreSQL, sized or not.
+     assert services["postgres"]["command"] == [
+-        "postgres", "-c", "shared_buffers=2048MB", "-c", "effective_cache_size=6144MB",
++        "postgres", "-c", f"max_connections={POSTGRES_MAX_CONNECTIONS}",
++        "-c", "shared_buffers=2048MB", "-c", "effective_cache_size=6144MB",
+     ]  # fmt: skip
+     # Not in deployment.env, which every owned service reads whole: a resize restarts the stores
+     # concerned, not the Conduit and the workspace.
+@@ -65,7 +67,9 @@ def test_the_rendered_compose_and_env_carry_the_sized_values() -> None:
+     # Unsized, every store is as before.
+     plain, plain_env = _rendered(_own_server(None))
+     assert plain["opensearch"]["environment"]["OPENSEARCH_JAVA_OPTS"] == "-Xms512m -Xmx512m"
+-    assert "command" not in plain["postgres"]
++    assert plain["postgres"]["command"] == [
++        "postgres", "-c", f"max_connections={POSTGRES_MAX_CONNECTIONS}",
++    ]  # fmt: skip
+     assert "OSPREY_ARCADEDB_HEAP=-Xms1G -Xmx8G -XX:+ExitOnOutOfMemoryError" in plain_env
+ 
+ 

@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from schemas.deployment import ResourcesConfig
@@ -237,3 +237,35 @@ def postgres_command(memory: StoreMemory | None = None) -> list[str]:
         "-c",
         f"effective_cache_size={memory.postgres_effective_cache_mib}MB",
     ]
+
+
+def postgres_connections_up_to_date(services: dict[str, Any]) -> bool:
+    """ADR-114 Amendment 43 on a deployment rendered before it (`scripts/refresh.py`, run by
+    `ospreyflow update` and `start --build`, which keep an existing compose file rather than render
+    it again): PostgreSQL's `max_connections` set to the product's number, the sized settings and
+    anything else on its command kept; Keycloak's pool named. Says whether anything changed."""
+    changed = False
+    postgres = services.get("postgres")
+    if isinstance(postgres, dict):
+        command = [str(part) for part in postgres.get("command") or ["postgres"]]
+        setting = f"max_connections={POSTGRES_MAX_CONNECTIONS}"
+        kept = [
+            part
+            for i, part in enumerate(command)
+            if not part.startswith("max_connections=")
+            and not (
+                part == "-c"
+                and i + 1 < len(command)
+                and command[i + 1].startswith("max_connections=")
+            )
+        ]
+        wanted = [kept[0], "-c", setting, *kept[1:]] if kept else ["postgres", "-c", setting]
+        if postgres.get("command") != wanted:
+            postgres["command"] = wanted
+            changed = True
+    keycloak = services.get("keycloak")
+    if isinstance(keycloak, dict) and isinstance(keycloak.get("environment"), dict):
+        if keycloak["environment"].get("KC_DB_POOL_MAX_SIZE") != str(KEYCLOAK_POOL_MAX):
+            keycloak["environment"]["KC_DB_POOL_MAX_SIZE"] = str(KEYCLOAK_POOL_MAX)
+            changed = True
+    return changed

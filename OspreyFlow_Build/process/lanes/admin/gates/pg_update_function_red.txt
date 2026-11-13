@@ -1,0 +1,128 @@
+PLANT: postgres_connections_up_to_date leaves an existing compose file as it was
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+______ test_update_brings_an_existing_compose_file_to_the_number[unsized] ______
+
+before = None, after = ['postgres', '-c', 'max_connections={n}']
+
+    @pytest.mark.parametrize(
+        ("before", "after"),
+        [
+            # Rendered before Amendment 43: the image's own command.
+            (None, ["postgres", "-c", "max_connections={n}"]),
+            # Sized (Amendment 33): the memory settings kept, after the number.
+            (
+                ["postgres", "-c", "shared_buffers=2048MB", "-c", "effective_cache_size=6144MB"],
+                ["postgres", "-c", "max_connections={n}", "-c", "shared_buffers=2048MB",
+                 "-c", "effective_cache_size=6144MB"],
+            ),
+            # A number set by hand on the command: the product's, as `apply` would render it.
+            (
+                ["postgres", "-c", "max_connections=400", "-c", "shared_buffers=1024MB"],
+                ["postgres", "-c", "max_connections={n}", "-c", "shared_buffers=1024MB"],
+            ),
+        ],
+        ids=["unsized", "sized", "hand-set"],
+    )  # fmt: skip
+    def test_update_brings_an_existing_compose_file_to_the_number(
+        before: list[str] | None, after: list[str]
+    ) -> None:
+        """`ospreyflow update` and `start --build` keep an existing compose file
+        (`scripts/refresh.py`, `refresh-pg-update.diff`): this is what they apply to it."""
+        from harness.profiles import postgres_connections_up_to_date
+    
+        services: dict[str, Any] = {
+            "postgres": {"image": POSTGRES_IMAGE, **({"command": before} if before else {})},
+            "keycloak": {"environment": {"KC_DB": "postgres"}},
+        }
+>       assert postgres_connections_up_to_date(services) is True
+E       AssertionError: assert False is True
+E        +  where False = <function postgres_connections_up_to_date at 0x102e293a0>({'postgres': {'image': 'postgres:16.4'}, 'keycloak': {'environment': {'KC_DB': 'postgres'}}})
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py:174: AssertionError
+_______ test_update_brings_an_existing_compose_file_to_the_number[sized] _______
+
+before = ['postgres', '-c', 'shared_buffers=2048MB', '-c', 'effective_cache_size=6144MB']
+after = ['postgres', '-c', 'max_connections={n}', '-c', 'shared_buffers=2048MB', '-c', ...]
+
+    @pytest.mark.parametrize(
+        ("before", "after"),
+        [
+            # Rendered before Amendment 43: the image's own command.
+            (None, ["postgres", "-c", "max_connections={n}"]),
+            # Sized (Amendment 33): the memory settings kept, after the number.
+            (
+                ["postgres", "-c", "shared_buffers=2048MB", "-c", "effective_cache_size=6144MB"],
+                ["postgres", "-c", "max_connections={n}", "-c", "shared_buffers=2048MB",
+                 "-c", "effective_cache_size=6144MB"],
+            ),
+            # A number set by hand on the command: the product's, as `apply` would render it.
+            (
+                ["postgres", "-c", "max_connections=400", "-c", "shared_buffers=1024MB"],
+                ["postgres", "-c", "max_connections={n}", "-c", "shared_buffers=1024MB"],
+            ),
+        ],
+        ids=["unsized", "sized", "hand-set"],
+    )  # fmt: skip
+    def test_update_brings_an_existing_compose_file_to_the_number(
+        before: list[str] | None, after: list[str]
+    ) -> None:
+        """`ospreyflow update` and `start --build` keep an existing compose file
+        (`scripts/refresh.py`, `refresh-pg-update.diff`): this is what they apply to it."""
+        from harness.profiles import postgres_connections_up_to_date
+    
+        services: dict[str, Any] = {
+            "postgres": {"image": POSTGRES_IMAGE, **({"command": before} if before else {})},
+            "keycloak": {"environment": {"KC_DB": "postgres"}},
+        }
+>       assert postgres_connections_up_to_date(services) is True
+E       AssertionError: assert False is True
+E        +  where False = <function postgres_connections_up_to_date at 0x102e293a0>({'postgres': {'image': 'postgres:16.4', 'command': ['postgres', '-c', 'shared_buffers=2048MB', '-c', 'effective_cache_size=6144MB']}, 'keycloak': {'environment': {'KC_DB': 'postgres'}}})
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py:174: AssertionError
+_____ test_update_brings_an_existing_compose_file_to_the_number[hand-set] ______
+
+before = ['postgres', '-c', 'max_connections=400', '-c', 'shared_buffers=1024MB']
+after = ['postgres', '-c', 'max_connections={n}', '-c', 'shared_buffers=1024MB']
+
+    @pytest.mark.parametrize(
+        ("before", "after"),
+        [
+            # Rendered before Amendment 43: the image's own command.
+            (None, ["postgres", "-c", "max_connections={n}"]),
+            # Sized (Amendment 33): the memory settings kept, after the number.
+            (
+                ["postgres", "-c", "shared_buffers=2048MB", "-c", "effective_cache_size=6144MB"],
+                ["postgres", "-c", "max_connections={n}", "-c", "shared_buffers=2048MB",
+                 "-c", "effective_cache_size=6144MB"],
+            ),
+            # A number set by hand on the command: the product's, as `apply` would render it.
+            (
+                ["postgres", "-c", "max_connections=400", "-c", "shared_buffers=1024MB"],
+                ["postgres", "-c", "max_connections={n}", "-c", "shared_buffers=1024MB"],
+            ),
+        ],
+        ids=["unsized", "sized", "hand-set"],
+    )  # fmt: skip
+    def test_update_brings_an_existing_compose_file_to_the_number(
+        before: list[str] | None, after: list[str]
+    ) -> None:
+        """`ospreyflow update` and `start --build` keep an existing compose file
+        (`scripts/refresh.py`, `refresh-pg-update.diff`): this is what they apply to it."""
+        from harness.profiles import postgres_connections_up_to_date
+    
+        services: dict[str, Any] = {
+            "postgres": {"image": POSTGRES_IMAGE, **({"command": before} if before else {})},
+            "keycloak": {"environment": {"KC_DB": "postgres"}},
+        }
+>       assert postgres_connections_up_to_date(services) is True
+E       AssertionError: assert False is True
+E        +  where False = <function postgres_connections_up_to_date at 0x102e293a0>({'postgres': {'image': 'postgres:16.4', 'command': ['postgres', '-c', 'max_connections=400', '-c', 'shared_buffers=1024MB']}, 'keycloak': {'environment': {'KC_DB': 'postgres'}}})
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py:174: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_update_brings_an_existing_compose_file_to_the_number[unsized]
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_update_brings_an_existing_compose_file_to_the_number[sized]
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_update_brings_an_existing_compose_file_to_the_number[hand-set]
+3 failed, 6 deselected in 1.29s
+exit=1

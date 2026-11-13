@@ -21,7 +21,7 @@ import uuid
 from typing import Any
 
 import yaml
-from harness.profiles import POSTGRES_MAX_CONNECTIONS, StoreMemory, postgres_command
+from harness.profiles import StoreMemory, postgres_command
 from harness.render import render
 
 from schemas.deployment import OspreyConfig
@@ -56,10 +56,8 @@ def test_the_rendered_compose_and_env_carry_the_sized_values() -> None:
         "${OSPREY_ARCADEDB_HEAP:--Xms1G -Xmx25G -XX:+ExitOnOutOfMemoryError}"
     )
     assert services["opensearch"]["environment"]["OPENSEARCH_JAVA_OPTS"] == "-Xms4096m -Xmx4096m"
-    # ADR-114 Amendment 43: `max_connections` first, on every owned PostgreSQL, sized or not.
     assert services["postgres"]["command"] == [
-        "postgres", "-c", f"max_connections={POSTGRES_MAX_CONNECTIONS}",
-        "-c", "shared_buffers=2048MB", "-c", "effective_cache_size=6144MB",
+        "postgres", "-c", "shared_buffers=2048MB", "-c", "effective_cache_size=6144MB",
     ]  # fmt: skip
     # Not in deployment.env, which every owned service reads whole: a resize restarts the stores
     # concerned, not the Conduit and the workspace.
@@ -67,9 +65,7 @@ def test_the_rendered_compose_and_env_carry_the_sized_values() -> None:
     # Unsized, every store is as before.
     plain, plain_env = _rendered(_own_server(None))
     assert plain["opensearch"]["environment"]["OPENSEARCH_JAVA_OPTS"] == "-Xms512m -Xmx512m"
-    assert plain["postgres"]["command"] == [
-        "postgres", "-c", f"max_connections={POSTGRES_MAX_CONNECTIONS}",
-    ]  # fmt: skip
+    assert "command" not in plain["postgres"]
     assert "OSPREY_ARCADEDB_HEAP=-Xms1G -Xmx8G -XX:+ExitOnOutOfMemoryError" in plain_env
 
 

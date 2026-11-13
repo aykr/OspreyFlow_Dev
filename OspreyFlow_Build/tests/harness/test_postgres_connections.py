@@ -10,15 +10,19 @@ Rule 12, each invariant and the test that fails without it:
   connection opened outside the recorded pools would show.
 - **Every profile with a PostgreSQL of its own renders the number** (Lite and Small, sized or not),
   and the gateway's and Keycloak's pools are rendered as the number counts them.
-- **Two Conduits at their ceiling, and every other client at its allowance, fit the rendered
-  PostgreSQL** (docker): `postgres:16.4` started with exactly the rendered command; Conduit 1 up,
-  its pools grown to their measured maximum and its running loads' lock connections opened;
-  Conduit 2 up, the same; then Keycloak's, the gateway's, Superset's and the report sync's
-  allowances. None may be refused. Red against the image's own command (100):
-  `gates/pg_two_conduits_red.txt`.
+- **The rendered number holds two Conduits at the ceiling, every other client and the reserve, at
+  once** (docker): `postgres:16.4` started with exactly the rendered command; two real Conduits
+  started against it; then, standing in for what their pools may still open (raw connections, not
+  their own pools grown), each Conduit's room up to `CONDUIT_POOL_CEILING` and its running loads'
+  allowance, the other clients' allowances, and the operator's reserve: the whole number, less one
+  connection for the test's own question. None may be refused, so a number lower than the formula
+  fails. Reds against the image's own command (100), at 250 (the second Conduit cannot start) and
+  near the formula (the reserve): `gates/pg_two_conduits_red*.txt`. The at-rest check sees a missed
+  pool only when its `min_size` is above 0.
 
-Every address the Conduits read is pinned to the throwaway PostgreSQL, the ArcadeDB stand-in or a
-closed port: nothing here reaches a lane stack or the owner's deployment.
+Every store and service address the Conduits read is pinned to the throwaway PostgreSQL, the
+ArcadeDB stand-in or a port checked closed first; the rest of the environment is the run's own (on
+the test server, `stack_lease.sh offline`'s: the committed `osprey.yaml`, the closed store ports).
 """
 
 from __future__ import annotations
@@ -137,6 +141,46 @@ def test_an_existing_deployment_restarts_postgres_keycloak_and_the_gateway_on_ap
     }  # fmt: skip
 
 
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        # Rendered before Amendment 43: the image's own command.
+        (None, ["postgres", "-c", "max_connections={n}"]),
+        # Sized (Amendment 33): the memory settings kept, after the number.
+        (
+            ["postgres", "-c", "shared_buffers=2048MB", "-c", "effective_cache_size=6144MB"],
+            ["postgres", "-c", "max_connections={n}", "-c", "shared_buffers=2048MB",
+             "-c", "effective_cache_size=6144MB"],
+        ),
+        # A number set by hand on the command: the product's, as `apply` would render it.
+        (
+            ["postgres", "-c", "max_connections=400", "-c", "shared_buffers=1024MB"],
+            ["postgres", "-c", "max_connections={n}", "-c", "shared_buffers=1024MB"],
+        ),
+    ],
+    ids=["unsized", "sized", "hand-set"],
+)  # fmt: skip
+def test_update_brings_an_existing_compose_file_to_the_number(
+    before: list[str] | None, after: list[str]
+) -> None:
+    """`ospreyflow update` and `start --build` keep an existing compose file
+    (`scripts/refresh.py`, `refresh-pg-update.diff`): this is what they apply to it."""
+    from harness.profiles import postgres_connections_up_to_date
+
+    services: dict[str, Any] = {
+        "postgres": {"image": POSTGRES_IMAGE, **({"command": before} if before else {})},
+        "keycloak": {"environment": {"KC_DB": "postgres"}},
+    }
+    assert postgres_connections_up_to_date(services) is True
+    wanted = [part.format(n=POSTGRES_MAX_CONNECTIONS) for part in after]
+    assert services["postgres"]["command"] == wanted
+    assert services["keycloak"]["environment"]["KC_DB_POOL_MAX_SIZE"] == str(KEYCLOAK_POOL_MAX)
+    # Safe to repeat, and what it writes is what the render writes for an unsized Small.
+    assert postgres_connections_up_to_date(services) is False
+    if before is None:
+        assert services["postgres"]["command"] == _rendered(SMALL)[0]["postgres"]["command"]
+
+
 # --- real Conduits against the rendered PostgreSQL (docker) --------------------------------------
 
 #: Wraps `asyncpg.create_pool` in the Conduit's own process, before anything imports it.
@@ -241,6 +285,11 @@ def _the_product_at_once(
     Returns what was measured; raises at the first refusal, naming its step."""
     from tests.services.api.test_statelessness import _ConduitInstance
 
+    for service, closed in CLOSED.items():
+        with socket.socket() as probe:
+            assert probe.connect_ex(("127.0.0.1", closed)) != 0, (
+                f"{service}'s port {closed} is open"
+            )
     (tmp_path / "hook").mkdir()
     (tmp_path / "hook" / "sitecustomize.py").write_text(_RECORD_POOLS, encoding="utf-8")
     arcade = http.server.ThreadingHTTPServer(("127.0.0.1", _free_port()), _EmptyArcadeDB)
@@ -289,16 +338,29 @@ def _the_product_at_once(
                         f"one Conduit's pools reach {ceiling} (+{entra} with Entra ID), past "
                         f"CONDUIT_POOL_CEILING ({CONDUIT_POOL_CEILING}): raise it in profiles.py"
                     )
-                    asyncio.run(clients.open(ceiling - at_rest, f"Conduit {n}'s pools grew"))
+                    asyncio.run(
+                        clients.open(
+                            CONDUIT_POOL_CEILING - at_rest,
+                            f"Conduit {n}'s pools grew to CONDUIT_POOL_CEILING",
+                        )
+                    )
                     asyncio.run(clients.open(RUNNING_LOADS_ALLOWED, f"Conduit {n}'s loads ran"))
                 others = KEYCLOAK_POOL_MAX + GATEWAY_POOL_MAX + SUPERSET_AND_REPORT_SYNC_MAX
                 asyncio.run(
                     clients.open(others, "Keycloak, the gateway, Superset and the report sync grew")
                 )
+                held = asyncio.run(clients.held_by_the_server())
+                asyncio.run(
+                    clients.open(
+                        POSTGRES_MAX_CONNECTIONS - held - 1,
+                        "the operator's reserve was used (the whole number, less one)",
+                    )
+                )
                 total = asyncio.run(clients.held_by_the_server())
                 said.append(
                     f"all at once: {total} client connections, of {POSTGRES_MAX_CONNECTIONS}"
                 )
+                assert total == POSTGRES_MAX_CONNECTIONS - 1, said
             finally:
                 asyncio.run(clients.close())
         return said
@@ -308,7 +370,7 @@ def _the_product_at_once(
         arcade.shutdown()
 
 
-def test_two_conduits_at_their_ceiling_and_every_other_client_fit_the_rendered_postgres(
+def test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     command = _rendered(SMALL)[0]["postgres"]["command"]
