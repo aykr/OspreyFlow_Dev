@@ -17,29 +17,32 @@ platform-b's dashboards check and for anyone fitting a new stand-in):
 
 | Method | Answers |
 |---|---|
-| `workload(name)` | `{kind, desired, ready, updated, settled, current, image, requests, limits, probe}` or None (`current`: the running reference is the candidate's, tag and digest) |
+| `workload(name)` | `{kind, desired, replicas, ready, updated, available, unavailable, revisions_match, settled, current, tag, image, requests, limits, probe}` or None (`current`: the template's reference is the candidate's, as the kept render's values pin it) |
 | `init_container("workload/container")` | `{image, requests, limits, exit_code}` or None |
-| `job(name)` | `{kind, schedule, suspended, image, requests, limits, succeeded, steps: {name: {image?, exit_code}}}` or None |
+| `job(name)` | `{kind, schedule, suspended, image, requests, limits, succeeded, current, tag, steps: {name: {image?, exit_code}}}` or None |
 | `image_pushed(repository)` | bool |
 | `rds_setting("server_version" \| "max_connections")` | str or None |
-| `shape()` | the deployment's shape |
+| `shape()` | the deployed configuration's shape (`ospreyflow-files`' `osprey.yaml`) |
 | `database_readers(db)`, `store_readers("elasticache" \| "opensearch")` | the workloads with a session or connection |
 | `bucket_objects(bucket)` | count of objects |
 | `entra_used(registration)` | the stand-in granted that registration a token (the API: a token for its audience) |
-| `connects(host)` | a pod of the namespace reaches it on 443 |
+| `connects(host)` | a pod of the namespace reaches it on 443 (raises when the probe has no answer) |
+| `reachable_outside(host)` | the kind node itself reaches it: the egress check's positive control |
 | `render_differences()` | `manifest.differences(load(), rendered(config))` |
 
 `KindDeployment` implements it on R1's cluster. **What it needs that is not there yet:**
-- **Platform's signing Entra stand-in** (lane/platform-v052-standin, `/authorize` and `/token`): R1's stand-in on
-  main publishes keys and signs nothing, so the Glass's sign-in in `spec08_poc.py` cannot run without it
-  (`OSPREY_V052_TOKEN_BY=r1` takes `r1_kind.token()`'s token instead, for a run before it lands).
-- **Its grant line** (asked of platform, not yet confirmed): one stderr line per token issued,
-  `entra-standin: granted <grant_type> client=<client_id> audience=<aud>`. Without it every `entra.*` fails; the
-  test of `granted_clients` is of the shape asked for, not of one the stand-in writes yet.
-- **R1's Postgres stand-in runs `max_connections=750`** (`r1_kind_standins.yaml`); the manifest says 1000, so
-  `managed.rds` fails until the stand-in matches (platform's file).
-- **An OpenSearch stand-in on kind** (3a's shape lists it, no longer pending): `store_readers("opensearch")` raises
-  until one exists, so `managed.opensearch` fails rather than passes.
+- **Platform's signing Entra stand-in**, unmerged on lane/platform-v052-standin: `/authorize` and `/token` (R1's on
+  main publishes keys and signs nothing, so the Glass's sign-in in `spec08_poc.py` needs it), and its grant line,
+  `entra-standin: granted <grant_type> client=<client_id> audience=<aud>` (73f85ee, `r1_kind_servers.py`, in the shape
+  `granted_clients` parses). `OSPREY_V052_TOKEN_BY=r1` takes `r1_kind.token()`'s token for a run before it lands, and
+  then `entra.glass` fails: a token the driver mints writes no grant line.
+- **The Postgres stand-in at 1000 connections**: on main it runs 750; 1d93ea0 on the same branch fills the manifest's
+  figure from `connections.POSTGRES_MAX_CONNECTIONS`. Until it merges, `managed.rds` fails.
+- **What `entra` does not check:** a registration's `kind`, `redirect`, `grants`, `exposes` and `app_roles`. The
+  stand-in enforces platform's own registrations (`r1_kind_entra.yaml`), not the manifest's, and gives whatever roles
+  it holds; these are the client administrator's words, held by nothing here.
+- **An OpenSearch stand-in on kind** (3a's shape lists it, no longer pending; platform builds it, the orchestrator's
+  word): `store_readers("opensearch")` raises until one exists, so `managed.opensearch` fails rather than passes.
 - **The run must exercise what it checks before `verify`:** spec 08 (sign-ins, uploads, loads), a Superset sign-in
   and a report sync (platform-b), one backup and one restore (`r1_kind.py backup|restore`), and one run of each
   held-suspended CronJob (`kubectl create job --from=cronjob/<name>`). A bucket nothing wrote fails, by design.
@@ -65,9 +68,11 @@ drifted from the API (a test pins that both routes are still gone).
 
 ## Red first
 
-`plants.py`: 28 plants, each one check broken at its real call site in a copy of the driver; every one turns the
+`plants.py`: 39 plants, each one check broken at its real call site in a copy of the driver; every one turns the
 tests red and the unplanted copy stays green (`gates/plants.txt`). They found two gaps while being built (no test
-had a CronJob whose runs never succeeded; a reader test whose pod order hid the finished-pod plant). A walk over
+had a CronJob whose runs never succeeded; a reader test whose pod order hid the finished-pod plant; no test of an
+unobserved generation alone; none of a CronJob template still on the old release). The stuck rollout is tested
+in the status kubectl reports for it (one copy, maxSurge 1: 2 replicas, 1 updated, 1 ready, 1 unavailable). A walk over
 every node of the YAML (not over `entries()`) injects an unplaced key and requires the run to stop.
 
     # from OspreyFlow_Core

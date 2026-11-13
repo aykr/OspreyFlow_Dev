@@ -8,9 +8,9 @@ bucket nobody writes, or an entry still marked `pending` (a step that has not re
 
 | Manifest | Check |
 |---|---|
-| version | every workload runs the candidate's own image reference (the render's, tag and digest), not v0.5.1's |
-| shape | the deployment's configuration is of this shape |
-| workloads | the Deployment or StatefulSet exists, of its kind; the rollout finished (observed generation current, updated and ready replicas both its count); the template's image, requests and limits its entry's; a readiness probe exactly when it lists one |
+| version | every workload, and every job's template, runs the candidate's own image reference (the kept render's values, `<repository>:<tag>@<digest>`), and each of ours is tagged with the manifest's version (so a kept render that is itself v0.5.1's fails too) |
+| shape | the deployed configuration (the `ospreyflow-files` ConfigMap's `osprey.yaml`) is of this shape |
+| workloads | the Deployment or StatefulSet exists, of its kind; the rollout finished: the controller has observed the latest generation, total, updated, ready and available replicas all its count, none unavailable (a crash-looping candidate beside a still-Ready old pod fails), a StatefulSet's current and update revisions one; the template's image, requests and limits its entry's; a readiness probe exactly when it lists one (the probe's content is the render check's) |
 | init_containers | in a running pod of its workload, from its image at its sizes, exited 0 |
 | jobs | a CronJob at its schedule (or held suspended, when its schedule says so), image and sizes, with a run of its own command at the candidate's image that succeeded (a held one started by the driver: `kubectl create job --from=cronjob/…`); a Job template (`<set>`) with a run that succeeded, every listed step exited 0, `restore-graph` from its image at its sizes |
 | images | pushed: the registry answers the render's reference for it |
@@ -18,8 +18,8 @@ bucket nobody writes, or an entry still marked `pending` (a step that has not re
 | managed.rds.databases | a session on it from a running pod of its reader (DATABASE_READERS) |
 | managed.elasticache, .opensearch | a connection from a running pod of its reader (STORE_READERS) |
 | managed.s3.buckets | holds at least one object, written by the deployment |
-| entra | the stand-in tenant granted a token to the registration (the API: a token for its audience). Its `redirect`, `grants`, `exposes` and `app_roles` are exercised by that use alone: the signing stand-in refuses an unregistered redirect and an ungranted scope or role. Nothing compares them as words |
-| egress | a pod of the namespace reaches each host on 443, **and is blocked from an address no entry lists**; a probe that cannot answer (the exec failed, a name did not resolve) fails the check, never passes it |
+| entra | the stand-in tenant granted a token to the registration (the API: a token for its audience). **Its `kind`, `redirect`, `grants`, `exposes` and `app_roles` are not checked**: the stand-in enforces its own registrations (platform's `r1_kind_entra.yaml`), not the manifest's, and hands out whatever roles it holds. They are the client administrator's words; a change to them is caught by no check here |
+| egress | a pod of the namespace reaches each host on 443, **and is blocked from an address no entry lists**, which the kind node itself (outside the policy) does reach: a node with no route out is no evidence. A probe that cannot answer (the exec failed, a name did not resolve) fails the check, never passes it |
 | (all of it) | the deployment's own render agrees with the manifest (`manifest.differences`): what only AWS can show (an instance class, node type or engine string; built_from and upstream) is held there |
 
 `verify(manifest, deployment)` runs the plan against anything with `Deployment`'s methods; `KindDeployment`
@@ -99,6 +99,7 @@ class Deployment(Protocol):
     def bucket_objects(self, bucket: str) -> int: ...
     def entra_used(self, registration: str) -> bool: ...
     def connects(self, host: str) -> bool: ...
+    def reachable_outside(self, host: str) -> bool: ...
     def shape(self) -> str: ...
     def render_differences(self) -> list[str]: ...
 
@@ -186,24 +187,39 @@ def _workload(name: str, w: dict[str, Any]) -> Callable[[Deployment], tuple[bool
             problems.append(f"desired {got.get('desired')}, listed {w['count']}")
         if not got.get("settled"):
             problems.append("not yet rolled out (the controller has not observed the latest generation)")
-        if got.get("updated") != w["count"]:
-            problems.append(f"updated {got.get('updated')} of {w['count']}")
-        if got.get("ready") != w["count"]:
-            problems.append(f"ready {got.get('ready')} of {w['count']}")
+        if got.get("replicas") != w["count"]:
+            problems.append(f"{got.get('replicas')} replicas, listed {w['count']} (a rollout still holding the old pod)")
+        for field in ("updated", "ready", "available"):
+            if got.get(field) != w["count"]:
+                problems.append(f"{field} {got.get(field)} of {w['count']}")
+        if got.get("unavailable"):
+            problems.append(f"{got.get('unavailable')} unavailable")
+        if got.get("revisions_match") is False:
+            problems.append("current and update revisions differ (the update has not finished)")
         if bool(got.get("probe")) != (w["readiness"] != "none"):
             problems.append(f"readiness probe {'present' if got.get('probe') else 'absent'}, listed {w['readiness']!r}")
         return _verdict(problems, f"{got['ready']}/{w['count']} ready, rolled out")
     return run
 
 
+def _same_release(tag: str | None, version: str) -> bool:
+    return tag is not None and tag.removeprefix("v") == str(version).removeprefix("v")
+
+
 def _version(m: dict[str, Any]) -> Callable[[Deployment], tuple[bool, str]]:
     def run(d: Deployment) -> tuple[bool, str]:
+        ours = {repo for repo, image in (m.get("images") or {}).items() if image.get("ours")}
         behind = []
-        for name in m.get("workloads") or {}:
-            got = d.workload(name)
-            if got is not None and not got.get("current"):
-                behind.append(name)
-        return (False, f"not on {m['version']}'s images: {', '.join(behind)}") if behind else (True, f"every workload on {m['version']}'s images")
+        for section, read in (("workloads", d.workload), ("jobs", d.job)):
+            for name, entry in (m.get(section) or {}).items():
+                got = read(name)
+                if got is None:
+                    continue  # absent: its own check fails
+                if not got.get("current"):
+                    behind.append(f"{name} (not the candidate's reference)")
+                elif entry.get("image") in ours and not _same_release(got.get("tag"), m["version"]):
+                    behind.append(f"{name} (tagged {got.get('tag')})")
+        return (False, f"not on {m['version']}'s images: {', '.join(behind)}") if behind else (True, f"every workload and job on {m['version']}'s images")
     return run
 
 
@@ -303,7 +319,11 @@ def _egress(host: str) -> Callable[[Deployment], tuple[bool, str]]:
 
 
 def _unlisted(d: Deployment) -> tuple[bool, str]:
-    return (False, f"{UNLISTED_HOST} reached on 443: egress is open") if d.connects(UNLISTED_HOST) else (True, "blocked")
+    if d.connects(UNLISTED_HOST):
+        return False, f"{UNLISTED_HOST} reached on 443: egress is open"
+    if not d.reachable_outside(UNLISTED_HOST):
+        return False, "blocked, but not reachable from outside the policy either (the node): no evidence the policy blocked it"
+    return True, "blocked, though reachable from outside the policy"
 
 
 def _render(d: Deployment) -> tuple[bool, str]:
@@ -420,17 +440,59 @@ def read_workload(obj: dict[str, Any], registry: str, *, expected: dict[str, str
     main = obj["spec"]["template"]["spec"]["containers"][0]
     status = obj.get("status") or {}
     repository = _repository(main["image"], registry)
+    revisions = (status.get("currentRevision"), status.get("updateRevision"))
     return {
         "kind": obj["kind"],
         "desired": obj["spec"].get("replicas", 1),
+        "replicas": status.get("replicas", 0),
         "ready": status.get("readyReplicas", 0),
         "updated": status.get("updatedReplicas", 0),
+        "available": status.get("availableReplicas", 0),
+        "unavailable": status.get("unavailableReplicas", 0),
+        "revisions_match": None if None in revisions else revisions[0] == revisions[1],
         "settled": status.get("observedGeneration", 0) >= (obj.get("metadata") or {}).get("generation", 0),
         "image": repository,
         "current": expected.get(repository) == main["image"],
+        "tag": tag_of(main["image"]),
         **_sizes(main),
         "probe": "readinessProbe" in main,
     }
+
+
+def tag_of(reference: str) -> str | None:
+    """`reg:5001/ospreyflow/api:v0.5.2@sha256:…` → `v0.5.2`; None when the reference has no tag."""
+    last = reference.split("@", 1)[0].rsplit("/", 1)[-1]
+    return last.split(":", 1)[1] if ":" in last else None
+
+
+def references_from_values(values: dict[str, Any], registry: str) -> dict[str, str]:
+    """The candidate's image reference for each repository, as its pods run them: the render's values
+    (`<repository>[:tag]@<digest>` once pinned), not images.yaml's tag-only push targets."""
+    found: list[str] = []
+    for w in values.get("workloads") or []:
+        found.append(w["image"])
+        found += [c["image"] for c in w.get("initContainers") or []]
+    backups = values.get("backups") or {}
+    if backups.get("image"):
+        found.append(backups["image"])
+    if (backups.get("arcadedb") or {}).get("image"):
+        found.append(backups["arcadedb"]["image"])
+    out: dict[str, str] = {}
+    for ref in found:
+        repo = _repository(ref, registry)
+        if out.setdefault(repo, ref) != ref:
+            raise ValueError(f"two references for {repo} in one render: {out[repo]} and {ref}")
+    return out
+
+
+def shape_of(configmap: dict[str, Any] | None) -> str:
+    """The shape in the deployed configuration (`ospreyflow-files`' `osprey.yaml`; left out means standard)."""
+    import yaml
+
+    if not configmap or "osprey.yaml" not in (configmap.get("data") or {}):
+        raise LookupError("no deployed configuration (the ospreyflow-files ConfigMap's osprey.yaml)")
+    config = yaml.safe_load(configmap["data"]["osprey.yaml"]) or {}
+    return str((config.get("cloud_platform") or {}).get("shape") or "standard")
 
 
 def _exit(status: dict[str, Any] | None) -> int | None:
@@ -540,9 +602,9 @@ class KindDeployment:
     platform's stand-ins in theirs. Every read is of the live thing; nothing is taken from the render
     but the candidate's image references and the render check's own comparison."""
 
-    def __init__(self, r1: Any, *, registry: str, expected: dict[str, str], config: Any, shape: str, clients: dict[str, str],
-                 api_audiences: set[str], bucket_prefix: str, jobs: Iterable[str]) -> None:
-        self.r1, self.registry, self.expected, self.config, self._shape = r1, registry, expected, config, shape
+    def __init__(self, r1: Any, *, registry: str, expected: dict[str, str], clients: dict[str, str],
+                 api_audiences: set[str], bucket_prefix: str, jobs: Iterable[str], config: Any = None) -> None:
+        self.r1, self.registry, self.expected, self.config = r1, registry, expected, config
         self.clients, self.api_audiences, self.bucket_prefix = clients, api_audiences, bucket_prefix
         self.job_names = list(jobs)
 
@@ -578,9 +640,10 @@ class KindDeployment:
             if not cron:
                 return None
             spec = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]
+            repo = _repository(spec["image"], self.registry)
             return {"kind": "CronJob", "schedule": cron["spec"]["schedule"], "suspended": bool(cron["spec"].get("suspend")),
-                    "image": _repository(spec["image"], self.registry), **_sizes(spec),
-                    "succeeded": cron_runs(cron, jobs, name), "steps": {}}
+                    "image": repo, **_sizes(spec), "succeeded": cron_runs(cron, jobs, name), "steps": {},
+                    "current": self.expected.get(repo) == spec["image"], "tag": tag_of(spec["image"])}
         names = runs_of_template(name, [j["metadata"]["name"] for j in jobs], self.job_names)
         runs = [j for j in jobs if j["metadata"]["name"] in names]
         if not runs:
@@ -588,7 +651,9 @@ class KindDeployment:
         done = [j for j in runs if (j.get("status") or {}).get("succeeded")] or runs
         job = done[-1]
         pods = [p for p in self._pods() if (p["metadata"].get("labels") or {}).get("job-name") == job["metadata"]["name"]]
-        return read_job(job, pods, self.registry)
+        main = job["spec"]["template"]["spec"]["containers"][0]["image"]
+        return {**read_job(job, pods, self.registry), "current": self.expected.get(_repository(main, self.registry)) == main,
+                "tag": tag_of(main)}
 
     def image_pushed(self, repository: str) -> bool:
         return bool(self.r1.sh("docker", "manifest", "inspect", "--insecure", self.expected[repository], check=False).strip())
@@ -628,12 +693,20 @@ class KindDeployment:
         out = self.r1.kubectl("-n", self.r1.NS, "exec", "deployment/api", "--", "/app/.venv/bin/python", "-c", PROBE, host, check=False)
         return probe_answer(out)
 
+    def reachable_outside(self, host: str) -> bool:
+        """The positive control: the kind node itself, which no NetworkPolicy governs."""
+        out = self.r1.sh("docker", "exec", "osprey-r1-control-plane", "bash", "-c",
+                         f"timeout 5 bash -c '</dev/tcp/{host}/443' 2>/dev/null && echo open || echo blocked", check=False)
+        return probe_answer(out)
+
     def shape(self) -> str:
-        return self._shape
+        return shape_of(self._get("configmap", "ospreyflow-files"))
 
     def render_differences(self) -> list[str]:
         from harness.cloud_platform.manifest import differences, load, rendered
 
+        if self.config is None:
+            raise LookupError("no configuration to render")
         return differences(load(), rendered(self.config))
 
 
@@ -657,18 +730,17 @@ def _kind(m: dict[str, Any]) -> KindDeployment:  # pragma: no cover - the live h
     from harness.render import load_config
 
     config = load_config(r1.CONFIG)
-    used = r1.KEPT / "images.yaml"  # the render the install used, kept by r1_kind.keep_render: its pinned references
-    if not used.exists():
+    if not (r1.KEPT / "values.yaml").exists():  # the render the install used, kept by r1_kind.keep_render
         raise SystemExit(f"no kept render at {r1.KEPT}: run the candidate's install through r1_kind.py first")
-    images = yaml.safe_load(used.read_text())
+    images = yaml.safe_load((r1.KEPT / "images.yaml").read_text())
+    values = yaml.safe_load((r1.KEPT / "values.yaml").read_text())
     raw = yaml.safe_load(r1.CONFIG.read_text())
     claims = raw["cloud_platform"]["claims"]
     entra = gates / "r1_kind_entra.yaml"
     others = yaml.safe_load(entra.read_text()) if entra.exists() else {}
     clients = {"glass": claims["client_id"], **{k: v["client_id"] for k, v in (others or {}).items()}}
-    expected = {_repository(i["target"], images["registry"]): i["target"] for i in images["images"]}
-    return KindDeployment(r1, registry=images["registry"], expected=expected, config=config,
-                          shape=raw["cloud_platform"].get("shape", ""), clients=clients,
+    expected = references_from_values(values, images["registry"])
+    return KindDeployment(r1, registry=images["registry"], expected=expected, config=config, clients=clients,
                           api_audiences={claims["api_client_id"], f"api://{claims['api_client_id']}"},
                           bucket_prefix=r1.state().get("prefix", ""), jobs=m["jobs"])
 

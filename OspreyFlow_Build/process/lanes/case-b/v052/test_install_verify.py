@@ -35,6 +35,7 @@ class Fake:
         self.m = m
         self.dropped: set[str] = set()
         self.reaches_anything = False
+        self.offline = False
         self.differences: list[str] = []
 
     def drop(self, entry: str) -> Fake:
@@ -49,6 +50,8 @@ class Fake:
             "kind": w["kind"], "desired": w["count"], "ready": w["count"], "image": w["image"],
             "requests": w["requests"], "limits": w["limits"], "probe": w["readiness"] != "none",
             "updated": w["count"], "settled": True, "current": "version" not in self.dropped,
+            "replicas": w["count"], "available": w["count"], "unavailable": 0, "revisions_match": True,
+            "tag": self.m["version"] if self.m["images"][w["image"]]["ours"] else "upstream",
         }
 
     def init_container(self, key: str) -> dict[str, Any] | None:
@@ -66,7 +69,8 @@ class Fake:
         suspended = str(j.get("schedule", "")).startswith("suspended")
         return {"kind": j["kind"], "schedule": "0 0 31 2 *" if suspended else j.get("schedule"),
                 "suspended": suspended, "image": j["image"],
-                "requests": j["requests"], "limits": j["limits"], "succeeded": 1, "steps": steps}
+                "requests": j["requests"], "limits": j["limits"], "succeeded": 1, "steps": steps,
+                "current": True, "tag": self.m["version"]}
 
     def image_pushed(self, repository: str) -> bool:
         return f"images.{repository}" not in self.dropped
@@ -96,6 +100,9 @@ class Fake:
             return f"egress.{host}" not in self.dropped
         return self.reaches_anything
 
+    def reachable_outside(self, host: str) -> bool:
+        return not self.offline
+
     def shape(self) -> str:
         return "small" if "shape" in self.dropped else self.m["shape"]
 
@@ -117,7 +124,9 @@ def test_every_entry_of_the_manifest_has_a_check() -> None:
 #: Collections: a new entry in one gets its own check, so the injection adds an entry with an unknown key.
 _COLLECTIONS = {("workloads",), ("init_containers",), ("jobs",), ("images",), ("entra",), ("egress",), ("managed",),
                 ("managed", "rds", "databases")}
-#: Compared whole at run time (a key added inside one is a difference, not an unplaced key).
+#: Compared whole, not walked: `requests` and `limits` at run time against the deployment; `readiness` only by
+#: the render check (`manifest.differences`), the live check asking only that a probe is there. Items inside
+#: lists (`grants`, `app_roles`, `buckets`, `steps`) are not walked here: buckets and steps are checked by name.
 _WHOLE = {"requests", "limits", "readiness"}
 
 
@@ -141,8 +150,9 @@ def test_an_unplaced_key_anywhere_in_the_manifest_stops_the_run(path: tuple[str,
         node["zz-unplaced"] = {"zz_unplaced": 1}
     else:
         node["zz_unplaced"] = 1
-    with pytest.raises(iv.NotExercised):
+    with pytest.raises(iv.NotExercised) as stopped:
         iv.plan(m)
+    assert any("zz-unplaced" in line or "zz_unplaced" in line for line in stopped.value.entries), stopped.value.entries
 
 
 def test_the_real_manifest_names_at_least_what_the_route_lists() -> None:
@@ -306,21 +316,56 @@ def test_a_suspended_cronjob_never_started_fails() -> None:
     assert failed == ["jobs.ospreyflow-search-rebuild"]
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "said"),
-    [("updated", 0, "updated 0"), ("settled", False, "not yet rolled out")],
-)
-def test_a_rollout_not_finished_fails_though_the_old_pod_is_ready(field: str, value: Any, said: str) -> None:
-    """One copy, a rolling update: the v0.5.1 pod stays Ready while the candidate's crash-loops."""
+#: kubectl's status for one copy, RollingUpdate (maxSurge 1, maxUnavailable 0), the candidate's pod crash-looping:
+#: the v0.5.1 pod still Ready, the new ReplicaSet's surge pod not (the review of fabb284, N2).
+STUCK_STATUS = {"observedGeneration": 4, "replicas": 2, "updatedReplicas": 1, "readyReplicas": 1,
+                "availableReplicas": 1, "unavailableReplicas": 1,
+                "conditions": [{"type": "Progressing", "status": "True", "reason": "ReplicaSetUpdated"}]}
+
+
+def _deployment(status: dict[str, Any], image: str = "r/ospreyflow/api@sha256:new") -> dict[str, Any]:
+    return {"kind": "Deployment", "metadata": {"name": "api", "generation": 4},
+            "spec": {"replicas": 1, "template": {"spec": {"containers": [{"name": "api", "image": image}]}}},
+            "status": status}
+
+
+def test_a_crash_looping_candidate_beside_the_ready_old_pod_fails() -> None:
     m = candidate()
+    stuck = iv.read_workload(_deployment(STUCK_STATUS), "r", expected={"ospreyflow/api": "r/ospreyflow/api@sha256:new"})
 
     class Stuck(Fake):
         def workload(self, name: str) -> dict[str, Any] | None:
             got = super().workload(name)
-            return {**got, field: value} if got and name == "api" else got
+            return {**got, **{k: stuck[k] for k in ("replicas", "updated", "ready", "available", "unavailable", "settled")}} if got and name == "api" else got
 
     failed = [r for r in iv.verify(m, Stuck(m)) if not r.ok]
-    assert [r.entry for r in failed] == ["workloads.api"] and said in failed[0].said
+    assert [r.entry for r in failed] == ["workloads.api"], failed
+    assert "2 replicas" in failed[0].said and "1 unavailable" in failed[0].said
+
+
+@pytest.mark.parametrize(
+    ("change", "said"),
+    [({"settled": False}, "not yet rolled out"), ({"ready": 0}, "ready 0"), ({"revisions_match": False}, "revisions differ")],
+)
+def test_each_unfinished_rollout_reading_alone_fails(change: dict[str, Any], said: str) -> None:
+    m = candidate()
+
+    class Unfinished(Fake):
+        def workload(self, name: str) -> dict[str, Any] | None:
+            got = super().workload(name)
+            return {**got, **change} if got and name == "arcadedb" else got
+
+    failed = [r for r in iv.verify(m, Unfinished(m)) if not r.ok]
+    assert [r.entry for r in failed] == ["workloads.arcadedb"] and said in failed[0].said
+
+
+def test_a_statefulset_mid_update_fails() -> None:
+    sts = {"kind": "StatefulSet", "metadata": {"name": "arcadedb", "generation": 2},
+           "spec": {"replicas": 1, "template": {"spec": {"containers": [{"name": "arcadedb", "image": "r/arcadedata/arcadedb@sha256:a"}]}}},
+           "status": {"observedGeneration": 2, "replicas": 1, "readyReplicas": 1, "availableReplicas": 1, "updatedReplicas": 0,
+                      "currentRevision": "arcadedb-6d", "updateRevision": "arcadedb-7f"}}
+    got = iv.read_workload(sts, "r", expected={})
+    assert got["revisions_match"] is False and got["updated"] == 0
 
 
 def test_a_workload_still_on_the_old_release_fails_the_version_check() -> None:
@@ -333,6 +378,70 @@ def test_a_workload_still_on_the_old_release_fails_the_version_check() -> None:
 
     failed = [r for r in iv.verify(m, Old(m)) if not r.ok]
     assert [r.entry for r in failed] == ["version"] and "worker" in failed[0].said
+
+
+def test_a_workload_whose_image_is_tagged_with_another_release_fails_the_version_check() -> None:
+    """The kept render could itself be v0.5.1's: the running tag is held to the manifest's version too."""
+    m = candidate()
+
+    class OldTag(Fake):
+        def workload(self, name: str) -> dict[str, Any] | None:
+            got = super().workload(name)
+            return {**got, "tag": "v0.5.1"} if got and name == "api" else got
+
+    failed = [r for r in iv.verify(m, OldTag(m)) if not r.ok]
+    assert [r.entry for r in failed] == ["version"] and "api" in failed[0].said
+
+
+def test_a_cronjob_left_on_the_old_release_fails_the_version_check() -> None:
+    m = candidate()
+
+    class OldCron(Fake):
+        def job(self, name: str) -> dict[str, Any] | None:
+            got = super().job(name)
+            return {**got, "current": False} if got and name == "ospreyflow-backup" else got
+
+    failed = [r for r in iv.verify(m, OldCron(m)) if not r.ok]
+    assert [r.entry for r in failed] == ["version"] and "ospreyflow-backup" in failed[0].said
+
+
+def test_the_candidates_reference_is_the_values_digest_form_not_the_images_list_tag() -> None:
+    """The render's workloads run `<target without tag>@<digest>`; images.yaml lists the tag-only target."""
+    values = {"workloads": [
+        {"name": "api", "image": "reg/ospreyflow/api@sha256:aa", "initContainers": []},
+        {"name": "litellm", "image": "reg/berriai/litellm@sha256:bb",
+         "initContainers": [{"name": "litellm-db", "image": "reg/postgres@sha256:cc"}]}],
+        "backups": {"image": "reg/ospreyflow/api@sha256:aa", "arcadedb": {"image": "reg/arcadedata/arcadedb@sha256:dd"}}}
+    expected = iv.references_from_values(values, "reg")
+    assert expected == {"ospreyflow/api": "reg/ospreyflow/api@sha256:aa", "berriai/litellm": "reg/berriai/litellm@sha256:bb",
+                        "postgres": "reg/postgres@sha256:cc", "arcadedata/arcadedb": "reg/arcadedata/arcadedb@sha256:dd"}
+    got = iv.read_workload(_deployment({"observedGeneration": 4, "readyReplicas": 1}, "reg/ospreyflow/api@sha256:aa"), "reg", expected=expected)
+    assert got["current"]
+
+
+def test_a_tag_is_read_from_a_reference_with_or_without_a_digest() -> None:
+    assert iv.tag_of("reg/ospreyflow/api:v0.5.2@sha256:aa") == "v0.5.2"
+    assert iv.tag_of("reg/ospreyflow/api:v0.5.2") == "v0.5.2"
+    assert iv.tag_of("reg:5001/ospreyflow/api@sha256:aa") is None
+
+
+def test_the_shape_is_read_from_the_deployed_configuration() -> None:
+    def cm(text: str) -> dict[str, Any]:
+        return {"data": {"osprey.yaml": text}}
+
+    assert iv.shape_of(cm("profile: cloud-platform\ncloud_platform:\n  shape: poc\n")) == "poc"
+    assert iv.shape_of(cm("profile: cloud-platform\ncloud_platform: {}\n")) == "standard"  # left out at its default
+    with pytest.raises(LookupError):
+        iv.shape_of(None)
+
+
+def test_an_offline_node_is_no_evidence_that_egress_is_blocked() -> None:
+    """With no route out at all, the unlisted address times out as Calico's refusal would (N5)."""
+    m = candidate()
+    fake = Fake(m)
+    fake.offline = True
+    failed = [r for r in iv.verify(m, fake) if not r.ok]
+    assert [r.entry for r in failed] == [iv.UNLISTED_HOST_CHECK] and "outside" in failed[0].said
 
 
 def test_restore_graph_is_checked_even_when_steps_does_not_name_it() -> None:
@@ -454,8 +563,8 @@ def test_a_job_whose_step_failed_reads_as_failed() -> None:
 
 
 def test_the_entra_standin_log_names_the_clients_it_granted() -> None:
-    """The line asked of platform's signing stand-in (lane/platform-v052-standin), not yet confirmed:
-    until it is, this is the shape we asked for, and the README says so."""
+    """The line platform's signing stand-in writes (lane/platform-v052-standin 73f85ee, r1_kind_servers.py
+    `_granted`), its access lines beside it; a refusal writes none."""
     log = ("entra-standin: \"GET /t/v2.0/.well-known/openid-configuration HTTP/1.1\" 200 -\n"
            "entra-standin: granted authorization_code client=aaaa audience=api://bbbb\n"
            "entra-standin: refused client_credentials client=dddd invalid_client\n"
@@ -465,15 +574,52 @@ def test_the_entra_standin_log_names_the_clients_it_granted() -> None:
 
 
 def test_a_rollout_reads_from_kubectls_status() -> None:
-    obj = {"kind": "Deployment", "metadata": {"generation": 3},
-           "spec": {"replicas": 1, "template": {"spec": {"containers": [{"name": "api", "image": "r/ospreyflow/api:v0.5.2@sha256:new"}]}}},
-           "status": {"observedGeneration": 3, "readyReplicas": 1, "updatedReplicas": 0, "replicas": 2}}
-    got = iv.read_workload(obj, "r", expected={"ospreyflow/api": "r/ospreyflow/api:v0.5.2@sha256:new"})
-    assert got["ready"] == 1 and got["updated"] == 0 and got["settled"] and got["current"]
-    behind = {**obj, "status": {**obj["status"], "observedGeneration": 2}}
+    got = iv.read_workload(_deployment(STUCK_STATUS), "r", expected={"ospreyflow/api": "r/ospreyflow/api@sha256:new"})
+    assert (got["replicas"], got["updated"], got["ready"], got["available"], got["unavailable"]) == (2, 1, 1, 1, 1)
+    assert got["settled"] and got["current"]
+    behind = _deployment({**STUCK_STATUS, "observedGeneration": 3})
     assert not iv.read_workload(behind, "r", expected={})["settled"]
-    old = iv.read_workload(obj, "r", expected={"ospreyflow/api": "r/ospreyflow/api:v0.5.1@sha256:old"})
+    old = iv.read_workload(_deployment(STUCK_STATUS), "r", expected={"ospreyflow/api": "r/ospreyflow/api@sha256:old"})
     assert not old["current"]
+
+
+class FakeR1:
+    """r1_kind's kubectl as the cluster answers it: empty output for NotFound (check=False)."""
+
+    NS, MANAGED = "ospreyflow-poc", "platform-managed"
+
+    def __init__(self, objects: dict[tuple[str, ...], Any]) -> None:
+        self.objects = objects
+
+    def kubectl(self, *args: str, check: bool = True, stdin: str | None = None) -> str:
+        import json
+
+        key = tuple(a for a in args if a not in ("-n", self.NS, "get", "-o", "json"))
+        return json.dumps(self.objects[key]) if key in self.objects else ""
+
+
+def _kind(objects: dict[tuple[str, ...], Any]) -> Any:
+    return iv.KindDeployment(FakeR1(objects), registry="r", expected={"ospreyflow/api": "r/ospreyflow/api@sha256:new"},
+                             clients={}, api_audiences=set(), bucket_prefix="p-", jobs=["ospreyflow-restore-<set>", "ospreyflow-restore-claims-<set>"])
+
+
+def test_a_statefulset_is_found_when_no_deployment_has_the_name() -> None:
+    sts = {**_deployment({"observedGeneration": 4, "readyReplicas": 1}), "kind": "StatefulSet"}
+    assert _kind({("statefulset", "api"): sts}).workload("api")["kind"] == "StatefulSet"
+    assert _kind({}).workload("api") is None
+
+
+def test_the_restore_reading_takes_its_own_job_and_its_pods() -> None:
+    def job(name: str, ok: int) -> dict[str, Any]:
+        return {"metadata": {"name": name}, "status": {"succeeded": ok},
+                "spec": {"template": {"spec": {"containers": [{"name": "restore-analytics", "image": "r/ospreyflow/api@sha256:new"}]}}}}
+
+    pod = {"metadata": {"labels": {"job-name": "ospreyflow-restore-1"}},
+           "status": {"containerStatuses": [{"name": "restore-analytics", "state": {"terminated": {"exitCode": 0}}}]}}
+    kind = _kind({("jobs",): {"items": [job("ospreyflow-restore-claims-1", 1), job("ospreyflow-restore-1", 1)]},
+                  ("pods",): {"items": [pod]}})
+    got = kind.job("ospreyflow-restore-<set>")
+    assert got["succeeded"] == 1 and got["steps"]["restore-analytics"]["exit_code"] == 0 and got["current"]
 
 
 @pytest.mark.parametrize(
@@ -530,3 +676,14 @@ def test_only_running_pods_name_a_reader() -> None:
         {"metadata": {"labels": {"app.kubernetes.io/name": "ospreyflow-backup"}}, "status": {"phase": "Succeeded", "podIP": "10.244.0.7"}},
     ]
     assert iv.readers_from_sessions("ospreyflow|10.244.0.7\n", "ospreyflow", pods) == {"api"}
+
+
+def test_a_cronjob_whose_template_is_still_the_old_release_reads_as_not_current() -> None:
+    def cron(image: str) -> dict[str, Any]:
+        return {"spec": {"schedule": "15 2 * * *", "jobTemplate": {"spec": {"template": {"spec": {"containers": [
+            {"name": "backup", "image": image, "command": ["run"]}]}}}}}}
+
+    old = _kind({("cronjob", "ospreyflow-backup"): cron("r/ospreyflow/api:v0.5.1@sha256:old"), ("jobs",): {"items": []}})
+    new = _kind({("cronjob", "ospreyflow-backup"): cron("r/ospreyflow/api@sha256:new"), ("jobs",): {"items": []}})
+    assert old.job("ospreyflow-backup")["current"] is False
+    assert new.job("ospreyflow-backup")["current"] is True
