@@ -1,0 +1,6 @@
+# plant: viewer_check_after_the_directory (OspreyFlow_Core/services/api/app.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '    people = await names.people([grantee])\n    if people is not None and grantee in people:\n        return\n'
+# with: '    people = await names.people([grantee])\n    if people is None or grantee in people:\n        return\n'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py -k 'dashboard'
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py::test_a_dashboard_is_held_to_viewer_where_the_directory_cannot_tell_people
+1 failed, 2 passed, 96 deselected in 4.68s

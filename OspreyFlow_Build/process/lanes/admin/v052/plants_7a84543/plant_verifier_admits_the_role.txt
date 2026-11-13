@@ -1,0 +1,6 @@
+# plant: verifier_admits_the_role (OspreyFlow_Core/services/api/service_identity.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '        if isinstance(roles, list) and DASHBOARD_APP_ROLE in roles:'
+# with: '        if False:'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py -k 'dashboard_role_is_no_service'
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_a_token_carrying_the_dashboard_role_is_no_service_identity
+1 failed, 32 deselected in 1.21s

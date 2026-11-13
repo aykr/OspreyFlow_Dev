@@ -1,0 +1,6 @@
+# plant: name_not_slugged (OspreyFlow_Core/services/api/entra_people.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '            application_id, dashboard_slug(name), clearance=clearance, org_unit=org_unit'
+# with: '            application_id, name, clearance=clearance, org_unit=org_unit'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_entra_people.py -k 'named_as_keycloak'
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_on_entra_a_dashboard_is_named_as_keycloak_names_one_and_once_a_tenant
+1 failed, 59 deselected in 4.20s

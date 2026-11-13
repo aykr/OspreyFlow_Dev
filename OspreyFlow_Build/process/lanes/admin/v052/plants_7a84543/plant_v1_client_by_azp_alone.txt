@@ -1,0 +1,6 @@
+# plant: v1_client_by_azp_alone (OspreyFlow_Core/packages/principal_auth/__init__.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '    named = [claims[c] for c in ("azp", "appid") if c in claims]'
+# with: '    named = [claims[c] for c in ("azp",) if c in claims]'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py -k 'v1_token'
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_a_v1_token_naming_its_client_in_appid_alone_is_the_dashboard
+1 failed, 18 deselected in 1.76s

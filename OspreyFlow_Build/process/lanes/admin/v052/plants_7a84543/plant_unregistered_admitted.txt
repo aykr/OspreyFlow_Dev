@@ -1,0 +1,6 @@
+# plant: unregistered_admitted (OspreyFlow_Core/packages/principal_auth/__init__.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '        if stored is None:\n            raise PrincipalResolutionError('
+# with: '        if stored is None:\n            stored = StoredDashboard(application_id, "OFFICIAL", "u", ())\n        if False:\n            raise PrincipalResolutionError('
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py -k 'unregistered'
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[unregistered]
+1 failed, 18 deselected in 1.76s

@@ -1,0 +1,6 @@
+# plant: run_api_read_unbounded (OspreyFlow_Core/services/api/app.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '                store.dashboard(store.tenant_id, client), timeout=ROLE_LOOKUP_TIMEOUT_SECONDS'
+# with: '                store.dashboard(store.tenant_id, client), timeout=None'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py -k 'answering_none'
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_the_run_api_door_with_a_store_answering_none_or_too_slowly[store-too-slow]
+1 failed, 1 passed, 31 deselected in 34.75s
