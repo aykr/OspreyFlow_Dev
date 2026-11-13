@@ -160,3 +160,44 @@ it("starts at the top where there is no top bar", () => {
   );
   expect(screen.getByRole("dialog", { name: "Cases" }).style.top).toBe("");
 });
+
+// ADR-145 Amendments 14 and 15: closing returns focus to whatever opened it, but never takes it from somewhere else
+// the person has since chosen; and where the opener is gone (a menu's item, closed with its menu) the caller names
+// where focus goes.
+function Opened({ show, returnFocusTo }: { show: boolean; returnFocusTo?: () => HTMLElement | null }) {
+  return (
+    <>
+      <button type="button">Opener</button>
+      <button type="button">Elsewhere</button>
+      <Drawer open={show} onClose={() => undefined} title="Panel" returnFocusTo={returnFocusTo}>
+        <p>body</p>
+      </Drawer>
+    </>
+  );
+}
+
+it("returns focus to its opener when it closes", () => {
+  const { rerender } = render(<Opened show={false} />);
+  act(() => screen.getByRole("button", { name: "Opener" }).focus());
+  rerender(<Opened show />);
+  expect(document.activeElement?.getAttribute("role")).toBe("dialog");
+  rerender(<Opened show={false} />);
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Opener" }));
+});
+
+it("leaves focus where the person moved it before it closed", () => {
+  const { rerender } = render(<Opened show={false} />);
+  act(() => screen.getByRole("button", { name: "Opener" }).focus());
+  rerender(<Opened show />);
+  act(() => screen.getByRole("button", { name: "Elsewhere" }).focus());
+  rerender(<Opened show={false} />);
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Elsewhere" }));
+});
+
+it("returns focus where its caller says when nothing focused opened it", () => {
+  const { rerender } = render(<Opened show={false} returnFocusTo={() => screen.getByRole("button", { name: "Elsewhere" })} />);
+  act(() => (document.activeElement as HTMLElement | null)?.blur());
+  rerender(<Opened show returnFocusTo={() => screen.getByRole("button", { name: "Elsewhere" })} />);
+  rerender(<Opened show={false} returnFocusTo={() => screen.getByRole("button", { name: "Elsewhere" })} />);
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Elsewhere" }));
+});

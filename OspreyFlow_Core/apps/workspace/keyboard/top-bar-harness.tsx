@@ -19,7 +19,7 @@ import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { createWorkingSet } from "../src/workingset/store";
 import { guideUrl } from "../src/home/guides";
-import { MORE_VIEWS, ON_THE_RAIL, RAIL_LABELS, splitRail, splitViews, VIEW_LABELS, VIEW_SWITCH } from "../src/shell/railLayout";
+import { MORE_VIEWS, ON_THE_RAIL, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS, VIEW_SWITCH } from "../src/shell/railLayout";
 import type { RailEntry } from "../src/rights/visibility";
 
 // The rail and the view switch as `App.tsx` lays them out (the owner's navigation decision, ADR-145 Amendment 15).
@@ -123,7 +123,7 @@ function RailWithHelp() {
           toggle();
         }}
         // Split and ordered as `App.tsx` does it (`shell/railLayout.ts`), so these cases see its layout.
-        {...splitRail(RAIL_ENTRIES.map((id) => ({ id, label: RAIL_LABELS[id], icon: id, onSelect: rail(id) })))}
+        {...splitRail(RAIL_ENTRIES.map((id) => ({ id, label: RAIL_LABELS[id], icon: id, onSelect: rail(id), ...railMark(id, { view: "graph", open: new Set() }) })))}
       />
       {/* Beside the rail, never over it, as `App.tsx` places it in the column the views share. */}
       {helpOpen && (

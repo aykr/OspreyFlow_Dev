@@ -998,7 +998,9 @@ export function App() {
   // ADR-112: someone who may not investigate (a Reports Viewer) lands where they may look.
   useEffect(() => {
     const views: string[] = viewsFor(rights);
-    if ((view === "graph" || view === "map" || view === "matrix" || view === "reports") && !views.includes(view)) {
+    // ADR-145 Amendment 15: the drawing board is offered with the graph (`investigate`), so a view kept from an earlier
+    // load that this person is not offered gives way too, and exactly one view stays current.
+    if (((view === "graph" || view === "map" || view === "matrix" || view === "reports") && !views.includes(view)) || (view === "boards" && !views.includes("graph"))) {
       setView(landingView(rights));
     }
   }, [rights, view]);
@@ -1841,15 +1843,17 @@ export function App() {
         place={app}
         // The owner's navigation decision (ADR-145 Amendment 15): no mode toggle and no note in the Glass; its views
         // are the top bar's one switch. The case line's *Views in this case* opens the Cases panel at its views.
-        onViews={app === "glass" ? () => setCasesOpen("views") : undefined}
+        onViews={app === "glass" ? () => setCasesOpen((open) => (open ? false : "views")) : undefined}
+        viewsOpen={casesOpen !== false}
         caseSwitcher={
           <CaseSwitcher
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
             currentId={investigationId}
-            // Amendment 15: the menu's last entry, *All cases*, opens the Cases panel (its *Browse all cases* the
-            // full list).
-            onBrowse={() => setCasesOpen("all")}
+            // Amendment 15: in the Glass the menu's last entry, *All cases*, opens the Cases panel (its *Browse all
+            // cases* the full list). In the Studio and in Rules and Monitoring it opens the case picker as before, whose
+            // choice keeps the place (seen 10 Oct 2026; the lane-reviewer's item 1): the panel is the Glass's.
+            onBrowse={app === "glass" ? () => setCasesOpen("all") : () => setBrowsingCases(true)}
             onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
             // ADR-145 Amendment 14 decision 4: where the Glass's banner says what the case reads ("reads …", or
             // "reads no dataset"), the switcher's scope badge (ADR-115 Amendment 1 point 5) would say it again;
@@ -2664,7 +2668,13 @@ export function App() {
         />
       </Drawer>
       {/* ADR-144 decision 5: the open case's *Views in this case*, then every case once with its views. */}
-      <Drawer open={casesOpen !== false} onClose={() => setCasesOpen(false)} title="Cases">
+      <Drawer
+        open={casesOpen !== false}
+        onClose={() => setCasesOpen(false)}
+        title="Cases"
+        // Opened from the case menu's *All cases*, whose item went with its menu: focus goes back to the menu's button.
+        returnFocusTo={() => document.querySelector<HTMLElement>("[aria-labelledby='context-banner-title'] .menu-button--case")}
+      >
         <div className="drawer-stack">
           {investigationId && (
             <ViewsPanel

@@ -51,6 +51,8 @@ export interface ContextBannerProps {
   /** The case line's *Views in this case* (the owner's navigation decision, ADR-145 Amendment 15): opens the Cases
    * panel at its views list. In the Glass only. */
   onViews?: () => void;
+  /** Whether the Cases panel *Views in this case* opens is open (its `aria-expanded`). */
+  viewsOpen?: boolean;
 }
 
 const YOU_ARE_IN: Record<PlaceId, string> = {
@@ -91,7 +93,7 @@ export function useCaseContext(
   return read && read.id === investigationId ? read : { name: null, datasets: null };
 }
 
-export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink, onViews }: ContextBannerProps) {
+export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink, onViews, viewsOpen = false }: ContextBannerProps) {
   const govuk = currentBrand() === "govuk";
   // The place opens the line in both brands (ADR-132 Amendment 8 folded GOV.UK's title into it), so each
   // part after it is set off by a separator.
@@ -138,7 +140,13 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
           {onViews && (
             <>
               {next()}
-              <button type="button" className={govuk ? "govuk-link context-banner__section" : "context-banner__section"} onClick={onViews}>
+              <button
+                type="button"
+                className={govuk ? "govuk-link context-banner__section" : "context-banner__section"}
+                aria-haspopup="dialog"
+                aria-expanded={viewsOpen}
+                onClick={onViews}
+              >
                 Views in this case
               </button>
             </>

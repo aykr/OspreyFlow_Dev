@@ -96,16 +96,38 @@ export async function dismissWelcome(page: Page): Promise<void> {
   if (await close.first().isVisible().catch(() => false)) await close.first().click();
 }
 
-/** A left-rail entry by its name: exact, since "Explore" is also the start of "Explore Details"
- * (ADR-145 Amendment 12). */
-export const rail = (page: Page, name: string) =>
+/** A left-rail entry by its name: Explore, Ask & Chat or History, the panels the rail opens (the owner's navigation
+ * decision, ADR-145 Amendment 15). Exact, so "Explore" never matches another name. */
+export const rail = (page: Page, name: "Explore" | "Ask & Chat" | "History") =>
   page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name, exact: true });
 
-/** A place under the rail's ⋯ Explore Details (History, Ownership, Connection strength; ADR-145
- * Amendment 12), chosen from its menu. */
+/** A view from the top bar's one view switch (Graph, Map, Drawing board, Reports) or its More views (Matrix,
+ * Figures, Ownership, Connection strength), chosen as a person chooses it (ADR-145 Amendment 15). */
+export async function chooseView(
+  page: Page,
+  name: "Graph" | "Map" | "Drawing board" | "Reports" | "Matrix" | "Figures" | "Ownership" | "Connection strength",
+): Promise<void> {
+  const inSwitch = page.getByRole("group", { name: "View" }).getByRole("button", { name, exact: true });
+  if (await inSwitch.isVisible().catch(() => false)) {
+    await inSwitch.click();
+    return;
+  }
+  await page.getByRole("button", { name: /^More views/ }).click();
+  await page.getByRole("group", { name: "More views" }).getByRole("button", { name, exact: true }).click();
+}
+
+/** The Cases panel (the case's brief, settings, access and views, and every case), from the case line's *Views in
+ * this case* (ADR-145 Amendment 15; it was the rail's Cases). */
+export async function casesPanel(page: Page): Promise<void> {
+  await page.getByRole("region", { name: "You are in the Glass" }).getByRole("button", { name: "Views in this case" }).click();
+  await expect(page.getByRole("dialog", { name: "Cases" })).toBeVisible();
+}
+
+/** History, Ownership or Connection strength, where each now is: History a panel of the rail, the other two views
+ * under More views (ADR-145 Amendment 15; they were under the rail's Explore Details). */
 export async function explorePlace(page: Page, name: "History" | "Ownership" | "Connection strength"): Promise<void> {
-  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: /^Explore Details/ }).click();
-  await page.getByRole("group", { name: "Explore Details" }).getByRole("button", { name }).click();
+  if (name === "History") await rail(page, "History").click();
+  else await chooseView(page, name);
 }
 
 export type MonitoringTab =
@@ -119,12 +141,11 @@ export type MonitoringTab =
 
 /** Rules and Monitoring on one of its tabs (ADR-146 decision 2; the Monitoring place's tabs before
  * it, by their old names: Queue and Watches' inbox are *Alerts*; Rules, Watches' hotlists and Lists are
- * *What raises alerts*; Audit is *Changes*). Connection strength stayed in the Glass, under the
- * rail's Explore Details (ADR-145 Amendment 12). Reached through the place switcher, as a person reaches it. */
+ * *What raises alerts*; Audit is *Changes*). Connection strength stayed in the Glass, a view under the
+ * top bar's More views (ADR-145 Amendment 15). Reached through the place switcher, as a person reaches it. */
 export async function monitoringTab(page: Page, tab: MonitoringTab): Promise<void> {
   if (tab === "Connection strength") {
-    await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: /^Explore Details/ }).click();
-    await page.getByRole("group", { name: "Explore Details" }).getByRole("button", { name: "Connection strength" }).click();
+    await chooseView(page, "Connection strength");
     await expect(page.getByRole("region", { name: "Connection strength" })).toBeVisible();
     await page.waitForTimeout(2500);
     return;

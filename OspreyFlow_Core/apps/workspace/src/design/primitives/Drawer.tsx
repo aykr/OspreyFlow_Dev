@@ -6,6 +6,9 @@ export interface DrawerProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  /** Where focus goes on closing when what opened the drawer is gone or held no focus (a menu's item that closed
+   * with its menu): the caller names the control to return to. */
+  returnFocusTo?: () => HTMLElement | null;
 }
 
 /** The chrome a drawer opens under: the workspace's top bar (`shell/TopBar.tsx`), so the GOV.UK header above it
@@ -25,7 +28,7 @@ function underTheChrome(): number | null {
 /** An overlay: shadow, no hairline (`spec/02_GLASS_FRONTEND.md` §8). Used
  * for the Inspector and named-step history panel. Not modal (ADR-145 Amendment 14 decision 2): it neither
  * traps focus nor makes the page behind it inert, and the navigation beside it stays usable. */
-export function Drawer({ open, onClose, title, children }: DrawerProps) {
+export function Drawer({ open, onClose, title, children, returnFocusTo }: DrawerProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState<number | null>(null);
   // The latest `onClose`, read when Escape is pressed. A parent may pass a new one on every
@@ -33,6 +36,8 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
   // took focus back to the drawer (9 October 2026, *Record an assessment*).
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const returnRef = useRef(returnFocusTo);
+  returnRef.current = returnFocusTo;
 
   // A layout effect, so Escape is heard from the moment it can be seen (as `Popover`).
   useLayoutEffect(() => {
@@ -50,7 +55,9 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
       document.removeEventListener("keydown", onKeyDown);
       const now = document.activeElement;
       const lost = now === null || now === document.body || (drawer !== null && drawer.contains(now));
-      if (opener?.isConnected && lost) opener.focus();
+      if (!lost) return;
+      const back = opener?.isConnected ? opener : (returnRef.current?.() ?? null);
+      back?.focus();
     };
   }, [open]);
 

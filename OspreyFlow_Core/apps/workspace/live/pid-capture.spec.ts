@@ -20,7 +20,7 @@ import {
   monitoringTab,
   openCaseNamed,
   openQueuedAlert,
-  explorePlace, rail,
+  casesPanel, explorePlace, rail,
   reportsTab,
   runNowAndWait,
   scrollAllToTop,
@@ -292,7 +292,7 @@ test("CAP-A1-J3", async ({ page }) => {
 
 test("CAP-A2-C1", async ({ page }) => {
   await freshCase(page);
-  await rail(page, "Cases").click();
+  await casesPanel(page);
   const brief = page.getByRole("region", { name: "Brief" });
   await expect(brief).toBeVisible();
   await brief.scrollIntoViewIfNeeded();
@@ -996,7 +996,8 @@ test("CAP-A2-C10M-e", async ({ page }) => {
   // hotlist, so it holds S1 alone.
   await signIn(page, "viewer");
   await openCase(page);
-  const boards = rail(page, "Dashboards");
+  // ADR-145 Amendment 15: the dashboards view is the view switch's Reports.
+  const boards = page.getByRole("group", { name: "View" }).getByRole("button", { name: "Reports", exact: true });
   test.skip(!(await boards.isVisible().catch(() => false)), "no dashboard for this case: P4 is a slide");
   await boards.click();
   await page.waitForTimeout(15_000);
@@ -1052,7 +1053,7 @@ test("CAP-A2-C7", async ({ page }) => {
   await expect(name).toHaveValue(/, selected$/);
   const called = await name.inputValue();
   await page.getByRole("button", { name: "Save view" }).click();
-  await rail(page, "Cases").click();
+  await casesPanel(page);
   await page.getByRole("button", { name: `Open ${called}` }).click();
   await expect(page.getByRole("region", { name: "Open view" })).toContainText(called, { timeout: 60_000 });
   await page.waitForTimeout(6000);

@@ -21,6 +21,7 @@ import { BrandFrame } from "../src/brand/BrandFrame";
 import { PLAIN_APPEARANCE } from "../src/brand/brand";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { ContextBanner, crossLinkFor } from "../src/shell/ContextBanner";
+import { CaseSwitcher } from "../src/investigation/CaseSwitcher";
 import { PlaceSwitcher } from "../src/shell/PlaceSwitcher";
 import { useLastGlassView } from "../src/shell/placeMemory";
 import { openCase } from "../src/investigation/cases";
@@ -39,7 +40,14 @@ window.__PLACES__ = { chosen: [], crossed: [] };
 if (!new URLSearchParams(location.search).has("investigation")) sessionStorage.clear();
 
 // The Admin place's reads answer empty: nothing here is under test but its frame (rule 9: synthetic).
-window.fetch = async () => new Response("[]", { status: 200 });
+// The case menu (the real `CaseSwitcher`, as `App.tsx` draws it) lists the two synthetic cases; every other read is empty.
+window.fetch = async (input: RequestInfo | URL) =>
+  new URL(String(input), location.href).pathname === "/v1/investigations"
+    ? new Response(JSON.stringify([
+        { id: "kestrel", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a" },
+        { id: "harrier", name: "Harrier", level: "author", created_at: "2026-11-02T09:00:00Z", created_by: "a" },
+      ]), { status: 200 })
+    : new Response("[]", { status: 200 });
 
 const brand = await applyHarnessBrand();
 const params = new URLSearchParams(location.search);
@@ -86,10 +94,17 @@ function Harness() {
     else if (to === "rules") setView("alerts");
     else if (to === "glass" && (view === "ingest" || view === "alerts")) setView(lastGlassView());
   };
+  // The real case menu: a case chosen reopens the page as `openCase` does; *All cases* opens the Cases panel in the Glass
+  // and is noted elsewhere (where `App.tsx` opens the case picker).
   const caseMenu = (
-    <button type="button" className="btn" onClick={() => reopen(caseId === "kestrel" ? "harrier" : "kestrel")}>
-      Case: {CASES[caseId] ?? caseId}
-    </button>
+    <CaseSwitcher
+      apiBaseUrl="http://keyboard-test.invalid"
+      bearerToken="unused"
+      currentId={caseId}
+      onOpen={reopen}
+      onBrowse={place === "glass" ? () => setPanel("cases") : () => window.__PLACES__!.crossed.push("browse")}
+      showScope={place !== "glass"}
+    />
   );
   return (
     <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
@@ -114,7 +129,8 @@ function Harness() {
       <ContextBanner
         place={place}
         // Amendment 15: no mode toggle and no note; the case line's *Views in this case* opens the Cases panel.
-        onViews={place === "glass" ? () => setPanel("cases") : undefined}
+        onViews={place === "glass" ? () => toggle("cases") : undefined}
+        viewsOpen={panels.has("cases")}
         caseSwitcher={place === "admin" ? undefined : caseMenu}
         datasets={place === "glass" ? ["Prison intel"] : null}
         crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {
@@ -149,7 +165,13 @@ function Harness() {
           </main>
           {/* Each open panel is a real drawer, as `App.tsx`'s are, so closing it returns focus to its opener. */}
           {[...panels].map((id) => (
-            <Drawer key={id} open onClose={() => toggle(id)} title={id === "cases" ? "Cases" : RAIL_LABELS[id]}>
+            <Drawer
+              key={id}
+              open
+              onClose={() => toggle(id)}
+              title={id === "cases" ? "Cases" : RAIL_LABELS[id]}
+              returnFocusTo={() => document.querySelector<HTMLElement>("[aria-labelledby='context-banner-title'] .menu-button--case")}
+            >
               <p>{id === "cases" ? "The case's views, then every case." : `${RAIL_LABELS[id]}'s panel.`}</p>
             </Drawer>
           ))}

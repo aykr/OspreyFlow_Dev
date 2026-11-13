@@ -270,6 +270,14 @@ test("Rules and Monitoring carries the count, and the Glass is returned to its l
   registerCovered(REGISTRY, "back-to-the-glass-from-rules-and-monitoring-by-keyboard");
 });
 
+/** Another case from the real case menu (`CaseSwitcher`), by keyboard: the menu opened, the case chosen. */
+async function chooseCase(page: import("@playwright/test").Page, name: string): Promise<void> {
+  await page.getByRole("button", { name: /^Case: Kestrel/ }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name, exact: true }).focus();
+  await page.keyboard.press("Enter");
+}
+
 // ADR-145 decision 2 (rule 13): the banner's cross-link, there and back, keeping the case and the view.
 test("the banner's cross-link goes to the Studio and back to the same case and view by keyboard", async ({ page }) => {
   await page.goto("/keyboard/places-harness.html?rights=investigate,edit_pipelines");
@@ -280,8 +288,7 @@ test("the banner's cross-link goes to the Studio and back to the same case and v
   await page.keyboard.press("Enter");
   await expect(page.getByText("ingest, ingest, on case kestrel")).toBeVisible();
   // Another case, chosen in the Studio: the real `openCase`, which reloads the page.
-  await page.getByRole("button", { name: "Case: Kestrel" }).focus();
-  await page.keyboard.press("Enter");
+  await chooseCase(page, "Harrier");
   await expect(page.getByText("ingest, ingest, on case harrier")).toBeVisible();
   await page.getByRole("button", { name: "← Back to case Harrier in the Glass" }).focus();
   await page.keyboard.press("Enter");
@@ -302,8 +309,7 @@ test("from Messages, the cross-link and a case change in the Studio come Back to
   await expect(page.getByText("glass, dossier, on case kestrel")).toBeVisible();
   await page.getByRole("button", { name: "Open this case's data in the Ingest Studio ↗" }).focus();
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "Case: Kestrel" }).focus();
-  await page.keyboard.press("Enter");
+  await chooseCase(page, "Harrier");
   await expect(page.getByText("ingest, ingest, on case harrier")).toBeVisible();
   await page.getByRole("button", { name: "← Back to case Harrier in the Glass" }).focus();
   await page.keyboard.press("Enter");
@@ -324,10 +330,31 @@ test("the case line's Views in this case opens the Cases panel by keyboard, and 
   await page.keyboard.press("Enter");
   const panel = page.getByRole("dialog", { name: "Cases" });
   await expect(panel).toBeVisible();
+  await expect(views).toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
   await expect(views).toBeFocused();
+  await expect(views).toHaveAttribute("aria-expanded", "false");
   registerCovered(REGISTRY, "case-line-views-by-keyboard");
+});
+
+// ADR-145 Amendment 15 (rule 13; the lane-reviewer's item 3): the case menu's last entry, All cases, opens the Cases panel
+// in the Glass by keyboard, and closing it returns focus to the case menu's button, the entry itself gone with its menu.
+test("the case menu's All cases opens the Cases panel by keyboard, and focus returns to the case menu", async ({ page }) => {
+  await page.goto("/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts");
+  const region = page.getByRole("region", { name: "You are in the Glass" });
+  const menuButton = region.getByRole("button", { name: /^Case: Kestrel/ });
+  await menuButton.focus();
+  await page.keyboard.press("Enter");
+  const all = page.getByRole("button", { name: "All cases", exact: true });
+  await all.focus();
+  await page.keyboard.press("Enter");
+  const panel = page.getByRole("dialog", { name: "Cases" });
+  await expect(panel).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(menuButton).toBeFocused();
+  registerCovered(REGISTRY, "all-cases-by-keyboard");
 });
 
 // ADR-145 Amendment 15 (the owner's navigation decision): exactly one view is current at any time, in the dark, light
@@ -348,7 +375,7 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     await page.getByRole("group", { name: "More views" }).getByRole("button", { name: "Ownership" }).focus();
     await page.keyboard.press("Enter");
     await expect(pressed).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Ownership" }).first()).toBeVisible();
+    await expect(page.locator(".menu-button--pressed")).toHaveText(/^Ownership/);
     await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Explore", exact: true }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("dialog", { name: "Explore" })).toBeVisible();

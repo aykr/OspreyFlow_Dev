@@ -100,10 +100,10 @@ index 7fd7441..e4c5549 100644
    // item and link forms and the withdrawal's question; another member's read-only view; a blank board;
    // the boards list with a board from a view chosen, the edit form and an item's menu open, a drawing
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 5a29e55..a221f13 100644
+index 5a29e55..651b278 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -854,12 +854,14 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
+@@ -854,12 +854,16 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
    // sections, and Home's cards.
    "switch-place-by-keyboard",
    "banner-cross-link-by-keyboard",
@@ -112,6 +112,8 @@ index 5a29e55..a221f13 100644
 +  // ADR-145 Amendment 15 (the owner's navigation decision, replacing Amendment 13's mode toggle): the case line's
 +  // Views in this case opens the Cases panel, focus returned to it.
 +  "case-line-views-by-keyboard",
++  // ...and the case menu's All cases, which opens the same panel, focus returned to the menu's button.
++  "all-cases-by-keyboard",
    "home-place-cards-by-keyboard",
 -  // ADR-145 Amendment 2 (variant B): the rail's More and each destination under it, More views, and a
 -  // folded panel of the column opened with one keypress.
@@ -123,7 +125,7 @@ index 5a29e55..a221f13 100644
    "more-views-by-keyboard",
    "open-a-folded-panel-by-keyboard",
    // ADR-145 Amendment 4 and ADR-146 decision 2 (L2.9): Rules and Monitoring, the fourth place, in the
-@@ -869,6 +871,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
+@@ -869,6 +873,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
    "back-to-the-glass-from-rules-and-monitoring-by-keyboard",
    "open-an-alert-from-home-by-keyboard",
    "open-rules-and-monitoring-from-home-by-keyboard",

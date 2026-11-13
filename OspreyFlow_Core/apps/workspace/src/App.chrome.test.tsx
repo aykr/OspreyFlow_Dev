@@ -379,3 +379,96 @@ describe("Build a report beside Reports (ADR-145 Amendment 15)", () => {
     expect(link()).toBeNull();
   });
 });
+
+// The lane-reviewer's findings on Part B (ADR-145 Amendment 15): All cases outside the Glass, focus after it, the switch's
+// rights, exactly one current view, and Views in this case as a toggle.
+describe("Part B after review (ADR-145 Amendment 15)", () => {
+  const withRights = (rights: string[]) => {
+    const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+      /\/v1\/me\/rights$/.test(String(input).split("?")[0]!) ? Promise.resolve(new Response(JSON.stringify({ rights }))) : held(input, init),
+    );
+  };
+  const switchOf = () => {
+    const group = screen.getByRole("group", { name: "View" });
+    return { main: within(group).getAllByRole("button").map((b) => b.textContent) };
+  };
+
+  test("in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(await within(screen.getByRole("navigation", { name: "Places" })).findByRole("button", { name: /^Ingest Studio$/ }));
+    const studio = await screen.findByRole("region", { name: "You are in the Ingest Studio" });
+    fireEvent.click(await within(studio).findByRole("button", { name: /^Case: Kestrel/ }));
+    const menu = await screen.findByRole("dialog", { name: "Case menu" }).catch(() => screen.getByRole("group", { name: "Case menu" }));
+    fireEvent.click(within(menu).getByRole("button", { name: "All cases" }));
+    expect(await screen.findByRole("heading", { level: 1 })).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Cases" })).toBeNull();
+  });
+
+  test("the Cases panel opened from All cases returns focus to the case menu's button when it closes", async () => {
+    render(<App />);
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    const caseButton = await within(region).findByRole("button", { name: /^Case: Kestrel/ });
+    caseButton.focus();
+    fireEvent.click(caseButton);
+    const menu = await screen.findByRole("dialog", { name: "Case menu" }).catch(() => screen.getByRole("group", { name: "Case menu" }));
+    const all = within(menu).getByRole("button", { name: "All cases" });
+    all.focus();
+    fireEvent.click(all);
+    const panel = await screen.findByRole("dialog", { name: "Cases" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Close Cases" }));
+    await vi.waitFor(() => expect(screen.queryByRole("dialog", { name: "Cases" })).toBeNull());
+    expect(document.activeElement).toBe(within(region).getByRole("button", { name: /^Case: Kestrel/ }));
+  });
+
+  test("Views in this case is a toggle: expanded while its panel is open, a second press closes it", async () => {
+    render(<App />);
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    const views = await within(region).findByRole("button", { name: "Views in this case" });
+    expect(views.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(views.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(views);
+    await screen.findByRole("dialog", { name: "Cases" });
+    expect(views.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(views);
+    await vi.waitFor(() => expect(screen.queryByRole("dialog", { name: "Cases" })).toBeNull());
+  });
+
+  test("a Reports Viewer's switch is Reports, with Figures under More views: no graph, map or drawing board", async () => {
+    withRights(["read_reports"]);
+    render(<App />);
+    await vi.waitFor(() => expect(screen.getByRole("group", { name: "View" })).toBeTruthy());
+    await vi.waitFor(() => expect(switchOf().main).toEqual(["Reports"]));
+    // A Reports Viewer lands on Figures, so More views is named after it (Amendment 2).
+    fireEvent.click(screen.getByRole("button", { name: /^(More views|Figures)/ }));
+    const more = within(await screen.findByRole("group", { name: "More views" }));
+    expect(more.getAllByRole("button").map((b) => b.textContent)).toEqual(["Figures"]);
+  });
+
+  test("an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views", async () => {
+    withRights(["investigate"]);
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await vi.waitFor(() => expect(switchOf().main).toEqual(["Graph", "Map", "Drawing board"]));
+    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    const more = within(await screen.findByRole("group", { name: "More views" }));
+    expect(more.getAllByRole("button").map((b) => b.textContent)).toEqual(["Matrix", "Connection strength"]);
+  });
+
+  test("exactly one view is current: one pressed in the switch, or none there and More views naming its own", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    const group = () => screen.getByRole("group", { name: "View" });
+    const pressed = () => within(group()).queryAllByRole("button", { pressed: true }).map((b) => b.textContent);
+    for (const name of ["Map", "Drawing board", "Reports", "Graph"]) {
+      fireEvent.click(within(group()).getByRole("button", { name }));
+      await vi.waitFor(() => expect(pressed()).toEqual([name]));
+      expect(screen.getByRole("button", { name: /^More views/ }).className).not.toContain("menu-button--pressed");
+    }
+    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    fireEvent.click(await within(await screen.findByRole("group", { name: "More views" })).findByRole("button", { name: "Matrix" }));
+    await vi.waitFor(() => expect(pressed()).toEqual([]));
+    expect(screen.getByRole("button", { name: /^Matrix/ }).className).toContain("menu-button--pressed");
+  });
+});

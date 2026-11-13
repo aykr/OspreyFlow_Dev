@@ -40,6 +40,8 @@ test("a board is opened from the boards list by keyboard", async ({ page }) => {
   await open(page);
   await press(page, "Open Wing B");
   await expect(page.getByRole("heading", { name: "Wing B" })).toBeVisible();
+  // ADR-145 Amendment 15: an open board says what it is, as the strip's note did.
+  await expect(page.getByText("Drawing board: your sketch; it does not change the case's data.")).toBeVisible();
   await expect(item(page, /^Person Unknown male “Tall” \(drawn\)/)).toBeVisible();
   await expect(item(page, /^Person Mercer \(loaded\)/)).toBeVisible();
   registerCovered("BOARD_ACTIONS", "open-a-board-from-the-boards-list-by-keyboard");
