@@ -33,6 +33,13 @@ from .search import SUGGEST_MIN_CHARS
 #: mention: a point a word), below the band above it.
 MAX_QUERY_CHARS = 200
 
+#: Rule 2: results deeper than this are refused, and the error says to narrow the search
+#: (`process/lanes/studio/SEARCH_RESPONSE_SHAPE.md`, note 4), never cut.
+MAX_DEPTH = 1000
+
+#: The group that lists documents whose text matched, beside the entity types.
+MENTIONS = "mentions"
+
 #: The bands, best first (the owner's search scope 3: exact identifier, then close names, then
 #: mentions). Fixed scores; `mention_some` alone varies, from 1 to the number of words.
 BAND_SCORES: dict[str, int] = {
@@ -114,16 +121,28 @@ def build_search_body(
     access_filter: dict[str, Any],
     phonetic_codes: PhoneticCodes,
     types: Sequence[str],
-    limit: int,
-    entity_types: Sequence[str] | None = None,
+    page_size: int,
+    page: int = 1,
+    group: str | None = None,
+    case_datasets: Sequence[str] = (),
     datasets: Sequence[str] | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> dict[str, Any]:
-    """A search's body: `types` is every entity type the ontology has, so the by-type counts are
-    asked for all of them; `entity_types`, `datasets` and the dates narrow the search and join the
-    access filter, never replace it."""
+    """A search's body (`process/lanes/studio/SEARCH_RESPONSE_SHAPE.md`).
+
+    - `types` is every entity type the ontology has, and `case_datasets` every dataset of the
+      case, so the counts are asked for all of them.
+    - `datasets` and the dates narrow the search and join the access filter, never replace it.
+    - `group` (a type, or `MENTIONS`) narrows the list alone. It is a `post_filter`, so every
+      group's count stays whole. The access filter is never a `post_filter`."""
     access = _require_filter(access_filter)
+    if page < 1 or page_size < 1:
+        raise ValueError("a page and its size start at 1")
+    if page * page_size > MAX_DEPTH:
+        raise ValueError(
+            f"results are listed {MAX_DEPTH} deep at most; narrow the search to see further"
+        )
     text = _require_length(text).strip()
 
     identifiers = [text]
@@ -164,15 +183,13 @@ def build_search_body(
     ]
 
     filters: list[dict[str, Any]] = [access]
-    if entity_types:
-        filters.append({"terms": {"type": list(entity_types)}})
     if datasets:
         filters.append({"terms": {"datasets": list(datasets)}})
     if date_from or date_to:
         span = {k: v for k, v in (("gte", date_from), ("lte", date_to)) if v}
         filters.append({"range": {"date": span}})
 
-    return {
+    body: dict[str, Any] = {
         "query": {
             "bool": {"filter": filters, "must": [{"dis_max": {"queries": bands, "tie_breaker": 0}}]}
         },
@@ -183,7 +200,8 @@ def build_search_body(
         ],
         "track_scores": True,
         "collapse": {"field": "node_id"},
-        "size": limit + 1,
+        "from": (page - 1) * page_size,
+        "size": page_size + 1,
         "_source": ["node_id", "kind"],
         "highlight": {
             "pre_tags": [HIGHLIGHT_OPEN],
@@ -202,15 +220,36 @@ def build_search_body(
             # Node documents by type, and text documents (mentions) apart, so a Document found by
             # its title and in its text is counted once in each, never twice in one.
             "by_type": {
-                "terms": {
-                    "field": "type",
-                    "size": len(types) + 1,
-                    "shard_size": 10 * (len(types) + 1),
+                "filter": {"term": {"kind": "node"}},
+                "aggs": {
+                    "types": {
+                        "terms": {
+                            "field": "type",
+                            "size": len(types) + 1,
+                            "shard_size": 10 * (len(types) + 1),
+                        }
+                    }
                 },
             },
             "mentions": {"filter": {"term": {"kind": "text"}}},
+            "datasets": {
+                "terms": {
+                    "field": "datasets",
+                    "size": len(case_datasets) + 1,
+                    "shard_size": 10 * (len(case_datasets) + 1),
+                }
+            },
+            "earliest": {"min": {"field": "date"}},
+            "latest": {"max": {"field": "date"}},
         },
     }
+    if group == MENTIONS:
+        body["post_filter"] = {"term": {"kind": "text"}}
+    elif group is not None:
+        body["post_filter"] = {
+            "bool": {"filter": [{"term": {"kind": "node"}}, {"term": {"type": group}}]}
+        }
+    return body
 
 
 def build_suggest_body(prefix: str, *, access_filter: dict[str, Any], limit: int) -> dict[str, Any]:
@@ -274,8 +313,13 @@ class IndexSearchResult:
     more: bool
     counts: dict[str, int]
     mentions: int
-    #: False when OpenSearch says a by-type count may be short (rule 2: the Glass says so).
+    #: False when OpenSearch says a count may be short (rule 2: the Glass says so).
     counts_exact: bool
+    dataset_counts: dict[str, int]
+    #: The earliest and latest `date` among the matches, as OpenSearch writes them; `None` if
+    #: none is dated.
+    earliest: str | None
+    latest: str | None
 
 
 _BAND_BY_SCORE = {score: band for band, score in BAND_SCORES.items()}
@@ -311,10 +355,16 @@ def _snippet(fragment: str) -> list[SnippetPart]:
     return parts
 
 
-def read_search_response(reply: dict[str, Any], *, limit: int) -> IndexSearchResult:
+def _exact(terms: dict[str, Any]) -> bool:
+    error: int = terms.get("doc_count_error_upper_bound", 0)
+    other: int = terms.get("sum_other_doc_count", 0)
+    return error == 0 and other == 0
+
+
+def read_search_response(reply: dict[str, Any], *, page_size: int) -> IndexSearchResult:
     raw = reply["hits"]["hits"]
     hits = []
-    for hit in raw[:limit]:
+    for hit in raw[:page_size]:
         highlight = hit.get("highlight", {})
         fragments = highlight.get("text") or highlight.get("names.words") or []
         hits.append(
@@ -324,14 +374,22 @@ def read_search_response(reply: dict[str, Any], *, limit: int) -> IndexSearchRes
                 snippet=_snippet(fragments[0]) if fragments else [],
             )
         )
-    by_type = reply["aggregations"]["by_type"]
+    aggs = reply["aggregations"]
+    by_type = aggs["by_type"]["types"]
+    datasets = aggs["datasets"]
     return IndexSearchResult(
         hits=hits,
-        more=len(raw) > limit,
+        more=len(raw) > page_size,
         counts={b["key"]: b["doc_count"] for b in by_type["buckets"]},
-        mentions=reply["aggregations"]["mentions"]["doc_count"],
-        counts_exact=by_type.get("doc_count_error_upper_bound", 0) == 0
-        and by_type.get("sum_other_doc_count", 0) == 0,
+        mentions=aggs["mentions"]["doc_count"],
+        counts_exact=_exact(by_type) and _exact(datasets),
+        dataset_counts={b["key"]: b["doc_count"] for b in datasets["buckets"]},
+        earliest=aggs["earliest"].get("value_as_string")
+        if aggs["earliest"].get("value") is not None
+        else None,
+        latest=aggs["latest"].get("value_as_string")
+        if aggs["latest"].get("value") is not None
+        else None,
     )
 
 

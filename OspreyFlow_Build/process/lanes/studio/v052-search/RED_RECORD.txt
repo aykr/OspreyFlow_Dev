@@ -25,3 +25,19 @@ FAILED tests/services/api/test_search_index_query.py::test_narrowing_filters_joi
 2 failed, 21 passed in 0.44s
 == restored
 23 passed in 0.41s
+
+== second round (the response shape: groups, datasets and dates, paging), at the builder after a01ca1c
+== plant: by-type counts over text documents too (a Document counted twice)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_index_query.py::test_the_by_type_counts_ask_every_type_the_ontology_has
+1 failed, 26 passed in 1.38s
+== plant: the group in the query, so other groups' counts shrink
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+FAILED tests/services/api/test_search_index_query.py::test_a_group_narrows_the_list_and_leaves_every_groups_count_whole
+1 failed, 26 passed in 1.46s
+== plant: the depth limit removed, so a deep page is cut by OpenSearch's window instead
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_index_query.py::test_a_page_past_the_depth_limit_is_refused_not_cut
+1 failed, 26 passed in 1.30s
+== restored
+27 passed in 1.19s

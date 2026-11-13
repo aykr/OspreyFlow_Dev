@@ -40,8 +40,9 @@ def _codes(word: str) -> list[str]:
 
 
 def _body(text: str = "Mohammed Smyth", **kw: Any) -> dict[str, Any]:
+    kw.setdefault("page_size", 20)
     return q.build_search_body(
-        text, access_filter=ACCESS, phonetic_codes=_codes, types=INDEX_TYPES, limit=20, **kw
+        text, access_filter=ACCESS, phonetic_codes=_codes, types=INDEX_TYPES, **kw
     )
 
 
@@ -75,15 +76,22 @@ def test_a_body_cannot_be_built_without_an_access_filter() -> None:
                 access_filter=missing,  # type: ignore[arg-type]
                 phonetic_codes=_codes,
                 types=INDEX_TYPES,
-                limit=20,
+                page_size=20,
             )
         with pytest.raises(ValueError, match="access filter"):
             q.build_suggest_body("Sm", access_filter=missing, limit=10)  # type: ignore[arg-type]
 
 
 def test_the_access_filter_limits_hits_and_counts_alike() -> None:
-    for body in (_body(), q.build_suggest_body("Sm", access_filter=ACCESS, limit=10)):
-        assert "post_filter" not in body
+    for body in (
+        _body(),
+        _body(group="Person"),
+        q.build_suggest_body("Sm", access_filter=ACCESS, limit=10),
+    ):
+        # `post_filter` limits the list but not the counts: the access filter is never there, only
+        # in the query, so it limits both.
+        assert ACCESS not in [v for _, v in _walk(body.get("post_filter", {}))]
+        assert body.get("post_filter", {}) != ACCESS
         assert body["query"]["bool"]["filter"][0] == ACCESS
         # The counts are aggregations of the same query, never of a second, unfiltered one.
         for key, _ in _walk(body.get("aggs", {})):
@@ -91,14 +99,25 @@ def test_the_access_filter_limits_hits_and_counts_alike() -> None:
 
 
 def test_narrowing_filters_join_the_access_filter_never_replace_it() -> None:
-    body = _body(
-        datasets=["ds-1"], entity_types=["Person"], date_from="2026-01-01", date_to="2026-02-01"
-    )
+    body = _body(datasets=["ds-1"], date_from="2026-01-01", date_to="2026-02-01")
     filters = body["query"]["bool"]["filter"]
     assert filters[0] == ACCESS
     assert {"terms": {"datasets": ["ds-1"]}} in filters
-    assert {"terms": {"type": ["Person"]}} in filters
     assert {"range": {"date": {"gte": "2026-01-01", "lte": "2026-02-01"}}} in filters
+
+
+def test_a_group_narrows_the_list_and_leaves_every_groups_count_whole() -> None:
+    """The results page's groups (the owner's Part A): choosing People lists people, while the
+    other groups keep their counts, so the group is a `post_filter`, after the counts."""
+    assert _body(group="Person")["post_filter"] == {
+        "bool": {"filter": [{"term": {"kind": "node"}}, {"term": {"type": "Person"}}]}
+    }
+    assert _body(group="mentions")["post_filter"] == {"term": {"kind": "text"}}
+    assert "post_filter" not in _body()
+    assert all(
+        f.get("terms", {}).get("type") is None
+        for f in _body(group="Person")["query"]["bool"]["filter"]
+    )
 
 
 # --- no expansion, no corpus statistics -----------------------------------------------------------
@@ -194,8 +213,20 @@ def test_the_order_is_total_and_one_node_appears_once() -> None:
         {"node_id": {"order": "asc"}},
     ]
     assert body["collapse"] == {"field": "node_id"}
-    assert body["size"] == 21  # one past the limit, so `more` is known (rule 2)
     assert body["track_scores"] is True
+    assert body["from"] == 0
+    assert body["size"] == 21  # one past the page, so `more` is known (rule 2)
+
+
+def test_a_page_starts_where_the_last_ended() -> None:
+    body = _body(page=3, page_size=20)
+    assert (body["from"], body["size"]) == (40, 21)
+
+
+def test_a_page_past_the_depth_limit_is_refused_not_cut() -> None:
+    _body(page=q.MAX_DEPTH // 20, page_size=20)
+    with pytest.raises(ValueError, match=str(q.MAX_DEPTH)):
+        _body(page=q.MAX_DEPTH // 20 + 1, page_size=20)
 
 
 # --- reading the reply ----------------------------------------------------------------------------
@@ -216,11 +247,21 @@ def _reply(hits: list[dict[str, Any]], *, error: int = 0, other: int = 0) -> dic
         "hits": {"hits": hits},
         "aggregations": {
             "by_type": {
-                "doc_count_error_upper_bound": error,
-                "sum_other_doc_count": other,
-                "buckets": [{"key": "Person", "doc_count": 3}],
+                "doc_count": 3,
+                "types": {
+                    "doc_count_error_upper_bound": error,
+                    "sum_other_doc_count": other,
+                    "buckets": [{"key": "Person", "doc_count": 3}],
+                },
             },
             "mentions": {"doc_count": 7},
+            "datasets": {
+                "doc_count_error_upper_bound": 0,
+                "sum_other_doc_count": 0,
+                "buckets": [{"key": "ds-1", "doc_count": 10}],
+            },
+            "earliest": {"value": 1.7e12, "value_as_string": "2025-03-02T00:00:00.000Z"},
+            "latest": {"value": None},
         },
     }
 
@@ -228,13 +269,13 @@ def _reply(hits: list[dict[str, Any]], *, error: int = 0, other: int = 0) -> dic
 def test_a_hit_is_read_with_its_band_and_more_is_one_past_the_limit() -> None:
     b = q.BAND_SCORES
     hits = [_hit("n1", b["identifier"]), _hit("n2", b["name_sounds"]), _hit("n3", 3.0, "text")]
-    result = q.read_search_response(_reply(hits), limit=2)
+    result = q.read_search_response(_reply(hits), page_size=2)
     assert [(h.node_id, h.band) for h in result.hits] == [
         ("n1", "identifier"),
         ("n2", "name_sounds"),
     ]
     assert result.more is True
-    assert q.read_search_response(_reply(hits), limit=3).hits[2].band == "mention_some"
+    assert q.read_search_response(_reply(hits), page_size=3).hits[2].band == "mention_some"
 
 
 def test_a_score_between_bands_is_a_defect_not_a_guess() -> None:
@@ -242,13 +283,13 @@ def test_a_score_between_bands_is_a_defect_not_a_guess() -> None:
     rarity, say), which is exactly what page A rules out: it is refused, never filed under a
     band."""
     with pytest.raises(ValueError, match="2950"):
-        q.read_search_response(_reply([_hit("n1", 2950.0)]), limit=5)
+        q.read_search_response(_reply([_hit("n1", 2950.0)]), page_size=5)
 
 
 def test_a_snippet_is_text_and_marks_never_markup() -> None:
     o, c = q.HIGHLIGHT_OPEN, q.HIGHLIGHT_CLOSE
     hit = _hit("n1", 1500, "text", text=[f"paid <b>{o}Kestrel{c}</b> & co"])
-    snippet = q.read_search_response(_reply([hit]), limit=5).hits[0].snippet
+    snippet = q.read_search_response(_reply([hit]), page_size=5).hits[0].snippet
     assert snippet == [
         q.SnippetPart(text="paid <b>", match=False),
         q.SnippetPart(text="Kestrel", match=True),
@@ -256,22 +297,34 @@ def test_a_snippet_is_text_and_marks_never_markup() -> None:
     ]
 
 
+def test_the_dataset_and_date_filters_are_offered_from_the_same_query() -> None:
+    aggs = _body(case_datasets=["ds-1", "ds-2"])["aggs"]
+    assert aggs["datasets"] == {"terms": {"field": "datasets", "size": 3, "shard_size": 30}}
+    assert aggs["earliest"] == {"min": {"field": "date"}}
+    assert aggs["latest"] == {"max": {"field": "date"}}
+
+
 def test_counts_are_read_by_type_with_mentions_apart() -> None:
-    result = q.read_search_response(_reply([]), limit=5)
+    result = q.read_search_response(_reply([]), page_size=5)
     assert result.counts == {"Person": 3}
     assert result.mentions == 7
     assert result.counts_exact is True
+    assert result.dataset_counts == {"ds-1": 10}
+    assert (result.earliest, result.latest) == ("2025-03-02T00:00:00.000Z", None)
 
 
 def test_counts_that_opensearch_says_may_be_short_are_not_shown_as_exact() -> None:
-    assert q.read_search_response(_reply([], error=2), limit=5).counts_exact is False
-    assert q.read_search_response(_reply([], other=4), limit=5).counts_exact is False
+    assert q.read_search_response(_reply([], error=2), page_size=5).counts_exact is False
+    assert q.read_search_response(_reply([], other=4), page_size=5).counts_exact is False
 
 
 def test_the_by_type_counts_ask_every_type_the_ontology_has() -> None:
     aggs = _body()["aggs"]
-    assert aggs["by_type"]["terms"]["field"] == "type"
-    assert aggs["by_type"]["terms"]["size"] >= len(INDEX_TYPES)
+    # Node documents alone: a text document carrying its Document's type would count it twice.
+    assert aggs["by_type"]["filter"] == {"term": {"kind": "node"}}
+    terms = aggs["by_type"]["aggs"]["types"]["terms"]
+    assert terms["field"] == "type"
+    assert terms["size"] > len(INDEX_TYPES)
     assert aggs["mentions"] == {"filter": {"term": {"kind": "text"}}}
 
 
