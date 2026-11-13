@@ -124,3 +124,34 @@ Green: tests/test_r1_entra_standin.py and tests/test_r1_kind_standins.py 33 pass
 The engine's base pinned by digest (sha256:1193b7c2...bcc4c, AWS's mirror's multi-platform index, 13 Nov 2026); its licence Apache-2.0 named beside it; in no product manifest (the poc's domain is AWS's).
 
 Found by make test at 7d1a074 on the server (gates/, below): seven Helm-backed tests of tests/cloud_platform_backup, red since data safety and 3a merged (main's state, my own steps' defect: their gates ran cp-policy-check on the server but not these, which skip on the Mac). The tests' P9 pods met the search index's Jobs, and the claims run and its restore now mount the shared claim (in every shape, ruling 3). The tests held to the design, P9's pods named; to be shown green on the server.
+
+The per-branch plants re-run at dcfe98b with a fresh PYTHONPYCACHEPREFIX for each pytest (the orchestrator's rule of 13 Nov; the earlier record above was made without it), the same reds:
+Plant: role (the domain's access policy):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another role's session-is not authorized to perform: es:ESHttpGet]
+FAILED tests/test_r1_opensearch_standin.py::test_a_refusal_names_the_account_and_the_domain
+FAILED tests/test_r1_opensearch_standin.py::test_each_domain_request_is_logged_with_who_and_the_answer
+FAILED tests/test_r1_opensearch_standin.py::test_r1s_domain_probe_signs_as_a_pod_does_and_reports_both_answers
+4 failed, 36 passed in 23.99s
+Plant: service (signed for another service):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[signed for s3-Credential should be scoped to correct service: 'es']
+1 failed, 39 passed in 24.14s
+Plant: region:
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another region-eu-west-2]
+1 failed, 39 passed in 22.58s
+Plant: session token:
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[no session token-security token included in the request is invalid]
+1 failed, 39 passed in 24.61s
+Plant: unsigned (the domain's own refusal):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[unsigned-is not authorized]
+1 failed, 39 passed in 23.64s
+Plant: skew (five minutes for es):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_allows_five_minutes_of_clock_skew_not_s3s_fifteen[6-False]
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_allows_five_minutes_of_clock_skew_not_s3s_fifteen[-6-False]
+2 failed, 38 passed in 23.77s
+Plant: size (10 MiB):
+        whoever signed it, never passed on to OpenSearch."""
+FAILED tests/test_r1_opensearch_standin.py::test_a_body_over_the_poc_domains_ten_mib_is_refused_413[10485761-False]
+1 failed, 39 passed in 24.72s
+Plant: egress (9200 among the managed ports):
+FAILED tests/test_r1_kind_standins.py::test_the_namespaces_pods_never_reach_the_opensearch_pod_past_the_domain
+1 failed, 39 passed in 24.85s
