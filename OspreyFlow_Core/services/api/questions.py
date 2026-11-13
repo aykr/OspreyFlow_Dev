@@ -295,6 +295,35 @@ class AskRequest(ScopeRequest):
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
 
 
+#: The identifiers a thing with no name is known by, in the canvas's order
+#: (`apps/workspace/src/canvas/labelChoices.ts`, `IDENTIFYING`).
+_CANVAS_IDENTIFYING = (
+    "account_number", "imei", "imsi", "e164", "email", "handle", "org_ref", "registration",
+)  # fmt: skip
+
+
+def canvas_label(node: Node) -> str:
+    """A node as the canvas names it by default (`labelChoices.ts`'s `defaultLabel`): a person as
+    "FAMILY, Given", a thing by its name, title, normalised value or identifier. Failing all of
+    those it is called as the brief calls it (`display_name`), never by its id (rule 7). Used for
+    "About: …", which the person reads beside the canvas."""
+    props = node.properties
+
+    def text(key: str) -> str | None:
+        value = props.get(key)
+        return " ".join(value.split()) or None if isinstance(value, str) else None
+
+    family = text("family_name")
+    if family is not None:
+        given = text("given_names")
+        return f"{family}, {given}" if given is not None else family
+    for key in ("name", "title", "value_normalised", *_CANVAS_IDENTIFYING):
+        found = text(key)
+        if found is not None:
+            return found
+    return display_name(node)
+
+
 def shared_handling(handlings: Sequence[Handling]) -> Handling | None:
     """The handling a question about several Documents is sent under (ADR-114 Amendment 6): theirs
     when every one carries the same handling code, otherwise none — and material whose handling is
@@ -315,9 +344,11 @@ class NothingToReadError(Exception):
 class ReadFromUnavailableError(Exception):
     """*Whole case* asked for before the case's search service is called (part D(iii))."""
 
+    #: The one wording, shown by the panel too (`QuestionsPanel.tsx`'s `WHOLE_CASE_UNAVAILABLE`,
+    #: held to this by `test_questions_read_from.py`).
     words = (
-        "Whole case is not available yet: it reads the case's datasets through the case's search, "
-        "which this release does not have. Choose Selected items or Everything on the graph."
+        "Whole case is not available yet: it will read the case's datasets through the case's "
+        "search. Choose Selected items or Everything on the graph."
     )
 
     def __init__(self) -> None:
@@ -722,13 +753,13 @@ class QuestionsService:
             investigation_id, principal, scope, window, documents_chars
         )
         # Counted from the asker's view alone: a selected id it does not hold is not counted, as
-        # one that does not exist is not (rule 3).
+        # one that does not exist is not (rule 3). A selected link is counted only when it is in
+        # the scope's links (inside the window, too), so every link counted is one the kept entry
+        # names in `graph_link_ids`, which a later reader must see to be shown it.
         held = {n.id: n for n in nodes}
         held_nodes = [held[i] for i in dict.fromkeys(picked_nodes) if i in held]
         wanted_links = set(picked_links)
-        held_links = {
-            e.id for e in edges if e.id in wanted_links and e.source in held and e.target in held
-        }
+        held_links = {e.id for e in scope.edges if e.id in wanted_links}
         read = ReadSummary(
             read_from=chosen,
             documents=len(documents),
@@ -737,7 +768,7 @@ class QuestionsService:
             links=len(scope.edges),
             events=events,
             selected=len(held_nodes) + len(held_links),
-            first_selected=display_name(held_nodes[0]) if held_nodes else None,
+            first_selected=canvas_label(held_nodes[0]) if held_nodes else None,
         )
         return _Material(documents, brief, event_handlings, event_scopes, read)
 
@@ -780,10 +811,16 @@ class QuestionsService:
                 "extraction", self._default_model, material.handling, engine, datasets,
                 await routed.held(datasets),
             )  # fmt: skip
-        except (EngineRefused, ModelEgressRefused) as refused:
+        except EngineRefused as refused:
             return WillRead(
                 read=material.read, engine=None, engine_label=None, model=None,
                 unusable=unusable, refused=str(refused),
+            )  # fmt: skip
+        except ModelEgressRefused as refused:
+            said = await self._egress_words(investigation_id, principal, refused)
+            return WillRead(
+                read=material.read, engine=None, engine_label=None, model=None,
+                unusable=unusable, refused=str(said),
             )  # fmt: skip
         label = LOCAL_LABEL if choice.engine == LOCAL else routes.engines[choice.engine].label
         return WillRead(
@@ -793,6 +830,19 @@ class QuestionsService:
             model=choice.model,
             unusable=[u for u in unusable if u.name != choice.engine],
             refused=None,
+        )
+
+    async def _egress_words(
+        self, investigation_id: str, principal: Principal, refused: ModelEgressRefused
+    ) -> ModelEgressRefused:
+        """The routing's refusal names the case's datasets. A caller the store names none to
+        (ADR-099 Amendment 11) is told the same thing without them (rule 3), as `_unusable` and
+        `GET …/models/engines` tell them; the decision itself is the routing's, unchanged."""
+        if await self._datasets.of_case(investigation_id, principal):
+            return refused
+        return ModelEgressRefused(
+            "No engine may answer this question: what it reads may not be sent to the hosted "
+            "engine, and this deployment has no local extraction model to use instead."
         )
 
     async def _unusable(
@@ -871,19 +921,23 @@ class QuestionsService:
         else:
             reading = f"{_NO_DOCUMENTS_INSTRUCTIONS}\n\n"
         graph_section = f"{_GRAPH_INSTRUCTIONS}\n\n{brief.text}\n\n" if brief.text else ""
-        result = await self._model.extract(
-            ExtractionRequest(
-                document_id=f"questions:{investigation_id}",
-                text=f"{reading}{graph_section}Question: {question}",
-                json_schema=_schema(),
-                model=self._default_model,
-                handling=material.handling,
-                engine=engine,
-                # ADR-136: what is sent is read from the case, so it comes from the case's
-                # datasets; a hosted engine sees it only when every one of them allows it.
-                datasets=await self._datasets.ids_of_case(investigation_id),
+        try:
+            result = await self._model.extract(
+                ExtractionRequest(
+                    document_id=f"questions:{investigation_id}",
+                    text=f"{reading}{graph_section}Question: {question}",
+                    json_schema=_schema(),
+                    model=self._default_model,
+                    handling=material.handling,
+                    engine=engine,
+                    # ADR-136: what is sent is read from the case, so it comes from the case's
+                    # datasets; a hosted engine sees it only when every one of them allows it.
+                    datasets=await self._datasets.ids_of_case(investigation_id),
+                )
             )
-        )
+        except ModelEgressRefused as refused:
+            # The same words as *will read* gives this caller (rule 3).
+            raise await self._egress_words(investigation_id, principal, refused) from None
         data = result.data
         answer = str(data.get("answer") or "").strip()
         document_numbers = [n for n in data.get("cited") or [] if isinstance(n, int)]

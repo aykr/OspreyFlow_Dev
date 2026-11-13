@@ -190,7 +190,42 @@ async def test_the_read_summary_counts_the_items_links_events_and_names_the_firs
     assert read is not None
     # Dana, Callum, and Rohan one link from Dana; the document is counted as a document.
     assert (read.items, read.documents, read.links, read.events) == (3, 1, 3, 2)
-    assert (read.selected, read.first_selected) == (3, "Dana MERCER")
+    assert (read.selected, read.first_selected) == (3, "MERCER, Dana")
+
+
+def test_about_names_the_first_selected_as_the_canvas_does_never_by_its_id() -> None:
+    """"About: Tarbuck, Kyle and 1 other": a person as the canvas labels them by default
+    (`labelChoices.ts`'s `defaultLabel`, "FAMILY, Given"), not as the brief does ("Given FAMILY");
+    a thing by its name or identifier; one with neither by its type, never a piece of its id."""
+    from services.api.questions import canvas_label
+
+    from .working_set.test_visible_link import node as bare
+
+    kyle = _person("node-kyle-1", "Kyle TARBUCK")
+    assert canvas_label(kyle) == "TARBUCK, Kyle"
+    phone = bare("node-phone-9f2").model_copy(update={"properties": {"e164": "+447700900123"}})
+    assert canvas_label(phone) == "+447700900123"
+    nameless = bare("node-x-7c3a91")
+    assert "7c3a91" not in canvas_label(nameless) and canvas_label(nameless).startswith("unnamed")
+
+
+async def test_a_selected_link_outside_the_window_is_not_counted() -> None:
+    """Every link `selected` counts must be one the kept entry names in `graph_link_ids`, which a
+    later reader must see to be shown the answer (rule 3): a selected link the timeline window
+    leaves out of the scope is not counted, though its ends still bring their neighbours."""
+    from schemas.domain import Interval
+
+    service, _, _, _, _ = await _case(links=_links_with_mentions(), documents=_docs())
+    window = Interval(
+        valid_from=datetime(2027, 1, 1, tzinfo=UTC), valid_to=datetime(2027, 12, 31, tzinfo=UTC)
+    )
+    answered = await service.ask(
+        "inv-1", "Who?", ANALYST, selected_node_ids=[DANA], selected_link_ids=[CALLED],
+        window=window,
+    )  # fmt: skip
+    assert answered.read is not None and answered.read.selected == 1  # Dana alone
+    (kept,) = await service.history("inv-1", ANALYST)
+    assert CALLED not in kept.graph_citations and answered.read == kept.read
 
 
 async def test_the_read_summary_is_kept_with_the_answer_and_read_back() -> None:
@@ -239,7 +274,7 @@ async def test_a_hidden_document_and_item_are_not_counted_quoted_or_cited() -> N
     assert text == text_bare  # not quoted: the same bytes to the model
     assert "Hidden" not in text
     assert [c.document_id for c in answered.citations] == [ABOUT_DANA]  # [2] cites nothing
-    assert will.read.first_selected == "Dana MERCER" and will.read.selected == 1
+    assert will.read.first_selected == "MERCER, Dana" and will.read.selected == 1
 
 
 async def test_the_cleared_reader_is_counted_the_hidden_document_and_item() -> None:
@@ -378,6 +413,50 @@ async def test_will_read_says_in_words_when_no_engine_may_answer() -> None:
     will = await service.will_read("inv-1", ANALYST, engine="gemini")
     assert will.engine is None
     assert will.refused is not None and "no local extraction model" in will.refused
+
+
+async def test_will_reads_refusal_names_no_dataset_to_a_caller_the_store_names_none_to() -> None:
+    """ADR-099 Amendment 11: the routing's refusal names the case's datasets; a caller with no role
+    is told no dataset's name, here as in `GET …/models/engines`. The analyst is told it, so the
+    comparison can fail."""
+    from .test_email_extraction import ANALYST as NO_ROLE
+
+    service, _, _, _, _ = await _case()
+    _routed(service, egress="none", local=False)
+    named = await service.will_read("inv-1", ANALYST, engine="gemini")
+    unnamed = await service.will_read("inv-1", NO_ROLE, engine="gemini")
+    assert named.refused is not None and "“Open”" in named.refused
+    assert unnamed.engine is None and unnamed.refused is not None
+    assert "Open" not in unnamed.refused and "no local extraction model" in unnamed.refused
+    assert all("Open" not in u.reason for u in unnamed.unusable)
+
+
+async def test_asks_refusal_names_no_dataset_to_a_caller_the_store_names_none_to() -> None:
+    """The same leak on the question's own 409 (`model_egress_refused`): the words are the same as
+    *will read* gives that caller."""
+    from services.api.model_routing import ModelEgressRefused
+
+    from .test_email_extraction import ANALYST as NO_ROLE
+
+    service, _, _, _, _ = await _case()
+    _routed(service, egress="none", local=False)
+    with pytest.raises(ModelEgressRefused) as named:
+        await service.ask("inv-1", "Who?", ANALYST, engine="gemini")
+    with pytest.raises(ModelEgressRefused) as unnamed:
+        await service.ask("inv-1", "Who?", NO_ROLE, engine="gemini")
+    assert "“Open”" in str(named.value)
+    assert "Open" not in str(unnamed.value) and "no local extraction model" in str(unnamed.value)
+
+
+def test_the_panel_says_whole_case_in_the_servers_own_words() -> None:
+    """One wording for *Whole case*: the panel's, shown before anything is asked, is the server's."""
+    from pathlib import Path
+
+    panel = (
+        Path(__file__).resolve().parents[4]
+        / "OspreyFlow_Core/apps/workspace/src/questions/QuestionsPanel.tsx"
+    ).read_text(encoding="utf-8")
+    assert f'"{ReadFromUnavailableError.words}"' in " ".join(panel.split())
 
 
 # --- the routes -------------------------------------------------------------------------------
