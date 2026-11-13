@@ -55,7 +55,7 @@ contributes the index side.
 ## Per lane
 
 **platform:**
-- **step 2 now, `v052-manifest`:** `harness/cloud_platform/poc_manifest.yaml`, holding:
+- **step 2 now, `v052-manifest`:** a new file, poc_manifest.yaml, in the cloud-platform harness folder, holding:
   - the containers, with their counts, images, requests, limits and readiness probes;
   - the Jobs and CronJobs;
   - the images and ECR repositories, ours and upstream;
