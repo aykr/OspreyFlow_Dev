@@ -63,3 +63,5 @@ ee440c1 5d0999d admin v052-heartbeat
 d2312e8 c4b955e rules stack-opensearch
 8728dc6 f89f6d7 platform-b ci-recipe
 8d6a898 a386fe3 docs v052-sweep part one (v0.5.1)
+f5a6f3d fcdfec4 rules deps-opensearch (v0.5.2)
+19e28e1 6b4bb26 platform v052-manifest (v0.5.2, step 2)
