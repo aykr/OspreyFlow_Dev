@@ -59,7 +59,7 @@ laurium-env:
 	uv pip install --python $(LAURIUM_ENV)/bin/python --require-hashes --only-binary :all: --no-deps -r $(CORE)/services/laurium/requirements.txt
 	uv pip install --python $(LAURIUM_ENV)/bin/python --require-hashes --only-binary :all: --no-deps -r $(BUILD)/tests/conformance/model_port/laurium_test_requirements.txt
 laurium-service: laurium-env
-	$(IN_CORE) ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 \
+	$(IN_CORE) ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 OPENSEARCH_PORT=59999 \
 	  $(LAURIUM_ENV)/bin/python -m pytest -c $(BUILD)/pytest.ini -p no:cacheprovider \
 	  ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py \
 	  ../OspreyFlow_Build/tests/conformance/model_port/test_suite_extract.py \
