@@ -21,3 +21,14 @@ E        +  where 834 = <module 'harness.cloud_platform.runbooks' from '/Users/a
 1 failed, 41 deselected in 4.77s
 Restored:
 1 passed, 41 deselected in 4.96s
+
+Revised to the render's own copies (the owner, 13 Nov: one Superset and one report sync on poc): least 834 on poc and development, 918 in production.
+Plant 1: Superset's term dropped from least_connections:
+1
+E       AssertionError: assert 758 == 834
+E        +  where 758 = <function least_for at 0x106def600>(False)
+Plant 2: the upgrade's term dropped (UPGRADE_OVERLAP = 1):
+E       AssertionError: assert 792 == 834
+E        +  where 792 = <function least_for at 0x104517600>(False)
+Restored:
+1 passed, 41 deselected in 0.56s

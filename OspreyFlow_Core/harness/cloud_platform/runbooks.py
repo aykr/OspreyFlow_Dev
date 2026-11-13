@@ -26,16 +26,15 @@ from harness.cloud_platform.connections import (  # noqa: F401 - the figures, re
     CONDUIT_POOL_CEILING,
     GATEWAY_POOL_MAX,
     OPERATOR_RESERVE,
-    POSTGRES_LEAST_CONNECTIONS,
     POSTGRES_MAX_CONNECTIONS,
-    REPORT_SYNC_COPIES,
     REPORT_SYNC_POOL,
     RUNNING_LOADS_ALLOWED,
     SQLALCHEMY_POOL,
-    SUPERSET_COPIES,
     SUPERSET_MART_QUERIES,
     SUPERSET_WORKERS,
     UPGRADE_OVERLAP,
+    least_connections,
+    least_for,
 )
 from harness.cloud_platform.decommission_check import DISK_NAMESPACE_TAG, KINDS
 from harness.cloud_platform.settings import PlatformSettings
@@ -96,6 +95,7 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
     theirs = " ".join(s.name for s in (secrets.postgres, secrets.redis, secrets.s3))
     if cp.tls_secret:  # the certificate the platform's team makes for the deployment's name (R1)
         theirs += f" {cp.tls_secret}"
+    least = least_for(cp.environment == "production")
     rollouts = "\n".join(
         f'kubectl -n "$NS" rollout status {w["kind"].lower()}/{w["name"]} --timeout=900s'
         for w in values["workloads"]
@@ -126,12 +126,13 @@ two app registrations in tenant `{claims.tenant_id}`, the Glass (application id 
 and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the Glass is
 granted), with the claims `cloud_platform.claims` names.
 
-**The managed PostgreSQL** allows a `max_connections` of {POSTGRES_MAX_CONNECTIONS}. The least it must allow is
-{POSTGRES_LEAST_CONNECTIONS}: two Conduits side by side during an update, the worker, the gateway and a reserve (ADR-114
-Amendment 43's figures), with Superset and the report sync (from v0.5.2: two copies of each) doubled by an
-upgrade in progress; {POSTGRES_MAX_CONNECTIONS} leaves {POSTGRES_MAX_CONNECTIONS - POSTGRES_LEAST_CONNECTIONS} to spare. The Terraform renders it as a {RDS_INSTANCE_CLASS}
-(8 GiB) with a parameter group setting it. In the environments repository, with
-`cloud-platform-terraform-rds-instance`, set it on the module:
+**The managed PostgreSQL** allows a `max_connections` of {POSTGRES_MAX_CONNECTIONS}. The least it must allow in this
+shape is {least}: two Conduits side by side during an update, the worker, the gateway and a reserve (ADR-114
+Amendment 43's figures), with Superset and the report sync (from v0.5.2, as many copies as this shape renders)
+doubled by an upgrade in progress. {POSTGRES_MAX_CONNECTIONS} is set for every shape, the production shape's least
+({least_for(True)}) among them, so this shape has more room: {POSTGRES_MAX_CONNECTIONS - least} to spare. The Terraform
+renders it as a {RDS_INSTANCE_CLASS} (8 GiB) with a parameter group setting it. In the environments repository,
+with `cloud-platform-terraform-rds-instance`, set it on the module:
 `db_parameter = [{{ name = "max_connections", value = "{POSTGRES_MAX_CONNECTIONS}", apply_method = "pending-reboot" }}]`.
 `max_connections` is static in PostgreSQL: it takes effect at creation, and on an existing instance only at
 its next reboot. With too few, the new Conduit of an update stops at `TooManyConnectionsError`.

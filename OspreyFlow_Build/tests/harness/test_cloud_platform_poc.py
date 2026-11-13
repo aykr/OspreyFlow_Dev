@@ -646,19 +646,27 @@ def test_the_install_says_how_many_connections_the_managed_postgres_must_allow(
     # Superset's own worker count, as its entrypoint starts it.
     entrypoint = (Path(rb.__file__).parents[2] / "deploy/superset/osprey_entrypoint.py").read_text()
     assert f'"--workers", "{rb.SUPERSET_WORKERS}"' in entrypoint
-    conduits = 3 * (220 + 20)  # an update's old and new Conduit, and the worker opening the same stores
-    superset_copy = 2 * (5 + 10) + 8  # two gunicorn workers at SQLAlchemy's 5 + 10; 8 mart queries
-    report_sync_copy = 4
-    upgrade = 2  # every Deployment's old and new copies side by side during an upgrade
-    least = conduits + 10 + 20 + upgrade * (2 * superset_copy + 2 * report_sync_copy)
-    assert least == 918
-    assert rb.POSTGRES_LEAST_CONNECTIONS == least
+    def least(superset: int, report_sync: int) -> int:
+        conduits = 3 * (220 + 20)  # an update's old and new Conduit, and the worker's stores
+        superset_copy = 2 * (5 + 10) + 8  # two gunicorn workers at SQLAlchemy's 5 + 10; 8 mart queries
+        upgrade = 2  # every Deployment's old and new copies side by side during an upgrade
+        return conduits + 10 + 20 + upgrade * (superset * superset_copy + report_sync * 4)
+
+    from harness.cloud_platform import DEVELOPMENT_REPLICAS
+    from harness.cluster import REPLICAS
+
+    # The render's own copies (the owner, 13 Nov: one of each on poc; production's two).
+    assert (DEVELOPMENT_REPLICAS["superset"], DEVELOPMENT_REPLICAS["report-sync"]) == (1, 1)
+    assert least(1, 1) == 834 and least(2, 2) == 918
+    assert rb.least_for(False) == least(1, 1)
+    assert rb.least_for(True) == least(REPLICAS["superset"], REPLICAS["report-sync"])
     assert rb.POSTGRES_MAX_CONNECTIONS == 1000  # the owner's figure (13 November 2026)
-    assert rb.POSTGRES_MAX_CONNECTIONS >= rb.POSTGRES_LEAST_CONNECTIONS
+    assert rb.POSTGRES_MAX_CONNECTIONS >= max(rb.least_for(False), rb.least_for(True))
     needs = runbooks["INSTALL.md"]
     needs = needs[needs.index("**What it needs.**") : needs.index("## 1.")]
     assert "`max_connections` of 1000" in needs
-    assert f"{rb.POSTGRES_LEAST_CONNECTIONS}" in needs and "82 to spare" in needs
+    assert "least it must allow in this\nshape is 834" in needs and "166 to spare" in needs
+    assert "(918)" in needs and "more room" in needs
     assert "Amendment 43" in needs and "db.t4g.large" in needs
     # The client's environments repository: MoJ's cloud-platform-terraform-rds-instance module.
     assert (
