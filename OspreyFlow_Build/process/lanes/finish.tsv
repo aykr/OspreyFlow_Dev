@@ -14,6 +14,6 @@
 8	The release candidate: the commit that passes R1, cut	orchestrator	Mon 16 Nov	2, 7	todo
 9	The upgrade from v0.5.0 rehearsed on a throwaway deployment (never osprey-small), at the candidate	rules	Mon 16 Nov	8	todo
 10	v0.5.1's CHANGELOG and release notes	orchestrator	Mon 16 Nov	8	todo
-11	The owner's word to publish	owner	Tue 17 Nov	9, 10	todo
+11	The owner's word to publish: given in advance, publish when green (the owner, 13 Nov)	owner	Sat 14 Nov	9, 10	done
 12	v0.5.1 published: the tag, the product repository, the release workflow	orchestrator	Tue 17 Nov	11	todo
 13	osprey-small (the GOV.UK demo) updated to v0.5.1 by `ospreyflow update`: a backup first, the data, key prompt and GOV.UK look kept, then the checks (gate, four sign-ins, health)	orchestrator	Tue 17 Nov	12	todo

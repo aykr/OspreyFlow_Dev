@@ -817,6 +817,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         4d (groups to roles) after v0.5.2; OpenSearch on poc signs in by IRSA and SigV4, with no FGAC, and has no index
         backup of its own (rebuilt from the graph; deleted at decommission).
 
+        **The owner, 13 Nov, about 21:30:** v0.5.1 is **cut early and published when green**, without waiting for the
+        owner's word: once conformance is green, the candidate, the upgrade rehearsal (throwaway) and the CHANGELOG
+        (with "on the cloud profile, loads are started by hand"); if all pass, publish and tell the owner after. The
+        orchestrator drafts the search navigation options by Sun 15 Nov. The Makefile's laurium-service run pins
+        OPENSEARCH_PORT shut (77466b1).
+
         **The owner's word, about 07:45:** once both demo fixes land (one key prompt, ADR-114 Am 42, platform-b; Home's
         "Your access and tasks", ADR-145 Am 11, platform), push main to the dev repo and publish the product repo
         again from the same commit (no tag), each recorded in PUSH_LOG.
