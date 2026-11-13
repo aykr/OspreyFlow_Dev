@@ -38023,3 +38023,194 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
 - The index can lag the graph by the indexer's poll; it is never ahead of it, and never holds a write that rolled back.
 - A write that bypasses the adapter is invisible until the drift check or a rebuild; that is why the seed resets
   rebuild.
+
+## ADR-149 — Search on OpenSearch: the reader's access filter in the query, strict ranking in bands, merged entities over visible hits, the fallback that says so, and one leak test — ACCEPTED (as built)
+
+*13 November 2026. **Accepted: the owner's route to v0.5.2** (`process/lanes/ROUTE_052.md`, step 3d; search scope 1–5,
+requirements a–f). The owner read the access design page (`process/lanes/studio/SEARCH_ACCESS_DESIGN.md`) on 13
+November at about 22:40 and ruled:
+- **ranking is strict:** no word-rarity scoring and no fuzzy or prefix expansion. The tiers are exact identifier,
+  then close name, then mention, with trigrams, edge n-grams and the Conduit's Double Metaphone key;
+- **groups count records,** and the screen says "records".
+
+The index, its documents and its feed are ADR-150's. The response shape the results page is built against is
+`process/lanes/studio/SEARCH_RESPONSE_SHAPE.md`, frozen at ee7a16d.*
+
+### Context
+
+Today's search is the graph's exact match on declared identifiers (`GraphPort.search_nodes`). The type-ahead is
+the graph's prefix read (`suggest_nodes`, ADR-059). Neither tolerates a typo or a sound-alike, finds a word in a
+document, ranks, or counts by type. At one type in the tens of millions, the prefix read is the slow part.
+
+Two standard OpenSearch features would let a record the reader may not see change what they do see, even with an
+access filter in the query:
+- **word-rarity scoring (BM25's IDF).** It is computed over the whole index, so hidden records can reorder visible
+  ones.
+- **fuzzy and prefix expansion.** It stops at a fixed number of words from the index's word list, and words held
+  only by hidden records can use that number up and push a visible hit out.
+
+Page A has a worked example of each, and the leak test shows both live.
+
+### Decisions
+
+1. **The reader's access filter is built from their own principal and goes in the query's own filter, never after
+   retrieval** (rule 3). The filter is `services/api/search_access.index_access_filter(scheme, principal)`, and it
+   has four parts:
+   - the classification, at or below the reader's clearance (an unknown clearance sees nothing);
+   - the handling code: unrestricted, or restricted and receivable by the reader, on a record their unit owns or
+     originated (a code the scheme does not define is never visible);
+   - one of the case's datasets (an empty case sees nothing);
+   - for a Document's text, the unit that holds it, which is the narrower rule `review.get_document_text` applies
+     today.
+
+   It is never a `post_filter`, so it limits counts and suggestions as well as hits. A principal with no case limit
+   (the Conduit's own background work) is refused.
+   - *Tests:* `tests/services/api/test_search_access.py::test_the_filter_agrees_with_the_conduits_rule_everywhere`
+     (over 10,000 combinations of the uk-le scheme, against `principal_may_view` and `in_case_datasets`) and
+     `::test_the_agreement_check_finds_each_axis_dropped` (each part shown red).
+   - *Tests:* `test_search_index_query.py::test_a_body_cannot_be_built_without_an_access_filter`,
+     `::test_the_access_filter_limits_hits_and_counts_alike`, and
+     `test_search_route_index.py::test_the_index_is_asked_with_the_readers_own_access_filter`.
+2. **The leak test: the reader's whole answer is identical whether or not the records they may not see are in the
+   index** (requirement a). `tests/services/search_index/test_search_leak_live.py` indexes one world through
+   ADR-150's real builder and writer.
+   - **The plants:** hidden records share names, sound-alikes, identifiers, words in text and a same-as link with
+     visible ones.
+   - **The readers:** four. One cleared for a restricted code, one not, a PUBLIC reader of another unit across two
+     datasets, and an empty case.
+   - **The comparison:** each reader asks 17 searches and 8 suggestions of that world and of one holding only what
+     the Conduit's rule lets them see. Every result, order, merged entity, passage, count, offered filter and `more`
+     must agree.
+   - **The graph there does not filter,** so a leaked hit cannot be hidden by the graph's own filter.
+   - **Shown red:**
+     - `::test_the_leak_check_finds_each_filter_part_dropped`, once per part of the filter;
+     - `::test_default_relevance_would_leak_through_word_rarity`, BM25 reordering two visible documents after 40
+       hidden ones;
+     - `::test_fuzzy_expansion_would_leak_a_visible_record_out`, a visible name lost behind 125 hidden near-names.
+   - **Removals are covered elsewhere.** A reverted, withdrawn or superseded record is not planted, because
+     `throwaway_index` takes live nodes only. The indexer deletes such a record because the graph returns none for
+     it (ADR-150 decisions 1 and 2), and `tests/services/search_index/test_feed_live.py` shows each such event
+     leaving the index.
+3. **Ranking is strict, in fixed-score bands** (the owner's ruling), best first:
+
+   | Band | Score | Matches |
+   | --- | --- | --- |
+   | Exact identifier | 3000 | the text as typed, or its canonical form (ADR-128) |
+   | Exact name | 2900 | the whole name |
+   | Every word of the name | 2500 | each word of the query in the name |
+   | Sounds like | 2300 | every query word shares a Double Metaphone code |
+   | Spelt like | 2100 | 60% of the query's trigrams, for a query of four letters or more |
+   | Mention: phrase | 1500 | the phrase in a Document's text |
+   | Mention: every word | 1200 | each word in the text |
+   | Mention: some words | 1 a word, under 1200 | some of the words in the text |
+
+   - Every scored field has `similarity: boolean` (ADR-150), and every band is a `constant_score` combined by
+     `dis_max` with a tie-breaker of 0. So no score depends on another document, and no band reaches the next.
+   - No fuzzy, prefix, wildcard, regexp or phrase-prefix query is ever built.
+   - A query is at most 200 characters, and a longer one is refused, never cut (rule 2). That also bounds the
+     "some words" band below the band above it.
+   - Within a band, results run newest first by `date`, then by node id.
+   - A score that no band gives is refused as a defect, never filed under a guess.
+   - *Tests:* `test_search_index_query.py::test_no_clause_expands_against_the_word_list` (shown red by
+     `::test_the_expansion_check_finds_a_planted_fuzzy_clause`), `::test_the_bands_never_overlap`,
+     `::test_every_dis_max_takes_the_best_band_alone`, `::test_a_query_over_the_limit_is_refused_not_cut`,
+     `::test_a_score_between_bands_is_a_defect_not_a_guess`.
+   - *Live tests:* `test_search_leak_live.py::test_an_exact_identifier_comes_first`,
+     `::test_names_exact_every_word_sounds_alike_and_spelt_alike`, `::test_names_rank_above_mentions_and_groups_count_records`.
+4. **No OpenSearch plugin is relied on.** Every analyser is core (analysis-common). The Double Metaphone codes come
+   from `phonetics` (MIT) in the indexer and on the query side alike, through one function
+   (`services.search_index.document.phonetic_codes`). Checked 13 November:
+   - the stock `opensearchproject/opensearch:2.17.1` image bundles neither analysis-phonetic nor analysis-icu (its
+     build manifest);
+   - Amazon OpenSearch Service lists both.
+
+   So Lite, Small and cloud-platform search alike. Beider–Morse is not used: abydos, its usual package, is GPL.
+   - *Test:* `tests/services/search_index/test_mapping_strict_ranking.py::test_no_phonetic_or_fuzzy_analysis_inside_opensearch`.
+5. **A Document's text is a document of its own**, found as a mention. Its passage is the highlighted fragment of
+   that text, returned as plain parts marked matched or not, never as markup. The marks are private-use
+   characters: OpenSearch trims a fragment's edges of every character up to U+0020, which cut control-character
+   marks (found live).
+   - *Tests:* `test_search_index_query.py::test_a_snippet_is_text_and_marks_never_markup`,
+     `::test_the_marks_survive_opensearch_trimming_a_fragments_edges`, and
+     `test_search_leak_live.py::test_a_mention_is_found_in_text_with_its_passage_marked`.
+6. **Groups count records** (the owner's ruling), by type over node documents, with documents' text matches apart
+   as "Mentioned in documents".
+   - A Document found by its title and in its text counts once in each group and is listed once.
+   - A group chosen narrows the list as a `post_filter`, so every group's count stays whole.
+   - Counts OpenSearch says may be short are not shown as exact.
+   - A dataset outside the case is never offered as a filter, even when an index count names it, and a filter on
+     one is refused (422).
+   - Results are listed at most 1,000 deep, and a deeper page is refused with words.
+   - *Tests:* `test_search_index_query.py::test_a_group_narrows_the_list_and_leaves_every_groups_count_whole`,
+     `::test_the_by_type_counts_ask_every_type_the_ontology_has`,
+     `::test_counts_that_opensearch_says_may_be_short_are_not_shown_as_exact`,
+     `::test_a_page_past_the_depth_limit_is_refused_not_cut`, and `test_search_service.py`'s two dataset cases.
+7. **The graph stays the source of truth** (requirement b). The index names hits by node id, and the nodes are read
+   through `GraphPort.get_nodes` with the reader's principal. A hit the graph does not return is never listed, and
+   the counts beside it are then not shown as exact. The Glass names a result with its own `nodeLabel`; the
+   response keeps today's `nodes`.
+   - *Test:* `test_search_service.py::test_a_hit_the_graph_does_not_return_is_dropped_and_counts_are_not_exact`.
+8. **Merged entities are merged over one page's visible hits** (rule 6; page A §2). The hits on a page that the case
+   reads as one entity at its threshold become one result, at its best member's place. Links are asked only among
+   hits the graph returned, through the adapter's filter, so a member the reader may not see joins nothing and
+   adds nothing. No cluster field is indexed (ADR-150).
+   - *Tests:* `test_search_service.py::test_visible_hits_the_case_reads_as_one_are_one_result`,
+     `::test_a_member_the_reader_may_not_see_adds_nothing`, `::test_a_merge_below_the_cases_threshold_or_split_is_not_made`.
+9. **The fallback says so** (requirements c and f).
+   - **When it is taken:** where no OpenSearch is configured, where none answers (unreachable, timed out, an alias
+     not built, 429 or 5xx), or before a reader's filter exists.
+   - **What it does:** today's exact search answers, with `source: "fallback"`, `limited: true` and the words to
+     show. Counts are never shown as exact, and it lists no deeper than 100.
+   - **What it never hides:** a query OpenSearch refuses (400). That is a defect, so it is raised, never shown as
+     "limited".
+
+   The results page shows the line (case lane, step 3e′).
+   - *Tests:* `test_search_service.py::test_with_no_index_the_fallback_answers_and_says_results_are_limited`,
+     `::test_an_unreachable_index_falls_back`, `::test_any_other_index_failure_is_not_hidden`,
+     `::test_an_index_that_cannot_answer_is_unavailable`, `::test_a_query_the_index_refuses_is_raised_as_it_is`.
+10. **Searches are audited as today** (requirement d): action `search`, now with what was asked (query, group,
+    filters, page) and where it was answered (`source`).
+    - *Test:* `test_search_route_index.py::test_the_search_is_audited_with_what_was_asked_and_where_it_was_answered`.
+
+### Consequences
+
+- An index search reads one page of nodes from the graph. Merging reads the links among that page only.
+- A merged entity whose members fall on two pages is shown on each.
+- Relevance within a band is plainer than OpenSearch's default: a match on a common word counts as much as one on a
+  rare word. That is the owner's chosen cost.
+- Two index defects found by this ADR's live tests are fixed in ADR-150's files as a diff for the rules lane
+  (`process/lanes/studio/v052-search/rules_index_fixes.diff`):
+  - trigrams at one position, so the "spelt like" threshold was ignored;
+  - a text document without its date.
+
+### ADR-059, Amendment 1 (13 November 2026) — suggestions from the index, with the graph's prefix read as the fallback
+
+A "starts with" suggestion is answered by the index (ADR-149):
+- **How it is asked:** with the reader's own access filter in its query, from the stored prefixes of node
+  documents' identifiers and names (edge n-grams, ADR-150), never a prefix query. Types are filtered in the query.
+- **Case:** the stored prefixes ignore case. A case-sensitive request (the box's default) asks for up to four
+  times its page and keeps the nodes holding a value that starts with the prefix as typed. It says `more` whenever
+  the index had more than it was asked (rule 2).
+- **Length:** a prefix longer than the stored prefixes (`PREFIX_MAX_CHARS`, 50) is refused, never cut.
+- **Fallback:** "contains" and "exact", no index, or an index that cannot answer use the graph's prefix read, as
+  before.
+
+The response is unchanged.
+- *Tests:* `test_search_service.py::test_a_suggestion_is_answered_by_the_index_in_its_order`,
+  `::test_a_case_sensitive_suggestion_is_narrowed_and_says_there_may_be_more`,
+  `::test_contains_and_exact_stay_on_the_graph`,
+  `::test_with_no_index_or_no_filter_or_an_unreachable_index_the_graph_suggests`,
+  `test_search_index_query.py::test_a_suggestion_longer_than_the_stored_prefixes_is_refused_not_cut`,
+  `test_search_route_index.py::test_a_suggestion_asks_the_index_with_the_readers_own_access_filter`, and live,
+  `test_search_leak_live.py::test_suggestions_come_from_stored_prefixes`.
+
+### ADR-074, Amendment 3 (13 November 2026) — the search box's scope: names by sound and spelling, identifiers, and words in documents
+
+The search box now covers more, through `POST /v1/investigations/{id}/search` (ADR-149):
+- **Names:** found by sound and by spelling, as well as by identifier. Names are a type's string properties marked
+  indexed and not `sensitivity: high`, the set ADR-074 named.
+- **Documents:** words in a Document's text, for the unit that holds the text.
+
+It still starts after two characters. Enter opens the results page (the owner's navigation decision, Part A), where
+results are grouped by type with counts of records. Suggestions under the box look as before.
+- *Tests:* ADR-149 decisions 3, 5 and 6.
