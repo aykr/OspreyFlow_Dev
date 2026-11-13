@@ -36984,3 +36984,88 @@ days in every fixture; step 7 refusing without the choice, and keep and destroy 
 left), and in Helm's own output `tests/cp_policy_check/test_cp_egress_order.py` (the claims backup's read-only shared
 mounts; the search Jobs refused our Secret whole). Red first: `process/lanes/platform/v052-opensearch/` and
 `v052-datasafety/`; the policy check's first run red on the server (`cp-policy-red.txt`), then green.
+
+## ADR-150 — The search index feed: every graph change reaches OpenSearch through an outbox in the graph's own transaction; one document per node; a rebuild from the graph and a drift check — ACCEPTED (design)
+
+*13 November 2026. **Accepted (design): the owner's route to v0.5.2** (`process/lanes/ROUTE_052.md`, step 3c: "every load,
+merge (SAME_AS), new version, promotion and deletion reaches the index. Add one rebuild command from the graph, and one
+drift check that reports the difference between graph and index. Red first, each event type"), the design approved by
+the orchestrator on 13 November (strict: the outbox in the same transaction, no cluster field). The query side
+(analysers' use, ranking, access in the query, suggestions, the leak test, the fallback, the audit) is ADR-149's.*
+
+### Context
+
+Nothing in the product writes an index today: `services/api/search.py` is "v1, graph-only", and ADR-114 Amendment 35
+point 2 leaves "the first feature to write an index" to make it rebuildable from the graph store and have `restore`
+trigger that rebuild. The graph (ArcadeDB, `GraphPort`) stays the source of truth (ROUTE_052 requirement b).
+
+Read on 13 November 2026, there is no single place a graph change passes after it commits:
+`DatasetStampingGraph.after_write` (`services/api/dataset_scope.py`) fires inside the caller's transaction, and the
+worker (`worker_main.py`), resolution (`resolve/trigger.py`), `scripts/revert_load.py`, `scripts/revert_promotion.py`
+and others use the raw adapter, so a hook on the wrapper misses them. The Valkey stream `changes:corpus`
+(`change_stream.py`) is capped (`MAXLEN ~900`) and covers ingest, resolution and manual assertion only.
+
+### Decisions
+
+1. **An outbox in the graph's own transaction.** Every write method of `GraphArcadeDBAdapter` records the ids of the
+   nodes it touched in a document type `IndexPending` (`node_id`, `at`), in the same transaction as the write, so a
+   write and its index entry commit or roll back together. By event type:
+   - **load:** `upsert_nodes` (each node written);
+   - **merge:** `upsert_edges`, `bulk_load_edges` and `supersede_edge` for a `SAME_AS` edge (both endpoints);
+   - **new version:** `supersede_node` (the old revision and the new one);
+   - **promotion:** `promote_elements`, `revert_promotion` (each node); a confirm (`extract/writer.py`) is a supersede;
+   - **deletion:** `revert_elements`, `withdraw_elements`, `withdraw_layer`, `restore_withdrawn`,
+     `restore_link_state`, `regrade_drawn` (each node they change).
+   A write that changes no node's document (an edge other than `SAME_AS`) records nothing. Writes that bypass the
+   adapter (the seed scripts' raw deletes and resets, `scripts/stamp_datasets.py`) are not in the outbox; the drift
+   check (decision 5) finds them and the rebuild (decision 4) mends them, and every seed reset runs the rebuild.
+2. **The indexer drains the outbox.** In batches, it reads each id's node as stored through a narrow port,
+   `IndexFeedSource.nodes_for_index(ids)` — a separate `Protocol` from `GraphPort`, implemented by the adapter,
+   unfiltered by design and called by the indexer alone (no route reaches it: a test holds that, rule 4). A node
+   that is reverted, superseded, withdrawn or absent is **deleted** from the index, not flagged; any other is
+   upserted. The outbox rows are removed only after OpenSearch has acknowledged the batch, so delivery is at least
+   once and every write is idempotent (a document is the node's current state, keyed by its id). It runs in the
+   worker process on every shape that has an OpenSearch (ROUTE_052 requirement f), and does nothing where none is
+   configured.
+3. **One document per node, keyed by the node's id.** Never one per file (a Document's `object_ref` is
+   content-addressed, so two Document nodes with different handling can share one) and never one per merged entity.
+   **No cluster or `SAME_AS` field:** a cluster id would tell a reader that hidden members exist. Merged entities are
+   collapsed at query time, over the visible hits only (rule 6; ADR-149). So a merge changes no document; the outbox
+   still records both endpoints, so the documents are re-read after every merge and a later field derived from
+   resolution reaches the index without a new event type. The document (ADR-149's mapping, held here once):
+   - keyword: `id`, `type`, `datasets[]`, `handling_classification`, `handling_code`, `owning_unit`, `originator`,
+     copied verbatim from the node's stored record;
+   - `identifiers[]` (keyword): the node's declared identifier values as a reader of its own dataset receives them,
+     plus each one's canonical form (`identifier_reading.search_alternative`) where it has one;
+   - `names[]`: the name-like display values (name, title, aliases), as keyword with a lowercase and asciifolding
+     normaliser, and subfields `prefix` (edge n-grams 2 to 20 at index time), `tri` (3-grams) and `words` (standard
+     tokenizer), each lowercase and asciifolding;
+   - `names_phonetic[]` (keyword): the Double Metaphone codes (`phonetics.dmetaphone`, MIT), primary and alternate,
+     of each name token, an empty code dropped; the function is exported so the query side applies the same
+     normalisation;
+   - `text`: a Document's extracted text (`document_texts`, `services/api/review.py`), standard analyser with
+     lowercase and asciifolding, offsets and positions kept for highlighting and phrases; a Document with no text row
+     is found by its title;
+   - `date`: the type's declared event or sent time where the ontology declares one, the record's creation otherwise.
+   Every text field uses `similarity: boolean`, so no score depends on documents a reader cannot see. Only what the
+   Glass already receives in a `Node` response is searchable: the document is built through the same serialisation,
+   with `withhold_sources` applied as for a reader of the node's own dataset, so no source-system identifier is
+   indexed (rule 7), and a `gazetteer-*` node carries its `name` only (ADR-147 Amendments 1 and 3).
+4. **A rebuild from the graph:** `python -m scripts.rebuild_search_index`. It pages every node (`list_nodes`' keyset
+   cursor, through `nodes_for_index`) into a new index named with its build time, then moves the alias the indexer
+   and the search service use onto it and deletes the old one, so a reader never sees a half-built index. The
+   outbox is emptied only of rows older than the rebuild's start. `ospreyflow restore` runs it after a restore
+   (ADR-114 Amendment 35 point 2), with a test that restores a set and finds the index again.
+5. **A drift check:** `python -m scripts.search_index_drift`. It compares the graph's live nodes with the index and
+   reports, by id: missing from the index, in the index but not live in the graph, and stale (a per-node fingerprint
+   of the indexed fields differs). It exits non-zero on any difference, and prints counts and the first ids of each.
+6. **Red first, each event type:** for each of load, merge, new version, promotion and deletion, a live case writes
+   through the adapter's real method and finds the index changed (and a plant that removes that method's outbox
+   write turns it red); the rebuild and the drift check each have a case that plants a difference and finds it.
+
+### Consequences
+
+- Every graph write costs one more document write in its own transaction.
+- The index can lag the graph by the indexer's poll; it is never ahead of it, and never holds a write that rolled back.
+- A write that bypasses the adapter is invisible until the drift check or a rebuild; that is why the seed resets
+  rebuild.
