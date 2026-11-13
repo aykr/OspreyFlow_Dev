@@ -1,0 +1,35 @@
+# v052-search (step 3d): report
+
+In progress. The studio lane, from 13 November 2026. The plan is `PLAN.md`; the red record is `RED_RECORD.txt`.
+
+## Decisions taken (overrule here)
+
+- **(a) Ranking is strict, and goes to the owner as their choice (page A §3).**
+  - Options: OpenSearch's default relevance (word rarity, fuzzy and prefix expansion); or fixed-score bands with
+    no expansion.
+  - Took the strict one, as the brief asks for access. Hidden records can change the order of visible ones through
+    word rarity, and can push visible hits out through expansion. Page A has two worked examples.
+- **(b) Sound-alike codes are computed in Python, on every shape.**
+  - Options: OpenSearch's analysis-phonetic plugin; or Double Metaphone in the Conduit and the indexer.
+  - Took Python. The stock `opensearchproject/opensearch:2.17.1` image does not bundle the plugin (its build
+    manifest, checked 13 Nov), so Lite and Small would need a derived image. `phonetics` (MIT) was already a
+    dependency.
+  - Beider–Morse is left out: abydos, its usual package, is GPL.
+- **(c) A Document's text is its own index document, limited to the unit that may read it today.**
+  - Options: text on the node's document; or text on a document of its own.
+  - Took its own. `get_document_text` reads only within the extracting unit, which is narrower than the node's
+    handling, and a highlight cannot be turned off per document. Rules agreed and built it.
+- **(d) Groups count records, with documents' text matches apart as "Mentioned in documents".**
+  - Options: count merged entities; or count records.
+  - Took records. Exact counts of merged entities would need the graph for every match, not only the page shown.
+    It is page A's question 2 to the owner.
+- **(e) A group narrows the list as a `post_filter`; the access filter is never one.** Every group's count stays
+  whole, and access limits counts and list alike.
+- **(f) Results are listed at most 1,000 deep, and a deeper page is refused with words** (rule 2). The cap keeps
+  clear of OpenSearch's own 10,000 window.
+- **(g) lane/studio-search is stacked on lane/rules-v052-index (bdfb4e5).**
+  - Options: wait for rules to merge; or stack.
+  - Took stack. The route needs rules' client, `phonetic_codes` and `throwaway_index`. Merge order: rules first.
+    Told the orchestrator.
+- **(h) Until stage 8's access filter exists, the route answers through today's search, saying it is limited.** No
+  index query is ever built without the filter (`build_search_body` refuses).
