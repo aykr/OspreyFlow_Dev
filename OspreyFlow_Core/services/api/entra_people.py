@@ -23,8 +23,12 @@ is the way back in (the orchestrator's ruling, amended 12 November 2026; the run
 **What Admin › People cannot do here, said in words** (`PersonActionRefused`): invite or reset a
 sign-in (Entra holds the accounts), change a person's clearance, unit or handling codes (Entra's
 claims carry them, through the deployment's claim mapping), remove a person (they would reappear,
-with no roles, at their next sign-in: disable them here instead, or in Entra), join an organisation
-account, or register a dashboard identity (a Keycloak client; Superset on Entra is a later step).
+with no roles, at their next sign-in: disable them here instead, or in Entra), or join an
+organisation account.
+
+**Dashboard identities** (ADR-148 Amendment 10) are registered here by their Entra app
+registration's application id and a slug-shaped name, one a tenant, with what they read with; Entra
+holds each one's secret. The deployment's own applications (the Glass's, the API's) are refused.
 
 **Every query names the tenant.** A row of another tenant's same object id grants nothing
 (`test_entra_people_live.py`, rule 3).

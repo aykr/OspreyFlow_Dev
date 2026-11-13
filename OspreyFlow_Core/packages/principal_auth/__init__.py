@@ -774,8 +774,10 @@ def _verified_dashboard(claims: Mapping[str, Any], mapping: ClaimMapping) -> str
     if claims.get("tid") != mapping.tenant_id:
         raise PrincipalResolutionError("token's tid is missing or names another tenant")
     # v2.0 names the client in `azp`, v1.0 in `appid`: one client, whichever are present.
-    clients = {claims[c] for c in ("azp", "appid") if c in claims}
-    client = next(iter(clients)) if len(clients) == 1 else None
+    # A claim of any other shape than a string is no client: refused, never an error.
+    named = [claims[c] for c in ("azp", "appid") if c in claims]
+    texts = all(isinstance(c, str) for c in named)
+    client = named[0] if named and texts and len(set(named)) == 1 else None
     own = {mapping.client_id, mapping.api_client_id, claims.get("aud")}
     if not isinstance(client, str) or not _GUID.match(client) or client in own:
         raise PrincipalResolutionError(
@@ -950,6 +952,8 @@ class PrincipalResolver:
                 raise ValueError("an Entra ID claim mapping needs the deployment's people store")
         elif role_source is not None:
             raise ValueError("a people store is read only for an Entra ID claim mapping")
+        elif dashboard_source is not None:
+            raise ValueError("a dashboard store is read only for an Entra ID claim mapping")
         if role_lookup_timeout_seconds <= 0:
             raise ValueError("the role lookup's timeout must be positive")
         self._role_source = role_source

@@ -1,0 +1,8 @@
+
+packages/principal_auth/__init__.py:777: TypeError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 22:13:34] "GET /jwks.json HTTP/1.1" 200 -
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_a_client_claim_that_is_a_list_is_refused_not_an_error[azp]
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_a_client_claim_that_is_a_list_is_refused_not_an_error[appid]
+2 failed, 15 deselected in 1.60s
