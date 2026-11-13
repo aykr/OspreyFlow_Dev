@@ -21,7 +21,7 @@ import { AdminPlace } from "../src/admin/AdminPlace";
 import { BrandFrame } from "../src/brand/BrandFrame";
 import { PLAIN_APPEARANCE } from "../src/brand/brand";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
-import { ContextBanner, crossLinkFor, MODE_NOTE } from "../src/shell/ContextBanner";
+import { ContextBanner, crossLinkFor, glassMode, MODE_NOTE } from "../src/shell/ContextBanner";
 import { PlaceSwitcher } from "../src/shell/PlaceSwitcher";
 import { useLastGlassView } from "../src/shell/placeMemory";
 import { openCase } from "../src/investigation/cases";
@@ -115,13 +115,14 @@ function Harness() {
         sections={
           place === "glass"
             ? [
-                // ADR-145 Amendment 13: the mode toggle, as `App.tsx` draws it.
-                { id: "case", label: "Graph", current: view !== "boards", onSelect: () => setView("graph") },
-                { id: "boards", label: "Drawing board", current: view === "boards", onSelect: () => setView("boards") },
+                // ADR-145 Amendment 13: the mode toggle, as `App.tsx` draws it; neither current on a place of
+                // the rail's own, such as Connection strength (Amendment 14 decision 3, the same `glassMode`).
+                { id: "case", label: "Graph", current: glassMode(view) === "graph", onSelect: () => setView("graph") },
+                { id: "boards", label: "Drawing board", current: glassMode(view) === "board", onSelect: () => setView("boards") },
               ]
             : []
         }
-        note={place === "glass" ? (view === "boards" ? MODE_NOTE.board : MODE_NOTE.graph) : undefined}
+        note={place === "glass" && glassMode(view) ? MODE_NOTE[glassMode(view)!] : undefined}
         caseSwitcher={place === "admin" ? undefined : caseMenu}
         datasets={place === "glass" ? ["Prison intel"] : null}
         crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {
@@ -144,6 +145,8 @@ function Harness() {
             <LeftRail
               {...splitRail(RAIL_ENTRIES.map((id) => ({
                 id, label: RAIL_LABELS[id], icon: id, onSelect: id === "strength" ? () => setView("strength") : () => undefined,
+                // As `App.tsx` marks them: the place open now pressed; a panel's opener never pressed (Amendment 14).
+                ...(id === "strength" || id === "ownership" || id === "dashboards" ? { pressed: view === id } : { expanded: false }),
               })))}
               onHelp={() => undefined}
             />

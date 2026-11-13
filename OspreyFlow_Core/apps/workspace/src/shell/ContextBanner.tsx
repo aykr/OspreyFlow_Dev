@@ -57,6 +57,18 @@ export const MODE_NOTE = {
   board: "Drawing board: your sketch; it does not change the case's data.",
 } as const;
 
+/** The Glass's views that show the case's data (ADR-145 Amendment 13: "on the graph (any view of the case's
+ * data)"). On any other Glass view (Dashboards with its Alert monitoring board, Ownership, Connection
+ * strength: places on the rail) neither mode is current and neither note is said, so the rail marks the
+ * place alone (ADR-145 Amendment 14 decision 3, the owner's "one place, one marker"). */
+export const CASE_DATA_VIEWS: readonly string[] = ["graph", "map", "matrix", "reports", "dossier"];
+
+/** Which of the Glass's two modes a view is: `null` for a place of its own on the rail. */
+export function glassMode(view: string): keyof typeof MODE_NOTE | null {
+  if (view === "boards") return "board";
+  return CASE_DATA_VIEWS.includes(view) ? "graph" : null;
+}
+
 const YOU_ARE_IN: Record<PlaceId, string> = {
   glass: `You are in ${PLACE_NAME.glass.replace(/^The /, "the ")}`,
   ingest: `You are in the ${PLACE_NAME.ingest}`,
@@ -191,7 +203,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
 }
 
 /** The cross-link between the Glass and the Studio for a person who holds both (decision 2): from
- * the Glass, to the Studio on the same case; from the Studio, back to the case in the Glass. */
+ * the Glass, to the Studio on the same case (its words not naming the datasets, Amendment 14); from the Studio, back to the case in the Glass. */
 export function crossLinkFor(
   place: PlaceId,
   places: readonly PlaceId[],
@@ -201,8 +213,9 @@ export function crossLinkFor(
 ): CrossLink | null {
   if (!places.includes("glass") || !places.includes("ingest")) return null;
   if (place === "glass") {
-    const what = datasets && datasets.length === 1 ? datasets[0] : "this case's data";
-    return { label: `Open ${what} in the Ingest Studio ↗`, onFollow: go.toStudio };
+    // ADR-145 Amendment 14 decision 4: the row names the case's datasets once, in "reads …"; the
+    // cross-link does not name them again.
+    return { label: "Open this case's data in the Ingest Studio ↗", onFollow: go.toStudio };
   }
   if (place === "ingest") {
     return { label: caseName ? `← Back to case ${caseName} in the Glass` : "← Back to the case in the Glass", onFollow: go.toGlass };

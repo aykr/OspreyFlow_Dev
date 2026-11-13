@@ -114,14 +114,14 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
   test("26 controls stand before the canvas, in this order", async () => {
     render(<App />);
     const canvas = await screen.findByRole("application", { name: "Network canvas" });
-    await screen.findByRole("button", { name: "Open Prison intel in the Ingest Studio ↗" });
+    await screen.findByRole("button", { name: "Open this case's data in the Ingest Studio ↗" });
     const stops = before(canvas);
     expect(stops).toEqual([
       // ADR-146 decision 2: Rules and Monitoring, with the count that left the banner.
       "Osprey, go to Home", "The Glass", "Ingest Studio", "Rules and Monitoring 3 open", "Admin",
       expect.stringMatching(/Search entities/), "Add many from a list", "Filters",
       "Graph", "Map", "More views▾", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
-      "Graph", "Drawing board", expect.stringMatching(/^Case: Kestrel/), "Open Prison intel in the Ingest Studio ↗",
+      "Graph", "Drawing board", expect.stringMatching(/^Case: Kestrel/), "Open this case's data in the Ingest Studio ↗",
       // The rail, then the Graph's own toolbar over the canvas.
       // ADR-145 Amendment 12: Ask & Chat and Dashboards on the rail, then its Explore Details.
       "Cases", "Explore", "Ask & Chat", "Dashboards", "Explore Details", "Help", "Show names",
@@ -175,5 +175,63 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
         .find((b) => b.closest(".side-panel-header"));
     expect(headers("Inspector")?.getAttribute("aria-expanded")).toBe("true");
     for (const name of ["Metrics", "Query builder"]) expect(headers(name)?.getAttribute("aria-expanded")).toBe("false");
+  });
+});
+
+// ADR-145 Amendment 14 (the owner's screen fixes of 13 November 2026, v0.5.2 step 3e): one place, one
+// marker, and the dataset named once in the context row.
+describe("one place, one marker; the dataset named once (ADR-145 Amendment 14)", () => {
+  const rail = () => screen.getByRole("navigation", { name: "Workspace" });
+  const marked = () => [...rail().querySelectorAll('[aria-pressed="true"]')].map((b) => b.getAttribute("aria-label"));
+
+  test("on Dashboards (Alert monitoring) no Glass mode is current and no mode's note is said", async () => {
+    render(<App />);
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(within(rail()).getByRole("button", { name: "Dashboards" }));
+    await vi.waitFor(() => expect(marked()).toEqual(["Dashboards"]));
+    const sections = within(region).getByRole("navigation", { name: "In the Glass" });
+    for (const name of ["Graph", "Drawing board"]) expect(within(sections).getByRole("button", { name }).getAttribute("aria-current")).toBeNull();
+    expect(within(region).queryByText(/^Graph: the case's data/)).toBeNull();
+    expect(region.getAttribute("aria-describedby")).toBeNull();
+  });
+
+  test("a view of the case's data keeps Graph current with its note (Map, Matrix, Figures)", async () => {
+    render(<App />);
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    await screen.findByRole("application", { name: "Network canvas" });
+    const graph = within(within(region).getByRole("navigation", { name: "In the Glass" })).getByRole("button", { name: "Graph" });
+    fireEvent.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Map" }));
+    await vi.waitFor(() => expect(graph.getAttribute("aria-current")).toBe("page"));
+    expect(within(region).getByText(/^Graph: the case's data/)).toBeTruthy();
+  });
+
+  test("the Cases drawer opened over Dashboards leaves one rail item marked, Cases expanded instead", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(within(rail()).getByRole("button", { name: "Dashboards" }));
+    await vi.waitFor(() => expect(marked()).toEqual(["Dashboards"]));
+    const cases = within(rail()).getByRole("button", { name: "Cases" });
+    fireEvent.click(cases);
+    await screen.findByRole("dialog", { name: "Cases" });
+    expect(marked()).toEqual(["Dashboards"]);
+    expect(cases.getAttribute("aria-expanded")).toBe("true");
+    expect(cases.getAttribute("aria-pressed")).toBeNull();
+  });
+
+  test("the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it", async () => {
+    const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+      /\/v1\/investigations$/.test(String(input).split("?")[0]!)
+        ? Promise.resolve(new Response(JSON.stringify([{ id: "inv-1", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a", datasets: ["Prison intel"] }])))
+        : held(input, init),
+    ); // prettier-ignore
+    render(<App />);
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    await within(region).findByText("reads Prison intel");
+    await within(region).findByRole("button", { name: "Open this case's data in the Ingest Studio ↗" });
+    // The switcher has read the listing (its name is the case's), so a badge would be drawn by now.
+    await within(region).findByRole("button", { name: /^Case: Kestrel/ });
+    expect((region.textContent ?? "").match(/prison intel/gi)).toHaveLength(1);
   });
 });

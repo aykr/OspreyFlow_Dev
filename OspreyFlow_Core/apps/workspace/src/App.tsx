@@ -58,7 +58,7 @@ import { LeftRail } from "./shell/LeftRail";
 import { RAIL_LABELS, splitRail } from "./shell/railLayout";
 import { Drawer } from "./design/primitives/Drawer";
 import { TopBar } from "./shell/TopBar";
-import { ContextBanner, crossLinkFor, MODE_NOTE, useCaseContext } from "./shell/ContextBanner";
+import { ContextBanner, crossLinkFor, glassMode, MODE_NOTE, useCaseContext } from "./shell/ContextBanner";
 import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { useLastGlassView } from "./shell/placeMemory";
 import { keepPlace, placeAtLoad, placeOnScreen, restorePlace } from "./auth/refreshPlace";
@@ -1705,12 +1705,12 @@ export function App() {
   // ADR-145 Amendment 12: the rail's places, split and ordered by `shell/railLayout.ts` (Cases, Explore,
   // Ask & Chat and Dashboards on it; History, Ownership and Connection strength under Explore Details).
   const railTools = [
-    { id: "cases", label: RAIL_LABELS.cases, icon: "cases" as const, onSelect: () => setCasesOpen(true), pressed: casesOpen },
-    { id: "explore", label: RAIL_LABELS.explore, icon: "explore" as const, onSelect: () => setExploreOpen(true), pressed: exploreOpen },
-    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
+    { id: "cases", label: RAIL_LABELS.cases, icon: "cases" as const, onSelect: () => setCasesOpen(true), expanded: casesOpen },
+    { id: "explore", label: RAIL_LABELS.explore, icon: "explore" as const, onSelect: () => setExploreOpen(true), expanded: exploreOpen },
+    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: () => setQuestionsOpen(true), expanded: questionsOpen },
     // ADR-111 Amendment 3: Superset dashboards, drawn inside the Glass.
     { id: "dashboards", label: RAIL_LABELS.dashboards, icon: "dashboards" as const, onSelect: () => setView("dashboards"), pressed: view === "dashboards" },
-    { id: "history", label: RAIL_LABELS.history, icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
+    { id: "history", label: RAIL_LABELS.history, icon: "history" as const, onSelect: () => setHistoryOpen(true), expanded: historyOpen },
     // ADR-109 ruling 5: enhanced due diligence — ultimate beneficial ownership.
     { id: "ownership", label: RAIL_LABELS.ownership, icon: "ownership" as const, onSelect: () => setView("ownership"), pressed: view === "ownership" },
     // ADR-139: Connection strength, which stayed in the Glass when Monitoring left (ADR-146 decision 2).
@@ -1824,11 +1824,13 @@ export function App() {
         sections={
           app === "glass"
             ? [
-                { id: "case", label: "Graph", current: view !== "boards", onSelect: () => setView(landingView(rights)) },
+                // ADR-145 Amendment 14 decision 3: Graph is current on a view of the case's data alone; on a
+                // place of the rail's own (Dashboards, Ownership, Connection strength) neither is.
+                { id: "case", label: "Graph", current: glassMode(view) === "graph", onSelect: () => setView(landingView(rights)) },
                 {
                   id: "boards",
                   label: "Drawing board",
-                  current: view === "boards",
+                  current: glassMode(view) === "board",
                   onSelect: () => {
                     setBoardToOpen(null);
                     setView("boards");
@@ -1844,10 +1846,14 @@ export function App() {
             currentId={investigationId}
             onBrowse={() => setBrowsingCases(true)}
             onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
+            // ADR-145 Amendment 14 decision 4: in the Glass the banner says what the case reads ("reads …"),
+            // so the switcher's scope badge (ADR-115 Amendment 1 point 5) would name it again.
+            showScope={app !== "glass"}
           />
         }
         // ADR-145 Amendment 13: the open mode's one line, read with the region.
-        note={app === "glass" ? (view === "boards" ? MODE_NOTE.board : MODE_NOTE.graph) : undefined}
+        // ADR-145 Amendment 14 decision 3: none on a place of the rail's own, which is not a mode.
+        note={app === "glass" && glassMode(view) ? MODE_NOTE[glassMode(view)!] : undefined}
         // ADR-145 decision 2: the Glass names what the case reads; the Studio's dataset is its own
         // choice, drawn by the Studio (`ingest/IngestStudio.tsx`), so the banner does not repeat it.
         datasets={app === "glass" ? caseContext.datasets : null}

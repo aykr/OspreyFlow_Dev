@@ -185,9 +185,9 @@ describe("the cross-link", () => {
     expect(crossLinkFor("admin", ["glass", "ingest", "admin"], "Kestrel", null, go)).toBeNull();
   });
 
-  it("goes from the Glass to the Studio on the case's data, and back to the case it came from", () => {
+  it("goes from the Glass to the Studio on the case's data without naming it again (ADR-145 Amendment 14), and back to the case it came from", () => {
     const there = crossLinkFor("glass", ["glass", "ingest"], "Kestrel", ["Prison intel"], go)!;
-    expect(there.label).toBe("Open Prison intel in the Ingest Studio ↗");
+    expect(there.label).toBe("Open this case's data in the Ingest Studio ↗");
     const back = crossLinkFor("ingest", ["glass", "ingest"], "Kestrel", ["Prison intel"], go)!;
     expect(back.label).toBe("← Back to case Kestrel in the Glass");
     render(<ContextBanner place="ingest" crossLink={back} />);

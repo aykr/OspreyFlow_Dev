@@ -265,7 +265,7 @@ test("the banner's cross-link goes to the Studio and back to the same case and v
   await page.getByRole("button", { name: "Map", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
-  await page.getByRole("button", { name: "Open Prison intel in the Ingest Studio ↗" }).focus();
+  await page.getByRole("button", { name: "Open this case's data in the Ingest Studio ↗" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("ingest, ingest, on case kestrel")).toBeVisible();
   // Another case, chosen in the Studio: the real `openCase`, which reloads the page.
@@ -289,7 +289,7 @@ test("from Messages, the cross-link and a case change in the Studio come Back to
     await page.keyboard.press("Enter");
   }
   await expect(page.getByText("glass, dossier, on case kestrel")).toBeVisible();
-  await page.getByRole("button", { name: "Open Prison intel in the Ingest Studio ↗" }).focus();
+  await page.getByRole("button", { name: "Open this case's data in the Ingest Studio ↗" }).focus();
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Case: Kestrel" }).focus();
   await page.keyboard.press("Enter");
@@ -326,6 +326,32 @@ test("the banner's toggle is Graph and Drawing board, each chosen by keyboard, i
   await expect(sections.getByRole("button", { name: "Graph" })).toHaveAttribute("aria-current", "page");
   await expect(region).toHaveAccessibleDescription(GRAPH);
   registerCovered(REGISTRY, "banner-sections-by-keyboard");
+});
+
+// ADR-145 Amendment 14 decision 3 (the owner's screen fixes, 13 November 2026: one place, one marker): a place
+// of the rail's own, chosen by keyboard from Explore Details, is the one thing marked. The banner's Graph is
+// not current there and its note is not said; back on a view of the case's data, both return.
+test("a rail place chosen by keyboard is the only marker: no Glass mode current, no mode's note", async ({ page }) => {
+  await page.goto("/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts");
+  const region = page.getByRole("region", { name: "You are in the Glass" });
+  const sections = region.getByRole("navigation", { name: "In the Glass" });
+  const rail = page.getByRole("navigation", { name: "Workspace" });
+  await rail.getByRole("button", { name: "Explore Details" }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("group", { name: "Explore Details" }).getByRole("button", { name: "Connection strength" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("glass, strength, on case kestrel")).toBeVisible();
+  for (const name of ["Graph", "Drawing board"]) await expect(sections.getByRole("button", { name })).not.toHaveAttribute("aria-current", "page");
+  await expect(region).not.toContainText("Graph: the case's data");
+  await expect(region).not.toHaveAttribute("aria-describedby");
+  await expect(rail.getByRole("button", { name: "Explore Details, Connection strength open" })).toBeVisible();
+  await expect(rail.locator('[aria-pressed="true"]')).toHaveCount(0);
+  await expect(rail.locator('[aria-expanded="true"]')).toHaveCount(0);
+  await sections.getByRole("button", { name: "Graph" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("glass, graph, on case kestrel")).toBeVisible();
+  await expect(sections.getByRole("button", { name: "Graph" })).toHaveAttribute("aria-current", "page");
+  await expect(region).toHaveAccessibleDescription("Graph: the case's data. Saved views are under Views or Cases.");
 });
 
 // ADR-146 decision 6 (rule 13): Home's Needs your attention opens the alert, not its case.
@@ -636,4 +662,39 @@ for (const shown of GOVUK_PAGES) {
       }
     });
   }
+}
+
+// ADR-145 Amendment 14 decision 2 (the owner, 13 November 2026: "the Cases panel covers the top navigation"):
+// a drawer opens under the top bar, so the places, the top bar's controls and, under GOV.UK, the GOV.UK
+// header's navigation stay in view and can be clicked while it is open. In each look the scans use.
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  test(`${brand} ${theme}: an open drawer starts under the top bar, the navigation above it uncovered`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/keyboard/shell-harness.html?brand=${brand}&drawer=1`);
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    const drawer = page.getByRole("dialog", { name: "Cases" });
+    await expect(drawer).toBeVisible();
+    const bar = await page.locator(".top-bar").boundingBox();
+    const box = await drawer.boundingBox();
+    expect(box!.y).toBeGreaterThanOrEqual(Math.floor(bar!.y + bar!.height));
+    // Every control above the drawer's top and inside its columns is the topmost thing at its own centre.
+    const covered = await page.evaluate(() => {
+      const top = document.querySelector<HTMLElement>("[role='dialog']")!.getBoundingClientRect();
+      return [...document.querySelectorAll<HTMLElement>("header a, header button, .top-bar a, .top-bar button")]
+        .filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.right > top.left;
+        })
+        .filter((el) => {
+          const r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return !(hit && (hit === el || el.contains(hit)));
+        })
+        .map((el) => el.getAttribute("aria-label") ?? el.textContent?.trim());
+    });
+    expect(covered).toEqual([]);
+    // Its own way out is still reached.
+    await drawer.getByRole("button", { name: "Close Cases" }).focus();
+    await expect(drawer.getByRole("button", { name: "Close Cases" })).toBeFocused();
+  });
 }

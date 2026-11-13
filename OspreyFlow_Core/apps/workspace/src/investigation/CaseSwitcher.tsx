@@ -15,6 +15,9 @@ export interface CaseSwitcherProps {
   onOpen: (id: string) => void;
   /** Show the full list of cases (the picker) over the workspace. Absent: no such button. */
   onBrowse?: () => void;
+  /** Whether the case's scope badge is drawn beside its name (ADR-115 Amendment 1 point 5). False where the
+   * row already says what the case reads (the Glass's banner, ADR-145 Amendment 14 decision 4). */
+  showScope?: boolean;
 }
 
 export function CaseSwitcher({
@@ -23,6 +26,7 @@ export function CaseSwitcher({
   currentId,
   onOpen,
   onBrowse,
+  showScope = true,
 }: CaseSwitcherProps) {
   const [cases, setCases] = useState<CaseListing[]>([]);
   const [creating, setCreating] = useState(false);
@@ -44,7 +48,7 @@ export function CaseSwitcher({
 
   const current = cases.find((entry) => entry.id === currentId);
   const currentName = current ? caseLabel(current) : "Current case";
-  const scope = scopeBadge(current?.datasets);
+  const scope = showScope ? scopeBadge(current?.datasets) : null;
   return (
     <>
     {/* ADR-097 step 3: the bar shows the case's name alone; "Case:" stays for a screen reader. */}

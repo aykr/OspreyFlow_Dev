@@ -15,6 +15,10 @@ export interface RailItem {
   onSelect: () => void;
   /** This place is the one open now. */
   pressed?: boolean;
+  /** For an item that opens a panel over the place (Cases, Explore, Ask & Chat, History): whether it is
+   * open. Such an item is never `pressed`: the rail marks the place alone, one place, one marker
+   * (ADR-145 Amendment 14 decision 3); the panel's state is `aria-expanded`. */
+  expanded?: boolean;
 }
 
 /** The rail's ⋯ *Explore Details*: a menu of the destinations not on the rail itself. It closes on Escape
@@ -36,7 +40,7 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
   // ADR-145 Amendment 12: named Explore Details, and, while one of its places is open, which
   // ("Explore Details, History open"); the destination open is marked inside the menu too.
   const name = "Explore Details";
-  const current = items.find((item) => item.pressed);
+  const current = items.find((item) => item.pressed || item.expanded);
   const label = current ? `${name}, ${current.label} open` : name;
   return (
     <div
@@ -108,7 +112,9 @@ export function LeftRail({
           type="button"
           className="left-rail__item"
           aria-label={item.label}
-          aria-pressed={item.pressed === undefined ? undefined : item.pressed}
+          aria-pressed={item.expanded !== undefined || item.pressed === undefined ? undefined : item.pressed}
+          aria-expanded={item.expanded}
+          aria-haspopup={item.expanded === undefined ? undefined : "dialog"}
           title={expanded ? undefined : item.label}
           onClick={item.onSelect}
         >
