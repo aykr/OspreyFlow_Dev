@@ -573,6 +573,18 @@ def token(**overrides: Any) -> str:
     return jwt.encode(claims, keys["pem"], algorithm="RS256", headers={"kid": keys["kid"]})
 
 
+def _foreign_signed() -> str:
+    """The administrator's own claims under the tenant's kid, signed by a key the tenant never published."""
+    import jwt
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    real = jwt.decode(token(), options={"verify_signature": False})
+    other = rsa.generate_private_key(public_exponent=65537, key_size=2048).private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    return jwt.encode(real, other, algorithm="RS256", headers={"kid": entra_keys()["kid"]})
+
+
 def door() -> Any:
     """A client to the Glass's door, by its name, over TLS (the stand-in CA trusted), through the
     ingress controller on the kind node: the deployment's name resolved to that node, nothing else."""
@@ -612,6 +624,10 @@ def checks() -> None:
         ("an expired token", token(iat=int(time.time()) - 7200, nbf=int(time.time()) - 7200, exp=int(time.time()) - 3600)),
         ("an app-only token", token(scp=None, idtyp="app", roles=["Runs.Write"])),
         ("a guest's token", token(idp="https://sts.windows.net/99999999-1111-4222-8333-444444444444/")),
+        ("a token with no oid", token(oid=None)),
+        ("a token with a group overage", token(groups=None, _claim_names={"groups": "src1"},
+                                               _claim_sources={"src1": {"endpoint": "https://graph.microsoft.com/v1.0/users/x/getMemberObjects"}})),
+        ("a token signed by a key the tenant does not publish", _foreign_signed()),
     ]:
         r = c.get("/v1/me", headers={"Authorization": f"Bearer {t}"})
         ok(f"sign-in refuses {what}", r.status_code in (401, 403), f"{r.status_code} {r.text[:120]}")
@@ -625,6 +641,16 @@ def checks() -> None:
     oid = claims["first_administrators"][0]
     r = c.put(f"/v1/admin/people/{oid}/roles", headers=admin, json={"roles": ["osprey-admin", "analyst", "data_engineer"]})
     ok("they give themselves analyst and data engineer in Admin › People", r.status_code == 200, r.text[:200])
+    # Roles are the deployment's (ADR-148 Am 8 point 1), not Entra app roles: a person of the tenant whom no
+    # administrator gave a role signs in with none and is refused what a role grants. Entra's own "assignment
+    # required" refusal (AADSTS50105) happens before a token exists, so only the real tenant can show it.
+    stranger = {"Authorization": f"Bearer {token(oid='50000000-0000-4000-8000-0000000000aa', sub='r1-pairwise-subject-00aa')}"}
+    r = c.get("/v1/me", headers=stranger)
+    ok("a person of the tenant given no role signs in with no role", r.status_code == 200 and not r.json().get("roles"), r.text[:200])
+    r = c.get("/v1/admin/people", headers=stranger)
+    ok("and is refused Admin › People", r.status_code == 403, f"{r.status_code} {r.text[:120]}")
+    r = c.post("/v1/investigations", headers=stranger, json={"name": "R1 refused", "new_dataset_name": "R1 refused"})
+    ok("and is refused a new case", r.status_code == 403, f"{r.status_code} {r.text[:120]}")
     # A case.
     r = c.post("/v1/investigations", headers=admin, json={"name": "R1 synthetic case", "new_dataset_name": f"R1 synthetic {secrets.token_hex(3)}"})
     ok("a case is made", r.status_code == 201, r.text[:200])
