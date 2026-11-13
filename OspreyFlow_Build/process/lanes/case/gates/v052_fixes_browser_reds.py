@@ -33,16 +33,16 @@ PLANTS = [
      [("src/design/primitives/Drawer.tsx", '    window.addEventListener("resize", fit);\n', ""),
       ("src/design/primitives/Drawer.tsx", "    const observer = typeof ResizeObserver !== \"undefined\" ? new ResizeObserver(fit) : null;", "    const observer = null as ResizeObserver | null;")],
      "keyboard/shell.spec.ts", "an open drawer starts under the top bar and the context row"),
-    ("glassMode answers graph for every view but boards (main's rule)",
-     [("src/shell/ContextBanner.tsx", '  return CASE_DATA_VIEWS.includes(view) ? "graph" : null;', '  return "graph";')],
-     "keyboard/shell.spec.ts", "a rail place chosen by keyboard is the only marker"),
-    ("no marker on Explore Details when the place is its own (7b1fbca's)",
-     [("src/shell/LeftRail.tsx", 'data-current={current?.pressed ? "true" : undefined}', "data-current={undefined}")],
-     "keyboard/shell.spec.ts", "a rail place chosen by keyboard is the only marker"),
-    ("a panel's opener pressed while open (main's two markers)",
-     [("src/shell/railLayout.ts", "return PANEL_OPENERS.includes(id) ? { expanded: state.open.has(id) } : { pressed: state.view === id };",
-       "return { pressed: state.view === id || state.open.has(id) };")],
-     "keyboard/shell.spec.ts", "the Cases panel opened over Dashboards"),
+    ("Reports not in the one view switch (main's switch)",
+     [("src/shell/railLayout.ts", 'export const VIEW_SWITCH = ["graph", "map", "boards", "dashboards"] as const;', 'export const VIEW_SWITCH = ["graph", "map", "boards"] as const;')],
+     "keyboard/shell.spec.ts", "exactly one view is current"),
+    ("a drawer that leaves focus where it was on closing (main's)",
+     [("src/design/primitives/Drawer.tsx", "      if (opener?.isConnected && lost) opener.focus();", "")],
+     "keyboard/shell.spec.ts", "each rail panel is opened and closed by keyboard"),
+    ("the case line without Views in this case",
+     [("src/shell/ContextBanner.tsx", "      {place === \"glass\" && caseSwitcher && (\n", "      {place === \"glass\" && caseSwitcher && false && (\n")],
+     "keyboard/shell.spec.ts", "the case line's Views in this case opens the Cases panel"),
+
 ]
 
 
