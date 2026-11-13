@@ -469,6 +469,18 @@ def stand_in(runbook: str, step: str) -> None:
         config = json.loads(kubectl("-n", MANAGED, "get", "configmap", "s3-standin", "-o", "jsonpath={.data.standin\\.json}"))
         config["buckets"] = [b for b in config["buckets"] if b["name"].endswith("backups")]
         config["roles"] = []
+        # The buckets the Terraform made, deleted as `aws_s3_bucket` deletes one: refused while it holds
+        # anything (BucketNotEmpty; no force_destroy), so step 6's emptying is what lets it go.
+        prefix = state()["prefix"]
+        gone = json.loads(s3_exec(
+            "import json, pathlib, shutil\n"
+            f"made = [p for p in pathlib.Path('/data').iterdir() if p.is_dir() and p.name.startswith({prefix!r})"
+            " and not p.name.endswith('backups')]\n"
+            "full = [p.name for p in made if any(f.is_file() for f in p.rglob('*'))]\n"
+            "if full: raise SystemExit('BucketNotEmpty: ' + ', '.join(full))\n"
+            "[shutil.rmtree(p) for p in made]\n"
+            "print(json.dumps([p.name for p in made]))"))
+        print(f"stand-in: the Terraform deleted the buckets {gone}")
         s3_standin(config)
         kubectl("delete", "mutatingwebhookconfiguration", "r1-irsa-standin", "--ignore-not-found")
         print("stand-in: the Terraform's removal applied; kept: the backups bucket and its key")
@@ -513,7 +525,8 @@ def script_for(name: str, text: str, start: int) -> str:
     """The runbook as one bash script: each block as written, each platform block's stand-in."""
     script = ["set -e"]
     for i, (step, platform_block, body) in enumerate(blocks(text), 1):
-        if i < start:
+        # From block N, step 1's settings still first: every later block reads them, in one shell.
+        if i < start and not step.startswith("1."):
             continue
         said = f"=== {name} block {i} (step {step}){' [the platform: stand-in]' if platform_block else ''} ==="
         script.append(f"printf '\\n%s\\n' {shlex.quote(said)}")
