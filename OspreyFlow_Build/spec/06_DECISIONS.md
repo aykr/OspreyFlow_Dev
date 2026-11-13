@@ -37032,25 +37032,36 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    **No cluster or `SAME_AS` field:** a cluster id would tell a reader that hidden members exist. Merged entities are
    collapsed at query time, over the visible hits only (rule 6; ADR-149). So a merge changes no document; the outbox
    still records both endpoints, so the documents are re-read after every merge and a later field derived from
-   resolution reaches the index without a new event type. The document (ADR-149's mapping, held here once):
-   - keyword: `id`, `type`, `datasets[]`, `handling_classification`, `handling_code`, `owning_unit`, `originator`,
-     copied verbatim from the node's stored record;
+   resolution reaches the index without a new event type. The document (ADR-149's mapping, held here once; studio's
+   corrections of 13 November folded in):
+   - `kind: node`; keyword: `id`, `type`, `datasets[]`, `handling_classification`, `handling_code`, `owning_unit`,
+     `originator`, copied verbatim from the node's stored record;
    - `identifiers[]` (keyword): the node's declared identifier values as a reader of its own dataset receives them,
      plus each one's canonical form (`identifier_reading.search_alternative`) where it has one;
-   - `names[]`: the name-like display values (name, title, aliases), as keyword with a lowercase and asciifolding
-     normaliser, and subfields `prefix` (edge n-grams 2 to 20 at index time), `tri` (3-grams) and `words` (standard
-     tokenizer), each lowercase and asciifolding;
+   - `names[]`: the type's string properties the ontology marks `indexed` and not `sensitivity: high` — the set the
+     type-ahead already searches (ADR-074; `tests/ontology/test_searchable_names.py` guards that no sensitive
+     property is marked) — as keyword with a lowercase and asciifolding normaliser, and subfields `prefix` (edge
+     n-grams 2 to 20 at index time), `tri` (3-grams) and `words` (standard tokenizer), each lowercase and asciifolding;
    - `names_phonetic[]` (keyword): the Double Metaphone codes (`phonetics.dmetaphone`, MIT), primary and alternate,
      of each name token, an empty code dropped; the function is exported so the query side applies the same
      normalisation;
-   - `text`: a Document's extracted text (`document_texts`, `services/api/review.py`), standard analyser with
-     lowercase and asciifolding, offsets and positions kept for highlighting and phrases; a Document with no text row
-     is found by its title;
    - `date`: the type's declared event or sent time where the ontology declares one, the record's creation otherwise.
-   Every text field uses `similarity: boolean`, so no score depends on documents a reader cannot see. Only what the
-   Glass already receives in a `Node` response is searchable: the document is built through the same serialisation,
-   with `withhold_sources` applied as for a reader of the node's own dataset, so no source-system identifier is
-   indexed (rule 7), and a `gazetteer-*` node carries its `name` only (ADR-147 Amendments 1 and 3).
+   **A Document's text is a document of its own** (`kind: text`, id `text:<node id>`): `node_id`, the node's access
+   fields, `text_owning_unit` and `text`. Today a text is read only by its owning unit (`review.py`
+   `get_document_text`, `WHERE owning_unit = principal.org_unit`), narrower than the Document node's handling, and a
+   highlight cannot be withheld per hit, so the text never sits on the node's document: the query side adds
+   `text_owning_unit = principal.org_unit` for `kind: text`, and a Document whose text a reader cannot read is still
+   found by its title. `text` is the standard analyser with lowercase and asciifolding, offsets and positions kept
+   for highlighting and phrases. A text is written in Postgres (`store_document_text`), outside the graph's
+   transaction, so its write records the node in the outbox after it commits; a crash between the two is what the
+   drift check finds.
+   Every field, keyword ones included, uses `similarity: boolean`, so no score depends on documents a reader cannot
+   see. Only what the Glass already receives in a `Node` response is searchable: the document is built through the
+   same serialisation, with `withhold_sources` applied as for a reader of the node's own dataset, so no source-system
+   identifier is indexed (rule 7), and a `gazetteer-*` node carries its `name` only (ADR-147 Amendments 1 and 3).
+   **The index is named per deployment:** its alias comes from settings (`search.index_alias`, default
+   `ospreyflow-<deployment name>`), so two installs sharing one managed domain never read each other's index; the
+   query side takes the index name as a parameter, so a test points it at a throwaway index.
 4. **A rebuild from the graph:** `python -m scripts.rebuild_search_index`. It pages every node (`list_nodes`' keyset
    cursor, through `nodes_for_index`) into a new index named with its build time, then moves the alias the indexer
    and the search service use onto it and deletes the old one, so a reader never sees a half-built index. The
@@ -37062,6 +37073,14 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
 6. **Red first, each event type:** for each of load, merge, new version, promotion and deletion, a live case writes
    through the adapter's real method and finds the index changed (and a plant that removes that method's outbox
    write turns it red); the rebuild and the drift check each have a case that plants a difference and finds it.
+
+7. **One client, built by one factory, for the indexer, the rebuild, the drift check and the query side.** Its address
+   is `OPENSEARCH_URL` when set (cloud-platform: the namespace's OpenSearch Secret, `https://…`), else
+   `http://OPENSEARCH_HOST:OPENSEARCH_PORT` (Lite and Small). `OPENSEARCH_SIGNING=sigv4` signs every request as
+   service `es` in `OPENSEARCH_REGION` with the pod's default AWS credentials (IRSA's web identity through
+   botocore's default chain; botocore is already a dependency), the owner's ruling for step 3a of 13 November;
+   `none` or unset sends unsigned, as Lite and Small do, and as a platform's signing proxy would need. A test shows
+   the `sigv4` path red against a stand-in domain that refuses an unsigned or wrongly signed request.
 
 ### Consequences
 
