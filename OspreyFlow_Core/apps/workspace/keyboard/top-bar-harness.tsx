@@ -19,6 +19,10 @@ import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { createWorkingSet } from "../src/workingset/store";
 import { guideUrl } from "../src/home/guides";
+import { RAIL_LABELS, splitRail } from "../src/shell/railLayout";
+import type { RailEntry } from "../src/rights/visibility";
+
+const RAIL_ENTRIES: RailEntry[] = ["cases", "explore", "questions", "dashboards", "history", "ownership", "strength"];
 import { useHelpKey, WorkspaceWelcome } from "../src/welcome/WorkspaceWelcome";
 import type { OntologySchema } from "../../../packages/schemas/generated";
 
@@ -114,19 +118,8 @@ function RailWithHelp() {
           window.__TOPBAR__!.help = (window.__TOPBAR__!.help ?? 0) + 1;
           toggle();
         }}
-        items={[
-          { id: "cases", label: "Cases", icon: "cases", onSelect: rail("cases") },
-          { id: "explore", label: "Explore", icon: "explore", onSelect: rail("explore") },
-          { id: "questions", label: "Ask & Chat", icon: "questions", onSelect: rail("questions") },
-          // ADR-111 Amendment 3: the Superset boards, drawn inside the Glass.
-          { id: "dashboards", label: "Dashboards", icon: "dashboards", onSelect: rail("dashboards") },
-        ]}
-        more={[
-          { id: "history", label: "History", icon: "history", onSelect: rail("history") },
-          { id: "ownership", label: "Ownership", icon: "ownership", onSelect: rail("ownership") },
-          // ADR-139: Connection strength, which stayed in the Glass.
-          { id: "strength", label: "Connection strength", icon: "strength", onSelect: rail("strength") },
-        ]}
+        // Split and ordered as `App.tsx` does it (`shell/railLayout.ts`), so these cases see its layout.
+        {...splitRail(RAIL_ENTRIES.map((id) => ({ id, label: RAIL_LABELS[id], icon: id, onSelect: rail(id) })))}
       />
       {/* Beside the rail, never over it, as `App.tsx` places it in the column the views share. */}
       {helpOpen && (
@@ -138,6 +131,7 @@ function RailWithHelp() {
           nodeCount={0}
           onRestored={() => undefined}
           onClose={() => setHelpOpen(false)}
+          takeFocus
           guide={{
             href: guideUrl("http://top-bar.invalid", "user"),
             open: () => {

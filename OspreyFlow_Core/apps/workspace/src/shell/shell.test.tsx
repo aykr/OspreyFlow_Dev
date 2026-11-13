@@ -119,9 +119,9 @@ describe("the rail's Explore Details and the top bar's More views", () => {
     expect(screen.getByRole("button", { name: "Explore Details" })).toBeTruthy();
   });
 
-  it("draws no More for a rail with nothing beyond it", () => {
+  it("draws no Explore Details for a rail with nothing beyond it", () => {
     render(<LeftRail items={[{ id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined }]} />);
-    expect(screen.queryByRole("button", { name: /^More/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Explore Details/ })).toBeNull();
   });
 
   it("puts the views used less under More views, naming the one open", () => {

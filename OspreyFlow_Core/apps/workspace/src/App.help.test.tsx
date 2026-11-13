@@ -87,6 +87,7 @@ describe("the rail's Help over every view the rail reaches", () => {
   } as never;
 
   beforeEach(() => {
+    localStorage.clear(); // whether the panel was closed before is kept here (`welcomeDismissed`)
     vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
     vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue(signedInPerson);
     vi.mocked(ontologySchema.fetchOntologyRegistry).mockResolvedValue(
@@ -97,7 +98,11 @@ describe("the rail's Help over every view the rail reaches", () => {
       const url = String(input);
       const body = url.endsWith("/v1/ontology")
         ? { entity_types: [], edge_types: [] }
-        : url.endsWith("/v1/me/rights")
+        : // The principal as the Conduit resolves it (ADR-148 Amendment 8): the panel opens at a
+          // first sign-in for this person (`welcomeDismissed`).
+          url.endsWith("/v1/me")
+          ? { id: "analyst-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] }
+          : url.endsWith("/v1/me/rights")
           ? { rights: ["investigate", "trace_ownership", "ask_model", "read_reports"] }
           : url.endsWith("/v1/handling-scheme")
             ? { name: "test", classification: ["OFFICIAL"], handling_codes: {} }
@@ -117,6 +122,10 @@ describe("the rail's Help over every view the rail reaches", () => {
 
   /** A place reached from the rail: on it, or in its menu (named More before Amendment 12). */
   async function openFromRail(name: string): Promise<void> {
+    if (name === "Map") {
+      fireEvent.click(await screen.findByRole("button", { name: "Map" }));
+      return;
+    }
     const direct = within(rail()).queryByRole("button", { name });
     if (direct) {
       fireEvent.click(direct);
@@ -136,6 +145,7 @@ describe("the rail's Help over every view the rail reaches", () => {
 
   const VIEWS: [string, string | null][] = [
     ["the graph", null],
+    ["the map", "Map"],
     ["Dashboards", "Dashboards"],
     ["Ownership", "Ownership"],
     ["Connection strength", "Connection strength"],
@@ -168,5 +178,73 @@ describe("the rail's Help over every view the rail reaches", () => {
     fireEvent.click(within(rail()).getByRole("button", { name: "Help" }));
     const link = within(panel()!).getByRole("link", { name: "Read the user guide (PDF)" });
     expect(link.getAttribute("href")).toMatch(/\/v1\/guides\/user$/);
+  });
+
+  test("a panel closed by Help stays closed at the next sign-in, as one closed by its ×", async () => {
+    render(<App />);
+    await screen.findByRole("navigation", { name: "Workspace" });
+    await screen.findByRole("dialog", { name: "Welcome back" }); // opened at a first sign-in
+    fireEvent.click(within(rail()).getByRole("button", { name: "Help" }));
+    expect(panel()).toBeNull();
+    cleanup();
+    render(<App />);
+    await screen.findByRole("navigation", { name: "Workspace" });
+    expect(panel()).toBeNull();
+  });
+
+  test("the panel opened at sign-in shows on the graph alone; asked for by Help, over any view", async () => {
+    render(<App />);
+    await screen.findByRole("dialog", { name: "Welcome back" }); // opened at a first sign-in
+    await openFromRail("Dashboards");
+    expect(panel()).toBeNull();
+    fireEvent.click(within(rail()).getByRole("button", { name: "Help" }));
+    expect(panel()).not.toBeNull();
+    expect(document.activeElement).toBe(panel());
+  });
+});
+
+// ADR-145 Amendment 12, against the real App: the rail's order, Explore Details' order, and Ask & Chat.
+describe("the rail as the real App draws it", () => {
+  const signedInPerson = {
+    access_token: "a-token",
+    profile: { sub: "analyst-2", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] },
+  } as never;
+  beforeEach(() => {
+    localStorage.clear(); // whether the panel was closed before is kept here (`welcomeDismissed`)
+    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
+    vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue(signedInPerson);
+    vi.mocked(ontologySchema.fetchOntologyRegistry).mockResolvedValue(
+      new ontologySchema.OntologyRegistry({ entity_types: [], edge_types: [] } as never),
+    );
+    sessionStorage.setItem("ospreyflow.investigationId", "inv-1");
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      const body = url.endsWith("/v1/me/rights")
+        ? { rights: ["investigate", "trace_ownership", "ask_model", "read_reports"] }
+        : url.endsWith("/v1/ontology")
+          ? { entity_types: [], edge_types: [] }
+          : [];
+      return Promise.resolve(new Response(JSON.stringify(body)));
+    });
+  });
+
+  test("Cases, Explore, Ask & Chat and Dashboards on the rail; History, Ownership and Connection strength under Explore Details", async () => {
+    render(<App />);
+    const rail = await screen.findByRole("navigation", { name: "Workspace" });
+    await within(rail).findByRole("button", { name: "Dashboards" });
+    const names = within(rail).getAllByRole("button").map((b) => b.getAttribute("aria-label"));
+    expect(names.slice(0, 5)).toEqual(["Cases", "Explore", "Ask & Chat", "Dashboards", "Explore Details"]);
+    fireEvent.click(within(rail).getByRole("button", { name: "Explore Details" }));
+    const menu = within(rail).getByRole("group", { name: "Explore Details" });
+    expect(within(menu).getAllByRole("button").map((b) => b.textContent)).toEqual(["History", "Ownership", "Connection strength"]);
+    fireEvent.click(within(menu).getByRole("button", { name: "History" }));
+    expect(within(rail).getByRole("button", { name: "Explore Details, History open" })).toBeTruthy();
+  });
+
+  test("Ask & Chat opens its drawer under its own name", async () => {
+    render(<App />);
+    const rail = await screen.findByRole("navigation", { name: "Workspace" });
+    fireEvent.click(await within(rail).findByRole("button", { name: "Ask & Chat" }));
+    expect(await screen.findByRole("button", { name: "Close Ask & Chat" })).toBeTruthy();
   });
 });

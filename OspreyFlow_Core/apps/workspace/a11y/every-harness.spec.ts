@@ -70,7 +70,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   ],
   // ADR-145 decision 2: the banner in the Studio, with its way back, and in Admin.
   // ADR-145 Amendment 2: Monitoring's badge (inside the GOV.UK notification banner under that
-  // brand), and the rail's ⋯ More and the top bar's More views drawn open.
+  // brand), and the rail's ⋯ Explore Details (ADR-145 Amendment 12) and the top bar's More views drawn
+  // open.
   // ADR-146 decision 2: Rules and Monitoring in the switcher with its count (inside the GOV.UK header
   // under that brand), and the place open, its banner a GOV.UK notification banner.
   "places-harness.html": [

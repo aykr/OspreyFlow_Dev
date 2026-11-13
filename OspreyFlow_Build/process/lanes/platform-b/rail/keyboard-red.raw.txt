@@ -1,8 +1,8 @@
-# rail + Help, keyboard red: shell.spec.ts with main's LeftRail.tsx and WorkspaceWelcome.tsx (the harness and spec as the branch has them), this Mac
-  ✓  1 keyboard/shell.spec.ts:76:1 › the marking strip and the top bar take 20 and 44 pixels, and the rail 48 with 36px buttons (350ms)
-  ✓  2 keyboard/shell.spec.ts:90:1 › each rail entry is reached and pressed by keyboard (211ms)
-  ✘  3 keyboard/shell.spec.ts:109:1 › each destination under the rail's Explore Details is reached and chosen by keyboard (1.0m)
-  ✓  4 keyboard/shell.spec.ts:162:1 › the rail shows its names, and hides them again, by keyboard (195ms)
-  ✘  5 keyboard/shell.spec.ts:178:1 › the rail's Help opens and closes the keys panel by keyboard, as ? and Esc do (1.0m)
+# rail after review, keyboard red: railLayout.ts planted with main's split and names (Cases and Explore on the rail; Ownership, History, Questions, Dashboards and Connection strength under the menu), the harnesses reading it as App does; this Mac
+  ✓  1 keyboard/shell.spec.ts:76:1 › the marking strip and the top bar take 20 and 44 pixels, and the rail 48 with 36px buttons (325ms)
+  ✘  2 keyboard/shell.spec.ts:90:1 › each rail entry is reached and pressed by keyboard (1.0m)
+  ✘  3 keyboard/shell.spec.ts:109:1 › each destination under the rail's Explore Details is reached and chosen by keyboard (5.2s)
+  ✓  4 keyboard/shell.spec.ts:162:1 › the rail shows its names, and hides them again, by keyboard (222ms)
+  ✓  5 keyboard/shell.spec.ts:178:1 › the rail's Help opens and closes the keys panel by keyboard, as ? and Esc do (215ms)
   2 failed
-  3 passed (2.0m)
+  3 passed (1.1m)

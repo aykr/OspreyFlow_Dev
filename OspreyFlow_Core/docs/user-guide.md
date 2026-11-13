@@ -774,7 +774,7 @@ the case's analyst layer.
 
 ## 6. Ask & Chat: questions to the model
 
-![Questions: ask about the documents in this case](images/user/12-questions.png)
+![Ask & Chat (named Questions in this picture): ask about the documents in this case](images/user/12-questions.png)
 
 **Ask & Chat** (on the rail; it was named *Questions*) asks the deployment's model about the documents in this case that you can see, and about
 **graph facts**. It answers from those only, citing each — **Draws on** opens a document. What it
@@ -1412,7 +1412,7 @@ recorded. Report packs export to PDF from the Packs and Published tabs.
 | --- | --- | --- |
 | Home | `G`, `I`, `R`, `A` | Open the Glass, the Ingest Studio, Rules and Monitoring or Admin, as your roles allow |
 | Anywhere | `/` | Search |
-| Anywhere | `?` | The welcome panel, with keys worth knowing |
+| Anywhere in the Glass | `?` | Opens or closes the welcome panel, with keys worth knowing and the user guide, over any view (as the rail's **Help** does) |
 | Canvas | Tab, Shift+Tab | Move into and out of the canvas |
 | Canvas | Arrows | Step to the next or previous neighbour; a screen reader hears its name, type and links |
 | Canvas | Ctrl/Cmd+Arrows | Step within the selection; with Shift, through every node |

@@ -208,11 +208,13 @@ switcher (§2.0, ADR-145 decision 1). Each is an icon button whose accessible na
 *Show names* widens the rail to show the labels and *Hide names* narrows it again. The switcher's
 *Rules and Monitoring* carries the case's open, claimed and closing alerts as a count (said in its name,
 "Rules and Monitoring 3 open"), and *Help*, above *Show names*,
-reopens the **welcome panel** (ADR-115 E6): over the canvas's top left (320px, 280 below 1100; a shadow, no
-hairline) it says what the canvas holds, offers the case's three latest history steps to pick up from
+opens the **welcome panel** (ADR-115 E6) over whichever view is on screen, and closes it again (ADR-145
+Amendment 12): under the canvas toolbar's left on the graph, the map and the matrix, at the top left of
+any other view (320px, 280 below 1100; a shadow, no hairline). It says what the canvas holds, offers the case's three latest history steps to pick up from
 (each restored as the History drawer restores one) and the keys worth knowing (`/`, the arrows, Enter, F,
-Escape, `?`). It is open until the person closes it once (kept per person in this browser); `?` anywhere
-but a text field opens it again (`keyboard/welcome.spec.ts`). *Cases* opens a
+Escape, `?`) and links the user guide. At sign-in it opens on the graph alone, until the person closes it
+once (by ×, Esc, Help or `?`; kept per person in this browser); `?` anywhere in the Glass but a text field
+or a list box opens or closes it (`keyboard/shell.spec.ts`, `App.help.test.tsx`). *Cases* opens a
 drawer with the open case's *Views in this case*, every case with its views (ADR-144 decision 5), and *Browse all cases*. The
 **view toolbar** above the canvas holds what belongs to that view alone: the resolution threshold on
 the Graph, *Add site* and *Draw boundary* on the Map. The **selection bar** at the foot of the canvas

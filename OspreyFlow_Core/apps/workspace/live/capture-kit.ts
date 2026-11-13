@@ -96,10 +96,17 @@ export async function dismissWelcome(page: Page): Promise<void> {
   if (await close.first().isVisible().catch(() => false)) await close.first().click();
 }
 
-/** A left-rail entry by its name. The rail names an entry with an open count as "<name>, N open",
- * so the match is not exact. */
+/** A left-rail entry by its name: exact, since "Explore" is also the start of "Explore Details"
+ * (ADR-145 Amendment 12). */
 export const rail = (page: Page, name: string) =>
-  page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name });
+  page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name, exact: true });
+
+/** A place under the rail's ⋯ Explore Details (History, Ownership, Connection strength; ADR-145
+ * Amendment 12), chosen from its menu. */
+export async function explorePlace(page: Page, name: "History" | "Ownership" | "Connection strength"): Promise<void> {
+  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: /^Explore Details/ }).click();
+  await page.getByRole("group", { name: "Explore Details" }).getByRole("button", { name }).click();
+}
 
 export type MonitoringTab =
   | "Queue"
@@ -113,11 +120,11 @@ export type MonitoringTab =
 /** Rules and Monitoring on one of its tabs (ADR-146 decision 2; the Monitoring place's tabs before
  * it, by their old names: Queue and Watches' inbox are *Alerts*; Rules, Watches' hotlists and Lists are
  * *What raises alerts*; Audit is *Changes*). Connection strength stayed in the Glass, under the
- * rail's More. Reached through the place switcher, as a person reaches it. */
+ * rail's Explore Details (ADR-145 Amendment 12). Reached through the place switcher, as a person reaches it. */
 export async function monitoringTab(page: Page, tab: MonitoringTab): Promise<void> {
   if (tab === "Connection strength") {
-    await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "More" }).click();
-    await page.getByRole("group", { name: "More" }).getByRole("button", { name: "Connection strength" }).click();
+    await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: /^Explore Details/ }).click();
+    await page.getByRole("group", { name: "Explore Details" }).getByRole("button", { name: "Connection strength" }).click();
     await expect(page.getByRole("region", { name: "Connection strength" })).toBeVisible();
     await page.waitForTimeout(2500);
     return;

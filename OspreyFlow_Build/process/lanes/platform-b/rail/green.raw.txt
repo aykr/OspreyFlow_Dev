@@ -1,17 +1,12 @@
-# rail + Help, green: the branch, this Mac
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
- FAIL  apps/workspace/src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the column opens with the Inspector only, the other panels folded in their order
-      Tests  1 failed | 116 passed (117)
-# App.chrome.test.tsx's 'the column opens with the Inspector only' fails on main too (not this change's)
-  ✓  12 keyboard/shell.spec.ts:90:1 › each rail entry is reached and pressed by keyboard (237ms)
-  ✓  13 keyboard/shell.spec.ts:109:1 › each destination under the rail's Explore Details is reached and chosen by keyboard (208ms)
-  ✓  18 keyboard/shell.spec.ts:178:1 › the rail's Help opens and closes the keys panel by keyboard, as ? and Esc do (259ms)
-  47 passed (7.6s)
-  ✘  23 a11y/every-harness.spec.ts:375:7 › places-harness.html open=views (govuk) has no automated WCAG 2.2 A or AA violations (970ms)
-  ✓  40 a11y/every-harness.spec.ts:375:7 › top-bar-harness.html help=1 (dark) has no automated WCAG 2.2 A or AA violations (899ms)
-  ✓  41 a11y/every-harness.spec.ts:375:7 › top-bar-harness.html help=1 (light) has no automated WCAG 2.2 A or AA violations (882ms)
-  ✓  42 a11y/every-harness.spec.ts:375:7 › top-bar-harness.html help=1 (govuk) has no automated WCAG 2.2 A or AA violations (1.0s)
-  ✓  43 a11y/every-harness.spec.ts:399:5 › top-bar-harness.html help=1: every labelled field's name contains its visible label (2.5.3) (628ms)
+# rail + Help after the lane review, green: the branch, this Mac
+      Tests  119 passed (119)
+  ✘    8 keyboard/admin-models.spec.ts:59:1 › Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for (5.4s)
+  ✘  144 keyboard/admin-models.spec.ts:200:1 › every registered Models action has its own proving test case above (184ms)
+  2 failed
+  1 skipped
+  782 passed (3.1m)
+# the two keyboard failures are admin-models' Bedrock case (Mac only: End on a closed <select>, a CARRIES row) and its registry case after it
+  ✘  23 a11y/every-harness.spec.ts:376:7 › places-harness.html open=views (govuk) has no automated WCAG 2.2 A or AA violations (976ms)
   1 failed
-  42 passed (37.6s)
-# places-harness.html open=views (govuk) fails with main's own places-harness too (the context banner's .btn and separator unmeasurable): not this change's
+  39 passed (35.2s)
+# places-harness open=views (govuk) fails with main's own places-harness too (recorded before)

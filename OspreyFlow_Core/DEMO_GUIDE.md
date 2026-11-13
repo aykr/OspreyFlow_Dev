@@ -756,8 +756,8 @@ and the Studio it carries the way across, *Open … in the Ingest Studio ↗* an
 Glass*, which replaces the Studio rail's *Back to the investigation*. In the Glass the same line carries
 *Case · Boards · Monitoring*; *Boards* says "(coming)" and does nothing yet. Since ADR-145 Amendment 2
 (the case screen lightened, 7 November 2026) *Monitoring*, with its open-alert count, is reached from
-that line; the rail keeps *Cases* and *Explore*, with *Ownership*, *History*, *Questions* and
-*Dashboards* under its ⋯ *More*; the view switch keeps *Graph* and *Map*, with *Matrix* and *Reports*
+that line; the rail keeps *Cases*, *Explore*, *Ask & Chat* and *Dashboards*, with *History*,
+*Ownership* and *Connection strength* under its ⋯ *Explore Details* (ADR-145 Amendment 12); the view switch keeps *Graph* and *Map*, with *Matrix* and *Reports*
 under *More views*; and the right-hand column opens with the Inspector only. Each account is offered
 exactly the places its rights open and can use (table below; ADR-145 Amendment 1): the Studio for
 whoever may read its pipelines (`edit_pipelines`), Admin for whoever holds the right of one of its built sections,

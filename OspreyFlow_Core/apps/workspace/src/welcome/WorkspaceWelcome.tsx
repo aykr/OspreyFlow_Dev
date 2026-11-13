@@ -3,7 +3,7 @@
 // restored as the History drawer restores one (spec 03 §3.1's route) — and the keys worth knowing,
 // each one the Glass has. It reopens with `?` or the rail's Help; closing it is remembered per person.
 import { GUIDE_FOR_PLACE } from "../home/guides";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { whenLabel } from "../home/homeData";
 import type { HistoryStepSummary, WorkingSetDelta } from "../workingset/models";
@@ -32,8 +32,8 @@ export function useHelpKey(open: () => void): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (event.key !== "?" || event.ctrlKey || event.metaKey || event.altKey) return;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (event.key !== "?" || event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+      if (target && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable)) return;
       open();
     };
     window.addEventListener("keydown", onKey);
@@ -61,10 +61,16 @@ export interface WorkspaceWelcomeProps {
   /** ADR-145 Amendment 12: the user guide, as Home's Glass card links it (ADR-145 Amendment 10):
    * its address, and opening it, resolving to words when it could not. None, no link. */
   guide?: { href: string; open: () => Promise<string | null> };
+  /** ADR-145 Amendment 12: opened by Help or `?`, the panel takes focus, so Esc closes it at once. */
+  takeFocus?: boolean;
   now?: Date;
 }
 
-export function WorkspaceWelcome({ apiBaseUrl, bearerToken, investigationId, nodeCount, onRestored, onClose, guide, now = new Date() }: WorkspaceWelcomeProps) {
+export function WorkspaceWelcome({ apiBaseUrl, bearerToken, investigationId, nodeCount, onRestored, onClose, guide, takeFocus = false, now = new Date() }: WorkspaceWelcomeProps) {
+  const dialog = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (takeFocus) dialog.current?.focus();
+  }, [takeFocus]);
   const [guideSaid, setGuideSaid] = useState("");
   const [steps, setSteps] = useState<HistoryStepSummary[] | null>(null);
   useEffect(() => {
@@ -96,6 +102,8 @@ export function WorkspaceWelcome({ apiBaseUrl, bearerToken, investigationId, nod
 
   return (
     <div
+      ref={dialog}
+      tabIndex={-1}
       role="dialog"
       aria-modal="false"
       aria-labelledby="workspace-welcome-title"

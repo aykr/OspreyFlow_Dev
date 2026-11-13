@@ -186,6 +186,12 @@ test("the rail's Help opens and closes the keys panel by keyboard, as ? and Esc 
   await page.keyboard.press("Enter");
   await expect(panel).toHaveCount(0);
   expect(await page.evaluate(() => window.__TOPBAR__?.help)).toBe(2);
+  // Opened by Help it takes focus, so Esc closes it straight away.
+  await help.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
   await page.locator("body").focus();
   await page.keyboard.press("?");
   await expect(panel).toBeVisible();
