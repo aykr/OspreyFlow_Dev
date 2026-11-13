@@ -78,3 +78,15 @@ FAILED tests/services/api/test_search_service.py::test_an_unreachable_index_fall
 3 failed, 8 passed in 2.05s
 == restored
 11 passed in 2.79s
+
+== fifth round: merged entities, at baa13f1 (the tests were red before the code: 16 failed, no tau argument)
+== plant: every hit, hidden ones too, asked for links
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_a_member_the_reader_may_not_see_adds_nothing
+1 failed, 15 passed in 1.86s
+== plant: splits ignored
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_a_merge_below_the_cases_threshold_or_split_is_not_made
+1 failed, 15 passed in 1.85s
+== restored
+16 passed in 2.77s
