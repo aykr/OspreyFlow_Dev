@@ -1,6 +1,6 @@
 """Rule 15's red-then-green for the step 6 driver: each plant breaks one check at its real call site in a
 copy of the driver, runs the driver's tests against that copy, and must turn them red; the unplanted copy
-must stay green; then the route reading's plants, in place and put back. Run from OspreyFlow_Core:
+must stay green; then the route reading's plants, in a copy of it beside a copy of its module. Run from OspreyFlow_Core:
 
     .venv/bin/python ../OspreyFlow_Build/process/lanes/case-b/v052/plants.py
 """
@@ -51,6 +51,12 @@ PLANTS: list[tuple[str, str, str, str]] = [
     ('install_verify.py', '    if "failed" in answer:', '    if False:', "the probe's failure read as an answer"),
     ('install_verify.py', '    if unsigned.get("status") != 403 or "not authorized" not in str(unsigned.get("error", "")):', '    if unsigned.get("status") != 403:', "any 403 taken for the domain's refusal"),
     ('install_verify.py', 'except BaseException as error:  # r1\'s kubectl keeps stdout alone', 'except ZeroDivisionError as error:  # r1\'s kubectl keeps stdout alone', "the probe's failure left on stderr"),
+    ('install_verify.py', '    if rendered != here:', '    if False:', "a kept render of other files (v0.5.1's) named the candidate"),
+    ('install_verify.py', '    if len(commits) != 1 or not _COMMIT.fullmatch(commits[0]):', '    if not commits:', 'a kept render of two commits, or of unknown, named the candidate'),
+    ('install_verify.py', '    if git("cat-file", "-t", commit).strip() != "commit":', '    if False:', 'a commit not in the copy named the candidate'),
+    ('verify_live.sh', 'export PATH="$HOME/osprey-runs/platform.tools/bin:$PATH" KUBECONFIG="$STATE/kubeconfig"', 'export PATH="$HOME/osprey-runs/platform.tools/bin:$PATH" KUBECONFIG="$STATE/config"', "the wrapper's kubeconfig not R1's"),
+    ('verify_live.sh', 'case " $* " in *" --candidate "*) ;; *) set -- --candidate auto "$@" ;; esac', ':', 'the wrapper runs with no candidate'),
+    ('install_verify.py', '    settings = {k: v for k, v in client.transport.kwargs.items() if k != "http_auth"}', '    settings = {"timeout": 30}', "the unsigned probe off the signed client's own transport"),
     ('install_verify.py', '        return release_of(self._get("configmap", "ospreyflow-env"))', '        return release_of(self._get("configmap", "ospreyflow-files"))', 'the release read from another ConfigMap'),
     ('install_verify.py', '    return all(expected[r] == c["image"] for c in containers if (r := _repository(c["image"], registry)) in expected)', '    return expected[_repository(spec["containers"][0]["image"], registry)] == spec["containers"][0]["image"]', 'an init or second container on the old reference passes'),
     ('install_verify.py', '    if _repository(spec["containers"][0]["image"], registry) not in expected:\n        return False', '    if False:\n        return False', 'a template the render never pinned reads as the candidate'),
@@ -76,46 +82,54 @@ PLANTS: list[tuple[str, str, str, str]] = [
 ]
 
 
-#: The closing-pass proof's route reading (tests/scenarios/test_over_the_wire_routes_exist.py), planted in place and
-#: put back: (the line as it stands, the planted line, what it breaks).
-ROUTES = HERE.parents[3] / "tests" / "scenarios" / "test_over_the_wire_routes_exist.py"
+#: The closing-pass proof's route reading (tests/scenarios/test_over_the_wire_routes_exist.py), planted in a
+#: temporary copy beside a copy of the module it reads (its MODULE is its own neighbour); the tracked files are
+#: never written. (the line as it stands, the planted line, what it breaks)
+SCENARIOS = HERE.parents[3] / "tests" / "scenarios"
+ROUTES, MODULE = SCENARIOS / "test_over_the_wire_routes_exist.py", SCENARIOS / "test_phase8_exit_over_the_wire.py"
 ROUTE_PLANTS: list[tuple[str, str, str]] = [
-    ('        if path is None or path.startswith("{") or ("/v1/" in path and not path.startswith("/v1/")):', '        if False:', 'unreadable calls skipped'),
-    ('        if path is None or path.startswith("{") or ("/v1/" in path and not path.startswith("/v1/")):', '        if path is None or ("/v1/" in path and not path.startswith("/v1/")):', 'a path led by a field that is not an origin skipped'),
+    ('        if path is None or not path.startswith("/v1/"):', '        if False:', 'unreadable calls skipped'),
+    ('        if path is None or not path.startswith("/v1/"):', '        if path is None or ("/v1/" in path and not path.startswith("/v1/")):', 'a path led by a field, or off /v1, skipped'),
     ('NOT_THE_CONDUIT = {"browser.get(authorize)", "browser.post(form_action.group(1)", "browser.post(f\'{KEYCLOAK_ORIGIN}/realms/"}', 'NOT_THE_CONDUIT: set[str] = set()', 'the sign-in exceptions removed (the real module has unreadable calls)'),
     ('        return text.removeprefix("{}") if text.startswith("{}/v1/") else text  # an origin before the path', '        return text', 'an origin-prefixed path not read'),
     ('            match = re.fullmatch(r"\\{\\}://\\{\\}(/v1/.*)", text)', '            match = None', 'the stream the module opens not read'),
+    ('            elif "://" in text and "/v1/" in text:', '            elif False:', 'a stream URL of another shape skipped'),
 ]
 
 
-def run_routes() -> tuple[int, str]:
+def run_routes(folder: Path) -> tuple[int, str]:
     env = {k: v for k, v in os.environ.items() if k != "OSPREY_LANE"}
     env.update(ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993",
                CLICKHOUSE_HTTP_PORT="59994")  # closed ports: the reading needs no store
-    done = subprocess.run([sys.executable, "-m", "pytest", "-c", str(HERE.parents[3] / "pytest.ini"), "-p", "no:cacheprovider",
-                           "-q", "-p", "no:randomly", str(ROUTES)], capture_output=True, text=True, check=False, env=env)
+    build = HERE.parents[3]
+    done = subprocess.run([sys.executable, "-m", "pytest", "-c", str(build / "pytest.ini"), "--rootdir", str(build),
+                           "-p", "no:cacheprovider", "-q", "-p", "no:randomly", str(folder / ROUTES.name)],
+                          capture_output=True, text=True, check=False, env=env)
     last = [line for line in done.stdout.splitlines() if line.strip()][-1:] or [done.stderr[-200:]]
     return done.returncode, last[0]
 
 
-def route_plants() -> int:
+def route_plants(tmp: Path) -> int:
     bad = 0
     original = ROUTES.read_text()
-    try:
-        code, said = run_routes()
-        print(f"{'GREEN' if code == 0 else 'RED  '} routes unplanted: {said}")
-        bad += code != 0
-        for line, planted, what in ROUTE_PLANTS:
-            if original.count(line) != 1:
-                print(f"MISS  {what}: the line is not in {ROUTES.name} exactly once")
-                bad += 1
-                continue
-            ROUTES.write_text(original.replace(line, planted))
-            code, said = run_routes()
-            print(f"{'RED  ' if code else 'GREEN'} {what}: {said}")
-            bad += code == 0
-    finally:
-        ROUTES.write_text(original)
+    base = tmp / "routes"
+    base.mkdir()
+    shutil.copy(ROUTES, base / ROUTES.name)
+    shutil.copy(MODULE, base / MODULE.name)
+    code, said = run_routes(base)
+    print(f"{'GREEN' if code == 0 else 'RED  '} routes unplanted: {said}")
+    bad += code != 0
+    for i, (line, planted, what) in enumerate(ROUTE_PLANTS):
+        if original.count(line) != 1:
+            print(f"MISS  {what}: the line is not in {ROUTES.name} exactly once")
+            bad += 1
+            continue
+        folder = tmp / f"routes{i}"
+        shutil.copytree(base, folder)
+        (folder / ROUTES.name).write_text(original.replace(line, planted))
+        code, said = run_routes(folder)
+        print(f"{'RED  ' if code else 'GREEN'} {what}: {said}")
+        bad += code == 0
     return bad
 
 
@@ -123,7 +137,8 @@ def run(folder: Path) -> tuple[int, str]:
     done = subprocess.run(
         [sys.executable, "-m", "pytest", "-c", str(HERE.parents[3] / "pytest.ini"), "-p", "no:cacheprovider", "-q", "-x",
          "-p", "no:randomly", str(folder)], capture_output=True, text=True, check=False,
-        env={**os.environ, "OSPREY_V052_SPEC08_MODULE": str(HERE.parents[3] / "tests" / "scenarios" / "test_phase8_exit_over_the_wire.py")})
+        env={**os.environ, "OSPREY_V052_SPEC08_MODULE": str(HERE.parents[3] / "tests" / "scenarios" / "test_phase8_exit_over_the_wire.py"),
+             "OSPREY_V052_R1_GATES": str(HERE.parents[1] / "platform" / "gates")})
     last = [line for line in done.stdout.splitlines() if line.strip()][-1:] or [done.stderr[-200:]]
     return done.returncode, last[0]
 
@@ -148,7 +163,7 @@ def main() -> int:
             code, said = run(folder)
             print(f"{'RED  ' if code else 'GREEN'} {what}: {said}")
             bad += code == 0
-    bad += route_plants()
+        bad += route_plants(Path(tmp))
     print("every plant red, unplanted green" if not bad else f"{bad} plant(s) not shown red")
     return 1 if bad else 0
 

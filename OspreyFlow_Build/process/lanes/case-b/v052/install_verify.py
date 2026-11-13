@@ -27,8 +27,7 @@ bucket nobody writes, or an entry still marked `pending` (a step that has not re
 reads R1's kind cluster (r1_kind.py, the platform lane's, imported and not changed). Run from OspreyFlow_Core:
 
     PYTHONPATH=.:packages:cli .venv/bin/python ../OspreyFlow_Build/process/lanes/case-b/v052/install_verify.py plan [--allow-pending]
-    bash ../OspreyFlow_Build/process/lanes/platform/gates/r1_kind.sh py \\
-        ../../case-b/v052/install_verify.py verify --candidate <commit> [--allow-pending]   # on kind, under a lease
+    bash ../OspreyFlow_Build/process/lanes/case-b/v052/verify_live.sh [--candidate <commit>] [--allow-pending]   # on kind, under a lease
 """
 
 
@@ -212,6 +211,23 @@ def _same_release(tag: str | None, version: str) -> bool:
 
 #: A commit as git names it: render.git_sha's full form; `dev-<short>` holds `rev-parse --short`'s (7 or more).
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
+
+
+def candidate_from_copy(tags: Iterable[str | None], git: Callable[..., str]) -> str:
+    """The candidate's commit, found: the one commit our kept render's images are tagged with, which must be in
+    the copy's history with HEAD's own tree (the stack_lease copy commits afresh on top of the last for each
+    run, so the upgrade's commit and the verify run's differ while their files are the same). A render from
+    other files (v0.5.1's, or a lane's head) has another tree, and fails here."""
+    commits = sorted({t for t in tags if t})
+    if len(commits) != 1 or not _COMMIT.fullmatch(commits[0]):
+        raise LookupError(f"the kept render's images of ours carry {commits or 'no tag'}, not one commit")
+    (commit,) = commits
+    if git("cat-file", "-t", commit).strip() != "commit":
+        raise LookupError(f"the kept render's commit {commit[:12]} is not in this copy's history")
+    rendered, here = git("rev-parse", f"{commit}^{{tree}}").strip(), git("rev-parse", "HEAD^{tree}").strip()
+    if rendered != here:
+        raise LookupError(f"the kept render's commit {commit[:12]} has other files than this copy's HEAD ({rendered[:12]} != {here[:12]})")
+    return commit
 
 
 def release_matches(release: str | None, version: str, candidate: str) -> tuple[bool, str]:
@@ -650,12 +666,15 @@ async def ask(client, alias):
 
 
 async def main():
-    from opensearchpy import AsyncHttpConnection, AsyncOpenSearch
+    from opensearchpy import AsyncOpenSearch
     from services.search_index.client import SearchIndexConfig, search_client
 
     config = SearchIndexConfig.from_env()
-    signed = await ask(search_client(config), config.alias)
-    bare = AsyncOpenSearch(hosts=[config.url], connection_class=AsyncHttpConnection, timeout=30)
+    client = search_client(config)
+    # The same transport as the signed client's own (hosts, connection class, TLS, timeout), less its signer.
+    settings = {k: v for k, v in client.transport.kwargs.items() if k != "http_auth"}
+    bare = AsyncOpenSearch(hosts=client.transport.hosts, connection_class=client.transport.connection_class, **settings)
+    signed = await ask(client, config.alias)
     return {"signing": config.signing, "alias": config.alias, "signed": signed, "unsigned": await ask(bare, config.alias)}
 
 
@@ -867,9 +886,20 @@ def _kind(m: dict[str, Any], candidate: str | None) -> KindDeployment:  # pragma
     others = yaml.safe_load(entra.read_text()) if entra.exists() else {}
     clients = {"glass": claims["client_id"], **{k: v["client_id"] for k, v in (others or {}).items()}}
     expected = references_from_values(values, images["registry"])
+    if candidate == "auto":
+        ours = [repo for repo, image in m["images"].items() if image.get("ours")]
+        candidate = candidate_from_copy((tag_of(ref) for repo, ref in expected.items() if repo in ours), _git)
+        print(f"candidate {candidate}: the kept render's commit, with this copy's files")
     return KindDeployment(r1, registry=images["registry"], expected=expected, config=config, clients=clients,
                           api_audiences={claims["api_client_id"], f"api://{claims['api_client_id']}"},
                           bucket_prefix=r1.state().get("prefix", ""), jobs=m["jobs"], candidate=candidate)
+
+
+def _git(*args: str) -> str:  # pragma: no cover - the live half
+    import subprocess
+
+    done = subprocess.run(["git", *args], capture_output=True, text=True, check=False)
+    return done.stdout if done.returncode == 0 else ""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -878,7 +908,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="install_verify", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("verb", choices=("plan", "verify"))
     parser.add_argument("--allow-pending", action="store_true", help="a dry run before every step has rendered")
-    parser.add_argument("--candidate", help="verify: the full commit the upgrade rendered from (the copy's HEAD that ran it)")
+    parser.add_argument("--candidate", help="verify: the full commit the upgrade rendered from, or `auto`: the kept render's own, "
+                        "held to this copy's files (verify_live.sh passes it)")
     args = parser.parse_args(argv)
     m = load()
     try:
@@ -892,7 +923,7 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(f"SKIP {e}: still pending" for e in skipped))
         return 0
     if args.verb == "verify" and not args.candidate:
-        parser.error("verify needs --candidate <the full commit the upgrade rendered from>")
+        parser.error("verify needs --candidate <the full commit the upgrade rendered from> or auto")
     results = verify(m, _kind(m, args.candidate), allow_pending=args.allow_pending)
     print(report(results, skipped))
     return 1 if any(not r.ok for r in results) else 0

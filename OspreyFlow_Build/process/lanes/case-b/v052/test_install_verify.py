@@ -34,6 +34,7 @@ def candidate() -> dict[str, Any]:
 #: The candidate's commit, as the copy's HEAD names it; the render tags ours with it (render.git_sha) and, before
 #: the checkout is tagged, writes the release as `dev-<git rev-parse --short>` (release.checkout_version).
 CANDIDATE = "0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d"
+OLD_COMMIT = "1111111111111111111111111111111111111111"  # v0.5.1's
 
 
 class Fake:
@@ -302,13 +303,10 @@ def test_a_cronjob_present_whose_runs_never_succeeded_fails() -> None:
 
 
 def _with_search_jobs() -> dict[str, Any]:
-    """3a's shape (lane/platform-v052-opensearch, 88a1820): held-suspended CronJobs, and OpenSearch's signing."""
+    """3a's shape, on main's manifest since 13 November: held-suspended CronJobs, and OpenSearch's signing."""
     m = candidate()
-    for name in ("ospreyflow-search-rebuild", "ospreyflow-search-drift"):
-        m["jobs"][name] = {"kind": "CronJob", "schedule": "suspended, started by the runbooks",
-                           "image": "ospreyflow/api", "requests": {"cpu": "500m", "memory": "2Gi"},
-                           "limits": {"cpu": "2", "memory": "4Gi"}}
-    m["managed"]["opensearch"]["signing"] = "sigv4"
+    assert {"ospreyflow-search-rebuild", "ospreyflow-search-drift"} <= set(m["jobs"])
+    assert m["managed"]["opensearch"]["signing"] == "sigv4"
     return m
 
 
@@ -332,9 +330,14 @@ def test_a_cronjob_listed_suspended_that_runs_on_a_schedule_fails() -> None:
 
 def test_a_suspended_cronjob_never_started_fails() -> None:
     m = _with_search_jobs()
-    fake = Fake(m).drop("jobs.ospreyflow-search-rebuild")
-    failed = [r.entry for r in iv.verify(m, fake) if not r.ok]
-    assert failed == ["jobs.ospreyflow-search-rebuild"]
+
+    class NeverStarted(Fake):
+        def job(self, name: str) -> dict[str, Any] | None:
+            got = super().job(name)
+            return {**got, "succeeded": 0} if got and name == "ospreyflow-search-rebuild" else got
+
+    failed = [r for r in iv.verify(m, NeverStarted(m)) if not r.ok]
+    assert [r.entry for r in failed] == ["jobs.ospreyflow-search-rebuild"] and "no run succeeded" in failed[0].said
 
 
 #: kubectl's status for one copy, RollingUpdate (maxSurge 1, maxUnavailable 0), the candidate's pod crash-looping:
@@ -643,7 +646,7 @@ def test_a_check_that_raises_is_a_failure_not_a_stop() -> None:
 def test_a_deployment_kubectl_reports_with_no_ready_replicas_is_not_ready() -> None:
     """kubectl leaves `readyReplicas` out altogether when none is ready (not 0)."""
     obj = {"kind": "Deployment", "spec": {"replicas": 1, "template": {"spec": {"containers": [
-        {"name": "api", "image": "localhost:5001/ospreyflow/api:v0.5.2@sha256:ab",
+        {"name": "api", "image": f"localhost:5001/ospreyflow/api:{CANDIDATE}@sha256:ab",
          "resources": {"requests": {"cpu": "500m", "memory": "2Gi"}, "limits": {"cpu": "2", "memory": "4Gi"}},
          "readinessProbe": {"exec": {"command": ["true"]}}}]}}},
         "status": {"replicas": 1, "unavailableReplicas": 1}}
@@ -778,14 +781,14 @@ def _cron_job(name: str, command: list[str], image: str, succeeded: int, owner: 
 
 def test_a_cronjobs_runs_count_only_its_own_command_at_the_candidates_image() -> None:
     cron = {"spec": {"jobTemplate": {"spec": {"template": {"spec": {"containers": [
-        {"name": "backup", "image": "r/ospreyflow/api:v0.5.2@sha256:new", "command": ["python", "-m", "x", "run"]}]}}}}}}
+        {"name": "backup", "image": f"r/ospreyflow/api:{CANDIDATE}@sha256:new", "command": ["python", "-m", "x", "run"]}]}}}}}}
     jobs = [
-        _cron_job("ospreyflow-backup-1", ["python", "-m", "x", "run"], "r/ospreyflow/api:v0.5.1@sha256:old", 1),  # before the upgrade
-        _cron_job("backup-sets-1", ["python", "-m", "x", "sets"], "r/ospreyflow/api:v0.5.2@sha256:new", 1),  # the runbook's listing
-        _cron_job("ospreyflow-backup-2", ["python", "-m", "x", "run"], "r/ospreyflow/api:v0.5.2@sha256:new", 0),  # failed
+        _cron_job("ospreyflow-backup-1", ["python", "-m", "x", "run"], f"r/ospreyflow/api:{OLD_COMMIT}@sha256:old", 1),  # before the upgrade
+        _cron_job("backup-sets-1", ["python", "-m", "x", "sets"], f"r/ospreyflow/api:{CANDIDATE}@sha256:new", 1),  # the runbook's listing
+        _cron_job("ospreyflow-backup-2", ["python", "-m", "x", "run"], f"r/ospreyflow/api:{CANDIDATE}@sha256:new", 0),  # failed
     ]
     assert iv.cron_runs(cron, jobs, "ospreyflow-backup") == 0
-    jobs.append(_cron_job("ospreyflow-backup-3", ["python", "-m", "x", "run"], "r/ospreyflow/api:v0.5.2@sha256:new", 1))
+    jobs.append(_cron_job("ospreyflow-backup-3", ["python", "-m", "x", "run"], f"r/ospreyflow/api:{CANDIDATE}@sha256:new", 1))
     assert iv.cron_runs(cron, jobs, "ospreyflow-backup") == 1
 
 
@@ -852,8 +855,9 @@ def _probe_line(**change: Any) -> str:
 
     line = {"signing": "sigv4", "alias": "ospreyflow-poc", "signed": {"status": 200, "count": 12},
             # the domain's refusal as the stand-in answers it (platform, 6998234): 403 with its JSON message
-            "unsigned": {"status": 403, "error": "AuthorizationException(403, 'User: anonymous is not authorized to "
-                                                 "perform: es:ESHttpGet on resource: arn:aws:es:eu-west-2:domain/vpc-x')"}}
+            # as opensearch-py's AuthorizationException reads, run against the stand-in's words (gates/search-probe-real.txt)
+            "unsigned": {"status": 403, "error": "AuthorizationException(403, '{\"message\": \"User: anonymous is not authorized to "
+                                                 "perform: es:ESHttpGet on resource: arn:aws:es:eu-west-2:123456789012:domain/ospreyflow-poc-search/\"}')"}}
     return json.dumps({**line, **change}) + "\n"  # stdout alone: r1_kind.sh keeps no stderr
 
 
@@ -898,7 +902,7 @@ def test_the_search_probe_prints_one_json_line_whatever_fails() -> None:
 def test_the_search_probe_is_python_and_uses_the_deployments_own_client() -> None:
     compile(iv.SEARCH_PROBE, "<probe>", "exec")
     assert "from services.search_index.client import SearchIndexConfig, search_client" in iv.SEARCH_PROBE
-    assert "search_client(config)" in iv.SEARCH_PROBE and "hosts=[config.url]" in iv.SEARCH_PROBE
+    assert "client = search_client(config)" in iv.SEARCH_PROBE
 
 
 def test_an_egress_placeholder_fails_without_probing() -> None:
@@ -914,7 +918,133 @@ def test_a_cronjob_whose_template_is_still_the_old_release_reads_as_not_current(
         return {"spec": {"schedule": "15 2 * * *", "jobTemplate": {"spec": {"template": {"spec": {"containers": [
             {"name": "backup", "image": image, "command": ["run"]}]}}}}}}
 
-    old = _kind({("cronjob", "ospreyflow-backup"): cron("r/ospreyflow/api:v0.5.1@sha256:old"), ("jobs",): {"items": []}})
+    old = _kind({("cronjob", "ospreyflow-backup"): cron(f"r/ospreyflow/api:{OLD_COMMIT}@sha256:old"), ("jobs",): {"items": []}})
     new = _kind({("cronjob", "ospreyflow-backup"): cron("r/ospreyflow/api@sha256:new"), ("jobs",): {"items": []}})
     assert old.job("ospreyflow-backup")["current"] is False
     assert new.job("ospreyflow-backup")["current"] is True
+
+
+# ---- the live half's own wiring ---------------------------------------------------------------------------
+
+
+def _env_seen(script: Path, args: list[str], tmp: Path) -> dict[str, str]:
+    """Run `script` as on the server, from a folder whose `.venv/bin/python` only reports what it was given."""
+    import json
+    import os
+    import subprocess
+
+    core = tmp / "core"
+    (core / ".venv" / "bin").mkdir(parents=True)
+    stub = core / ".venv" / "bin" / "python"
+    stub.write_text('#!/bin/sh\nexec "$(command -v python3)" -c \'import json,os,sys; print(json.dumps({**{k: os.environ.get(k, "") for k in ("PATH", "KUBECONFIG", "OSPREY_PLATFORM_FOLDERS", "PYTHONPATH")}, "ARGV": sys.argv[1:]}))\' "$@"\n')
+    stub.chmod(0o755)
+    env = {"HOME": str(tmp / "home"), "PATH": os.environ["PATH"],
+           **{k: v for k, v in os.environ.items() if k == "OSPREY_V052_R1_GATES"}}
+    done = subprocess.run(["bash", str(script), *args], cwd=core, env=env, capture_output=True, text=True, check=True)
+    return json.loads(done.stdout)
+
+
+def test_the_live_wrapper_gives_install_verify_r1s_own_environment(tmp_path: Path) -> None:
+    """The review of b6da153, must 1: `r1_kind.sh py` runs r1_kind.py only; the wrapper must set what it sets."""
+    here = Path(iv.__file__).resolve().parent
+    ours = _env_seen(here / "verify_live.sh", [], tmp_path / "a")
+    import os
+
+    gates = Path(os.environ.get("OSPREY_V052_R1_GATES") or here.parents[1] / "platform" / "gates")
+    r1 = _env_seen(gates / "r1_kind.sh", ["py", "x"], tmp_path / "b")
+    for key in ("KUBECONFIG", "OSPREY_PLATFORM_FOLDERS"):
+        assert ours[key] == r1[key].replace(str(tmp_path / "b"), str(tmp_path / "a")), key
+    assert ours["PATH"].split(":")[0] == r1["PATH"].split(":")[0].replace(str(tmp_path / "b"), str(tmp_path / "a"))
+    assert Path(ours["ARGV"][0]) == here / "install_verify.py" and ours["ARGV"][1:] == ["verify", "--candidate", "auto"]
+    named = _env_seen(here / "verify_live.sh", ["--candidate", "abc", "--allow-pending"], tmp_path / "c")
+    assert named["ARGV"][1:] == ["verify", "--candidate", "abc", "--allow-pending"]
+
+
+def _copy_repo(tmp: Path) -> tuple[Any, str, str, str]:
+    """A stack_lease copy: each run commits afresh (`commit --allow-empty`) on top of the last."""
+    import subprocess
+
+    def git(*args: str) -> str:
+        done = subprocess.run(["git", "-C", str(tmp), *args], capture_output=True, text=True, check=False,
+                              env={"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x.invalid", "GIT_COMMITTER_NAME": "t",
+                                   "GIT_COMMITTER_EMAIL": "t@x.invalid", "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"})
+        return done.stdout if done.returncode == 0 else ""
+
+    tmp.mkdir(parents=True, exist_ok=True)
+    git("init", "-q")
+    (tmp / "f").write_text("v0.5.1's files\n")
+    git("add", "-A"), git("commit", "-q", "-m", "the copy sent for this run")
+    old = git("rev-parse", "HEAD").strip()
+    (tmp / "f").write_text("the candidate's files\n")
+    git("add", "-A"), git("commit", "-q", "--allow-empty", "-m", "the copy sent for this run")
+    upgrade = git("rev-parse", "HEAD").strip()
+    git("add", "-A"), git("commit", "-q", "--allow-empty", "-m", "the copy sent for this run")
+    return git, old, upgrade, git("rev-parse", "HEAD").strip()
+
+
+def test_the_candidate_is_the_kept_renders_commit_with_this_copys_files(tmp_path: Path) -> None:
+    git, _old, upgrade, head = _copy_repo(tmp_path)
+    assert head != upgrade
+    assert iv.candidate_from_copy([upgrade, upgrade, None], git) == upgrade
+
+
+@pytest.mark.parametrize(
+    ("which", "said"),
+    [("old", "other files"), ("absent", "not in this copy's history"), ("two", "not one commit"),
+     ("unknown", "not one commit"), ("none", "not one commit")],
+)
+def test_a_kept_render_not_of_this_copys_files_names_no_candidate(tmp_path: Path, which: str, said: str) -> None:
+    git, old, upgrade, _ = _copy_repo(tmp_path)
+    tags = {"old": [old], "absent": ["1" * 40], "two": [old, upgrade], "unknown": ["unknown"], "none": [None]}[which]
+    with pytest.raises(LookupError, match=said):
+        iv.candidate_from_copy(tags, git)
+
+
+def test_the_unsigned_probe_takes_the_signed_clients_own_transport() -> None:
+    """The review of b6da153, item 4: the same hosts, connection class, TLS and timeout, less the signer."""
+    assert "client.transport.kwargs.items() if k != \"http_auth\"" in iv.SEARCH_PROBE
+    assert "hosts=client.transport.hosts, connection_class=client.transport.connection_class" in iv.SEARCH_PROBE
+
+
+def _have_search_client() -> bool:
+    import importlib.util
+
+    return all(importlib.util.find_spec(m) is not None for m in ("opensearchpy", "botocore", "services.search_index"))
+
+
+@pytest.mark.skipif(not _have_search_client(), reason="rules' search client and opensearch-py are not in this tree yet")
+def test_the_search_probe_against_a_domain_that_refuses_unsigned(tmp_path: Path) -> None:  # pragma: no cover
+    """The probe as the pod runs it, the deployment's own client against a server answering as the domain's
+    stand-in does: signed answered, unsigned refused 403 in the domain's JSON words."""
+    import json
+    import os
+    import subprocess
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class Domain(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if self.headers.get("Authorization"):
+                body, status = {"count": 3, "_shards": {}}, 200
+            else:
+                body, status = {"message": "User: anonymous is not authorized to perform: es:ESHttpGet"}, 403
+            raw = json.dumps(body).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        do_POST = do_GET
+
+        def log_message(self, *args: Any) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Domain)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    env = {**os.environ, "OPENSEARCH_URL": f"http://127.0.0.1:{server.server_port}", "OPENSEARCH_SIGNING": "sigv4",
+           "OPENSEARCH_REGION": "eu-west-2", "AWS_ACCESS_KEY_ID": "AKIDEXAMPLE", "AWS_SECRET_ACCESS_KEY": "x"}
+    done = subprocess.run([sys.executable, "-c", iv.SEARCH_PROBE], capture_output=True, text=True, env=env, check=False)
+    server.shutdown()
+    ok, said = iv.search_answer(done.stdout)
+    assert ok, (said, done.stderr[-500:])
