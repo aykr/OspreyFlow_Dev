@@ -1,5 +1,5 @@
-PLANT at 9093b5e: max_connections=250: the second Conduit must not come up
-Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T181418Z-3dd4e444/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_postgres_connections.py -v -s -k rendered_number_holds
+PLANT at 6074baf: max_connections=250: the second Conduit must not come up
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T191327Z-8774602d/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py -v -s -k rendered_number_holds
 ============================= test session starts ==============================
 platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python
 port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
@@ -7,14 +7,14 @@ rootdir: /root/osprey-runs/admin/OspreyFlow_Build
 configfile: pytest.ini
 plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
 asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collecting ... collected 9 items / 8 deselected / 1 selected
+collecting ... collected 1 item
 
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve FAILED
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve FAILED
 
 =================================== FAILURES ===================================
 _ test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve _
 
-self = <tests.services.api.test_statelessness._ConduitInstance object at 0x7886e0e685f0>
+self = <tests.services.api.test_statelessness._ConduitInstance object at 0x717d24016270>
 jwks_url = 'http://127.0.0.1:59998/jwks', extra_env = None
 
     def __init__(self, jwks_url: str, extra_env: dict[str, str] | None = None) -> None:
@@ -73,7 +73,7 @@ jwks_url = 'http://127.0.0.1:59998/jwks', extra_env = None
 ../OspreyFlow_Build/tests/services/api/test_statelessness.py:178: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-base_url = 'http://127.0.0.1:36007', timeout_s = 60.0
+base_url = 'http://127.0.0.1:48125', timeout_s = 60.0
 process = <Popen: returncode: 3 args: ['/root/osprey-runs/admin/OspreyFlow_Core/.venv/...>
 
     def _wait_until_up(
@@ -84,15 +84,15 @@ process = <Popen: returncode: 3 args: ['/root/osprey-runs/admin/OspreyFlow_Core/
         while time.monotonic() < deadline:
             if process is not None and process.poll() is not None:
 >               raise ConduitExited(f"{base_url} exited ({process.returncode}) before it came up")
-E               tests.services.api.test_statelessness.ConduitExited: http://127.0.0.1:36007 exited (3) before it came up
+E               tests.services.api.test_statelessness.ConduitExited: http://127.0.0.1:48125 exited (3) before it came up
 
 ../OspreyFlow_Build/tests/services/api/test_statelessness.py:73: ConduitExited
 
 The above exception was the direct cause of the following exception:
 
 command = ['postgres', '-c', 'max_connections=250']
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7886dfe07470>
-tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6528/test_the_rendered_number_holds0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x717d24afd7f0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6640/test_the_rendered_number_holds0')
 
     def _the_product_at_once(
         command: list[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -140,10 +140,10 @@ tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6528/test_the_rendered_number_h
 >                           conduits.append(_ConduitInstance(f"{oidc}/jwks"))
                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py:324: 
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:220: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-self = <tests.services.api.test_statelessness._ConduitInstance object at 0x7886e0e685f0>
+self = <tests.services.api.test_statelessness._ConduitInstance object at 0x717d24016270>
 jwks_url = 'http://127.0.0.1:59998/jwks', extra_env = None
 
     def __init__(self, jwks_url: str, extra_env: dict[str, str] | None = None) -> None:
@@ -208,8 +208,8 @@ jwks_url = 'http://127.0.0.1:59998/jwks', extra_env = None
             said = self._log.read().decode("utf-8", "replace")[-20000:]
             self._log.close()
 >           raise TimeoutError(f"{exc}; the Conduit's own last words:\n{said}") from exc
-E           TimeoutError: http://127.0.0.1:36007 exited (3) before it came up; the Conduit's own last words:
-E           INFO:     Started server process [3631976]
+E           TimeoutError: http://127.0.0.1:48125 exited (3) before it came up; the Conduit's own last words:
+E           INFO:     Started server process [548857]
 E           INFO:     Waiting for application startup.
 E           ERROR:    Traceback (most recent call last):
 E             File "/root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/routing.py", line 656, in lifespan
@@ -255,8 +255,8 @@ E           ERROR:    Application startup failed. Exiting.
 
 The above exception was the direct cause of the following exception:
 
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7886dfe07470>
-tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6528/test_the_rendered_number_holds0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x717d24afd7f0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6640/test_the_rendered_number_holds0')
 
     def test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve(
         monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -265,12 +265,12 @@ tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6528/test_the_rendered_number_h
 >       print("\n".join(_the_product_at_once(command, monkeypatch, tmp_path)))
                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py:377: 
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:273: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
 command = ['postgres', '-c', 'max_connections=250']
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7886dfe07470>
-tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6528/test_the_rendered_number_holds0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x717d24afd7f0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6640/test_the_rendered_number_holds0')
 
     def _the_product_at_once(
         command: list[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -332,22 +332,22 @@ E                           asyncpg.exceptions.TooManyConnectionsError: sorry, t
 E                           
 E                           ERROR:    Application startup failed. Exiting.
 
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py:326: AssertionError
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:222: AssertionError
 =============================== warnings summary ===============================
-tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
-  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections.py:324: ConduitStartTime: a Conduit came up in 4.6 s (http://127.0.0.1:43397)
+tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:220: ConduitStartTime: a Conduit came up in 7.2 s (http://127.0.0.1:59845)
     conduits.append(_ConduitInstance(f"{oidc}/jwks"))
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 ---------------------- 1 unmarked test(s) reached a store ----------------------
-tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve: ClickHouse on port 59994, Valkey on port 59993
+tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve: ClickHouse on port 59994, Valkey on port 59993
 ============================= slowest 30 durations =============================
-15.98s call     tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
-0.12s setup    tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+21.70s call     tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+0.22s setup    tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
 
 (1 durations < 0.005s hidden.  Use -vv to show these durations.)
 =========================== short test summary info ============================
-FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
-================= 1 failed, 8 deselected, 1 warning in 16.53s ==================
-Wall time: 18 s, exit 1 (no stack, no lease; set-up before it 13 s)
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+======================== 1 failed, 1 warning in 22.64s =========================
+Wall time: 24 s, exit 1 (no stack, no lease; set-up before it 13 s)
 exit=1

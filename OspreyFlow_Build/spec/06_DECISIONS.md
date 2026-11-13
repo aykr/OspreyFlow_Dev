@@ -36765,7 +36765,7 @@ CARRIES row): a deployed Small's PostgreSQL was rendered with no `max_connection
 Conduit holds 50 at rest beside Keycloak, the gateway's database, Superset and any worker. A second Conduit, or a worker
 opening the same stores, met `TooManyConnectionsError`.
 
-**What one Conduit opens, measured in a running Conduit** (`tests/harness/test_postgres_connections.py`, every
+**What one Conduit opens, measured in a running Conduit** (`tests/harness/test_postgres_connections_live.py`, every
 `asyncpg.create_pool` the process makes recorded with its sizes; `gates/pg_two_conduits_green.txt`): **48 pools; 50
 connections at their `min_size`** (what it holds at rest, and exactly what it added to the server, as platform-b
 measured), **201 at their `max_size`** (what its pools may grow to), with Entra ID's 4 more where configured. The source alone undercounts: two stores are opened twice in every Conduit
@@ -36838,7 +36838,8 @@ Conduit's pools are not changed.**
   (`gates/pg_update_path_red.txt`). The call and that test are in `scripts/refresh.py` and `tests/test_refresh.py`,
   platform-b's, so they travel as `process/lanes/admin/platform-pg.diff`, with the two assertions of platform's
   `test_render_memory.py` and `test_model_engines.py` that follow the new render.
-- `::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve` (docker:
+- `tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve`
+  (its own CI job, `postgres-connections-test`, ignored by `test`, wired in `process/lanes/admin/ci-pg.diff`; docker:
   `postgres:16.4` with exactly the rendered command; two real Conduits, their pools recorded as they are opened, the
   connections each adds at rest checked against them, the measured maximum with Entra's checked against the ceiling;
   then raw connections standing in for each Conduit's room up to the ceiling and its loads, every other client's

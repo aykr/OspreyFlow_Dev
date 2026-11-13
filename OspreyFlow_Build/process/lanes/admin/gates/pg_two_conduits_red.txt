@@ -1,5 +1,5 @@
-PLANT at 9093b5e: the image's own command (max_connections 100)
-Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T181350Z-c38d6e4b/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_postgres_connections.py -v -s -k rendered_number_holds
+PLANT at 6074baf: the image's own command (max_connections 100)
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T191256Z-e20f7673/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py -v -s -k rendered_number_holds
 ============================= test session starts ==============================
 platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python
 port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
@@ -7,14 +7,14 @@ rootdir: /root/osprey-runs/admin/OspreyFlow_Build
 configfile: pytest.ini
 plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
 asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collecting ... collected 9 items / 8 deselected / 1 selected
+collecting ... collected 1 item
 
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve FAILED
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve FAILED
 
 =================================== FAILURES ===================================
 _ test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve _
 
-self = <tests.harness.test_postgres_connections._Clients object at 0x79488c6dec60>
+self = <tests.harness.test_postgres_connections_live._Clients object at 0x7cb87097da30>
 n = 170, what = "Conduit 1's pools grew to CONDUIT_POOL_CEILING"
 
     async def open(self, n: int, what: str) -> None:
@@ -23,7 +23,7 @@ n = 170, what = "Conduit 1's pools grew to CONDUIT_POOL_CEILING"
 >               self.opened.append(await asyncpg.connect(self.dsn))
                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py:269: 
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:165: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 .venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
     return await connect_utils._connect(
@@ -34,13 +34,13 @@ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-params = ConnectionParameters(user='osprey', password='txXuk0pgfTPxP1mI', database='ospreyflow', ssl=<ssl.SSLContext object at ...postgres'>, server_settings=None, target_session_attrs=<SessionAttribute.any: 'any'>, krbsrvname=None, gsslib='gssapi')
-retry = True, addr = ('127.0.0.1', 46261)
+params = ConnectionParameters(user='osprey', password='TsqHMxtq5TukCuFi', database='ospreyflow', ssl=<ssl.SSLContext object at ...postgres'>, server_settings=None, target_session_attrs=<SessionAttribute.any: 'any'>, krbsrvname=None, gsslib='gssapi')
+retry = True, addr = ('127.0.0.1', 57431)
 loop = <_UnixSelectorEventLoop running=False closed=True debug=False>
 config = ConnectionConfiguration(command_timeout=None, statement_cache_size=100, max_cached_statement_lifetime=300, max_cacheable_statement_size=15360)
 connection_class = <class 'asyncpg.connection.Connection'>
 record_class = <class 'asyncpg.protocol.record.Record'>
-params_input = ConnectionParameters(user='osprey', password='txXuk0pgfTPxP1mI', database='ospreyflow', ssl=<ssl.SSLContext object at ...postgres'>, server_settings=None, target_session_attrs=<SessionAttribute.any: 'any'>, krbsrvname=None, gsslib='gssapi')
+params_input = ConnectionParameters(user='osprey', password='TsqHMxtq5TukCuFi', database='ospreyflow', ssl=<ssl.SSLContext object at ...postgres'>, server_settings=None, target_session_attrs=<SessionAttribute.any: 'any'>, krbsrvname=None, gsslib='gssapi')
 
     async def __connect_addr(
         params,
@@ -95,8 +95,8 @@ E           asyncpg.exceptions.TooManyConnectionsError: sorry, too many clients 
 
 The above exception was the direct cause of the following exception:
 
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x79488d0072f0>
-tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6527/test_the_rendered_number_holds0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7cb8713feed0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6639/test_the_rendered_number_holds0')
 
     def test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve(
         monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -105,9 +105,9 @@ tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6527/test_the_rendered_number_h
 >       print("\n".join(_the_product_at_once(command, monkeypatch, tmp_path)))
                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py:377: 
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:273: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py:341: in _the_product_at_once
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:237: in _the_product_at_once
     asyncio.run(
 /usr/lib/python3.12/asyncio/runners.py:194: in run
     return runner.run(main)
@@ -120,7 +120,7 @@ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
            ^^^^^^^^^^^^^^^
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-self = <tests.harness.test_postgres_connections._Clients object at 0x79488c6dec60>
+self = <tests.harness.test_postgres_connections_live._Clients object at 0x7cb87097da30>
 n = 170, what = "Conduit 1's pools grew to CONDUIT_POOL_CEILING"
 
     async def open(self, n: int, what: str) -> None:
@@ -131,22 +131,22 @@ n = 170, what = "Conduit 1's pools grew to CONDUIT_POOL_CEILING"
 >               raise AssertionError(f"refused while {what}: {refused}") from refused
 E               AssertionError: refused while Conduit 1's pools grew to CONDUIT_POOL_CEILING: sorry, too many clients already
 
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py:271: AssertionError
+../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:167: AssertionError
 =============================== warnings summary ===============================
-tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
-  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections.py:324: ConduitStartTime: a Conduit came up in 5.2 s (http://127.0.0.1:55509)
+tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections_live.py:220: ConduitStartTime: a Conduit came up in 8.1 s (http://127.0.0.1:54475)
     conduits.append(_ConduitInstance(f"{oidc}/jwks"))
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 ---------------------- 1 unmarked test(s) reached a store ----------------------
-tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve: ClickHouse on port 59994, Valkey on port 59993
+tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve: ClickHouse on port 59994, Valkey on port 59993
 ============================= slowest 30 durations =============================
-11.30s call     tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
-0.12s setup    tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+13.89s call     tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+0.17s setup    tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
 
 (1 durations < 0.005s hidden.  Use -vv to show these durations.)
 =========================== short test summary info ============================
-FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
-================= 1 failed, 8 deselected, 1 warning in 11.90s ==================
-Wall time: 13 s, exit 1 (no stack, no lease; set-up before it 14 s)
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections_live.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+======================== 1 failed, 1 warning in 14.69s =========================
+Wall time: 17 s, exit 1 (no stack, no lease; set-up before it 12 s)
 exit=1
