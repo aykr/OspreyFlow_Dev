@@ -554,6 +554,13 @@ def render_back() -> None:
 
 def runbook(name: str, start: int) -> None:
     render_back()
+    if name == "DECOMMISSION" and (KEPT / "values.yaml").exists():
+        # The runbook as this release renders it (a fix to its words reaches a decommission already
+        # begun), over the values the install put in, which stay the kept ones.
+        sh(".venv/bin/python", "-m", "harness.render", "--config", str(CONFIG), "--allow-unpinned")
+        for kept in ("values.yaml", "versions.lock", "images.yaml"):
+            if (KEPT / kept).exists():
+                shutil.copy2(KEPT / kept, FOLDER / kept)
     path = FOLDER / f"{name}.md"
     if name == "INSTALL" and not path.exists():
         # The runbook's own header: the render that writes it, before anything is pushed.
