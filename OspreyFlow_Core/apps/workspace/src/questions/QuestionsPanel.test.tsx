@@ -513,6 +513,59 @@ describe("QuestionsPanel · read from, will read, the engine", () => {
     expect(screen.queryByText(/no engines?/i)).toBeNull();
   });
 
+  it("asks again when the timeline window has moved by the time the question box is focused, as the question reads it", async () => {
+    let current: { validFrom: string; validTo: string | null } | null = { validFrom: "2026-01-01T00:00:00Z", validTo: null };
+    const calls = serve({ "GET /questions": () => json(200, []), "POST /questions": () => json(200, ANSWERED) });
+    mount(vi.fn(), vi.fn(), { getTimelineWindow: () => current });
+    await screen.findByText("About: everything on the graph");
+    expect(willBodies(calls)).toHaveLength(1);
+    expect(willBodies(calls)[0]!.window).toEqual({ valid_from: "2026-01-01T00:00:00Z", valid_to: null });
+    current = { validFrom: "2026-06-01T00:00:00Z", validTo: null };
+    fireEvent.focus(screen.getByLabelText("Your question"));
+    await waitFor(() => expect(willBodies(calls)).toHaveLength(2));
+    expect(willBodies(calls)[1]!.window).toEqual({ valid_from: "2026-06-01T00:00:00Z", valid_to: null });
+    fireEvent.focus(screen.getByLabelText("Your question")); // unchanged: not asked again
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText("Dana Mercer wrote about it [1].");
+    expect(willBodies(calls).filter((b) => (b.window as { valid_from: string }).valid_from === "2026-06-01T00:00:00Z").length).toBeGreaterThanOrEqual(1);
+    const posted = calls.find((c) => c.init?.method === "POST" && c.url.endsWith("/questions"))!;
+    expect(JSON.parse(String(posted.init!.body)).window).toEqual({ valid_from: "2026-06-01T00:00:00Z", valid_to: null });
+  });
+
+  it("asks nothing when the canvas's selection changes under Everything on the graph, since nothing it sends changes", async () => {
+    const calls = serve({ "GET /questions": () => json(200, []) });
+    const props = { apiBaseUrl: "http://api", bearerToken: "t", investigationId: "b1", onDelta: vi.fn() };
+    const { rerender } = render(<QuestionsPanel {...props} selection={selection} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Everything on the graph" }));
+    await screen.findByText("About: everything on the graph");
+    const before = willBodies(calls).length;
+    rerender(<QuestionsPanel {...props} selection={{ nodeIds: ["n-other"], linkIds: [] }} />);
+    rerender(<QuestionsPanel {...props} selection={{ nodeIds: ["n-other", "n-more"], linkIds: [] }} />);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(willBodies(calls).length).toBe(before);
+  });
+
+  it("keeps the case's own reasons beneath the engine choice while will read is refused", async () => {
+    serve({
+      "GET /questions": () => json(200, []),
+      "GET /models/engines": () => json(200, { engines: [
+        { name: "local", label: "This deployment's own model", roles: ["extraction"], default_for: ["extraction"] },
+        { name: "gemini", label: "Gemini", roles: ["extraction"], default_for: [], privacy_contract: false, available: false, reason: "Not available for this case: kept in." },
+      ] }),
+      "POST /questions/will-read": () => json(422, { error: "nothing_to_read", detail: "The graph holds nothing to read. Add items to the canvas first." }),
+    });  // prettier-ignore
+    mount();
+    expect(await screen.findByText("The graph holds nothing to read. Add items to the canvas first.")).toBeTruthy();
+    expect(screen.getByText("Gemini: Not available for this case: kept in.")).toBeTruthy();
+  });
+
+  it("says the engine list failed when the answer holds no list, never that there is none", async () => {
+    serve({ "GET /questions": () => json(200, []), "GET /models/engines": () => json(200, {}) });
+    mount();
+    expect(await screen.findByText(/The list of model engines could not be loaded/)).toBeTruthy();
+  });
+
   it("says under each answer what it read, and that an answer with no document came from the links and events", async () => {
     serve({ "GET /questions": () => json(200, [
       { ...ANSWERED, read: WILL.read },

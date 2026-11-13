@@ -4,7 +4,7 @@
 // model answers from those Documents and graph facts, citing them; what it proposes is listed with
 // Accept and Reject — inferred until accepted, and accepted onto this case's canvas. The
 // conversation is the case's, and shown to each reader as far as they may see it.
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { AnsweredBy, EnginePicker, useEngineChoice } from "../models/engines";
 import { candidateLabel, candidateSource, type EmailCandidate } from "../inspector/linkEventsApi";
@@ -44,8 +44,10 @@ export interface QuestionsPanelProps {
 }
 
 /** *Whole case* until the case's search is called (part D(iii)): offered, disabled, with why. */
+/** The server's own words (`ReadFromUnavailableError.words`, held to these by
+ * `test_questions_read_from.py`), shown before anything is asked. */
 export const WHOLE_CASE_UNAVAILABLE =
-  "Not available yet: Whole case reads the case's datasets through the case's search, which this release does not have.";
+  "Whole case is not available yet: it will read the case's datasets through the case's search. Choose Selected items or Everything on the graph.";
 
 const READ_FROM_CHOICES: { value: ReadFrom; label: string }[] = [
   { value: "selection", label: "Selected items" },
@@ -84,6 +86,10 @@ export function readWords(read: ReadSummary): string {
       : "";
   return `${listed}${unread}`;
 }
+
+/** How long the scope must stay still before *will read* is asked (each answer reads the scope's
+ * documents and writes an audit row). */
+export const WILL_READ_DEBOUNCE_MS = 300;
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -125,7 +131,14 @@ export function QuestionsPanel({
   const [will, setWill] = useState<WillRead | null>(null);
   const [willProblem, setWillProblem] = useState<string | null>(null);
   const [willAsked, setWillAsked] = useState(0);
-  const scopeKey = JSON.stringify([readFrom, nodeIds, linkIds, engineChoice.chosen, viewId, investigationId]);
+  // Keyed on the body *will read* actually sends: under Everything on the graph a click on the
+  // canvas changes nothing sent, so asks nothing. The timeline window is read as the panel draws,
+  // and again when the question box takes focus (`willAsked`), as the question itself reads it.
+  const sentNodeIds = readFrom === "selection" ? nodeIds : [];
+  const sentLinkIds = readFrom === "selection" ? linkIds : [];
+  const timelineWindow = getTimelineWindow?.() ?? null;
+  const askedWindow = useRef<string>("");
+  const scopeKey = JSON.stringify([readFrom, sentNodeIds, sentLinkIds, timelineWindow, engineChoice.chosen, viewId, investigationId]);
   const radioName = useId();
 
   useEffect(() => {
@@ -145,23 +158,31 @@ export function QuestionsPanel({
 
   useEffect(() => {
     let cancelled = false;
+    // The last answer is for another scope: it is not shown, and Ask waits, until this one comes.
+    setWill(null);
     setWillProblem(null);
-    willRead(apiBaseUrl, bearerToken, investigationId, {
-      nodeIds: readFrom === "selection" ? nodeIds : [],
-      linkIds: readFrom === "selection" ? linkIds : [],
-      window: getTimelineWindow?.() ?? null,
-      engine: engineChoice.chosen,
-      viewId,
-      readFrom,
-    })
-      .then((found) => !cancelled && setWill(found))
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setWill(null);
-        setWillProblem(err instanceof Error ? err.message : String(err));
-      });
+    // Debounced: a run of changes (selecting several items) asks once, after the last.
+    const timer = window.setTimeout(() => {
+      const sentWindow = getTimelineWindow?.() ?? null;
+      askedWindow.current = JSON.stringify(sentWindow);
+      willRead(apiBaseUrl, bearerToken, investigationId, {
+        nodeIds: sentNodeIds,
+        linkIds: sentLinkIds,
+        window: sentWindow,
+        engine: engineChoice.chosen,
+        viewId,
+        readFrom,
+      })
+        .then((found) => !cancelled && setWill(found))
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          setWill(null);
+          setWillProblem(err instanceof Error ? err.message : String(err));
+        });
+    }, WILL_READ_DEBOUNCE_MS);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
     // `scopeKey` stands for the scope's own values; `willAsked` asks again after a question.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -174,8 +195,8 @@ export function QuestionsPanel({
     setProblem(null);
     try {
       const answered = await askQuestion(apiBaseUrl, bearerToken, investigationId, text, {
-        nodeIds: readFrom === "selection" ? nodeIds : [],
-        linkIds: readFrom === "selection" ? linkIds : [],
+        nodeIds: sentNodeIds,
+        linkIds: sentLinkIds,
         window: getTimelineWindow?.() ?? null,
         engine: engineChoice.chosen,
         viewId,
@@ -387,7 +408,7 @@ export function QuestionsPanel({
             question goes to the deployment&rsquo;s default.
           </p>
         )}
-        <EnginePicker choice={engineChoice} id="questions-engine" disabled={asking} reasons={will?.unusable ?? []} />
+        <EnginePicker choice={engineChoice} id="questions-engine" disabled={asking} reasons={will?.unusable} />
         {engineChoice.chosen === null && will !== null && will.unusable.length > 0 && (
           <div style={{ display: "grid", gap: "var(--sp-2)" }}>
             {will.unusable.map((engine) => (
@@ -408,6 +429,11 @@ export function QuestionsPanel({
           value={question}
           disabled={asking}
           onChange={(e) => setQuestion(e.target.value)}
+          // The timeline window may have moved without the panel being drawn again: if it has,
+          // *will read* is asked again before the question is, as the question will read it.
+          onFocus={() => {
+            if (JSON.stringify(getTimelineWindow?.() ?? null) !== askedWindow.current) setWillAsked((n) => n + 1);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();

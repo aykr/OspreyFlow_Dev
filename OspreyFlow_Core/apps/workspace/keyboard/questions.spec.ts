@@ -29,7 +29,7 @@ function willRead(posted: { read_from?: string }) {
     read: {
       read_from: selection ? "selection" : "graph", documents: selection ? 1 : 2, documents_without_text: 0,
       items: selection ? 2 : 5, links: selection ? 1 : 4, events: 0, selected: selection ? 1 : 0,
-      first_selected: selection ? "Dana Mercer" : null,
+      first_selected: selection ? "Mercer, Dana" : null,
     },
     engine: "local", engine_label: "This deployment's own model", model: "qwen2.5:7b-instruct", unusable: [], refused: null,
   };  // prettier-ignore
@@ -255,7 +255,7 @@ test("what to read from is chosen by arrow keys, the Conduit says what will be r
   const selected = page.getByRole("radio", { name: "Selected items" });
   const everything = page.getByRole("radio", { name: "Everything on the graph" });
   await expect(selected).toBeChecked(); // the harness has Dana selected
-  await expect(page.getByText("About: Dana Mercer")).toBeVisible();
+  await expect(page.getByText("About: Mercer, Dana")).toBeVisible();
   await expect(page.getByText("Will read: 1 document, 2 items and 1 link")).toBeVisible();
   await expect(page.getByText("Will be answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeVisible();
   await expect(page.getByRole("radio", { name: "Whole case" })).toBeDisabled();
@@ -277,6 +277,12 @@ test("what to read from is chosen by arrow keys, the Conduit says what will be r
   await page.keyboard.press("ArrowUp");
   await expect(selected).toBeChecked();
   await expect.poll(() => willReads.at(-1)?.read_from).toBe("selection");
+  // Asked again with Selected items: the question sends the choice and what is selected.
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.type("And about Dana?");
+  await page.keyboard.press("Control+Enter");
+  await expect.poll(() => scopes.length).toBe(2);
+  expect(scopes[1]).toMatchObject({ read_from: "selection", selected_node_ids: ["n-dana"], selected_link_ids: [] });
   registerCovered(REGISTRY, "choose-what-to-read-from-by-keyboard");
 });
 

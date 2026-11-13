@@ -10,7 +10,7 @@
 // as the role's default: the local engine is chosen instead.
 import { useEffect, useState } from "react";
 
-import type { OfferedEngine } from "../../../../packages/schemas/generated";
+import type { OfferedEngine, UnusableEngine } from "../../../../packages/schemas/generated";
 import { Select } from "../design/primitives/Select";
 
 export type EngineRole = OfferedEngine["roles"][number];
@@ -20,7 +20,7 @@ export const LOCAL_ENGINE = "local";
 const LOCAL_LABEL = "This deployment's own model";
 
 /** `GET /v1/models/engines`, or within a case `GET /v1/investigations/{id}/models/engines` (ADR-136):
- * what the deployment offers. Anything but a list of engines is none. */
+ * what the deployment offers. Anything but a list of engines is a failure to read them. */
 export async function fetchOfferedEngines(
   apiBaseUrl: string,
   bearerToken: string,
@@ -34,7 +34,9 @@ export async function fetchOfferedEngines(
   });
   if (!response.ok) throw new Error(`The model engines could not be read (${response.status}).`);
   const body = (await response.json()) as { engines?: unknown };
-  return Array.isArray(body.engines) ? (body.engines as OfferedEngine[]) : [];
+  // An answer with no list is not a list of none: it is a failure, said as one (ADR-135 Am 12).
+  if (!Array.isArray(body.engines)) throw new Error("The model engines could not be read.");
+  return body.engines as OfferedEngine[];
 }
 
 export interface EngineChoice {
@@ -104,12 +106,8 @@ export function engineOptionText(engine: OfferedEngine): string {
   return `${engine.label}${mark}${isAvailable(engine) ? "" : " — not available"}`;
 }
 
-/** An engine that cannot be used, and why, in words. */
-export interface EngineReason {
-  name: string;
-  label: string;
-  reason: string;
-}
+/** An engine that cannot be used, and why, in words: the Conduit's `UnusableEngine`. */
+export type EngineReason = UnusableEngine;
 
 /** The choice itself, with its visible label: hidden unless there are two or more engines to
  * choose between. `id` ties the label to the select, so it must be unique on the page. `reasons`,
