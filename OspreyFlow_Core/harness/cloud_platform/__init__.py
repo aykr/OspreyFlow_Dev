@@ -254,11 +254,17 @@ def search_index_values(
     """The chart's `searchIndex`: the Conduit's image, settings and size, under the namespace's own
     service account (the IRSA role the domain admits), for each standing Job."""
     api = next(w for w in workloads if w["name"] == "api")
+    # The settings alone (no Secret of ours whole): the graph's password by name, and the domain's
+    # address from the platform's secret, as the Conduit is given it. Nothing else is read.
+    address = next(e for e in api.get("env", []) if e["name"] == "OPENSEARCH_URL")
     return {
         "serviceAccountName": platform.secrets.irsa.service_account,
         "image": api["image"],
         "resources": copy.deepcopy(api["resources"]),
-        "env": copy.deepcopy(api.get("env", [])),
+        "env": [
+            copy.deepcopy(address),
+            {"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"},
+        ],
         "jobs": [
             {"name": name, "label": label, "command": ["/app/.venv/bin/python", "-m", module]}
             for name, (label, module) in SEARCH_INDEX_JOBS.items()

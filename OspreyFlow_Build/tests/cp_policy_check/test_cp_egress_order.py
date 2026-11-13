@@ -307,6 +307,29 @@ def test_a_store_s_password_named_to_superset_is_refused(
     ]
 
 
+@pytest.mark.parametrize("job", ["ospreyflow-search-rebuild", "ospreyflow-search-drift"])
+def test_the_search_index_s_jobs_hold_the_graph_s_password_alone(
+    rendered: tuple[list[dict[str, Any]], dict[str, Any], str], job: str
+) -> None:
+    """v0.5.2 step 3a: the rebuild and the drift check (ADR-150) read the graph's password by name
+    and the domain's address from the platform's secret; given our Secret whole, or another key of
+    it, they are refused as any pod not listed is (the gate's lists widened for these two alone)."""
+    docs, _, registry = copy.deepcopy(rendered)
+    doc = next((d for d in docs if d["kind"] == "CronJob" and d["metadata"]["name"] == job), None)
+    if doc is None:
+        pytest.skip(f"{job} is not rendered here")
+    assert check_manifests(docs, registry, controller_namespace=CONTROLLER) == []
+    container = pod_spec(doc)["containers"][0]
+    container.setdefault("envFrom", []).append({"secretRef": {"name": "ospreyflow-secrets"}})
+    container.setdefault("env", []).append({"name": "OSPREY_LITELLM_MASTER_SECRET", "valueFrom": {
+        "secretKeyRef": {"name": "ospreyflow-secrets", "key": "OSPREY_LITELLM_MASTER_SECRET"}}})  # fmt: skip
+    found = check_manifests(docs, registry, controller_namespace=CONTROLLER)
+    assert sorted((v.rule, v.detail) for v in found) == [
+        ("whole-secret", "is given ospreyflow-secrets's OSPREY_LITELLM_MASTER_SECRET"),
+        ("whole-secret", "reads ospreyflow-secrets whole"),
+    ]
+
+
 def test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more(
     rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
 ) -> None:

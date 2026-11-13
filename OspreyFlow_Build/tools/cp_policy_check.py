@@ -279,6 +279,10 @@ NAMED_SECRET_ALLOWED: dict[str, frozenset[str]] = {
     # P9's backup (ADR-148 Amendment 7): ArcadeDB's password, to ask ArcadeDB for its backup. Its
     # other pods (the claims' runs, the restores) call ArcadeDB never and hold no key of ours.
     "backup": frozenset({"ARCADEDB_ROOT_PASSWORD"}),
+    # The search index's rebuild and drift check (ADR-150; v0.5.2 step 3a): the graph's password, to
+    # read every node; the domain's address is the platform's secret's, not ours.
+    "search-rebuild": frozenset({"ARCADEDB_ROOT_PASSWORD"}),
+    "search-drift": frozenset({"ARCADEDB_ROOT_PASSWORD"}),
     "keycloak": frozenset({"OSPREY_KEYCLOAK_ADMIN", "OSPREY_KEYCLOAK_ADMIN_PASSWORD",
                            "OSPREY_KEYCLOAK_DB_PASSWORD"}),
     # The engines' keys are not listed: this deployment's keyed engines' alone (`_engine_keys`),
@@ -367,13 +371,15 @@ def _whole_secret(
 #: Bedrock, and P9's backup and restore pods (their web identity; a restore also asks the API
 #: whether the writers have stopped). Held here, not read from the render.
 TOKEN_ALLOWED = frozenset({"api", "worker", "report-sync", "litellm",
-                           "backup", "backup-claims", "restore", "restore-claims"})  # fmt: skip
+                           "backup", "backup-claims", "restore", "restore-claims",
+                           "search-rebuild", "search-drift"})  # fmt: skip
 
 
 #: Whose account each holds: IRSA's bucket role (the platform's `secrets.irsa.service_account`) is
-#: the Conduit's, the workers' and the report sync's alone; the gateway's own role
-#: (`gateway_service_account`) the gateway's alone; P9's pods each an account of their own.
-IRSA_PODS = frozenset({"api", "worker", "report-sync"})
+#: the Conduit's, the workers' and the report sync's alone, and the search index's rebuild and drift
+#: check's (v0.5.2 step 3a: the OpenSearch domain admits that role alone, by SigV4); the gateway's
+#: own role (`gateway_service_account`) the gateway's alone; P9's pods each an account of their own.
+IRSA_PODS = frozenset({"api", "worker", "report-sync", "search-rebuild", "search-drift"})
 
 
 def _token(
