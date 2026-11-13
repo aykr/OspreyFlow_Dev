@@ -1,0 +1,28 @@
+# 4c steps C and D (ADR-148 Am 15): the people store's administrator-set access, the Access route on Entra, the socket. Red first, fresh PYTHONPYCACHEPREFIX per pytest. Mac, offline.
+# Not yet run live: test_entra_people_live.py's Amendment 15 section (the real table, its transaction, a sign-in never overwriting what was set) needs a stack lease, which this session was not permitted to take.
+
+== (a) rule 3: the store's own clearance limit removed (the route's check alone, which the setter's SECRET token passes):
+FAILED test_entra_people_administrator_access.py::test_the_store_refuses_a_clearance_above_the_setter_s_own_as_it_holds_them
+FAILED test_entra_people_administrator_access.py::test_the_decision_is_the_store_s_whatever_the_caller_checked
+2 failed, 70 passed, 1 warning in 7.14s
+
+== (b) the store's own handling-code limit removed:
+FAILED test_entra_people_administrator_access.py::test_the_store_refuses_a_code_beyond_the_setter_s_own_as_it_holds_them
+FAILED test_entra_people_administrator_access.py::test_the_decision_is_the_store_s_whatever_the_caller_checked
+2 failed, 70 passed, 1 warning in 7.00s
+
+== (c) a value Entra sends changed here (the token-held check removed):
+FAILED test_entra_people_administrator_access.py::test_a_value_entra_sends_is_not_changed_here
+1 failed, 71 passed, 1 warning in 8.16s
+
+== (d) the open socket not told of an access change:
+FAILED test_entra_people_administrator_access.py::test_an_open_socket_closes_when_what_the_administrator_set_changes[clearance-changed]
+FAILED test_entra_people_administrator_access.py::test_an_open_socket_closes_when_what_the_administrator_set_changes[unit-changed]
+2 failed, 70 passed, 1 warning in 7.17s
+
+== (e) the audit row without what it was before:
+FAILED test_entra_people_administrator_access.py::test_an_administrator_sets_the_values_within_their_own_and_it_is_audited
+1 failed, 71 passed, 1 warning in 7.04s
+
+== green:
+72 passed, 1 warning in 7.13s

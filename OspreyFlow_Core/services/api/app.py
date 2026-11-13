@@ -705,7 +705,12 @@ from .entity_pictures import (
     PictureNotFoundError,
     PictureSetResponse,
 )
-from .entra_people import STALE_ACCESS_WORDS, EntraPeopleAdmin, access_current
+from .entra_people import (
+    STALE_ACCESS_WORDS,
+    AccessBeyondTheSetter,
+    EntraPeopleAdmin,
+    access_current,
+)
 from .event_scope import own_events_only
 from .explore import (
     ExploreService,
@@ -17127,6 +17132,25 @@ async def set_person_access_route(
 ) -> PersonAccount:
     """A person's clearance, unit and receivable handling codes — none above the administrator's."""
     _within_your_reach(principal, body, handling_scheme)
+    if isinstance(identity_admin, EntraPeopleAdmin):
+        # ADR-148 Amendment 15: on Entra ID, only the values the claim mapping sources from the
+        # administrator, within the setter's own as the people store holds them (rule 3).
+        before, person = await identity_admin.set_administrator_access(
+            user_id, principal.id, body, list(handling_scheme.classification)
+        )
+        def held(p: PersonAccount) -> dict[str, Any]:
+            return {"clearance": p.clearance, "org_unit": p.org_unit,
+                    "receivable_handling_codes": p.receivable_handling_codes}  # fmt: skip
+
+        await audit.record(
+            principal=principal,
+            action="set_person_access",
+            resolved_query={"user_id": user_id,
+                            "by_administrator": sorted(identity_admin.by_administrator),
+                            "before": held(before), "after": held(person)},  # fmt: skip
+            result_cardinality=1,
+        )
+        return person
     person = await identity_admin.set_access(user_id, body)
     await audit.record(principal=principal, action="set_person_access",
                        resolved_query={"user_id": user_id, "clearance": body.clearance,
@@ -19431,6 +19455,12 @@ async def _identity_admin_refused(request: Request, exc: IdentityAdminRefused) -
     )
 
 
+@app.exception_handler(AccessBeyondTheSetter)
+async def _access_beyond_the_setter(request: Request, exc: AccessBeyondTheSetter) -> JSONResponse:
+    """ADR-148 Amendment 15: the people store's own limit, answered as the route's own check is."""
+    return JSONResponse(status_code=403, content={"detail": {"error": exc.error, **exc.detail}})
+
+
 @app.exception_handler(PersonActionRefused)
 async def _person_action_refused(request: Request, exc: PersonActionRefused) -> JSONResponse:
     return JSONResponse(status_code=409, content={"error": exc.error, "detail": exc.words})
@@ -20605,6 +20635,15 @@ async def _socket_standing(app_: Any, raw: Principal) -> int | None:
     if stored is None or stored.disabled:
         return status.WS_1008_POLICY_VIOLATION
     if list(dict.fromkeys(stored.roles)) != list(raw.roles):
+        return status.WS_1008_POLICY_VIOLATION
+    # ADR-148 Amendment 15: a value an administrator set, changed since the socket opened.
+    by_administrator: frozenset[str] = getattr(store, "by_administrator", frozenset())
+    if ("clearance" in by_administrator and stored.clearance != raw.clearance) or (
+        "org_unit" in by_administrator and stored.org_unit != raw.org_unit
+    ) or (
+        "handling_codes" in by_administrator
+        and sorted(stored.receivable_handling_codes or ()) != sorted(raw.receivable_handling_codes)
+    ):
         return status.WS_1008_POLICY_VIOLATION
     return None
 
