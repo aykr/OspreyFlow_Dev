@@ -5,8 +5,12 @@
 | (a) Each half of the audit's list clause planted alone; a live case recorded above the list's marking and an R list; P52 with another reader; the route file in the red record's green files | done | live `test_an_entry_is_read_by_its_lists_marking_as_recorded_and_by_its_handling_code` (L28b recorded half, L28c code now, L28d code as recorded); route `test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance`, two readers (P52, P52b) |
 | (b) The subscription, schedule and refresh entries recording no marking | done: each records the list's marking as it stood (`ScreeningListStore.audit_marking`), the scheduled refresh's too | live `test_each_audit_entry_about_a_list_records_the_lists_marking` (L29); the scheduled refresh's entry has no test of its own (its closure needs the whole refresh), logged in Am 7 |
 
-**Gates.** Offline plants: 56 red, none broken (`lists/AM7_RED_RECORD.txt`). **Not yet run, and not claimed:** the
-live cases, the live plants (now 38) and `make test` and `make -k ci`: R1 holds the test server.
+**Gates at 355a255** (on main d701f48; OspreyFlow_Core tree 25059a3c2146bbd30af73b9241a4911b2742d1ab). Offline
+plants: 56 red, none broken (`lists/AM7_RED_RECORD.txt`). Live, on stack b under the rules lane's lease (taken
+2026-11-13T18:12:54Z, released after): the two live files 40 passed (`gates/355a255.live-files.txt`); the live
+plants built green (149), L0 to L29 with L0b, L2b, L24b, L24c, L24d and L28b to L28d each red (38), restored green
+(`lists/AM7_LIVE_RECORD.txt`; the lists step's record as merged kept as `AM7_LIVE_RECORD.lists-merge.txt`).
+**Not yet run, and not claimed:** `make test` and `make -k ci`, held until R1's gates are done.
 
 # rules lane · report · rules-lists, fifth pass: the orchestrator's re-check of 6bfc8d6 (13 November 2026)
 
