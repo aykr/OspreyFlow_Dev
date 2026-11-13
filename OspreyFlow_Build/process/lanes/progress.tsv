@@ -121,3 +121,4 @@ rules-b	v052-ask	L	todo	v0.5.2 Part D: Ask & Chat (panel, server, Whole case)
 case-b	v052-selection	M	todo	v0.5.2 Parts C and E: one set of actions for the selection; the typeface
 orchestrator	v051-cut	S	building	v0.5.1 cut: CI at the candidate, the upgrade rehearsal, the CHANGELOG, publish when green (the owner's word)
 platform	v052-searchkind	M	review	v0.5.2: the OpenSearch domain on R1's kind (stand-in wired, its limits, the run's domain check)
+platform-b	v052-4c	M	building	The administrator fallback on Entra, poc alone (ADR-148 Am 15; audit 4c)
