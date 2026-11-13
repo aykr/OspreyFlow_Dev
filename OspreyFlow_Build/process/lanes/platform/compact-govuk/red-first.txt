@@ -39,15 +39,10 @@ plant-case.txt:  1 failed
      × is full while Home or the sign-in page is shown 5ms
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
       Tests  1 failed | 9 passed (10)
-## 4. the overlay exclusion's two guards, each planted
-== a mistyped title
-    + Received  + 3
-    +   "places-harness.html open=view (govuk)",
-  1 failed
-== a selector that names nothing
-    Error: .context-banner__sectionz is still on the page
-    Error: element(s) not found
-  1 failed
+## 4. the open menu's target-size entry (UNDER_AN_OPEN_OVERLAY), after the second review: target-size results alone are dropped, only when reported
+- a listed class no longer reported (planted "context-banner__sectionz"): "listed under an open overlay but no longer reported: update UNDER_AN_OPEN_OVERLAY" (1 failed)
+- a title that is not a scanned look (planted "places-harness.html open=view (govuk)"): "every node left out under an open overlay names a look this file scans" failed (shown with the first form of the list; the check is unchanged)
+- restored: places-harness and the title check, 42 passed
 ## After: header 33, banner 23, strip 20, toolbar 44, the folded row 32; the canvas at 152: 105 CSS px gained (about 139 at the owner's 1.32 scale). Dark, light, Home and the sign-in page as before (their cases green at 054f24b and at the head).
 ## 5. No crown in the header off gov.uk (the owner's addition), red at 054f24b, each layer
 - GovukHeader.test.tsx: "draws no crown off gov.uk, the word mark kept" FAILED (1 failed, 5 passed); "draws the crown on gov.uk" passed.
@@ -55,3 +50,7 @@ plant-case.txt:  1 failed
 - test_keycloak_theme_govuk.py: "the chrome takes the header's crown off gov.uk" FAILED against 054f24b's govuk_chrome.js (1 failed, 11 passed).
 - shell.spec.ts: "govuk off gov.uk: the header's crown is not drawn" Received: 1 (1 failed); the gov.uk case passed.
 After: all green (vitest src/brand 71; node keycloak_theme 29; the Python file 12; shell.spec.ts 48).
+## The head's gates (one uninterrupted run each, at a09546e, the Mac)
+- every-harness.spec.ts, every harness in dark, light and GOV.UK: 1031 passed. Of the second review's rework since, the places harness and the title check ran again: 42 passed.
+- the keyboard suite: 793 passed, 1 skipped, 2 failed: admin-models.spec.ts's Bedrock case and its registry check, which fail the same at 054f24b (not this change's).
+- vitest (shell, brand, admin, home): 378 passed; eslint and tsc clean; tests/keycloak_theme: 29 passed; test_keycloak_theme_govuk.py: 12 passed.

@@ -361,13 +361,15 @@ test("the scan found the harness pages", () => {
   expect(pages.length).toBeGreaterThan(30);
 });
 
-// ADR-132 Amendment 8: nodes an open menu lies over in one drawn-open state, left out of that state's scan.
-// axe's target-size counts a target a menu covers all but a sliver of as too small (it skips one covered
-// wholly); in the browser the menu is on top (`elementFromPoint` at every sampled point of its items).
-// GOV.UK's context row is one row under the top bar since Amendment 8, so *More views*, drawn open, lies
-// over its sections and leaves 4 px of *Boards (coming)* showing. Each title must be a scanned title.
+// ADR-132 Amendment 8: target-size results, alone, for targets an open menu lies over in one drawn-open
+// state. axe's target-size counts a target a menu covers all but a sliver of as too small (it skips one
+// covered wholly); in the browser the menu is on top (`elementFromPoint` at every sampled point of its
+// items). GOV.UK's context row is one row under the top bar since Amendment 8, so *More views*, drawn open,
+// lies over its sections and leaves 4 px of *Boards (coming)* showing. Every other rule still runs on those
+// nodes, and each entry must still be reported, so it fails once the menu no longer lies over them. Keyed by
+// a scanned title; each value a class the dropped nodes' markup carries.
 const UNDER_AN_OPEN_OVERLAY: Record<string, readonly string[]> = {
-  "places-harness.html open=views (govuk)": [".context-banner__sections"],
+  "places-harness.html open=views (govuk)": ["context-banner__section"],
 };
 
 // Every look's title, as each test below is named, so a listed finding under a mistyped title fails.
@@ -393,14 +395,20 @@ for (const name of pages) {
         }
         let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
-        // Under an open overlay in one state alone; each selector must still be on the page, so the
-        // exclusion cannot outlive what it names, and the same nodes are scanned in every other state.
-        for (const selector of UNDER_AN_OPEN_OVERLAY[title] ?? []) {
-          await expect(page.locator(selector).first(), `${selector} is still on the page`).toBeAttached();
-          builder = builder.exclude(selector);
-        }
         const results = await builder.analyze();
-        expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+        // Target-size alone, for the nodes an open menu lies over (UNDER_AN_OPEN_OVERLAY): dropped only when
+        // reported, and each listed class must be dropped at least once, so the entry cannot outlive it.
+        const overlaid = UNDER_AN_OPEN_OVERLAY[title] ?? [];
+        const dropped = new Set<string>();
+        const violations = results.violations
+          .map((v) => v.id !== "target-size" ? v : { ...v, nodes: v.nodes.filter((n) => {
+            const under = overlaid.find((c) => n.html.includes(`class="${c}`) || n.html.includes(` ${c}`));
+            if (under) dropped.add(under);
+            return !under;
+          }) })
+          .filter((v) => v.nodes.length > 0); // prettier-ignore
+        expect(overlaid.filter((c) => !dropped.has(c)), "listed under an open overlay but no longer reported: update UNDER_AN_OPEN_OVERLAY").toEqual([]);
+        expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
         // axe's undecided colour contrast, measured here (1.4.3): a shortfall or an unmeasurable
         // node fails, unless it is a listed finding carried by its owner, and a listed one that is
         // gone fails too, so the list never outlives what it excuses.

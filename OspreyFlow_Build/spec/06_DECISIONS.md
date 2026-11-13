@@ -35918,7 +35918,7 @@ screenshot figures are about 1.32 times these.
    the canvas's toolbars; the dark and light looks; Home and the sign-in page.
    - Test: the strip's and the toolbar's heights in the gain's case; *ospreyflow dark/light: a case's workspace top is as it
      was* (the content at 130 and the banner at 41, as at 054f24b); *govuk: Home keeps the full header and
-     banner*.
+     banner* and *govuk: the sign-in page keeps the full header and banner*.
 7. **Keyboard and axe.** Each place's banner and the shell keep their keyboard cases (`shell.spec.ts`, rule
    13). `every-harness.spec.ts` scans the places harness's demonstration state (`banner=1`, and with Rules
    and Monitoring) in the dark, light and GOV.UK looks. When the *More views* menu is drawn open over the
@@ -35929,9 +35929,9 @@ screenshot figures are about 1.32 times these.
    - Target size: the menu covers all of *Boards (coming)* but 4 px. axe's target-size counts that sliver
      as a target too small, where it skips one covered wholly; in the browser the menu is on top at every
      sampled point. In that one state the row's sections are left out of the scan
-     (`UNDER_AN_OPEN_OVERLAY`). They are scanned in every other state. The exclusion fails if its selector
-     no longer finds anything, or if its title is not a scanned look; each guard was shown red with a
-     planted typo.
+     (`UNDER_AN_OPEN_OVERLAY`): its target-size result for the row's sections is dropped, and only that;
+     every other rule still runs on them, and they are scanned whole in every other state. The entry fails
+     once that result is no longer reported, and if its title is not a scanned look; each was shown red.
    - The case-screen options harness placed its stand-in *More* menu at 230 px from the page's top, and so
      over Explore once the top was compact (axe's target-size). It is now placed from its own row, on the
      rail in every look, and its GOV.UK finding is the same as dark's and light's.
