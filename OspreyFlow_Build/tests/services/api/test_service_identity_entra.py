@@ -334,3 +334,52 @@ def test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity(
             setattr(app.state, key, value)
     refused = answered.status_code == 403 and "dashboard identity" in answered.text
     assert refused is registered, (answered.status_code, answered.text)
+
+
+class _AnswersNone(_Dashboards):
+    async def dashboard(self, tenant_id: str, application_id: str):  # type: ignore[no-untyped-def]
+        return None
+
+
+class _Slow(_Dashboards):
+    async def dashboard(self, tenant_id: str, application_id: str):  # type: ignore[no-untyped-def]
+        import asyncio
+
+        await asyncio.sleep(30)
+        return None
+
+
+@pytest.mark.parametrize(
+    ("store", "answer"),
+    [(_AnswersNone, "past"), (_Slow, 503)],
+    ids=["store-answers-none", "store-too-slow"],
+)
+def test_the_run_api_door_with_a_store_answering_none_or_too_slowly(
+    jwks_url, keypair, store, answer, monkeypatch
+) -> None:
+    """A store that holds no such registration lets the client past this door; one that does not
+    answer within the role lookup's bound is a 503 in words, never a wait as long as the store's
+    (ADR-148 Amendment 10, the lane review of 009a889)."""
+    import time
+
+    from fastapi.testclient import TestClient
+    from services.api import app as app_module
+
+    monkeypatch.setattr(app_module, "ROLE_LOOKUP_TIMEOUT_SECONDS", 0.2)
+    app = app_module.app
+    before = {k: getattr(app.state, k, None) for k in ("service_identities", "people_store")}
+    app.state.service_identities = _verifier(jwks_url)
+    app.state.people_store = store()
+    started = time.monotonic()
+    try:
+        answered = TestClient(app, raise_server_exceptions=False).post(
+            "/v1/runs", json={}, headers={"Authorization": f"Bearer {_app_token(keypair)}"}
+        )
+    finally:
+        for key, value in before.items():
+            setattr(app.state, key, value)
+    assert time.monotonic() - started < 10
+    if answer == 503:
+        assert answered.status_code == 503 and "could not be read" in answered.text
+    else:
+        assert answered.status_code not in (403, 503), (answered.status_code, answered.text)
