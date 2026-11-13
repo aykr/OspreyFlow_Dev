@@ -47,3 +47,34 @@ FAILED tests/services/api/test_search_index_query.py::test_a_page_past_the_depth
 FAILED tests/services/api/test_search_index_query.py::test_a_suggestion_longer_than_the_stored_prefixes_is_refused_not_cut
 1 failed, 27 passed
 == with the check: 28 passed
+
+== fourth round: the search service, at 20968b4; its tests were green on first run, so each is shown red here
+== plant: the index asked whenever there is one, with or without an access filter
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_with_no_access_filter_the_index_is_never_asked
+1 failed, 10 passed in 3.42s
+== plant: every index failure falls back, hiding a broken query as 'limited'
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_any_other_index_failure_is_not_hidden
+1 failed, 10 passed in 3.33s
+== plant: a hit listed whether or not the graph returns it
+ 1 file changed, 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_a_hit_the_graph_does_not_return_is_dropped_and_counts_are_not_exact
+1 failed, 10 passed in 4.45s
+== plant: every dataset an index count names offered, inside the case or not
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_an_index_reply_becomes_the_response_shape
+FAILED tests/services/api/test_search_service.py::test_a_dataset_outside_the_case_is_never_offered
+2 failed, 9 passed in 2.16s
+== plant: a filter on any dataset passed to the index
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_a_filter_on_a_dataset_outside_the_case_is_refused
+1 failed, 10 passed in 2.04s
+== plant: the fallback not flagged as limited
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+FAILED tests/services/api/test_search_service.py::test_with_no_access_filter_the_index_is_never_asked
+FAILED tests/services/api/test_search_service.py::test_with_no_index_the_fallback_answers_and_says_results_are_limited
+FAILED tests/services/api/test_search_service.py::test_an_unreachable_index_falls_back
+3 failed, 8 passed in 2.05s
+== restored
+11 passed in 2.79s
