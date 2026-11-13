@@ -1,0 +1,2 @@
+E       AssertionError: the over-the-wire module calls routes the Conduit does not serve: ['GET /v1/alerts', 'GET /v1/hotlists', 'GET /v1/monitors', 'POST /v1/hotlists', 'POST /v1/monitors']
+1 failed, 3 passed in 3.08s

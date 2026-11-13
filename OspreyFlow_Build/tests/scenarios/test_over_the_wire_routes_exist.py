@@ -1,0 +1,93 @@
+"""Every route the closing-pass proof calls is one the Conduit serves.
+
+`test_phase8_exit_over_the_wire.py` runs only when opted in against a rendered deployment, so a route
+it calls can move and nothing notices: B13 and B14's fixture went on asking `POST /v1/hotlists` and
+`GET /v1/alerts` after both moved under the case (found giving each of its cases a disposition for the
+v0.5.2 install test, 13 November 2026). This reads every call the module makes, from its source, and
+holds each to the routes FastAPI has registered, so the module cannot drift from the API again
+without failing offline.
+"""
+
+from __future__ import annotations
+
+import ast
+import re
+from pathlib import Path
+
+MODULE = Path(__file__).with_name("test_phase8_exit_over_the_wire.py")
+VERBS = {"get", "post", "put", "patch", "delete"}
+_PARAM = re.compile(r"\{[^}]*\}")
+
+
+def _path(node: ast.expr) -> str | None:
+    """A call's path argument as a template: a string, an f-string (its fields as `{}`), or
+    `_in_case(<path>)` (the module's own case prefix); None for anything else."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        return "".join(v.value if isinstance(v, ast.Constant) else "{}" for v in node.values)
+    if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "_in_case" and node.args:
+        inner = _path(node.args[0])
+        return None if inner is None else "/v1/investigations/{}" + inner.removeprefix("/v1")
+    return None
+
+
+def calls(source: str) -> set[str]:
+    """`METHOD /path` for every `<client>.<verb>(path, …)` in the source whose path is a /v1 route."""
+    found = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in VERBS and node.args:
+            path = _path(node.args[0])
+            if path and path.startswith("/v1/"):
+                found.add(f"{node.func.attr.upper()} {_PARAM.sub('{}', path.split('?', 1)[0])}")
+    return found
+
+
+def _served() -> set[str]:
+    from tools.route_coverage_check import list_live_routes
+
+    return {_PARAM.sub("{}", r) for r in list_live_routes()}
+
+
+def served_by(call: str, served: set[str]) -> bool:
+    """A call matches a route segment by segment: a route's `{}` takes any one segment (a literal one
+    too, as `compute/{metric}` takes `compute/degree`); a call's segment holding a `{}` only a `{}`."""
+    method, _, path = call.partition(" ")
+    asked = path.strip("/").split("/")
+    for route in served:
+        verb, _, pattern = route.partition(" ")
+        parts = pattern.strip("/").split("/")
+        if verb == method and len(parts) == len(asked) and all(
+            r == "{}" or (r == a and "{}" not in a) for r, a in zip(parts, asked, strict=True)
+        ):
+            return True
+    return False
+
+
+def test_the_reading_finds_the_calls_it_must() -> None:
+    """A floor, so a reading that finds nothing cannot agree with every route."""
+    found = calls(MODULE.read_text(encoding="utf-8"))
+    for must in ("GET /v1/ontology", "POST /v1/investigations/{}/search", "GET /v1/alerts/{}",
+                 "POST /v1/investigations/{}/ingest/recipes"):
+        assert must in found, sorted(found)
+
+
+def test_the_reading_names_a_moved_route() -> None:
+    """The shape the module wrote before the fix, read at its own call site."""
+    source = 'def f(client):\n    client.post("/v1/hotlists", json={})\n    client.get(_in_case(f"/v1/x/{i}"))\n'
+    assert calls(source) == {"POST /v1/hotlists", "GET /v1/investigations/{}/x/{}"}
+
+
+def test_matching_takes_a_parameter_for_a_literal_and_never_the_reverse() -> None:
+    served = {"POST /v1/investigations/{}/compute/{}", "GET /v1/alerts/{}", "POST /v1/investigations/{}/hotlists"}
+    assert served_by("POST /v1/investigations/{}/compute/degree", served)
+    assert served_by("GET /v1/alerts/no-such-alert-{}", served)
+    assert not served_by("POST /v1/hotlists", served)
+    assert not served_by("GET /v1/alerts", served)
+    assert not served_by("POST /v1/investigations/{}/{}", {"POST /v1/investigations/{}/hotlists"})
+
+
+def test_every_route_the_closing_pass_proof_calls_is_served() -> None:
+    served = _served()
+    missing = sorted(c for c in calls(MODULE.read_text(encoding="utf-8")) if not served_by(c, served))
+    assert not missing, f"the over-the-wire module calls routes the Conduit does not serve: {missing}"
