@@ -1,0 +1,11 @@
+Red first (offline on the Mac, closed ports 59991-59994, no OSPREY_LANE), before the driver changed:
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_kind_deployment_searches_with_the_domain_as_the_poc_does
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_domains_host_answers_at_the_stand_in_inside_the_cluster
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_terraform_stand_in_answers_the_domains_url
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_domain_admits_the_namespaces_role_alone_and_proxies_to_its_opensearch
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_opensearch_behind_the_domain_is_the_poc_manifests_engine
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_decommissions_terraform_removal_takes_the_domain_with_it
+6 failed, 1 passed in 0.45s
+
+Green at the change (offline on the Mac, closed ports): tests/test_r1_kind_standins.py 7 passed.
+The kind config (r1_kind_osprey.yaml) rendered offline on the kind platform settings: terraform/opensearch.tf, OPENSEARCH_URL from opensearch-output/proxy_url, searchIndex rebuild and drift Jobs, egress managedPorts [443, 5432, 6379].

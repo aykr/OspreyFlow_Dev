@@ -5,8 +5,9 @@
 profile: cloud-platform
 components:
   analytics_engine: clickhouse
-  # The poc shape makes no OpenSearch domain (ADR-148 Amendment 5 point 16).
-  search: postgres-fulltext
+  # v0.5.2 (ADR-148 Amendment 13): the poc shape searches with its own OpenSearch domain, which the
+  # S3/STS stand-in answers as (r1_kind.SEARCH_HOST), checking SigV4 for es before the OpenSearch pod.
+  search: opensearch
 network:
   public_origin: https://ospreyflow.r1.test
 cloud_platform:

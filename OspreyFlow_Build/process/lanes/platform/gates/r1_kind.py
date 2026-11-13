@@ -60,15 +60,21 @@ REGION = "eu-west-2"
 KEY_ARN = f"arn:aws:kms:{REGION}:{ACCOUNT}:key/0f9e8d7c-0011-4000-8000-000000000001"
 GLASS = "ospreyflow.r1.test"
 PASSWORD = "throwaway-r1"
+#: The namespace's OpenSearch domain's endpoint as AWS names one inside a VPC (`vpc-<domain>-<id>.<region>.es.amazonaws.com`;
+#: the domain is `<namespace>-search`, opensearch.tf): the S3/STS stand-in answers as it (ADR-148 Amendment 13).
+SEARCH_HOST = f"vpc-{NS}-search-r1standin.{REGION}.es.amazonaws.com"
 #: The names the platform's services answer by, inside the cluster, at their stand-ins (CoreDNS).
 NAMES = {
     "login.microsoftonline.com": "entra-standin",
     f"s3.{REGION}.amazonaws.com": "s3-standin",
     f"sts.{REGION}.amazonaws.com": "s3-standin",
+    SEARCH_HOST: "s3-standin",  # checked there as the domain, then proxied to the OpenSearch pod
 }
 THIRD_PARTY = {  # the managed stores' stand-ins' images, through AWS's mirror of Docker Hub's (no pull limit): Valkey is its own publisher there, not under docker/library
     "postgres:16.4": "public.ecr.aws/docker/library/postgres:16.4",
     "valkey/valkey:8.0": "public.ecr.aws/valkey/valkey:8.0",
+    # The engine behind the domain's stand-in: the poc manifest's OpenSearch_2.17.
+    "opensearchproject/opensearch:2.17.1": "public.ecr.aws/opensearchproject/opensearch:2.17.1",
 }
 
 
@@ -328,6 +334,10 @@ def s3_config(prefix: str, roles: dict[str, str]) -> dict[str, Any]:
             "name": backup_bucket, "kms_key": KEY_ARN,
             "policy": backups.bucket_policy(f"arn:aws:s3:::{backup_bucket}", KEY_ARN, role_arns)}],
         "keys": [{"arn": KEY_ARN, "policy": backups.key_policy(f"arn:aws:iam::{ACCOUNT}:root", role_arns, REGION)}],
+        # The domain's access policy admits `aws_iam_role.service` alone (opensearch.tf); what it admits
+        # goes on to the OpenSearch pod beside the stand-in (r1_kind_standins.yaml).
+        "domains": [{"host": SEARCH_HOST, "roles": [roles["ospreyflow"]],
+                     "upstream": f"http://opensearch.{MANAGED}.svc.cluster.local:9200"}],
     }
 
 
@@ -352,7 +362,7 @@ def platform() -> None:
          "data": {"ca-bundle.crt": bundle()}},
     ])
     apply([d for d in yaml.safe_load_all(standins_text(PASSWORD)) if d])
-    for s in ("postgres", "valkey"):
+    for s in ("postgres", "valkey", "opensearch"):
         kubectl("-n", MANAGED, "rollout", "status", f"statefulset/{s}", "--timeout=300s")
     coredns()
     # Entra ID: the tenant's discovery, keys, /authorize and /token (v0.5.2, step 8). It signs what it
@@ -403,6 +413,7 @@ def _terraform_values(prefix: str, roles: dict[str, str]) -> dict[str, str]:
         "aws_iam_role.service.arn": roles["ospreyflow"],
         "aws_iam_role.backup.arn": roles["ospreyflow-backup"],
         "aws_iam_role.backup_clickhouse.arn": roles["ospreyflow-backup-clickhouse"],
+        '"https://${aws_opensearch_domain.search.endpoint}"': f"https://{SEARCH_HOST}",
     }
     for name in ("postgres", "redis"):  # the managed stand-ins' own, set when they were made
         passwords[name] = PASSWORD
@@ -519,6 +530,10 @@ def stand_in(runbook: str, step: str) -> None:
         config = json.loads(kubectl("-n", MANAGED, "get", "configmap", "s3-standin", "-o", "jsonpath={.data.standin\\.json}"))
         config["buckets"] = [b for b in config["buckets"] if b["name"].endswith("backups")]
         config["roles"] = []
+        # The domain goes with the Terraform (ADR-148 Amendment 13: no index backup), its disks with it.
+        config["domains"] = []
+        kubectl("-n", MANAGED, "delete", "statefulset", "opensearch", "--ignore-not-found")
+        kubectl("-n", MANAGED, "delete", "pvc", "-l", "app=opensearch", "--ignore-not-found")
         # The buckets the Terraform made, deleted as `aws_s3_bucket` deletes one: refused while it holds
         # anything (BucketNotEmpty; no force_destroy), so step 6's emptying is what lets it go.
         prefix = state()["prefix"]
