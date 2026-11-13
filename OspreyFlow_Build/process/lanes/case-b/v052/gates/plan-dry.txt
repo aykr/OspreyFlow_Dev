@@ -1,3 +1,4 @@
+# install_verify.py plan --allow-pending at b6da153 on main's manifest, 2026-11-13T22:37:03Z, rc=0
 version: the candidate's images running
 shape: the deployment's shape
 workloads.workspace: rolled out and ready, at its image and sizes
@@ -13,6 +14,8 @@ jobs.ospreyflow-backup: a run succeeded
 jobs.ospreyflow-backup-claims: a run succeeded
 jobs.ospreyflow-restore-<set>: a run succeeded
 jobs.ospreyflow-restore-claims-<set>: a run succeeded
+jobs.ospreyflow-search-rebuild: a run succeeded
+jobs.ospreyflow-search-drift: a run succeeded
 images.ospreyflow/workspace: pushed
 images.ospreyflow/api: pushed
 images.ospreyflow/worker: pushed
@@ -31,6 +34,7 @@ managed.s3.buckets.staging: written
 managed.s3.buckets.site-images: written
 managed.s3.buckets.tile-cache: written
 managed.s3.buckets.backups: written
+managed.opensearch: reached by its reader
 entra.glass: used
 entra.api: used
 egress.login.microsoftonline.com: reached on 443
@@ -38,13 +42,11 @@ egress.s3.eu-west-2.amazonaws.com: reached on 443
 egress.sts.eu-west-2.amazonaws.com: reached on 443
 egress (unlisted: 1.1.1.1): blocked
 render (agrees with the manifest): the deployment's render agrees
-40 checks planned
+43 checks planned
 SKIP workloads.superset: still pending
 SKIP workloads.report-sync: still pending
 SKIP images.ospreyflow/superset: still pending
 SKIP images.ospreyflow/report-sync: still pending
 SKIP entra.superset: still pending
 SKIP entra.report-sync: still pending
-SKIP egress.<the namespace's OpenSearch domain endpoint>: still pending
 SKIP managed.rds.databases.superset: still pending
-SKIP managed.opensearch: still pending
