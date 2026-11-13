@@ -255,9 +255,8 @@ class ClaimMapping(BaseModel):
     api_client_id: str | None = None
     #: The delegated scope the Glass asks for; an Entra token's `scp` must include it.
     scope: str = DEFAULT_SCOPE
-    #: Superset's own app registration (ADR-148 Amendment 9): a delegated token issued to it is
-    #: admitted for `GET /v1/me` and `/v1/me/rights` alone, by the allowed-routes gate. Until that
-    #: gate lands it is still refused as another client's.
+    #: Superset's own app registration (ADR-148 Amendment 9): a person's delegated token issued to
+    #: it, with this API's scope, is admitted to `SUPERSET_ROUTES` alone (`Principal.routes`).
     superset_client_id: str | None = None
 
     @model_validator(mode="after")
@@ -274,6 +273,17 @@ class ClaimMapping(BaseModel):
             raise ValueError("`scope` must name one delegated scope")
         if self.api_client_id is not None and not _GUID.match(self.api_client_id):
             raise ValueError("`api_client_id` must be the API's application id (a GUID)")
+        if self.superset_client_id is not None and (
+            self.tenant_id is None
+            or not _GUID.match(self.superset_client_id)
+            or self.superset_client_id in (self.client_id, self.api_client_id)
+        ):
+            # ADR-148 Amendment 9: its own registration in the Entra tenant, never the Glass's (whose
+            # tokens would then be held to Superset's two routes) nor the API's.
+            raise ValueError(
+                "`superset_client_id` must be Superset's own application id (a GUID) in an Entra ID "
+                "mapping, neither the Glass's nor the API's"
+            )
         if self.tenant_id is None and (
             self.client_id is not None
             or self.api_client_id is not None
@@ -697,6 +707,8 @@ class _Verified:
     org_unit: str
     codes: list[str]
     token_roles: list[str]
+    #: None for the Glass's token (every route its rights allow); Superset's, `SUPERSET_ROUTES`.
+    routes: list[str] | None = None
 
 
 def _stored_roles(stored: StoredPerson) -> list[str]:
@@ -745,7 +757,7 @@ def principal_from_claims(
                 )
             roles = verified.token_roles
         principal_id, clearance, org_unit = verified.id, verified.clearance, verified.org_unit
-        codes = verified.codes
+        codes, routes = verified.codes, verified.routes
     return Principal(
         # Entra: the object id, one per person in the (pinned) tenant, which Graph also gives, so
         # Admin › People can assign roles before a first sign-in; Entra's `sub` is pairwise per
@@ -767,6 +779,11 @@ DASHBOARD_APP_ROLE = "Dashboard.Read"
 DASHBOARD_ROUTES = frozenset(
     {"GET /v1/investigations", "GET /v1/investigations/{investigation_id}/reports/feed"}
 )
+
+
+#: ADR-148 Amendment 9: what a person's delegated token issued to Superset's own registration is
+#: admitted to: who they are and what they may do, from which Superset gives them its role.
+SUPERSET_ROUTES = frozenset({"GET /v1/me", "GET /v1/me/rights"})
 
 
 def _verified_dashboard(claims: Mapping[str, Any], mapping: ClaimMapping) -> str:
@@ -802,6 +819,7 @@ def _is_app_only(claims: Mapping[str, Any]) -> bool:
 def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verified:
     """Every refusal a token's claims can earn, before anything is read about the person: a
     refused token never records a person in the store."""
+    routes: list[str] | None = None
     if mapping.is_entra:
         if claims.get("tid") != mapping.tenant_id:
             raise PrincipalResolutionError("token's tid is missing or names another tenant")
@@ -816,9 +834,15 @@ def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verifi
             raise PrincipalResolutionError(
                 f"token's scp does not grant this API's scope ({mapping.scope!r})"
             )
-        # v2.0 names the client in `azp`, v1.0 in `appid`: whichever is present must be the Glass.
-        clients = [claims[c] for c in ("azp", "appid") if c in claims]
-        if not clients or any(c != mapping.client_id for c in clients):
+        # v2.0 names the client in `azp`, v1.0 in `appid`: whichever is present must be the Glass,
+        # or Superset's own registration (ADR-148 Amendment 9), whose person is admitted to
+        # reading who they are alone (`SUPERSET_ROUTES`), so Superset can give them their role.
+        clients = {claims[c] for c in ("azp", "appid") if c in claims}
+        if clients == {mapping.client_id}:
+            pass
+        elif mapping.superset_client_id is not None and clients == {mapping.superset_client_id}:
+            routes = sorted(SUPERSET_ROUTES)
+        else:
             raise PrincipalResolutionError("token was not issued to the Glass's client")
         # A guest (B2B) account is homed in another tenant: `acct` 1, or an `idp` other than the
         # issuer. Refused until the deployment decides to admit guests (ADR-148 Amendment 6).
@@ -845,6 +869,7 @@ def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verifi
         # Keycloak's `roles` come from Admin › People through its attribute; an Entra token's are
         # app roles an Entra administrator assigns, never read (Amendment 6 point 4).
         token_roles=[] if mapping.is_entra else _string_list(claims, CLAIM_ROLES, "roles"),
+        routes=routes,
     )
 
 
