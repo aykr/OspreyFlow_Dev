@@ -1,0 +1,10 @@
+PLANT: auth/refreshPlace.ts as first built (8657a4b): no hand-off stash or noted address in the precedence, the chosen place kept whatever the rights draw, every kept Glass view restored
+     × a case switch carried over the identity provider's round trip, whose stash names no tab 2ms
+     × an address noted before a full-page sign-in (/rules), back at the root 0ms
+     × an address noted before a full-page sign-in (/alerts/a1), back at the root 0ms
+     × a place the rights do not offer is kept as Home, as it is drawn 1ms
+     × a Glass view drawn without a rights check (dashboards) is not put back; the Glass opens its own first view 1ms
+     × a Glass view drawn without a rights check (strength) is not put back; the Glass opens its own first view 0ms
+     × a Glass view drawn without a rights check (ownership) is not put back; the Glass opens its own first view 0ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  7 failed | 15 passed (22)

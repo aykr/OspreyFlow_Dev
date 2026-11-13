@@ -1,0 +1,4 @@
+PLANT: placeAtLoad without the hand-off stash (8657a4b's precedence), App level
+     × a case chosen on Home, carried over a full-page sign-in, opens that case, not the Home the tab kept 132ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 46 skipped (47)

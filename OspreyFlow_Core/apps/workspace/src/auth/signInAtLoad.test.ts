@@ -1,9 +1,9 @@
-// ADR-050 Amendment 3: a refresh keeps the person signed in. The identity provider below is a fake
-// that answers the `prompt=none` round as Keycloak does (rule 15: "what does the real one refuse, and
-// does the fake refuse it?"): a person when its session is live, and `login_required` when it has
-// none, which `renewSilently` (`userManager.ts`) turns into `null`. The browser walk through the real
-// `oidc-client-ts` and the real App is `keyboard/refresh.spec.ts`; the live round against a real
-// Keycloak is `tests/services/api/test_refresh_silent_sign_in_live.py`.
+// ADR-050 Amendment 3: a refresh keeps the person signed in. The decision at load, given what
+// `renewSilently` (`userManager.ts`) returns: the person when the identity provider's session is live,
+// `null` for its `login_required`, or an error. This is a stand-in for that function's answer, not a
+// fake provider: the fake that refuses `prompt=none` as Keycloak does, driven through the real
+// `oidc-client-ts`, is `keyboard/refresh-sign-in.spec.ts`'s, and Keycloak itself answers in
+// `tests/harness/test_refresh_silent_sign_in_keycloak.py`.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AUTO_SIGN_IN_FAILED, forgetThisLoad, signInAtLoad, type SignInAtLoadSteps } from "./signInAtLoad";

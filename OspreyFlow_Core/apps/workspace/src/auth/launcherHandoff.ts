@@ -79,6 +79,20 @@ export function readHandoff(
   return { autoSignIn: false, view: stashed(storage, now) };
 }
 
+/** A hand-off is still being carried over a sign-in round trip: its stash is there and fresh, whether
+ * or not it names a tab (a plain case switch names none). ADR-050 Amendment 3: the place a refresh
+ * keeps gives way to it. */
+export function handOffPending(storage: Storage, now: number = Date.now()): boolean {
+  try {
+    const raw = storage.getItem(HANDOFF_STORAGE_KEY);
+    if (!raw) return false;
+    const value = JSON.parse(raw) as Partial<Stash> | null;
+    return !!value && typeof value.at === "number" && now - value.at <= HANDOFF_MAX_AGE_MS;
+  } catch {
+    return false;
+  }
+}
+
 /** Called once the sign-in has completed, so the choice is not applied to a later visit. */
 export function clearHandoff(storage: Storage): void {
   try {

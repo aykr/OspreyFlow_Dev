@@ -84,6 +84,8 @@ afterEach(() => {
   // Each test is a page load of its own: the silent round is asked once per load.
   forgetThisLoad();
   vi.mocked(userManager.renewSilently).mockReset().mockImplementation(async () => null);
+  vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(false);
+  vi.mocked(userManager.completeSignInFromRedirect).mockReset();
   window.history.replaceState({}, "", "/");
   sessionStorage.clear();
 });
@@ -124,6 +126,65 @@ describe("06_DECISIONS.md ADR-050 — the sign-in gate", () => {
     expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
     expect(vi.mocked(userManager.signIn)).not.toHaveBeenCalled();
     expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalledTimes(1);
+  });
+
+  // ADR-050 Amendment 3 point 3 at the App: the kept place, the case in the tab, and a case switch
+  // carried over the identity provider's round trip. Home is told by its greeting ("Signed in as").
+  const signedInAs = (sub: string) => {
+    const asked: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input).split("?")[0]!;
+      asked.push(url);
+      if (url.endsWith("/v1/me")) return Promise.resolve(new Response(JSON.stringify({ id: sub, clearance: "OFFICIAL", roles: [] })));
+      if (url.endsWith("/v1/me/rights")) return Promise.resolve(new Response(JSON.stringify({ rights: ["investigate"] })));
+      return new Promise<Response>(() => undefined);
+    });
+    return asked;
+  };
+  const settled = async (asked: string[]) => {
+    await vi.waitFor(() => expect(asked.some((u) => u.endsWith("/v1/me/rights"))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  };
+
+  test("a refresh on Home with a case in the tab lands on Home; in the case, in that case", async () => {
+    vi.mocked(userManager.renewSilently).mockResolvedValue({
+      access_token: "t", expires_at: Math.floor(Date.now() / 1000) + 300, profile: { sub: "analyst-1" },
+    } as never);
+    sessionStorage.setItem("ospreyflow.investigationId", "case-1");
+    sessionStorage.setItem("ospreyflow.place", "home");
+    let asked = signedInAs("analyst-1");
+    render(<App />);
+    await screen.findByText(/^Signed in as/);
+
+    cleanup();
+    vi.restoreAllMocks();
+    forgetThisLoad();
+    vi.mocked(userManager.renewSilently).mockResolvedValue({
+      access_token: "t", expires_at: Math.floor(Date.now() / 1000) + 300, profile: { sub: "analyst-1" },
+    } as never);
+    sessionStorage.setItem("ospreyflow.place", "case");
+    asked = signedInAs("analyst-1");
+    render(<App />);
+    await settled(asked);
+    expect(screen.queryByText(/^Signed in as/)).toBeNull();
+    expect(asked.some((u) => u.includes("/v1/investigations/case-1"))).toBe(true);
+  });
+
+  test("a case chosen on Home, carried over a full-page sign-in, opens that case, not the Home the tab kept", async () => {
+    // `openCase` noted the case and the hand-off (`caseUrl`'s `from=case`, no tab), and the silent
+    // round had failed, so the identity provider's sign-in page was shown; it returns with a code.
+    sessionStorage.setItem("ospreyflow.place", "home");
+    sessionStorage.setItem("ospreyflow.investigationId", "case-2");
+    sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: null, at: Date.now() }));
+    vi.mocked(userManager.isSignInRedirectCallback).mockReturnValue(true);
+    vi.mocked(userManager.completeSignInFromRedirect).mockResolvedValue({
+      access_token: "t2", expires_at: Math.floor(Date.now() / 1000) + 300, profile: { sub: "analyst-1" },
+    } as never);
+    const asked = signedInAs("analyst-1");
+    render(<App />);
+    await settled(asked);
+    expect(screen.queryByText(/^Signed in as/)).toBeNull();
+    expect(asked.some((u) => u.includes("/v1/investigations/case-2"))).toBe(true);
   });
 
   test("the silent round at load is asked once under React's development double-run, and a failure shows the screen once", async () => {

@@ -4,6 +4,7 @@
 import { User, UserManager, WebStorageStateStore } from "oidc-client-ts";
 
 import { SIGN_IN_WINDOW_NAME } from "./callbackFrame";
+import { forgetPlace } from "./refreshPlace";
 import { oidcAuthority, oidcClientId, oidcScope, postLogoutRedirectUri, redirectUri } from "./oidcConfig";
 
 /** Who signed in, as the ID token names them: the token's subject and their names, nothing more.
@@ -176,8 +177,8 @@ export function completeSignInFromRedirect(): Promise<User> {
 export async function renewSilently(args: { silentRequestTimeoutInSeconds?: number } = {}): Promise<User | null> {
   try {
     // `forceIframeAuth`: always the `prompt=none` round against the identity provider's cookie,
-    // never a refresh token (ADR-050 objection 5's ruling: none is used by the browser), even though
-    // Keycloak puts one in the code exchange's answer.
+    // never a refresh token (ADR-050 objection 5's ruling: none is used by the browser); since
+    // Amendment 2 the realm gives the Glass none (`use.refresh.tokens: false`).
     return await getUserManager().signinSilent({ forceIframeAuth: true, ...args });
   } catch (error) {
     if (error instanceof Error && error.name === "ErrorResponse") {
@@ -194,6 +195,8 @@ export function signInAgainInPlace(): Promise<User> {
 }
 
 export function signOut(): Promise<void> {
+  // ADR-050 Amendment 3: the next person in this tab does not start where this one was.
+  forgetPlace(sessionStorage);
   return getUserManager().signoutRedirect();
 }
 
@@ -206,7 +209,9 @@ export function isSignInRedirectCallback(): boolean {
  * left in place, a reload would try to consume the same authorization code twice and fail. */
 export function clearRedirectCallbackParams(): void {
   const url = new URL(window.location.href);
-  for (const param of ["code", "state", "session_state", "iss"]) {
+  // The refusal's own words too: left in place, every refresh after one showed it again and never
+  // tried the silent sign-in (ADR-050 Amendment 3).
+  for (const param of ["code", "state", "session_state", "iss", "error", "error_description", "error_uri"]) {
     url.searchParams.delete(param);
   }
   window.history.replaceState({}, document.title, url.toString());

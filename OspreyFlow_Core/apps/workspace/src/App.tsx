@@ -61,7 +61,7 @@ import { TopBar } from "./shell/TopBar";
 import { ContextBanner, crossLinkFor, useCaseContext } from "./shell/ContextBanner";
 import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { useLastGlassView } from "./shell/placeMemory";
-import { keepPlace, placeAtLoad, placeOnScreen, restorePlace } from "./shell/refreshPlace";
+import { keepPlace, placeAtLoad, placeOnScreen, restorePlace } from "./auth/refreshPlace";
 import { fetchHandlingScheme, type HandlingScheme } from "./ingest/api";
 import { Button } from "./design/primitives/Button";
 import { AccountUnread } from "./auth/AccountUnread";
@@ -74,7 +74,6 @@ import {
   INVESTIGATION_ID_SESSION_KEY,
   initialInvestigationId,
   investigationIdFromSession,
-  investigationIdFromUrl,
 } from "./investigation/investigationId";
 import { computeCommunityHulls } from "./metrics/hulls";
 import { MetricsPanel } from "./metrics/MetricsPanel";
@@ -289,14 +288,10 @@ export function App() {
   useState(() => noteAddress());
   const address = useAddress();
   // ADR-050 Amendment 3: the place this tab was on when it was refreshed, unless the address says
-  // where to go first (`shell/refreshPlace.ts`). Read once, before anything is drawn.
+  // where to go first (`auth/refreshPlace.ts`). Read once, before anything is drawn.
   const [restored] = useState(() => {
     const place = placeAtLoad(
-      {
-        handedOff: handoff.autoSignIn || handoff.view !== null,
-        addressed: address.kind !== "none",
-        caseNamed: investigationIdFromUrl() !== null,
-      },
+      { autoSignIn: handoff.autoSignIn, pathname: window.location.pathname, search: window.location.search },
       sessionStorage,
     );
     return place ? restorePlace(place, initialInvestigationId() !== null, sessionStorage) : null;
@@ -962,8 +957,8 @@ export function App() {
   // taken for the person's place; the case list over a case is not a place of its own.
   useEffect(() => {
     if (!bearerToken || !rightsSettled || browsingCases) return;
-    keepPlace(placeOnScreen(startChoice, view, investigationId !== null), sessionStorage);
-  }, [bearerToken, rightsSettled, browsingCases, startChoice, view, investigationId]);
+    keepPlace(placeOnScreen(startChoice, view, investigationId !== null, startPlaces(rights)), sessionStorage);
+  }, [bearerToken, rightsSettled, browsingCases, startChoice, view, investigationId, rights]);
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
   useEffect(() => {
