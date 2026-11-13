@@ -1,29 +1,30 @@
-"""The leak test (the owner's requirement a; page A §4, read and ruled on 13 November 2026; ADR-149,
-reserved): **an analyst cannot see, count or infer a record they are not cleared for.**
+"""The leak test (the owner's requirement a; page A §4, read and ruled on 13 November 2026; ADR-149
+decision 2): **an analyst cannot see, count or infer a record they are not cleared for.**
 
 One world of synthetic records is indexed through the real document builder and bulk writer
 (rules' `throwaway_index`). Hidden records are made to look as much like visible ones as possible:
 the same names, sound-alikes, words in text, identifiers, and same-as links to visible records.
-For each reader, a second index holds only what the Conduit's own rule (`principal_may_view`,
-`in_case_datasets`, and a text's unit) lets that reader see. **Every search and suggestion the
-reader makes must answer identically from both:** results, their order, merged entities, passages,
-every group count and total, the filters offered, and `more`.
+Some records have changed in the graph since the index last caught up (reverted, withdrawn,
+superseded, re-marked), so the index holds them at their older facts while the outbox names them.
 
-The graph here deliberately does **not** filter: it returns any node asked for. So a hit the index
-leaks reaches the response and shows as a difference, rather than being dropped by the graph's own
-filter.
+For each reader, a second index holds exactly what the Conduit's own rule (`principal_may_view`,
+`in_case_datasets`, a text's unit) lets that reader see in the graph as it is now, less the nodes
+the index has not caught up with. **Every search and suggestion the reader makes, through the
+service itself (`search_page`, `suggest_page`), must answer identically from both:** results, their
+order,
+merged entities, passages, every group count and total, the filters offered, and `more`.
 
-Shown red first (rule 15):
-- once per part of the access filter, with that part replaced by match-all
+The graph here does **not** apply access: it returns any node or link asked for, as it stands now
+(a reverted or withdrawn node is gone, a re-marked one is at its new marking), so a hit the index
+leaks reaches the response as a difference rather than being dropped by the graph's own filter.
+
+Shown red first (rule 15), each at the real comparison with one protection removed:
+- each part of the access filter replaced by match-all
   (`test_the_leak_check_finds_each_filter_part_dropped`);
-- once for ranking: OpenSearch's default scoring lets hidden records reorder visible ones
-  (`test_default_relevance_would_leak_through_word_rarity`);
-- once for expansion: a fuzzy query lets hidden near-names push a visible one out
-  (`test_fuzzy_expansion_would_leak_a_visible_record_out`).
-
-A reverted, withdrawn or superseded record is not planted here: the graph returns none for it, so
-the indexer deletes it (ADR-150), and rules' `test_feed_live.py` shows each such event leaving the
-index. `throwaway_index` takes live nodes only.
+- the outbox's pending nodes not left out (`test_the_leak_check_finds_the_pending_nodes_counted`);
+- word rarity: `similarity: boolean` off in the mapping, and the bands' refusal of a score no band
+  gives turned off (`test_the_leak_check_finds_word_rarity_when_scoring_is_not_strict`);
+- expansion: the typo band asked as a fuzzy query (`test_the_leak_check_finds_fuzzy_expansion`).
 
 Needs a lease: the leased stack's OpenSearch, its port pinned (`stack_lease.sh remote`).
 """
@@ -31,15 +32,16 @@ Needs a lease: the leased stack's OpenSearch, its port pinned (`stack_lease.sh r
 from __future__ import annotations
 
 import copy
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Iterator, Sequence
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
 from opensearchpy import AsyncOpenSearch
 from services.api import search_index_query as q
 from services.api import search_service as s
+from services.api.search import SuggestRequest
 from services.api.search_access import index_access_filter
 from services.search_index import testing as index_testing
 from services.search_index.document import phonetic_codes
@@ -58,6 +60,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from schemas.search import SearchFilters, SearchPageRequest, SearchPageResponse
 
 pytestmark = pytest.mark.store
 
@@ -99,15 +102,31 @@ def _node(
     )
 
 
+def _near(word: str) -> list[str]:
+    """Every word one letter different from `word`."""
+    return sorted(
+        {
+            word[:pos] + letter + word[pos + 1 :]
+            for pos in range(len(word))
+            for letter in "abcdefghijklmnopqrstuvwxyz"
+        }
+        - {word}
+    )
+
+
 # --- the world ------------------------------------------------------------------------------------
 
 VISIBLE_LOOKING = [
     _node("p-smythe", "Person", family_name="Smythe", given_names="John", nino="AB123456C"),
     _node("p-mohammed", "Person", family_name="Mohammed", given_names="Ali"),
+    _node("p-pemberton", "Person", family_name="Pemberton"),
     _node("o-kestrel", "Organisation", name="Kestrel Holdings", org_ref="ORG-1"),
     _node("d-memo", "Document", title="Harbour memo", sent_at="2026-01-05T09:00:00Z"),
     _node("d-report", "Document", title="Quarterly report", sent_at="2026-02-10T09:00:00Z"),
     _node("d-note", "Document", title="Kestrel note", sent_at="2026-03-01T09:00:00Z"),
+    # Merged entities: A and B are each the same as H, whom no OFFICIAL reader may see.
+    _node("p-ashdown-a", "Person", family_name="Ashdown"),
+    _node("p-ashdown-b", "Person", family_name="Ashdown"),
     # PUBLIC, for the reader cleared to PUBLIC alone, in unit-2, reading both datasets.
     _node("p-smythe-public", "Person", cls="PUBLIC", family_name="Smythe", given_names="Jon"),
     _node(
@@ -139,6 +158,7 @@ HIDDEN_LOOKING = [
         nino="AB123456C",
     ),
     _node("p-muhammad-secret", "Person", cls="SECRET", family_name="Muhammad"),
+    _node("p-ashdown-h", "Person", cls="SECRET", family_name="Ashdown"),
     # Restricted, owned and originated by another unit.
     _node(
         "p-smythe-r-other",
@@ -158,7 +178,7 @@ HIDDEN_LOOKING = [
     ),
     # A code the scheme does not define.
     _node("p-smythe-undefined", "Person", code="UNDEFINED", family_name="Smythe"),
-    # Many hidden documents whose text makes "kestrel" common (the word-rarity leak).
+    # Many hidden documents whose text makes "kestrel" and "briefing" common (word rarity).
     *[
         _node(
             f"d-secret-{i}",
@@ -169,22 +189,35 @@ HIDDEN_LOOKING = [
         )
         for i in range(40)
     ],
-    # Many hidden near-names of "smyth", one letter changed (the expansion leak).
+    # Many hidden near-names, one letter from what is typed (expansion).
     *[
-        _node(f"p-near-{i}", "Person", cls="SECRET", family_name=name)
-        for i, name in enumerate(
-            sorted(
-                {
-                    "smyth"[:pos] + letter + "smyth"[pos + 1 :]
-                    for pos in range(5)
-                    for letter in "abcdefghijklmnopqrstuvwxyz"
-                }
-                - {"smyth"}
-            )
-        )
+        _node(f"p-near-smyth-{i}", "Person", cls="SECRET", family_name=name)
+        for i, name in enumerate(_near("smyth"))
+    ],
+    *[
+        _node(f"p-near-pemb-{i}", "Person", cls="SECRET", family_name=name)
+        for i, name in enumerate(n for n in _near("pembertom") if n != "pemberton")
     ],
 ]
-NODES = {n.id: n for n in VISIBLE_LOOKING + HIDDEN_LOOKING}
+
+# Changed in the graph since the index caught up: the index holds STALE, the graph holds NOW, and
+# the outbox names every one of them (and the superseding revision, not yet indexed at all).
+STALE = [
+    _node("p-reverted", "Person", family_name="Smythe", given_names="Reverted"),
+    _node("p-withdrawn", "Person", family_name="Smyth", given_names="Withdrawn"),
+    _node("o-superseded", "Organisation", name="Kestrel Holdings", org_ref="ORG-1"),
+    _node("p-remarked", "Person", family_name="Smythe", given_names="Remarked"),
+]
+NOW = {
+    # Reverted and withdrawn: gone from every read. Superseded: its successor reads instead.
+    "o-superseded-v2": _node("o-superseded-v2", "Organisation", name="Kestrel Holdings Group"),
+    # Re-marked above OFFICIAL.
+    "p-remarked": _node("p-remarked", "Person", cls="SECRET", family_name="Smythe"),
+}
+PENDING = sorted({n.id for n in STALE} | set(NOW))
+
+INDEXED = {n.id: n for n in VISIBLE_LOOKING + HIDDEN_LOOKING + STALE}
+GRAPH = {**{n.id: n for n in VISIBLE_LOOKING + HIDDEN_LOOKING}, **NOW}
 TEXTS = {
     "d-memo": ("Kestrel paid the invoice at Harbour Street", "unit-1"),
     "d-report": ("the invoice and the invoice and the invoice", "unit-1"),
@@ -193,17 +226,26 @@ TEXTS = {
     "d-public": ("Kestrel invoice notice for the harbour", "unit-2"),
     **{f"d-secret-{i}": ("kestrel kestrel briefing", "unit-1") for i in range(40)},
 }
-LINKS = [
-    Edge(
-        id="same-as-1",
+
+
+def _same_as(link_id: str, a: str, b: str) -> Edge:
+    base = VISIBLE_LOOKING[0]
+    return Edge(
+        id=link_id,
         type=SAME_AS,
-        source="p-smythe",
-        target="p-smyth-secret",
+        source=a,
+        target=b,
         properties={"score": 0.99},
-        provenance=VISIBLE_LOOKING[0].provenance,
-        handling=VISIBLE_LOOKING[0].handling,
-        audit=VISIBLE_LOOKING[0].audit,
+        provenance=base.provenance,
+        handling=base.handling,
+        audit=base.audit,
     )
+
+
+LINKS = [
+    _same_as("same-as-1", "p-smythe", "p-smyth-secret"),
+    _same_as("same-as-2", "p-ashdown-a", "p-ashdown-h"),
+    _same_as("same-as-3", "p-ashdown-h", "p-ashdown-b"),
 ]
 
 READERS = {
@@ -228,7 +270,7 @@ READERS = {
 }
 
 SEARCHES = [
-    s.SearchPageRequest(query=text, page_size=50)
+    SearchPageRequest(query=text, page_size=50)
     for text in [
         "Smythe",
         "Smyth",
@@ -238,23 +280,30 @@ SEARCHES = [
         "Kestrel Holdings",
         "Kestrel",
         "Kestrel invoice",
+        "kestrel briefing invoice",
         "invoice",
         "Mohammed",
         "Muhammad",
+        "Ashdown",
+        "Pembertom",
         "harbour",
     ]
 ] + [
-    s.SearchPageRequest(query="Smyth", group="Person", page_size=50),
-    s.SearchPageRequest(query="Kestrel", group="mentions", page_size=50),
-    s.SearchPageRequest(query="Kestrel", filters=s.SearchFilters(datasets=["ds-1"]), page_size=50),
-    s.SearchPageRequest(
+    SearchPageRequest(query="Smyth", group="Person", page_size=50),
+    SearchPageRequest(query="Kestrel", group="mentions", page_size=50),
+    SearchPageRequest(query="Kestrel", filters=SearchFilters(datasets=["ds-1"]), page_size=50),
+    SearchPageRequest(
         query="invoice",
-        filters=s.SearchFilters(date_from="2026-01-01", date_to="2026-01-31"),
+        filters=SearchFilters(date_from=date(2026, 1, 1), date_to=date(2026, 1, 31)),
         page_size=50,
     ),
-    s.SearchPageRequest(query="Smyth", page=1, page_size=1),
+    SearchPageRequest(query="Smyth", page=1, page_size=1),
 ]
-SUGGESTIONS = ["Sm", "Smy", "Smyth", "Kes", "Mo", "Mu", "AB12", "Ha"]
+SUGGESTIONS = [
+    SuggestRequest(query=text, ignore_case=ignore)
+    for text in ["Sm", "Smy", "Smyth", "Kes", "Mo", "Mu", "AB12", "Ha", "Ash", "Pem"]
+    for ignore in (True, False)
+] + [SuggestRequest(query="Smy", types=["Person"], ignore_case=True)]
 
 
 def _may_see(node: Node, principal: Principal) -> bool:
@@ -266,18 +315,19 @@ def _may_see(node: Node, principal: Principal) -> bool:
 
 
 def _seen(principal: Principal) -> tuple[list[Node], dict[str, tuple[str, str]]]:
-    """What `principal` may see, by the Conduit's own rule: the absent world for them."""
-    nodes = [n for n in NODES.values() if _may_see(n, principal)]
+    """What `principal` may see in the graph as it is now, less the nodes the index has not
+    caught up with (left out of every query): the absent world for them."""
+    nodes = [n for n in GRAPH.values() if n.id not in PENDING and _may_see(n, principal)]
     shown = {n.id for n in nodes}
     texts = {k: v for k, v in TEXTS.items() if k in shown and v[1] == principal.org_unit}
     return nodes, texts
 
 
 class _Unfiltered:
-    """A graph that returns every node and link asked for, so the index's filter is the only one."""
+    """The graph as it is now, with no access applied: every node and link asked for."""
 
     async def get_nodes(self, node_ids: Sequence[str], principal: Principal) -> list[Node]:
-        return [NODES[i] for i in node_ids if i in NODES]
+        return [GRAPH[i] for i in node_ids if i in GRAPH]
 
     async def edges_among(
         self, node_ids: Sequence[str], principal: Principal, *, edge_types: Sequence[str]
@@ -290,58 +340,74 @@ class _Unfiltered:
     ) -> list[Node]:
         raise AssertionError("the fallback must not answer in the leak test")
 
+    async def suggest_nodes(self, prefix: str, principal: Principal, **kwargs: Any) -> Any:
+        raise AssertionError("the fallback must not answer in the leak test")
+
 
 async def _answers(
     client: AsyncOpenSearch, index: str, principal: Principal, access: dict[str, Any]
 ) -> list[Any]:
     searcher = s.opensearch_searcher(client, index)
+    graph: Any = _Unfiltered()
+    case = {d: n for d, n in CASE_NAMES.items() if d in (principal.datasets or ())}
     out: list[Any] = []
     for request in SEARCHES:
-        if not set(request.filters.datasets or ()) <= set(principal.datasets or ()):
-            # A filter on a dataset outside the case is refused (422) before the index is asked.
-            with pytest.raises(ValueError, match="not a dataset of this case"):
-                await s.search_page(
-                    request,
-                    principal,
-                    _Unfiltered(),  # type: ignore[arg-type]
-                    searcher=searcher,
-                    access_filter=access,
-                    phonetic_codes=phonetic_codes,
-                    types=TYPES,
-                    case_datasets={},
-                    tau=TAU,
-                )
-            out.append((request.model_dump(), "refused"))
+        try:
+            response = await s.search_page(
+                request,
+                principal,
+                graph,
+                searcher=searcher,
+                access_filter=access,
+                phonetic_codes=phonetic_codes,
+                types=TYPES,
+                case_datasets=case,
+                tau=TAU,
+                pending=PENDING,
+                schema=ONTOLOGY,
+            )
+        except ValueError as refused:  # a filter on a dataset outside the case: a 422
+            out.append((request.model_dump(), "refused", str(refused)))
             continue
-        response = await s.search_page(
-            request,
-            principal,
-            _Unfiltered(),  # type: ignore[arg-type]
-            searcher=searcher,
-            access_filter=access,
-            phonetic_codes=phonetic_codes,
-            types=TYPES,
-            case_datasets={d: n for d, n in CASE_NAMES.items() if d in (principal.datasets or ())},
-            tau=TAU,
-        )
         assert response.source == "index", "the leak test must be answered by the index"
         out.append((request.model_dump(), response.model_dump()))
-    for prefix in SUGGESTIONS:
-        body = q.build_suggest_body(prefix, access_filter=access, limit=10)
-        out.append((prefix, q.read_suggest_response(await searcher(body), limit=10)))
+    for suggestion in SUGGESTIONS:
+        answered = await s.suggest_page(
+            suggestion,
+            principal,
+            graph,
+            searcher=searcher,
+            access_filter=access,
+            schema=ONTOLOGY,
+            pending=PENDING,
+        )
+        assert answered.source == "index"
+        out.append((suggestion.model_dump(), answered.model_dump()))
     return out
 
 
 @asynccontextmanager
 async def _worlds(principal: Principal) -> AsyncIterator[tuple[AsyncOpenSearch, str, str]]:
     nodes, texts = _seen(principal)
-    async with throwaway_index(list(NODES.values()), TEXTS, schema=ONTOLOGY) as (client, present):
+    async with throwaway_index(list(INDEXED.values()), TEXTS, schema=ONTOLOGY) as (
+        client,
+        present,
+    ):
         async with throwaway_index(nodes, texts, schema=ONTOLOGY, client=client) as (_, absent):
             yield client, present, absent
 
 
 def _differences(present: list[Any], absent: list[Any]) -> list[Any]:
-    return [(p[0], p[1], a[1]) for p, a in zip(present, absent, strict=True) if p != a]
+    return [(p[0], p[1:], a[1:]) for p, a in zip(present, absent, strict=True) if p != a]
+
+
+async def _compare(reader: str, access: dict[str, Any] | None = None) -> list[Any]:
+    principal = READERS[reader]
+    access = access or index_access_filter(SCHEME, principal)
+    async with _worlds(principal) as (client, present, absent):
+        with_hidden = await _answers(client, present, principal, access)
+        without = await _answers(client, absent, principal, access)
+    return _differences(with_hidden, without)
 
 
 # --- the test -------------------------------------------------------------------------------------
@@ -357,7 +423,9 @@ async def test_a_reader_gets_the_same_answers_with_hidden_records_present_or_abs
         with_hidden = await _answers(client, present, principal, access)
         without = await _answers(client, absent, principal, access)
     assert _differences(with_hidden, without) == []
-    found = sum(len(r[1]["results"]) for r in with_hidden if isinstance(r[1], dict))
+    found = sum(
+        len(r[1]["results"]) for r in with_hidden if isinstance(r[1], dict) and "results" in r[1]
+    )
     if reader == "empty-case":
         assert found == 0
     else:
@@ -365,123 +433,122 @@ async def test_a_reader_gets_the_same_answers_with_hidden_records_present_or_abs
 
 
 async def test_the_world_is_not_vacuous() -> None:
-    """The hidden records are really in the present index and really match the queries: an
-    unlimited filter finds them."""
+    """The hidden and stale records are really in the present index and really match the
+    queries: an unlimited filter finds them."""
     reader = READERS["cleared-for-R"]
     async with _worlds(reader) as (client, present, absent):
-        everything: dict[str, Any] = {"bool": {}}
         searcher = s.opensearch_searcher(client, present)
         body = q.build_search_body(
-            "Smyth",
-            access_filter=everything,
+            "Smythe",
+            access_filter={"bool": {}},
             phonetic_codes=phonetic_codes,
             types=TYPES,
             page_size=50,
         )
-        ids = {h["_source"]["node_id"] for h in (await searcher(body))["hits"]["hits"]}
+        ids = {h["_source"]["node_id"] for h in (await searcher(body, 5.0))["hits"]["hits"]}
     assert {"p-smyth-secret", "p-smythe-r-other", "p-smythe-undefined"} <= ids
+    assert {"p-reverted", "p-remarked"} <= ids
 
 
 @pytest.mark.parametrize("part", ["classification", "handling_code", "datasets", "text_unit"])
 async def test_the_leak_check_finds_each_filter_part_dropped(part: str) -> None:
     """Rule 15: the comparison above, shown red with each part of the real filter replaced by
     match-all, for the reader each part hides something from."""
-    reader = READERS["not-for-R" if part == "handling_code" else "cleared-for-R"]
-    access = copy.deepcopy(index_access_filter(SCHEME, reader))
+    reader = "not-for-R" if part == "handling_code" else "cleared-for-R"
+    access = copy.deepcopy(index_access_filter(SCHEME, READERS[reader]))
     access["bool"]["filter"] = [
         {"bool": {"_name": f"{part} dropped"}} if c["bool"]["_name"] == part else c
         for c in access["bool"]["filter"]
     ]
-    async with _worlds(reader) as (client, present, absent):
-        with_hidden = await _answers(client, present, reader, access)
-        without = await _answers(client, absent, reader, access)
-    assert _differences(with_hidden, without)
+    assert await _compare(reader, access)
 
 
-def _default_relevance(body: Any) -> Any:
-    """The mapping as OpenSearch would have it by default: no `similarity: boolean` anywhere."""
-    if isinstance(body, dict):
-        return {k: _default_relevance(v) for k, v in body.items() if k != "similarity"}
-    if isinstance(body, list):
-        return [_default_relevance(v) for v in body]
-    return body
+@pytest.fixture
+def no_exclusion(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setattr(q, "_left_out", lambda pending: {})
+    yield
 
 
-async def _order(client: AsyncOpenSearch, index: str, body: dict[str, Any]) -> list[str]:
-    reply = await client.search(index=index, body=body)
-    return [h["_source"]["node_id"] for h in reply["hits"]["hits"]]
+async def test_the_leak_check_finds_the_pending_nodes_counted(no_exclusion: None) -> None:
+    """The orchestrator's ruling on page A, shown red: without the exclusion, a reverted,
+    withdrawn, superseded or re-marked node the index still holds at its older facts is counted."""
+    assert await _compare("cleared-for-R")
 
 
-async def test_default_relevance_would_leak_through_word_rarity(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Rule 15 for ranking (page A's first worked example): with OpenSearch's default scoring, 40
-    hidden documents mentioning "kestrel" reverse the order of two visible ones; with the built
-    query and mapping they do not."""
-    reader = READERS["cleared-for-R"]
-    access = index_access_filter(SCHEME, reader)
-    plain = {
-        "query": {"bool": {"filter": [access], "must": [{"match": {"text": "kestrel invoice"}}]}},
-        "_source": ["node_id"],
-    }
-    built = q.build_search_body(
-        "Kestrel invoice",
-        access_filter=access,
-        phonetic_codes=phonetic_codes,
-        types=TYPES,
-        page_size=50,
-    )
-    async with _worlds(reader) as (client, present, absent):
-        strict = (await _order(client, present, built), await _order(client, absent, built))
+@pytest.fixture
+def not_strict(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """OpenSearch's default scoring: `similarity: boolean` removed from the mapping the throwaway
+    indexes are made with, and the bands' refusal of a score no band gives turned off, so word
+    rarity reaches the order instead of being refused."""
     original = index_testing.index_body  # type: ignore[attr-defined]
-    monkeypatch.setattr(index_testing, "index_body", lambda: _default_relevance(original()))
-    async with _worlds(reader) as (client, present, absent):
-        default = (await _order(client, present, plain), await _order(client, absent, plain))
-    assert strict[0] == strict[1]
-    assert default[0] != default[1], default
+
+    def default_relevance(body: Any) -> Any:
+        if isinstance(body, dict):
+            return {k: default_relevance(v) for k, v in body.items() if k != "similarity"}
+        if isinstance(body, list):
+            return [default_relevance(v) for v in body]
+        return body
+
+    monkeypatch.setattr(index_testing, "index_body", lambda: default_relevance(original()))
+    real_band = q._band
+
+    def lenient(score: float) -> str:
+        try:
+            return real_band(score)
+        except q.ScoreOutsideBands:
+            return "mention_some"
+
+    monkeypatch.setattr(q, "_band", lenient)
+    yield
 
 
-async def test_fuzzy_expansion_would_leak_a_visible_record_out() -> None:
-    """Rule 15 for expansion (page A's second worked example): a fuzzy query for "smyth" expands to
-    at most 50 words, and the hidden near-names can use them up; the built query expands nothing."""
-    reader = READERS["cleared-for-R"]
-    access = index_access_filter(SCHEME, reader)
-    fuzzy = {
-        "query": {
-            "bool": {
-                "filter": [access, {"term": {"kind": "node"}}],
-                "must": [
-                    {
-                        "fuzzy": {
-                            "names.words": {"value": "smyth", "fuzziness": 1, "max_expansions": 50}
+async def test_the_leak_check_finds_word_rarity_when_scoring_is_not_strict(
+    not_strict: None,
+) -> None:
+    """Page A's first worked example, at the real comparison: 40 hidden documents make "kestrel"
+    and "briefing" common, and two visible documents change places."""
+    assert await _compare("cleared-for-R")
+
+
+@pytest.fixture
+def expanding(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """The typo band asked as OpenSearch's fuzzy query (at most 50 words of the index's list)."""
+    real = q.build_search_body
+
+    def with_fuzzy(text: str, **kw: Any) -> dict[str, Any]:
+        body = real(text, **kw)
+        for band in body["query"]["bool"]["must"][0]["dis_max"]["queries"]:
+            if band["bool"]["_name"] == "name_typo":
+                band["bool"]["must"][0]["constant_score"]["filter"] = {
+                    "fuzzy": {
+                        "names.words": {
+                            "value": text.lower(),
+                            "fuzziness": 1,
+                            "max_expansions": 50,
                         }
                     }
-                ],
-            }
-        },
-        "_source": ["node_id"],
-        "size": 100,
-    }
-    built = q.build_search_body(
-        "Smyth", access_filter=access, phonetic_codes=phonetic_codes, types=TYPES, page_size=50
-    )
-    async with _worlds(reader) as (client, present, absent):
-        strict = (await _order(client, present, built), await _order(client, absent, built))
-        expanded = (await _order(client, present, fuzzy), await _order(client, absent, fuzzy))
-    assert strict[0] == strict[1]
-    assert "p-smythe" in expanded[1]
-    assert expanded[0] != expanded[1], expanded
+                }
+        return body
+
+    monkeypatch.setattr(q, "build_search_body", with_fuzzy)
+    yield
 
 
-# --- the bands, as built, against a real index (stages 2 to 6) ------------------------------------
+async def test_the_leak_check_finds_fuzzy_expansion(expanding: None) -> None:
+    """Page A's second worked example, at the real comparison: hidden near-names of "pembertom"
+    use up the fuzzy query's 50 words, and the visible "Pemberton" goes missing."""
+    assert await _compare("cleared-for-R")
 
 
-async def _search(text: str, **kw: Any) -> s.SearchPageResponse:
+# --- the bands, as built, against a real index (ADR-149 decisions 3, 5, 6) ------------------------
+
+
+async def _search(text: str, **kw: Any) -> SearchPageResponse:
     reader = READERS["cleared-for-R"]
     nodes, texts = _seen(reader)
     async with throwaway_index(nodes, texts, schema=ONTOLOGY) as (client, index):
         return await s.search_page(
-            s.SearchPageRequest(query=text, page_size=50, **kw),
+            SearchPageRequest(query=text, page_size=50, **kw),
             reader,
             _Unfiltered(),  # type: ignore[arg-type]
             searcher=s.opensearch_searcher(client, index),
@@ -490,15 +557,18 @@ async def _search(text: str, **kw: Any) -> s.SearchPageResponse:
             types=TYPES,
             case_datasets={"ds-1": "Fixture Corp"},
             tau=TAU,
+            schema=ONTOLOGY,
         )
 
 
-def _bands(response: s.SearchPageResponse) -> list[tuple[str, str]]:
+def _bands(response: SearchPageResponse) -> list[tuple[str, str]]:
     return [(r.node_ids[0], r.match.band) for r in response.results]
 
 
 async def test_an_exact_identifier_comes_first() -> None:
-    assert _bands(await _search("AB123456C"))[0] == ("p-smythe", "identifier")
+    found = await _search("AB123456C")
+    assert _bands(found)[0] == ("p-smythe", "identifier")
+    assert found.results[0].match.field == "Nino"
 
 
 async def test_names_exact_every_word_sounds_alike_and_spelt_alike() -> None:
@@ -511,10 +581,17 @@ async def test_names_exact_every_word_sounds_alike_and_spelt_alike() -> None:
     assert _bands(await _search("Kestrel Holdinsg"))[0] == ("o-kestrel", "name_typo")
 
 
+async def test_a_typo_needs_most_of_the_querys_trigrams() -> None:
+    """The trigram band's 60% (ADR-150's trigram tokenizer): "invoice" shares one trigram with the
+    title "Public notice" and finds no name; "Kestrel invoice" makes "Kestrel note" no close
+    name."""
+    assert not [b for _, b in _bands(await _search("invoice")) if b.startswith("name")]
+    assert ("d-note", "name_typo") not in _bands(await _search("Kestrel invoice"))
+
+
 async def test_a_mention_is_found_in_text_with_its_passage_marked() -> None:
     found = await _search("Kestrel invoice")
-    bands = _bands(found)
-    assert bands[0] == ("d-memo", "mention_words")
+    assert _bands(found)[0] == ("d-memo", "mention_words")
     memo = found.results[0]
     assert memo.is_document
     assert [p.text for p in memo.passage if p.match] == ["Kestrel", "invoice"]
@@ -528,12 +605,13 @@ async def test_names_rank_above_mentions_and_groups_count_records() -> None:
     assert bands[0].startswith("name")
     groups = {g.key: g.count for g in found.groups}
     assert groups.get("Organisation") == 1 and groups.get("mentions") == 1
+    assert [g.label for g in found.groups if g.key == "Organisation"] == ["Organisations"]
     assert found.counts_exact and found.total == sum(groups.values())
 
 
 async def test_the_date_filter_and_the_offered_span() -> None:
     found = await _search(
-        "invoice", filters=s.SearchFilters(date_from="2026-01-01", date_to="2026-01-31")
+        "invoice", filters=SearchFilters(date_from=date(2026, 1, 1), date_to=date(2026, 1, 31))
     )
     assert [n for n, _ in _bands(found)] == ["d-memo"]
     everything = await _search("invoice")
@@ -549,13 +627,17 @@ async def test_suggestions_come_from_stored_prefixes() -> None:
     nodes, texts = _seen(reader)
     async with throwaway_index(nodes, texts, schema=ONTOLOGY) as (client, index):
         searcher = s.opensearch_searcher(client, index)
-        body = q.build_suggest_body(
-            "Smy", access_filter=index_access_filter(SCHEME, reader), limit=10
-        )
-        ids, more = q.read_suggest_response(await searcher(body), limit=10)
-        body = q.build_suggest_body(
-            "AB1234", access_filter=index_access_filter(SCHEME, reader), limit=10
-        )
-        by_id, _ = q.read_suggest_response(await searcher(body), limit=10)
-    assert set(ids) == {"p-smythe", "p-smythe-public"} and more is False
-    assert by_id == ["p-smythe"]
+        access = index_access_filter(SCHEME, reader)
+        graph: Any = _Unfiltered()
+
+        async def suggest(request: SuggestRequest) -> Any:
+            return await s.suggest_page(
+                request, reader, graph, searcher=searcher, access_filter=access, schema=ONTOLOGY
+            )
+
+        insensitive = await suggest(SuggestRequest(query="smy", ignore_case=True))
+        sensitive = await suggest(SuggestRequest(query="smy"))
+        by_id = await suggest(SuggestRequest(query="AB1234", ignore_case=True))
+    assert {n.id for n in insensitive.nodes} == {"p-smythe", "p-smythe-public"}
+    assert sensitive.nodes == [] and sensitive.source == "index"  # "Smythe", not "smy"
+    assert [n.id for n in by_id.nodes] == ["p-smythe"]
