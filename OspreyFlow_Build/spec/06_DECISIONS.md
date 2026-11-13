@@ -36765,52 +36765,69 @@ CARRIES row): a deployed Small's PostgreSQL was rendered with no `max_connection
 Conduit holds 50 at rest beside Keycloak, the gateway's database, Superset and any worker. A second Conduit, or a worker
 opening the same stores, met `TooManyConnectionsError`.
 
-**Measured** (13 November 2026, main 8176f38): the Conduit opens **48** asyncpg pools (`services/api`, none in
-`packages`): **49** connections at their `min_size` (at rest) and **197** at their `max_size` (under load). The other
-clients of a deployment's PostgreSQL: Keycloak (its own `db-pool-max-size`, 100 by default, not rendered), the gateway
-(LiteLLM, `database_connection_pool_limit` 10 a worker), Superset and the report sync where rendered. As rendered:
+**What one Conduit opens, measured in a running Conduit** (`tests/harness/test_postgres_connections.py`, every
+`asyncpg.create_pool` the process makes recorded with its sizes; `gates/pg_two_conduits_green.txt`): **48 pools; 50
+connections at their `min_size`** (what it holds at rest, and exactly what it added to the server, as platform-b
+measured), **201 at their `max_size`** (what its pools may grow to), with Entra ID's 4 more where configured. The source alone undercounts: two stores are opened twice in every Conduit
+(`InvestigationStore` and `PostgresBoardItemStore`, by `run_resources.build_run_resources` and again in `app.py`), and
+Entra ID's people store opens one more pool when Entra is configured. Beside the pools, each running load holds one
+connection outside them for its row-key lock (`recipe_runs.hold_row_keys`), and nothing bounds how many loads run at once.
+
+As rendered, before and after:
 
 | Profile | PostgreSQL | Before | After |
 | --- | --- | --- | --- |
-| local-lite | owned, compose | no `max_connections` (100) | 580 |
-| small | owned, compose (sized or not) | no `max_connections` (100) | 580 |
+| local-lite | owned, compose | no `max_connections` (100) | 660 |
+| small | owned, compose (sized or not) | no `max_connections` (100) | 660 |
 | cluster | managed (`external.postgres`), not rendered | the operator's | the operator's |
 | cloud-platform | RDS PostgreSQL 16 (`db.t4g.small`, `.large` in production), not in-cluster | RDS's default, from the instance's memory | unchanged here: a carry (below) |
 
-**Decision: render `max_connections`, from the product's own number; the pools are not changed.**
+**Decision: render `max_connections` from the product's own number, and render the two other pools it counts; the
+Conduit's pools are not changed.**
 
-1. **The number** (`harness/profiles.py`, `POSTGRES_MAX_CONNECTIONS`): two Conduits at their pools' ceiling
-   (`CONDUITS_ALLOWED` × `CONDUIT_POOL_CEILING`, 2 × 200), Keycloak's pool (100), the gateway (20), Superset and the
-   report sync (40), and a reserve for an operator's `psql`, a backup and PostgreSQL's own superuser slots (20): **580**.
-   The Conduit's ceiling is guarded against the source: `tests/harness/test_postgres_connections.py` sums every
-   `create_pool(...)` call's `max_size` (a pool whose size is not written as a number is refused in words) and fails when
-   a pool added or grown takes the sum past 200, naming the file to raise it in. The others are each client's own
-   default, stated as allowances, not measurements.
-2. **Rendered on every owned PostgreSQL** as its command (`postgres -c max_connections=580`, with the sized memory
-   settings after it where the server is sized, Amendment 33 decision 6): in the store's own definition, never in
-   `deployment.env`, so the change restarts PostgreSQL alone.
-3. **Why not `min_size=0` instead, or as well.** Bounding the pools' minimum moves only the count at rest (49 to 0);
-   two Conduits under load still reach 394, past 100, so it does not remove the refusal, and it would put a connection's
-   set-up on the first query after each idle spell in 48 stores. A server with room for the peak has room for the rest;
-   the pools stay as they are. (Revisit if a deployment runs more than two Conduits, which `CONDUITS_ALLOWED` would then
-   name.)
-4. **A deployed Small picks it up on `ospreyflow apply`**: the rendered PostgreSQL's definition differs, so apply
-   restarts PostgreSQL, and nothing else (ADR-137's `services_to_restart`); a deployment not applied keeps 100 until it
-   is. PostgreSQL's memory per allowed connection is small (its lock table and process slots); the sized
-   `shared_buffers` are unchanged.
+1. **The number** (`harness/profiles.py`, `POSTGRES_MAX_CONNECTIONS`, **660**): two Conduits
+   (`CONDUITS_ALLOWED`), each at its pools' ceiling (`CONDUIT_POOL_CEILING`, 220: the measured 201 with Entra's
+   4, and room) and with 20 running loads' lock connections (`RUNNING_LOADS_ALLOWED`, an allowance, not a bound);
+   Keycloak's pool (100) and the gateway's (10), **both now rendered**, so they are the product's numbers and not the
+   images' defaults (`KC_DB_POOL_MAX_SIZE`; LiteLLM's `general_settings.database_connection_pool_limit`, one worker,
+   the render passing no `--num_workers`); Superset's two workers at SQLAlchemy's 5 and 10 overflow, its queries to the
+   mart and the report sync's pool (50, an allowance from those clients' own defaults); and a reserve for an
+   operator's `psql`, a backup and PostgreSQL's own superuser slots (20). The test fails when a running Conduit's pools,
+   with Entra's, outgrow the ceiling, naming the file to raise it in.
+2. **Rendered on every owned PostgreSQL** as its command (`postgres -c max_connections=660`, the sized memory settings
+   after it where the server is sized, Amendment 33 decision 6): in the store's own definition, never in
+   `deployment.env`. A `-c` on the command line wins over `ALTER SYSTEM` and `postgresql.conf`, so an operator who
+   raised `max_connections` by hand finds it set to 660 after `apply`; there is no `osprey.yaml` setting for it yet
+   (as `resources.postgres_shared_buffers_gib` is for the buffers), which is the way to change it if 660 is wrong.
+3. **Why the pools are left as they are.** Bounding their minimum (`min_size=0`) moves only what one Conduit holds at
+   rest (about 50); what two Conduits may grow to is unchanged by it, and that is what the server must allow. It was
+   not measured how often the pools reach their maximum, nor what `min_size=0` would cost (a connection's set-up on the
+   first query after an idle spell, in each store), so neither is claimed. `services/api/hotlists.py`'s choice to
+   bound its pools rather than raise `max_connections` was made for the lane stacks' fixed 400; a deployment's own
+   PostgreSQL can be given its number. A shared pool for the stores would reduce the ceiling and is a larger change:
+   not made here.
+4. **A deployed Small picks it up on `ospreyflow apply` of a release that carries this amendment**: PostgreSQL's
+   definition (its command), Keycloak's (its pool) and the gateway's (its pool) differ, so apply restarts those three
+   and nothing else (ADR-137's `services_to_restart`). That the Conduit and the others reconnect when PostgreSQL alone
+   restarts under them is not tested here. Memory: an allowed connection that is not open costs little; 660 open
+   connections would be 660 server processes, which Small's sizing (Amendment 33) does not weigh; the number is a
+   ceiling for the worst moment, not what a Small holds.
 5. **Not covered here, and carried:** a managed PostgreSQL (`external.postgres`, the cluster profile, cloud-platform's
    RDS) sets its own limit. RDS's default comes from the instance's memory (`LEAST(DBInstanceClassMemory/9531392,
-   5000)`, about 190 on a `db.t4g.small`), below two Conduits' peak: a parameter group naming 580, or a larger class, is
-   the platform lane's (`harness/cloud_platform/terraform.py`), sent as a CARRIES row. Preflight saying so for a managed
-   PostgreSQL that allows fewer is part of the same carry.
+   5000)`, roughly 190 on a `db.t4g.small`), below two Conduits' ceiling: a parameter group naming the number, or a
+   larger class, is the platform lane's (`harness/cloud_platform/terraform.py`), now a CARRIES row (the orchestrator, 13
+   November). Also carried: a bound on concurrent loads (their lock connections), and the lane stacks' and CI's 400
+   (`stack_lease.sh`'s `PG_CONNECTIONS`, `tests/test_ci_postgres_connections.py`), which is now below the product's
+   number and unlinked to it.
 
-**Tests**, red first: `tests/harness/test_postgres_connections.py` — `::test_the_conduits_pools_at_their_max_fit_the_ceiling`
-and `::test_a_pool_added_past_the_ceiling_is_caught_in_the_real_call_sites_shape` (a pool planted as the stores write
-it, one over the room left: caught; an unsized one: refused in words); `::test_every_owned_postgres_is_rendered_with_the_products_number`
-(Lite, Small, Small sized); `::test_an_existing_deployment_restarts_its_postgres_alone_on_apply`;
-`::test_two_conduits_at_their_ceiling_fit_the_rendered_postgres` (docker: `postgres:16.4` with exactly the rendered
-command, two real Conduits started against it, then the connections their pools and the other services may still open
-taken to the number: none refused; red with the image's own command, `TooManyConnectionsError` once the two Conduits are
-up, `gates/pg_two_conduits_red.txt`). At the image's 100 both Conduits do come up at rest (98); the refusal is the next
-connection a pool, Keycloak or the gateway asks for, which is the production shape. `tests/harness/test_render_memory.py`'s
-two assertions on PostgreSQL's command follow the new first setting.
+**Tests**, red first, `tests/harness/test_postgres_connections.py`:
+`::test_every_owned_postgres_is_rendered_with_the_products_number` (Lite, Small, Small sized);
+`::test_the_gateway_and_keycloak_are_rendered_with_the_pools_the_number_counts`;
+`::test_an_existing_deployment_restarts_postgres_keycloak_and_the_gateway_on_apply`;
+`::test_two_conduits_at_their_ceiling_and_every_other_client_fit_the_rendered_postgres` (docker: `postgres:16.4`
+with exactly the rendered command; a real Conduit, its pools recorded, the connections it adds checked against them,
+its pools grown to their measured maximum and its loads' locks opened; a second the same; then every other client's
+allowance; every other address pinned to a closed port; green, 602 client connections at once of 660,
+`gates/pg_two_conduits_green.txt`; red with the image's own command, refused while Conduit 1's pools grew,
+`gates/pg_two_conduits_red.txt`). `tests/harness/test_render_memory.py`'s
+and `tests/harness/test_model_engines.py`'s assertions on PostgreSQL's command and the gateway's settings follow.
