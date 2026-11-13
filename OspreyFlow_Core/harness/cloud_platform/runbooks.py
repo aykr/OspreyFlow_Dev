@@ -208,6 +208,33 @@ where the ingress's certificate is signed by a CA your machine does not trust, e
 curl -fsS ${{OSPREY_CURL_OPTS:-}} "https://{glass}/healthz" >/dev/null && echo "the Glass answers"
 kubectl -n "$NS" get pods
 ```
+
+## 8. Against the client's real tenant (once, with the client's Entra administrator)
+
+**This section is not a block to run: each item needs a person at a browser.** Our own acceptance
+signed in through a stand-in for Entra ID, which can show how the Conduit treats a token but nothing
+about how tenant `{claims.tenant_id}` is set up. Only the real tenant shows these. If any item fails,
+stop and raise it with the client's Entra administrator before anyone else is told the service is ready.
+
+1. **Token version.** With `token_version` 2.0, the API registration's manifest has
+   `requestedAccessTokenVersion` set to 2. Without it, Entra issues v1.0 tokens with another issuer,
+   and every sign-in is refused.
+2. **The first administrator.** One of {", ".join(claims.first_administrators)} signs in at
+   `https://{glass}`. Admin › People lists them with Admin, and their clearance (for example
+   OFFICIAL-SENSITIVE), unit and handling codes are the ones their groups give. If they are not, the
+   claims set in the registration (`claims_mapping_policy`, optional claims) do not send what
+   `cloud_platform.claims` names.
+3. **A person given no role.** A member of the tenant whom no administrator has given a role signs in,
+   is listed in Admin › People with no role, and sees no case and no Admin.
+4. **Who may sign in at all.** If the Glass's enterprise application has *Assignment required*, a person
+   who is not assigned is refused by Entra itself (AADSTS50105) and never reaches the deployment. If it
+   does not, every member of the tenant can sign in, with no role until given one: confirm which the
+   client wants.
+5. **A guest.** A guest (B2B) account signs in and is refused.
+6. **Many groups.** A person in more than 200 groups is refused in words, because Entra then leaves the
+   groups out of the token. Limit the claim to the groups assigned to the application.
+7. **Keys.** Entra rolls its signing key unannounced. The Conduit fetches the tenant's keys again
+   within five minutes. A sign-in still refused for an unknown key after that is a fault: report it.
 """
 
 

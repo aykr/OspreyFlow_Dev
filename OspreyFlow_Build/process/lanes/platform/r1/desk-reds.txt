@@ -29,3 +29,8 @@ E                +  where True = any(<generator object test_a_block_for_later_is
 1 failed, 29 deselected in 0.55s
 E       AssertionError: assert 'ospreyflow-poc-certificate' in 'for secret in rds-postgresql-instance-output elasticache-redis s3-bucket-output ospreyflow-secrets; do'
 1 failed, 30 deselected in 0.52s
+
+# 13 November 2026, at main 217c7e7: the owner's ruling, "a stand-in now, the real tenant later". The install
+# gains section 8, what only the client's real tenant can show. Red before the section was written:
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_ends_with_what_only_the_real_tenant_can_show
+1 failed, 31 deselected in 0.56s

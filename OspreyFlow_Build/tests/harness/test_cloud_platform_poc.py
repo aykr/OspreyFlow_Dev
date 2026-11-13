@@ -331,6 +331,20 @@ def test_the_install_check_says_what_its_curl_options_are(runbooks: dict[str, st
     assert "OSPREY_CURL_OPTS" in prose and "--cacert" in prose
 
 
+def test_the_install_ends_with_what_only_the_real_tenant_can_show(runbooks: dict[str, str]) -> None:
+    """R1 signed in through a stand-in for Entra ID (the owner's ruling, 13 November 2026): its tokens
+    were minted beside it, so nothing about the client's own tenant was shown. The install ends with a
+    section, marked as such, of what the platform team checks against the real tenant, each item named,
+    and none of it in the sequence of blocks (it needs a person at a browser)."""
+    text = runbooks["INSTALL.md"]
+    assert "## 8. Against the client's real tenant" in text
+    section = text[text.index("## 8. Against the client's real tenant") :]
+    assert "```" not in section
+    for item in ("requestedAccessTokenVersion", "AADSTS50105", "guest", "200 groups", "no role",
+                 "OFFICIAL", "signing key"):
+        assert item in section, item
+
+
 def test_no_command_needs_more_than_a_namespace_s_rights(runbooks: dict[str, str]) -> None:
     """The client's team is the namespace's tenant: no block lists or changes anything cluster-wide
     (volumes, every kind there is), and the disks are read from the account, by the claims'
