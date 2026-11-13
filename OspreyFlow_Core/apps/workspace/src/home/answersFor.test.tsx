@@ -98,6 +98,24 @@ describe("the Home section", () => {
     expect((await screen.findByRole("alert")).textContent).toMatch(/None of your cases loads into that dataset/);
   });
 
+  // 13 November 2026, the owner's demo: this section's lists borrowed `home-facts`, whose items are a two-column grid
+  // made for the Facts list's glyph-then-text; with no glyph, the text fell into the narrow glyph column, one word
+  // a line. A list without glyphs is the plain variant, and the plain variant's items are not a grid.
+  it("lays its lists out plainly, never in the glyph grid made for Facts", async () => {
+    const { container } = render(
+      <AnswersForSection apiBaseUrl="x" bearerToken="t" rights={ENGINEER} roles={["data_engineer"]}
+        onOpenCase={vi.fn()} onOpenModel={vi.fn()} onOpenOperations={vi.fn()}
+        read={{ cases: async () => CASES, needs: async () => NEEDS }} />,
+    ); // prettier-ignore
+    await screen.findByRole("button", { name: "Author of Prison intel" });
+    const lists = [...container.querySelectorAll("ul.home-facts")];
+    expect(lists.length).toBeGreaterThan(0);
+    for (const list of lists) {
+      if (list.querySelector(".home-glyph") === null) expect(list.classList).toContain("home-facts--plain");
+    }
+    // That the plain variant's items are not a grid is held in homeKey.test.ts, which reads home.css.
+  });
+
   it("says why an administrator answers for a promotion by their Administrator role", () => {
     const shown = answersFor({ rights: new Set(["administer_system"]), roles: ["osprey-admin"], cases: [], needs: NEEDS });
     expect(shown.answers.find((a) => a.text.startsWith("Reviewer"))?.why).toBe("Given by your Administrator role.");

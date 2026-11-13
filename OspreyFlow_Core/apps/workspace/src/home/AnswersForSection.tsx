@@ -66,7 +66,7 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
       {problem && <p role="alert">{problem}</p>}
       {unread.length > 0 && <p role="alert">{`Could not read ${unread.join(" or ")}; what is shown may be short.`}</p>}
       <h3 className="label">Places you can open</h3>
-      <ul className="home-facts">
+      <ul className="home-facts home-facts--plain">
         {shown.places.length === 0 && <li>None yet. Ask an administrator to give you a role.</li>}
         {shown.places.map((p) => (
           <li key={p.key}>
@@ -75,7 +75,7 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
         ))}
       </ul>
       <h3 className="label">What you answer for</h3>
-      <ul className="home-facts">
+      <ul className="home-facts home-facts--plain">
         {(!needsRead || cases === null) && <li>Reading…</li>}
         {needsRead && cases !== null && shown.answers.length === 0 && unread.length === 0 && <li>Nothing waits for you.</li>}
         {shown.answers.map((a, i) => {
@@ -102,7 +102,7 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
       {shown.levels.length > 0 && (
         <>
           <h3 className="label">Your level in each case</h3>
-          <ul className="home-facts">
+          <ul className="home-facts home-facts--plain">
             {shown.levels.map((l) => (
               <li key={l.caseId}>{`${l.level} of ${l.name}`}</li>
             ))}
@@ -114,7 +114,7 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
         {shown.can.map((g) => (
           <div key={g.group}>
             <h4 className="label">{g.group}</h4>
-            <ul className="home-facts">
+            <ul className="home-facts home-facts--plain">
               {g.rights.map((r) => (
                 <li key={r.right}>
                   <details>
