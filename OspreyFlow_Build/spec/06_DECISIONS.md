@@ -33875,10 +33875,17 @@ them hidden from a reader, would have been withheld from that reader whole. This
    `use_of()` and `scheduled_lists()`, which a refresh reads of the one list it refreshes, after the route has
    answered a hidden list as unsubscribed, or, scheduled, after the owner's clearance for the list is checked
    (`ListRefreshExecutor`: an owner no longer cleared for it is refused in words, recorded with the list's
-   refreshes). A list's schedule in *Disable…*'s plan is read through the same filter (`admin_people`): one the
-   administrator is not cleared for is listed as "a list you can't see", under an id naming nothing, and goes
-   only to someone cleared for the list's classification and code (`markings_hold`;
-   `test_custom_roles_store.py`'s list-schedule cases; the orchestrator's verification of e911b90, item 2). A refresh's file carries no marking, so an update
+   refreshes, `test_an_owner_not_cleared_for_the_list_is_refused_in_words_and_nothing_is_read`; one cleared
+   refreshes it, `test_an_owner_cleared_for_a_marked_list_refreshes_it`). A list's schedule in *Disable…*'s
+   plan is read through the same filter (`admin_people`). One the administrator is not cleared for is left out,
+   nothing of it said (its kind, number or place), and is a withheld item (`person_ownership._WITHHELD_SQL`):
+   *Transfer and disable* is refused for it, 409 `withheld_items` in words naming nothing, until an
+   administrator cleared for the list transfers it (the owner's ruling of 9 November 2026; the orchestrator's
+   verifications of e911b90, item 2, and of 7a1c760). It goes only to someone cleared for the list's
+   classification and code (`markings_hold`). Tests, each way:
+   `test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace`,
+   `test_an_administrator_cleared_for_the_list_transfers_its_schedule`,
+   `test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list`. A refresh's file carries no marking, so an update
    keeps the marking the list holds (`apply_update`), never dropping it to OFFICIAL.
    *Limit:* a subscription (ADR-133) cannot name a marking yet, so a list first loaded by subscription is
    OFFICIAL, P. Studio lists (ADR-140 Amendment 13) are not read by the gate and are unchanged.
@@ -33947,7 +33954,9 @@ them hidden from a reader, would have been withheld from that reader whole. This
    pass, defect 7, correcting this point's earlier "as any unique name does"). *Logged for the owner:* list
    names are one namespace across markings, and no answer to that request both writes nothing and says
    nothing. The check and the write are two statements; a list marked between them is the race logged with
-   it. It holds for a pack's alert item
+   it. So are the schedule and refresh routes' (`hidden()`, then `set_schedule` or the refresh): a list raised
+   between the two is scheduled or refreshed by one who was cleared a moment before, and a scheduled refresh
+   then checks its owner again (`ListRefreshExecutor`). *Logged.* It holds for a pack's alert item
    too, which is frozen as its adder was shown the alert: it is read back by the citations it shows
    (`alerts.edges_shown_with`), so its own adder reads it, and an item showing a list is withheld from a reader
    not cleared for it.
@@ -34022,11 +34031,11 @@ them hidden from a reader, would have been withheld from that reader whole. This
    unchanged: their tests count the store's subscriptions. *Logged.*
 
 **Tests that would fail (rule 12).** The offline ones are shown red by plants at their real call sites
-(`process/lanes/rules/lists/AM7_RED_RECORD.txt`: P1 to P48, and P3b; a plant that breaks collection is
+(`process/lanes/rules/lists/AM7_RED_RECORD.txt`: P1 to P51, with P3b, P49b and P51b; a plant that breaks collection is
 recorded BROKEN, never red), headed by the commit it ran at and the code's identity with it. The new cases
 were also run against the code before the second pass (`REVIEW2_RED_BEFORE.txt`). The live ones, and CARRIES
 row 113's cross-file red, by `process/lanes/rules/lists/am7_live_plants.py` under the rules lane's lease
-(`AM7_LIVE_RECORD.txt` beside it: L0 to L23, L0b and L2b each red on 12 November 2026 evening, headed by
+(`AM7_LIVE_RECORD.txt` beside it: L0 to L27, with L0b, L2b and L24b, each red, headed by
 the code's identity; L0, L4, L6 and L12 retargeted where the second pass moved their invariant, the runs
 before that kept raw beside it). The live files
 the change reaches, with `test_route_rights.py`, ran on the same lease (`process/lanes/rules/gates/`, each
@@ -34119,6 +34128,22 @@ failure outside those files triaged beside it).
   `test_a_sentences_preview_screens_only_the_lists_the_previewer_is_cleared_for`;
   `test_a_sentences_words_name_no_list`; `test_a_lists_entries_are_read_only_for_a_clearance_admitting_its_marking`
   (live, the query).
+- A party reused at its list's old marking after a raise, or under another code (2; the orchestrator's
+  verifications of e911b90, item 1, and of 7a1c760): `test_a_party_held_below_its_lists_marking_now_is_not_reused`,
+  `test_a_party_held_at_its_lists_classification_under_another_code_is_not_reused`; and reused where it holds
+  the list's, `test_a_party_held_at_its_lists_marking_is_reused` (P49, P49b).
+- A hidden list's schedule named, counted or placed in *Disable…*, moved by one who may not see it, or given
+  to one not cleared for it (1; item 2 of e911b90's verification, and 7a1c760's):
+  `test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace`,
+  `test_an_administrator_cleared_for_the_list_transfers_its_schedule`,
+  `test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list` (L24, L24b, L25).
+- A scheduled refresh run as an owner not cleared for the list (1):
+  `test_an_owner_not_cleared_for_the_list_is_refused_in_words_and_nothing_is_read`,
+  `test_an_owner_cleared_for_a_marked_list_refreshes_it` (L26).
+- An analytics store made before the alert facts' sets left without them, or altered at every start (5):
+  `test_an_old_file_gains_the_sets_and_its_alert_is_still_counted` (DuckDB, P51, P51b);
+  `test_a_store_made_before_the_alert_facts_sets_issues_their_three_alters_once` (P50) and, live,
+  `test_a_store_made_before_the_alert_facts_sets_is_brought_forward_and_keeps_its_rows` (L27).
 - A live file's list left for the next file (9): `test_no_other_file_leaves_a_list_naming_this_files_people`, red
   with `test_screening_refresh.py` run first before the teardowns, green after.
 
