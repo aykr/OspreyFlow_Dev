@@ -26,6 +26,12 @@ one: **what a reader gets back is identical whether or not the records they may 
 - **Only what the Glass may already show is searchable.** Each index document is built from the same data a reader
   of the node's own dataset receives, with source details withheld. A Document's text is the extracted text already
   held in the database; a Document with none is searchable by its title.
+  - **Names** are a type's string properties marked searchable in the domain model and not marked highly
+    sensitive: the same set the type-ahead uses today (ADR-074).
+  - **A Document's text is its own index document.** Today only the unit that extracted a text may read it, which is
+    narrower than the Document's own handling. So the text document carries the Document's access facts plus that
+    unit, and the filter checks both. Snippets and matches from a text therefore reach only its unit. A reader who
+    may see the Document but not its text still finds it by its title.
   Source-system identifiers are never indexed (rule 7). A gazetteer place is searchable by its name alone (ADR-147).
 - **The filter in every query** has three parts, the same three as the graph's:
   1. the record's classification is no higher than the reader's clearance; an unknown clearance sees nothing;
@@ -110,6 +116,7 @@ One test, against a real OpenSearch on a lane stack, on synthetic data:
   - a restricted code the reader cannot receive;
   - a restricted code they can receive, but owned by another unit;
   - a dataset outside the reader's case;
+  - a Document the reader may see whose text belongs to another unit;
   - reverted, withdrawn and superseded records.
 - **Assertion.** For a set of queries (exact identifier, misspelt name, sound-alike, prefix suggestion, full-text
   phrase, filtered by dataset and by date), the reader's whole response is identical with the hidden records in the
