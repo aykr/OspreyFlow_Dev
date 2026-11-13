@@ -26,11 +26,14 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-
-import httpx
+from typing import TYPE_CHECKING, Any
 
 from .home import CommandRefused
+
+# ADR-114 decision 3: the command itself is the standard library and PyYAML alone. httpx is the
+# checkout's, imported where a client is made (`client`, reached through `main._conduit_verb`).
+if TYPE_CHECKING:
+    import httpx
 
 #: The longest `--wait` waits before saying the run is still going (exit 1).
 WAIT_SECONDS = 6 * 60 * 60
@@ -262,6 +265,8 @@ def run(
 
 
 def client(api: str) -> httpx.Client:
+    import httpx
+
     return httpx.Client(base_url=api.rstrip("/"), timeout=60.0)
 
 

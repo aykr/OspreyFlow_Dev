@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import getpass
+import importlib.util
 import json
 import os
 import re
@@ -1425,12 +1426,49 @@ def _conduit_running(ctx: _Context, directory: Path) -> bool:
     return any(str(row.get("State", "")) not in stopped for row in _services(output))
 
 
+#: Set on the command run again inside the checkout's environment, so it never runs itself again.
+_IN_CHECKOUT = "OSPREYFLOW_IN_CHECKOUT"
+_REENTER = "import sys; from ospreyflow.main import main; sys.exit(main(sys.argv[1:]))"
+
+
+def _in_checkout(args: argparse.Namespace, ctx: _Context) -> int:
+    """ADR-114 decision 3: the command is the standard library and PyYAML; work needing more runs
+    in the checkout's own environment. `release` and `run` need httpx, so where the command is
+    installed alone (`uv tool install ./cli`) they run again there, with the same words and folder.
+    Found by R1 (13 November 2026): httpx imported at module level stopped every verb of such an
+    install."""
+    if ctx.env.get(_IN_CHECKOUT):
+        raise CommandRefused(
+            f"`ospreyflow {args.verb}` needs httpx, which the checkout's environment at "
+            f"{ctx.product} does not have: run `uv sync --frozen` there, then try again."
+        )
+    folders = (ctx.product / "cli", ctx.product, ctx.product / "packages")
+    path = os.pathsep.join(str(p) for p in folders)
+    # The command's own words, straight to the person as when it runs here: not through `ctx.run`,
+    # whose redactor hides a line naming a secret, as `run`'s refusal naming OSPREY_CLIENT_SECRET.
+    again = {_IN_CHECKOUT: "1", "OSPREYFLOW_HOME": str(ctx.product), "PYTHONPATH": path}
+    argv = [*ctx.python, "-c", _REENTER, *args.argv]
+    return subprocess.run(argv, env={**os.environ, **again}, cwd=Path.cwd(), check=False).returncode
+
+
 def _conduit_verb(args: argparse.Namespace, ctx: _Context) -> int:
     """`release` and `run`: thin clients of the Conduit's routes (`conduit_client.py`), at the
     deployment's own address unless `OSPREY_API_URL` names another."""
-    with conduit_client.client(
-        conduit_client.api_url(ctx.env, named.address_of(ctx.config_path))
-    ) as http:
+    if importlib.util.find_spec("httpx") is None:
+        return _in_checkout(args, ctx)
+    import httpx
+
+    api = conduit_client.api_url(ctx.env, named.address_of(ctx.config_path))
+    try:
+        return _conduit_call(args, ctx, api)
+    except httpx.TransportError as failed:
+        raise CommandRefused(
+            f"The Conduit at {api} could not be reached ({type(failed).__name__})."
+        ) from failed
+
+
+def _conduit_call(args: argparse.Namespace, ctx: _Context, api: str) -> int:
+    with conduit_client.client(api) as http:
         if args.verb == "run":
             return conduit_client.run(
                 http, token=conduit_client.service_token(ctx.env, http), dataset=args.dataset,
@@ -1689,6 +1727,7 @@ def main(
         args = _parser().parse_args(args_in)
     except SystemExit as stop:
         return stop.code if isinstance(stop.code, int) else 2
+    args.argv = args_in  # as given, for a verb run again in the checkout's environment
 
     try:
         try:
