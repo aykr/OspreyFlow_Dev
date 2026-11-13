@@ -574,7 +574,8 @@ def _blocks(out: str) -> dict[str, list[str]]:
 
 
 def test_the_default_view_shows_its_blocks_in_the_owners_order(hb, tmp_path) -> None:
-    out = hb(**_overview_fixture(hb, tmp_path)).stdout
+    """Adapted 13 November 2026 (brief hb): today's full blocks are kept under --full, in today's order."""
+    out = hb("--full", **_overview_fixture(hb, tmp_path)).stdout
     assert out.splitlines()[1] == "Client-install chain expected to finish merging: 14 Nov (estimates as of 15:00 UTC)"
     order = ["VIEW 1 · FOUNDATION FEATURES", *(f"  {f}\n" for f in _FEATURES), "VIEW 2 · DEPLOYMENT",
              *(f"  {d}\n" for d in _DEPLOYMENTS), "\nRELEASE\n", "\nHOUSEKEEPING\n", "  Housekeeping\n", "\nLANES\n"]
@@ -583,7 +584,8 @@ def test_the_default_view_shows_its_blocks_in_the_owners_order(hb, tmp_path) -> 
 
 
 def test_the_default_view_lists_only_steps_not_done_with_counts(hb, tmp_path) -> None:
-    out = hb(**_overview_fixture(hb, tmp_path)).stdout
+    """Adapted 13 November 2026 (brief hb): the full blocks, under --full."""
+    out = hb("--full", **_overview_fixture(hb, tmp_path)).stdout
     blocks = _blocks(out)
     for done in ("(L1, studio)", "(M1, platform)", "(H1, docs)"):
         assert done not in out, done
@@ -599,9 +601,21 @@ def test_the_default_view_lists_only_steps_not_done_with_counts(hb, tmp_path) ->
 
 
 def test_the_default_view_says_each_state_in_plain_words(hb, tmp_path) -> None:
+    """Adapted 13 November 2026 (brief hb): the states are read from the full blocks (--full), and the codes are
+    looked for in both views, leaving out LANES NOW's note lines, which are each lane's own words ("C1 review
+    fixes"); its headings, which carry the states, are kept."""
     import re
 
-    out = hb(**_overview_fixture(hb, tmp_path)).stdout
+    codes = r"\btodo\b|(?<!in )\breview\b|ready-to-merge|waiting-for-owner|being built"
+    env = _overview_fixture(hb, tmp_path)
+
+    def without_notes(out: str) -> str:
+        before, rest = out.split("\nLANES NOW\n", 1)
+        section, after = rest.split("\n\n", 1)
+        return before + "\n".join(line for line in section.splitlines() if not line.startswith("    ")) + after
+
+    assert not re.search(codes, without_notes(hb(**env).stdout))
+    out = without_notes(hb("--full", **env).stdout)
     states = {
         line.split(" · ")[1]
         for lines in _blocks(out).values()
@@ -611,7 +625,7 @@ def test_the_default_view_says_each_state_in_plain_words(hb, tmp_path) -> None:
     assert states == {"building", "not started", "in review", "waiting to merge",
                       "needs you: A1: the owner's ruling on the…"}, states
     # The step table's and the beats' own codes never reach the owner ("in review" is the plain words for review).
-    assert not re.search(r"\btodo\b|(?<!in )\breview\b|ready-to-merge|waiting-for-owner|being built", out), out
+    assert not re.search(codes, out), out
 
 
 def test_the_default_views_lanes_table_names_each_lanes_step_and_next(hb, tmp_path) -> None:
@@ -692,3 +706,175 @@ def test_the_default_view_shows_the_path_to_the_release_with_what_each_step_wait
 def test_the_default_view_has_no_path_section_without_a_finish_file(hb, tmp_path) -> None:
     out = hb(**_overview_fixture(hb, tmp_path)).stdout
     assert "PATH TO" not in out
+
+
+# --- brief hb (13 November 2026): a lane's stages, and the default view reorganised --------------------------
+# The owner: "build this view into the heartbeat for all the lanes and refresh the current organisation of
+# heartbeats". Every stages file is written by the real `stages` verb; every beat by the real `beat`.
+
+
+def _stage_lines(path: Path) -> list[str]:
+    return [line for line in path.read_text().splitlines() if line.startswith("stage=")]
+
+
+def test_stages_are_written_whole_and_a_second_call_replaces_them(hb, tmp_path) -> None:
+    lanes = tmp_path / "lanes"
+    made = hb("stages", "studio", "L2", "1|done|Plan|ratified", "2|now|Build", "3|todo|Gate")
+    assert made.returncode == 0, made.stderr
+    text = (lanes / "studio.stages").read_text().splitlines()
+    assert text[0] == "step=L2" and text[1].startswith("at=")
+    assert text[2:] == ["stage=1|done|Plan|ratified", "stage=2|now|Build", "stage=3|todo|Gate"]
+    assert hb("stages", "studio", "L2", "1|done|Plan", "2|done|Build").returncode == 0
+    assert _stage_lines(lanes / "studio.stages") == ["stage=1|done|Plan", "stage=2|done|Build"]
+    assert sorted(p.name for p in lanes.iterdir()) == ["studio.stages"]  # no temporary file left beside it
+
+
+def test_stages_clear_removes_the_list(hb, tmp_path) -> None:
+    hb("stages", "studio", "L2", "1|now|Build")
+    cleared = hb("stages", "studio", "--clear")
+    assert cleared.returncode == 0
+    assert not (tmp_path / "lanes" / "studio.stages").exists()
+
+
+@pytest.mark.parametrize(
+    ("bad", "said"),
+    [
+        ("2|started|Build", "Unknown stage state 'started'"),
+        ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+        ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+        ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+    ],
+)
+def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+    path = tmp_path / "lanes" / "studio.stages"
+    assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+    before = path.read_text()
+    refused = hb("stages", "studio", "L2", "1|done|Plan", "2|now|Build", bad)
+    assert refused.returncode == 2
+    assert said in refused.stderr, refused.stderr
+    assert path.read_text() == before  # the earlier list stands, untouched
+
+
+def _section(out: str, heading: str) -> list[str]:
+    """The lines under a heading, up to the next blank line."""
+    return out.split(f"\n{heading}\n", 1)[1].split("\n\n", 1)[0].splitlines()
+
+
+def test_lanes_now_shows_a_lanes_stages_with_their_marks_and_where_it_is(hb, tmp_path) -> None:
+    env = _overview_fixture(hb, tmp_path)
+    assert hb("stages", "studio", "L2", "1|done|Plan|ratified", "2|done|Red tests", "3|now|Build|the drawers",
+              "4|blocked|Live run|waiting for a stack", "5|todo|Merge").returncode == 0
+    now = _section(hb(**env).stdout, "LANES NOW")
+    at = now.index("  STUDIO · L2 · working · last heard 0m ago · stage 3 of 5")
+    assert now[at + 1 : at + 6] == [
+        "    ✅ 1. Plan · ratified",
+        "    ✅ 2. Red tests",
+        "    ⏳ 3. Build · the drawers",
+        "    ⛔ 4. Live run · waiting for a stack",
+        "    — 5. Merge",
+    ]
+    # A lane with no stages: its beat's note, one line; its state in plain words.
+    at = now.index("  PLATFORM · X1 · working · last heard 0m ago")
+    assert now[at + 1] == "    X1 part 1 live run"
+    assert "  ADMIN · A1 · waiting for you · last heard 0m ago" in now
+    assert "  RULES · R1 · ready to merge · last heard 0m ago" in now
+
+
+def test_a_stages_list_from_another_step_is_not_shown(hb, tmp_path) -> None:
+    env = _overview_fixture(hb, tmp_path)  # studio's beat names L2
+    assert hb("stages", "studio", "L1", "1|done|Plan", "2|now|Build").returncode == 0
+    now = _section(hb(**env).stdout, "LANES NOW")
+    at = now.index("  STUDIO · L2 · working · last heard 0m ago")
+    assert now[at + 1] == "    L2: wiring the drawers"
+    assert not any("Build" in line for line in now)
+
+
+def test_a_paused_or_idle_lane_is_one_line_at_the_end_not_a_block(hb, tmp_path) -> None:
+    env = _overview_fixture(hb, tmp_path)
+    assert hb("beat", "docs", "paused", "paused at H2").returncode == 0
+    assert hb("beat", "case", "idle", "nothing assigned").returncode == 0
+    now = _section(hb(**env).stdout, "LANES NOW")
+    assert not any(line.startswith(("  DOCS ·", "  CASE ·")) for line in now), now
+    assert now[-1] == "  Idle: case; paused: docs"
+
+
+def test_the_default_view_opens_with_what_needs_you_and_only_that(hb, tmp_path) -> None:
+    env = _overview_fixture(hb, tmp_path)  # admin waits on the owner; rules is ready to merge
+    assert hb("beat", "case", "waiting-for-owner", "C1: waiting for C0 to merge").returncode == 0  # the orchestrator's
+    out = hb(**env).stdout
+    assert _section(out, "NEEDS YOU:") == ["  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b"]
+    assert out.index("OVERALL") < out.index("NEEDS YOU:") < out.index("LANES NOW") < out.index("VIEW 1")
+    for lane in ("admin", "case"):
+        assert hb("beat", lane, "working", "at work").returncode == 0
+    calm = hb(**env).stdout
+    assert "NEEDS YOU:" not in calm and calm.index("Nothing needs you.") < calm.index("LANES NOW")
+
+
+def test_the_views_are_one_line_a_group_naming_only_its_open_steps(hb, tmp_path) -> None:
+    env = _overview_fixture(hb, tmp_path)
+    out = hb(**env).stdout
+    lines = out.splitlines()
+    assert "  Models and maps: 1 of 1 done" in lines
+    assert "  Ingest Studio: 1 of 3 done · open: L2 (studio, building), L3 (studio, not started)" in lines
+    assert "  Local-lite: 0 of 1 done · open: C2 (case, not started)" in lines
+    # A step waiting on the owner says so in two words here; its note is under NEEDS YOU and LANES NOW.
+    assert "  Four places, the Glass and Admin: 0 of 2 done · open: A1 (admin, needs you), A2 (admin, not started)" in lines
+    groups = out.split("VIEW 1 · FOUNDATION FEATURES\n")[1].split("\nRELEASE\n")[0].splitlines()
+    assert all(len(line) <= 120 for line in groups), "a group's line is cut to the screen"
+    assert not any(line.strip() in ("Ingest Studio", "Models and maps") for line in lines)  # no full block
+    assert "Ingest two (L2, studio)" not in out
+    full = hb("--full", **env).stdout
+    assert "  Ingest Studio\n    1 of 3 steps done\n    Ingest two (L2, studio) · building · 12 Nov\n" in full
+
+
+def test_open_steps_side_by_side_with_one_lane_and_state_share_it(hb, tmp_path) -> None:
+    env = _overview_fixture(hb, tmp_path)
+    for name, row in (("progress.tsv", "platform\tP8\tL\ttodo\tNothing shared\nplatform\tP9\tM\ttodo\tAlerts\n"),
+                      ("groups.tsv", "platform\tP8\tLaurium\tAfter the client's install\n"
+                                     "platform\tP9\tLaurium\tAfter the client's install\n")):
+        with (tmp_path / name).open("a") as f:
+            f.write(row)
+    lines = hb(**env).stdout.splitlines()
+    assert "  After the client's install: 0 of 3 done · open: R2 (rules, not started), P8, P9 (platform, not started)" in lines
+
+
+def _repo_with_merges(base: Path, merges: int) -> tuple[Path, str]:
+    """A repository whose main has `merges` merge commits after its cut, as the orchestrator's merges are."""
+    env = {**os.environ, "GIT_AUTHOR_NAME": "T", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+           "GIT_COMMITTER_NAME": "T", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
+    repo = base / "release-repo"
+    repo.mkdir()
+
+    def git(*a: str) -> str:
+        return subprocess.run(["git", *a], cwd=repo, env=env, check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "the cut")
+    cut = git("rev-parse", "--short", "HEAD")
+    for i in range(merges):
+        git("checkout", "-q", "-b", f"lane/x{i}")
+        git("commit", "-q", "--allow-empty", "-m", f"work {i}")
+        git("checkout", "-q", "main")
+        git("merge", "-q", "--no-ff", f"lane/x{i}", "-m", f"merge: x{i} step {i}")
+    return repo, cut
+
+
+def test_release_is_one_line_with_its_merge_count_and_the_list_only_under_full(hb, tmp_path) -> None:
+    env = _overview_fixture(hb, tmp_path)
+    repo, cut = _repo_with_merges(tmp_path, 3)
+    release = (tmp_path / "release.tsv").read_text().replace("cut\t0000000", f"cut\t{cut}")
+    (tmp_path / "release.tsv").write_text(release)
+    env = {**env, "OSPREY_REPO": str(repo)}
+    out = hb(**env).stdout
+    assert _section(out, "RELEASE") == [
+        f"  Last: v0.5.0, published 2026-11-11 06:35 UTC · 3 merges since {cut}",
+        "  Next: v0.5.1: the chain merged",
+    ]
+    assert "step 1" not in out
+    full = hb("--full", **env).stdout
+    assert f"  Merged on main since (3 merges after {cut}):" in full and "x1 step 1" in full
+
+
+def test_the_default_view_says_where_the_full_view_is(hb, tmp_path) -> None:
+    out = hb(**_overview_fixture(hb, tmp_path)).stdout
+    assert out.splitlines()[-1] == "Every block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes"
