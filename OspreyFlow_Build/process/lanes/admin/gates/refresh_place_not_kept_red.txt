@@ -1,0 +1,36 @@
+PLANT A (on the branch's App.tsx): the kept place not put back at load. Expected red: 'a refresh in Admin lands in Admin' after the reload, at the place, not at set-up.
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Core/apps/workspace/), logged at osprey-runs/admin.meta/runs/20261113T124544Z-03d8a578/log: npx playwright test --config keyboard/playwright.config.ts refresh-sign-in -g lands in Admin --reporter=line
+
+Running 1 test using 1 worker
+
+[1/1] keyboard/refresh-sign-in.spec.ts:154:1 › a refresh in Admin lands in Admin, not on Home
+  1) keyboard/refresh-sign-in.spec.ts:154:1 › a refresh in Admin lands in Admin, not on Home ───────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('navigation', { name: 'Admin sections' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('navigation', { name: 'Admin sections' }) with timeout 5000ms
+      - waiting for getByRole('navigation', { name: 'Admin sections' })
+
+
+      161 |
+      162 |   await page.reload();
+    > 163 |   await expect(admin(page)).toBeVisible();
+          |                             ^
+      164 |   await expect(home(page)).toHaveCount(0);
+      165 |   await expect(signInScreen(page)).toHaveCount(0);
+      166 | });
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:163:29
+
+    Error Context: test-results/refresh-sign-in-a-refresh--f49b9--lands-in-Admin-not-on-Home/error-context.md
+
+
+  1 failed
+    keyboard/refresh-sign-in.spec.ts:154:1 › a refresh in Admin lands in Admin, not on Home ────────
+Wall time: 10 s, exit 1 (no stack, no lease; set-up before it 13 s)
+exit=1

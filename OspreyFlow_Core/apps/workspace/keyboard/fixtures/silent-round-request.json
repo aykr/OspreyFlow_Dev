@@ -1,0 +1,12 @@
+{
+  "path": "/protocol/openid-connect/auth",
+  "fixed": {
+    "client_id": "osprey-glass",
+    "redirect_uri": "<origin>/",
+    "response_type": "code",
+    "scope": "openid",
+    "code_challenge_method": "S256",
+    "prompt": "none"
+  },
+  "random": ["state", "code_challenge"]
+}

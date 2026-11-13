@@ -1,0 +1,36 @@
+PLANT B (on the branch's App.tsx): the place kept in localStorage, shared by every tab. Expected red: the new tab opens in Admin, not on Home.
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Core/apps/workspace/), logged at osprey-runs/admin.meta/runs/20261113T124606Z-7823760b/log: npx playwright test --config keyboard/playwright.config.ts refresh-sign-in -g new tab --reporter=line
+
+Running 1 test using 1 worker
+
+[1/1] keyboard/refresh-sign-in.spec.ts:181:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home
+  1) keyboard/refresh-sign-in.spec.ts:181:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: /, Ada$/, level: 1 })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('heading', { name: /, Ada$/, level: 1 }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: /, Ada$/, level: 1 })
+
+
+      189 |   await fakeIdentityProviderAndConduit(other, idp);
+      190 |   await other.goto("/");
+    > 191 |   await expect(home(other)).toBeVisible();
+          |                             ^
+      192 | });
+      193 |
+      194 | test("a kept Admin for a person whose rights do not open it lands on Home, and Home is kept", async ({ page }) => {
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:191:29
+
+    Error Context: test-results/refresh-sign-in-the-place--36790-vider-session-opens-on-Home/error-context.md
+
+
+  1 failed
+    keyboard/refresh-sign-in.spec.ts:181:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home 
+Wall time: 10 s, exit 1 (no stack, no lease; set-up before it 10 s)
+exit=1

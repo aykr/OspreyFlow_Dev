@@ -1,21 +1,43 @@
 // ADR-050 Amendment 3: a refresh keeps the person signed in and where they were. This drives the real
 // Glass (`/`, `main.tsx` and `App.tsx`, not a harness) and the real `oidc-client-ts`, with its hidden
 // `prompt=none` frame, against a fake identity provider served at the transport (`page.route`, which
-// answers the page's frames too). The fake answers as Keycloak does, refusals included (rule 15): with
-// no session, `prompt=none` is answered `error=login_required` on the redirect, never a code. The
-// Conduit is faked the same way, with only what the sign-in and Home read. No keyboard action is new
-// (the Sign in screen is unchanged), so this file registers none; it lives here for this suite's
-// server, which serves the whole workspace.
+// answers the page's frames too). Rule 15: the fake refuses what Keycloak 26 refuses, as
+// `tests/harness/test_refresh_silent_sign_in_keycloak.py` measures it against the real one — with no
+// session, `prompt=none` is answered by an error on the redirect (`login_required`, or the
+// `interaction_required` and `consent_required` Keycloak also sends), with `state` and `iss`, never a
+// code; an unregistered `redirect_uri` or client is refused outright; and a code is exchanged once,
+// for the PKCE verifier its challenge names and the `redirect_uri` it was given to, else
+// `invalid_grant`. The request the library sends is held to `fixtures/silent-round-request.json`,
+// which the live Keycloak test sends as it is. The Conduit is faked with only what the sign-in and
+// Home read. No keyboard action is new (the Sign in screen is unchanged), so this file registers none.
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+
 import { expect, test, type Page } from "@playwright/test";
 
 const IDP = "http://localhost:8081/realms/osprey";
 const API = "http://localhost:8000";
+const SILENT_ROUND: { path: string; fixed: Record<string, string>; random: string[] } = JSON.parse(
+  readFileSync(new URL("./fixtures/silent-round-request.json", import.meta.url), "utf-8"),
+);
+
+type Refusal = "login_required" | "interaction_required" | "consent_required";
 
 interface FakeIdentityProvider {
   /** Keycloak's own session cookie, as far as this fake is concerned. */
   session: boolean;
   /** Every `prompt=none` round asked of it. */
   silentRounds: number;
+  /** What it answers a `prompt=none` round with when there is no session. */
+  refusal?: Refusal;
+  /** The `prompt=none` requests, as the library sent them. */
+  asked?: URLSearchParams[];
+}
+
+interface Issued {
+  challenge: string;
+  redirectUri: string;
+  used: boolean;
 }
 
 function jwt(claims: Record<string, unknown>): string {
@@ -23,7 +45,10 @@ function jwt(claims: Record<string, unknown>): string {
   return `${part({ alg: "RS256", typ: "JWT" })}.${part(claims)}.c2lnbmF0dXJl`;
 }
 
-async function fakeIdentityProviderAndConduit(page: Page, idp: FakeIdentityProvider): Promise<void> {
+const EVERY_RIGHT = ["investigate", "create_case", "administer_system", "manage_people"];
+
+async function fakeIdentityProviderAndConduit(page: Page, idp: FakeIdentityProvider, rights: string[] = EVERY_RIGHT): Promise<void> {
+  const issued = new Map<string, Issued>();
   // Everything on these two origins is answered here, never passed on: on the Mac they are the owner's
   // own deployment's ports (8081, 8000). Registered first, so the routes below (later, so first
   // matched) answer what they name and this answers the rest.
@@ -36,26 +61,55 @@ async function fakeIdentityProviderAndConduit(page: Page, idp: FakeIdentityProvi
         token_endpoint: `${IDP}/protocol/openid-connect/token`,
         end_session_endpoint: `${IDP}/protocol/openid-connect/logout`,
         jwks_uri: `${IDP}/protocol/openid-connect/certs`,
+        authorization_response_iss_parameter_supported: true,
+        code_challenge_methods_supported: ["plain", "S256"],
       },
     }),
   );
   await page.route(`${IDP}/protocol/openid-connect/auth?**`, (route) => {
-    const asked = new URL(route.request().url());
-    const back = new URL(asked.searchParams.get("redirect_uri")!);
-    back.searchParams.set("state", asked.searchParams.get("state")!);
-    if (asked.searchParams.get("prompt") === "none") {
+    const asked = new URL(route.request().url()).searchParams;
+    const redirectUri = asked.get("redirect_uri") ?? "";
+    // The realm registers the Glass's root alone, exactly (`harness/realm.py`'s `_glass_client`):
+    // anything else is Keycloak's error page, never a redirect.
+    const origin = new URL(route.request().frame().page().url() || "http://x/").origin;
+    if (asked.get("client_id") !== "osprey-glass" || redirectUri !== `${origin}/`)
+      return route.fulfill({ status: 400, contentType: "text/html", body: "Invalid parameter: redirect_uri" });
+    const back = new URL(redirectUri);
+    back.searchParams.set("state", asked.get("state") ?? "");
+    back.searchParams.set("iss", IDP);
+    if (asked.get("prompt") === "none") {
       idp.silentRounds += 1;
-      // Keycloak's refusal: no session, so no code, and no login page either.
-      if (!idp.session) back.searchParams.set("error", "login_required");
-      else back.searchParams.set("code", `code-${idp.silentRounds}`);
+      idp.asked?.push(asked);
+      if (!idp.session) {
+        back.searchParams.set("error", idp.refusal ?? "login_required");
+        return route.fulfill({ status: 302, headers: { location: back.toString() } });
+      }
+      if (asked.get("code_challenge_method") !== "S256" || !asked.get("code_challenge"))
+        return route.fulfill({ status: 400, contentType: "text/html", body: "Missing parameter: code_challenge" });
+      const code = `code-${idp.silentRounds}-${Math.random().toString(36).slice(2)}`;
+      issued.set(code, { challenge: asked.get("code_challenge")!, redirectUri, used: false });
+      back.searchParams.set("session_state", "s1");
+      back.searchParams.set("code", code);
       return route.fulfill({ status: 302, headers: { location: back.toString() } });
     }
     // The interactive sign-in is the login page; these tests never get as far as typing into it.
     return route.fulfill({ status: 200, contentType: "text/html", body: "<title>Sign in to osprey</title>" });
   });
   await page.route(`${IDP}/protocol/openid-connect/token`, (route) => {
-    // A code is exchanged only while the session lives, as Keycloak's would be refused after logout.
-    if (!idp.session) return route.fulfill({ status: 400, json: { error: "invalid_grant" } });
+    const form = new URLSearchParams(route.request().postData() ?? "");
+    const grant = issued.get(form.get("code") ?? "");
+    const verifier = form.get("code_verifier") ?? "";
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const refused =
+      !idp.session ||
+      form.get("grant_type") !== "authorization_code" ||
+      form.get("client_id") !== "osprey-glass" ||
+      !grant ||
+      grant.used ||
+      grant.redirectUri !== form.get("redirect_uri") ||
+      grant.challenge !== challenge;
+    if (grant) grant.used = true;
+    if (refused) return route.fulfill({ status: 400, json: { error: "invalid_grant", error_description: "Code not valid" } });
     const now = Math.floor(Date.now() / 1000);
     const claims = { iss: IDP, aud: "osprey-glass", sub: "analyst-1", iat: now, exp: now + 300, preferred_username: "analyst1", given_name: "Ada" };
     return route.fulfill({
@@ -67,7 +121,7 @@ async function fakeIdentityProviderAndConduit(page: Page, idp: FakeIdentityProvi
     if (path === "/v1/me")
       return route.fulfill({ json: { id: "analyst-1", clearance: "OFFICIAL", org_unit: "unit-a", roles: ["osprey-admin"], receivable_handling_codes: [] } });
     if (path === "/v1/me/rights")
-      return route.fulfill({ json: { rights: ["investigate", "create_case", "administer_system", "manage_people"] } });
+      return route.fulfill({ json: { rights } });
     // What the workspace reads before it draws anything, in the shapes the Conduit answers.
     if (path === "/v1/ontology")
       return route.fulfill({ json: { version: 1, entity_types: [{ name: "Person", pole_class: "person", channel: "cyan", shape: "circle", properties: [] }], edge_types: [] } });
@@ -135,4 +189,66 @@ test("the place is kept in this tab only: a new tab with the same identity-provi
   await fakeIdentityProviderAndConduit(other, idp);
   await other.goto("/");
   await expect(home(other)).toBeVisible();
+});
+
+test("a kept Admin for a person whose rights do not open it lands on Home, and Home is kept", async ({ page }) => {
+  // The tab was Admin for someone else (their session ended without signing out); this person may
+  // only investigate. The place grants nothing (ADR-145 N6).
+  const idp = { session: true, silentRounds: 0 };
+  await fakeIdentityProviderAndConduit(page, idp, ["investigate", "create_case"]);
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("seeded")) {
+      sessionStorage.setItem("seeded", "1");
+      sessionStorage.setItem("ospreyflow.place", "admin");
+    }
+  });
+  await page.goto("/");
+  await expect(home(page)).toBeVisible();
+  await expect(admin(page)).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("ospreyflow.place"))).toBe("home");
+});
+
+for (const refusal of ["login_required", "interaction_required", "consent_required"] as const) {
+  test(`Keycloak's ${refusal} on the silent round falls to the Sign in screen, asked once`, async ({ page }) => {
+    const idp: FakeIdentityProvider = { session: false, silentRounds: 0, refusal };
+    await fakeIdentityProviderAndConduit(page, idp);
+    await page.goto("/");
+    await expect(signInScreen(page)).toBeVisible();
+    await expect(page.getByText(/could not be completed|could not be started/)).toHaveCount(0);
+    await page.waitForTimeout(1_500);
+    expect(idp.silentRounds).toBe(1);
+  });
+}
+
+test("the silent round is the request the live Keycloak test sends (fixtures/silent-round-request.json)", async ({ page }) => {
+  const idp: FakeIdentityProvider = { session: true, silentRounds: 0, asked: [] };
+  await fakeIdentityProviderAndConduit(page, idp);
+  await page.goto("/");
+  await expect(home(page)).toBeVisible();
+  const [sent] = idp.asked!;
+  const origin = new URL(page.url()).origin;
+  const fixed = Object.fromEntries(
+    [...sent!.entries()].filter(([k]) => !SILENT_ROUND.random.includes(k)).map(([k, v]) => [k, v.replace(origin, "<origin>")]),
+  );
+  expect(new URL(`${IDP}/protocol/openid-connect/auth`).pathname.replace("/realms/osprey", "")).toBe(SILENT_ROUND.path);
+  expect(fixed).toEqual(SILENT_ROUND.fixed);
+  expect([...sent!.keys()].filter((k) => SILENT_ROUND.random.includes(k)).sort()).toEqual([...SILENT_ROUND.random].sort());
+});
+
+test("a code is exchanged once: the fake refuses it again, as Keycloak does", async ({ page }) => {
+  const idp: FakeIdentityProvider = { session: true, silentRounds: 0 };
+  let codeUrl = "";
+  page.on("request", (r) => {
+    if (r.url().includes("code=code-")) codeUrl = r.url();
+  });
+  await fakeIdentityProviderAndConduit(page, idp);
+  await page.goto("/");
+  await expect(home(page)).toBeVisible();
+  const code = new URL(codeUrl).searchParams.get("code");
+  const again = await page.evaluate(
+    async ([token, code]) =>
+      (await fetch(token!, { method: "POST", body: new URLSearchParams({ grant_type: "authorization_code", client_id: "osprey-glass", code: code!, redirect_uri: `${location.origin}/`, code_verifier: "x" }) })).status,
+    [`${IDP}/protocol/openid-connect/token`, code],
+  );
+  expect(again).toBe(400);
 });
