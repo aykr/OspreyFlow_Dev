@@ -1,0 +1,28 @@
+# plant: tail_in_the_lanes_order
+# replaced: '  @order = grep { $rest{$_} } ("idle", "paused", "no heartbeat");   # the same order every time\n'
+# with: ''
+# run: pytest -k 'paused_or_idle'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_a_paused_or_idle_lane_is_one_line_at_the_end_not_a_block _________
+
+hb = <function hb.<locals>.run at 0x1104818a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3910/test_a_paused_or_idle_lane_is_0')
+
+    def test_a_paused_or_idle_lane_is_one_line_at_the_end_not_a_block(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        assert hb("beat", "case", "paused", "paused at C1").returncode == 0  # case comes before docs in the lanes' order
+        assert hb("beat", "docs", "idle", "nothing assigned").returncode == 0
+        now = _section(hb(**env).stdout, "LANES NOW")
+        assert not any(line.startswith(("  DOCS ·", "  CASE ·")) for line in now), now
+>       assert now[-1] == "  Idle: docs; paused: case"
+E       AssertionError: assert '  Paused: case; idle: docs' == '  Idle: docs; paused: case'
+E         
+E         -   Idle: docs; paused: case
+E         +   Paused: case; idle: docs
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:857: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_paused_or_idle_lane_is_one_line_at_the_end_not_a_block
+1 failed, 65 deselected in 1.53s

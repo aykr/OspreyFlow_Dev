@@ -1,0 +1,62 @@
+# plant: count_precedence
+# replaced: 'my ($at) = ((grep { $_->[1] eq "now" } @s), (grep { $_->[1] eq "blocked" } @s), (grep { $_->[1] eq "todo" } @s));'
+# with: 'my ($at) = (grep { $_->[1] eq "now" } @s), (grep { $_->[1] eq "blocked" } @s), (grep { $_->[1] eq "todo" } @s);'
+# run: pytest -k 'without_a_stage_under_way'
+
+FF.                                                                      [100%]
+=================================== FAILURES ===================================
+_____ test_where_a_lane_is_without_a_stage_under_way[stages0-stage 3 of 4] _____
+
+hb = <function hb.<locals>.run at 0x118f59940>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3906/test_where_a_lane_is_without_a0')
+stages = ('1|done|Plan', '2|done|Build', '3|blocked|Live run|no stack', '4|todo|Merge')
+said = 'stage 3 of 4'
+
+    @pytest.mark.parametrize(
+        ("stages", "said"),
+        [
+            (("1|done|Plan", "2|done|Build", "3|blocked|Live run|no stack", "4|todo|Merge"), "stage 3 of 4"),
+            (("1|done|Plan", "2|todo|Build", "3|todo|Merge"), "stage 2 of 3"),
+            (("1|done|Plan", "2|done|Build"), "all 2 stages done"),
+        ],
+    )
+    def test_where_a_lane_is_without_a_stage_under_way(hb, tmp_path, stages, said) -> None:
+        """A blocked stage, else the first not started, is where the lane is (review of 4ac8f81, finding 1: a list with no
+        stage under way read "all 4 stages done" above a blocked one)."""
+        env = _overview_fixture(hb, tmp_path)
+        assert hb("stages", "studio", "L2", *stages).returncode == 0
+        now = _section(hb(**env).stdout, "LANES NOW")
+>       assert f"  STUDIO · L2 · working · last heard 0m ago · {said}" in now, now
+E       AssertionError: ['  STUDIO · L2 · working · last heard 0m ago · all 4 stages done', '    ✅ 1. Plan', '    ✅ 2. Build', '    ⛔ 3. Live run · no stack', '    — 4. Merge', '  CASE · C1 · working · last heard 0m ago', ...]
+E       assert '  STUDIO · L2 · working · last heard 0m ago · stage 3 of 4' in ['  STUDIO · L2 · working · last heard 0m ago · all 4 stages done', '    ✅ 1. Plan', '    ✅ 2. Build', '    ⛔ 3. Live run · no stack', '    — 4. Merge', '  CASE · C1 · working · last heard 0m ago', ...]
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:820: AssertionError
+_____ test_where_a_lane_is_without_a_stage_under_way[stages1-stage 2 of 3] _____
+
+hb = <function hb.<locals>.run at 0x118f8fec0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3906/test_where_a_lane_is_without_a1')
+stages = ('1|done|Plan', '2|todo|Build', '3|todo|Merge'), said = 'stage 2 of 3'
+
+    @pytest.mark.parametrize(
+        ("stages", "said"),
+        [
+            (("1|done|Plan", "2|done|Build", "3|blocked|Live run|no stack", "4|todo|Merge"), "stage 3 of 4"),
+            (("1|done|Plan", "2|todo|Build", "3|todo|Merge"), "stage 2 of 3"),
+            (("1|done|Plan", "2|done|Build"), "all 2 stages done"),
+        ],
+    )
+    def test_where_a_lane_is_without_a_stage_under_way(hb, tmp_path, stages, said) -> None:
+        """A blocked stage, else the first not started, is where the lane is (review of 4ac8f81, finding 1: a list with no
+        stage under way read "all 4 stages done" above a blocked one)."""
+        env = _overview_fixture(hb, tmp_path)
+        assert hb("stages", "studio", "L2", *stages).returncode == 0
+        now = _section(hb(**env).stdout, "LANES NOW")
+>       assert f"  STUDIO · L2 · working · last heard 0m ago · {said}" in now, now
+E       AssertionError: ['  STUDIO · L2 · working · last heard 0m ago · all 3 stages done', '    ✅ 1. Plan', '    — 2. Build', '    — 3. Merge', '  CASE · C1 · working · last heard 0m ago', '    C1 review fixes', ...]
+E       assert '  STUDIO · L2 · working · last heard 0m ago · stage 2 of 3' in ['  STUDIO · L2 · working · last heard 0m ago · all 3 stages done', '    ✅ 1. Plan', '    — 2. Build', '    — 3. Merge', '  CASE · C1 · working · last heard 0m ago', '    C1 review fixes', ...]
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:820: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_where_a_lane_is_without_a_stage_under_way[stages0-stage 3 of 4]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_where_a_lane_is_without_a_stage_under_way[stages1-stage 2 of 3]
+2 failed, 1 passed, 63 deselected in 3.70s

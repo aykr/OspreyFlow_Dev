@@ -1,0 +1,67 @@
+# plant: stage_name
+# replaced: '[ -n "$name" ] || { echo'
+# with: 'true || { echo'
+# run: pytest -k 'bad_stage and (empty-name or no-name)'
+
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+___ test_a_bad_stage_is_refused_in_words_and_nothing_is_written[empty-name] ____
+
+hb = <function hb.<locals>.run at 0x114859940>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3895/test_a_bad_stage_is_refused_in0')
+bad = '2|now|', said = 'A stage is <n>|<state>|<name>[|<note>]'
+
+    @pytest.mark.parametrize(
+        ("bad", "said"),
+        [
+            ("2|started|Build", "Unknown stage state 'started'"),
+            ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now todo|Build", "Unknown stage state 'now todo'"),
+            ("2|now|Build\nstage=3|bogus|X", "one line"),
+        ],
+        ids=["state", "number", "empty-name", "no-name", "two-states", "newline"],
+    )
+    def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+        path = tmp_path / "lanes" / "studio.stages"
+        assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+        before = path.read_text()
+        refused = hb("stages", "studio", "L2", "1|done|Plan", "2|now|Build", bad)
+>       assert refused.returncode == 2
+E       assert 0 == 2
+E        +  where 0 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...2' is not one of studio's steps in the step table (progress.tsv): it shows once its beat is on a step of that name.\n").returncode
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:759: AssertionError
+_____ test_a_bad_stage_is_refused_in_words_and_nothing_is_written[no-name] _____
+
+hb = <function hb.<locals>.run at 0x11488fe20>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3895/test_a_bad_stage_is_refused_in1')
+bad = '2|now', said = 'A stage is <n>|<state>|<name>[|<note>]'
+
+    @pytest.mark.parametrize(
+        ("bad", "said"),
+        [
+            ("2|started|Build", "Unknown stage state 'started'"),
+            ("x|now|Build", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now|", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now", "A stage is <n>|<state>|<name>[|<note>]"),
+            ("2|now todo|Build", "Unknown stage state 'now todo'"),
+            ("2|now|Build\nstage=3|bogus|X", "one line"),
+        ],
+        ids=["state", "number", "empty-name", "no-name", "two-states", "newline"],
+    )
+    def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
+        path = tmp_path / "lanes" / "studio.stages"
+        assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+        before = path.read_text()
+        refused = hb("stages", "studio", "L2", "1|done|Plan", "2|now|Build", bad)
+>       assert refused.returncode == 2
+E       assert 0 == 2
+E        +  where 0 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...2' is not one of studio's steps in the step table (progress.tsv): it shows once its beat is on a step of that name.\n").returncode
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:759: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[empty-name]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[no-name]
+2 failed, 64 deselected in 0.56s

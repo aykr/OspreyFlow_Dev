@@ -7,8 +7,8 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 ________ test_open_steps_side_by_side_with_one_lane_and_state_share_it _________
 
-hb = <function hb.<locals>.run at 0x10734ccc0>
-tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3819/test_open_steps_side_by_side_w0')
+hb = <function hb.<locals>.run at 0x1056598a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3917/test_open_steps_side_by_side_w0')
 
     def test_open_steps_side_by_side_with_one_lane_and_state_share_it(hb, tmp_path) -> None:
         env = _overview_fixture(hb, tmp_path)
@@ -19,9 +19,9 @@ tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/p
                 f.write(row)
         lines = hb(**env).stdout.splitlines()
 >       assert "  After the client's install: 0 of 3 done · open: R2 (rules, not started), P8, P9 (platform, not started)" in lines
-E       assert "  After the client's install: 0 of 3 done · open: R2 (rules, not started), P8, P9 (platform, not started)" in ['OSPREYFLOW · Fri 13 Nov 2026, 16:23 UTC (16:23 UK time)', 'Client-install chain expected to finish merging: 14 Nov (...not started', '', 'NEEDS YOU:', "  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b", ...]
+E       assert "  After the client's install: 0 of 3 done · open: R2 (rules, not started), P8, P9 (platform, not started)" in ['OSPREYFLOW · Fri 13 Nov 2026, 16:44 UTC (16:44 UK time)', 'Client-install chain expected to finish merging: 14 Nov (...not started', '', 'NEEDS YOU:', "  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b", ...]
 
-../OspreyFlow_Build/tests/test_lanes_heartbeat.py:836: AssertionError
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:912: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_open_steps_side_by_side_with_one_lane_and_state_share_it
-1 failed, 52 deselected in 1.23s
+1 failed, 65 deselected in 1.36s

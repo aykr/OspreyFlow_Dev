@@ -1,0 +1,24 @@
+# plant: list_only_when_the_note_names_it
+# replaced: '@s = () unless defined $step && defined $on{$lane} && $on{$lane} eq $step;'
+# with: '@s = () unless defined $step && $note =~ /(?<![A-Za-z0-9.\\-])\\Q$step\\E(?![A-Za-z0-9\\-])/;'
+# run: pytest -k 'names_no_step'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__ test_a_beat_that_names_no_step_shows_the_list_of_the_step_the_table_gives ___
+
+hb = <function hb.<locals>.run at 0x1071dd9e0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3905/test_a_beat_that_names_no_step0')
+
+    def test_a_beat_that_names_no_step_shows_the_list_of_the_step_the_table_gives(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        assert hb("beat", "platform", "working", "the live run on the cluster").returncode == 0
+        assert hb("stages", "platform", "X1", "1|done|Plan", "2|now|Live run").returncode == 0
+        now = _section(hb(**env).stdout, "LANES NOW")
+>       assert "  PLATFORM · X1 · working · last heard 0m ago · stage 2 of 2" in now
+E       assert '  PLATFORM · X1 · working · last heard 0m ago · stage 2 of 2' in ['  STUDIO · L2 · working · last heard 0m ago', '    L2: wiring the drawers', '  CASE · C1 · working · last heard 0m a...s', '  ADMIN · A1 · waiting for you · last heard 0m ago', "    A1: the owner's ruling on the claim names, a or b", ...]
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:848: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_beat_that_names_no_step_shows_the_list_of_the_step_the_table_gives
+1 failed, 65 deselected in 1.61s

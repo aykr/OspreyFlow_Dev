@@ -1,4 +1,5 @@
-# red first: this branch's tests against main's lanes_heartbeat.sh (152542c), 2026-11-13T16:24:30Z
+# Re-run after the code was written (16:24 UTC, after the plants): this branch's tests at 4ac8f81 against main's
+# lanes_heartbeat.sh (152542c), restored to the branch's afterwards. The run before any code is hb_red_before_code.txt.
 ..............................FFF......FFFFFFFFFFFFFF                    [100%]
 =================================== FAILURES ===================================
 __________ test_the_default_view_shows_its_blocks_in_the_owners_order __________

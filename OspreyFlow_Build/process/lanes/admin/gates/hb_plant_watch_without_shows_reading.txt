@@ -1,0 +1,65 @@
+# plant: watch_without_shows_reading
+# replaced: '  NEEDS_COPY="$needs" show >/dev/null\n'
+# with: ''
+# run: pytest -k 'watch'
+
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+___________ test_watch_notifies_once_per_new_line_not_on_every_pass ____________
+
+hb = <function hb.<locals>.run at 0x111a598a0>
+
+    def test_watch_notifies_once_per_new_line_not_on_every_pass(hb) -> None:
+        _all_beat(hb)
+        hb.age("glass", 46)  # quiet: the orchestrator's, never notified (the owner, 9 November 2026)
+        hb.hold_lease("studio", 121)  # long-held: the orchestrator's too
+        hb("beat", "case", "waiting-for-owner", "a question for the owner")
+        hb("watch", "1", OSPREY_WATCH_PASSES="3")
+>       notes = hb.notified.read_text().splitlines()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:172: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/pathlib.py:1027: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3913/test_watch_notifies_once_per_n0/notified.log')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3913/test_watch_notifies_once_per_n0/notified.log'
+
+../../../../miniconda3/lib/python3.12/pathlib.py:1013: FileNotFoundError
+_______ test_watch_shows_the_default_view_unless_asked_for_the_full_view _______
+
+hb = <function hb.<locals>.run at 0x111a8d260>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3913/test_watch_shows_the_default_v0')
+
+    def test_watch_shows_the_default_view_unless_asked_for_the_full_view(hb, tmp_path) -> None:
+        """The owner, 11 November 2026: watch prints the default view (the two views, the release, housekeeping
+        and the Lanes table) on every pass, not the older summary by track; --full stays lane by lane."""
+        table = _summary_fixture(tmp_path)
+        env = {"OSPREY_WATCH_PASSES": "1", "OSPREY_LANES": "studio", "OSPREY_PROGRESS_FILE": str(table)}
+        default = hb("watch", "1", **env).stdout
+        for heading in ("VIEW 1 · FOUNDATION FEATURES", "VIEW 2 · DEPLOYMENT", "RELEASE", "HOUSEKEEPING", "LANES"):
+            assert heading in default, heading
+>       assert "NEEDS YOU:\n  - studio has never sent a heartbeat" in default  # what needs the owner, shown each pass
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'NEEDS YOU:\n  - studio has never sent a heartbeat' in 'OspreyFlow lanes · 16:44:40 · every 1s · Ctrl-C to stop\n\nOSPREYFLOW · Fri 13 Nov 2026, 16:44 UTC (16:44 UK time)\nC...                   free\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:448: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_watch_notifies_once_per_new_line_not_on_every_pass
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_watch_shows_the_default_view_unless_asked_for_the_full_view
+2 failed, 64 deselected in 4.05s

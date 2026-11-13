@@ -1,4 +1,13 @@
 # The default view, line counts on the real lanes (13 November 2026; the lanes' notes are not copied here)
-before (main 152542c, lanes_heartbeat.sh): 133 lines
-after (this branch): 73 lines
-after, --full: 146 lines
+before (main 152542c): 133 lines
+after (this branch): 72 lines
+after, --full: 147 lines
+
+# Why not ~60 (the brief's target). The parts the brief keeps as they are, on today's data:
+#   header and OVERALL 4, PATH TO V0.5.1 15 (13 steps in finish.tsv), HOUSEKEEPING 7 (3 open steps),
+#   the LANES table 15 (11 lanes in lanes.conf, a heading, the footer): 41 lines.
+# The reorganised parts: NEEDS YOU 2, LANES NOW 3 + 2 a lane at work (4 today) = 11, VIEW 1 8, VIEW 2 6, RELEASE 2: 29.
+# So 60 needs the kept parts shortened, which is the orchestrator's to rule. And each lane that sends stages adds
+# one line a stage: six lanes at work with eight stages each would add about 40. Ways to hold it near 60, for the
+# ruling: in LANES NOW, by default, a lane's current and blocked stages only (the whole list under --full); the LANES
+# table only for lanes with a session or a step; PATH's done steps on one line.

@@ -1,0 +1,27 @@
+# plant: no_warning_for_an_unknown_step
+# replaced: 'if [ -f "$PROGRESS" ] && ! awk'
+# with: 'if false && ! awk'
+# run: pytest -k 'kept_with_a_warning'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______ test_a_step_the_step_table_does_not_name_is_kept_with_a_warning ________
+
+hb = <function hb.<locals>.run at 0x10ad818a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3902/test_a_step_the_step_table_doe0')
+
+    def test_a_step_the_step_table_does_not_name_is_kept_with_a_warning(hb, tmp_path) -> None:
+        """The step is the lane's own words; a list for a step the step table does not give the lane is written (a new
+        step may not be in progress.tsv yet) but is said not to show until it is (review of 4ac8f81, finding 7)."""
+        env = _overview_fixture(hb, tmp_path)
+        made = hb("stages", "case", "C2: drawers", "1|now|Build", OSPREY_PROGRESS_FILE=env["OSPREY_PROGRESS_FILE"])
+        assert made.returncode == 0 and (tmp_path / "lanes" / "case.stages").exists()
+>       assert "'C2: drawers' is not one of case's steps in the step table" in made.stderr, made.stderr
+E       AssertionError: 
+E       assert "'C2: drawers' is not one of case's steps in the step table" in ''
+E        +  where '' = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 'stages', 'case', 'C2: drawers', '1|now|Build'], returncode=0, stdout='Stages: case, C2: drawers, 1 stages.\n', stderr='').stderr
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:776: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_step_the_step_table_does_not_name_is_kept_with_a_warning
+1 failed, 65 deselected in 0.75s

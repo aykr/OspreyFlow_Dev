@@ -7,8 +7,8 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 ________ test_stages_are_written_whole_and_a_second_call_replaces_them _________
 
-hb = <function hb.<locals>.run at 0x104d90cc0>
-tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3811/test_stages_are_written_whole_0')
+hb = <function hb.<locals>.run at 0x10ce598a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3900/test_stages_are_written_whole_0')
 
     def test_stages_are_written_whole_and_a_second_call_replaces_them(hb, tmp_path) -> None:
         lanes = tmp_path / "lanes"
@@ -17,6 +17,7 @@ tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/p
         text = (lanes / "studio.stages").read_text().splitlines()
         assert text[0] == "step=L2" and text[1].startswith("at=")
         assert text[2:] == ["stage=1|done|Plan|ratified", "stage=2|now|Build", "stage=3|todo|Gate"]
+        first = (lanes / "studio.stages").stat().st_ino
         assert hb("stages", "studio", "L2", "1|done|Plan", "2|done|Build").returncode == 0
 >       assert _stage_lines(lanes / "studio.stages") == ["stage=1|done|Plan", "stage=2|done|Build"]
 E       AssertionError: assert ['stage=1|don...2|done|Build'] == ['stage=1|don...2|done|Build']
@@ -25,7 +26,7 @@ E         At index 0 diff: 'stage=1|done|Plan|ratified' != 'stage=1|done|Plan'
 E         Left contains 3 more items, first extra item: 'stage=3|todo|Gate'
 E         Use -v to get more diff
 
-../OspreyFlow_Build/tests/test_lanes_heartbeat.py:728: AssertionError
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:729: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_stages_are_written_whole_and_a_second_call_replaces_them
-1 failed, 52 deselected in 0.42s
+1 failed, 65 deselected in 0.39s

@@ -7,8 +7,8 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 ______________________ test_stages_clear_removes_the_list ______________________
 
-hb = <function hb.<locals>.run at 0x106a4ccc0>
-tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3812/test_stages_clear_removes_the_0')
+hb = <function hb.<locals>.run at 0x1073598a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3901/test_stages_clear_removes_the_0')
 
     def test_stages_clear_removes_the_list(hb, tmp_path) -> None:
         hb("stages", "studio", "L2", "1|now|Build")
@@ -17,9 +17,9 @@ tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/p
 >       assert not (tmp_path / "lanes" / "studio.stages").exists()
 E       AssertionError: assert not True
 E        +  where True = exists()
-E        +    where exists = ((PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3812/test_stages_clear_removes_the_0') / 'lanes') / 'studio.stages').exists
+E        +    where exists = ((PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3901/test_stages_clear_removes_the_0') / 'lanes') / 'studio.stages').exists
 
-../OspreyFlow_Build/tests/test_lanes_heartbeat.py:736: AssertionError
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:739: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_stages_clear_removes_the_list
-1 failed, 52 deselected in 0.36s
+1 failed, 65 deselected in 0.44s

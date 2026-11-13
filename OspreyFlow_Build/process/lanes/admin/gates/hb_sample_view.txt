@@ -1,6 +1,6 @@
 # The new default view on the test fixture (brief hb's sample; no real lane's data)
 
-OSPREYFLOW · Fri 13 Nov 2026, 16:29 UTC (16:29 UK time)
+OSPREYFLOW · Fri 13 Nov 2026, 16:46 UTC (16:46 UK time)
 Client-install chain expected to finish merging: 14 Nov (estimates as of 15:00 UTC)
 OVERALL: 3 of 14 steps done · 1 in review · 5 building · 5 not started
 
@@ -34,13 +34,12 @@ VIEW 1 · FOUNDATION FEATURES
 
 VIEW 2 · DEPLOYMENT
   Local-lite: 0 of 1 done · open: C2 (case, not started)
-  Small (osprey-small runs v0.5.0): 2 of 6 done · open: L2 (studio, building), C1 (case, in review), A2 (admin, not…
-  Client install: 0 of 4 done · open: L3 (studio, not started), A1 (admin, needs you), X1 (platform, building), H3…
+  Small (osprey-small runs v0.5.0): 2 of 6 done · open: L2 (studio, building), C1 (case, in review), +2 more
+  Client install: 0 of 4 done · open: L3 (studio, not started), A1 (admin, needs you), X1 (platform, building), +1 more
   After the client's install: 0 of 1 done · open: R2 (rules, not started)
 
 RELEASE
-  Last: v0.5.0, published 2026-11-11 06:35 UTC · merges since: not known (the release cut 0000000 is not in this repository)
-  Next: v0.5.1: the chain merged
+  v0.5.0, published 2026-11-11 06:35 UTC · merges since: not known (cut 0000000 not in this repository) · next:…
 
 HOUSEKEEPING
 

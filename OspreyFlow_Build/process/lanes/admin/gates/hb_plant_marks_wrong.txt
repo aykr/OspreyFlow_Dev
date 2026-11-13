@@ -7,8 +7,8 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 _____ test_lanes_now_shows_a_lanes_stages_with_their_marks_and_where_it_is _____
 
-hb = <function hb.<locals>.run at 0x112f4cd60>
-tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3815/test_lanes_now_shows_a_lanes_s0')
+hb = <function hb.<locals>.run at 0x108e01940>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3907/test_lanes_now_shows_a_lanes_s0')
 
     def test_lanes_now_shows_a_lanes_stages_with_their_marks_and_where_it_is(hb, tmp_path) -> None:
         env = _overview_fixture(hb, tmp_path)
@@ -28,7 +28,7 @@ E
 E         At index 3 diff: '    ⏳ 4. Live run · waiting for a stack' != '    ⛔ 4. Live run · waiting for a stack'
 E         Use -v to get more diff
 
-../OspreyFlow_Build/tests/test_lanes_heartbeat.py:769: AssertionError
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:792: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_lanes_now_shows_a_lanes_stages_with_their_marks_and_where_it_is
-1 failed, 52 deselected in 1.46s
+1 failed, 65 deselected in 1.44s

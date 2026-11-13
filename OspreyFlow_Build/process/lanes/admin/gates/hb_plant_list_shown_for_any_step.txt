@@ -1,14 +1,14 @@
-# plant: stale_stages_shown
-# replaced: '@s = () unless defined $step'
-# with: '@s = () if 0 && defined $step'
+# plant: list_shown_for_any_step
+# replaced: '@s = () unless defined $step && defined $on{$lane} && $on{$lane} eq $step;'
+# with: '@s = () unless defined $step;'
 # run: pytest -k 'another_step'
 
 F                                                                        [100%]
 =================================== FAILURES ===================================
 ______________ test_a_stages_list_from_another_step_is_not_shown _______________
 
-hb = <function hb.<locals>.run at 0x104d50cc0>
-tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3813/test_a_stages_list_from_anothe0')
+hb = <function hb.<locals>.run at 0x11a0598a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3904/test_a_stages_list_from_anothe0')
 
     def test_a_stages_list_from_another_step_is_not_shown(hb, tmp_path) -> None:
         env = _overview_fixture(hb, tmp_path)  # studio's beat names L2
@@ -18,7 +18,7 @@ tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/p
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E       ValueError: '  STUDIO · L2 · working · last heard 0m ago' is not in list
 
-../OspreyFlow_Build/tests/test_lanes_heartbeat.py:787: ValueError
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:827: ValueError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_stages_list_from_another_step_is_not_shown
-1 failed, 52 deselected in 1.31s
+1 failed, 65 deselected in 1.54s

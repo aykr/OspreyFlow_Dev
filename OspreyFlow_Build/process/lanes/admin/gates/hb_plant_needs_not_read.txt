@@ -3,12 +3,12 @@
 # with: '@n = ()'
 # run: pytest -k 'what_needs_you'
 
-F                                                                        [100%]
+FF                                                                       [100%]
 =================================== FAILURES ===================================
 ________ test_the_default_view_opens_with_what_needs_you_and_only_that _________
 
-hb = <function hb.<locals>.run at 0x10944ccc0>
-tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3816/test_the_default_view_opens_wi0')
+hb = <function hb.<locals>.run at 0x1116818a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3911/test_the_default_view_opens_wi0')
 
     def test_the_default_view_opens_with_what_needs_you_and_only_that(hb, tmp_path) -> None:
         env = _overview_fixture(hb, tmp_path)  # admin waits on the owner; rules is ready to merge
@@ -17,10 +17,10 @@ tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/p
 >       assert _section(out, "NEEDS YOU:") == ["  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b"]
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-../OspreyFlow_Build/tests/test_lanes_heartbeat.py:805: 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:864: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-out = 'OSPREYFLOW · Fri 13 Nov 2026, 16:23 UTC (16:23 UK time)\nClient-install chain expected to finish merging: 14 Nov (est...                     H3\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
+out = 'OSPREYFLOW · Fri 13 Nov 2026, 16:44 UTC (16:44 UK time)\nClient-install chain expected to finish merging: 14 Nov (est...                     H3\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
 heading = 'NEEDS YOU:'
 
     def _section(out: str, heading: str) -> list[str]:
@@ -29,7 +29,38 @@ heading = 'NEEDS YOU:'
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E       IndexError: list index out of range
 
-../OspreyFlow_Build/tests/test_lanes_heartbeat.py:760: IndexError
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:783: IndexError
+___________ test_default_views_run_at_once_do_not_mix_what_needs_you ___________
+
+hb = <function hb.<locals>.run at 0x1116b0540>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3911/test_default_views_run_at_once0')
+
+    def test_default_views_run_at_once_do_not_mix_what_needs_you(hb, tmp_path) -> None:
+        """The default view reads `show`'s lines from its own copy (review of 4ac8f81, finding 11); sixteen at once
+        each say the same, once."""
+        import concurrent.futures
+    
+        env = _overview_fixture(hb, tmp_path)
+        with concurrent.futures.ThreadPoolExecutor(8) as pool:
+            outs = list(pool.map(lambda _: hb(**env).stdout, range(16)))
+        for out in outs:
+>           assert _section(out, "NEEDS YOU:") == ["  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b"], out
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:991: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Fri 13 Nov 2026, 16:44 UTC (16:44 UK time)\nClient-install chain expected to finish merging: 14 Nov (est...                     H3\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
+heading = 'NEEDS YOU:'
+
+    def _section(out: str, heading: str) -> list[str]:
+        """The lines under a heading, up to the next blank line."""
+>       return out.split(f"\n{heading}\n", 1)[1].split("\n\n", 1)[0].splitlines()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:783: IndexError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_opens_with_what_needs_you_and_only_that
-1 failed, 52 deselected in 1.37s
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_default_views_run_at_once_do_not_mix_what_needs_you
+2 failed, 64 deselected in 4.19s
