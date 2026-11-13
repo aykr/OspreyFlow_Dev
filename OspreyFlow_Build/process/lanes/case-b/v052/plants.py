@@ -55,6 +55,7 @@ PLANTS: list[tuple[str, str, str, str]] = [
     ('install_verify.py', '    if len(commits) != 1 or not _COMMIT.fullmatch(commits[0]):', '    if not commits:', 'a kept render of two commits, or of unknown, named the candidate'),
     ('install_verify.py', '    if git("cat-file", "-t", commit).strip() != "commit":', '    if False:', 'a commit not in the copy named the candidate'),
     ('verify_live.sh', 'export PATH="$HOME/osprey-runs/platform.tools/bin:$PATH" KUBECONFIG="$STATE/kubeconfig"', 'export PATH="$HOME/osprey-runs/platform.tools/bin:$PATH" KUBECONFIG="$STATE/config"', "the wrapper's kubeconfig not R1's"),
+    ('verify_live.sh', 'export OSPREY_PLATFORM_FOLDERS="$(cd "$GATES/../../../.." && pwd)/tests/fixtures/cloud_platform/platforms"', 'export OSPREY_PLATFORM_FOLDERS="$(cd "$GATES/../../../.." && pwd)/tests/fixtures/cloud_platform"', "the wrapper's platform folder not R1's"),
     ('verify_live.sh', 'case " $* " in *" --candidate "*) ;; *) set -- --candidate auto "$@" ;; esac', ':', 'the wrapper runs with no candidate'),
     ('install_verify.py', '    settings = {k: v for k, v in client.transport.kwargs.items() if k != "http_auth"}', '    settings = {"timeout": 30}', "the unsigned probe off the signed client's own transport"),
     ('install_verify.py', '        return release_of(self._get("configmap", "ospreyflow-env"))', '        return release_of(self._get("configmap", "ospreyflow-files"))', 'the release read from another ConfigMap'),
@@ -93,12 +94,15 @@ ROUTE_PLANTS: list[tuple[str, str, str]] = [
     ('NOT_THE_CONDUIT = {"browser.get(authorize)", "browser.post(form_action.group(1)", "browser.post(f\'{KEYCLOAK_ORIGIN}/realms/"}', 'NOT_THE_CONDUIT: set[str] = set()', 'the sign-in exceptions removed (the real module has unreadable calls)'),
     ('        return text.removeprefix("{}") if text.startswith("{}/v1/") else text  # an origin before the path', '        return text', 'an origin-prefixed path not read'),
     ('            match = re.fullmatch(r"\\{\\}://\\{\\}(/v1/.*)", text)', '            match = None', 'the stream the module opens not read'),
-    ('            elif "://" in text and "/v1/" in text:', '            elif False:', 'a stream URL of another shape skipped'),
+    ('            elif re.match(r"(\\{\\}|wss?)://", text):', '            elif False:', 'a stream URL of another shape skipped'),
+    ('        if (isinstance(node, ast.Call) and ast.unparse(node.func).endswith("connect") and node.args', '        if (False and node.args', 'a stream opened at a URL not read skipped'),
+    ('            and n.func.attr in VERBS | {"request", "stream"} and ast.unparse(n.func.value) in CLIENTS]', '            and n.func.attr in VERBS and ast.unparse(n.func.value) in CLIENTS]', "a client's request or stream skipped"),
 ]
 
 
 def run_routes(folder: Path) -> tuple[int, str]:
     env = {k: v for k, v in os.environ.items() if k != "OSPREY_LANE"}
+    env["PYTHONPYCACHEPREFIX"] = tempfile.mkdtemp(prefix="plant-pyc-")
     env.update(ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993",
                CLICKHOUSE_HTTP_PORT="59994")  # closed ports: the reading needs no store
     build = HERE.parents[3]
@@ -138,7 +142,10 @@ def run(folder: Path) -> tuple[int, str]:
         [sys.executable, "-m", "pytest", "-c", str(HERE.parents[3] / "pytest.ini"), "-p", "no:cacheprovider", "-q", "-x",
          "-p", "no:randomly", str(folder)], capture_output=True, text=True, check=False,
         env={**os.environ, "OSPREY_V052_SPEC08_MODULE": str(HERE.parents[3] / "tests" / "scenarios" / "test_phase8_exit_over_the_wire.py"),
-             "OSPREY_V052_R1_GATES": str(HERE.parents[1] / "platform" / "gates")})
+             "OSPREY_V052_R1_GATES": str(HERE.parents[1] / "platform" / "gates"),
+             # A fresh bytecode cache for every run (the orchestrator's CARRIES, 1cd8b5a): a .pyc is matched to its
+             # source by mtime to the second and size, so a rewrite within a second could run the last plant's code.
+             "PYTHONPYCACHEPREFIX": tempfile.mkdtemp(prefix="plant-pyc-")})
     last = [line for line in done.stdout.splitlines() if line.strip()][-1:] or [done.stderr[-200:]]
     return done.returncode, last[0]
 

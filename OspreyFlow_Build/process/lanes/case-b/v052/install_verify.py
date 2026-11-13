@@ -924,7 +924,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.verb == "verify" and not args.candidate:
         parser.error("verify needs --candidate <the full commit the upgrade rendered from> or auto")
-    results = verify(m, _kind(m, args.candidate), allow_pending=args.allow_pending)
+    try:
+        deployment = _kind(m, args.candidate)
+    except LookupError as error:  # no candidate found: said in the report's own form, the run failed
+        print(report([Result("version", "the candidate's commit", False, f"LookupError: {error}")], skipped))
+        return 1
+    results = verify(m, deployment, allow_pending=args.allow_pending)
     print(report(results, skipped))
     return 1 if any(not r.ok for r in results) else 0
 

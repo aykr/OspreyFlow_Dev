@@ -48,11 +48,14 @@ platform-b's dashboards check and for anyone fitting a new stand-in):
   checked against the namespace's role, unsigned refused 403 in the domain's JSON words, the rest proxied to an
   OpenSearch 2.17.1 pod) and **rules' search client** (`services/search_index/client.py`, lane/rules-v052-index,
   unmerged). `SEARCH_PROBE` runs in the api pod: the client the deployment uses, with its own `OPENSEARCH_*` settings and
-  IRSA credentials, counts the alias signed, and the same transport, hosts and timeout count it unsigned. The reader
-  passes when it signs, the signed count is answered with documents and the unsigned one is refused 403. **Not yet run
-  against the real client or stand-in:** neither opensearch-py nor the client is in this branch's environment, so the
-  offline tests hold the parser to the probe's JSON line and the probe to compiling and naming the client; its first
-  real run is the leased run after both land.
+  IRSA credentials, counts the alias signed, and the signed client's own transport (hosts, connection class, TLS
+  settings, timeout) less its signer counts it unsigned. The reader passes when it signs, the signed count is answered
+  with documents and the unsigned one is refused 403 in the domain's words. **Run with rules' real client** and
+  opensearch-py 3.2 against `search_domain_fake.py` (a count on the alias signed SigV4 for `es` answered, anything else
+  refused as the domain refuses), both ways: `record_search_probe.py`, recorded in `gates/search-probe-real.txt` with
+  the probe's hash. Over http, so the TLS settings are carried but not exercised; the stand-in itself is first met on
+  the leased run after platform's searchkind and rules' index land. The same case is in the tests, skipped until both
+  opensearch-py and the client are in this tree.
 - **On main's manifest** (this branch rebased onto it, 13 November): 43 checks planned, the 7 pending all v052-superset;
   `managed.opensearch` is planned and fails on a live run until platform's searchkind and rules' index both land (the probe
   was run with rules' real client against a server answering as the stand-in does, both ways: `gates/search-probe-real.txt`);
@@ -98,7 +101,11 @@ until the checkout is tagged (`release.checkout_version`). The stack_lease copy 
 on top of the last for each run (`stack_lease.sh`, `commit --allow-empty`), so the verify run's HEAD is not the
 upgrade's. **`--candidate auto` (the wrapper's default) finds it**: the one commit the kept render's images of ours
 carry, which must be in the copy's history with HEAD's own files; a render from other files (v0.5.1's, a lane's head)
-has another tree and names no candidate. A named `--candidate` overrides it. A release of `dev-unknown` (a render with
+has another tree and names no candidate, and the run reports `FAIL version` with the reason. A named `--candidate`
+overrides it. **What keeps `auto` matching:** the verify run sends the same files as the upgrade's (the same
+worktree, nothing committed or added to it between the two runs, no record of the upgrade written into it first),
+and the kept render is this run's (another lane's R1 run overwrites `KEPT`). Simplest: run the upgrade and the
+verify in one `stack_lease.sh remote` command. Each way it stops matching fails, never passes. A release of `dev-unknown` (a render with
 no git) fails. **Not checked:** that the candidate came by an upgrade at all (a fresh install of it passes alike); the
 Helm history is the runbook's to show.
 **Rounds 3 and 4's lesson (the reviews of 1f06074 and 8d1aadf, must 1 each):** the version check read our images' tag and held it to the

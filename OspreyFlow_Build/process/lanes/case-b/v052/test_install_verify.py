@@ -1014,37 +1014,19 @@ def _have_search_client() -> bool:
 
 @pytest.mark.skipif(not _have_search_client(), reason="rules' search client and opensearch-py are not in this tree yet")
 def test_the_search_probe_against_a_domain_that_refuses_unsigned(tmp_path: Path) -> None:  # pragma: no cover
-    """The probe as the pod runs it, the deployment's own client against a server answering as the domain's
-    stand-in does: signed answered, unsigned refused 403 in the domain's JSON words."""
-    import json
+    """The probe as the pod runs it, the deployment's own client against search_domain_fake (a count on the alias
+    signed for `es` answered, anything else refused 403 in the domain's words), both ways."""
     import os
     import subprocess
-    import threading
-    from http.server import BaseHTTPRequestHandler, HTTPServer
 
-    class Domain(BaseHTTPRequestHandler):
-        def do_GET(self) -> None:
-            if self.headers.get("Authorization"):
-                body, status = {"count": 3, "_shards": {}}, 200
-            else:
-                body, status = {"message": "User: anonymous is not authorized to perform: es:ESHttpGet"}, 403
-            raw = json.dumps(body).encode()
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
+    import search_domain_fake
+    from services.search_index.client import SearchIndexConfig
 
-        do_POST = do_GET
-
-        def log_message(self, *args: Any) -> None:
-            pass
-
-    server = HTTPServer(("127.0.0.1", 0), Domain)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    env = {**os.environ, "OPENSEARCH_URL": f"http://127.0.0.1:{server.server_port}", "OPENSEARCH_SIGNING": "sigv4",
-           "OPENSEARCH_REGION": "eu-west-2", "AWS_ACCESS_KEY_ID": "AKIDEXAMPLE", "AWS_SECRET_ACCESS_KEY": "x"}
-    done = subprocess.run([sys.executable, "-c", iv.SEARCH_PROBE], capture_output=True, text=True, env=env, check=False)
-    server.shutdown()
-    ok, said = iv.search_answer(done.stdout)
-    assert ok, (said, done.stderr[-500:])
+    alias = SearchIndexConfig.from_env({}).alias
+    for refuse_signed, expect in ((False, True), (True, False)):
+        server = search_domain_fake.start(alias, refuse_signed=refuse_signed)
+        env = {**os.environ, "OPENSEARCH_URL": f"http://127.0.0.1:{server.server_port}", "OPENSEARCH_SIGNING": "sigv4",
+               "OPENSEARCH_REGION": "eu-west-2", "AWS_ACCESS_KEY_ID": "AKIDEXAMPLE", "AWS_SECRET_ACCESS_KEY": "x"}
+        done = subprocess.run([sys.executable, "-c", iv.SEARCH_PROBE], capture_output=True, text=True, env=env, check=False)
+        server.shutdown()
+        assert iv.search_answer(done.stdout)[0] is expect, (done.stdout, done.stderr[-500:])
