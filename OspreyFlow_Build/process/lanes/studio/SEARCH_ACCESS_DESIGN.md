@@ -1,6 +1,6 @@
 # Search on OpenSearch: the access design (page A, v0.5.2 step 3d)
 
-Draft by the studio lane, 13 November 2026, with the rules lane's index side (to be confirmed). For the orchestrator
+Draft by the studio lane, 13 November 2026, with the rules lane's index side (agreed with rules, 13 November). For the orchestrator
 by Sun 15 Nov, then the owner on Mon 16. Nothing below about access is built until the owner has read it.
 
 **The principle.** The index holds the same access facts as the graph and applies them **inside every query**, using
@@ -13,9 +13,19 @@ one: **what a reader gets back is identical whether or not the records they may 
   many Document nodes name it, and two of those nodes can carry different handling. Never one per merged entity:
   storage is never merged (rule 6).
 - **Each document carries the node's own access facts, copied as they are:** classification, handling code, owning
-  unit, originator, and its datasets (ADR-099). A reverted, withdrawn or superseded node is removed from the index,
-  not flagged. The graph stays the source of truth; the rules lane's drift check reports any difference (step 3c).
-- **Only what the Glass may already show is searchable:** a node's displayed properties, and a Document's text.
+  unit, originator, and its datasets (ADR-099). It carries **no merged-entity or same-as field**, since a shared
+  cluster id would itself show that a hidden member exists.
+- **The graph feeds the index.** Every write the graph store makes also records an index event, in the same
+  transaction. This covers loads, merges, new versions, promotions and every kind of removal:
+  - a removed node (reverted, withdrawn or superseded) is deleted from the index, not flagged;
+  - a new version replaces the old one;
+  - a promotion, which changes a node's datasets, re-indexes the node under the same id.
+
+  Writes that bypass the store's normal path (seed resets, for example) are found by the drift check and repaired by
+  the rebuild from the graph (step 3c). The graph stays the source of truth.
+- **Only what the Glass may already show is searchable.** Each index document is built from the same data a reader
+  of the node's own dataset receives, with source details withheld. A Document's text is the extracted text already
+  held in the database; a Document with none is searchable by its title.
   Source-system identifiers are never indexed (rule 7). A gazetteer place is searchable by its name alone (ADR-147).
 - **The filter in every query** has three parts, the same three as the graph's:
   1. the record's classification is no higher than the reader's clearance; an unknown clearance sees nothing;
@@ -28,7 +38,8 @@ one: **what a reader gets back is identical whether or not the records they may 
 
 ## 2. A merged entity built from datasets with different access
 
-Merging stays a view (01 §4). Each record is its own document with its own access, so a search finds only the
+Merging stays a view (01 §4). Records are grouped into merged entities only after the access filter, never before.
+Each record is its own document with its own access, so a search finds only the
 records the reader may see. The Conduit then joins the hits into one entity using the same-as links the reader's case
 reads from the graph, at the reader's own resolution threshold, through the graph's own filter. A record the reader
 may not see adds **nothing** to the merged entity: no name, alias, snippet, count, rank or "also known as". The
@@ -70,7 +81,7 @@ case already (ADR-099 Amendment 2), so a search never joins across cases.
   | Scope | Strict | Cost |
   | --- | --- | --- |
   | Typos | Met: a name matches on shared three-letter fragments ("Jonathon" finds "Jonathan") | Weak on names of three letters or fewer, which fall back to the phonetic key and the exact match. Graded overlap, not "one edit away". |
-  | Spelling variants and sounds-like | Met: by a Double Metaphone key from `phonetics` 1.0.5 (MIT), already a dependency through resolution. Run on 13 Nov, "Mohammed", "Muhammad" and "Mohamad" all give `MHMT`; "Smyth", "Smythe" and "Smith" all give `SM0`/`XMT`; "Jonathan" and "Jonathon" give `JN0N` | Double Metaphone suits English spellings best. Beider–Morse, which handles surnames from more languages, is to be added if a permissive implementation exists. The plugin's options would be no wider. |
+  | Spelling variants and sounds-like | Met: by a Double Metaphone key from `phonetics` 1.0.5 (MIT), already a dependency through resolution. Run on 13 Nov, "Mohammed", "Muhammad" and "Mohamad" all give `MHMT`; "Smyth", "Smythe" and "Smith" all give `SM0`/`XMT`; "Jonathan" and "Jonathon" give `JN0N` | Double Metaphone suits English spellings best. Beider–Morse, which handles surnames from more languages, is left out: its usual Python package (abydos) is GPL. |
   | Exact identifier, then close names, then mentions | Met in full: each tier is a fixed band of score, so no record crosses tiers | None. |
   | Order within the mentions tier | Phrase matches first, then by how many of the query's words match, then newest first | A match on a common word counts as much as a match on a rare one. This is the main loss against OpenSearch's default. |
 
