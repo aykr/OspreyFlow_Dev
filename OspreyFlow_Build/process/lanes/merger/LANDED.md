@@ -57,3 +57,4 @@ e19a7db fed0752 platform-b modes (ADR-145 Am 13, ADR-144 Am 3)
 52ad2d8 b4712bf platform-b ci-small
 9b80f1a da5daf4 platform R1
 6aa02ff 21056ce admin pg (ADR-114 Am 43) + ci-pg.diff
+ad55522 1162de4 platform poc-rds (4b, ADR-114 Am 46)
