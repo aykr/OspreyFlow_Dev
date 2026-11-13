@@ -1,0 +1,44 @@
+# test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up, red first
+Branch lane/docs-6a8-shared at 98e840c (from main 30970b0); offline, closed ports, on the Mac, no stack.
+Command: cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 POSTGRES_PASSWORD=throwaway VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/test_guides_cloud_platform.py -k set_holds
+Each plant is in the working tree only, restored after its run; the planted lines are shown.
+
+## 1. main's guide ('the shared volume ... is not backed up') against the render
+E       AssertionError: assert ['data/recipe...del-settings'] == []
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:159: AssertionError
+1 failed, 9 deselected in 0.72s
+
+## 2. The render backs up a fourth folder (SHARED_PARTS, its call site) the guide does not name
++    {"name": "shared-tiles", "subPath": "tiles"},
+E       AssertionError: assert ['tiles'] == []
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:159: AssertionError
+1 failed, 9 deselected in 0.73s
+
+## 3. The render drops a folder (map settings) the guide still names
+-    {"name": "shared-map-settings", "subPath": "map-settings"},
+E       AssertionError: assert ['map-settings'] == []
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:163: AssertionError
+1 failed, 9 deselected in 0.72s
+
+## 4. The corrected guide with the claims run planted back as the poc shape's alone
+-`BACKUP DATABASE`, then ClickHouse's `BACKUP … TO S3`) and `ospreyflow-backup-claims` (the claims part,
+-in every shape: each folder and claim, read-only). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by
++`BACKUP DATABASE`, then ClickHouse's `BACKUP … TO S3`) and, in the poc shape, `ospreyflow-backup-claims`
++(each claim, read-only). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:165: AssertionError
+1 failed, 9 deselected in 0.73s
+
+## 5. The corrected guide with the old sentence planted back beside the folders
+-Ingest's, and a restore leaves it as it is. The
++Ingest's. The shared volume, `ospreyflow-shared`, is not backed up. The
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:168: AssertionError
+1 failed, 9 deselected in 0.71s
+
+## 5b. The corrected guide kept, and a second sentence planted giving the claims run to the poc shape alone
+-in every shape: each folder and claim, read-only). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by
++in every shape: each folder and claim, read-only). Earlier releases ran, in the poc shape, `ospreyflow-backup-claims` alone. Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:166: AssertionError
+1 failed, 9 deselected in 0.77s
+
+## 6. Green
+1 passed, 9 deselected in 0.70s
