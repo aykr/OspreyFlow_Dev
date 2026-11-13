@@ -31,6 +31,11 @@ def candidate() -> dict[str, Any]:
     return m
 
 
+#: The candidate's commit, as the copy's HEAD names it; the render tags ours with it (render.git_sha) and, before
+#: the checkout is tagged, writes the release as `dev-<git rev-parse --short>` (release.checkout_version).
+CANDIDATE = "0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d"
+
+
 class Fake:
     """A deployment that has exactly what the manifest lists, in the manifest's own terms; `drop`
     takes one listed item away the way a real deployment lacks it (absent, not ready, never reached)."""
@@ -55,6 +60,7 @@ class Fake:
             "requests": w["requests"], "limits": w["limits"], "probe": w["readiness"] != "none",
             "updated": w["count"], "settled": True, "current": "version" not in self.dropped,
             "replicas": w["count"], "available": w["count"], "unavailable": 0, "revisions_match": True,
+            "tag": CANDIDATE if self.m["images"][w["image"]]["ours"] else None,
         }
 
     def init_container(self, key: str) -> dict[str, Any] | None:
@@ -73,14 +79,18 @@ class Fake:
         return {"kind": j["kind"], "schedule": "0 0 31 2 *" if suspended else j.get("schedule"),
                 "suspended": suspended, "image": j["image"],
                 "requests": j["requests"], "limits": j["limits"], "succeeded": 1, "steps": steps,
-                "current": True}
+                "current": True, "tag": CANDIDATE}
 
     def image_pushed(self, repository: str) -> bool:
         return f"images.{repository}" not in self.dropped
 
+    def candidate(self) -> str | None:
+        return CANDIDATE
+
     def release(self) -> str | None:
-        # Read through release_of from the ConfigMap as the chart writes it (configmaps.yaml, `ospreyflow-env`).
-        version = "v0.5.1" if "release" in self.dropped else str(self.m["version"])
+        # Read through release_of from the ConfigMap as the chart writes it (configmaps.yaml, `ospreyflow-env`),
+        # with the value the render writes before the candidate is tagged (the install test's day).
+        version = "v0.5.1" if "release" in self.dropped else f"dev-{CANDIDATE[:7]}"
         return iv.release_of({"kind": "ConfigMap", "metadata": {"name": "ospreyflow-env"},
                               "data": {"OSPREY_RELEASE_VERSION": version, "OSPREY_ENV": "production"}})
 
@@ -407,7 +417,7 @@ def test_a_workload_still_on_the_old_release_fails_the_version_check() -> None:
 
 def test_a_deployment_whose_release_is_another_fails_the_version_check() -> None:
     """The kept render could itself be v0.5.1's: the deployment's own release (OSPREY_RELEASE_VERSION) is held to
-    the manifest's version. Our tags are the commit (render.py), so the release is not read from a tag."""
+    the candidate."""
     m = candidate()
     failed = [r for r in iv.verify(m, Fake(m).drop("release")) if not r.ok]
     assert [r.entry for r in failed] == ["version"] and "v0.5.1" in failed[0].said
@@ -420,15 +430,59 @@ def test_the_release_is_read_from_the_env_configmap() -> None:
         iv.release_of(None)
 
 
-def test_a_release_not_recorded_fails_the_version_check() -> None:
+@pytest.mark.parametrize(
+    ("release", "ok"),
+    [("v0.5.2", True), ("0.5.2", True), (f"dev-{CANDIDATE[:7]}", True), (f"dev-{CANDIDATE[:12]}", True),
+     ("dev-unknown", False), ("v0.5.1", False), ("dev-1234567", False), (f"dev-{CANDIDATE[:4]}", False), (None, False)],
+)
+def test_the_release_is_the_manifests_version_or_the_candidates_dev_commit(release: str | None, ok: bool) -> None:
+    """release.checkout_version: `v0.5.2` when the checkout is tagged, else `dev-<short>`; `dev-unknown` with no git."""
+    assert iv.release_matches(release, "v0.5.2", CANDIDATE)[0] is ok
+
+
+@pytest.mark.parametrize("release", [None, "dev-unknown"])
+def test_a_release_not_recorded_or_unknown_fails_the_version_check(release: str | None) -> None:
     m = candidate()
 
     class Unrecorded(Fake):
         def release(self) -> str | None:
-            return iv.release_of({"data": {}})
+            return iv.release_of({"data": {} if release is None else {"OSPREY_RELEASE_VERSION": release}})
 
     failed = [r for r in iv.verify(m, Unrecorded(m)) if not r.ok]
-    assert [r.entry for r in failed] == ["version"] and "not recorded" in failed[0].said
+    assert [r.entry for r in failed] == ["version"] and (release or "not recorded") in failed[0].said
+
+
+@pytest.mark.parametrize("tag", ["unknown", "1234567890abcdef1234567890abcdef12345678", "v0.5.2"])
+def test_one_of_ours_tagged_with_another_commit_fails_the_version_check(tag: str) -> None:
+    """`unknown`: a render with no git and no OSPREY_BUILT_FROM_SHA (render.git_sha)."""
+    m = candidate()
+
+    class Other(Fake):
+        def workload(self, name: str) -> dict[str, Any] | None:
+            got = super().workload(name)
+            return {**got, "tag": tag} if got and name == "api" else got
+
+    failed = [r for r in iv.verify(m, Other(m)) if not r.ok]
+    assert [r.entry for r in failed] == ["version"] and f"api (tagged {tag}" in failed[0].said
+
+
+@pytest.mark.parametrize("named", [None, "", "0c1d2e3", "v0.5.2"])
+def test_no_full_candidate_commit_named_fails_the_version_check(named: str | None) -> None:
+    m = candidate()
+
+    class Unnamed(Fake):
+        def candidate(self) -> str | None:
+            return named
+
+    failed = [r for r in iv.verify(m, Unnamed(m)) if not r.ok]
+    assert [r.entry for r in failed] == ["version"] and "no candidate commit named" in failed[0].said
+
+
+def test_the_live_reading_takes_the_release_from_ospreyflow_env() -> None:
+    env = {"kind": "ConfigMap", "metadata": {"name": "ospreyflow-env"}, "data": {"OSPREY_RELEASE_VERSION": "dev-0c1d2e3"}}
+    assert _kind({("configmap", "ospreyflow-env"): env}).release() == "dev-0c1d2e3"
+    with pytest.raises(LookupError):
+        _kind({("configmap", "ospreyflow-files"): env}).release()
 
 
 def test_a_cronjob_left_on_the_old_release_fails_the_version_check() -> None:
@@ -445,7 +499,7 @@ def test_a_cronjob_left_on_the_old_release_fails_the_version_check() -> None:
 
 #: Our images as the render writes them: tagged with the commit (render.py `{registry}/{service}:{sha}`), pinned
 #: by digest after the push (cloud_platform `_Copies`), so `<repository>:<commit>@<digest>`.
-SHA = "0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d"
+SHA = CANDIDATE
 API = f"reg/ospreyflow/api:{SHA}@sha256:aa"
 
 
@@ -469,10 +523,13 @@ def test_a_correct_candidate_in_the_renders_shape_passes_the_version_check() -> 
     read = iv.read_workload(_deployment({"observedGeneration": 4, "replicas": 1, "readyReplicas": 1, "updatedReplicas": 1,
                                          "availableReplicas": 1}, API), "reg", expected=expected)
 
+    assert read["tag"] == CANDIDATE
+
     class Rendered(Fake):
         def workload(self, name: str) -> dict[str, Any] | None:
             got = super().workload(name)
-            return {**got, "current": read["current"]} if got else got
+            ours = got and got["tag"] is not None
+            return {**got, "current": read["current"], "tag": read["tag"] if ours else None} if got else got
 
     assert [r for r in iv.verify(m, Rendered(m)) if not r.ok and r.entry == "version"] == []
 
@@ -762,7 +819,7 @@ def test_the_newest_successful_run_is_read_whatever_kubectls_order() -> None:
 
 def test_the_opensearch_reader_check_reads_each_readers_probe() -> None:
     signed = {"signing": "sigv4", "alias": "ospreyflow-poc", "signed": {"status": 200, "count": 12},
-              "unsigned": {"status": 403, "error": "AuthorizationException(403, ...)"}}
+              "unsigned": {"status": 403, "error": "AuthorizationException(403, 'User: anonymous is not authorized ...')"}}
 
     class ExecR1(FakeR1):
         def __init__(self, answer: dict[str, Any] | str) -> None:
@@ -787,7 +844,7 @@ def test_the_opensearch_reader_check_reads_each_readers_probe() -> None:
     with pytest.raises(LookupError, match="not refused 403"):
         kind({**signed, "unsigned": {"status": 200, "count": 12}}).store_readers("opensearch")
     with pytest.raises(LookupError, match="no answer"):
-        kind('error: unable to upgrade connection: container not found').store_readers("opensearch")
+        kind("").store_readers("opensearch")
 
 
 def _probe_line(**change: Any) -> str:
@@ -797,7 +854,7 @@ def _probe_line(**change: Any) -> str:
             # the domain's refusal as the stand-in answers it (platform, 6998234): 403 with its JSON message
             "unsigned": {"status": 403, "error": "AuthorizationException(403, 'User: anonymous is not authorized to "
                                                  "perform: es:ESHttpGet on resource: arn:aws:es:eu-west-2:domain/vpc-x')"}}
-    return "Warning: something on stderr\n" + json.dumps({**line, **change}) + "\n"
+    return json.dumps({**line, **change}) + "\n"  # stdout alone: r1_kind.sh keeps no stderr
 
 
 @pytest.mark.parametrize(
@@ -808,16 +865,34 @@ def _probe_line(**change: Any) -> str:
      ({"signed": {"status": None, "error": "ConnectionError"}}, "was refused: None"),
      ({"signed": {"status": 200, "count": 0}}, "holds no documents"),
      ({"unsigned": {"status": 200, "count": 12}}, "not refused 403"),
-     ({"unsigned": {"status": None, "error": "ConnectionError"}}, "not refused 403")],
+     ({"unsigned": {"status": None, "error": "ConnectionError"}}, "not refused 403"),
+     # a 403 that is not the domain's refusal (an S3 XML refusal: the request reached the stand-in by another name)
+     ({"unsigned": {"status": 403, "error": "AuthorizationException(403, 'SignatureDoesNotMatch')"}}, "not refused 403"),
+     ({"failed": "ModuleNotFoundError: No module named 'opensearchpy'"}, "failed in the reader's pod: ModuleNotFoundError")],
 )
 def test_a_search_reader_signs_finds_documents_and_is_refused_unsigned(change: dict[str, Any], said: str | None) -> None:
     ok, text = iv.search_answer(_probe_line(**change))
     assert ok is (said is None) and (said is None or said in text), text
 
 
-def test_a_search_probe_with_no_json_line_is_no_answer() -> None:
-    ok, text = iv.search_answer("Traceback (most recent call last):\nModuleNotFoundError: No module named 'opensearchpy'\n")
-    assert not ok and "no answer" in text and "opensearchpy" in text
+@pytest.mark.parametrize("out", ["", "error: unable to upgrade connection: container not found\n"])
+def test_a_search_probe_with_no_json_line_is_no_answer(out: str) -> None:
+    """What r1's kubectl returns when the exec itself fails: stdout empty, or kubectl's own words."""
+    ok, text = iv.search_answer(out)
+    assert not ok and "no answer" in text
+
+
+def test_the_search_probe_prints_one_json_line_whatever_fails() -> None:
+    """Run as the pod runs it, where neither opensearch-py nor rules' client is installed here: the reason is the line."""
+    import json
+    import subprocess
+
+    done = subprocess.run([sys.executable, "-I", "-c", iv.SEARCH_PROBE], capture_output=True, text=True, check=False)
+    assert done.returncode == 0, done.stderr
+    line = json.loads(done.stdout.strip().splitlines()[-1])
+    assert "ModuleNotFoundError" in line["failed"]
+    ok, text = iv.search_answer(done.stdout)
+    assert not ok and "ModuleNotFoundError" in text
 
 
 def test_the_search_probe_is_python_and_uses_the_deployments_own_client() -> None:

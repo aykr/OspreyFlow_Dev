@@ -8,7 +8,7 @@ bucket nobody writes, or an entry still marked `pending` (a step that has not re
 
 | Manifest | Check |
 |---|---|
-| version | the deployment's own release (`OSPREY_RELEASE_VERSION` in the `ospreyflow-env` ConfigMap, the render's `release_version`) is the manifest's version, so a kept render that is itself v0.5.1's fails; and every container of every workload and job template, init containers too, runs the candidate's own reference where the render pinned its repository (the kept render's values, `<repository>:<commit>@<digest>` for ours: our tags are the commit, never the release) |
+| version | against the candidate's commit, named by the run (`--candidate`, the copy's HEAD the upgrade rendered from): each of our images runs tagged with it (the render tags ours `<repository>:<commit>`, `render.git_sha`), and the deployment's own release (`OSPREY_RELEASE_VERSION`, the `ospreyflow-env` ConfigMap, `render.release_version`) is the manifest's version (a tagged candidate) or `dev-<that commit>` (untagged, as before the tag); `dev-unknown`, `unknown` or another commit fails, so a kept render that is itself v0.5.1's fails. And every container of every workload and job template, init containers too, runs the candidate's own reference where the render pinned its repository (the kept render's values, `:<commit>@<digest>`) |
 | shape | the deployed configuration (the `ospreyflow-files` ConfigMap's `osprey.yaml`) is of this shape |
 | workloads | the Deployment or StatefulSet exists, of its kind; the rollout finished: the controller has observed the latest generation, total, updated, ready and available replicas all its count, none unavailable (a crash-looping candidate beside a still-Ready old pod fails), a StatefulSet's current and update revisions one; the template's image, requests and limits its entry's; a readiness probe exactly when it lists one (the probe's content is the render check's) |
 | init_containers | in a running pod of its workload, from its image at its sizes, exited 0 |
@@ -28,7 +28,7 @@ reads R1's kind cluster (r1_kind.py, the platform lane's, imported and not chang
 
     PYTHONPATH=.:packages:cli .venv/bin/python ../OspreyFlow_Build/process/lanes/case-b/v052/install_verify.py plan [--allow-pending]
     bash ../OspreyFlow_Build/process/lanes/platform/gates/r1_kind.sh py \\
-        ../../case-b/v052/install_verify.py verify [--allow-pending]   # on the kind cluster, under a lease
+        ../../case-b/v052/install_verify.py verify --candidate <commit> [--allow-pending]   # on kind, under a lease
 """
 
 
@@ -94,6 +94,7 @@ class Deployment(Protocol):
     def init_container(self, key: str) -> dict[str, Any] | None: ...
     def job(self, name: str) -> dict[str, Any] | None: ...
     def image_pushed(self, repository: str) -> bool: ...
+    def candidate(self) -> str | None: ...
     def release(self) -> str | None: ...
     def rds_setting(self, name: str) -> str | None: ...
     def database_readers(self, database: str) -> set[str]: ...
@@ -208,20 +209,44 @@ def _same_release(tag: str | None, version: str) -> bool:
     return tag is not None and tag.removeprefix("v") == str(version).removeprefix("v")
 
 
+#: A commit as git names it: render.git_sha's full form; `dev-<short>` holds `rev-parse --short`'s (7 or more).
+_COMMIT = re.compile(r"^[0-9a-f]{40}$")
+
+
+def release_matches(release: str | None, version: str, candidate: str) -> tuple[bool, str]:
+    """The deployment's release as `render.release_version` writes it: the manifest's version when the candidate's
+    checkout was tagged with it, else `dev-<short commit>`, which must be the candidate's."""
+    if _same_release(release, version):
+        return True, f"release {release}"
+    if release and release.startswith("dev-"):
+        short = release.removeprefix("dev-")
+        if re.fullmatch(r"[0-9a-f]{7,40}", short) and candidate.startswith(short):
+            return True, f"release {release}, the candidate's commit, untagged"
+    return False, f"the deployment's release is {release or 'not recorded'} (OSPREY_RELEASE_VERSION), not {version} or dev-{candidate[:7]}"
+
+
 def _version(m: dict[str, Any]) -> Callable[[Deployment], tuple[bool, str]]:
     def run(d: Deployment) -> tuple[bool, str]:
+        candidate = d.candidate() or ""
+        if not _COMMIT.fullmatch(candidate):
+            return False, f"no candidate commit named ({candidate or 'none'}): --candidate takes the full commit the upgrade rendered from"
+        ours = {repo for repo, image in (m.get("images") or {}).items() if image.get("ours")}
         behind = []
-        release = d.release()
-        if not _same_release(release, m["version"]):
-            behind.append(f"the deployment's release is {release or 'not recorded'} (OSPREY_RELEASE_VERSION)")
+        ok, said = release_matches(d.release(), m["version"], candidate)
+        if not ok:
+            behind.append(said)
         for section, read in (("workloads", d.workload), ("jobs", d.job)):
-            for name in m.get(section) or {}:
+            for name, entry in (m.get(section) or {}).items():
                 got = read(name)
                 if got is None:
                     continue  # absent: its own check fails
                 if not got.get("current"):
                     behind.append(f"{name} (not the candidate's reference)")
-        return (False, f"not on {m['version']}: {', '.join(behind)}") if behind else (True, f"{m['version']}, every workload and job on its images")
+                elif entry.get("image") in ours and got.get("tag") != candidate:
+                    behind.append(f"{name} (tagged {got.get('tag')}, not the candidate's commit)")
+        if behind:
+            return False, f"not on {m['version']}'s candidate {candidate[:12]}: {', '.join(behind)}"
+        return True, f"{said}; every workload and job on the candidate's images ({candidate[:12]})"
     return run
 
 
@@ -467,9 +492,16 @@ def read_workload(obj: dict[str, Any], registry: str, *, expected: dict[str, str
         "settled": status.get("observedGeneration", 0) >= (obj.get("metadata") or {}).get("generation", 0),
         "image": repository,
         "current": current(obj["spec"]["template"]["spec"], registry, expected),
+        "tag": tag_of(main["image"]),
         **_sizes(main),
         "probe": "readinessProbe" in main,
     }
+
+
+def tag_of(reference: str) -> str | None:
+    """`reg:5001/ospreyflow/api:<commit>@sha256:…` → `<commit>`; None when the reference has no tag."""
+    last = reference.split("@", 1)[0].rsplit("/", 1)[-1]
+    return last.split(":", 1)[1] if ":" in last else None
 
 
 def release_of(configmap: dict[str, Any] | None) -> str | None:
@@ -604,8 +636,6 @@ PROBE = ("import socket, sys\ntry:\n    socket.create_connection((sys.argv[1], 4
 #: same count through the same transport, hosts and timeout, with no signer. One JSON line.
 SEARCH_PROBE = """
 import asyncio, json
-from opensearchpy import AsyncHttpConnection, AsyncOpenSearch
-from services.search_index.client import SearchIndexConfig, search_client
 
 
 async def ask(client, alias):
@@ -619,14 +649,20 @@ async def ask(client, alias):
 
 
 async def main():
+    from opensearchpy import AsyncHttpConnection, AsyncOpenSearch
+    from services.search_index.client import SearchIndexConfig, search_client
+
     config = SearchIndexConfig.from_env()
     signed = await ask(search_client(config), config.alias)
     bare = AsyncOpenSearch(hosts=[config.url], connection_class=AsyncHttpConnection, timeout=30)
-    print(json.dumps({"signing": config.signing, "alias": config.alias, "signed": signed,
-                      "unsigned": await ask(bare, config.alias)}))
+    return {"signing": config.signing, "alias": config.alias, "signed": signed, "unsigned": await ask(bare, config.alias)}
 
 
-asyncio.run(main())
+try:
+    answer = asyncio.run(main())
+except BaseException as error:  # r1's kubectl keeps stdout alone: the reason goes there, as the one line
+    answer = {"failed": f"{type(error).__name__}: {error}"[:400]}
+print(json.dumps(answer))
 """
 
 
@@ -638,6 +674,8 @@ def search_answer(out: str) -> tuple[bool, str]:
         answer = json.loads(lines[-1])
     except (IndexError, ValueError):
         return False, f"the search probe gave no answer: {out.strip()[-300:]!r}"
+    if "failed" in answer:
+        return False, f"the search probe failed in the reader's pod: {answer['failed']}"
     alias, signed, unsigned = answer.get("alias"), answer.get("signed") or {}, answer.get("unsigned") or {}
     if answer.get("signing") != "sigv4":
         return False, f"the reader's signing is {answer.get('signing')!r}, not sigv4"
@@ -645,8 +683,9 @@ def search_answer(out: str) -> tuple[bool, str]:
         return False, f"a signed count on {alias} was refused: {signed.get('status')} {signed.get('error', '')}".rstrip()
     if not isinstance(signed.get("count"), int) or signed["count"] < 1:
         return False, f"{alias} holds no documents (count {signed.get('count')!r})"
-    if unsigned.get("status") != 403:
-        return False, f"an unsigned count on {alias} was answered {unsigned.get('status')}, not refused 403: not the domain"
+    if unsigned.get("status") != 403 or "not authorized" not in str(unsigned.get("error", "")):
+        return False, (f"an unsigned count on {alias} was answered {unsigned.get('status')}, not refused 403 as the domain "
+                       f"refuses (\"not authorized\"): not the domain")
     return True, f"{signed['count']} documents in {alias}, signed; unsigned refused 403"
 
 
@@ -668,10 +707,15 @@ class KindDeployment:
     but the candidate's image references and the render check's own comparison."""
 
     def __init__(self, r1: Any, *, registry: str, expected: dict[str, str], clients: dict[str, str],
-                 api_audiences: set[str], bucket_prefix: str, jobs: Iterable[str], config: Any = None) -> None:
+                 api_audiences: set[str], bucket_prefix: str, jobs: Iterable[str], config: Any = None,
+                 candidate: str | None = None) -> None:
         self.r1, self.registry, self.expected, self.config = r1, registry, expected, config
         self.clients, self.api_audiences, self.bucket_prefix = clients, api_audiences, bucket_prefix
         self.job_names = list(jobs)
+        self._candidate = candidate
+
+    def candidate(self) -> str | None:
+        return self._candidate
 
     def _get(self, *args: str) -> Any:
         out = self.r1.kubectl("-n", self.r1.NS, "get", *args, "-o", "json", check=False)
@@ -708,7 +752,7 @@ class KindDeployment:
             spec = template["containers"][0]
             return {"kind": "CronJob", "schedule": cron["spec"]["schedule"], "suspended": bool(cron["spec"].get("suspend")),
                     "image": _repository(spec["image"], self.registry), **_sizes(spec), "succeeded": cron_runs(cron, jobs, name),
-                    "steps": {}, "current": current(template, self.registry, self.expected)}
+                    "steps": {}, "current": current(template, self.registry, self.expected), "tag": tag_of(spec["image"])}
         names = runs_of_template(name, [j["metadata"]["name"] for j in jobs], self.job_names)
         runs = [j for j in jobs if j["metadata"]["name"] in names]
         if not runs:
@@ -718,7 +762,8 @@ class KindDeployment:
         job = done[-1]
         pods = [p for p in self._pods() if (p["metadata"].get("labels") or {}).get("job-name") == job["metadata"]["name"]]
         return {**read_job(job, pods, self.registry),
-                "current": current(job["spec"]["template"]["spec"], self.registry, self.expected)}
+                "current": current(job["spec"]["template"]["spec"], self.registry, self.expected),
+                "tag": tag_of(job["spec"]["template"]["spec"]["containers"][0]["image"])}
 
     def image_pushed(self, repository: str) -> bool:
         return bool(self.r1.sh("docker", "manifest", "inspect", "--insecure", self.expected[repository], check=False).strip())
@@ -802,7 +847,7 @@ def report(results: list[Result], skipped: list[str]) -> str:
     return "\n".join(lines)
 
 
-def _kind(m: dict[str, Any]) -> KindDeployment:  # pragma: no cover - the live half, run under a lease
+def _kind(m: dict[str, Any], candidate: str | None) -> KindDeployment:  # pragma: no cover - the live half, run under a lease
     import yaml
 
     gates = Path(__file__).resolve().parents[2] / "platform" / "gates"
@@ -823,7 +868,7 @@ def _kind(m: dict[str, Any]) -> KindDeployment:  # pragma: no cover - the live h
     expected = references_from_values(values, images["registry"])
     return KindDeployment(r1, registry=images["registry"], expected=expected, config=config, clients=clients,
                           api_audiences={claims["api_client_id"], f"api://{claims['api_client_id']}"},
-                          bucket_prefix=r1.state().get("prefix", ""), jobs=m["jobs"])
+                          bucket_prefix=r1.state().get("prefix", ""), jobs=m["jobs"], candidate=candidate)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -832,6 +877,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="install_verify", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("verb", choices=("plan", "verify"))
     parser.add_argument("--allow-pending", action="store_true", help="a dry run before every step has rendered")
+    parser.add_argument("--candidate", help="verify: the full commit the upgrade rendered from (the copy's HEAD that ran it)")
     args = parser.parse_args(argv)
     m = load()
     try:
@@ -844,7 +890,9 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(f"{c.entry}: {c.what}" for c in checks) + f"\n{len(checks)} checks planned")
         print("\n".join(f"SKIP {e}: still pending" for e in skipped))
         return 0
-    results = verify(m, _kind(m), allow_pending=args.allow_pending)
+    if args.verb == "verify" and not args.candidate:
+        parser.error("verify needs --candidate <the full commit the upgrade rendered from>")
+    results = verify(m, _kind(m, args.candidate), allow_pending=args.allow_pending)
     print(report(results, skipped))
     return 1 if any(not r.ok for r in results) else 0
 

@@ -17,14 +17,15 @@ platform-b's dashboards check and for anyone fitting a new stand-in):
 
 | Method | Answers |
 |---|---|
-| `workload(name)` | `{kind, desired, replicas, ready, updated, available, unavailable, revisions_match, settled, current, image, requests, limits, probe}` or None (`current`: every container of the template, init containers too, on the candidate's reference where the kept render's values pin its repository, and the main one pinned) |
+| `workload(name)` | `{kind, desired, replicas, ready, updated, available, unavailable, revisions_match, settled, current, tag, image, requests, limits, probe}` or None (`current`: every container of the template, init containers too, on the candidate's reference where the kept render's values pin its repository, and the main one pinned) |
 | `init_container("workload/container")` | `{image, requests, limits, exit_code}` or None |
-| `job(name)` | `{kind, schedule, suspended, image, requests, limits, succeeded, current, steps: {name: {image?, exit_code}}}` or None (a `<set>` template: its newest successful run, by creation time) |
-| `release()` | the deployment's `OSPREY_RELEASE_VERSION` (the `ospreyflow-env` ConfigMap, the render's `release_version`); our image tags are the commit, so the release is read here, not from a tag |
+| `job(name)` | `{kind, schedule, suspended, image, requests, limits, succeeded, current, tag, steps: {name: {image?, exit_code}}}` or None (a `<set>` template: its newest successful run, by creation time) |
+| `candidate()` | the full commit the run names (`--candidate`): the copy's HEAD the upgrade rendered from |
+| `release()` | the deployment's `OSPREY_RELEASE_VERSION` (the `ospreyflow-env` ConfigMap, the render's `release_version`): the manifest's version when the candidate's checkout carries its tag, else `dev-<short commit>`, which must be the candidate's |
 | `image_pushed(repository)` | bool |
 | `rds_setting("server_version" \| "max_connections")` | str or None |
 | `shape()` | the deployed configuration's shape (`ospreyflow-files`' `osprey.yaml`) |
-| `database_readers(db)`, `store_readers("elasticache" \| "opensearch")` | the workloads with a session or connection; for OpenSearch, each reader whose `SEARCH_PROBE` answers (raises with the reader's words otherwise) |
+| `database_readers(db)`, `store_readers("elasticache" \| "opensearch")` | the workloads with a session or connection; for OpenSearch, each reader whose `SEARCH_PROBE` answers (raises with the reader's words otherwise: the probe prints one JSON line whatever fails, since r1's kubectl keeps stdout alone) |
 | `bucket_objects(bucket)` | count of objects |
 | `entra_used(registration)` | the stand-in granted that registration a token (the API: a token for its audience) |
 | `connects(host)` | a pod of the namespace reaches it on 443 (raises when the probe has no answer) |
@@ -80,15 +81,21 @@ fixed, and `tests/scenarios/test_over_the_wire_routes_exist.py` holds every call
 
 ## Red first
 
-`plants.py`: 48 plants, each one check broken at its real call site in a copy of the driver; every one turns the
+`plants.py`: 55 plants, each one check broken at its real call site in a copy of the driver, and 5 in the route reading (in place, put back); every one turns the
 tests red and the unplanted copy stays green (`gates/plants.txt`, with the commit it ran at). Building them found
 four gaps (no test had a CronJob whose runs never succeeded; a reader test whose pod order hid the finished-pod
 plant; no test of an unobserved generation alone; none of a CronJob template still on the old release).
-**Round 3's lesson (the review of 1f06074, must 1):** the version check read our images' tag and held it to the
+**The candidate is named by its commit, not found.** Our images are tagged with the commit (`render.git_sha`) and the
+release reads `dev-<short>` until the checkout is tagged (`release.checkout_version`); the stack_lease copy is its own
+repository, committed afresh each run (`stack_lease.sh`, the copy's `git init`), so the commit is the copy's HEAD
+when the upgrade rendered. **Step 6 passes it**: `verify --candidate $(git -C <the copy> rev-parse HEAD)`, taken in the
+same run as the upgrade; a later run's copy has a new commit. A release of `dev-unknown` (a render with no git) fails.
+**Rounds 3 and 4's lesson (the reviews of 1f06074 and 8d1aadf, must 1 each):** the version check read our images' tag and held it to the
 release, but the render tags them with the commit (`render.py`, `{registry}/{service}:{sha}`), so it failed every
-real install while the tests passed, since the fake answered the tag the check wanted. The release is now read
-from the deployment's own `OSPREY_RELEASE_VERSION`, and a correct candidate in the render's `:<commit>@<digest>` shape
-is tested to pass. The stuck rollout is tested
+real install while the tests passed, since the fake answered the tag the check wanted. The next fix read the
+release alone and the fake answered `v0.5.2`, which the render writes only for a tagged checkout: before the tag it
+writes `dev-<short>`. The fake now answers what the render writes before the tag (`dev-<short>` and `:<commit>` tags),
+and plants give `dev-unknown`, `unknown`, v0.5.1's release and another commit. The stuck rollout is tested
 in the status kubectl reports for it (one copy, maxSurge 1: 2 replicas, 1 updated, 1 ready, 1 unavailable). A walk over
 every node of the YAML (not over `entries()`) injects an unplaced key and requires the run to stop.
 
