@@ -1,0 +1,205 @@
+=== PLANT: Am 13: App draws no note (the mode never says what it is)
+--- src/App.tsx: 'note={app === "glass" ? (view === "boards" ? MODE_NOTE.board : MODE_NOTE.graph) : undefined}' -> 'note={undefined}'
+ ❯ src/App.chrome.test.tsx (5 tests | 1 failed | 4 skipped) 1114ms
+     × each mode's one-line note is the context region's, and changes with the mode 543ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find an accessible element with the role "region" and name "You are in the Glass" and description "Graph: the case's data. Saved views are under Views or Cases."
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+
+=== PLANT: Am 13: the note drawn but not the region description (a screen reader entering the region is not told)
+--- src/shell/ContextBanner.tsx: 'const described = note ? "context-banner-note" : undefined;' -> 'const described = undefined;'
+ ❯ src/App.chrome.test.tsx (5 tests | 1 failed | 4 skipped) 634ms
+     × each mode's one-line note is the context region's, and changes with the mode 239ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find an accessible element with the role "region" and name "You are in the Glass" and description "Graph: the case's data. Saved views are under Views or Cases."
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+
+=== PLANT: Am 13: the note stuck on the graph line on a board
+--- src/App.tsx: '(view === "boards" ? MODE_NOTE.board : MODE_NOTE.graph)' -> 'MODE_NOTE.graph'
+ ❯ src/App.chrome.test.tsx (5 tests | 1 failed | 4 skipped) 701ms
+     × each mode's one-line note is the context region's, and changes with the mode 234ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find an accessible element with the role "region" and name "You are in the Glass" and description "Drawing board: your sketch; it does not change the case's data."
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+
+=== PLANT: Am 13: the old names Case · Boards
+--- src/App.tsx: 'label: "Drawing board",' -> 'label: "Boards",'
+ ❯ src/App.chrome.test.tsx (5 tests | 3 failed) 1853ms
+     × 26 controls stand before the canvas, in this order 189ms
+     × the banner's Drawing board opens the case's drawing boards and is the current section (ADR-143, L3.3; ADR-145 Amendment 13) 1036ms
+     × each mode's one-line note is the context region's, and changes with the mode 36ms
+     ✓ the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name 48ms
+     ✓ the column opens with the Inspector only, the other panels folded in their order 89ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'Osprey, go to Home', …(25) ] to deeply equal [ 'Osprey, go to Home', …(25) ]
+- Expected
++ Received
+TestingLibraryElementError: Unable to find role="button" and name "Drawing board"
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Drawing board"
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+
+=== PLANT: Am 3: the list read on mount, not on open
+--- src/views/ViewsMenu.tsx: '    if (!open) return;\n    let live = true;' -> '    let live = true;'
+ ❯ src/views/ViewsMenu.test.tsx (7 tests | 2 failed) 155ms
+     × reads nothing until opened, then lists the views the Conduit sends this reader, and no other 75ms
+     ✓ opens the chosen view by the caller's onOpen and closes 21ms
+     ✓ marks the view open now, and says which are private and which shared 13ms
+     ✓ says how to make one when the case has none 7ms
+     ✓ says a refused list in words, not as an empty case 9ms
+     × reads the list again each time it opens, so a view saved since is there 18ms
+     ✓ closes on Escape and gives focus back to its button 11ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ Array(1) ] to deeply equal []
+- Expected
++ Received
+AssertionError: expected [ …(4) ] to have a length of 2 but got 4
+- Expected
++ Received
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 passed (7)
+
+=== PLANT: Am 3: a chosen view not handed to onOpen
+--- src/views/ViewsMenu.tsx: '                      onOpen(view);' -> '                      void view;'
+ ❯ src/views/ViewsMenu.test.tsx (7 tests | 1 failed) 158ms
+     ✓ reads nothing until opened, then lists the views the Conduit sends this reader, and no other 86ms
+     × opens the chosen view by the caller's onOpen and closes 16ms
+     ✓ marks the view open now, and says which are private and which shared 14ms
+     ✓ says how to make one when the case has none 5ms
+     ✓ says a refused list in words, not as an empty case 7ms
+     ✓ reads the list again each time it opens, so a view saved since is there 17ms
+     ✓ closes on Escape and gives focus back to its button 12ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected "vi.fn()" to be called with arguments: [ { id: 'v-private', …(6) } ]
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+
+=== PLANT: Am 3: a refused list drawn as an empty case
+--- src/views/ViewsMenu.tsx: '        setProblem(failure instanceof Error ? failure.message : "The views could not be loaded.");' -> '        void failure;'
+ ❯ src/views/ViewsMenu.test.tsx (7 tests | 1 failed) 1147ms
+     ✓ reads nothing until opened, then lists the views the Conduit sends this reader, and no other 80ms
+     ✓ opens the chosen view by the caller's onOpen and closes 14ms
+     ✓ marks the view open now, and says which are private and which shared 12ms
+     ✓ says how to make one when the case has none 6ms
+     × says a refused list in words, not as an empty case 1006ms
+     ✓ reads the list again each time it opens, so a view saved since is there 16ms
+     ✓ closes on Escape and gives focus back to its button 11ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find role="alert"
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+
+=== PLANT: Am 3: the drawer's old empty words
+--- src/views/ViewsMenu.tsx: 'export const NO_VIEWS_YET = "No saved views yet. Select nodes and choose Save as a view.";' -> 'export const NO_VIEWS_YET = "No views yet. Select nodes on the canvas and choose Save as a view.";'
+ ❯ src/views/ViewsMenu.test.tsx (7 tests | 1 failed) 145ms
+     ✓ reads nothing until opened, then lists the views the Conduit sends this reader, and no other 79ms
+     ✓ opens the chosen view by the caller's onOpen and closes 14ms
+     ✓ marks the view open now, and says which are private and which shared 11ms
+     × says how to make one when the case has none 8ms
+     ✓ says a refused list in words, not as an empty case 7ms
+     ✓ reads the list again each time it opens, so a view saved since is there 14ms
+     ✓ closes on Escape and gives focus back to its button 11ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'No views yet. Select nodes on the can…' to be 'No saved views yet. Select nodes and …' // Object.is equality
+Expected: "No saved views yet. Select nodes and choose Save as a view."
+Received: "No views yet. Select nodes on the canvas and choose Save as a view."
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+
+=== PLANT: Am 3: the open view not marked
+--- src/views/ViewsMenu.tsx: 'aria-current={view.id === openViewId ? "true" : undefined}' -> 'aria-current={undefined}'
+ ❯ src/views/ViewsMenu.test.tsx (7 tests | 1 failed) 157ms
+     ✓ reads nothing until opened, then lists the views the Conduit sends this reader, and no other 82ms
+     ✓ opens the chosen view by the caller's onOpen and closes 14ms
+     × marks the view open now, and says which are private and which shared 13ms
+     ✓ says how to make one when the case has none 8ms
+     ✓ says a refused list in words, not as an empty case 9ms
+     ✓ reads the list again each time it opens, so a view saved since is there 18ms
+     ✓ closes on Escape and gives focus back to its button 12ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected null to be 'true' // Object.is equality
+- Expected:
++ Received:
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+
+=== PLANT: Am 3: Escape leaves focus in the closed panel
+--- src/views/ViewsMenu.tsx: '          setOpen(false);\n          button.current?.focus();' -> '          setOpen(false);'
+ ❯ src/views/ViewsMenu.test.tsx (7 tests | 1 failed) 142ms
+     ✓ reads nothing until opened, then lists the views the Conduit sends this reader, and no other 78ms
+     ✓ opens the chosen view by the caller's onOpen and closes 12ms
+     ✓ marks the view open now, and says which are private and which shared 10ms
+     ✓ says how to make one when the case has none 6ms
+     ✓ says a refused list in words, not as an empty case 7ms
+     ✓ reads the list again each time it opens, so a view saved since is there 15ms
+     × closes on Escape and gives focus back to its button 14ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <body><div>…(1)</div></body> to be <button type="button" …(3)>…(1)</button> // Object.is equality
+- Expected
++ Received
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+
+=== PLANT: Am 3: App wires the menu to nothing (no openLens)
+--- src/App.tsx: '                      onOpen={(chosen) => void openLens(chosen.id)}' -> '                      onOpen={() => undefined}'
+ ❯ src/App.views.test.tsx (2 tests | 1 failed) 1873ms
+     × a view chosen from Views opens as the read-only lens, as the drawer opens it, and Back puts the case back 1271ms
+     ✓ the Cases drawer keeps its list of the case's views 83ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find role="region" and name "Open view"
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+
+=== PLANT: Am 3: the drawer's list dropped
+--- src/App.tsx: '          {investigationId && (\n            <ViewsPanel' -> '          {false && investigationId && (\n            <ViewsPanel'
+ ❯ src/App.views.test.tsx (2 tests | 1 failed) 1784ms
+     ✓ a view chosen from Views opens as the read-only lens, as the drawer opens it, and Back puts the case back 274ms
+     × the Cases drawer keeps its list of the case's views 1055ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find role="list" and name "Views in this case"
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+
+=== PLANT: Am 13 keyboard: a section answers the pointer alone (onMouseDown), so Enter does nothing
+--- src/shell/ContextBanner.tsx: '                onClick={section.onSelect}' -> '                onMouseDown={section.onSelect}'
+    Error: expect(locator).toBeVisible() failed
+    Expected: visible
+    Error: element(s) not found
+  1 failed
+
+=== PLANT: Am 13 keyboard: the note not the region description
+--- src/shell/ContextBanner.tsx: 'const described = note ? "context-banner-note" : undefined;' -> 'const described = undefined;'
+    Error: expect(locator).toHaveAccessibleDescription(expected) failed
+    Expected: "Graph: the case's data. Saved views are under Views or Cases."
+    Received: ""
+        14 × locator resolved to <div role="region" class="context-banner" aria-labelledby="context-banner-title">…</div>
+  1 failed
+
+=== PLANT: Am 3 keyboard: a view in the menu answers the pointer alone
+--- src/views/ViewsMenu.tsx: '                    onClick={() => {\n                      setOpen(false);\n                      onOpen(view);' -> '                    onMouseDown={() => {\n                      setOpen(false);\n                      onOpen(view);'
+    Error: expect(received).toBe(expected) // Object.is equality
+    Expected: "v-shared"
+    Received: null
+  1 failed
+  1 passed (7.1s)
+
+=== PLANT: Am 13 x Am 8: the GOV.UK note in the row's own 19 px type
+--- src/shell/places.css: '.context-banner--folded .context-banner__note { font-size: 14px; line-height: 20px;' -> '.context-banner--folded .context-banner__note { font-size: 19px; line-height: 25px;'
+    Error: the canvas starts at least 100 px higher than main's 257
+    Expected: <= 157
+    Received:    186
+    Error: one row
+    Expected: <= 40
+    Received:    66
+    Error: the region's height
+    Expected: <= 40
+    Received:    66
+    Error: the region's height
+    Expected: <= 40
+    Received:    66
+  4 failed
+  5 passed (5.3s)
+
