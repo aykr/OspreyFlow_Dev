@@ -12,7 +12,7 @@
 // The workspace and the Admin area fill the window (`--workspace-height`, default `100vh`). When
 // something stands above them, the frame measures it and sets that height to what is left, so the
 // status bar stays in view; the footer is below, reached by scrolling, as on any GOV.UK page.
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { brandTitle, isGovUkHost, type Appearance } from "./brand";
 import { GovukFooter } from "./govuk/GovukFooter";
@@ -30,7 +30,8 @@ const FullFooter = createContext<(wanted: boolean) => void>(() => {});
 /** Called by Home and the sign-in page: while mounted, the frame draws the full footer. */
 export function useFullFooter(): void {
   const claim = useContext(FullFooter);
-  useEffect(() => {
+  // Before the first paint (ADR-132 Amendment 8): Home and the sign-in page never show the compact top.
+  useLayoutEffect(() => {
     claim(true);
     return () => claim(false);
   }, [claim]);
@@ -81,7 +82,7 @@ export function BrandFrame({
           by the slim footer's own rule (Home and the sign-in page claim the full frame). */}
       <div ref={above} className={claims === 0 ? "brand-chrome brand-chrome--compact" : "brand-chrome"}>
         {/* ADR-145 decision 3: the place switcher stands inside the GOV.UK header. */}
-        <GovukHeader withPlaces />
+        <GovukHeader withPlaces hostname={hostname} />
         <PhaseBanner phase={appearance.phase} text={appearance.bannerText} />
       </div>
       {/* Focused by the skip link; not itself a control, so it is not in the Tab order. */}

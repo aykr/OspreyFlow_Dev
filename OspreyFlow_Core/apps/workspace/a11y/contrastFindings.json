@@ -1054,13 +1054,6 @@
    "reason": "hidden at every point, under an opaque element over the words or clipped",
    "own": 18.34,
    "owner": "shell"
-  },
-  ".context-banner__sep[aria-hidden=\"true\"]:nth-child(6)": {
-   "text": "·",
-   "ratio": "unmeasurable",
-   "reason": "hidden at every point, under an opaque element over the words or clipped",
-   "own": 19.59,
-   "owner": "shell"
   }
  }
 }

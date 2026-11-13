@@ -88,8 +88,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, cr
   const govuk = currentBrand() === "govuk";
   // The place opens the line in both brands (ADR-132 Amendment 8 folded GOV.UK's title into it), so each
   // part after it is set off by a separator.
-  const sepEl = <span className="context-banner__sep" aria-hidden="true">·</span>;
-  const next = () => sepEl;
+  const next = () => <span className="context-banner__sep" aria-hidden="true">·</span>;
   const line = (
     <>
       {sections.length > 0 && (

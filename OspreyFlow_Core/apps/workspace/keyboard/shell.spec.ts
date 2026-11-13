@@ -366,8 +366,9 @@ for (const brand of ["ospreyflow", "govuk"] as const) {
 // Chromium at 1440×1000 with the demonstration's banner words, as osprey-small shows them; at main 054f24b
 // the place's content started at 257 px under GOV.UK and at 130 in dark and light.
 const DEMO_WORDS = "Demonstration only: this is not a government service, and all data is synthetic.";
+// Whole pixels: a line box's height depends on the fonts' metrics, which differ by a fraction between hosts.
 const top = (page: import("@playwright/test").Page, selector: string) =>
-  page.locator(selector).first().evaluate((e) => { const b = e.getBoundingClientRect(); return { top: b.top, height: b.height, bottom: b.bottom }; });
+  page.locator(selector).first().evaluate((e) => { const b = e.getBoundingClientRect(); return { top: Math.round(b.top), height: Math.round(b.height), bottom: Math.round(b.bottom) }; });
 
 test("govuk: a case's workspace gains at least 100 px of height, the strip and toolbar untouched", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -379,7 +380,8 @@ test("govuk: a case's workspace gains at least 100 px of height, the strip and t
   const banner = page.getByRole("region", { name: "Service phase" });
   await expect(banner).toHaveText(DEMO_WORDS);
   expect.soft((await top(page, '[aria-label="Service phase"]')).height, "the banner on one slim line").toBeLessThanOrEqual(30);
-  expect((await top(page, ".classification-strip")).height, "the marking strip untouched").toBe(20);
+  expect.soft((await top(page, ".classification-strip")).height, "the marking strip untouched").toBe(20);
+  expect.soft((await top(page, ".top-bar")).height, "the toolbar untouched").toBe(44);
 });
 
 for (const place of ["glass", "ingest", "rules", "admin"] as const) {
@@ -388,14 +390,20 @@ for (const place of ["glass", "ingest", "rules", "admin"] as const) {
     await page.goto(`/keyboard/places-harness.html?banner=1&brand=govuk&place=${place}&rights=investigate,edit_pipelines,triage_alerts,read_alert_queue,manage_people`);
     const name = { glass: "You are in the Glass", ingest: "You are in the Ingest Studio", rules: "You are in Rules and Monitoring", admin: "You are in Admin" }[place];
     const region = page.getByRole("region", { name });
-    await expect(region.getByRole("heading", { level: 2, name })).toBeVisible();
+    // Each claim judged on its own (rule 15), so each was shown red alone at 054f24b.
+    await expect.soft(region.getByRole("heading", { level: 2, name })).toBeVisible();
     const bar = await region.evaluate((e) => e.getBoundingClientRect().height);
-    expect(bar, "one row").toBeLessThanOrEqual(40);
+    expect.soft(bar, "one row").toBeLessThanOrEqual(40);
+    const heading = region.getByRole("heading", { level: 2 });
+    const size = (e: Element) => getComputedStyle(e).fontSize;
+    const rowSize = await region.evaluate((e) => getComputedStyle(e.querySelector(".govuk-notification-banner__content") ?? e).fontSize);
+    expect.soft(await heading.evaluate(size), "the title at the row's size").toBe(rowSize);
     if (place === "glass") {
-      const title = await region.getByRole("heading", { level: 2 }).boundingBox();
+      const title = await heading.boundingBox();
       const caseSection = await region.getByRole("button", { name: "Case", exact: true }).boundingBox();
-      expect(Math.abs(title!.y + title!.height / 2 - (caseSection!.y + caseSection!.height / 2)), "on the same row as Case").toBeLessThan(6);
-      expect(title!.x, "at the row's start").toBeLessThan(caseSection!.x);
+      expect.soft(Math.abs(title!.y + title!.height / 2 - (caseSection!.y + caseSection!.height / 2)), "on the same row as Case").toBeLessThan(6);
+      expect.soft(title!.x, "at the row's start").toBeLessThan(caseSection!.x);
+      expect.soft(await region.getByRole("button", { name: "Case", exact: true }).evaluate(size), "Case at the row's size").toBe(rowSize);
     }
   });
 }
@@ -410,13 +418,26 @@ for (const theme of ["dark", "light"] as const) {
   });
 }
 
-test("govuk: Home keeps the full header and banner", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto("/keyboard/start-harness.html?brand=govuk");
-  await expect(page.locator(".govuk-header")).toBeVisible();
-  expect((await top(page, ".govuk-header")).height).toBe(61);
-  expect((await top(page, '[aria-label="Service phase"]')).height).toBe(41);
-});
+for (const [screen, harness] of [["Home", "start-harness.html"], ["the sign-in page", "sign-in-harness.html"]] as const) {
+  test(`govuk: ${screen} keeps the full header and banner`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`/keyboard/${harness}?brand=govuk`);
+    await expect(page.locator(".govuk-header")).toBeVisible();
+    expect.soft((await top(page, ".govuk-header")).height).toBe(61);
+    expect.soft((await top(page, '[aria-label="Service phase"]')).height).toBe(41);
+  });
+}
+
+// ADR-132 Amendment 8 (the owner's ruling, 13 November 2026): off gov.uk the header draws no crown, the word
+// mark and its link kept; on a gov.uk host the crown is drawn, as before.
+for (const [where, query, crown] of [["off gov.uk", "", 0], ["on gov.uk", "&host=demo.service.gov.uk", 1]] as const) {
+  test(`govuk ${where}: the header's crown ${crown ? "is drawn" : "is not drawn"}, the GOV.UK link kept`, async ({ page }) => {
+    await page.goto(`/keyboard/shell-harness.html?brand=govuk${query}`);
+    const header = page.locator(".govuk-header");
+    await expect(header.getByRole("link", { name: /GOV\.UK/ })).toBeVisible();
+    await expect(header.locator(".govuk-header__logotype g")).toHaveCount(crown);
+  });
+}
 
 test("govuk: the header, the Glass and the footer are reached by Tab in that order", async ({ page }) => {
   await page.goto("/keyboard/shell-harness.html?brand=govuk");

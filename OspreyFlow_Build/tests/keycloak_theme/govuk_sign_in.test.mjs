@@ -188,3 +188,19 @@ test("on gov.uk the footer is as it was, Crown and all", () => {
   assert.ok(/Crown copyright/.test(footer.textContent));
   assert.ok(/Open Government Licence/.test(footer.textContent));
 });
+
+// ADR-132 Amendment 8 (the owner, 13 November 2026): off gov.uk the sign-in page's header has no crown,
+// as its footer has none (Amendment 7); the GOV.UK word mark stays. On gov.uk it is as it was.
+test("off gov.uk the header draws no crown, the word mark kept", () => {
+  const win = page({ brand: "govuk", settings: SETTINGS });
+  const logo = win.document.querySelector(".govuk-header__logotype");
+  assert.ok(logo);
+  assert.equal(logo.querySelector("g"), null);
+  assert.ok(logo.querySelector(".govuk-logo-dot"));
+  assert.equal(logo.getAttribute("aria-label"), "GOV.UK");
+});
+
+test("on gov.uk the header draws the crown", () => {
+  const win = page({ brand: "govuk", settings: SETTINGS, url: "https://id.prison-intelligence.service.gov.uk/realms/osprey/" });
+  assert.ok(win.document.querySelector(".govuk-header__logotype g"));
+});

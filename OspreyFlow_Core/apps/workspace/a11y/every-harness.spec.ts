@@ -361,6 +361,15 @@ test("the scan found the harness pages", () => {
   expect(pages.length).toBeGreaterThan(30);
 });
 
+// ADR-132 Amendment 8: nodes an open menu lies over in one drawn-open state, left out of that state's scan.
+// axe's target-size counts a target a menu covers all but a sliver of as too small (it skips one covered
+// wholly); in the browser the menu is on top (`elementFromPoint` at every sampled point of its items).
+// GOV.UK's context row is one row under the top bar since Amendment 8, so *More views*, drawn open, lies
+// over its sections and leaves 4 px of *Boards (coming)* showing. Each title must be a scanned title.
+const UNDER_AN_OPEN_OVERLAY: Record<string, readonly string[]> = {
+  "places-harness.html open=views (govuk)": [".context-banner__sections"],
+};
+
 // Every look's title, as each test below is named, so a listed finding under a mistyped title fails.
 const TITLES = new Set<string>();
 
@@ -384,6 +393,12 @@ for (const name of pages) {
         }
         let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
+        // Under an open overlay in one state alone; each selector must still be on the page, so the
+        // exclusion cannot outlive what it names, and the same nodes are scanned in every other state.
+        for (const selector of UNDER_AN_OPEN_OVERLAY[title] ?? []) {
+          await expect(page.locator(selector).first(), `${selector} is still on the page`).toBeAttached();
+          builder = builder.exclude(selector);
+        }
         const results = await builder.analyze();
         expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
         // axe's undecided colour contrast, measured here (1.4.3): a shortfall or an unmeasurable
@@ -407,4 +422,8 @@ for (const name of pages) {
 
 test("every listed contrast finding names a look this file scans", () => {
   expect(Object.keys(CONTRAST_FINDINGS).filter((title) => !TITLES.has(title))).toEqual([]);
+});
+
+test("every node left out under an open overlay names a look this file scans", () => {
+  expect(Object.keys(UNDER_AN_OPEN_OVERLAY).filter((title) => !TITLES.has(title))).toEqual([]);
 });

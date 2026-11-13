@@ -343,9 +343,11 @@ service navigation) under the header: the owner removed it everywhere on 4 Novem
 workspace its height back (ADR-132 Amendment 5). The service's name is in the page title,
 "<service> – GOV.UK", on the Glass and on the sign-in page alike. On every workspace screen (every place,
 Admin included, but not Home or the sign-in page) the header and the banner are compact (ADR-132
-Amendment 8): the header about 32 pixels with a 20-pixel logo, its place links kept at 24 pixels; the
-banner one 22-pixel line in 14-pixel type, its words and its *Service phase* region unchanged. The
-classification strip and this bar are untouched.
+Amendment 8): the header 33 pixels with a 20-pixel logo, its place links kept at 24 pixels; the
+banner one 23-pixel line in 14-pixel type, its words and its *Service phase* region unchanged. The
+classification strip and this bar are untouched. Off gov.uk the header's logo is the GOV.UK word mark alone, with no crown, on
+every page and on the sign-in page, as the footer carries nothing of the Crown there (ADR-132 Amendments 7
+and 8).
 
 One row, 40px. From the left:
 
@@ -482,7 +484,7 @@ another case in the Studio reloads the page; the view to return to is kept in th
 storage, so *Back* still returns to it (`shell/placeMemory.ts`). Messages is not kept: it is drawn for
 one node, which a reload does not keep, so *Back* returns to the view open before it. Under the GOV.UK
 brand the banner is a GOV.UK notification banner folded into one row (ADR-132 Amendment 8): "You are
-in …" starts the row at its size, still the region's heading and name, followed by the rest. It is 32
+in …" starts the row in its type, bold, still the region's heading and name, followed by the rest. It is 32
 pixels at 1440 wide, where the title band over one line had taken 91.
 
 **Admin** is reached from the switcher and Home, not the rail (ADR-110 Amendment 14). It is a side

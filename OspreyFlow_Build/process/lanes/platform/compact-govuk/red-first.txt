@@ -1,27 +1,57 @@
 # ADR-132 Amendment 8, red first at main 054f24b (13 November 2026, the Mac, Chromium, 1440x1000, the places harness with the demonstration's banner words, CSS px)
-## Before (054f24b): GOV.UK header 61, banner 41, strip 20, toolbar 44, context bar 91 (Admin 59); the canvas at 257. Dark and light: the canvas at 130, the bar 41. Home under GOV.UK: header 61, banner 41.
-## The browser cases at 054f24b, each assertion soft (shell.spec.ts)
+## Before (054f24b): GOV.UK header 61, banner 41, strip 20, toolbar 44, context bar 91 (Admin 59); the canvas at 257. Dark and light: the canvas at 130, the bar 41. Home and the sign-in page under GOV.UK: header 61, banner 41.
+## 1. shell.spec.ts's cases at 054f24b (the three source files put back to 054f24b by name), every assertion soft
+  1) keyboard/shell.spec.ts:373:1 › govuk: a case's workspace gains at least 100 px of height, the strip and toolbar untouched 
     Error: the canvas starts at least 100 px higher than main's 257
     Received:    257
     Error: a slim header
     Received:    61
     Error: the banner on one slim line
     Received:    41
+  2) keyboard/shell.spec.ts:388:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (glass) 
     Error: one row
     Received:    91
+    Error: on the same row as Case
+    Received:   42.5
+    Error: at the row's start
+    Received:   25
+  3) keyboard/shell.spec.ts:388:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (ingest) 
     Error: one row
     Received:    91
+  4) keyboard/shell.spec.ts:388:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (rules) 
     Error: one row
     Received:    91
+  5) keyboard/shell.spec.ts:388:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (admin) 
     Error: one row
     Received:    59
   5 failed
-  3 passed (4.4s)
-## The compact rule's unit case, the frame forced compact everywhere
+  4 passed (4.3s)
+## 2. the two font-size assertions, which pass at main (its title had its own band), each red by a fault planted in this amendment's CSS
+plant-title.txt:    Error: the title at the row's size
+plant-title.txt:    Expected: "19px"
+plant-title.txt:    Received: "16px"
+plant-title.txt:  1 failed
+plant-case.txt:    Error: Case at the row's size
+plant-case.txt:    Expected: "19px"
+plant-case.txt:    Received: "16px"
+plant-case.txt:  1 failed
+## 3. the compact rule's unit case, the frame forced compact everywhere
      × is full while Home or the sign-in page is shown 5ms
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
       Tests  1 failed | 9 passed (10)
-## After: header 33, banner 23, strip 20, toolbar 44, the folded row 32; the canvas at 152: 105 CSS px gained (about 139 at the owner's 1.32 scale). Dark, light and Home as before (the same cases green).
-## shell.spec.ts at the head
-  55 passed (8.5s)
-## The full axe scan at the head (every harness, dark, light and GOV.UK): 1030 passed (15.2m)
+## 4. the overlay exclusion's two guards, each planted
+== a mistyped title
+    + Received  + 3
+    +   "places-harness.html open=view (govuk)",
+  1 failed
+== a selector that names nothing
+    Error: .context-banner__sectionz is still on the page
+    Error: element(s) not found
+  1 failed
+## After: header 33, banner 23, strip 20, toolbar 44, the folded row 32; the canvas at 152: 105 CSS px gained (about 139 at the owner's 1.32 scale). Dark, light, Home and the sign-in page as before (their cases green at 054f24b and at the head).
+## 5. No crown in the header off gov.uk (the owner's addition), red at 054f24b, each layer
+- GovukHeader.test.tsx: "draws no crown off gov.uk, the word mark kept" FAILED (1 failed, 5 passed); "draws the crown on gov.uk" passed.
+- govuk_sign_in.test.mjs: "off gov.uk the header draws no crown, the word mark kept" failed (pass 17, fail 1); "on gov.uk the header draws the crown" passed.
+- test_keycloak_theme_govuk.py: "the chrome takes the header's crown off gov.uk" FAILED against 054f24b's govuk_chrome.js (1 failed, 11 passed).
+- shell.spec.ts: "govuk off gov.uk: the header's crown is not drawn" Received: 1 (1 failed); the gov.uk case passed.
+After: all green (vitest src/brand 71; node keycloak_theme 29; the Python file 12; shell.spec.ts 48).

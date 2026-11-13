@@ -85,6 +85,16 @@ def test_under_govuk_the_chrome_draws_no_service_name_band() -> None:
     assert "document.title" in chrome
 
 
+def test_under_govuk_the_chrome_takes_the_header_s_crown_off_gov_uk() -> None:
+    """ADR-132 Amendment 8, the owner's ruling of 13 November 2026: off gov.uk the sign-in page's header
+    draws no crown, as its footer draws none (Amendment 7). The script that ships in the theme is the
+    one that removes it, by the host it is served on (`govuk_sign_in.test.mjs` runs it on both hosts)."""
+    chrome = render_login_theme(TOKENS, appearance=GOVUK, glass_origin=GLASS)[GOVUK_CHROME_SCRIPT]
+    assert '.slice(-7) === ".gov.uk"' in chrome  # the host test, as the footer's
+    removal = chrome[chrome.index("Amendment 8") :]
+    assert "if (!onGovUk)" in removal and '.querySelector(".govuk-header__logotype")' in removal
+
+
 def _config(appearance: dict[str, object] | None = None) -> OspreyConfig:
     raw: dict[str, object] = {"network": {"public_origin": GLASS}}
     if appearance:
