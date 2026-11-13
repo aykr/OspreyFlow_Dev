@@ -1,0 +1,25 @@
+GREEN: the silent round through the shared key's real Caddy (caddy:2.11.4-alpine's binary, OSPREY_TEST_CADDY)
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T125013Z-5bc94d06/log: bash -c cd ../OspreyFlow_Core; d=$(mktemp -d); c=$(docker create caddy:2.11.4-alpine); docker cp -q $c:/usr/bin/caddy $d/caddy; docker rm -f $c >/dev/null; echo "OSPREY_TEST_CADDY=$d/caddy ($($d/caddy version | head -1))"; OSPREY_TEST_CADDY=$d/caddy ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py -v -rs; r=$?; rm -rf $d; exit $r
+OSPREY_TEST_CADDY=/tmp/tmp.Fp9bEwxkD5/caddy (v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=)
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/admin/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py::test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name PASSED [ 50%]
+../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing PASSED [100%]
+
+============================= slowest 30 durations =============================
+1.73s setup    tests/harness/test_refresh_silent_round_through_the_key.py::test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name
+1.52s setup    tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing
+0.98s call     tests/harness/test_refresh_silent_round_through_the_key.py::test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name
+0.50s teardown tests/harness/test_refresh_silent_round_through_the_key.py::test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name
+0.47s teardown tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing
+0.02s call     tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing
+============================== 2 passed in 5.80s ===============================
+Wall time: 8 s, exit 0 (no stack, no lease; set-up before it 15 s)
+exit=0

@@ -1,20 +1,19 @@
-"""The refresh's silent round passes the shared key's gate (ADR-050 Amendment 3, point 3).
+"""The refresh's silent round through the shared key's gate (ADR-050 Amendment 3, point 4).
 
 On a deployment that asks for a shared key (ADR-114 Amendments 41 and 42, osprey-small), the Glass's
 silent sign-in at load sends its hidden frame to `id.<host>`'s authorisation endpoint, which is
 **behind** the key (only the token, the keys and the discovery document are open,
-`harness.site.OPEN_ON_THE_IDENTITY_PROVIDER`). It passes because the browser holds the pass from
-answering the key on the Glass's own name: `osprey_pass` is set for the base name (`Domain=<host>`,
-`SameSite=Lax`), and a frame from `<host>` to `id.<host>` is a same-site request, so the browser
-sends it. Then the identity provider's answer brings the frame back to `<host>/?code=…`, again with
-the pass.
+`harness.site.OPEN_ON_THE_IDENTITY_PROVIDER`).
 
-Driven through the real Caddy the deployment renders (`test_access_key_proxy.py`'s fixture, whose
-`curl` keeps and sends cookies by a browser's domain rules), with the frame's own request headers.
-Its refusal is checked too (rule 15): with no pass, the same round is asked for the key, and nothing
-behind the proxy sees it. A browser that has not answered the key never has the Glass to refresh
-in the first place; the 8-hour pass ending under an open Glass is the one way to meet that refusal,
-and the frame then times out to the Sign in screen, whose button reaches the key's prompt.
+**What this proves, at the HTTP level only:** through the real Caddy the deployment renders
+(`test_access_key_proxy.py`'s fixture, whose `curl` keeps and sends cookies by RFC 6265's domain
+rules), a request carrying the pass that answering the key on the Glass's own name gave
+(`Domain=<host>`) reaches the identity provider, and its return to the Glass passes too; without
+the pass it is answered 401 with the key's Basic challenge and reaches nothing. **What it does not
+prove:** that a browser sends the `SameSite=Lax` pass with a hidden frame's navigation from
+`<host>` to `id.<host>` (a same-site request, so the cookie rules say it should), nor what a
+browser does with the 401's challenge inside a hidden frame. Neither is measured here; Amendment 3
+says so.
 """
 
 from __future__ import annotations

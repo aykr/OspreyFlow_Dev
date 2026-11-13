@@ -40,6 +40,7 @@ import httpx
 import pytest
 from harness import keycloak_admin
 from harness.realm import GLASS_CLIENT_ID, render_realm_json
+from tools.layout import CORE
 
 from schemas.deployment import OspreyConfig
 
@@ -120,20 +121,32 @@ def keycloak(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Keycloak]:
         docker("rm", "-f", "-v", name, check=False)
 
 
+#: The silent round exactly as `oidc-client-ts` sends it, captured and held by
+#: `apps/workspace/keyboard/refresh-sign-in.spec.ts` (which fails when the library's request
+#: changes): its fixed parameters, and the names of the two it makes afresh each time.
+SILENT_ROUND = json.loads(
+    (CORE / "apps/workspace/keyboard/fixtures/silent-round-request.json").read_text(
+        encoding="utf-8"
+    )
+)
+
+
 def _authorise(kc: Keycloak, *, prompt_none: bool) -> tuple[dict[str, str], str]:
-    """The Glass's authorisation request (`oidc-client-ts`'s, as `userManager.ts` builds it): its
-    URL and the PKCE verifier."""
+    """The Glass's authorisation request, from the captured silent round: its parameters and the
+    PKCE verifier. Without `prompt_none`, the same request less `prompt` (the interactive
+    sign-in)."""
+    assert sorted(SILENT_ROUND["random"]) == ["code_challenge", "state"], SILENT_ROUND
     verifier = secrets.token_urlsafe(64)
     challenge = (
         base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     )
     params = {
-        "client_id": GLASS_CLIENT_ID, "response_type": "code", "scope": "openid",
-        "redirect_uri": kc.redirect_uri, "state": secrets.token_urlsafe(8),
-        "code_challenge": challenge, "code_challenge_method": "S256",
-    }  # fmt: skip
-    if prompt_none:
-        params["prompt"] = "none"
+        k: (kc.redirect_uri if v == "<origin>/" else v) for k, v in SILENT_ROUND["fixed"].items()
+    }
+    assert params["prompt"] == "none" and params["redirect_uri"] == kc.redirect_uri
+    params |= {"state": secrets.token_urlsafe(8), "code_challenge": challenge}
+    if not prompt_none:
+        del params["prompt"]
     return params, verifier
 
 
@@ -143,9 +156,10 @@ def _answer(location: str) -> dict[str, str]:
     }
 
 
-def _silent_round(kc: Keycloak, browser: httpx.Client) -> httpx.Response:
+def _silent_round(kc: Keycloak, browser: httpx.Client) -> tuple[httpx.Response, str]:
     params, _ = _authorise(kc, prompt_none=True)
-    return browser.get(f"{kc.origin}/realms/{REALM}/protocol/openid-connect/auth", params=params)
+    path = f"{kc.origin}/realms/{REALM}{SILENT_ROUND['path']}"
+    return browser.get(path, params=params), params["state"]
 
 
 def _sign_in_through_the_form(kc: Keycloak, browser: httpx.Client) -> None:
@@ -168,13 +182,16 @@ def test_with_no_session_keycloak_refuses_prompt_none_with_login_required(
     keycloak: Keycloak,
 ) -> None:
     with httpx.Client(follow_redirects=False, timeout=30) as browser:
-        answered = _silent_round(keycloak, browser)
+        answered, state = _silent_round(keycloak, browser)
     assert answered.status_code == 302, answered.status_code
     location = answered.headers["location"]
     assert location.startswith(keycloak.redirect_uri), location
     back = _answer(location)
     assert back.get("error") == "login_required", back
     assert "code" not in back, back
+    # The library matches the refusal to its request by `state`; Keycloak 26 also names itself.
+    assert back.get("state") == state, back
+    assert back.get("iss") == f"{keycloak.origin}/realms/{REALM}", back
 
 
 def test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuses_after_logout(
@@ -192,6 +209,7 @@ def test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuse
         back = _answer(answered.headers["location"])
         assert "error" not in back, back
         assert back.get("state") == params["state"]
+        assert back.get("iss") == f"{keycloak.origin}/realms/{REALM}", back
         exchanged = browser.post(
             f"{keycloak.origin}/realms/{REALM}/protocol/openid-connect/token",
             data={"grant_type": "authorization_code", "client_id": GLASS_CLIENT_ID,
@@ -212,6 +230,7 @@ def test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuse
         assert logout.status_code in (200, 204, 302), logout.status_code
         for cookie in browser.cookies.jar:
             cookie.secure = False
-        refused = _silent_round(keycloak, browser)
+        refused, state = _silent_round(keycloak, browser)
         assert refused.status_code == 302
-        assert _answer(refused.headers["location"]).get("error") == "login_required"
+        again = _answer(refused.headers["location"])
+        assert again.get("error") == "login_required" and again.get("state") == state, again

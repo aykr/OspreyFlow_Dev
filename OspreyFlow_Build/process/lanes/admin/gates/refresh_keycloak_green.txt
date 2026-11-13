@@ -1,0 +1,24 @@
+GREEN: tests/harness/test_refresh_silent_sign_in_keycloak.py against a real Keycloak 26.0 (throwaway container, the server's docker; no lane stack carries Keycloak), the request from apps/workspace/keyboard/fixtures/silent-round-request.json
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T124704Z-ea5085be/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py -v
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/admin/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_no_session_keycloak_refuses_prompt_none_with_login_required PASSED [ 50%]
+../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuses_after_logout PASSED [100%]
+
+============================= slowest 30 durations =============================
+36.21s setup    tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_no_session_keycloak_refuses_prompt_none_with_login_required
+1.08s teardown tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuses_after_logout
+0.44s call     tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_no_session_keycloak_refuses_prompt_none_with_login_required
+0.27s call     tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuses_after_logout
+
+(2 durations < 0.005s hidden.  Use -vv to show these durations.)
+============================== 2 passed in 38.56s ==============================
+Wall time: 40 s, exit 0 (no stack, no lease; set-up before it 12 s)
+exit=0
