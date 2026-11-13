@@ -62,3 +62,31 @@ In progress. The studio lane, from 13 November 2026. The plan is `PLAN.md`; the 
     - ask the index for up to four times the page and keep only the matches in the typed case.
   - Took the third. `more` is set whenever the index had more than it was asked (rule 2). "Contains" and
     "exact" stay on the graph.
+
+### Corrected after the reviews of d2b207a (the lane-reviewer's and the orchestrator's)
+
+- **(p) is withdrawn; it was wrong twice.**
+  - **The premise was false:** `throwaway_index` indexes any node it is given.
+  - **It hid an access gap:** while the indexer lags, a reverted, withdrawn, superseded or re-marked node is in
+    the index at its older facts, and it was counted.
+  - **It should have gone to the orchestrator,** since it narrowed an access test, rather than being logged here.
+
+  The orchestrator ruled strict (A), and it is built:
+  - pending nodes are left out of every query (`must_not`, from rules' `pending_node_ids`);
+  - counts are not shown as exact while any are pending;
+  - the graph answers when the set is not known to be whole;
+  - the leak test plants each case, red without the exclusion.
+- **(m) is replaced:** only an unreachable index falls back (the owner's requirement c, as the orchestrator read
+  it). 404, 429, 5xx, 401, 403 and TLS failures are raised and logged.
+- **(q) is narrowed:** a case-sensitive suggestion is narrowed on the type's identifiers and names only.
+- **(r) The bar's fallback line is built here** (the orchestrator's ruling B): `limited` on `/suggest` and one line
+  in `GlobalSearch`, in three looks with axe (`keyboard/top-bar.spec.ts`).
+- **(s) The search threshold is read through `get_search_working_set`.** It is overridable, and it is `None` on an
+  app with no lifespan, rather than through `WorkingSetDep`, which every offline route test would then have to
+  override.
+  - Options: `WorkingSetDep`, changing six test files' fixtures; or a search-only dependency.
+  - Took the second. Production always has a working set; `test_the_cases_threshold_merges_through_the_working_set`
+    proves the route uses it.
+- **(t) `rules_index_fixes.diff` is gone:** rules landed both fixes in their own branch (3e7d1bc), with plants.
+- **(u) Listed, not fixed:** the query side's client is not closed at shutdown (needs a lifespan edit; the
+  orchestrator accepted listing it).

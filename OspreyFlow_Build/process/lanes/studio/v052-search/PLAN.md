@@ -53,7 +53,7 @@ the query. So no score depends on another document, and the tiers are bands that
 | Close name: typo | `match` on `names.tri`, 60% of the query's trigrams, for a query of four letters or more | 2100 |
 | Mention: phrase | `match_phrase` on `text` (text documents) | 1500 |
 | Mention: every word | `match` on `text`, operator and | 1200 |
-| Mention: some words | `match` on `text`: one point per word matched, under 1200 because the query is cut to 200 characters | 1–100 |
+| Mention: some words | `match` on `text`: one point per word matched, under 1200 because a query over 200 characters is refused, never cut | 1–100 |
 
 - Within a band, newest first by `date`, then by id, so the order is total and repeatable.
 - Hits are collapsed on `node_id`, so a Document found both by its title and in its text appears once, in its

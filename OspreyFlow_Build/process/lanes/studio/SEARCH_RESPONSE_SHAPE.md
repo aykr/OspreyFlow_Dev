@@ -102,3 +102,27 @@ is one the reader may see.
    checks access again. No other route is added for it.
 6. **Never in a response:** OpenSearch's own scores, index names, source-system identifiers, or any count that
    includes a record the reader may not see.
+
+## As built, after the reviews of d2b207a (13 November 2026, through the orchestrator)
+
+The models are `packages/schemas/search.py`, generated to TypeScript (`SearchPageRequest`, `SearchPageResponse` and
+their parts, in `packages/schemas/generated`). The case lane builds against those. Read alongside the example above:
+
+- **`groups[].label`** is the plural the screen shows ("People", "Documents", "Organisations"), as the example
+  says. `key` stays the type's name.
+- **`match.field`** is the property's display name ("Family name", "Nino"), never one the index does not search.
+  It is `null` for a mention, as before, **and for a typo** (`band: "name_typo"`): a typo is graded over the
+  trigrams of every name, not matched in one property. That is meant, not a gap.
+- **`limited_reason`** is one of three, by why the fallback answered:
+  - "…this deployment has no search index";
+  - "…the search index cannot be reached";
+  - "…the search index is catching up with recent changes".
+
+  On the fallback, "The date filter is not applied." is added when a date filter was asked.
+- **`counts_exact`** is also false while nodes the index has not caught up with are left out (ADR-149 decision 2).
+  Say "counts may be incomplete".
+- **`limit`** (today's field) may still be up to 100 when `page_size` is not given; `page_size` is 1–50.
+- **Dates** are days in UTC (`YYYY-MM-DD`). A date filter that ends before it starts is refused (422).
+- **`/suggest`'s response** gains `source` (`"index"` or `"graph"`) and `limited`. The bar's line is this step's
+  (ADR-059 Amendment 1). The lines touched in `GlobalSearch.tsx` are `LIMITED_SUGGESTIONS`, the `limited` state,
+  the reply's type in `ask`, and the status element.
