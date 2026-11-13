@@ -19,11 +19,14 @@ until then the route passes none, so every search takes the fallback.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from typing import Any, Literal
+from dataclasses import dataclass
+from typing import Any, Literal, Protocol
 
+import opensearchpy
 from pydantic import BaseModel, Field
 from services.resolve.projection import compute_clusters
 
+from ontology.handling import HandlingScheme
 from ports.graph import GraphPort
 from schemas.domain import NOT_SAME_AS, SAME_AS, Node, Principal
 
@@ -56,6 +59,43 @@ class IndexUnavailable(Exception):
 
 
 Searcher = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
+
+
+class _SearchClient(Protocol):
+    async def search(self, *, index: str, body: dict[str, Any]) -> Any: ...
+
+
+#: The index cannot answer: not reachable, timed out, overloaded, or the alias not built yet.
+_UNAVAILABLE_STATUS = {404, 429, 502, 503, 504}
+
+
+def opensearch_searcher(client: _SearchClient, alias: str) -> Searcher:
+    """A `Searcher` over the shared client (rules' `search_client`), asking the deployment's alias
+    and never a concrete index. Only a failure meaning the index cannot answer becomes
+    `IndexUnavailable`; a query it refuses (400) is this code's defect and is raised as it is."""
+
+    async def ask(body: dict[str, Any]) -> dict[str, Any]:
+        try:
+            reply = await client.search(index=alias, body=body)
+        except opensearchpy.ConnectionError as exc:  # timeouts included
+            raise IndexUnavailable("the search index cannot be reached") from exc
+        except opensearchpy.TransportError as exc:
+            if exc.status_code in _UNAVAILABLE_STATUS:
+                raise IndexUnavailable(f"the search index answered {exc.status_code}") from exc
+            raise
+        return dict(reply)
+
+    return ask
+
+
+@dataclass(frozen=True)
+class SearchIndexSetup:
+    """What the route needs to ask the index: the searcher, every entity type the ontology has
+    (for the by-type counts) and the handling scheme (for the reader's access filter)."""
+
+    searcher: Searcher
+    types: Sequence[str]
+    scheme: HandlingScheme
 
 
 class SearchFilters(BaseModel):

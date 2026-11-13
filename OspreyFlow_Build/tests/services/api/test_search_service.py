@@ -357,3 +357,50 @@ def test_the_fallback_merges_the_same_way() -> None:
     graph = _Graph(exact=[_typed("a"), _typed("b")], links=[_link(SAME_AS, "a", "b")])
     out = _ask(s.SearchPageRequest(query="x"), graph, None, tau=0.95)
     assert [r.node_ids for r in out.results] == [["a", "b"]]
+
+
+async def _run(searcher: s.Searcher, body: dict[str, Any]) -> dict[str, Any]:
+    return await searcher(body)
+
+
+# --- the searcher over a real client's errors -----------------------------------------------------
+
+
+class _Client:
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
+        self.calls.append((index, body))
+        if self.error is not None:
+            raise self.error
+        return {"hits": {"hits": []}}
+
+
+def test_the_searcher_asks_the_alias_alone() -> None:
+    client = _Client()
+    asyncio.run(_run(s.opensearch_searcher(client, "ospreyflow-default"), {"query": {}}))
+    assert client.calls == [("ospreyflow-default", {"query": {}})]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        __import__("opensearchpy").ConnectionError("N/A", "refused", OSError("refused")),
+        __import__("opensearchpy").ConnectionTimeout("TIMEOUT", "timed out", TimeoutError()),
+        __import__("opensearchpy").NotFoundError(404, "index_not_found_exception", {}),
+        __import__("opensearchpy").TransportError(503, "unavailable", {}),
+    ],
+)
+def test_an_index_that_cannot_answer_is_unavailable(error: Exception) -> None:
+    with pytest.raises(s.IndexUnavailable):
+        asyncio.run(_run(s.opensearch_searcher(_Client(error), "a"), {}))
+
+
+def test_a_query_the_index_refuses_is_raised_as_it_is() -> None:
+    import opensearchpy
+
+    error = opensearchpy.RequestError(400, "parsing_exception", {})
+    with pytest.raises(opensearchpy.RequestError):
+        asyncio.run(_run(s.opensearch_searcher(_Client(error), "a"), {}))

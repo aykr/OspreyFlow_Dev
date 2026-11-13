@@ -528,6 +528,7 @@ from . import (
     map_places,
     raised_alerts,
     rule_editor,
+    search_service,
     sentence_rules,
 )
 from . import audit_section as audit_section_module
@@ -995,7 +996,7 @@ from .screening_refresh import (
     check_location,
 )
 from .screening_refresh import refresh as refresh_screening_list
-from .search import SearchRequest, SearchResponse, SuggestRequest, SuggestResponse
+from .search import SuggestRequest, SuggestResponse
 from .sentence_rules import (
     is_deployment_wide,
     run_on_list_refresh,
@@ -6090,23 +6091,86 @@ async def restore_history_step(
 # --- search -------------------------------------------------------------------
 
 
+def get_search_index(request: Request) -> search_service.SearchIndexSetup | None:
+    """ADR-149 (reserved): the index search asks, made once per process, or `None` where no
+    OpenSearch is configured (`OPENSEARCH_URL` or `OPENSEARCH_HOST`), and then every search takes
+    the fallback and says so. The client and the alias are the index's own (ADR-150 decision 7)."""
+    if not hasattr(request.app.state, "search_index"):
+        from services.search_index.client import SearchIndexConfig, search_client
+        from services.search_index.run import configured
+
+        setup = None
+        if configured():
+            config = SearchIndexConfig.from_env()
+            setup = search_service.SearchIndexSetup(
+                searcher=search_service.opensearch_searcher(search_client(config), config.alias),
+                types=[t.name for t in request.app.state.ontology.entity_types],
+                scheme=request.app.state.handling_scheme,
+            )
+        request.app.state.search_index = setup
+    return request.app.state.search_index  # type: ignore[no-any-return]
+
+
+SearchIndexDep = Annotated[search_service.SearchIndexSetup | None, Depends(get_search_index)]
+
+
 @app.post(
     "/v1/investigations/{investigation_id}/search",
     dependencies=[Depends(require_right(Right.INVESTIGATE))],
 )
 async def search_route(
     investigation: InvestigationViewerDep,
-    body: SearchRequest,
+    body: search_service.SearchPageRequest,
     principal: PrincipalDep,
     graph: GraphDep,
     audit: AuditDep,
-) -> SearchResponse:
-    result = await search_module.search(graph, body, principal)
+    datasets: DatasetsDep,
+    index: SearchIndexDep,
+    request: Request,
+) -> search_service.SearchPageResponse:
+    """ADR-149 (reserved): the index when there is one, today's exact search otherwise, saying so.
+    The reader's access filter is built here from their own principal (page A §1) and goes into
+    the index's query; the case's threshold merges the visible hits (page A §2)."""
+    from services.search_index.document import phonetic_codes
+
+    from .search_access import index_access_filter
+
+    case = set(principal.datasets or ())
+    names = {d.id: d.name for d in await datasets.list_for(principal) if d.id in case}
+    working_set = getattr(request.app.state, "working_set", None)
+    tau = (
+        await working_set.get_resolution_threshold(investigation.id)
+        if working_set is not None
+        else None
+    )
+    try:
+        result = await search_service.search_page(
+            body,
+            principal,
+            graph,
+            searcher=index.searcher if index is not None else None,
+            access_filter=index_access_filter(index.scheme, principal)
+            if index is not None
+            else None,
+            phonetic_codes=phonetic_codes,
+            types=index.types if index is not None else (),
+            case_datasets=names,
+            tau=tau,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     await audit.record(
         principal=principal,
         action="search",
-        resolved_query={"query": body.query},
-        result_cardinality=len(result.nodes),
+        resolved_query={
+            "query": body.query,
+            "group": body.group,
+            "filters": body.filters.model_dump(),
+            "page": body.page,
+            "page_size": result.page_size,
+            "source": result.source,
+        },
+        result_cardinality=len(result.results),
     )
     return result
 

@@ -82,7 +82,8 @@ def test_search_returns_hits_from_the_graph_port(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert [n["id"] for n in response.json()["nodes"]] == ["hit-1"]
-    assert client.graph.calls == [("AB123456C", PRINCIPAL, 20)]  # type: ignore[attr-defined]
+    # One past the page, so the route knows whether there is more (ADR-149, reserved).
+    assert client.graph.calls == [("AB123456C", PRINCIPAL, 21)]  # type: ignore[attr-defined]
     assert client.audit.records[-1]["action"] == "search"  # type: ignore[attr-defined]
 
 
