@@ -7,8 +7,8 @@ The list is read from its file in the ingest folder through its connector, admit
 9 (synthetic only when every file is one of the repository's own; a real list only when this
 device's `real_data_exceptions.yaml` names its dataset), applied as a new version, and every
 customer of every case with a screening rule re-screened against the changed entries only, as each
-rule's deployer. What happened is printed in words and recorded, as the route records it. `--list`
-prints the subscriptions.
+rule's deployer. What happened is printed in words and recorded, as the route records it, with the
+list's marking as it stood (ADR-146 Amendment 7). `--list` prints the subscriptions.
 
 A list's schedule is ADR-133 stage (d)'s scheduled trigger: the pipeline scheduler runs Studio
 recipes as their owners and cannot run a list. Until then, an operator may run this from the host's
@@ -62,7 +62,8 @@ async def _run(list_name: str | None) -> int:
         await resources.audit.record(
             principal=operator, action="screening_list_refreshed", investigation_id=None,
             resolved_query={"list_name": list_name, "outcome": update.outcome,
-                            "version": update.version, "alerts": update.alerts},
+                            "version": update.version, "alerts": update.alerts,
+                            **await store.audit_marking(list_name)},
             result_cardinality=update.alerts,
         )  # fmt: skip
         print(update.words)
