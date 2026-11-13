@@ -4,5 +4,5 @@ published	2026-11-11 06:35 UTC
 cut	4b8de6c
 repository	aykr/OspreyFlow
 next	v0.5.1, target Tue 17 Nov on the owner's word: R1 on kind, CI green, the rehearsed upgrade, the CHANGELOG (finish.tsv)
-chain	merged 12 Nov; R1 running on kind since 13 Nov
+chain	merged 12 Nov; R1 passed and merged 13 Nov (16 findings fixed)
 small	main 6c691e8 (13 Nov: banner, key prompt, Home, rail, Help, slim header, refresh), capped at 24 GiB after the demo
