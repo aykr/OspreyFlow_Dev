@@ -1,0 +1,6 @@
+RED: src/App.test.tsx's two new cases against App.tsx at the branch point e1f15e4 (main when this lane branched)
+     × a refresh with a live identity-provider session is signed in silently, without the screen 1072ms
+     × the silent round at load is asked once under React's development double-run, and a failure shows the screen once 139ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+      Tests  2 failed | 43 skipped (45)

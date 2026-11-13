@@ -47,7 +47,9 @@ vi.mock("./auth/userManager", async () => {
     completeSignInFromRedirect: vi.fn(),
     clearRedirectCallbackParams: vi.fn(),
     getUserManager: vi.fn(() => ({ signinRedirect: vi.fn() }) as never),
-    renewSilently: vi.fn(() => new Promise(() => undefined)),
+    // Keycloak's answer to `prompt=none` with no session (`login_required`), as `renewSilently`
+    // returns it: the load's silent round (ADR-050 Amendment 3) ends at the screen.
+    renewSilently: vi.fn(async () => null),
     signInAgainInPlace: vi.fn(),
     signIn: vi.fn(),
     signOut: vi.fn(),
@@ -73,11 +75,15 @@ vi.mock("./map/providers", async () => {
 });
 
 import * as userManager from "./auth/userManager";
+import { forgetThisLoad } from "./auth/signInAtLoad";
 import * as ontologySchema from "./ontology/schema";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  // Each test is a page load of its own: the silent round is asked once per load.
+  forgetThisLoad();
+  vi.mocked(userManager.renewSilently).mockReset().mockImplementation(async () => null);
   window.history.replaceState({}, "", "/");
   sessionStorage.clear();
 });
@@ -90,6 +96,45 @@ describe("06_DECISIONS.md ADR-050 — the sign-in gate", () => {
 
     await screen.findByRole("button", { name: "Sign in" });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // ADR-050 Amendment 3: a refresh keeps the person signed in. The identity provider's session is
+  // live, so the load's one silent round answers with the person: no screen, no full-page sign-in.
+  test("a refresh with a live identity-provider session is signed in silently, without the screen", async () => {
+    vi.mocked(userManager.renewSilently).mockResolvedValue({
+      access_token: "token-from-the-silent-round",
+      expires_at: Math.floor(Date.now() / 1000) + 300,
+      profile: { sub: "analyst-1", preferred_username: "analyst1" },
+    } as never);
+    const asked: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = String(input).split("?")[0]!;
+      asked.push(`${url} ${new Headers(init?.headers).get("Authorization") ?? ""}`);
+      if (url.endsWith("/v1/me")) return Promise.resolve(new Response(JSON.stringify({ id: "analyst-1", clearance: "OFFICIAL", roles: [] })));
+      if (url.endsWith("/v1/me/rights")) return Promise.resolve(new Response(JSON.stringify({ rights: ["investigate"] })));
+      return new Promise<Response>(() => undefined);
+    });
+    sessionStorage.removeItem("ospreyflow.investigationId");
+
+    render(<App />);
+
+    // Home, signed in with the silent round's token: the Conduit is asked as that person.
+    await screen.findByText(/^Signed in as/);
+    expect(asked).toContain("http://localhost:8000/v1/me Bearer token-from-the-silent-round");
+    expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
+    expect(vi.mocked(userManager.signIn)).not.toHaveBeenCalled();
+    expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalledTimes(1);
+  });
+
+  test("the silent round at load is asked once under React's development double-run, and a failure shows the screen once", async () => {
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    await screen.findByRole("button", { name: "Sign in" });
+    expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(userManager.signIn)).not.toHaveBeenCalled();
   });
 
   test("a wrong-audience token refused by the Conduit shows the sign-in screen with the reason", async () => {
