@@ -1041,7 +1041,7 @@
   }
  },
  "places-harness.html open=views (govuk)": {
-  ".context-banner__sep[aria-hidden=\"true\"]:nth-child(4)": {
+  ".context-banner__sep:nth-child(4)": {
    "text": "·",
    "ratio": "unmeasurable",
    "reason": "hidden at every point, under an opaque element over the words or clipped",
