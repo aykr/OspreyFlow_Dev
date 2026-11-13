@@ -36659,3 +36659,101 @@ Models* keeps its host open while `osprey.yaml` declares it"). Amendment 8 other
    render from the enabled set as *Admin › Models* holds it, or have *Admin › Models* say in words, when an engine is
    disabled, that its host stays open until `osprey.yaml` changes. CARRIES carries it for after v0.5.1; it does not
    block v0.5.1.
+
+### ADR-145, Amendment 13 (13 November 2026) — The Glass's mode toggle reads *Graph · Drawing board*, each mode saying what it is in one line
+
+Status: as built by the platform-b lane (step modes) at the owner's ruling of 13 November 2026, on the
+orchestrator's reservation. It amends decision 1's Glass sections (*Case · Boards*) and the banner of decision 2;
+ADR-132 Amendment 8's one GOV.UK row is kept at 1440.
+
+1. **The toggle is *Graph · Drawing board*.** The context row's sections beside "You are in the Glass" were *Case ·
+   Boards*. *Graph* is the case's data and its views (it was *Case*; it still opens the view a person lands on);
+   *Drawing board* is ADR-143's drawing boards (it was *Boards*). Every user-facing *Boards* that meant this toggle
+   is renamed: `places.json`, `App.tsx`, the user guide (1.50, its PDF reprinted alone), `DEMO_GUIDE.md` and
+   `02_GLASS_FRONTEND.md` §2.0a and §2.0b. A board's own name, and the list's heading "Drawing boards in case
+   ‹name›", are left alone. The top bar's view switch also has a *Graph*: the two are told apart by their
+   landmarks (*In the Glass* and the top bar's *View* group), and the tests that meant the view switch now say so.
+   Tests: `App.chrome.test.tsx`, *26 controls stand before the canvas* (the names in order) and *the banner's
+   Drawing board opens the case's drawing boards and is the current section* (red with `Boards` planted,
+   `process/lanes/platform-b/modes/red-first.raw.txt`); `places.test.tsx` (the places' table).
+2. **Each mode says what it is, in one line.** On the graph (any view of the case's data): "Graph: the case's data.
+   Saved views are under Views or Cases." (*Views* is ADR-144 Amendment 3's menu, built in the same step); on a
+   board: "Drawing board: your sketch; it does not change the case's data." (`MODE_NOTE` in
+   `shell/ContextBanner.tsx`). The line is inside the context region and is the region's description
+   (`aria-describedby`), so a screen reader reads it with the region. Tests: `App.chrome.test.tsx` *each mode's
+   one-line note is the context region's, and changes with the mode* (the real App; red with no note, with the
+   note but not the description, and with the graph's note kept on a board).
+3. **As compact as Amendment 8's row allows.** The line is a flex item of the row, after what the case reads and
+   before the cross-link: in the row where it fits, on its own line under the row, still in the region, where it
+   does not. Under GOV.UK it is in GOV.UK's 14 px type, as the phase banner is (Amendment 8 decision 3): at the
+   row's 19 px it does not fit at 1440 and the row becomes two lines. Measured on the places harness with the
+   demonstration's banner:
+
+   | Width | GOV.UK row | OspreyFlow row | Where the line is |
+   | --- | --- | --- | --- |
+   | 1440 | 32 px (was 32) | 41 px (was 41) | in the row |
+   | 1024 | 66 px (was 32) | 81 px (was 41) | under the row, the cross-link beside it (GOV.UK); OspreyFlow's line stays in the row and the cross-link goes under it |
+
+   At 1024 the canvas starts 34 px lower under GOV.UK (187, from 153) and 40 under OspreyFlow (171, from 131).
+   Putting the line after the cross-link would cost about 20 px instead, at the price of drawing it at the row's far
+   end, away from the toggle it explains; that is the owner's call and is not made here. Tests:
+   `keyboard/shell.spec.ts` *govuk 1440: the context row with Graph's note is one row* and *… with Drawing
+   board's note is one row* (at most 40 px, the line on the title's row), *govuk 1024: … at most two lines, the
+   note under the row* (at most 72 px, the line inside the region and under the title's row); Amendment 8's own
+   cases (*the context bar is one row*, *gains at least 100 px*, *ospreyflow dark/light: a case's workspace top is
+   as it was*) unchanged and green. With the note in the row's 19 px type planted, the 1440 cases, *the context bar
+   is one row* (glass) and *gains at least 100 px* fail (66 px, the content at 186).
+4. **Keyboard and axe.** `keyboard/shell.spec.ts` *the banner's toggle is Graph and Drawing board, each chosen by
+   keyboard, its note read with the region* (rule 13, SHELL_ACTIONS `banner-sections-by-keyboard`): each section
+   reached and chosen by Enter, the current one marked, the region's description following the mode. Red with a
+   section answering the pointer alone (`onMouseDown`) and with the description removed. `places-harness.tsx`
+   now draws *Drawing board* as `App.tsx` does (it was drawn as coming). `a11y/every-harness.spec.ts` scans the
+   places harness in the dark, light and GOV.UK looks: with *More views* drawn open over the row, the separator
+   before the line (dark 10.08:1, light 7.60:1 on its own colours) and, under GOV.UK, *Drawing board* and a
+   separator (19.59:1) are under the menu and listed in `contrastFindings.json`, as Amendment 8's were; the
+   target-size entry Amendment 8 decision 7 kept for *Boards (coming)* is no longer reported and is taken out.
+   The registry comment and the axe changes are sent to the orchestrator as diffs
+   (`process/lanes/platform-b/modes/*.diff`).
+
+**Not covered:** the user guide's screenshots still show *Case · Boards*; the architecture guide's table of places
+(§ "The places", `docs/architecture-guide.md`) still says *Case · Boards*, left so that only the user guide's PDF
+is reprinted, as this step was asked (changing it needs that guide's own version and PDF); the marketing site's
+`three-places.html` names *Case · Boards* in two places (its owner's file, not changed here).
+
+### ADR-144, Amendment 3 (13 November 2026) — *Views ▾* by the graph: the case's saved views one click from the canvas
+
+Status: as built by the platform-b lane (step modes) at the owner's ruling of 13 November 2026, on the
+orchestrator's reservation. It adds a second place a case's views are listed to decision 5's Cases drawer, which
+is kept. ADR-144 and Amendments 1 and 2 are otherwise unchanged.
+
+1. **Where.** The canvas toolbar's *View* group opens with **Views ▾**, beside *Clear view*
+   (`views/ViewsMenu.tsx`, handed to `GlassCanvas` by `App.tsx` as `viewsMenu`), on the graph, in the case and in
+   an open view alike. ADR-145 Amendment 13's graph line points to it: "Saved views are under Views or Cases."
+2. **What it lists, and to whom.** The open case's views this reader may see, by the same read as the drawer's
+   *Views in this case* (`listViews`, `GET /v1/investigations/{id}/views`), so the same rights: the Conduit sends
+   a reader only their own views and those shared with the case (decision 3), and the menu draws what it is sent
+   and decides nothing (rule 3). It reads the list each time it opens, so a view saved since is there. Each row
+   is the view's name and its *Private* or *Shared* tag; the view open now is marked current. A refused list is
+   said in words, never shown as an empty case. With none: "No saved views yet. Select nodes and choose Save as a
+   view." Tests: `ViewsMenu.test.tsx` (nothing read until opened, then only what the Conduit sends this reader;
+   read again at each opening; the open view marked; the empty words; a refusal said; Escape closes and gives
+   focus back), each red with its plant (`process/lanes/platform-b/modes/red-first.raw.txt`).
+3. **Opening one is the drawer's own `openLens`.** The view is opened from the Conduit and shown as Amendment 2's
+   read-only lens, with its banner and *Back to the case*. Sharing and deleting stay in the drawer. Tests:
+   `App.views.test.tsx` *a view chosen from Views opens as the read-only lens, as the drawer opens it, and Back
+   puts the case back* (the real App; red with the menu wired to nothing) and *the Cases drawer keeps its list of
+   the case's views* (red with the drawer's list dropped).
+4. **Keyboard and axe.** `keyboard/views.spec.ts` *a view is opened from Views by the graph by keyboard, and Back
+   to the case closes it* (rule 13: the menu opened by Enter, a view reached by Tab and chosen by Enter, the lens
+   open on it, the menu marking it on the next opening, Escape back to the button, *Back to the case* by Enter;
+   VIEW_ACTIONS `open-a-view-from-views-by-the-graph-by-keyboard`, red with a row answering the pointer alone) and
+   *Views by the graph says how to make one when the case has none, by keyboard*. `a11y/every-harness.spec.ts`
+   scans `views-harness.html` with the menu closed (`show=menu`), open (`show=menu&open=1`) and open on a case
+   with none (`show=menu&open=1&empty=1`) in the dark, light and GOV.UK looks. The registry id and the axe states
+   are sent to the orchestrator as diffs (`process/lanes/platform-b/modes/*.diff`).
+5. **The guides follow:** `02_GLASS_FRONTEND.md` §3.1h, the user guide 1.50 (§5.13), its PDF reprinted alone, and
+   `DEMO_GUIDE.md`.
+
+**Not covered:** the canvas toolbar is drawn by `GlassCanvas`, which the App tests stand in for (jsdom has no
+WebGL); the menu's place in the real toolbar is held by the code and the keyboard harness's toolbar, not by a test
+on the real canvas.
