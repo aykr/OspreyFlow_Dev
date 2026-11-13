@@ -116,5 +116,5 @@ case	v052-results	Four places, the Glass and Admin	Client install
 platform	v052-measure	Housekeeping	Client install
 docs	v052-sweep	Housekeeping	Client install
 admin	v052-heartbeat	Housekeeping	Housekeeping
-case	v052-r1-driver	Housekeeping	Client install
+case-b	v052-r1-driver	Housekeeping	Client install
 docs	v052-sweep-draft	Housekeeping	Client install
