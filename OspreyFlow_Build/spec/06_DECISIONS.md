@@ -37033,14 +37033,23 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    worker process on every shape that has an OpenSearch (ROUTE_052 requirement f), and does nothing where none is
    configured.
    - **Each `_bulk` request is at most 10 MiB** (`indexer.MAX_BULK_BYTES`, the smallest `http.max_content_length`
-     of an Amazon OpenSearch instance), counted in the bytes the client sends, written by its own serialiser; the
-     indexer and the rebuild both send through `write_actions`, which cuts a larger batch into several requests and
-     never parts an action from its document. One action over the cap on its own is raised (`BulkTooLarge`, naming
-     the node) and nothing of the batch is sent. A 413 from OpenSearch is raised, never swallowed: the batch stays in
-     its outbox, the rebuild fails and its alias does not move. `tests/services/search_index/test_bulk_cap.py` holds
-     each sentence against a stand-in that refuses an oversized body with OpenSearch's 413; its five plants (no
-     split, no check of one action alone, characters counted for bytes, the 413 swallowed, the cap at 20 MiB) are
-     each red (`process/lanes/rules/v052-index/bulk-cap-plants.txt`).
+     of an Amazon OpenSearch instance), counted in the bytes the client sends (its own serialiser, encoded with
+     `surrogatepass` as its transport does); the indexer and the rebuild both send through `write_actions`, which
+     cuts a larger batch into several requests and never parts an action from its document. A 413 for a request, a
+     429 or a 5xx for an item, is raised, never swallowed: the batch stays in its outbox and is sent again, and a
+     rebuild fails (decision 4). Held by `tests/services/search_index/test_bulk_cap.py`, against `FakeOpenSearch`,
+     which refuses an oversized body with OpenSearch's 413.
+   - **A document OpenSearch can never take is set aside, never left to hold the outbox.** One action over the cap on
+     its own, or an item refused with a 4xx other than a delete's 404, a 408, a 409 or a 429 (a strict mapping's
+     unknown field, a term over Lucene's 32,766 bytes), is recorded in the deployment's refused index
+     (`<alias>-refused`, outside the alias, so no search reads it), with its reason, and an error naming it is
+     logged; the rest of the batch is written and the outbox cleared. The drift check reports it (decision 5); a
+     rebuild records afresh what it refuses, and keeps only its own records once its alias has moved. A keyword
+     field indexes at most `KEYWORD_MAX_CHARS` (8,191) characters (`ignore_above`, under Lucene's term at four bytes
+     a character), so a long name is never refused for its length. Held by `test_refused.py`, against
+     `FakeOpenSearch`, which refuses each of these as OpenSearch does.
+   - **The plants** for each sentence of decisions 2, 3, 4, 5 and 7 are code in `process/lanes/rules/v052-index/plants.py`
+     and each is red in its `PLANTS_RECORD.txt`.
 3. **One document per node, keyed by the node's id.** Never one per file (a Document's `object_ref` is
    content-addressed, so two Document nodes with different handling can share one) and never one per merged entity.
    **No cluster or `SAME_AS` field:** a cluster id would tell a reader that hidden members exist. Merged entities are
@@ -37076,10 +37085,10 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    see. **Strict ranking (the owner's ruling, 13 November):** no score depends on how rare a word is, and there is
    no fuzzy expansion; a name is matched by trigrams, edge n-grams and the Conduit's own Double Metaphone key (a
    keyword computed before indexing), with no phonetic, fuzzy, synonym or stemming analysis inside OpenSearch.
-   `tests/services/search_index/test_mapping_strict_ranking.py` holds it; its four plants (BM25 on a name's words
-   and on the text, a phonetic filter added, the trigrams removed) are each red
-   (`process/lanes/rules/v052-index/strict-ranking-plants.txt`). Groups counting records is the query side's
-   (ADR-149). Only what the Glass already receives in a `Node` response is searchable: the document is built through the
+   `tests/services/search_index/test_mapping_strict_ranking.py` holds it, by an allow-list of the analysers,
+   tokenizers and filters the mapping may name. That a text never committed is never queued, and one committed always
+   is: `test_findings_inferred.py`'s `test_a_documents_text_and_its_outbox_row_are_one_transaction`, through the real
+   `store_document_text`. Groups counting records is the query side's (ADR-149). Only what the Glass already receives in a `Node` response is searchable: the document is built through the
    same serialisation, with `withhold_sources` applied as for a reader of the node's own dataset, so no source-system
    identifier is indexed (rule 7), and a `gazetteer-*` node carries its `name` only (ADR-147 Amendments 1 and 3).
    **The index is named per deployment:** its alias comes from settings (`search.index_alias`, default
@@ -37090,11 +37099,28 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    and the search service use onto it and deletes the old one, so a reader never sees a half-built index. While it
    fills, the new index holds a second alias (`<alias>-building`) and the indexer writes each change to both, so a
    node changed after the rebuild read it does not stay at its older state; the outboxes are left alone and their
-   rows re-applied after the move, idempotently. `ospreyflow restore` runs it after a restore
-   (ADR-114 Amendment 35 point 2), with a test that restores a set and finds the index again.
+   rows re-applied after the move, idempotently. `ospreyflow restore` runs it as its last step after a restore
+   (ADR-114 Amendment 35 point 2) on a compose shape whose compose file runs an `opensearch` service; a compose shape
+   without one has no index, and cloud-platform rebuilds through its own `ospreyflow-search-rebuild` Job (platform's
+   runbook), not through this step. Held: `test_the_restore_rebuilds_after_every_store_is_back` (the call is the
+   restore's last step, plant V27) and `test_a_restore_rebuilds_the_index_only_where_there_is_one`; that the rebuild
+   finds every node of a graph again, `test_feed_live.py`'s
+   `test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them`. A restore run end to end and then
+   searched is not run by this step: CARRIES' row, for platform-b's restore exit test.
+   - **A failed rebuild leaves nothing behind:** its index is deleted, and the building alias with it, and the alias
+     stays where it was. A rebuild first deletes any index a crashed one left under `<alias>-building` (otherwise
+     every change goes to that stray index too, and a second index under the alias refuses every write). Held by
+     `test_refused.py`'s `test_a_rebuild_that_fails_leaves_nothing_and_keeps_the_refusal_record` and
+     `test_a_rebuild_removes_the_index_a_crashed_rebuild_left`, and `test_bulk_cap.py`'s
+     `test_a_413_in_the_rebuild_is_raised_and_leaves_nothing_behind`.
 5. **A drift check:** `python -m scripts.search_index_drift`. It compares the graph's live nodes with the index and
    reports, by id: missing from the index, in the index but not live in the graph, and stale (a per-node fingerprint
-   of the indexed fields differs). It exits non-zero on any difference, and prints counts and the first ids of each.
+   of the indexed fields differs), and refused (set aside, decision 2, with its reason; reported instead of missing).
+   It exits non-zero on any difference, and prints counts and the first ids of each. When either outbox still holds
+   rows it says so: a change on its way shows as drift until the indexer has sent it
+   (`test_the_drift_check_says_the_outboxes_still_hold_changes`). It holds every indexed id and fingerprint and
+   every expected id in memory, some 150 bytes a document (about 4.5 GB at thirty million): a streaming check is
+   CARRIES' row, before it is run on step B's load.
 6. **Red first, each event type:** for each of load, merge, new version, promotion and deletion, a live case writes
    through the adapter's real method and finds the index changed (and a plant that removes that method's outbox
    write turns it red); the rebuild and the drift check each have a case that plants a difference and finds it.
@@ -37107,14 +37133,13 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    `none` or unset sends unsigned, as Lite and Small do, and as a platform's signing proxy would need. A test shows
    the `sigv4` path red against a stand-in domain that refuses an unsigned or wrongly signed request.
    - **The CA it trusts** is the bundle a deployment names in `SSL_CERT_FILE`, `AWS_CA_BUNDLE` or
-     `REQUESTS_CA_BUNDLE`, the first set winning (OpenSSL's, then the AWS SDK's, then `requests`'s), so an OpenSearch
-     behind a private CA or a TLS-inspecting proxy is reached as the rest of the pod reaches AWS; opensearch-py on its
-     own reads only `SSL_CERT_FILE`. A variable naming a file that is not there is refused in words, never replaced
-     by the public roots; with none set, the public roots. `tests/services/search_index/test_client_ca.py` holds each
-     sentence against a TLS server on 127.0.0.1 signed by a throwaway CA, which refuses the client that names no
-     bundle; red first for `AWS_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`, the order and the absent file
-     (`process/lanes/rules/v052-index/client-ca-red-first.txt`), and its three plants each red
-     (`client-ca-plants.txt`).
+     `REQUESTS_CA_BUNDLE`, the first set winning (OpenSSL's, then the AWS SDK's, then `requests`'s), trusted beside
+     the system's own roots (opensearch-py's TLS context loads both), so an OpenSearch behind a private CA or a
+     TLS-inspecting proxy is reached as the rest of the pod reaches AWS; opensearch-py on its own reads only
+     `SSL_CERT_FILE`. A variable naming a file that is not there is refused in words, never quietly dropped.
+     `tests/services/search_index/test_client_ca.py` holds each sentence against a TLS server on 127.0.0.1 signed by
+     a throwaway CA, which refuses the client that names no bundle; red first for `AWS_CA_BUNDLE`,
+     `REQUESTS_CA_BUNDLE`, the order and the absent file (`process/lanes/rules/v052-index/client-ca-red-first.txt`).
 
 ### Consequences
 
