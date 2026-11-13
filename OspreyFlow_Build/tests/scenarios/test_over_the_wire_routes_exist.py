@@ -39,8 +39,10 @@ def _path(node: ast.expr) -> str | None:
 
 
 def _client_calls(source: str) -> list[ast.Call]:
+    """Every call on a client that names a path: its verbs, and `request`/`stream`, whose path is not read here
+    and so is always named."""
     return [n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-            and n.func.attr in VERBS and ast.unparse(n.func.value) in CLIENTS]
+            and n.func.attr in VERBS | {"request", "stream"} and ast.unparse(n.func.value) in CLIENTS]
 
 
 def unreadable(source: str) -> set[str]:
@@ -49,19 +51,38 @@ def unreadable(source: str) -> set[str]:
     that are not the Conduit's; and every WebSocket URL not of the one shape `streams` reads."""
     found = set()
     for node in _client_calls(source):
-        path = _path(node.args[0]) if node.args else None
+        path = _path(node.args[0]) if node.args and node.func.attr in VERBS else None
         if path is None or not path.startswith("/v1/"):
             text = ast.unparse(node)
             if not any(text.startswith(known) for known in NOT_THE_CONDUIT):
                 found.add(f"line {node.lineno}: {text[:120]}")
     tree = ast.parse(source)
     prose = _prose(tree)
+    # A WebSocket opened with a URL the reading cannot read (a concatenation, a name given anything but a string
+    # it reads) is named; a name only ever given strings is read through them.
+    given: dict[str, list[ast.expr]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    given.setdefault(target.id, []).append(node.value)
+
+    def read_url(arg: ast.expr) -> bool:
+        if isinstance(arg, (ast.JoinedStr, ast.Constant)):
+            return True
+        values = given.get(arg.id, []) if isinstance(arg, ast.Name) else []
+        return bool(values) and all(isinstance(v, (ast.JoinedStr, ast.Constant)) for v in values)
+
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and ast.unparse(node.func).endswith("connect") and node.args
+                and not read_url(node.args[0])):
+            found.add(f"line {node.lineno}: a stream opened at a URL not read: {ast.unparse(node)[:120]}")
     for node in ast.walk(tree):
         if isinstance(node, (ast.JoinedStr, ast.Constant)) and id(node) not in prose:
             text = _template(node)
             if text is None or re.fullmatch(r"\{\}://\{\}(/v1/.*)", text):
                 continue
-            elif "://" in text and "/v1/" in text:
+            elif re.match(r"(\{\}|wss?)://", text):
                 found.add(f"line {node.lineno}: a stream URL of another shape: {text[:120]}")
     return found
 
@@ -171,11 +192,16 @@ def test_a_client_call_whose_path_cannot_be_read_is_named() -> None:
     source = ('def f(analyst, browser, d, path):\n    analyst.get(path)\n    analyst.post(url="/v1/x")\n'
               '    analyst.get(_paths.alerts(case))\n    d.get(path)\n    browser.get(authorize)\n'
               '    analyst.post(f"{case_prefix}/hotlists")\n    analyst.get("/healthz")\n'
-              '    u = f"ws://{host}/v1/investigations/{i}/stream"\n')
+              '    u = f"ws://{host}/v1/investigations/{i}/stream"\n    w = f"{scheme}://{host}/ws/x"\n'
+              '    websockets.connect(origin + "/v1/x/stream")\n    analyst.request("GET", "/v1/x")\n'
+              '    ok = f"{scheme}://{h}/v1/investigations/{i}/stream"\n    websockets.connect(ok)\n')
     assert unreadable(source) == {"line 2: analyst.get(path)", "line 3: analyst.post(url='/v1/x')",
                                   "line 4: analyst.get(_paths.alerts(case))", "line 7: analyst.post(f'{case_prefix}/hotlists')",
                                   "line 8: analyst.get('/healthz')",
-                                  "line 9: a stream URL of another shape: ws://{}/v1/investigations/{}/stream"}
+                                  "line 9: a stream URL of another shape: ws://{}/v1/investigations/{}/stream",
+                                  "line 10: a stream URL of another shape: {}://{}/ws/x",
+                                  "line 11: a stream opened at a URL not read: websockets.connect(origin + '/v1/x/stream')",
+                                  "line 12: analyst.request('GET', '/v1/x')"}
 
 
 def test_the_stream_the_module_opens_is_read_and_served() -> None:
