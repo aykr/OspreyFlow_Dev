@@ -555,3 +555,42 @@ def test_the_install_checks_the_certificate_secret_the_settings_name() -> None:
     assert "ospreyflow-poc-certificate" in check.splitlines()[0]
     unnamed = _artefacts(_config())["INSTALL.md"]
     assert "certificate" not in unnamed[unnamed.index("## 2.") : unnamed.index("## 3.")]
+
+
+# ---- the values, pinned (install step 4) ------------------------------------------------------
+
+_OURS = "ghcr.io/ospreyflow/"
+_REGISTRY = "123456789012.dkr.ecr.eu-west-2.amazonaws.com/"
+
+
+def _registry_only(ref: str) -> str | None:
+    """As a release's build machine finds them at install step 4: ours are in the namespace's registry
+    (step 3 pushed them) and not at ghcr.io for an unpublished head, nor where ghcr.io is out of reach."""
+    return None if ref.startswith(_OURS) else _resolver(ref)
+
+
+def test_the_pinned_render_needs_ours_only_in_the_namespace_s_registry() -> None:
+    """R1 on kind, install block 8: the pinned render refused ghcr.io/ospreyflow/*'s digests, which it
+    asked for before taking each of ours from the registry's copy instead. Every test's resolver
+    answered any reference, so none could see it (rule 15: the fake refuses what the real one does)."""
+    artefacts = render(_config(), resolver=_registry_only).artefacts
+    values = yaml.safe_load(artefacts["values.yaml"])
+    images = {w["name"]: w["image"] for w in values["workloads"]}
+    lock = {e["service"]: e for e in yaml.safe_load(artefacts["versions.lock"])["images"]}
+    for name in ("api", "workspace", "worker"):
+        reference, digest = images[name].split("@")
+        assert reference.startswith(_REGISTRY + "ospreyflow/"), images[name]
+        assert digest == _resolver(reference), images[name]
+        # The lock names the image whose digest it records: the registry's copy, as the values pin.
+        assert lock[name]["repository"] == reference.rsplit(":", 1)[0], lock[name]
+        assert lock[name]["digest"] == digest
+
+
+def test_the_pinned_render_before_the_push_names_the_registry_s_copies() -> None:
+    """Before step 3's push the registry holds none of ours: refused, naming the copies it lacks."""
+    from harness.render import UnpinnedImagesError
+
+    with pytest.raises(UnpinnedImagesError) as refused:
+        render(_config(), resolver=lambda ref: None if "/ospreyflow/" in ref else _resolver(ref))
+    assert _REGISTRY + "ospreyflow/api:" in str(refused.value)
+    assert _OURS not in str(refused.value)

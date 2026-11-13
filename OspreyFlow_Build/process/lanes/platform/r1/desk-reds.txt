@@ -40,3 +40,14 @@ FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_in
 >       assert ".venv/bin/ospreyflow" not in text
 E       AssertionError: assert '.venv/bin/ospreyflow' not in '# Install: ...report it.\n'
 1 failed, 32 deselected in 0.52s
+
+# 13 November 2026, R1 on kind, install block 8 (step 4, the values pinned) stopped: UnpinnedImagesError for
+# ghcr.io/ospreyflow/{workspace,api,ner,laurium,worker}:<head>. The cloud-platform render asked the release's
+# own registry for ours before taking each from the namespace registry's copy; every test's resolver answered
+# any reference. Red at 614ec43 with a resolver refusing ghcr.io/ospreyflow/* (as an unpublished head does):
+E           harness.render.UnpinnedImagesError: refusing to write versions.lock without a digest for: ghcr.io/ospreyflow/workspace:554bf84e..., ghcr.io/ospreyflow/api:..., ghcr.io/ospreyflow/ner:...
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_pinned_render_needs_ours_only_in_the_namespace_s_registry
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_pinned_render_before_the_push_names_the_registry_s_copies
+2 failed, 33 deselected in 0.84s
+# The lock's half alone (the repository rewrite planted out, the pin kept):
+E           assert 'ghcr.io/ospreyflow/api' == '123456789012...spreyflow/api'
