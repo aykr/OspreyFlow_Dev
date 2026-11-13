@@ -611,3 +611,14 @@ def test_the_decommission_removes_a_restore_s_jobs_before_the_claims(runbooks: d
     assert "--cascade=foreground" in line and "--wait" in line  # their pods gone, not only the Jobs
     step3 = text[text.index("## 3. The workloads") : text.index("## 4. The claims")]
     assert "pvc-protection" in step3 or "keeps a claim" in step3
+
+
+def test_every_workload_that_serves_a_port_says_when_it_is_ready(poc: dict[str, Any]) -> None:
+    """R1 on kind, finding 14: the Conduit and the Glass had no readiness probe (no compose healthcheck to
+    translate), so a pod was ready the moment its container started: every `rollout status` and the
+    install's `helm --wait` passed before either listened, and after a restore the door answered 503."""
+    unready = [w["name"] for w in poc["workloads"] if w.get("ports") and not w.get("probe")]
+    assert unready == []
+    by_name = _by_name(poc)
+    assert "127.0.0.1:8000/healthz" in " ".join(by_name["api"]["probe"]["exec"])
+    assert "127.0.0.1:8080/" in " ".join(by_name["workspace"]["probe"]["exec"])

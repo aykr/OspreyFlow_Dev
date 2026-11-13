@@ -68,3 +68,6 @@ FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_de
 # R1 on kind, finding 13: the restore's step 4 waited for ArcadeDB alone; the restored check right after it met a 503 at the door.
 # Red before the rollout wait:
 E       ValueError: substring not found   (test_a_restore_ends_when_what_it_started_is_ready)
+
+# R1 on kind, finding 14: the Conduit and the Glass had no readiness probe; after the restore's rollout waits the door still answered 503 (8 s), the new api pod Ready at 1 s old. Red:
+E       AssertionError: assert ['workspace', 'api'] == []   (test_every_workload_that_serves_a_port_says_when_it_is_ready)
