@@ -13745,7 +13745,8 @@ def _list_schedule_executor(application: FastAPI) -> ListRefreshExecutor:
             principal=owner, action="screening_list_refreshed", investigation_id=None,
             resolved_query={"list_name": list_name, "outcome": update.outcome,
                             "version": update.version, "alerts": update.alerts,
-                            "trigger": "schedule", "slot": slot.isoformat()},
+                            "trigger": "schedule", "slot": slot.isoformat(),
+                            **await state.screening_lists.audit_marking(list_name)},
             result_cardinality=update.alerts,
         )  # fmt: skip
         return update
@@ -17549,7 +17550,9 @@ async def subscribe_screening_list(
         )  # fmt: skip
     status_ = await screening_lists.subscribe(body, principal.id, synthetic=False)
     await audit.record(principal=principal, action="screening_list_subscribed",
-                       investigation_id=None, resolved_query=body.model_dump(mode="json"),
+                       investigation_id=None,
+                       resolved_query={**body.model_dump(mode="json"),
+                                       **await screening_lists.audit_marking(body.list_name)},
                        result_cardinality=1)  # fmt: skip
     return status_
 
@@ -17592,7 +17595,8 @@ async def set_screening_list_schedule(
     await audit.record(principal=principal, action="screening_list_schedule_set",
                        investigation_id=None,
                        resolved_query={"list_name": list_name, "schedule": (
-                           body.schedule.model_dump() if body.schedule else None)},
+                           body.schedule.model_dump() if body.schedule else None),
+                           **await screening_lists.audit_marking(list_name)},
                        result_cardinality=1)  # fmt: skip
     return updated
 
@@ -17651,7 +17655,8 @@ async def refresh_screening_list_route(
     await audit.record(principal=principal, action="screening_list_refreshed",
                        investigation_id=None,
                        resolved_query={"list_name": list_name, "outcome": update.outcome,
-                                       "version": update.version, "alerts": update.alerts},
+                                       "version": update.version, "alerts": update.alerts,
+                                       **await screening_lists.audit_marking(list_name)},
                        result_cardinality=update.alerts)  # fmt: skip
     own = await screening_lists.update_for(
         update.id, org_unit=principal.org_unit, cleared=cleared

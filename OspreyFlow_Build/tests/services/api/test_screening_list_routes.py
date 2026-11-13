@@ -517,3 +517,25 @@ def test_a_reader_cleared_for_a_list_refreshes_and_schedules_it(world: tuple[_Wo
     assert refreshed.status_code == 200 and refreshed.json()["list_name"] == SECRET_LIST, refreshed.text
     scheduled = client.put(f"/v1/admin/screening-lists/{SECRET_LIST}/schedule", json={"schedule": None})
     assert scheduled.status_code == 200, scheduled.text
+
+
+def test_each_audit_entry_about_a_list_records_the_lists_marking(world: tuple[_World, TestClient]) -> None:
+    """Admin › Audit admits a reader to an entry naming a list by the list's marking now and as the
+    entry recorded it (`audit_section._lists_clause`). The subscription, schedule and refresh
+    entries recorded none, so with the list's kept marking gone such an entry would have read as
+    OFFICIAL, P to everyone (CARRIES, the orchestrator's verification of lists at 5c862eb): each
+    now records it, the SECRET list's SECRET and the unmarked list's OFFICIAL, P. Red with the
+    entries recording no marking."""
+    w, client = world
+    _with_a_secret_list(w, client)
+    w.as_ = SECRET_ADMIN
+    client.post(f"/v1/admin/screening-lists/{SECRET_LIST}/refresh")
+    client.put(f"/v1/admin/screening-lists/{SECRET_LIST}/schedule", json={"schedule": {"every": "daily", "hour": 5}})
+    client.post("/v1/admin/screening-lists", json={**LIST, "location": "lists/other.json"})
+    marked = {(r["action"], r["resolved_query"]["list_name"]): (  # type: ignore[index]
+        r["resolved_query"].get("list_classification"), r["resolved_query"].get("list_handling_code"))  # type: ignore[union-attr]
+        for r in w.audit.records if str(r["action"]).startswith("screening_list_")}  # fmt: skip
+    assert marked[("screening_list_refreshed", SECRET_LIST)] == ("SECRET", "P")
+    assert marked[("screening_list_schedule_set", SECRET_LIST)] == ("SECRET", "P")
+    assert marked[("screening_list_subscribed", "Synthetic list")] == ("OFFICIAL", "P")
+    assert marked[("screening_list_refreshed", "Synthetic list")] == ("OFFICIAL", "P")
