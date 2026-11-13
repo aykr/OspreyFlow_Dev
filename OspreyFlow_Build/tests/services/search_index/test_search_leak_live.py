@@ -108,6 +108,23 @@ VISIBLE_LOOKING = [
     _node("d-memo", "Document", title="Harbour memo", sent_at="2026-01-05T09:00:00Z"),
     _node("d-report", "Document", title="Quarterly report", sent_at="2026-02-10T09:00:00Z"),
     _node("d-note", "Document", title="Kestrel note", sent_at="2026-03-01T09:00:00Z"),
+    # PUBLIC, for the reader cleared to PUBLIC alone, in unit-2, reading both datasets.
+    _node("p-smythe-public", "Person", cls="PUBLIC", family_name="Smythe", given_names="Jon"),
+    _node(
+        "o-kestrel-public", "Organisation", cls="PUBLIC", datasets=["ds-2"], name="Kestrel Shipping"
+    ),
+    _node(
+        "p-smyth-r-unit2",
+        "Person",
+        cls="PUBLIC",
+        code="R",
+        owner="unit-2",
+        origin="unit-2",
+        family_name="Smyth",
+    ),
+    _node(
+        "d-public", "Document", cls="PUBLIC", title="Public notice", sent_at="2026-01-20T09:00:00Z"
+    ),
     # Visible to a reader who may receive R, in the owning unit: hidden from one who may not.
     _node("p-smith-r", "Person", code="R", family_name="Smith", given_names="John"),
 ]
@@ -173,6 +190,7 @@ TEXTS = {
     "d-report": ("the invoice and the invoice and the invoice", "unit-1"),
     # The Document is visible; its text is held by another unit.
     "d-note": ("Kestrel invoice for the harbour", "unit-2"),
+    "d-public": ("Kestrel invoice notice for the harbour", "unit-2"),
     **{f"d-secret-{i}": ("kestrel kestrel briefing", "unit-1") for i in range(40)},
 }
 LINKS = [
@@ -279,6 +297,22 @@ async def _answers(
     searcher = s.opensearch_searcher(client, index)
     out: list[Any] = []
     for request in SEARCHES:
+        if not set(request.filters.datasets or ()) <= set(principal.datasets or ()):
+            # A filter on a dataset outside the case is refused (422) before the index is asked.
+            with pytest.raises(ValueError, match="not a dataset of this case"):
+                await s.search_page(
+                    request,
+                    principal,
+                    _Unfiltered(),  # type: ignore[arg-type]
+                    searcher=searcher,
+                    access_filter=access,
+                    phonetic_codes=phonetic_codes,
+                    types=TYPES,
+                    case_datasets={},
+                    tau=TAU,
+                )
+            out.append((request.model_dump(), "refused"))
+            continue
         response = await s.search_page(
             request,
             principal,
