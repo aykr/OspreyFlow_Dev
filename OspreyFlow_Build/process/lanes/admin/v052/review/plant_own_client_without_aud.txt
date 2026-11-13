@@ -1,0 +1,6 @@
+# plant: aud (packages/principal_auth/__init__.py)
+# replaced:     own = {mapping.client_id, mapping.api_client_id, claims.get("aud")}
+# with:     own = {mapping.client_id, mapping.api_client_id}
+# (the resolver's duplicate oidc_audience check removed first: a verified token's aud is the configured audience)
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[this-api-itself]
+1 failed, 12 passed in 7.65s
