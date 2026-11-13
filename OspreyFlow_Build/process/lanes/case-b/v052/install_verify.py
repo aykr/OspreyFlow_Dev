@@ -1,29 +1,31 @@
 """Step 6's verifier (ROUTE_052 step 6, process/lanes/case-b/BRIEF_v052.md): a live poc deployment held to
-the poc manifest (`harness/cloud_platform/poc_manifest.yaml`), entry by entry.
+the poc manifest (`harness/cloud_platform/poc_manifest.yaml`), entry by entry, after the upgrade.
 
 **Every listed item becomes a check, or the run stops before anything runs** ("listed but not exercised"):
-a section, an entry, a key inside an entry, a database with no known reader, a job step nobody named, or an
-entry still marked `pending` (a step that has not rendered it: a dry run may pass `--allow-pending`, the
-install test may not). What each check asks of the deployment:
+a section, an entry, a key anywhere inside one, a database with no known reader, a job step nobody named, a
+bucket nobody writes, or an entry still marked `pending` (a step that has not rendered it: a dry run may pass
+`--allow-pending`, the install test may not). What each check asks of the deployment:
 
 | Manifest | Check |
 |---|---|
-| workloads | the Deployment or StatefulSet exists, of its kind; desired and ready replicas both its count; the running image, requests and limits its entry's; a readiness probe exactly when it lists one |
-| init_containers | in its workload's pod, from its image at its sizes, exited 0 |
-| jobs | a CronJob at its schedule (or held suspended, when its schedule says so), image and sizes, with a run that succeeded (a held one started by the driver: `kubectl create job --from=cronjob/…`); a Job template (`<set>`) with a run that succeeded, every listed step exited 0, `restore-graph` from its image at its sizes |
+| version | every workload runs the candidate's own image reference (the render's, tag and digest), not v0.5.1's |
+| shape | the deployment's configuration is of this shape |
+| workloads | the Deployment or StatefulSet exists, of its kind; the rollout finished (observed generation current, updated and ready replicas both its count); the template's image, requests and limits its entry's; a readiness probe exactly when it lists one |
+| init_containers | in a running pod of its workload, from its image at its sizes, exited 0 |
+| jobs | a CronJob at its schedule (or held suspended, when its schedule says so), image and sizes, with a run of its own command at the candidate's image that succeeded (a held one started by the driver: `kubectl create job --from=cronjob/…`); a Job template (`<set>`) with a run that succeeded, every listed step exited 0, `restore-graph` from its image at its sizes |
 | images | pushed: the registry answers the render's reference for it |
 | managed.rds | it answers, its major version and `max_connections` the entry's |
-| managed.rds.databases | a session on it from a pod of its reader (DATABASE_READERS) |
-| managed.elasticache, .opensearch | a connection from a pod of its reader (STORE_READERS) |
+| managed.rds.databases | a session on it from a running pod of its reader (DATABASE_READERS) |
+| managed.elasticache, .opensearch | a connection from a running pod of its reader (STORE_READERS) |
 | managed.s3.buckets | holds at least one object, written by the deployment |
-| entra | the stand-in tenant granted a token to the registration (the API: a token for its audience) |
-| egress | a pod of the namespace reaches each host on 443, **and is refused an unlisted one** |
-| (all of it) | the deployment's own render agrees with the manifest (`manifest.differences`): what only AWS can show (an instance class, node type or engine string; built_from and upstream) is held there, and said so |
+| entra | the stand-in tenant granted a token to the registration (the API: a token for its audience). Its `redirect`, `grants`, `exposes` and `app_roles` are exercised by that use alone: the signing stand-in refuses an unregistered redirect and an ungranted scope or role. Nothing compares them as words |
+| egress | a pod of the namespace reaches each host on 443, **and is blocked from an address no entry lists**; a probe that cannot answer (the exec failed, a name did not resolve) fails the check, never passes it |
+| (all of it) | the deployment's own render agrees with the manifest (`manifest.differences`): what only AWS can show (an instance class, node type or engine string; built_from and upstream) is held there |
 
 `verify(manifest, deployment)` runs the plan against anything with `Deployment`'s methods; `KindDeployment`
 reads R1's kind cluster (r1_kind.py, the platform lane's, imported and not changed). Run from OspreyFlow_Core:
 
-    .venv/bin/python ../OspreyFlow_Build/process/lanes/case-b/v052/install_verify.py plan [--allow-pending]
+    PYTHONPATH=.:packages:cli .venv/bin/python ../OspreyFlow_Build/process/lanes/case-b/v052/install_verify.py plan [--allow-pending]
     bash ../OspreyFlow_Build/process/lanes/platform/gates/r1_kind.sh py \\
         ../../case-b/v052/install_verify.py verify [--allow-pending]   # on the kind cluster, under a lease
 """
@@ -44,11 +46,10 @@ from typing import Any, Protocol
 # ---- what the verifier knows how to check ---------------------------------------------------------
 
 SECTIONS = {"version", "shape", "workloads", "init_containers", "jobs", "images", "managed", "entra", "egress"}
-#: Whole-manifest words, held by the render check (the render is of this version and shape).
-WORDS = {"version", "shape"}
 WORKLOAD_KEYS = {"kind", "count", "image", "requests", "limits", "readiness", "pending"}
 INIT_KEYS = {"image", "requests", "limits", "pending"}
 JOB_KEYS = {"kind", "schedule", "when", "image", "requests", "limits", "steps", "restore-graph", "pending"}
+RESTORE_GRAPH_KEYS = {"image", "requests", "limits"}
 #: The recovery runbook's restore steps (cloud_platform_backups), each a container of the restore Job.
 JOB_STEPS = {"verify", "fetch-graph", "writers", "restore-graph", "restore-analytics", "restore-claims"}
 IMAGE_KEYS = {"ours", "built_from", "upstream", "pending"}
@@ -60,8 +61,10 @@ MANAGED_KEYS = {
     # and its value held by the render check, as the instance type is.
     "opensearch": {"engine", "instance_type", "data_nodes", "signing", "pending"},
 }
+DATABASE_KEYS = {"pending"}
 ENTRA_KEYS = {"kind", "redirect", "grants", "exposes", "app_roles", "pending"}
 ENTRA_REGISTRATIONS = {"glass", "api", "superset", "report-sync"}
+EGRESS_KEYS = {"pending"}  # every host on 443: a port key would be unplaced
 #: Which workload reads each database: a session from one of its pods is what "reached" means.
 DATABASE_READERS: dict[str, tuple[str, ...]] = {
     "ospreyflow": ("api", "worker"),
@@ -69,8 +72,10 @@ DATABASE_READERS: dict[str, tuple[str, ...]] = {
     "superset": ("superset",),
 }
 STORE_READERS: dict[str, tuple[str, ...]] = {"elasticache": ("api", "worker"), "opensearch": ("api",)}
-#: A host no poc namespace is allowed (documentation's own domain, RFC 2606).
-UNLISTED_HOST = "example.com"
+#: The buckets the services write (harness.cloud_platform.terraform.BUCKETS and the backups' own).
+KNOWN_BUCKETS = {"media", "staging", "site-images", "tile-cache", "backups"}
+#: An address no poc namespace may reach: an address, so the probe asks the policy and not DNS.
+UNLISTED_HOST = "1.1.1.1"
 UNLISTED_HOST_CHECK = f"egress (unlisted: {UNLISTED_HOST})"
 RENDER_CHECK = "render (agrees with the manifest)"
 
@@ -94,6 +99,7 @@ class Deployment(Protocol):
     def bucket_objects(self, bucket: str) -> int: ...
     def entra_used(self, registration: str) -> bool: ...
     def connects(self, host: str) -> bool: ...
+    def shape(self) -> str: ...
     def render_differences(self) -> list[str]: ...
 
 
@@ -121,7 +127,7 @@ def _pending(entry: Any) -> str | None:
 
 def entries(m: dict[str, Any], *, pending: bool = True) -> list[str]:
     """Every checkable entry of the manifest, as `section.name` (managed ones one level deeper)."""
-    found: list[tuple[str, Any]] = []
+    found: list[tuple[str, Any]] = [(k, None) for k in ("version", "shape") if k in m]
     for section in ("workloads", "init_containers", "jobs", "images", "entra", "egress"):
         found += [(f"{section}.{n}", e) for n, e in (m.get(section) or {}).items()]
     for service, settings in (m.get("managed") or {}).items():
@@ -178,11 +184,33 @@ def _workload(name: str, w: dict[str, Any]) -> Callable[[Deployment], tuple[bool
         problems = _compare(w, got, ("kind", "image", "requests", "limits"))
         if got.get("desired") != w["count"]:
             problems.append(f"desired {got.get('desired')}, listed {w['count']}")
+        if not got.get("settled"):
+            problems.append("not yet rolled out (the controller has not observed the latest generation)")
+        if got.get("updated") != w["count"]:
+            problems.append(f"updated {got.get('updated')} of {w['count']}")
         if got.get("ready") != w["count"]:
             problems.append(f"ready {got.get('ready')} of {w['count']}")
         if bool(got.get("probe")) != (w["readiness"] != "none"):
             problems.append(f"readiness probe {'present' if got.get('probe') else 'absent'}, listed {w['readiness']!r}")
-        return _verdict(problems, f"{got['ready']}/{w['count']} ready")
+        return _verdict(problems, f"{got['ready']}/{w['count']} ready, rolled out")
+    return run
+
+
+def _version(m: dict[str, Any]) -> Callable[[Deployment], tuple[bool, str]]:
+    def run(d: Deployment) -> tuple[bool, str]:
+        behind = []
+        for name in m.get("workloads") or {}:
+            got = d.workload(name)
+            if got is not None and not got.get("current"):
+                behind.append(name)
+        return (False, f"not on {m['version']}'s images: {', '.join(behind)}") if behind else (True, f"every workload on {m['version']}'s images")
+    return run
+
+
+def _shape(m: dict[str, Any]) -> Callable[[Deployment], tuple[bool, str]]:
+    def run(d: Deployment) -> tuple[bool, str]:
+        got = d.shape()
+        return (got == m["shape"], f"shape {got}" + ("" if got == m["shape"] else f", listed {m['shape']}"))
     return run
 
 
@@ -215,8 +243,11 @@ def _job(name: str, j: dict[str, Any]) -> Callable[[Deployment], tuple[bool, str
                 problems.append(f"step {step} absent")
             elif steps[step].get("exit_code") != 0:
                 problems.append(f"step {step} exit {steps[step].get('exit_code')}")
-        if "restore-graph" in j and "restore-graph" in steps:
-            problems += [f"restore-graph {p}" for p in _compare(j["restore-graph"], steps["restore-graph"], ("image", "requests", "limits"))]
+        if "restore-graph" in j:
+            if "restore-graph" not in steps:
+                problems.append("step restore-graph absent")
+            else:
+                problems += [f"restore-graph {p}" for p in _compare(j["restore-graph"], steps["restore-graph"], ("image", "requests", "limits"))]
         return _verdict(problems, "a run succeeded")
     return run
 
@@ -241,7 +272,7 @@ def _rds(r: dict[str, Any]) -> Callable[[Deployment], tuple[bool, str]]:
     return run
 
 
-def _readers(found: set[str], expected: tuple[str, ...], what: str) -> tuple[bool, str]:
+def _readers(found: set[str], expected: tuple[str, ...]) -> tuple[bool, str]:
     mine = found & set(expected)
     if mine:
         return True, f"reached by {', '.join(sorted(mine))}"
@@ -249,11 +280,11 @@ def _readers(found: set[str], expected: tuple[str, ...], what: str) -> tuple[boo
 
 
 def _database(db: str) -> Callable[[Deployment], tuple[bool, str]]:
-    return lambda d: _readers(d.database_readers(db), DATABASE_READERS[db], db)
+    return lambda d: _readers(d.database_readers(db), DATABASE_READERS[db])
 
 
 def _store(store: str) -> Callable[[Deployment], tuple[bool, str]]:
-    return lambda d: _readers(d.store_readers(store), STORE_READERS[store], store)
+    return lambda d: _readers(d.store_readers(store), STORE_READERS[store])
 
 
 def _bucket(bucket: str) -> Callable[[Deployment], tuple[bool, str]]:
@@ -268,11 +299,11 @@ def _entra(name: str) -> Callable[[Deployment], tuple[bool, str]]:
 
 
 def _egress(host: str) -> Callable[[Deployment], tuple[bool, str]]:
-    return lambda d: (True, "reached on 443") if d.connects(host) else (False, "refused or unreachable on 443")
+    return lambda d: (True, "reached on 443") if d.connects(host) else (False, "blocked on 443")
 
 
 def _unlisted(d: Deployment) -> tuple[bool, str]:
-    return (False, f"{UNLISTED_HOST} reached on 443: egress is open") if d.connects(UNLISTED_HOST) else (True, "refused")
+    return (False, f"{UNLISTED_HOST} reached on 443: egress is open") if d.connects(UNLISTED_HOST) else (True, "blocked")
 
 
 def _render(d: Deployment) -> tuple[bool, str]:
@@ -292,18 +323,28 @@ def plan(m: dict[str, Any], *, allow_pending: bool = False) -> list[Check]:
         if entry not in pending:
             checks.append(Check(entry, what, run))
 
-    def keys(entry: str, got: dict[str, Any], known: set[str]) -> None:
+    def keys(entry: str, got: Any, known: set[str]) -> None:
+        if not isinstance(got, dict):
+            unknown.append(f"{entry}: not an entry ({got!r})")
+            return
         unknown.extend(f"{entry}: {k}" for k in got if k not in known)
 
+    if "version" in m:
+        add("version", "the candidate's images running", _version(m))
+    if "shape" in m:
+        add("shape", "the deployment's shape", _shape(m))
     for name, w in (m.get("workloads") or {}).items():
         keys(f"workloads.{name}", w, WORKLOAD_KEYS)
-        add(f"workloads.{name}", "ready, at its image and sizes", _workload(name, w))
+        add(f"workloads.{name}", "rolled out and ready, at its image and sizes", _workload(name, w))
     for key, c in (m.get("init_containers") or {}).items():
         keys(f"init_containers.{key}", c, INIT_KEYS)
         add(f"init_containers.{key}", "ran first and exited 0", _init(key, c))
     for name, j in (m.get("jobs") or {}).items():
         keys(f"jobs.{name}", j, JOB_KEYS)
-        unknown.extend(f"jobs.{name}: steps {s}" for s in j.get("steps", []) if s not in JOB_STEPS)
+        if isinstance(j, dict):
+            unknown.extend(f"jobs.{name}: steps {s}" for s in j.get("steps", []) if s not in JOB_STEPS)
+            if "restore-graph" in j:
+                keys(f"jobs.{name}.restore-graph", j["restore-graph"], RESTORE_GRAPH_KEYS)
         add(f"jobs.{name}", "a run succeeded", _job(name, j))
     for repo, image in (m.get("images") or {}).items():
         keys(f"images.{repo}", image, IMAGE_KEYS)
@@ -315,10 +356,11 @@ def plan(m: dict[str, Any], *, allow_pending: bool = False) -> list[Check]:
         keys(f"managed.{service}", settings, MANAGED_KEYS[service])
         if service == "rds":
             add("managed.rds", "answers, at its version and max_connections", _rds(settings))
-            for db in settings.get("databases") or {}:
+            for db, entry in (settings.get("databases") or {}).items():
                 if db not in DATABASE_READERS:
                     unknown.append(f"managed.rds.databases.{db} (no known reader)")
                     continue
+                keys(f"managed.rds.databases.{db}", entry or {}, DATABASE_KEYS)
                 add(f"managed.rds.databases.{db}", "reached by its reader", _database(db))
         elif service == "s3":
             for b in settings.get("buckets", []):
@@ -334,17 +376,14 @@ def plan(m: dict[str, Any], *, allow_pending: bool = False) -> list[Check]:
             continue
         keys(f"entra.{name}", reg, ENTRA_KEYS)
         add(f"entra.{name}", "used", _entra(name))
-    for host in m.get("egress") or {}:
+    for host, entry in (m.get("egress") or {}).items():
+        keys(f"egress.{host}", entry or {}, EGRESS_KEYS)
         add(f"egress.{host}", "reached on 443", _egress(host))
-    checks.append(Check(UNLISTED_HOST_CHECK, "refused", _unlisted))
+    checks.append(Check(UNLISTED_HOST_CHECK, "blocked", _unlisted))
     checks.append(Check(RENDER_CHECK, "the deployment's render agrees", _render))
     if unknown:
         raise NotExercised(unknown)
     return checks
-
-
-#: The buckets the services write (harness.cloud_platform.terraform.BUCKETS and the backups' own).
-KNOWN_BUCKETS = {"media", "staging", "site-images", "tile-cache", "backups"}
 
 
 def verify(m: dict[str, Any], d: Deployment, *, allow_pending: bool = False) -> list[Result]:
@@ -352,7 +391,9 @@ def verify(m: dict[str, Any], d: Deployment, *, allow_pending: bool = False) -> 
     for check in plan(m, allow_pending=allow_pending):
         try:
             ok, said = check.run(d)
-        except Exception as error:  # noqa: BLE001 - a check that cannot read its answer has failed, not passed
+        except KeyboardInterrupt:
+            raise
+        except BaseException as error:  # noqa: BLE001 - a check that cannot read its answer has failed, not passed (r1's shell exits)
             ok, said = False, f"{type(error).__name__}: {error}"
         results.append(Result(check.entry, check.what, ok, said))
     return results
@@ -368,18 +409,25 @@ def _repository(image: str, registry: str) -> str:
 
 
 def _sizes(container: dict[str, Any]) -> dict[str, Any]:
-    r = container.get("resources") or {}
-    return {"requests": dict(r.get("requests") or {}), "limits": dict(r.get("limits") or {})}
+    from harness.cloud_platform.manifest import _sizes as sizes
+
+    return sizes(container.get("resources") or {})
 
 
-def read_workload(obj: dict[str, Any], registry: str) -> dict[str, Any]:
-    """A Deployment or StatefulSet as kubectl returns it (`readyReplicas` left out when none is ready)."""
+def read_workload(obj: dict[str, Any], registry: str, *, expected: dict[str, str]) -> dict[str, Any]:
+    """A Deployment or StatefulSet as kubectl returns it (`readyReplicas`, `updatedReplicas` left out when 0).
+    `expected` maps a repository to the candidate's full reference (the render's)."""
     main = obj["spec"]["template"]["spec"]["containers"][0]
+    status = obj.get("status") or {}
+    repository = _repository(main["image"], registry)
     return {
         "kind": obj["kind"],
         "desired": obj["spec"].get("replicas", 1),
-        "ready": (obj.get("status") or {}).get("readyReplicas", 0),
-        "image": _repository(main["image"], registry),
+        "ready": status.get("readyReplicas", 0),
+        "updated": status.get("updatedReplicas", 0),
+        "settled": status.get("observedGeneration", 0) >= (obj.get("metadata") or {}).get("generation", 0),
+        "image": repository,
+        "current": expected.get(repository) == main["image"],
         **_sizes(main),
         "probe": "readinessProbe" in main,
     }
@@ -409,9 +457,36 @@ def read_job(job: dict[str, Any], pods: list[dict[str, Any]], registry: str) -> 
             "succeeded": (job.get("status") or {}).get("succeeded", 0), "steps": steps}
 
 
+def cron_runs(cron: dict[str, Any], jobs: list[dict[str, Any]], name: str) -> int:
+    """The CronJob's own successful runs: owned by it, its command and args unchanged (the runbook's
+    `backup-sets-*` listing is made from it with another command), at its own image (the candidate's,
+    not a run from before the upgrade)."""
+    template = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]
+    mine = 0
+    for job in jobs:
+        if not any(o.get("kind") == "CronJob" and o.get("name") == name for o in job["metadata"].get("ownerReferences") or []):
+            continue
+        c = job["spec"]["template"]["spec"]["containers"][0]
+        if (c.get("image"), c.get("command"), c.get("args")) != (template.get("image"), template.get("command"), template.get("args")):
+            continue
+        mine += 1 if (job.get("status") or {}).get("succeeded") else 0
+    return mine
+
+
+def runs_of_template(name: str, job_names: Iterable[str], templates: Iterable[str]) -> list[str]:
+    """The runs of a `<set>` Job template, never those of a longer template sharing its prefix."""
+    prefix = name.split("<set>", 1)[0]
+    longer = [t.split("<set>", 1)[0] for t in templates if "<set>" in t and t != name and t.startswith(prefix)]
+    return [j for j in job_names if j.startswith(prefix) and not any(j.startswith(p) for p in longer)]
+
+
+def _running(pods: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [p for p in pods if (p.get("status") or {}).get("phase") == "Running"]
+
+
 def _by_ip(pods: list[dict[str, Any]]) -> dict[str, str]:
     return {p["status"]["podIP"]: p["metadata"]["labels"]["app.kubernetes.io/name"]
-            for p in pods if (p.get("status") or {}).get("podIP") and "app.kubernetes.io/name" in (p["metadata"].get("labels") or {})}
+            for p in _running(pods) if p["status"].get("podIP") and "app.kubernetes.io/name" in (p["metadata"].get("labels") or {})}
 
 
 def readers_from_sessions(rows: str, database: str, pods: list[dict[str, Any]]) -> set[str]:
@@ -428,23 +503,33 @@ def readers_from_sessions(rows: str, database: str, pods: list[dict[str, Any]]) 
 def readers_from_client_list(listing: str, pods: list[dict[str, Any]]) -> set[str]:
     """Valkey's CLIENT LIST: the workloads with a connection open."""
     names = _by_ip(pods)
-    found = set()
-    for addr in re.findall(r"\baddr=([0-9.]+):\d+", listing):
-        if addr in names:
-            found.add(names[addr])
-    return found
+    return {names[a] for a in re.findall(r"\baddr=([0-9.]+):\d+", listing) if a in names}
 
 
 _GRANTED = re.compile(r"^entra-standin: granted \S+ client=(\S+) audience=(\S+)", re.MULTILINE)
 
 
 def granted_clients(log: str) -> set[str]:
-    """The stand-in tenant's grants (one line per token issued; refusals name no grant)."""
+    """The stand-in tenant's grants: one line per token issued, asked of platform (README); refusals name no grant."""
     return {m.group(1) for m in _GRANTED.finditer(log)}
 
 
 def granted_audiences(log: str) -> set[str]:
     return {m.group(2) for m in _GRANTED.finditer(log)}
+
+
+#: Run in the api pod: `open` (connected), `blocked` (refused or timed out); anything else is no answer.
+PROBE = ("import socket, sys\ntry:\n    socket.create_connection((sys.argv[1], 443), timeout=5).close(); print('open')\n"
+         "except socket.gaierror:\n    print('dns')\nexcept OSError:\n    print('blocked')")
+
+
+def probe_answer(out: str) -> bool:
+    answer = out.strip()
+    if answer == "open":
+        return True
+    if answer == "blocked":
+        return False
+    raise LookupError(f"the egress probe gave no answer about the policy: {answer[:200]!r}")
 
 
 # ---- the kind cluster -----------------------------------------------------------------------------
@@ -453,12 +538,12 @@ def granted_audiences(log: str) -> set[str]:
 class KindDeployment:
     """R1's kind cluster (r1_kind.py), read through kubectl: the deployment in its namespace, the
     platform's stand-ins in theirs. Every read is of the live thing; nothing is taken from the render
-    but the image references to look up and the render check's own comparison."""
+    but the candidate's image references and the render check's own comparison."""
 
-    def __init__(self, r1: Any, *, registry: str, render: dict[str, Any], config: Any, clients: dict[str, str],
-                 api_audiences: set[str], bucket_prefix: str, hosts: dict[str, str], jobs: Iterable[str]) -> None:
-        self.r1, self.registry, self.render, self.config = r1, registry, render, config
-        self.clients, self.api_audiences, self.bucket_prefix, self.hosts = clients, api_audiences, bucket_prefix, hosts
+    def __init__(self, r1: Any, *, registry: str, expected: dict[str, str], config: Any, shape: str, clients: dict[str, str],
+                 api_audiences: set[str], bucket_prefix: str, jobs: Iterable[str]) -> None:
+        self.r1, self.registry, self.expected, self.config, self._shape = r1, registry, expected, config, shape
+        self.clients, self.api_audiences, self.bucket_prefix = clients, api_audiences, bucket_prefix
         self.job_names = list(jobs)
 
     def _get(self, *args: str) -> Any:
@@ -472,12 +557,13 @@ class KindDeployment:
         for kind in ("deployment", "statefulset"):
             obj = self._get(kind, name)
             if obj:
-                return read_workload(obj, self.registry)
+                return read_workload(obj, self.registry, expected=self.expected)
         return None
 
     def init_container(self, key: str) -> dict[str, Any] | None:
         workload, _, container = key.partition("/")
-        pods = [p for p in self._pods() if (p["metadata"].get("labels") or {}).get("app.kubernetes.io/name") == workload]
+        pods = [p for p in _running(self._pods()) if (p["metadata"].get("labels") or {}).get("app.kubernetes.io/name") == workload]
+        pods.sort(key=lambda p: p["metadata"].get("creationTimestamp", ""), reverse=True)  # the newest: the candidate's
         for pod in pods:
             spec = next((c for c in pod["spec"].get("initContainers") or [] if c["name"] == container), None)
             if spec:
@@ -486,18 +572,17 @@ class KindDeployment:
         return None
 
     def job(self, name: str) -> dict[str, Any] | None:
+        jobs = self._get("jobs")["items"]
         if "<set>" not in name:
             cron = self._get("cronjob", name)
             if not cron:
                 return None
             spec = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]
-            runs = [j for j in self._get("jobs")["items"] if any(o.get("name") == name for o in j["metadata"].get("ownerReferences") or [])]
-            return {"kind": "CronJob", "schedule": cron["spec"]["schedule"], "suspended": bool(cron["spec"].get("suspend")), "image": _repository(spec["image"], self.registry),
-                    **_sizes(spec), "succeeded": sum((j.get("status") or {}).get("succeeded", 0) for j in runs), "steps": {}}
-        prefix = name.split("<set>", 1)[0]
-        longer = [n.split("<set>", 1)[0] for n in self.job_names if "<set>" in n and n != name and n.startswith(prefix)]
-        runs = [j for j in self._get("jobs")["items"]
-                if j["metadata"]["name"].startswith(prefix) and not any(j["metadata"]["name"].startswith(p) for p in longer)]
+            return {"kind": "CronJob", "schedule": cron["spec"]["schedule"], "suspended": bool(cron["spec"].get("suspend")),
+                    "image": _repository(spec["image"], self.registry), **_sizes(spec),
+                    "succeeded": cron_runs(cron, jobs, name), "steps": {}}
+        names = runs_of_template(name, [j["metadata"]["name"] for j in jobs], self.job_names)
+        runs = [j for j in jobs if j["metadata"]["name"] in names]
         if not runs:
             return None
         done = [j for j in runs if (j.get("status") or {}).get("succeeded")] or runs
@@ -506,16 +591,14 @@ class KindDeployment:
         return read_job(job, pods, self.registry)
 
     def image_pushed(self, repository: str) -> bool:
-        target = next(i["target"] for i in self.render["images.yaml"]["images"] if _repository(i["target"], self.registry) == repository)
-        return bool(self.r1.sh("docker", "manifest", "inspect", "--insecure", target, check=False).strip())
+        return bool(self.r1.sh("docker", "manifest", "inspect", "--insecure", self.expected[repository], check=False).strip())
 
-    def _postgres(self, sql: str, database: str = "postgres") -> str:
+    def _postgres(self, sql: str) -> str:
         return self.r1.kubectl("-n", self.r1.MANAGED, "exec", "statefulset/postgres", "--", "psql", "-U", "postgres",
-                               "-d", database, "-Atc", sql)
+                               "-d", "postgres", "-Atc", sql)
 
     def rds_setting(self, name: str) -> str | None:
-        out = self._postgres(f"SHOW {name}").strip()
-        return out or None
+        return self._postgres(f"SHOW {name}").strip() or None
 
     def database_readers(self, database: str) -> set[str]:
         rows = self._postgres("SELECT datname || '|' || coalesce(host(client_addr), '') FROM pg_stat_activity WHERE datname IS NOT NULL")
@@ -529,9 +612,11 @@ class KindDeployment:
         raise NotImplementedError(f"no stand-in for {store} on kind yet (v052-opensearch): the check fails until one exists")
 
     def bucket_objects(self, bucket: str) -> int:
+        if not self.bucket_prefix:
+            raise LookupError("no bucket prefix in R1's state (r1_kind.py terraform saves it as `prefix`)")
         name = f"{self.bucket_prefix}{bucket}"
         code = f"import pathlib; p = pathlib.Path('/data') / {name!r}; print(len(list(p.glob('*.json'))) if p.is_dir() else 0)"
-        return int(self.r1.s3_exec(code).strip() or 0)
+        return int(self.r1.s3_exec(code).strip())
 
     def entra_used(self, registration: str) -> bool:
         log = self.r1.kubectl("-n", self.r1.MANAGED, "logs", "deployment/entra-standin", "--tail=-1")
@@ -540,13 +625,11 @@ class KindDeployment:
         return self.clients[registration] in granted_clients(log)
 
     def connects(self, host: str) -> bool:
-        target = self.hosts.get(host, host)
-        if target.startswith("<"):
-            raise LookupError(f"no address given for {host}")
-        code = ("import socket, sys\ntry:\n    socket.create_connection((sys.argv[1], 443), timeout=5).close(); print('open')\n"
-                "except OSError:\n    print('refused')")
-        out = self.r1.kubectl("-n", self.r1.NS, "exec", "deployment/api", "--", "/app/.venv/bin/python", "-c", code, target, check=False)
-        return out.strip() == "open"
+        out = self.r1.kubectl("-n", self.r1.NS, "exec", "deployment/api", "--", "/app/.venv/bin/python", "-c", PROBE, host, check=False)
+        return probe_answer(out)
+
+    def shape(self) -> str:
+        return self._shape
 
     def render_differences(self) -> list[str]:
         from harness.cloud_platform.manifest import differences, load, rendered
@@ -571,19 +654,23 @@ def _kind(m: dict[str, Any]) -> KindDeployment:  # pragma: no cover - the live h
     gates = Path(__file__).resolve().parents[2] / "platform" / "gates"
     sys.path.insert(0, str(gates))
     import r1_kind as r1  # the platform lane's driver, imported and not changed
-    from harness.render import load_config, render
+    from harness.render import load_config
 
     config = load_config(r1.CONFIG)
-    artefacts = render(config, resolver=lambda ref: None, allow_unpinned=True).artefacts
-    images = yaml.safe_load(artefacts["images.yaml"])
-    claims = yaml.safe_load(r1.CONFIG.read_text())["cloud_platform"]["claims"]
+    used = r1.KEPT / "images.yaml"  # the render the install used, kept by r1_kind.keep_render: its pinned references
+    if not used.exists():
+        raise SystemExit(f"no kept render at {r1.KEPT}: run the candidate's install through r1_kind.py first")
+    images = yaml.safe_load(used.read_text())
+    raw = yaml.safe_load(r1.CONFIG.read_text())
+    claims = raw["cloud_platform"]["claims"]
     entra = gates / "r1_kind_entra.yaml"
     others = yaml.safe_load(entra.read_text()) if entra.exists() else {}
     clients = {"glass": claims["client_id"], **{k: v["client_id"] for k, v in (others or {}).items()}}
-    state = r1.state()
-    return KindDeployment(r1, registry=images["registry"], render={"images.yaml": images}, config=config, clients=clients,
+    expected = {_repository(i["target"], images["registry"]): i["target"] for i in images["images"]}
+    return KindDeployment(r1, registry=images["registry"], expected=expected, config=config,
+                          shape=raw["cloud_platform"].get("shape", ""), clients=clients,
                           api_audiences={claims["api_client_id"], f"api://{claims['api_client_id']}"},
-                          bucket_prefix=state.get("bucket_prefix", ""), hosts=state.get("egress_hosts", {}), jobs=m["jobs"])
+                          bucket_prefix=r1.state().get("prefix", ""), jobs=m["jobs"])
 
 
 def main(argv: list[str] | None = None) -> int:

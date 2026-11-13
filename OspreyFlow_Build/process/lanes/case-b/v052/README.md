@@ -17,11 +17,12 @@ platform-b's dashboards check and for anyone fitting a new stand-in):
 
 | Method | Answers |
 |---|---|
-| `workload(name)` | `{kind, desired, ready, image, requests, limits, probe}` or None |
+| `workload(name)` | `{kind, desired, ready, updated, settled, current, image, requests, limits, probe}` or None (`current`: the running reference is the candidate's, tag and digest) |
 | `init_container("workload/container")` | `{image, requests, limits, exit_code}` or None |
 | `job(name)` | `{kind, schedule, suspended, image, requests, limits, succeeded, steps: {name: {image?, exit_code}}}` or None |
 | `image_pushed(repository)` | bool |
 | `rds_setting("server_version" \| "max_connections")` | str or None |
+| `shape()` | the deployment's shape |
 | `database_readers(db)`, `store_readers("elasticache" \| "opensearch")` | the workloads with a session or connection |
 | `bucket_objects(bucket)` | count of objects |
 | `entra_used(registration)` | the stand-in granted that registration a token (the API: a token for its audience) |
@@ -29,35 +30,45 @@ platform-b's dashboards check and for anyone fitting a new stand-in):
 | `render_differences()` | `manifest.differences(load(), rendered(config))` |
 
 `KindDeployment` implements it on R1's cluster. **What it needs that is not there yet:**
-- **The Entra stand-in's grant line** (platform, `r1_kind_servers.py`): one stderr line per token issued,
-  `entra-standin: granted <grant_type> client=<client_id> audience=<aud>`. Without it `entra.*` fail.
+- **Platform's signing Entra stand-in** (lane/platform-v052-standin, `/authorize` and `/token`): R1's stand-in on
+  main publishes keys and signs nothing, so the Glass's sign-in in `spec08_poc.py` cannot run without it
+  (`OSPREY_V052_TOKEN_BY=r1` takes `r1_kind.token()`'s token instead, for a run before it lands).
+- **Its grant line** (asked of platform, not yet confirmed): one stderr line per token issued,
+  `entra-standin: granted <grant_type> client=<client_id> audience=<aud>`. Without it every `entra.*` fails; the
+  test of `granted_clients` is of the shape asked for, not of one the stand-in writes yet.
+- **R1's Postgres stand-in runs `max_connections=750`** (`r1_kind_standins.yaml`); the manifest says 1000, so
+  `managed.rds` fails until the stand-in matches (platform's file).
 - **An OpenSearch stand-in on kind** (3a's shape lists it, no longer pending): `store_readers("opensearch")` raises
   until one exists, so `managed.opensearch` fails rather than passes.
 - **The run must exercise what it checks before `verify`:** spec 08 (sign-ins, uploads, loads), a Superset sign-in
   and a report sync (platform-b), one backup and one restore (`r1_kind.py backup|restore`), and one run of each
   held-suspended CronJob (`kubectl create job --from=cronjob/<name>`). A bucket nothing wrote fails, by design.
-- `state.json` keys `bucket_prefix` (the Terraform stand-in's) and, if any host is a placeholder, `egress_hosts`.
+- R1's kept render (`r1_kind.keep_render`, at `KEPT`): the candidate's image references, which `version` and
+  `images.*` are held to; and R1's `state.json` `prefix` (the Terraform stand-in's), which the buckets are named by.
 
 ## Spec 08 on poc: `spec08_poc.py`
 
 `tests/scenarios/test_phase8_exit_over_the_wire.py`, **unchanged**, under a pytest plugin that signs in as the Glass
 does at the Entra stand-in (authorization code with PKCE, run from the api pod), skips each case that cannot run on
-poc with its reason, and **stops the run** if the module has a case with no disposition or a disposition for a gone
-case. The runner makes an empty case and uploads the ingest fixtures (CDR, SMS, seizure record) through
+poc with its reason, and **stops the run** if the module (as written, whatever `-k` selects) has a case with no
+disposition or a disposition for a gone case. The runner makes an empty case and uploads the CDR fixture through
 `POST .../ingest/source-files`, the analyst's own door.
 
-**8 of 27 cases run; 19 rest on a seed and are marked "no seed path on poc".** They rest on the `hmp`,
-`fixture-corp` and `scenarios` seed datasets, and `harness.apply`'s seed is compose-only. What runs: the door,
-the ingest root and the Studio, B1–B3 (and the find-and-open case on their load), A1's grid, redraw and centroid.
-What does not: A2–A15 and A1's geocoding, B4–B21 (B13/B14 too: their handset and first SIM are seeded).
+**9 of 27 cases run; 15 rest on a seed ("no seed path on poc"); 3 are broken on every shape.** The 15 rest on the
+`hmp`, `fixture-corp` and `scenarios` seed datasets, and `harness.apply`'s seed is compose-only. What runs: the
+door, the ingest root and the Studio, B1–B3 and the find-and-open case on their load, A1's grid, redraw and
+centroid. **B13 (both cases) and B14** seed nothing they assert, but their fixture `seizure_alert` asks
+`POST /v1/hotlists` and `GET /v1/alerts`, routes the Conduit now has only under a case and by id: the module has
+drifted from the API (a test pins that both routes are still gone).
 
 `python spec08_poc.py table` prints the dispositions.
 
 ## Red first
 
-`plants.py`: 15 plants, each one check broken at its real call site in a copy of the driver; every one turns the
-tests red and the unplanted copy stays green (`gates/plants.txt`). It found one gap while being built: no test had a
-CronJob present whose runs never succeeded; one does now.
+`plants.py`: 28 plants, each one check broken at its real call site in a copy of the driver; every one turns the
+tests red and the unplanted copy stays green (`gates/plants.txt`). They found two gaps while being built (no test
+had a CronJob whose runs never succeeded; a reader test whose pod order hid the finished-pod plant). A walk over
+every node of the YAML (not over `entries()`) injects an unplaced key and requires the run to stop.
 
     # from OspreyFlow_Core
     .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider ../OspreyFlow_Build/process/lanes/case-b/v052/

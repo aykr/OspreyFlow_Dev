@@ -1,17 +1,30 @@
-GREEN unplanted: 87 passed in 0.88s
-RED   a workload not ready passes: 1 failed, 59 passed in 0.72s
-RED   an unknown key inside an entry is not a stop: 1 failed, 3 passed in 0.33s
-RED   an unknown section is not a stop: 1 failed, 2 passed in 0.32s
-RED   a pending entry is not a stop: 1 failed, 10 passed in 0.36s
-RED   open egress passes: 1 failed, 57 passed in 0.69s
-RED   a CronJob listed suspended that runs by itself passes: 1 failed, 69 passed in 0.75s
-RED   a job never succeeded passes: 1 failed, 67 passed in 0.73s
-RED   a failed restore step passes: 1 failed, 66 passed in 0.73s
-RED   kubectl's absent readyReplicas read as all ready: 1 failed, 74 passed in 0.77s
-RED   a database reached by a stranger passes: 1 failed, 72 passed in 0.77s
-RED   a check that raises passes: 1 failed, 73 passed in 0.78s
-RED   a spec 08 case with no disposition runs unremarked: 1 failed, 80 passed in 0.84s
-RED   a disposition for a case that no longer exists is not noticed: 1 failed, 81 passed in 0.89s
-RED   a case that cannot run on poc is run anyway: 1 failed, 84 passed in 1.07s
-RED   the module still signs in at Keycloak: 1 failed, 84 passed in 1.06s
+GREEN unplanted: 157 passed in 1.19s
+RED   a workload not ready passes: 1 failed, 112 passed in 1.03s
+RED   an unknown key inside an entry is not a stop: 1 failed, 2 passed in 0.32s
+RED   an unknown section is not a stop: 1 failed, 1 passed in 0.30s
+RED   a pending entry is not a stop: 1 failed, 61 passed in 0.68s
+RED   open egress passes: 1 failed, 110 passed in 0.99s
+RED   a CronJob listed suspended that runs by itself passes: 1 failed, 122 passed in 1.08s
+RED   a job never succeeded passes: 1 failed, 120 passed in 1.10s
+RED   a failed restore step passes: 1 failed, 119 passed in 1.06s
+RED   kubectl's absent readyReplicas read as all ready: 1 failed, 132 passed in 1.19s
+RED   a database reached by a stranger passes: 1 failed, 130 passed in 1.13s
+RED   a check that raises passes: 1 failed, 128 passed in 1.10s
+RED   r1's SystemExit ends the whole run: 1 failed, 128 passed in 1.13s
+RED   a workload on v0.5.1's image passes the version check: 1 failed, 63 passed in 0.70s
+RED   a rollout with no updated replica passes: 1 failed, 124 passed in 1.09s
+RED   a rollout the controller has not observed passes: 1 failed, 125 passed in 1.10s
+RED   another shape passes: 1 failed, 64 passed in 0.70s
+RED   a probe with no answer reads as blocked: 1 failed, 140 passed in 1.13s
+RED   the runbook's listing Job or a v0.5.1 run counts as a backup: 1 failed, 144 passed in 1.13s
+RED   the claims restore's run counts as the graph's: 1 failed, 145 passed in 1.14s
+RED   a finished pod's address names a reader: 1 failed, 146 passed in 1.12s
+RED   restore-graph unchecked when steps does not name it: 1 failed, 127 passed in 1.11s
+RED   a key inside an egress entry is not a stop: 1 failed, 47 passed in 0.59s
+RED   a collected case with no disposition runs: 1 failed, 155 passed in 1.19s
+RED   a narrowed selection stops the run: 1 failed, 154 passed in 1.15s
+RED   a spec 08 case with no disposition runs unremarked: 1 failed, 148 passed in 1.16s
+RED   a disposition for a case that no longer exists is not noticed: 1 failed, 149 passed in 1.14s
+RED   a case that cannot run on poc is run anyway: 1 failed, 153 passed in 1.17s
+RED   the module still signs in at Keycloak: 1 failed, 153 passed in 1.16s
 every plant red, unplanted green

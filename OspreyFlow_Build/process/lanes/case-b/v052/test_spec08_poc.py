@@ -39,12 +39,26 @@ def test_every_reason_says_why() -> None:
         assert reason is None or len(reason) > 20, case
 
 
-def test_the_seed_count_is_what_the_table_says() -> None:
-    seeded = [c for c, r in s8.DISPOSITIONS.items() if r == s8.NO_SEED]
+def test_the_counts_reported_are_the_tables() -> None:
+    """The figures the README, the friction row and the orchestrator were given (the review of 816922f,
+    item 5: they had said 8 and 19)."""
     runs = [c for c, r in s8.DISPOSITIONS.items() if r is None]
-    assert len(seeded) + len(runs) == len(s8.DISPOSITIONS)
+    seeded = [c for c, r in s8.DISPOSITIONS.items() if r == s8.NO_SEED]
+    moved = [c for c, r in s8.DISPOSITIONS.items() if r == s8.ROUTES_MOVED]
+    assert (len(runs), len(seeded), len(moved)) == (9, 15, 3)
+    assert len(runs) + len(seeded) + len(moved) == len(s8.DISPOSITIONS) == 27
     assert "test_the_analysts_own_door_opens" in runs
     assert "test_b7_a_shared_messaging_handle_is_common_to_the_second_cohort" in seeded
+
+
+def test_the_moved_routes_are_really_gone_from_the_conduit() -> None:
+    """B13/B14's fixture asks `/v1/hotlists` and `/v1/alerts`; the Conduit has them only under a case
+    (and an alert by its id). If either comes back, this fails and the disposition is wrong."""
+    app = (s8.MODULE.parents[3] / "OspreyFlow_Core" / "services" / "api" / "app.py").read_text(encoding="utf-8")
+    module = s8.MODULE.read_text(encoding="utf-8")
+    for route in ('"/v1/hotlists"', '"/v1/alerts"'):
+        assert route in module, route
+        assert route not in app, route
 
 
 class Item:
@@ -69,6 +83,14 @@ def test_the_plugin_skips_exactly_the_cases_that_cannot_run_and_swaps_the_sign_i
             assert len(skipped) == 1 and s8.DISPOSITIONS[item.name] in skipped[0].kwargs["reason"], item.name
     assert other.markers == []
     assert module._sign_in_as_the_demo_analyst() == "a stand-in token"
+
+
+def test_a_narrowed_selection_runs_without_stopping() -> None:
+    """`run -k b1` collects one case: the module's other cases are not "gone" (item 13)."""
+    module = SimpleNamespace(_sign_in_as_the_demo_analyst=lambda: "x")
+    items = [Item("test_b1_every_rendering_of_one_number_resolves_to_a_single_endpoint", module)]
+    s8.mark(items, mint=lambda: "t")
+    assert items[0].markers == []
 
 
 def test_the_plugin_refuses_a_module_that_gained_a_case() -> None:
