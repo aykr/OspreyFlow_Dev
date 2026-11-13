@@ -72,6 +72,8 @@ ROUTE_CASES = [f"{ROUTES}::{n}" for n in (
 REFRESH_SECRET = f"{REFRESH}::test_a_marked_lists_match_found_by_a_cleared_deployer_carries_the_lists_marking"
 DISABLE = f"{B}/services/api/test_custom_roles_store.py"
 OWNERSHIP = f"{B}/services/api/test_person_ownership_store.py"
+AUDIT_CODES = (f"{B}/services/api/test_audit_section_store.py::"
+               "test_an_entry_is_read_by_its_lists_marking_as_recorded_and_by_its_handling_code")
 TRENDS = f"{B}/conformance/analytics_port/test_suite.py::test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader"
 
 #: (name, file under the worktree, built text, planted text, the tests, in order)
@@ -346,6 +348,36 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         '        f" AND ({_LIST_NAMED} IS NULL OR ("',
         '        " AND (TRUE OR ("',
         [f"{B}/services/api/test_audit_section_store.py::test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list"],
+    ),
+    # --- the orchestrator's verification of lists at 5c862eb (CARRIES): each half of the audit's clause
+    (
+        "L28b an audit entry read by its list's marking now alone, not as recorded (5c862eb, CARRIES a)",
+        "OspreyFlow_Core/services/api/audit_section.py",
+        "        f\"AND COALESCE(a.resolved_query->>'list_classification', 'OFFICIAL') = ANY({cls}) \"\n"
+        "        f\"AND COALESCE(a.resolved_query->>'list_handling_code', 'P') = ANY({codes})))\"",
+        "        \"))\"",
+        [AUDIT_CODES],
+    ),
+    (
+        "L28c an audit entry's list code now unread (5c862eb, CARRIES a)",
+        "OspreyFlow_Core/services/api/audit_section.py",
+        "        f\"              WHERE m.list_name = {_LIST_NAMED}), 'P') = ANY({codes}) \"",
+        "        f\"              WHERE m.list_name = {_LIST_NAMED}), 'P') IS NOT NULL \"",
+        [AUDIT_CODES],
+    ),
+    (
+        "L28d an audit entry's list code as recorded unread (5c862eb, CARRIES a)",
+        "OspreyFlow_Core/services/api/audit_section.py",
+        "        f\"AND COALESCE(a.resolved_query->>'list_handling_code', 'P') = ANY({codes})))\"",
+        "        \"AND TRUE))\"",
+        [AUDIT_CODES],
+    ),
+    (
+        "L29 a list's audit entries recording no marking (5c862eb, CARRIES b)",
+        "OspreyFlow_Core/services/api/screening.py",
+        '        return {"list_classification": classification, "list_handling_code": code}',
+        "        return {}",
+        [f"{ROUTES}::test_each_audit_entry_about_a_list_records_the_lists_marking"],
     ),
 ]
 
