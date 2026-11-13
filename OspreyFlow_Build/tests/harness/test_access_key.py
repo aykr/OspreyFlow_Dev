@@ -105,7 +105,8 @@ def test_each_of_the_three_names_asks_for_the_key_and_says_noindex(name: str) ->
         "\t\tbasic_auth @osprey_locked bcrypt OspreyFlow {\n\t\t\timport osprey_access_key\n"
         in block
     )
-    assert "\t\timport osprey_access_pass_set\n" in block
+    # ADR-114 Amendment 42: the pass is set for the deployment's own base name.
+    assert "\t\timport osprey_access_pass_set demo.example.org\n" in block
     assert "\tlog\n" in block
 
 
@@ -475,3 +476,102 @@ def test_a_folder_in_the_key_files_place_is_refused_in_words(tmp_path: Path) -> 
     (live / access_key.ACCESS_KEY_FILE).mkdir(parents=True)
     with pytest.raises(access_key.KeyRefused, match="is a folder"):
         access_key.carry_into(stage, live)
+
+
+# --- ADR-114 Amendment 42: a key file set before the amendment ---------------------------------------
+
+
+#: A key file exactly as `set` wrote it under Amendment 41 (main at a9af842, the helper that wrote the
+#: demonstration's file): frozen text, never derived from today's `snippet`.
+AMENDMENT_41_FILE = (
+    "# Written by `python -m harness.access_key set` (ADR-114 Amendment 41): the shared key's\n"
+    "# bcrypt hash and the pass a browser is given once it has answered; never the key itself.\n"
+    "# Readable by its owner alone. Set it again with the same command; never edit it by hand.\n"
+    "(osprey_access_key) {\n\tdemo HASH\n}\n"
+    "(osprey_access_pass) {\n\theader Cookie *osprey_pass=TOKEN*\n}\n"
+    "(osprey_access_pass_set) {\n"
+    '\theader @osprey_answered +Set-Cookie "osprey_pass=TOKEN; Path=/; Max-Age=28800; Secure; '
+    'HttpOnly; SameSite=Lax"\n'
+    "}\n"
+)
+
+
+def _amendment_41_file(path: Path, text: str | None = None) -> str:
+    """A key file as `set` wrote it before Amendment 42: its pass for one name alone."""
+    token = "k" * 43
+    path.parent.mkdir(parents=True, exist_ok=True)
+    written = AMENDMENT_41_FILE.replace("HASH", HASH).replace("TOKEN", token)
+    path.write_text(text if text is not None else written, encoding="utf-8")
+    os.chmod(path, 0o600)
+    return token
+
+
+def test_a_key_set_before_the_amendment_is_still_read(tmp_path: Path) -> None:
+    path = tmp_path / access_key.ACCESS_KEY_FILE
+    token = _amendment_41_file(path)
+    assert access_key.read(path) == ("demo", HASH, token)
+
+
+def test_apply_carries_a_key_set_before_the_amendment_into_the_new_shape_unchanged(tmp_path: Path) -> None:
+    """No key is set again: the user, the hash and the pass are kept, and only the pass's cookie
+    names the base, so the deployment asks once from its next `apply`."""
+    live, stage = tmp_path / "live", tmp_path / "stage"
+    live.mkdir()
+    stage.mkdir()
+    token = _amendment_41_file(live / access_key.ACCESS_KEY_FILE)
+    access_key.carry_into(stage, live)
+    carried = stage / access_key.ACCESS_KEY_FILE
+    assert carried.read_text(encoding="utf-8") == access_key.snippet("demo", HASH, token)
+    assert "Domain={args[0]}" in carried.read_text(encoding="utf-8")
+    assert stat.S_IMODE(carried.stat().st_mode) == 0o600
+
+
+def test_a_key_set_before_the_amendment_and_pending_is_carried_into_the_new_shape(tmp_path: Path) -> None:
+    live, stage = tmp_path / "live", tmp_path / "stage"
+    stage.mkdir()
+    token = _amendment_41_file(live / access_key.PENDING_FILE)
+    access_key.carry_into(stage, live)
+    assert (stage / access_key.ACCESS_KEY_FILE).read_text(encoding="utf-8") == access_key.snippet(
+        "demo", HASH, token
+    )
+
+
+def test_a_key_set_before_the_amendment_restarts_the_proxy_when_carried(tmp_path: Path) -> None:
+    from harness.apply import services_to_restart
+
+    live, stage = tmp_path / "live", tmp_path / "stage"
+    rendered = render(_config(access_key=True), allow_unpinned=True)
+    for folder in (live, stage):
+        folder.mkdir()
+        for name, text in rendered.artefacts.items():
+            (folder / name).write_text(text, encoding="utf-8")
+    _amendment_41_file(live / access_key.ACCESS_KEY_FILE)
+    access_key.carry_into(stage, live)
+    assert "proxy" in services_to_restart(live, stage)
+
+
+def test_a_key_file_in_the_old_shape_edited_by_hand_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / access_key.ACCESS_KEY_FILE
+    old = AMENDMENT_41_FILE.replace("HASH", HASH).replace("TOKEN", "k" * 43)
+    for edited in (old.replace("HttpOnly; ", ""), old + "(anything) {\n\trespond 200\n}\n"):
+        _amendment_41_file(path, edited)
+        with pytest.raises(access_key.KeyRefused, match="edited by hand"):
+            access_key.read(path)
+
+
+@pytest.mark.parametrize(
+    ("host", "whole"),
+    [("example.org", True), ("ospreyflow.app", True), ("example.co.uk", True),
+     ("demo.example.org", False), ("govuk.ospreyflow.app", False), ("demo.example.co.uk", False)],
+)  # fmt: skip
+def test_preflight_warns_when_the_address_is_a_whole_domain(tmp_path: Path, host: str, whole: bool) -> None:
+    """ADR-114 Amendment 42: the pass is kept for the deployment's base name; when that is the
+    organisation's whole domain, every name under it receives the pass, and preflight says so."""
+    _written(tmp_path)
+    config = OspreyConfig.model_validate(
+        {"profile": "small", "network": {"public_origin": f"https://{host}", "access_key": True}}
+    )
+    result = _preflight(tmp_path, config)
+    assert result.status is (Status.WARN if whole else Status.PASS), host
+    if whole:
+        assert f"every name under {host}" in result.what_is_wrong

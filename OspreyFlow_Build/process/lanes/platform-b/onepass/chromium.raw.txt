@@ -1,0 +1,11 @@
+# onepass in real Chromium (Playwright 1.64.1) against the real Caddy 2.11.4, credentials offered to the first name's origin only; this Mac
+## red: main a3df0f4's access_key.py and site.py (the pass host-only, ADR-114 Amendment 41)
+answered on demo.gate.localhost: demo.gate.localhost=200 id.demo.gate.localhost=401 bi.demo.gate.localhost=401; pass cookies kept: demo.gate.localhost
+answered on id.demo.gate.localhost: id.demo.gate.localhost=200 demo.gate.localhost=401 bi.demo.gate.localhost=401; pass cookies kept: id.demo.gate.localhost
+answered on bi.demo.gate.localhost: bi.demo.gate.localhost=200 demo.gate.localhost=401 id.demo.gate.localhost=401; pass cookies kept: bi.demo.gate.localhost
+no key given: demo.gate.localhost=401 id.demo.gate.localhost=401 bi.demo.gate.localhost=401
+## green: the branch (the pass for the base name, Amendment 42)
+answered on demo.gate.localhost: demo.gate.localhost=200 id.demo.gate.localhost=200 bi.demo.gate.localhost=200; pass cookies kept: .demo.gate.localhost
+answered on id.demo.gate.localhost: id.demo.gate.localhost=200 demo.gate.localhost=200 bi.demo.gate.localhost=200; pass cookies kept: .demo.gate.localhost
+answered on bi.demo.gate.localhost: bi.demo.gate.localhost=200 demo.gate.localhost=200 id.demo.gate.localhost=200; pass cookies kept: .demo.gate.localhost
+no key given: demo.gate.localhost=401 id.demo.gate.localhost=401 bi.demo.gate.localhost=401

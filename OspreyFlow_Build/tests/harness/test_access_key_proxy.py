@@ -98,7 +98,8 @@ class _Proxy:
 
     def ask(self, name: str, path: str = "/", *, method: str = "GET",
             user: str | None = None, key: str | None = None,
-            headers: dict[str, str] | None = None) -> tuple[int, dict[str, list[str]]]:  # fmt: skip
+            headers: dict[str, str] | None = None,
+            jar: Path | None = None) -> tuple[int, dict[str, list[str]]]:  # fmt: skip
         """One request through the proxy by `curl`, as a browser sends it: the name in the TLS
         handshake and the `Host`, resolved to this machine. Returns the status and the headers."""
         argv = [
@@ -107,6 +108,10 @@ class _Proxy:
         ]  # fmt: skip
         if user is not None:
             argv += ["-u", f"{user}:{key}"]
+        if jar is not None:
+            # curl's own cookie engine, which keeps and sends cookies by a browser's rules
+            # (RFC 6265 domain matching): the pass reaches a name only as a browser would send it.
+            argv += ["-b", str(jar), "-c", str(jar)]
         for field, value in (headers or {}).items():
             argv += ["-H", f"{field}: {value}"]
         out = subprocess.run(argv, capture_output=True, text=True, timeout=30, check=True).stdout
@@ -281,10 +286,10 @@ def test_the_key_lets_a_browser_in_gives_it_the_pass_and_never_reaches_behind(
     assert status == 200
     assert fields["x-robots-tag"] == ["noindex, nofollow"]
     (given,) = [c for c in fields["set-cookie"] if c.startswith(f"{access_key.PASS_COOKIE}=")]
-    # Host-only (no Domain): it is sent back to this one name alone, never to another subdomain of
-    # the deployment's domain; each of the three names asks once. Eight hours at most.
-    assert given == (f"{access_key.PASS_COOKIE}={proxy.token}; Path=/; Max-Age=28800; Secure; "
-                     "HttpOnly; SameSite=Lax")  # fmt: skip
+    # ADR-114 Amendment 42: for the deployment's own base name, so one answer passes all three
+    # names (and nothing outside the base). Eight hours at most.
+    assert given == (f"{access_key.PASS_COOKIE}={proxy.token}; Domain={HOST}; Path=/; Max-Age=28800; "
+                     "Secure; HttpOnly; SameSite=Lax")  # fmt: skip
     (seen,) = proxy.stand_in.seen
     assert seen.authorization is None, "the key reached the service behind the proxy"
 
@@ -478,3 +483,61 @@ def test_a_deployment_that_does_not_ask_is_answered_as_before(tmp_path: Path) ->
         process.kill()
         process.wait(timeout=10)
         stand_in.shutdown()
+
+
+# --- ADR-114 Amendment 42: one key prompt for the whole deployment -----------------------------------
+
+
+@pytest.mark.parametrize("first", NAMES)
+def test_one_answer_on_any_name_lets_the_other_two_through(proxy: _Proxy, first: str, tmp_path: Path) -> None:
+    """The owner's ruling of 13 November 2026: the key answered once, on whichever name a visitor
+    reaches first, and the other two go through without asking again."""
+    jar = tmp_path / "jar"
+    assert proxy.ask(first, "/", user="demo", key=KEY, jar=jar)[0] == 200
+    for name in NAMES:
+        status, fields = proxy.ask(name, "/after", jar=jar)
+        assert status == 200, name
+        assert fields["x-robots-tag"] == ["noindex, nofollow"]
+    assert all(seen.authorization is None for seen in proxy.stand_in.seen)
+
+
+@pytest.mark.parametrize("first", NAMES)
+def test_a_wrong_or_no_key_still_asks_on_all_three(proxy: _Proxy, first: str, tmp_path: Path) -> None:
+    jar = tmp_path / "jar"
+    assert proxy.ask(first, "/", user="demo", key="not the shared key", jar=jar)[0] == 401
+    for name in NAMES:
+        status, fields = proxy.ask(name, "/", jar=jar)
+        assert status == 401 and fields["x-robots-tag"] == ["noindex, nofollow"], name
+    assert proxy.stand_in.seen == []
+
+
+def _sent_to(set_cookie: str, origin: str, name: str) -> bool:
+    """Whether a browser that received `set_cookie` from `origin` sends it to `name`: RFC 6265 §5.3
+    step 6 and §5.1.3. With a `Domain` attribute, to that domain and the names under it; without
+    one, host-only, to `origin` alone. (`http.cookiejar`'s default policy is not a browser's: it
+    sends a host-only cookie to subdomains too.)"""
+    attributes = {
+        part.split("=", 1)[0].strip().lower(): (part.split("=", 1) + [""])[1].strip()
+        for part in set_cookie.split(";")[1:]
+    }
+    domain = attributes.get("domain", "").lstrip(".").lower()
+    if not domain:
+        return name == origin
+    if not (origin == domain or origin.endswith("." + domain)):
+        return False  # a browser refuses to store it at all (§5.3 step 6)
+    return name == domain or name.endswith("." + domain)
+
+
+def test_the_pass_goes_to_the_deployments_names_and_nowhere_else(proxy: _Proxy) -> None:
+    """Sent by a browser's own rules (RFC 6265 domain matching): to the deployment's base name and
+    the names under it, never to the domain above it, a sibling, or a name that merely ends with the
+    same letters."""
+    status, fields = proxy.ask(HOST, "/", user="demo", key=KEY)
+    assert status == 200
+    (given,) = [c for c in fields["set-cookie"] if c.startswith(f"{access_key.PASS_COOKIE}=")]
+    parent = HOST.split(".", 1)[1]
+    expected = {
+        HOST: True, f"id.{HOST}": True, f"bi.{HOST}": True, f"deep.id.{HOST}": True,
+        parent: False, f"other.{parent}": False, f"x{HOST}": False, f"{HOST}.example.org": False,
+    }
+    assert {name: _sent_to(given, HOST, name) for name in expected} == expected

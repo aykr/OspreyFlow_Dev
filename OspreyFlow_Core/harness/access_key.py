@@ -13,12 +13,13 @@ holds the user name, the hash and a new random pass, never the key. `ospreyflow 
 it into place as `access-key.caddy` and restarts the proxy, which imports it
 (`harness.site.render_caddyfile`) and mounts it alone.
 
-**The pass.** A browser that has answered with the key is given a cookie for that name alone
-(`osprey_pass`, host-only, HttpOnly, Secure, SameSite=Lax, eight hours), so it is asked once a
-name, and its own requests that carry a token of their own (the Glass's API, its WebSocket) or come
-from a frame still pass. The pass is a random value of its own, replaced each time the key is set;
-it is not the key. The tools on the server that reach the deployment by name read it from the same
-file (`harness.site.carry_the_pass`), as the owner who can read the file.
+**The pass.** A browser that has answered with the key is given a cookie for the deployment's base
+name (`osprey_pass`, `Domain=<host>`, HttpOnly, Secure, SameSite=Lax, kept eight hours by the
+browser; ADR-114 Amendment 42), so it is asked once for all three names, and its own requests that
+carry a token of their own (the Glass's API, its WebSocket) or come from a frame still pass. The
+pass is a random value of its own, replaced each time the key is set; it is not the key. The tools
+on the server that reach the deployment by name read it from the same file
+(`harness.site.carry_the_pass`), as the owner who can read the file.
 
 Nothing here prints the key or the hash.
 """
@@ -47,8 +48,8 @@ PENDING_FILE = f"{ACCESS_KEY_FILE}.pending"
 IN_PROXY = "/etc/caddy/access-key.caddy"
 #: The session cookie a browser is given once it has answered with the key.
 PASS_COOKIE = "osprey_pass"
-#: How long a pass lasts in a browser: a working day. Host-only (no `Domain`), so it is sent back to
-#: the one name that gave it, never to another subdomain; each of the three names asks once.
+#: How long a browser keeps a pass: a working day. The proxy itself accepts the pass until the key
+#: is set again. For the deployment's base name (Amendment 42): one answer passes all three names.
 PASS_SECONDS = 8 * 60 * 60
 #: The fewest characters a key may have.
 SHORTEST = 12
@@ -79,7 +80,10 @@ def snippet(user: str, hashed: str, token: str) -> str:
         + f"\theader Cookie *{cookie}*\n"
         + "}\n"
         + "(osprey_access_pass_set) {\n"
-        + f'\theader @osprey_answered +Set-Cookie "{cookie}; Path=/; Max-Age={PASS_SECONDS}; '
+        # ADR-114 Amendment 42: for the deployment's base name, given by the Caddyfile's import, so
+        # one answer passes all three names and nothing outside the base.
+        + f'\theader @osprey_answered +Set-Cookie "{cookie}; Domain={{args[0]}}; Path=/; '
+        + f"Max-Age={PASS_SECONDS}; "
         + "Secure; "
         + 'HttpOnly; SameSite=Lax"\n'
         + "}\n"
@@ -108,9 +112,29 @@ def read(path: Path) -> tuple[str, str, str]:
     user, hashed, token = found["user"], found["hash"], found["token"]
     if not (_USER.match(user) and _BCRYPT.match(hashed) and _TOKEN.match(token)):
         raise KeyRefused(f"{path} is not a file `python -m harness.access_key set` wrote")
-    if text != snippet(user, hashed, token):
+    if text not in (snippet(user, hashed, token), _before_amendment_42(user, hashed, token)):
         raise KeyRefused(f"{path} has been edited by hand; set the key again")
     return user, hashed, token
+
+
+def _before_amendment_42(user: str, hashed: str, token: str) -> str:
+    """The file exactly as `set` wrote it under Amendment 41 (its pass for one name alone), frozen
+    here as written then, not derived from today's `snippet`: still read, and written in the
+    current shape by `carry_into`, keeping the user, the hash and the pass."""
+    return (
+        "# Written by `python -m harness.access_key set` (ADR-114 Amendment 41): "
+        "the shared key's\n"
+        "# bcrypt hash and the pass a browser is given once it has answered; "
+        "never the key itself.\n"
+        "# Readable by its owner alone. Set it again with the same command; "
+        "never edit it by hand.\n"
+        f"(osprey_access_key) {{\n\t{user} {hashed}\n}}\n"
+        f"(osprey_access_pass) {{\n\theader Cookie *{PASS_COOKIE}={token}*\n}}\n"
+        "(osprey_access_pass_set) {\n"
+        f'\theader @osprey_answered +Set-Cookie "{PASS_COOKIE}={token}; Path=/; Max-Age=28800; '
+        'Secure; HttpOnly; SameSite=Lax"\n'
+        "}\n"
+    )
 
 
 def pass_token(directory: Path) -> str | None:
@@ -165,8 +189,19 @@ def carry_into(stage: Path, out_dir: Path, owner: tuple[int, int] | None = None)
         )
     for source in (out_dir / PENDING_FILE, in_place):
         if source.is_file():
-            shutil.copy2(source, stage / ACCESS_KEY_FILE)
-            _give(stage / ACCESS_KEY_FILE, owner)
+            staged = stage / ACCESS_KEY_FILE
+            try:
+                user, hashed, token = read(source)
+            except KeyRefused:
+                # Carried as it is, so preflight refuses it in words.
+                shutil.copy2(source, staged)
+            else:
+                # Written in the current shape (ADR-114 Amendment 42), the same user, hash and pass.
+                from harness.atomic import replace_whole
+
+                text = snippet(user, hashed, token).encode("utf-8")
+                replace_whole(staged, text, mode=0o600)
+            _give(staged, owner)
             return
 
 
