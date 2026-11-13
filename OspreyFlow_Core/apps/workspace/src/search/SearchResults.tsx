@@ -26,8 +26,11 @@ export interface SearchResultsProps {
   onShow: (nodes: Node[]) => void;
   /** Open, for a document: the reader with its first record. */
   onOpenDocument: (nodeId: string) => void;
-  /** The Ask line: Ask & Chat with the words carried over; nothing is sent until the person presses Ask. */
-  onAsk: (words: string) => void;
+  /** The Ask line: Ask & Chat with the words carried over; nothing is sent until the person presses Ask. Absent for
+   * someone Ask & Chat is not offered to (no ask_model): no line. */
+  onAsk?: (words: string) => void;
+  /** Kept but not drawn (a document opened from the results is read over the view; closing it shows them again). */
+  hidden?: boolean;
 }
 
 interface Filters {
@@ -62,6 +65,7 @@ export function SearchResults({
   onShow,
   onOpenDocument,
   onAsk,
+  hidden = false,
 }: SearchResultsProps) {
   const govuk = currentBrand() === "govuk";
   const [group, setGroup] = useState<string | null>(null);
@@ -120,7 +124,7 @@ export function SearchResults({
   const shown = answer.kind === "page" ? answer.page : null;
   const counts = offered ?? shown;
   const totalWords = counts ? `${records(counts.total)}${counts.counts_exact ? "" : " (counts may be incomplete)"}` : null;
-  const askLine = (
+  const askLine = onAsk && (
     <p className={govuk ? "govuk-body search-results__ask" : "search-results__ask"}>
       <button type="button" className={govuk ? "govuk-link search-results__link" : "search-results__link"} onClick={() => onAsk(query)}>
         {`Ask a question about '${query}' instead`}
@@ -139,7 +143,7 @@ export function SearchResults({
   const byId = new Map((shown?.nodes ?? []).map((n) => [n.id, n]));
 
   return (
-    <section className={govuk ? "search-results search-results--govuk" : "search-results"} aria-labelledby={headingId}>
+    <section className={govuk ? "search-results search-results--govuk" : "search-results"} aria-labelledby={headingId} hidden={hidden}>
       <button type="button" className={govuk ? "govuk-back-link search-results__back" : "search-results__back"} onClick={onBack}>
         {`Back to ${backLabel}`}
       </button>
@@ -310,7 +314,7 @@ function ResultItem({
         </p>
       )}
       <div className="search-results__actions">
-        <button type="button" className={action} aria-label={`Show ${name} on the graph`} disabled={nodes.length === 0} onClick={() => onShow(nodes)}>
+        <button type="button" className={action} aria-label={`Show on graph: ${name}`} disabled={nodes.length === 0} onClick={() => onShow(nodes)}>
           Show on graph
         </button>
         {result.is_document && first && (

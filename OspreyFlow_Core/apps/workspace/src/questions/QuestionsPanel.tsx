@@ -45,6 +45,9 @@ export interface QuestionsPanelProps {
   /** What to read from when the panel opens, before the analyst chooses; absent, the selection
    * when there is one, else the graph. */
   initialReadFrom?: ReadFrom;
+  /** Words carried over from the search results page's Ask line (ADR-145 Amendment 15 Part A): put in the question
+   * box, focused, and not sent until the person presses Ask. A new `at` carries the same words again. */
+  draft?: { text: string; at: number } | null;
 }
 
 /** What *Whole case* does, in one line (ADR-098 Amendment 9), shown under the choice before anything
@@ -144,10 +147,17 @@ export function QuestionsPanel({
   view = null,
   onLeaveView,
   initialReadFrom,
+  draft = null,
 }: QuestionsPanelProps) {
   const viewId = view?.id ?? null;
   const [entries, setEntries] = useState<QuestionAnswer[] | null>(null);
   const [question, setQuestion] = useState("");
+  const questionBox = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!draft) return;
+    setQuestion(draft.text);
+    questionBox.current?.focus();
+  }, [draft]);
   const [asking, setAsking] = useState(false);
   const [deciding, setDeciding] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -471,6 +481,7 @@ export function QuestionsPanel({
         </label>
         <textarea
           id="questions-input"
+          ref={questionBox}
           className="input"
           rows={3}
           maxLength={2000}

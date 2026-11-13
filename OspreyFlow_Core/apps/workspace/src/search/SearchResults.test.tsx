@@ -154,7 +154,7 @@ test("Show on graph hands over every record the result stands for", async () => 
   serve(PAGE());
   const props = draw();
   const items = within(await screen.findByRole("list", { name: "Results" })).getAllByRole("listitem");
-  fireEvent.click(within(items[0]!).getByRole("button", { name: `Show ${nodeLabel(PAGE().nodes[0]!)} on the graph` }));
+  fireEvent.click(within(items[0]!).getByRole("button", { name: `Show on graph: ${nodeLabel(PAGE().nodes[0]!)}` }));
   expect(props.onShow).toHaveBeenCalledWith([expect.objectContaining({ id: "p1" }), expect.objectContaining({ id: "p2" })]);
 });
 

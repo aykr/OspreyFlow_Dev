@@ -1,0 +1,37 @@
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+index 3f69e5c..3f1bda4 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+@@ -103,6 +103,8 @@ const EXTRA_STATES: Record<string, string[]> = {
+   // ADR-144 (L3.2b): case views as another member sees them, the Save as a view form, and the banner
+   // over an opened view.
+   // ADR-144 Amendment 3: the graph's *Views ▾*, closed, open on the case's views, and open on none.
++  // ADR-145 Amendment 15 Part A: the search results page open, with nothing found, on the fallback and refused.
++  "search-results-harness.html": ["open=1", "open=1&state=none", "open=1&state=limited", "open=1&state=refused"],
+   "views-harness.html": ["in=drawer", "in=drawer&asking=delete", "in=drawer&long=1", "as=bob", "show=form", "show=lens", "show=merged", "show=merged&notes=open", "asking=delete", "show=menu", "show=menu&open=1", "show=menu&open=1&empty=1"],
+   // ADR-143 decisions 4 to 7 (L3.3): a board open with its drawn and loaded items, its inspector, its
+   // item and link forms and the withdrawal's question; another member's read-only view; a blank board;
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 89c1230..cf3b32e 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -1140,6 +1140,19 @@ export const WELCOME_ACTIONS = defineActionRegistry("WELCOME_ACTIONS", [
+   "close-the-welcome-panel",
+ ] as const);
+ 
++// The search results page (the owner's navigation decision of 13 November 2026, Part A; ADR-145 Amendment 15 Part A):
++// opened by Enter in the top bar's search box, each of its actions by keyboard, and Back with focus in the box.
++export const SEARCH_RESULTS_ACTIONS = defineActionRegistry("SEARCH_RESULTS_ACTIONS", [
++  "open-search-results-by-keyboard",
++  "choose-a-result-group-by-keyboard",
++  "filter-search-results-by-keyboard",
++  "next-page-of-results-by-keyboard",
++  "show-a-result-on-the-graph-by-keyboard",
++  "open-a-document-from-the-results-by-keyboard",
++  "ask-instead-from-the-results-by-keyboard",
++  "back-from-the-results-by-keyboard",
++] as const);
++
+ // ADR-124 decision 2 (U6b): the dialog a reader is shown when their own view of the case is past a cap.
+ export const VIEW_OVER_CAP_ACTIONS = defineActionRegistry("VIEW_OVER_CAP_ACTIONS", [
+   "see-the-over-cap-dialog-when-the-server-says-the-view-is-too-large",

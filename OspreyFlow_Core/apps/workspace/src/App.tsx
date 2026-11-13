@@ -99,6 +99,7 @@ import {
 } from "./ontology/schema";
 import { fetchCaseLinkTypes, type CaseLinkTypes } from "./linktypes/linkTypesApi";
 import { GlobalSearch } from "./search/GlobalSearch";
+import { SearchResults } from "./search/SearchResults";
 import { drawSearchResult } from "./search/drawSearchResult";
 import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
 import { IngestStudio } from "./ingest/IngestStudio";
@@ -692,6 +693,20 @@ export function App() {
     null,
   );
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  // The search results page (ADR-145 Amendment 15 Part A): the words searched and the view's name the person left.
+  // While it shows, it fills the main area over that view, which stays as it was beneath it, and no view is current.
+  const [searching, setSearching] = useState<{ query: string; left: string } | null>(null);
+  // Back from the results: focus returns to the search box once the view beneath is reachable again.
+  const focusSearchBox = useRef(false);
+  useEffect(() => {
+    if (searching !== null || !focusSearchBox.current) return;
+    focusSearchBox.current = false;
+    document.querySelector<HTMLElement>('.top-bar [role="combobox"]')?.focus();
+  }, [searching]);
+  // The Ask line's words, carried into Ask & Chat's question box, not sent.
+  const [questionDraft, setQuestionDraft] = useState<{ text: string; at: number } | null>(null);
+  // Another case is another search: its results are not this one's.
+  useEffect(() => setSearching(null), [investigationId]);
   // The types the map places (`placeableTypes`): read by the working-set subscription, which is
   // registered once, so a ref rather than the schema state it is worked out from.
   const placeableRef = useRef<ReadonlySet<string>>(placeableTypes(null));
@@ -1734,14 +1749,19 @@ export function App() {
       .map((id) => ({
         id,
         label: VIEW_LABELS[id],
-        pressed: view === id,
+        // Part A: while the search results show, no view is current, and choosing any view leaves them.
+        pressed: view === id && searching === null,
         onSelect:
           id === "boards"
             ? () => {
+                setSearching(null);
                 setBoardToOpen(null);
                 setView("boards");
               }
-            : () => setView(id),
+            : () => {
+                setSearching(null);
+                setView(id);
+              },
       })),
   );
   const showsWorkingSetTools =
@@ -1781,6 +1801,10 @@ export function App() {
               investigationId={investigationId}
               entityTypes={ontologySchema?.entity_types.map((e) => e.name) ?? []}
               onApplyDelta={applyStarterDelta}
+              // Part A: Enter on the typed words opens the results page over the view on screen.
+              onSearch={(query) =>
+                setSearching({ query, left: view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph" })
+              }
               screenNodes={() => {
                 const graph = workingSetRef.current.graph;
                 return graph.nodes().map((id) => graph.getNodeAttribute(id, "data"));
@@ -1801,7 +1825,10 @@ export function App() {
             ? [
                 ...(mainViews.length > 0 ? mainViews : otherViews),
                 ...(dossierNodeId
-                  ? [{ id: "dossier", label: "Messages", pressed: view === "dossier", onSelect: () => setView("dossier") }]
+                  ? [{ id: "dossier", label: "Messages", pressed: view === "dossier" && searching === null, onSelect: () => {
+                      setSearching(null);
+                      setView("dossier");
+                    } }]
                   : []),
               ]
             : []
@@ -1880,6 +1907,8 @@ export function App() {
       )}
       {/* `position: relative` so the keys panel, over whichever view is on screen, is placed in it. */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
+      {/* Part A: the view left stays as it was beneath the search results, out of reach while they show. */}
+      <div style={{ display: "contents" }} inert={app === "glass" && searching !== null && readerDocumentId === null ? true : undefined}>
       {/* ADR-145 Amendment 12: the keys panel over any view the view switch opens, not only the graph's
           (it was drawn beside the graph alone, so Help did nothing visible elsewhere). */}
       {welcomeOpen && !inCanvasArea && welcomePanel}
@@ -2580,6 +2609,37 @@ export function App() {
         </BottomPanelFrame>
       )}
       </div>
+      {/* Part A: the results fill the main area, over the view left, hidden (kept) while a document is read from them. */}
+      {app === "glass" && searching !== null && investigationId && bearerToken && (
+        <SearchResults
+          key={searching.query}
+          hidden={readerDocumentId !== null}
+          apiBaseUrl={API_BASE_URL}
+          bearerToken={bearerToken}
+          investigationId={investigationId}
+          query={searching.query}
+          backLabel={searching.left}
+          onBack={() => {
+            focusSearchBox.current = true;
+            setSearching(null);
+          }}
+          onShow={(nodes) => {
+            void seedToCanvas(nodes, []);
+            setSelectedNode(nodes[0] ?? null);
+            setSearching(null);
+            setView("graph");
+          }}
+          onOpenDocument={(id) => {
+            setReaderFallback(undefined);
+            setReaderDocumentId(id);
+          }}
+          onAsk={railEntries(rights).includes("questions") ? (words) => {
+            setQuestionDraft({ text: words, at: Date.now() });
+            setQuestionsOpen(true);
+          } : undefined}
+        />
+      )}
+      </div>
       </div>
       {showsWorkingSetTools && (
         <StatusBar
@@ -2660,6 +2720,7 @@ export function App() {
           }}
           view={questionsView}
           onLeaveView={() => setQuestionsView(null)}
+          draft={questionDraft}
         />
       </Drawer>
       {/* ADR-144 decision 5: the open case's *Views in this case*, then every case once with its views. */}
