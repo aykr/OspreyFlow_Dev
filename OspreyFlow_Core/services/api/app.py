@@ -2154,6 +2154,20 @@ async def get_principal(
                 "Try again shortly.",
             },
         ) from exc
+    # ADR-148 Amendment 10: a principal admitted to named routes alone (a dashboard identity on
+    # Entra ID) is refused every other, before anything is read for it.
+    if identity.routes is not None:
+        route = request.scope.get("route")
+        asked = f"{request.method} {getattr(route, 'path', request.url.path)}"
+        if asked not in identity.routes:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "route_not_admitted",
+                    "message": "this identity is admitted only to "
+                    + ", ".join(sorted(identity.routes)),
+                },
+            )
     # The token's own roles, kept apart for what must read a custom role's rights afresh later
     # (the delta socket's ticket, `issue_ws_ticket`).
     request.state.token_roles = list(identity.roles)
