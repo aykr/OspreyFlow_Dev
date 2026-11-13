@@ -667,7 +667,8 @@ def test_a_reference_pinned_by_digest_is_locked_from_the_reference_never_the_reg
 
     result = render(config, resolver=_ghcr_unreachable(asked))
 
-    lock = {row["service"]: row for row in yaml.safe_load(result.artefacts["versions.lock"])["images"]}
+    rows = yaml.safe_load(result.artefacts["versions.lock"])["images"]
+    lock = {row["service"]: row for row in rows}
     for image in pinned:
         assert lock[image.service]["digest"] == image.image.partition("@")[2]
         assert lock[image.service]["source"] == "reference"
