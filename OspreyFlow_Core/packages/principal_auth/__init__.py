@@ -1239,11 +1239,8 @@ class PrincipalResolver:
         store is read (`_verified_dashboard`); its principal built as every other is."""
         mapping = self._claim_mapping
         assert mapping.tenant_id is not None and self._dashboard_source is not None
+        # The API's own audience is refused there: a verified token's `aud` is the configured one.
         application_id = _verified_dashboard(claims, mapping)
-        if application_id == self._config.oidc_audience:
-            raise PrincipalResolutionError(
-                "token is app-only and its client is no dashboard identity's application"
-            )
         try:
             stored = await asyncio.wait_for(
                 self._dashboard_source.dashboard(mapping.tenant_id, application_id),

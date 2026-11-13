@@ -36,6 +36,7 @@ from tests.services.api.test_auth_entra_claims import (
     OTHER_TENANT,
     TENANT,
     FakePeople,
+    _config,
     _entra_config,
     _key,
 )
@@ -119,6 +120,26 @@ def test_an_app_only_token_that_is_no_registered_dashboard_is_refused(
         dashboards.rows[(TENANT, own)] = StoredDashboard(own, "OFFICIAL", "unit-1", ())
     with pytest.raises(PrincipalResolutionError, match=why):
         _resolve(_resolver(jwks_url, dashboards), claims, keypair)
+
+
+def test_the_api_s_own_application_is_refused_where_the_audience_is_its_uri(
+    keypair, jwks_url
+) -> None:
+    """The audience may be the API's application id URI (`api://…`), not its id: then the only
+    defence naming the API's own application is the mapping's `api_client_id`, held here alone
+    (the lane review of 009a889: each own-client defence planted on its own)."""
+    audience = "api://osprey-api"
+    dashboards = FakeDashboards()
+    dashboards.rows[(TENANT, CLIENT_ID)] = StoredDashboard(CLIENT_ID, "OFFICIAL", "unit-1", ())
+    resolver = PrincipalResolver(
+        _config(jwks_url, oidc_issuer=ISSUER, oidc_audience=audience),
+        claim_mapping=BY_EXTENSION.model_copy(update={"api_client_id": CLIENT_ID}),
+        role_source=FakePeople(), dashboard_source=dashboards, role_lookup_timeout_seconds=0.2,
+    )  # fmt: skip
+    with pytest.raises(PrincipalResolutionError, match="client"):
+        _resolve(resolver, app_only_claims(CLIENT_ID, aud=audience), keypair)
+    # The same token shape from a registered dashboard is its principal: the case asks the client.
+    assert _resolve(resolver, app_only_claims(aud=audience), keypair).id == DASHBOARD
 
 
 def test_without_the_dashboard_store_every_app_only_token_is_refused_as_before(
