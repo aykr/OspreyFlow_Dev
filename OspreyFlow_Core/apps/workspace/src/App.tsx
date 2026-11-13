@@ -2671,7 +2671,7 @@ export function App() {
       </Drawer>
       {/* ADR-144 decision 5: the open case's *Views in this case*, then every case once with its views. */}
       <Drawer open={casesOpen} onClose={() => setCasesOpen(false)} title="Cases">
-        <div style={{ display: "grid", gap: "var(--sp-8)" }}>
+        <div className="drawer-stack">
           {investigationId && (
             <ViewsPanel
               apiBaseUrl={API_BASE_URL}

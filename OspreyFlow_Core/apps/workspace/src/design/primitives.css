@@ -147,6 +147,10 @@
   display: flex; flex-direction: column;
 }
 .drawer > .panel__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* A drawer's stack of sections (the Cases drawer's views and cases): one column, the drawer's width at most, never
+   its content's. With a grid's implicit `auto` column a long view name widened it to 573 px in the 360 px drawer
+   and pushed the view's tag out (ADR-145 Amendment 14 decision 1, `views.spec.ts`). */
+.drawer-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-8); min-width: 0; }
 .drawer__title { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-8); }
 
 .popover {

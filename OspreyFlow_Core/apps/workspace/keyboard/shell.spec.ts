@@ -378,25 +378,6 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     await expect(cases).toHaveAttribute("aria-expanded", "false");
   });
 }
-  const sections = region.getByRole("navigation", { name: "In the Glass" });
-  const rail = page.getByRole("navigation", { name: "Workspace" });
-  await rail.getByRole("button", { name: "Explore Details" }).focus();
-  await page.keyboard.press("Enter");
-  await page.getByRole("group", { name: "Explore Details" }).getByRole("button", { name: "Connection strength" }).focus();
-  await page.keyboard.press("Enter");
-  await expect(page.getByText("glass, strength, on case kestrel")).toBeVisible();
-  for (const name of ["Graph", "Drawing board"]) await expect(sections.getByRole("button", { name })).not.toHaveAttribute("aria-current", "page");
-  await expect(region).not.toContainText("Graph: the case's data");
-  await expect(region).not.toHaveAttribute("aria-describedby");
-  await expect(rail.getByRole("button", { name: "Explore Details, Connection strength open" })).toBeVisible();
-  await expect(rail.locator('[aria-pressed="true"]')).toHaveCount(0);
-  await expect(rail.locator('[aria-expanded="true"]')).toHaveCount(0);
-  await sections.getByRole("button", { name: "Graph" }).focus();
-  await page.keyboard.press("Enter");
-  await expect(page.getByText("glass, graph, on case kestrel")).toBeVisible();
-  await expect(sections.getByRole("button", { name: "Graph" })).toHaveAttribute("aria-current", "page");
-  await expect(region).toHaveAccessibleDescription("Graph: the case's data. Saved views are under Views or Cases.");
-});
 
 // ADR-146 decision 6 (rule 13): Home's Needs your attention opens the alert, not its case.
 test("an alert on Home, focused, is opened at its address by Enter", async ({ page }) => {
@@ -720,11 +701,11 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
     const drawer = page.getByRole("dialog", { name: "Cases" });
     await expect(drawer).toBeVisible();
-    const check = async () => {
+    // What the case asserts, returned rather than thrown, so `expect.poll` can wait for the frame after a resize.
+    const measure = async () => {
       const row = (await page.getByRole("region", { name: "You are in the Glass" }).boundingBox())!;
       const bar = (await page.locator(".top-bar").boundingBox())!;
       const box = (await drawer.boundingBox())!;
-      expect(box.y).toBeGreaterThanOrEqual(Math.floor(Math.max(bar.y + bar.height, row.y + row.height)));
       // Every control above the drawer's top and inside its columns is the topmost thing at its own centre.
       const covered = await page.evaluate(() => {
         const top = document.querySelector<HTMLElement>("[role='dialog']")!.getBoundingClientRect();
@@ -740,12 +721,14 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
           })
           .map((el) => el.getAttribute("aria-label") ?? el.textContent?.trim());
       });
-      expect(covered).toEqual([]);
-      return box.y;
+      return { underTheChrome: box.y >= Math.floor(Math.max(bar.y + bar.height, row.y + row.height)), covered, top: box.y, chrome: row.y + row.height };
     };
-    const wide = await check();
+    await expect.poll(measure).toMatchObject({ underTheChrome: true, covered: [] });
+    const wide = await measure();
     await page.setViewportSize({ width: 900, height: 900 });
-    await expect.poll(check).toBeGreaterThan(wide);
+    // At 900 the row wraps, so the chrome is deeper; the drawer is measured again and follows it.
+    await expect.poll(async () => (await measure()).chrome).toBeGreaterThan(wide.chrome);
+    await expect.poll(measure).toMatchObject({ underTheChrome: true, covered: [] });
     // Its own way out is reached by keyboard: the drawer takes focus as it opens, and Tab reaches Close.
     await drawer.focus();
     await page.keyboard.press("Tab");

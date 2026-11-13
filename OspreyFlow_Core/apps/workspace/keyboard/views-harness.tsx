@@ -198,7 +198,7 @@ createRoot(container).render(
       // ADR-145 Amendment 14 decision 1: `?in=drawer` draws the panel and the list as `App.tsx`'s Cases drawer
       // does, in the real 360 px drawer, where the owner saw Open cover the Private tag.
       <Drawer open onClose={() => undefined} title="Cases">
-        <div style={{ display: "grid", gap: "var(--sp-8)" }}>
+        <div className="drawer-stack">
           {listed}
         </div>
       </Drawer>

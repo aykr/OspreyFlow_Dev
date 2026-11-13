@@ -2,9 +2,12 @@
    Tokens only (`design/tokens.css`). Under the GOV.UK brand the panel and the form use the package's
    own govuk-summary-list, govuk-tag, govuk-form-group and govuk-button classes; these rules only
    space them. Every control is at least 24 by 24 pixels (axe target-size). */
-.case-views { display: grid; gap: var(--sp-8); }
-.case-views__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-4); }
-.case-views__row { display: grid; gap: var(--sp-4); padding: var(--sp-4) 0; border-bottom: 1px solid var(--border-subtle); }
+/* Each grid's one column is `minmax(0, 1fr)` and the panel itself may shrink (`min-width: 0`): with a grid's
+   default (`auto`) a long view name widened the panel past the 360 px Cases drawer and pushed its tag out
+   (ADR-145 Amendment 14 decision 1, found by `views.spec.ts`'s long name). */
+.case-views { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-8); min-width: 0; }
+.case-views__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+.case-views__row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); padding: var(--sp-4) 0; border-bottom: 1px solid var(--border-subtle); }
 .case-views__line { display: flex; align-items: center; gap: var(--sp-8); min-width: 0; }
 .case-views__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-13); color: var(--text-primary); }
 .case-views__actions, .case-views__confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); }
