@@ -998,6 +998,7 @@ from .sentence_rules import (
     strength_context,
 )
 from .service_identity import (
+    DASHBOARD_IS_NO_SERVICE_IDENTITY,
     DEPLOYMENT_CLIENT_WORDS,
     ServiceIdentityRefused,
     ServiceIdentityVerifier,
@@ -2297,11 +2298,24 @@ async def get_service_identity(
     anyio's shared pool, with no bound of its own)."""
     verifier: ServiceIdentityVerifier = request.app.state.service_identities
     try:
-        return await in_keys_thread(verifier.client_of, credentials.credentials)
+        client = await in_keys_thread(verifier.client_of, credentials.credentials)
     except SigningKeysUnavailable as unavailable:
         raise HTTPException(status_code=503, detail=str(unavailable)) from unavailable
     except ServiceIdentityRefused as refused:
         raise HTTPException(status_code=refused.status, detail=str(refused)) from refused
+    # ADR-148 Amendment 10: a client Admin › Dashboards registered is a dashboard identity, which
+    # reads the report feed and never submits runs, whatever its token holds.
+    store = getattr(request.app.state, "people_store", None)
+    if store is not None:
+        try:
+            registered = await store.dashboard(store.tenant_id, client)
+        except Exception as exc:  # noqa: BLE001 - any failure of the read is the one 503
+            raise HTTPException(
+                status_code=503, detail="the dashboard identities could not be read"
+            ) from exc
+        if registered is not None:
+            raise HTTPException(status_code=403, detail=DASHBOARD_IS_NO_SERVICE_IDENTITY)
+    return client
 
 
 ServiceIdentityDep = Annotated[str, Depends(get_service_identity)]

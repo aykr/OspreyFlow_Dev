@@ -1,0 +1,58 @@
+# red: a dashboard never submits runs, before the code, 6a664b4, 2026-11-13T20:44:02Z
+FF.                                                                      [100%]
+=================================== FAILURES ===================================
+_______ test_a_token_carrying_the_dashboard_role_is_no_service_identity ________
+
+jwks_url = 'http://127.0.0.1:65470/jwks.json'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x107a4aa90>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x113983a30>)
+
+    def test_a_token_carrying_the_dashboard_role_is_no_service_identity(jwks_url, keypair) -> None:
+        """Its client holds this API's `Dashboard.Read`: a dashboard's, registered here or not."""
+        from principal_auth import DASHBOARD_APP_ROLE
+    
+        token = _app_token(keypair, roles=["Runs.Trigger", DASHBOARD_APP_ROLE])
+>       with pytest.raises(ServiceIdentityRefused, match="dashboard") as refused:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ServiceIdentityRefused
+
+../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:297: Failed
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:44:02] "GET /jwks.json HTTP/1.1" 200 -
+_ test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity[registered-dashboard] _
+
+jwks_url = 'http://127.0.0.1:65473/jwks.json'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x1139afe10>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x1139afa90>)
+registered = True
+
+    @pytest.mark.parametrize("registered", [True, False], ids=["registered-dashboard", "not-a-dashboard"])
+    def test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity(
+        jwks_url, keypair, registered
+    ) -> None:
+        """Through the real `get_service_identity`: a client Admin › Dashboards registered is refused
+        before anything is read, though its token holds no dashboard role; any other gets past this
+        door (to whatever the route's own dependencies then answer, here without the app's start)."""
+        from fastapi.testclient import TestClient
+        from services.api.app import app
+    
+        before = {k: getattr(app.state, k, None) for k in ("service_identities", "people_store")}
+        app.state.service_identities = _verifier(jwks_url)
+        app.state.people_store = _Dashboards() if registered else None
+        try:
+            answered = TestClient(app, raise_server_exceptions=False).post(
+                "/v1/runs", json={}, headers={"Authorization": f"Bearer {_app_token(keypair)}"}
+            )
+        finally:
+            for key, value in before.items():
+                setattr(app.state, key, value)
+        refused = answered.status_code == 403 and "dashboard identity" in answered.text
+>       assert refused is registered, (answered.status_code, answered.text)
+E       AssertionError: (500, 'Internal Server Error')
+E       assert False is True
+
+../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:336: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:44:05] "GET /jwks.json HTTP/1.1" 200 -
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_a_token_carrying_the_dashboard_role_is_no_service_identity
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity[registered-dashboard]
+2 failed, 1 passed, 26 deselected in 3.79s
