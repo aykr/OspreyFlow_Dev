@@ -1,0 +1,15 @@
+                with pytest.raises(WebSocketDisconnect) as closed:
+                    with client.websocket_connect(
+                        "/v1/investigations/case-1/stream", headers={"Authorization": "Bearer x"}
+                    ) as socket:
+                        socket.receive_json()
+                assert closed.value.code == 1008
+>               assert (principal.id in read) is admitted, f"{kind}: {principal.id}'s case was read"
+E               AssertionError: dashboard identity: dash's case was read
+E               assert ('dash' in ['dash']) is False
+E                +  where 'dash' = Principal(id='dash', clearance='SECRET', org_unit='u', receivable_handling_codes=[], roles=['reports_viewer'], datasets=None, routes=['GET /v1/investigations', 'GET /v1/investigations/{investigation_id}/reports/feed']).id
+
+../OspreyFlow_Build/tests/services/api/test_route_gate.py:149: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_gate.py::test_a_principal_admitted_to_named_routes_never_opens_a_case_stream[dashboard identity]
+1 failed, 2 deselected in 1.73s
