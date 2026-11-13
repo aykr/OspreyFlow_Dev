@@ -15,14 +15,15 @@ from pathlib import Path
 import pytest
 from harness.render import load_config
 from services.api.mapconfig_loader import load_map_config
-
-from schemas.deployment import OspreyConfig
 from tools.layout import REPO as REPO_ROOT
 from tools.osprey_bundle import (
     BundleResult,
     NonRedistributableProviderError,
     bundle_map_providers,
 )
+
+from schemas.deployment import OspreyConfig
+from tests.committed import committed_copy
 
 FIXTURE_ALL_OPEN = """
 map:
@@ -111,8 +112,9 @@ def _fake_docker_tag(_local_tag: str, _pull_mode_tag: str) -> None:
 
 
 @pytest.fixture
-def bundle_config() -> OspreyConfig:
-    return load_config(REPO_ROOT / "osprey.yaml")
+def bundle_config(tmp_path_factory: pytest.TempPathFactory) -> OspreyConfig:
+    # The commit's text, not the working copy: a lane's copy is the owner's (`tests/committed.py`).
+    return load_config(committed_copy(REPO_ROOT / "osprey.yaml", tmp_path_factory.mktemp("cfg")))
 
 
 def test_build_bundle_stages_every_expected_file(
@@ -359,7 +361,6 @@ def test_a_missing_local_image_is_refused_by_name_not_by_a_bare_docker_tag_trace
     tag` that refuses — not a stub standing in for it.
     """
     import pytest
-
     from tools.osprey_bundle import MissingLocalImageError, _docker_tag
 
     absent = "osprey/no-such-service:definitely-not-built-13b"

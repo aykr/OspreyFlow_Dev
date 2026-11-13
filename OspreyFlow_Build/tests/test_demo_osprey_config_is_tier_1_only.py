@@ -13,22 +13,36 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from services.api.mapconfig_loader import load_map_config
 from tools.layout import REPO as _REPO
+
+from tests.committed import committed_copy
 
 OSPREY_YAML = _REPO / "osprey.yaml"
 
 
-def test_every_provider_in_the_committed_config_is_open_and_redistributable() -> None:
-    config = load_map_config(OSPREY_YAML)
+@pytest.fixture(scope="module")
+def committed_config(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The committed `osprey.yaml`, not the working copy: in a lane worktree that is the owner's
+    own config (`tests/committed.py`), and rule 9 is about what the repository ships."""
+    return committed_copy(OSPREY_YAML, tmp_path_factory.mktemp("committed"))
+
+
+def test_every_provider_in_the_committed_config_is_open_and_redistributable(
+    committed_config: Path,
+) -> None:
+    config = load_map_config(committed_config)
     assert config.providers  # not vacuously true
     for provider in config.providers:
         assert provider.licence.client_scope == "open", provider.id
         assert provider.licence.redistributable is True, provider.id
 
 
-def test_the_default_provider_is_tier_1_local_and_needs_no_credential() -> None:
-    config = load_map_config(OSPREY_YAML)
+def test_the_default_provider_is_tier_1_local_and_needs_no_credential(
+    committed_config: Path,
+) -> None:
+    config = load_map_config(committed_config)
     default = next(p for p in config.providers if p.id == config.default)
     assert default.credential is None
     assert default.proxy == "none"
@@ -48,10 +62,12 @@ def test_no_maps_file_is_committed_so_the_demo_and_ci_start_from_this_config() -
     assert [p for p in tracked if p.rsplit("/", 1)[-1] in {"maps.yaml", "map-keys.yaml"}] == []
 
 
-def test_a_conduit_with_no_maps_file_serves_exactly_this_config(tmp_path: Path) -> None:
+def test_a_conduit_with_no_maps_file_serves_exactly_this_config(
+    tmp_path: Path, committed_config: Path
+) -> None:
     from services.api.map_admin import InMemoryMapAdminAudit, MapAdmin, MapKeyFile, MapSettingsFile
 
-    installed = load_map_config(OSPREY_YAML)
+    installed = load_map_config(committed_config)
     admin = MapAdmin(
         installed=installed, settings_file=MapSettingsFile(tmp_path), key_file=MapKeyFile(tmp_path),
         audit=InMemoryMapAdminAudit(), tiles_root=tmp_path,
