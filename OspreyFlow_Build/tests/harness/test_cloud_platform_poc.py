@@ -622,3 +622,33 @@ def test_every_workload_that_serves_a_port_says_when_it_is_ready(poc: dict[str, 
     by_name = _by_name(poc)
     assert "127.0.0.1:8000/healthz" in " ".join(by_name["api"]["probe"]["exec"])
     assert "127.0.0.1:8080/" in " ".join(by_name["workspace"]["probe"]["exec"])
+
+
+
+def test_the_install_says_how_many_connections_the_managed_postgres_must_allow(
+    runbooks: dict[str, str],
+) -> None:
+    """R1 on kind, finding 15: a new Conduit beside the old one in a rolling update failed at start with
+    `TooManyConnectionsError` (the stand-in allows PostgreSQL's 100; one Conduit held 51 at rest). A
+    managed Postgres's limit follows its instance class unless its parameter group sets it, so the
+    install says the least to set: two Conduits (the update's old and new), the worker opening the same
+    stores, the gateway and an operator's reserve. The Conduit's figures are ADR-114 Amendment 43's
+    (`harness.profiles` once lane/admin-pg merges, held there by a running Conduit's own pools); this
+    test takes them from there when they are, and never keeps a second count beside them."""
+    import importlib
+
+    from harness.cloud_platform import runbooks as rb
+
+    profiles = importlib.import_module("harness.profiles")
+    for name in ("CONDUIT_POOL_CEILING", "RUNNING_LOADS_ALLOWED", "GATEWAY_POOL_MAX", "OPERATOR_RESERVE"):
+        if hasattr(profiles, name):
+            assert getattr(rb, name) == getattr(profiles, name), name
+    assert rb.POSTGRES_MAX_CONNECTIONS == (
+        2 * (rb.CONDUIT_POOL_CEILING + rb.RUNNING_LOADS_ALLOWED)
+        + rb.CONDUIT_POOL_CEILING + rb.RUNNING_LOADS_ALLOWED  # the worker opens the same stores
+        + rb.GATEWAY_POOL_MAX + rb.OPERATOR_RESERVE
+    )
+    needs = runbooks["INSTALL.md"]
+    needs = needs[needs.index("**What it needs.**") : needs.index("## 1.")]
+    assert f"`max_connections` of at least {rb.POSTGRES_MAX_CONNECTIONS}" in needs
+    assert "parameter group" in needs and "Amendment 43" in needs

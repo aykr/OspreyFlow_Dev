@@ -35,6 +35,21 @@ RENDER = '"$PY" -m harness.render --config "$CONFIG"'
 _FENCE = re.compile(r"^```bash( platform)?\n(.*?)^```\n", re.S | re.M)
 
 
+#: The managed PostgreSQL's least `max_connections` (R1 on kind, finding 15). The Conduit's figures are
+#: ADR-114 Amendment 43's (lane/admin-pg: `harness.profiles`, where a running Conduit's own pools hold
+#: them; `test_cloud_platform_poc.py` holds these equal to them once it merges): one Conduit's pools at
+#: their `max_size`, and the one connection each running load holds outside them.
+CONDUIT_POOL_CEILING = 220
+RUNNING_LOADS_ALLOWED = 20
+GATEWAY_POOL_MAX = 10
+OPERATOR_RESERVE = 20
+#: Two Conduits (an update's old and new pods, side by side), the worker (which opens the same stores),
+#: the gateway, and an operator's reserve. No Keycloak or Superset on this profile.
+POSTGRES_MAX_CONNECTIONS = (
+    3 * (CONDUIT_POOL_CEILING + RUNNING_LOADS_ALLOWED) + GATEWAY_POOL_MAX + OPERATOR_RESERVE
+)
+
+
 def command_blocks(text: str, *, on_the_platform: bool) -> list[str]:
     """A runbook's blocks in order: every `bash` block, and the `bash platform` blocks only when
     the runbook is followed on the client's platform."""
@@ -110,6 +125,11 @@ A block fenced `bash later` is not part of that order: the words before it say w
 two app registrations in tenant `{claims.tenant_id}`, the Glass (application id `{claims.client_id}`)
 and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the Glass is
 granted), with the claims `cloud_platform.claims` names.
+
+**The managed PostgreSQL** allows a `max_connections` of at least {POSTGRES_MAX_CONNECTIONS}: two Conduits
+side by side during an update, the worker, the gateway and a reserve (ADR-114 Amendment 43's figures). RDS
+derives it from the instance's memory unless its parameter group sets it (a db.t3.medium gives about 410),
+so set it there; with too few, the new Conduit of an update stops at `TooManyConnectionsError`.
 {_bare_connector_hosts(cp.connector_hosts)}
 ## 1. The settings and the namespace
 

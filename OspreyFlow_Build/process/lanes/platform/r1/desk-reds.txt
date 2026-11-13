@@ -71,3 +71,6 @@ E       ValueError: substring not found   (test_a_restore_ends_when_what_it_star
 
 # R1 on kind, finding 14: the Conduit and the Glass had no readiness probe; after the restore's rollout waits the door still answered 503 (8 s), the new api pod Ready at 1 s old. Red:
 E       AssertionError: assert ['workspace', 'api'] == []   (test_every_workload_that_serves_a_port_says_when_it_is_ready)
+
+# R1 on kind, finding 15: a new Conduit in the re-install stopped at asyncpg TooManyConnectionsError (stand-in max 100; one Conduit held 51 at rest, 48 pools). Red:
+E       AttributeError: module 'harness.cloud_platform.runbooks' has no attribute 'POSTGRES_MAX_CONNECTIONS'
