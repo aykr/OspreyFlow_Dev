@@ -1,4 +1,4 @@
-"""v052-fixes (ADR-145 Amendment 14): the browser (Playwright keyboard) reds, each a plant at the real call site.
+"""v052-fixes (ADR-145 Amendments 14 and 15): the browser (Playwright keyboard) reds, each a plant at the real call site.
 
 Run from the worktree root on a clean tree at the commit under test:
     python3 OspreyFlow_Build/process/lanes/case/gates/v052_fixes_browser_reds.py > OspreyFlow_Build/process/lanes/case/gates/v052-fixes-browser-reds.log
@@ -37,7 +37,7 @@ PLANTS = [
      [("src/shell/railLayout.ts", 'export const VIEW_SWITCH = ["graph", "map", "boards", "dashboards"] as const;', 'export const VIEW_SWITCH = ["graph", "map", "boards"] as const;')],
      "keyboard/shell.spec.ts", "exactly one view is current"),
     ("a drawer that leaves focus where it was on closing (main's)",
-     [("src/design/primitives/Drawer.tsx", "      if (opener?.isConnected && lost) opener.focus();", "")],
+     [("src/design/primitives/Drawer.tsx", "      const back = opener?.isConnected ? opener : (returnRef.current?.() ?? null);\n      back?.focus();\n", "")],
      "keyboard/shell.spec.ts", "each rail panel is opened and closed by keyboard"),
     ("the case line without Views in this case",
      [("src/shell/ContextBanner.tsx", "      {place === \"glass\" && caseSwitcher && (\n", "      {place === \"glass\" && caseSwitcher && false && (\n")],
@@ -46,6 +46,21 @@ PLANTS = [
      [("src/shell/TopBar.tsx", "      {besideViews}\n", "")],
      "keyboard/shell.spec.ts", "Build a report follows Reports by keyboard"),
 
+    # After the lane-reviewer's second review (13 Nov): All cases by keyboard, the open board's line, Help's focus
+    ("All cases opening nothing in the Glass (the harness's wiring, as App's before 4c969b3)",
+     [("keyboard/places-harness.tsx", 'onBrowse={place === "glass" ? () => setPanel("cases") : () => window.__PLACES__!.crossed.push("browse")}',
+       'onBrowse={() => window.__PLACES__!.crossed.push("browse")}')],
+     "keyboard/shell.spec.ts", "the case menu's All cases opens the Cases panel by keyboard"),
+    ("the Cases panel naming nowhere to return focus to (4c969b3's)",
+     [("keyboard/places-harness.tsx", """              returnFocusTo={() => document.querySelector<HTMLElement>("[aria-labelledby='context-banner-title'] .menu-button--case")}\n""", "")],
+     "keyboard/shell.spec.ts", "the case menu's All cases opens the Cases panel by keyboard"),
+    ("the open board's line in the view's row, beside the board (0b5e031's fragment)",
+     [("src/boards/BoardsPlace.tsx", '      <div className="board-open">\n', "      <>\n"),
+      ("src/boards/BoardsPlace.tsx", "      </div>\n    );\n  }\n\n  const button", "      </>\n    );\n  }\n\n  const button")],
+     "keyboard/boards.spec.ts", "a board is opened from the boards list by keyboard"),
+    ("Help's keys panel leaving focus where it was on closing",
+     [("src/welcome/WorkspaceWelcome.tsx", "      if (lost && opener?.isConnected) opener.focus();\n", "")],
+     "keyboard/shell.spec.ts", "the rail's Help opens and closes the keys panel by keyboard"),
 ]
 
 

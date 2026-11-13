@@ -36796,8 +36796,10 @@ lane's, accepted by the orchestrator for the owner, who may overrule it.
 
    `CaseSwitcher.test.tsx` *is left out with showScope false, and drawn by default*.
 5. **The record.** Every claimed red is on file, each a plant at the real call site, restored by `git checkout`:
-   - `process/lanes/case/gates/v052_fixes_unit_reds.py` and its log (jsdom, 19 of 19 red);
-   - `v052_fixes_browser_reds.py` and its log (the keyboard cases, slot 2);
+   - `process/lanes/case/gates/v052_fixes_unit_reds.py` and its log (jsdom, 34 of 34 red at 4cf8163, Amendment 15's
+     plants among them);
+   - `v052_fixes_browser_reds.py` and its logs (the keyboard cases, slot 2; all twelve plants in
+     `v052-fixes-browser-reds.062e079.log`);
    - `v052-navigation-app-reds.log` (Amendment 15's App tests before Amendment 15).
 
    The registry, `every-harness` and contrast-finding changes are the orchestrator's files, sent as one diff
@@ -36852,6 +36854,9 @@ beside the current view, and there is one route to cases and one place to manage
      anyone else.
    - It is a link out of the Glass, never a view, so it stands outside the switch's group (`TopBar`'s `besideViews`,
      `BuildAReportLink`).
+   - A builder offered no *Reports* (the built-in Administrator: `manage_dashboards` without `read_reports`) has it
+     after their own switch: the right to build is the test, not the right to read (a gap the lane-reviewer found,
+     decided so by the lane under the never-stop rule, the owner free to overrule).
 
    Tests:
    - `App.chrome.test.tsx` *Build a report beside Reports*, on the real App: offered to a builder where Superset is
@@ -36881,8 +36886,32 @@ beside the current view, and there is one route to cases and one place to manage
      `open=cases`). The contrast findings under the open *More views* are updated.
    - The registry, `every-harness` and contrast-finding changes are the orchestrator's (one diff, Amendment 14 decision 5).
 
+7. **After the lane review (13 November 2026).** What the review of Part B found, each red first:
+   - *One offer list.* What a person is offered is `shell/railLayout.ts`'s `offeredViews`, read by `App.tsx` and both
+     keyboard harnesses (which copied every view before, whatever their `?rights=`). A view of the switch not offered
+     gives way to `viewToLandOn` (the landing view where offered, else the first offered), so exactly one view is
+     current for every person: `App.chrome.test.tsx`'s *Part B after review* block (a Reports Viewer's switch; an
+     investigator's; the built-in Administrator with Connection strength current; a drawing board, and Ownership,
+     chosen before the rights arrive giving way; exactly one current; *All cases* in the Studio opening the picker;
+     the Cases panel returning focus to the case menu; *Views in this case* a toggle), plants 23 to 34 of
+     `v052-fixes-unit-reds.log`.
+   - *Focus.* `Drawer.test.tsx`'s three focus cases (to its opener; left where the person moved it; to the caller's
+     `returnFocusTo` where the opener is gone). Help's keys panel returns focus to Help (`keyboard/shell.spec.ts`
+     *the rail's Help opens and closes the keys panel*). The drawer's `lost` guard has no plant of its own: React DOM
+     already puts back focus a commit moved off an element still in the page, so removing the guard changes nothing a
+     test can see (the reds script says so).
+   - *The board's line.* An open board says it is a sketch, above the board and across it, not as a column beside it
+     (`BoardsPlace.test.tsx`; `keyboard/boards.spec.ts` *a board is opened from the boards list by keyboard*, which
+     measures it).
+   - *The keyboard.* *the case menu's All cases opens the Cases panel by keyboard, and focus returns to the case menu*
+     (registry `all-cases-by-keyboard`). The registry check stands last in `shell.spec.ts`, read on one worker as CI
+     runs it; *Build a report*'s case stood after it, and the check was red for that reason in the c9ae729 run.
+   - The browser plants for each are in `v052-fixes-browser-reds.062e079.log`.
+
 **Not covered:** the user guide's and the architecture guide's pages on the places, the rail and the context row
-(docs', after the freeze's sweep); `case-screen-options-harness.tsx`, L2.3's prototype of the old variants, left as the
+(docs', after the freeze's sweep); the rail's dead *Explore Details* menu (`LeftRail.tsx`'s `RailMore`,
+`railLayout.ts`'s empty `EXPLORE_DETAILS`, `shell.test.tsx`'s cases for it) and the banner's unused `sections` and
+`note` props, left for a later clean-up with their tests; `case-screen-options-harness.tsx`, L2.3's prototype of the old variants, left as the
 record it is.
 
 **Part A (step 3e′), the search results layout:** to be recorded here when built.

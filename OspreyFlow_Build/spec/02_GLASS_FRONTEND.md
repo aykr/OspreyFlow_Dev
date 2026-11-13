@@ -366,7 +366,9 @@ One row, 40px. From the left:
   GOV.UK header instead, not in this bar.
 - **The case menu**, `<name> ▾` (its accessible name keeps `Case: <name>`; at least 240px wide, ADR-097
   step 3), now in the **context banner** under the bar (§2.0a): opens the cases the account can reach
-  (the open one marked), `All cases`, and `New case`. The name may be cut short with an ellipsis; its
+  (the open one marked), `New case`, and last `All cases`: in the Glass it opens the Cases panel, and closing that
+  panel returns focus to the case menu; in the Ingest Studio and Rules and Monitoring it opens the case picker, whose
+  choice keeps the place (ADR-145 Amendment 15). The name may be cut short with an ellipsis; its
   full text is the button's title. The Ingest Studio's own "Data loaded from this studio goes into"
   row uses the same menu.
 - **Search**, with its **Filters** control as an icon inside the box at its right-hand end (a small
@@ -384,8 +386,15 @@ One row, 40px. From the left:
   dossier is open; then **More views ▾**, a menu of *Matrix, Figures, Ownership, Connection strength*, one click
   away, named after the one of them that is open. *Reports* is the dashboards view (ADR-111 Amendment 3: Alert
   monitoring first, then the Superset boards); *Figures* is ADR-145 Amendment 4's. Exactly one view is current.
-  A person offered none of the four (a Reports Viewer offered Figures alone) has their views in the switch itself. The pressed one is drawn in primary text with a 2px underline, not in brass (ADR-097: brass is
+  What each person is offered is one list, `shell/railLayout.ts`'s `offeredViews`, read by `App.tsx` and the keyboard
+  harnesses alike; a view not offered gives way to the landing view, or the first offered, so one stays current even
+  when chosen before the rights arrived. A person offered none of the four (the built-in Administrator, offered
+  Connection strength alone) has their views in the switch itself. The pressed one is drawn in primary text with a 2px underline, not in brass (ADR-097: brass is
   for the primary action, focus and the selection).
+- **Build a report**, a link opening Superset in a new tab, straight after the view switch (after *Reports* where
+  it is offered), for a holder of `manage_dashboards` where the deployment names Superset's address (ADR-145
+  Amendment 15 decision 5). A builder offered no *Reports* (the built-in Administrator) has it after their own
+  switch, since the right to build is the test, not the right to read.
 - **Export**, for the whole case, on the Graph: one menu button, `Export ▾`, that opens the export panel
   (`aria-expanded`, not a pressed state; ADR-097 step 3).
 - **The theme** is an item of the account menu (ADR-097 step 3); a button of its own stands just left
@@ -514,11 +523,12 @@ deployed page, whose brand frame adds the skip link first — in this order: the
 (Rules and Monitoring with its count), search with *Add many from a list* and *Filters*, Graph, Map,
 Drawing board, Reports, *More views*, *Export*, the theme, the account; the case menu, *Views in this case* and the
 cross-link; the rail's Explore, Ask & Chat, History, Help and Show names; and the Graph's *Match strictness* (25
-controls, ADR-145 Amendment 15). `App.chrome.test.tsx` counts
-them on the real `App` and fails if one returns.
+controls, ADR-145 Amendment 15; one more, *Build a report*, for a builder where Superset is deployed).
+`App.chrome.test.tsx` counts them on the real `App` and fails if one returns.
 
 **Keyboard and accessibility.** `keyboard/shell.spec.ts` proves the switcher (under both brands), the
-banner's cross-link (through the real case module and a reload), its sections and Home's cards end to
+banner's cross-link (through the real case module and a reload), the case line's *Views in this case* and *All
+cases*, the view switch and *More views*, each rail panel, *Build a report* and Home's cards end to
 end, each shown red with its handler or the kept view removed (rule 13); `a11y/every-harness.spec.ts` scans `keyboard/places-harness.html`
 in the dark, light and GOV.UK variants, in each place, the Admin place drawn in it.
 
@@ -545,7 +555,9 @@ offers *← Back to the alert*, which returns to the alert's address with the al
 
 ### 2.0b Boards: drawing on a case (ADR-143 decisions 4 to 7 and 13; Amendment 2 decision 5; L3.3)
 
-*Drawing board* (`apps/workspace/src/boards/`) lists the open case's boards this person may see, with *New
+*Drawing board* (`apps/workspace/src/boards/`) says first, on the list and above an open board alike, "Drawing board:
+your sketch; it does not change the case's data." (ADR-145 Amendment 15, the strip's note having left;
+`BoardsPlace.test.tsx`, `keyboard/boards.spec.ts`). It lists the open case's boards this person may see, with *New
 board* (blank, from one of the case's views this person may see, or from the selection on the canvas,
 its loaded items kept as live references) and
 *New drawing as a case of its own* (a name, the highest marking it may hold, a starter model: a drawn
