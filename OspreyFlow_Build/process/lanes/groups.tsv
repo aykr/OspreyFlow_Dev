@@ -93,3 +93,11 @@ docs	sites	Housekeeping	Housekeeping
 platform	R1	Housekeeping	Client install
 platform-b	ci-green	Housekeeping	Housekeeping
 platform-b	gate-b	Four places, the Glass and Admin	Small
+platform-b	stateless	Housekeeping	Housekeeping
+platform-b	onepass	Four places, the Glass and Admin	Small
+platform-b	rail	Four places, the Glass and Admin	Small
+platform	home-access	Four places, the Glass and Admin	Small
+platform	compact-govuk	Four places, the Glass and Admin	Small
+admin	refresh	Four places, the Glass and Admin	Small
+admin	pg	Housekeeping	Small
+demo	fixes-13nov	Housekeeping	Small
