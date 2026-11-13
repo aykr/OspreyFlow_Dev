@@ -800,6 +800,18 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         merge; **"carry on with the post-0.5.1 steps as well"**: Part 3 (ospreyflow.app beside the GOV.UK demo), the
         CARRIES backlog, T1's rest, then P7a/P8/P9b after the client's install.
 
+        **The owner's decisions, 13 Nov evening:** (1) v0.5.1 on Tuesday as R1 tested it, **without Superset**; then
+        **v0.5.2** with Superset and report sync on cloud-platform poc and its own R1 re-run with a dashboards check
+        (platform-b leads, now, without delaying v0.5.1); the client installs v0.5.2 if it has passed by then, else
+        v0.5.1 with dashboards as an upgrade. (2) The other page gaps are not built: the owner corrects the page (one
+        copy each of Glass, API, workers; no ingest image; Laurium and report sync own images); the orchestrator sends
+        the exact image, ECR and container list for poc at v0.5.2. (3) OpenSearch: what search loses on PostgreSQL at
+        the client's size, or what it costs on poc (being researched). (4) RDS max_connections set explicitly in the
+        parameter group, **default 1000** (the owner), sized for Superset and an upgrade; MoJ's RDS module takes it as
+        db_parameter (pending-reboot). Pool settings after v0.5.2. (5) Any ruling of the orchestrator's that removes
+        or defers something the client page or an ADR requires goes to the owner first (the orchestrator's ruling (a)
+        of 11 Nov deferred Superset without asking).
+
         **The owner's word, about 07:45:** once both demo fixes land (one key prompt, ADR-114 Am 42, platform-b; Home's
         "Your access and tasks", ADR-145 Am 11, platform), push main to the dev repo and publish the product repo
         again from the same commit (no tag), each recorded in PUSH_LOG.
