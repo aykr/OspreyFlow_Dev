@@ -8,7 +8,7 @@ bucket nobody writes, or an entry still marked `pending` (a step that has not re
 
 | Manifest | Check |
 |---|---|
-| version | every workload, and every job's template, runs the candidate's own image reference (the kept render's values, `<repository>:<tag>@<digest>`), and each of ours is tagged with the manifest's version (so a kept render that is itself v0.5.1's fails too) |
+| version | the deployment's own release (`OSPREY_RELEASE_VERSION` in the `ospreyflow-env` ConfigMap, the render's `release_version`) is the manifest's version, so a kept render that is itself v0.5.1's fails; and every container of every workload and job template, init containers too, runs the candidate's own reference where the render pinned its repository (the kept render's values, `<repository>:<commit>@<digest>` for ours: our tags are the commit, never the release) |
 | shape | the deployed configuration (the `ospreyflow-files` ConfigMap's `osprey.yaml`) is of this shape |
 | workloads | the Deployment or StatefulSet exists, of its kind; the rollout finished: the controller has observed the latest generation, total, updated, ready and available replicas all its count, none unavailable (a crash-looping candidate beside a still-Ready old pod fails), a StatefulSet's current and update revisions one; the template's image, requests and limits its entry's; a readiness probe exactly when it lists one (the probe's content is the render check's) |
 | init_containers | in a running pod of its workload, from its image at its sizes, exited 0 |
@@ -16,10 +16,11 @@ bucket nobody writes, or an entry still marked `pending` (a step that has not re
 | images | pushed: the registry answers the render's reference for it |
 | managed.rds | it answers, its major version and `max_connections` the entry's |
 | managed.rds.databases | a session on it from a running pod of its reader (DATABASE_READERS) |
-| managed.elasticache, .opensearch | a connection from a running pod of its reader (STORE_READERS) |
+| managed.elasticache | a connection from a running pod of its reader (STORE_READERS) |
+| managed.opensearch | from each reader's pod, the deployment's own search client (`services.search_index.client`, rules' ADR-150 client) counts the alias, signed, and is answered with documents; the same count sent unsigned by the same transport is refused 403 (the domain admits only a signed request, so an answer to an unsigned one means the reader reached something else) |
 | managed.s3.buckets | holds at least one object, written by the deployment |
 | entra | the stand-in tenant granted a token to the registration (the API: a token for its audience). **Its `kind`, `redirect`, `grants`, `exposes` and `app_roles` are not checked**: the stand-in enforces its own registrations (platform's `r1_kind_entra.yaml`), not the manifest's, and hands out whatever roles it holds. They are the client administrator's words; a change to them is caught by no check here |
-| egress | a pod of the namespace reaches each host on 443, **and is blocked from an address no entry lists**, which the kind node itself (outside the policy) does reach: a node with no route out is no evidence. A probe that cannot answer (the exec failed, a name did not resolve) fails the check, never passes it |
+| egress | a pod of the namespace reaches each host on 443 (a `<placeholder>` names no host and fails), **and is blocked from an address no entry lists**, which the kind node itself (outside the policy) does reach: a node with no route out is no evidence. A probe that cannot answer (the exec failed, a name did not resolve) fails the check, never passes it |
 | (all of it) | the deployment's own render agrees with the manifest (`manifest.differences`): what only AWS can show (an instance class, node type or engine string; built_from and upstream) is held there |
 
 `verify(manifest, deployment)` runs the plan against anything with `Deployment`'s methods; `KindDeployment`
@@ -93,6 +94,7 @@ class Deployment(Protocol):
     def init_container(self, key: str) -> dict[str, Any] | None: ...
     def job(self, name: str) -> dict[str, Any] | None: ...
     def image_pushed(self, repository: str) -> bool: ...
+    def release(self) -> str | None: ...
     def rds_setting(self, name: str) -> str | None: ...
     def database_readers(self, database: str) -> set[str]: ...
     def store_readers(self, store: str) -> set[str]: ...
@@ -208,18 +210,18 @@ def _same_release(tag: str | None, version: str) -> bool:
 
 def _version(m: dict[str, Any]) -> Callable[[Deployment], tuple[bool, str]]:
     def run(d: Deployment) -> tuple[bool, str]:
-        ours = {repo for repo, image in (m.get("images") or {}).items() if image.get("ours")}
         behind = []
+        release = d.release()
+        if not _same_release(release, m["version"]):
+            behind.append(f"the deployment's release is {release or 'not recorded'} (OSPREY_RELEASE_VERSION)")
         for section, read in (("workloads", d.workload), ("jobs", d.job)):
-            for name, entry in (m.get(section) or {}).items():
+            for name in m.get(section) or {}:
                 got = read(name)
                 if got is None:
                     continue  # absent: its own check fails
                 if not got.get("current"):
                     behind.append(f"{name} (not the candidate's reference)")
-                elif entry.get("image") in ours and not _same_release(got.get("tag"), m["version"]):
-                    behind.append(f"{name} (tagged {got.get('tag')})")
-        return (False, f"not on {m['version']}'s images: {', '.join(behind)}") if behind else (True, f"every workload and job on {m['version']}'s images")
+        return (False, f"not on {m['version']}: {', '.join(behind)}") if behind else (True, f"{m['version']}, every workload and job on its images")
     return run
 
 
@@ -315,6 +317,9 @@ def _entra(name: str) -> Callable[[Deployment], tuple[bool, str]]:
 
 
 def _egress(host: str) -> Callable[[Deployment], tuple[bool, str]]:
+    if host.startswith("<"):
+        # The manifest's words for an address only the deployment knows: nothing here can probe it.
+        return lambda d: (False, f"{host} is a placeholder, not a host: the manifest names no address to probe")
     return lambda d: (True, "reached on 443") if d.connects(host) else (False, "blocked on 443")
 
 
@@ -434,6 +439,15 @@ def _sizes(container: dict[str, Any]) -> dict[str, Any]:
     return sizes(container.get("resources") or {})
 
 
+def current(spec: dict[str, Any], registry: str, expected: dict[str, str]) -> bool:
+    """A pod template on the candidate: its main container's repository pinned by the render, and every
+    container (init containers too) whose repository the render pinned running exactly that reference."""
+    containers = (spec.get("initContainers") or []) + spec["containers"]
+    if _repository(spec["containers"][0]["image"], registry) not in expected:
+        return False
+    return all(expected[r] == c["image"] for c in containers if (r := _repository(c["image"], registry)) in expected)
+
+
 def read_workload(obj: dict[str, Any], registry: str, *, expected: dict[str, str]) -> dict[str, Any]:
     """A Deployment or StatefulSet as kubectl returns it (`readyReplicas`, `updatedReplicas` left out when 0).
     `expected` maps a repository to the candidate's full reference (the render's)."""
@@ -452,17 +466,17 @@ def read_workload(obj: dict[str, Any], registry: str, *, expected: dict[str, str
         "revisions_match": None if None in revisions else revisions[0] == revisions[1],
         "settled": status.get("observedGeneration", 0) >= (obj.get("metadata") or {}).get("generation", 0),
         "image": repository,
-        "current": expected.get(repository) == main["image"],
-        "tag": tag_of(main["image"]),
+        "current": current(obj["spec"]["template"]["spec"], registry, expected),
         **_sizes(main),
         "probe": "readinessProbe" in main,
     }
 
 
-def tag_of(reference: str) -> str | None:
-    """`reg:5001/ospreyflow/api:v0.5.2@sha256:…` → `v0.5.2`; None when the reference has no tag."""
-    last = reference.split("@", 1)[0].rsplit("/", 1)[-1]
-    return last.split(":", 1)[1] if ":" in last else None
+def release_of(configmap: dict[str, Any] | None) -> str | None:
+    """The deployment's release as the render wrote it into the `ospreyflow-env` ConfigMap."""
+    if configmap is None:
+        raise LookupError("no ospreyflow-env ConfigMap in the namespace")
+    return (configmap.get("data") or {}).get("OSPREY_RELEASE_VERSION")
 
 
 def references_from_values(values: dict[str, Any], registry: str) -> dict[str, str]:
@@ -585,6 +599,57 @@ PROBE = ("import socket, sys\ntry:\n    socket.create_connection((sys.argv[1], 4
          "except socket.gaierror:\n    print('dns')\nexcept OSError:\n    print('blocked')")
 
 
+#: Run in a reader's pod (`python -c`): the deployment's own search client (rules' services/search_index/client.py,
+#: ADR-150 decision 7, with the pod's OPENSEARCH_* settings and IRSA credentials) counts the alias signed; then the
+#: same count through the same transport, hosts and timeout, with no signer. One JSON line.
+SEARCH_PROBE = """
+import asyncio, json
+from opensearchpy import AsyncHttpConnection, AsyncOpenSearch
+from services.search_index.client import SearchIndexConfig, search_client
+
+
+async def ask(client, alias):
+    try:
+        return {"status": 200, "count": (await client.count(index=alias)).get("count")}
+    except Exception as error:
+        status = getattr(error, "status_code", None)
+        return {"status": status if isinstance(status, int) else None, "error": str(error)[:300]}
+    finally:
+        await client.close()
+
+
+async def main():
+    config = SearchIndexConfig.from_env()
+    signed = await ask(search_client(config), config.alias)
+    bare = AsyncOpenSearch(hosts=[config.url], connection_class=AsyncHttpConnection, timeout=30)
+    print(json.dumps({"signing": config.signing, "alias": config.alias, "signed": signed,
+                      "unsigned": await ask(bare, config.alias)}))
+
+
+asyncio.run(main())
+"""
+
+
+def search_answer(out: str) -> tuple[bool, str]:
+    """SEARCH_PROBE's line: a reader reached the domain when it signs, its signed count is answered with
+    documents, and the unsigned count is refused 403 (the domain's refusal of an unsigned request)."""
+    lines = [line for line in out.strip().splitlines() if line.startswith("{")]
+    try:
+        answer = json.loads(lines[-1])
+    except (IndexError, ValueError):
+        return False, f"the search probe gave no answer: {out.strip()[-300:]!r}"
+    alias, signed, unsigned = answer.get("alias"), answer.get("signed") or {}, answer.get("unsigned") or {}
+    if answer.get("signing") != "sigv4":
+        return False, f"the reader's signing is {answer.get('signing')!r}, not sigv4"
+    if signed.get("status") != 200:
+        return False, f"a signed count on {alias} was refused: {signed.get('status')} {signed.get('error', '')}".rstrip()
+    if not isinstance(signed.get("count"), int) or signed["count"] < 1:
+        return False, f"{alias} holds no documents (count {signed.get('count')!r})"
+    if unsigned.get("status") != 403:
+        return False, f"an unsigned count on {alias} was answered {unsigned.get('status')}, not refused 403: not the domain"
+    return True, f"{signed['count']} documents in {alias}, signed; unsigned refused 403"
+
+
 def probe_answer(out: str) -> bool:
     answer = out.strip()
     if answer == "open":
@@ -639,21 +704,21 @@ class KindDeployment:
             cron = self._get("cronjob", name)
             if not cron:
                 return None
-            spec = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]
-            repo = _repository(spec["image"], self.registry)
+            template = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+            spec = template["containers"][0]
             return {"kind": "CronJob", "schedule": cron["spec"]["schedule"], "suspended": bool(cron["spec"].get("suspend")),
-                    "image": repo, **_sizes(spec), "succeeded": cron_runs(cron, jobs, name), "steps": {},
-                    "current": self.expected.get(repo) == spec["image"], "tag": tag_of(spec["image"])}
+                    "image": _repository(spec["image"], self.registry), **_sizes(spec), "succeeded": cron_runs(cron, jobs, name),
+                    "steps": {}, "current": current(template, self.registry, self.expected)}
         names = runs_of_template(name, [j["metadata"]["name"] for j in jobs], self.job_names)
         runs = [j for j in jobs if j["metadata"]["name"] in names]
         if not runs:
             return None
+        runs.sort(key=lambda j: j["metadata"].get("creationTimestamp", ""))  # the newest last: the candidate's
         done = [j for j in runs if (j.get("status") or {}).get("succeeded")] or runs
         job = done[-1]
         pods = [p for p in self._pods() if (p["metadata"].get("labels") or {}).get("job-name") == job["metadata"]["name"]]
-        main = job["spec"]["template"]["spec"]["containers"][0]["image"]
-        return {**read_job(job, pods, self.registry), "current": self.expected.get(_repository(main, self.registry)) == main,
-                "tag": tag_of(main)}
+        return {**read_job(job, pods, self.registry),
+                "current": current(job["spec"]["template"]["spec"], self.registry, self.expected)}
 
     def image_pushed(self, repository: str) -> bool:
         return bool(self.r1.sh("docker", "manifest", "inspect", "--insecure", self.expected[repository], check=False).strip())
@@ -661,6 +726,9 @@ class KindDeployment:
     def _postgres(self, sql: str) -> str:
         return self.r1.kubectl("-n", self.r1.MANAGED, "exec", "statefulset/postgres", "--", "psql", "-U", "postgres",
                                "-d", "postgres", "-Atc", sql)
+
+    def release(self) -> str | None:
+        return release_of(self._get("configmap", "ospreyflow-env"))
 
     def rds_setting(self, name: str) -> str | None:
         return self._postgres(f"SHOW {name}").strip() or None
@@ -674,7 +742,20 @@ class KindDeployment:
             listing = self.r1.kubectl("-n", self.r1.MANAGED, "exec", "statefulset/valkey", "--", "valkey-cli", "--tls",
                                       "--insecure", "-a", self.r1.PASSWORD, "--no-auth-warning", "CLIENT", "LIST")
             return readers_from_client_list(listing, self._pods())
-        raise NotImplementedError(f"no stand-in for {store} on kind yet (v052-opensearch): the check fails until one exists")
+        if store == "opensearch":
+            found, refused = set(), []
+            for reader in STORE_READERS[store]:
+                out = self.r1.kubectl("-n", self.r1.NS, "exec", f"deployment/{reader}", "--", "/app/.venv/bin/python", "-c",
+                                      SEARCH_PROBE, check=False)
+                ok, said = search_answer(out)
+                if ok:
+                    found.add(reader)
+                else:
+                    refused.append(f"{reader}: {said}")
+            if refused:
+                raise LookupError("; ".join(refused))
+            return found
+        raise NotImplementedError(f"no reader check for {store}")
 
     def bucket_objects(self, bucket: str) -> int:
         if not self.bucket_prefix:

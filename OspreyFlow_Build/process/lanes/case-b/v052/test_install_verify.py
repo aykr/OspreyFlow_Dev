@@ -23,8 +23,12 @@ from harness.cloud_platform.manifest import load
 
 
 def candidate() -> dict[str, Any]:
-    """The manifest as it stands at the candidate: every step rendered, no `pending` left."""
-    return iv.without_pending(load())
+    """The manifest as it stands at the candidate: every step rendered, no `pending` left. The OpenSearch domain's
+    egress placeholder goes, as 3a took it out (platform's 1d914fe: the domain is reached on the managed networks,
+    not an egress host); a placeholder left in fails (test_an_egress_placeholder_fails_without_probing)."""
+    m = iv.without_pending(load())
+    m["egress"] = {h: e for h, e in m["egress"].items() if not h.startswith("<")}
+    return m
 
 
 class Fake:
@@ -51,7 +55,6 @@ class Fake:
             "requests": w["requests"], "limits": w["limits"], "probe": w["readiness"] != "none",
             "updated": w["count"], "settled": True, "current": "version" not in self.dropped,
             "replicas": w["count"], "available": w["count"], "unavailable": 0, "revisions_match": True,
-            "tag": self.m["version"] if self.m["images"][w["image"]]["ours"] else "upstream",
         }
 
     def init_container(self, key: str) -> dict[str, Any] | None:
@@ -70,10 +73,16 @@ class Fake:
         return {"kind": j["kind"], "schedule": "0 0 31 2 *" if suspended else j.get("schedule"),
                 "suspended": suspended, "image": j["image"],
                 "requests": j["requests"], "limits": j["limits"], "succeeded": 1, "steps": steps,
-                "current": True, "tag": self.m["version"]}
+                "current": True}
 
     def image_pushed(self, repository: str) -> bool:
         return f"images.{repository}" not in self.dropped
+
+    def release(self) -> str | None:
+        # Read through release_of from the ConfigMap as the chart writes it (configmaps.yaml, `ospreyflow-env`).
+        version = "v0.5.1" if "release" in self.dropped else str(self.m["version"])
+        return iv.release_of({"kind": "ConfigMap", "metadata": {"name": "ospreyflow-env"},
+                              "data": {"OSPREY_RELEASE_VERSION": version, "OSPREY_ENV": "production"}})
 
     def database_readers(self, database: str) -> set[str]:
         if f"managed.rds.databases.{database}" in self.dropped:
@@ -96,6 +105,8 @@ class Fake:
         return f"entra.{registration}" not in self.dropped
 
     def connects(self, host: str) -> bool:
+        if host.startswith("<"):
+            raise LookupError(f"the egress probe gave no answer about the policy: 'dns' ({host})")  # as the real probe
         if host in self.m["egress"]:
             return f"egress.{host}" not in self.dropped
         return self.reaches_anything
@@ -359,13 +370,27 @@ def test_each_unfinished_rollout_reading_alone_fails(change: dict[str, Any], sai
     assert [r.entry for r in failed] == ["workloads.arcadedb"] and said in failed[0].said
 
 
+#: kubectl's status for a StatefulSet one pod into an update: the old revision's pod still Ready.
+STS_MID_UPDATE = {"observedGeneration": 2, "replicas": 1, "readyReplicas": 1, "availableReplicas": 1,
+                  "currentRevision": "arcadedb-6d", "updateRevision": "arcadedb-7f"}
+
+
 def test_a_statefulset_mid_update_fails() -> None:
+    m = candidate()
     sts = {"kind": "StatefulSet", "metadata": {"name": "arcadedb", "generation": 2},
            "spec": {"replicas": 1, "template": {"spec": {"containers": [{"name": "arcadedb", "image": "r/arcadedata/arcadedb@sha256:a"}]}}},
-           "status": {"observedGeneration": 2, "replicas": 1, "readyReplicas": 1, "availableReplicas": 1, "updatedReplicas": 0,
-                      "currentRevision": "arcadedb-6d", "updateRevision": "arcadedb-7f"}}
+           "status": STS_MID_UPDATE}
     got = iv.read_workload(sts, "r", expected={})
     assert got["revisions_match"] is False and got["updated"] == 0
+
+    class MidUpdate(Fake):
+        def workload(self, name: str) -> dict[str, Any] | None:
+            have = super().workload(name)
+            keys = ("replicas", "updated", "ready", "available", "unavailable", "settled", "revisions_match")
+            return {**have, **{k: got[k] for k in keys}} if have and name == "arcadedb" else have
+
+    failed = [r for r in iv.verify(m, MidUpdate(m)) if not r.ok]
+    assert [r.entry for r in failed] == ["workloads.arcadedb"], failed
 
 
 def test_a_workload_still_on_the_old_release_fails_the_version_check() -> None:
@@ -380,17 +405,30 @@ def test_a_workload_still_on_the_old_release_fails_the_version_check() -> None:
     assert [r.entry for r in failed] == ["version"] and "worker" in failed[0].said
 
 
-def test_a_workload_whose_image_is_tagged_with_another_release_fails_the_version_check() -> None:
-    """The kept render could itself be v0.5.1's: the running tag is held to the manifest's version too."""
+def test_a_deployment_whose_release_is_another_fails_the_version_check() -> None:
+    """The kept render could itself be v0.5.1's: the deployment's own release (OSPREY_RELEASE_VERSION) is held to
+    the manifest's version. Our tags are the commit (render.py), so the release is not read from a tag."""
+    m = candidate()
+    failed = [r for r in iv.verify(m, Fake(m).drop("release")) if not r.ok]
+    assert [r.entry for r in failed] == ["version"] and "v0.5.1" in failed[0].said
+
+
+def test_the_release_is_read_from_the_env_configmap() -> None:
+    assert iv.release_of({"data": {"OSPREY_RELEASE_VERSION": "v0.5.2"}}) == "v0.5.2"
+    assert iv.release_of({"data": {}}) is None
+    with pytest.raises(LookupError):
+        iv.release_of(None)
+
+
+def test_a_release_not_recorded_fails_the_version_check() -> None:
     m = candidate()
 
-    class OldTag(Fake):
-        def workload(self, name: str) -> dict[str, Any] | None:
-            got = super().workload(name)
-            return {**got, "tag": "v0.5.1"} if got and name == "api" else got
+    class Unrecorded(Fake):
+        def release(self) -> str | None:
+            return iv.release_of({"data": {}})
 
-    failed = [r for r in iv.verify(m, OldTag(m)) if not r.ok]
-    assert [r.entry for r in failed] == ["version"] and "api" in failed[0].said
+    failed = [r for r in iv.verify(m, Unrecorded(m)) if not r.ok]
+    assert [r.entry for r in failed] == ["version"] and "not recorded" in failed[0].said
 
 
 def test_a_cronjob_left_on_the_old_release_fails_the_version_check() -> None:
@@ -405,24 +443,56 @@ def test_a_cronjob_left_on_the_old_release_fails_the_version_check() -> None:
     assert [r.entry for r in failed] == ["version"] and "ospreyflow-backup" in failed[0].said
 
 
-def test_the_candidates_reference_is_the_values_digest_form_not_the_images_list_tag() -> None:
-    """The render's workloads run `<target without tag>@<digest>`; images.yaml lists the tag-only target."""
+#: Our images as the render writes them: tagged with the commit (render.py `{registry}/{service}:{sha}`), pinned
+#: by digest after the push (cloud_platform `_Copies`), so `<repository>:<commit>@<digest>`.
+SHA = "0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d"
+API = f"reg/ospreyflow/api:{SHA}@sha256:aa"
+
+
+def test_the_candidates_reference_is_the_values_pinned_form_not_the_images_list_tag() -> None:
     values = {"workloads": [
-        {"name": "api", "image": "reg/ospreyflow/api@sha256:aa", "initContainers": []},
+        {"name": "api", "image": API, "initContainers": []},
         {"name": "litellm", "image": "reg/berriai/litellm@sha256:bb",
          "initContainers": [{"name": "litellm-db", "image": "reg/postgres@sha256:cc"}]}],
-        "backups": {"image": "reg/ospreyflow/api@sha256:aa", "arcadedb": {"image": "reg/arcadedata/arcadedb@sha256:dd"}}}
+        "backups": {"image": API, "arcadedb": {"image": "reg/arcadedata/arcadedb@sha256:dd"}}}
     expected = iv.references_from_values(values, "reg")
-    assert expected == {"ospreyflow/api": "reg/ospreyflow/api@sha256:aa", "berriai/litellm": "reg/berriai/litellm@sha256:bb",
+    assert expected == {"ospreyflow/api": API, "berriai/litellm": "reg/berriai/litellm@sha256:bb",
                         "postgres": "reg/postgres@sha256:cc", "arcadedata/arcadedb": "reg/arcadedata/arcadedb@sha256:dd"}
-    got = iv.read_workload(_deployment({"observedGeneration": 4, "readyReplicas": 1}, "reg/ospreyflow/api@sha256:aa"), "reg", expected=expected)
+    got = iv.read_workload(_deployment({"observedGeneration": 4, "readyReplicas": 1}, API), "reg", expected=expected)
     assert got["current"]
 
 
-def test_a_tag_is_read_from_a_reference_with_or_without_a_digest() -> None:
-    assert iv.tag_of("reg/ospreyflow/api:v0.5.2@sha256:aa") == "v0.5.2"
-    assert iv.tag_of("reg/ospreyflow/api:v0.5.2") == "v0.5.2"
-    assert iv.tag_of("reg:5001/ospreyflow/api@sha256:aa") is None
+def test_a_correct_candidate_in_the_renders_shape_passes_the_version_check() -> None:
+    """The review of 1f06074, must 1: a tag check on `:<commit>` failed every real install."""
+    m = candidate()
+    expected = {"ospreyflow/api": API}
+    read = iv.read_workload(_deployment({"observedGeneration": 4, "replicas": 1, "readyReplicas": 1, "updatedReplicas": 1,
+                                         "availableReplicas": 1}, API), "reg", expected=expected)
+
+    class Rendered(Fake):
+        def workload(self, name: str) -> dict[str, Any] | None:
+            got = super().workload(name)
+            return {**got, "current": read["current"]} if got else got
+
+    assert [r for r in iv.verify(m, Rendered(m)) if not r.ok and r.entry == "version"] == []
+
+
+def test_an_init_container_on_the_old_reference_is_not_the_candidate() -> None:
+    expected = {"berriai/litellm": "reg/berriai/litellm@sha256:bb", "postgres": "reg/postgres@sha256:new"}
+    spec = {"containers": [{"name": "litellm", "image": "reg/berriai/litellm@sha256:bb"}],
+            "initContainers": [{"name": "litellm-db", "image": "reg/postgres@sha256:old"}]}
+    assert iv.current(spec, "reg", expected) is False
+    spec["initContainers"][0]["image"] = "reg/postgres@sha256:new"
+    assert iv.current(spec, "reg", expected) is True
+    # a main container the render never pinned is not the candidate, whatever the rest
+    assert iv.current({"containers": [{"name": "x", "image": "reg/stranger@sha256:zz"}]}, "reg", expected) is False
+
+
+def test_a_second_container_on_the_old_reference_is_not_the_candidate() -> None:
+    expected = {"ospreyflow/api": API, "arcadedata/arcadedb": "reg/arcadedata/arcadedb@sha256:dd"}
+    spec = {"containers": [{"name": "restore-analytics", "image": API},
+                           {"name": "restore-graph", "image": "reg/arcadedata/arcadedb@sha256:old"}]}
+    assert iv.current(spec, "reg", expected) is False
 
 
 def test_the_shape_is_read_from_the_deployed_configuration() -> None:
@@ -676,6 +746,92 @@ def test_only_running_pods_name_a_reader() -> None:
         {"metadata": {"labels": {"app.kubernetes.io/name": "ospreyflow-backup"}}, "status": {"phase": "Succeeded", "podIP": "10.244.0.7"}},
     ]
     assert iv.readers_from_sessions("ospreyflow|10.244.0.7\n", "ospreyflow", pods) == {"api"}
+
+
+def test_the_newest_successful_run_is_read_whatever_kubectls_order() -> None:
+    def job(name: str, created: str, image: str) -> dict[str, Any]:
+        return {"metadata": {"name": name, "creationTimestamp": created}, "status": {"succeeded": 1},
+                "spec": {"template": {"spec": {"containers": [{"name": "restore-analytics", "image": image}]}}}}
+
+    # v0.5.1's run sorts after the candidate's by name; it is the older one
+    jobs = [job("ospreyflow-restore-a", "2026-11-25T10:00:00Z", "r/ospreyflow/api@sha256:new"),
+            job("ospreyflow-restore-b", "2026-11-20T10:00:00Z", "r/ospreyflow/api@sha256:old")]
+    got = _kind({("jobs",): {"items": jobs}, ("pods",): {"items": []}}).job("ospreyflow-restore-<set>")
+    assert got["current"] is True
+
+
+def test_the_opensearch_reader_check_reads_each_readers_probe() -> None:
+    signed = {"signing": "sigv4", "alias": "ospreyflow-poc", "signed": {"status": 200, "count": 12},
+              "unsigned": {"status": 403, "error": "AuthorizationException(403, ...)"}}
+
+    class ExecR1(FakeR1):
+        def __init__(self, answer: dict[str, Any] | str) -> None:
+            super().__init__({})
+            self.answer, self.asked = answer, []
+
+        def kubectl(self, *args: str, check: bool = True, stdin: str | None = None) -> str:
+            import json
+
+            if "exec" in args:
+                self.asked.append(args[args.index("exec") + 1])
+                assert iv.SEARCH_PROBE in args
+                return self.answer if isinstance(self.answer, str) else json.dumps(self.answer)
+            return super().kubectl(*args, check=check, stdin=stdin)
+
+    def kind(answer: dict[str, Any] | str) -> Any:
+        return iv.KindDeployment(ExecR1(answer), registry="r", expected={}, clients={}, api_audiences=set(),
+                                 bucket_prefix="p-", jobs=[])
+
+    ok = kind(signed)
+    assert ok.store_readers("opensearch") == {"api"} and ok.r1.asked == ["deployment/api"]
+    with pytest.raises(LookupError, match="not refused 403"):
+        kind({**signed, "unsigned": {"status": 200, "count": 12}}).store_readers("opensearch")
+    with pytest.raises(LookupError, match="no answer"):
+        kind('error: unable to upgrade connection: container not found').store_readers("opensearch")
+
+
+def _probe_line(**change: Any) -> str:
+    import json
+
+    line = {"signing": "sigv4", "alias": "ospreyflow-poc", "signed": {"status": 200, "count": 12},
+            # the domain's refusal as the stand-in answers it (platform, 6998234): 403 with its JSON message
+            "unsigned": {"status": 403, "error": "AuthorizationException(403, 'User: anonymous is not authorized to "
+                                                 "perform: es:ESHttpGet on resource: arn:aws:es:eu-west-2:domain/vpc-x')"}}
+    return "Warning: something on stderr\n" + json.dumps({**line, **change}) + "\n"
+
+
+@pytest.mark.parametrize(
+    ("change", "said"),
+    [({}, None),
+     ({"signing": "none"}, "not sigv4"),
+     ({"signed": {"status": 403, "error": "refused"}}, "was refused: 403"),
+     ({"signed": {"status": None, "error": "ConnectionError"}}, "was refused: None"),
+     ({"signed": {"status": 200, "count": 0}}, "holds no documents"),
+     ({"unsigned": {"status": 200, "count": 12}}, "not refused 403"),
+     ({"unsigned": {"status": None, "error": "ConnectionError"}}, "not refused 403")],
+)
+def test_a_search_reader_signs_finds_documents_and_is_refused_unsigned(change: dict[str, Any], said: str | None) -> None:
+    ok, text = iv.search_answer(_probe_line(**change))
+    assert ok is (said is None) and (said is None or said in text), text
+
+
+def test_a_search_probe_with_no_json_line_is_no_answer() -> None:
+    ok, text = iv.search_answer("Traceback (most recent call last):\nModuleNotFoundError: No module named 'opensearchpy'\n")
+    assert not ok and "no answer" in text and "opensearchpy" in text
+
+
+def test_the_search_probe_is_python_and_uses_the_deployments_own_client() -> None:
+    compile(iv.SEARCH_PROBE, "<probe>", "exec")
+    assert "from services.search_index.client import SearchIndexConfig, search_client" in iv.SEARCH_PROBE
+    assert "search_client(config)" in iv.SEARCH_PROBE and "hosts=[config.url]" in iv.SEARCH_PROBE
+
+
+def test_an_egress_placeholder_fails_without_probing() -> None:
+    m = candidate()
+    m["egress"]["<the namespace's OpenSearch domain endpoint>"] = {}
+    failed = [r for r in iv.verify(m, Fake(m)) if not r.ok]
+    assert [r.entry for r in failed] == ["egress.<the namespace's OpenSearch domain endpoint>"]
+    assert "placeholder" in failed[0].said
 
 
 def test_a_cronjob_whose_template_is_still_the_old_release_reads_as_not_current() -> None:

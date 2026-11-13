@@ -17,13 +17,14 @@ platform-b's dashboards check and for anyone fitting a new stand-in):
 
 | Method | Answers |
 |---|---|
-| `workload(name)` | `{kind, desired, replicas, ready, updated, available, unavailable, revisions_match, settled, current, tag, image, requests, limits, probe}` or None (`current`: the template's reference is the candidate's, as the kept render's values pin it) |
+| `workload(name)` | `{kind, desired, replicas, ready, updated, available, unavailable, revisions_match, settled, current, image, requests, limits, probe}` or None (`current`: every container of the template, init containers too, on the candidate's reference where the kept render's values pin its repository, and the main one pinned) |
 | `init_container("workload/container")` | `{image, requests, limits, exit_code}` or None |
-| `job(name)` | `{kind, schedule, suspended, image, requests, limits, succeeded, current, tag, steps: {name: {image?, exit_code}}}` or None |
+| `job(name)` | `{kind, schedule, suspended, image, requests, limits, succeeded, current, steps: {name: {image?, exit_code}}}` or None (a `<set>` template: its newest successful run, by creation time) |
+| `release()` | the deployment's `OSPREY_RELEASE_VERSION` (the `ospreyflow-env` ConfigMap, the render's `release_version`); our image tags are the commit, so the release is read here, not from a tag |
 | `image_pushed(repository)` | bool |
 | `rds_setting("server_version" \| "max_connections")` | str or None |
 | `shape()` | the deployed configuration's shape (`ospreyflow-files`' `osprey.yaml`) |
-| `database_readers(db)`, `store_readers("elasticache" \| "opensearch")` | the workloads with a session or connection |
+| `database_readers(db)`, `store_readers("elasticache" \| "opensearch")` | the workloads with a session or connection; for OpenSearch, each reader whose `SEARCH_PROBE` answers (raises with the reader's words otherwise) |
 | `bucket_objects(bucket)` | count of objects |
 | `entra_used(registration)` | the stand-in granted that registration a token (the API: a token for its audience) |
 | `connects(host)` | a pod of the namespace reaches it on 443 (raises when the probe has no answer) |
@@ -41,8 +42,19 @@ platform-b's dashboards check and for anyone fitting a new stand-in):
 - **What `entra` does not check:** a registration's `kind`, `redirect`, `grants`, `exposes` and `app_roles`. The
   stand-in enforces platform's own registrations (`r1_kind_entra.yaml`), not the manifest's, and gives whatever roles
   it holds; these are the client administrator's words, held by nothing here.
-- **An OpenSearch stand-in on kind** (3a's shape lists it, no longer pending; platform builds it, the orchestrator's
-  word): `store_readers("opensearch")` raises until one exists, so `managed.opensearch` fails rather than passes.
+- **OpenSearch** (`managed.opensearch`, 3a's, no longer pending from 1d914fe): platform's domain stand-in
+  (lane/platform-v052-searchkind 6998234: the domain's VPC endpoint answered by the S3/STS stand-in, SigV4 for `es`
+  checked against the namespace's role, unsigned refused 403 in the domain's JSON words, the rest proxied to an
+  OpenSearch 2.17.1 pod) and **rules' search client** (`services/search_index/client.py`, lane/rules-v052-index,
+  unmerged). `SEARCH_PROBE` runs in the api pod: the client the deployment uses, with its own `OPENSEARCH_*` settings and
+  IRSA credentials, counts the alias signed, and the same transport, hosts and timeout count it unsigned. The reader
+  passes when it signs, the signed count is answered with documents and the unsigned one is refused 403. **Not yet run
+  against the real client or stand-in:** neither opensearch-py nor the client is in this branch's environment, so the
+  offline tests hold the parser to the probe's JSON line and the probe to compiling and naming the client; its first
+  real run is the leased run after both land.
+- **The domain's egress placeholder** (`"<the namespace's OpenSearch domain endpoint>"`, pending on this branch's base):
+  3a removed it (1d914fe; the domain is reached on the managed networks, as RDS and ElastiCache are). A placeholder
+  left in the manifest fails its egress check in words, never probed.
 - **The run must exercise what it checks before `verify`:** spec 08 (sign-ins, uploads, loads), a Superset sign-in
   and a report sync (platform-b), one backup and one restore (`r1_kind.py backup|restore`), and one run of each
   held-suspended CronJob (`kubectl create job --from=cronjob/<name>`). A bucket nothing wrote fails, by design.
@@ -68,10 +80,15 @@ fixed, and `tests/scenarios/test_over_the_wire_routes_exist.py` holds every call
 
 ## Red first
 
-`plants.py`: 39 plants, each one check broken at its real call site in a copy of the driver; every one turns the
-tests red and the unplanted copy stays green (`gates/plants.txt`). They found two gaps while being built (no test
-had a CronJob whose runs never succeeded; a reader test whose pod order hid the finished-pod plant; no test of an
-unobserved generation alone; none of a CronJob template still on the old release). The stuck rollout is tested
+`plants.py`: 48 plants, each one check broken at its real call site in a copy of the driver; every one turns the
+tests red and the unplanted copy stays green (`gates/plants.txt`, with the commit it ran at). Building them found
+four gaps (no test had a CronJob whose runs never succeeded; a reader test whose pod order hid the finished-pod
+plant; no test of an unobserved generation alone; none of a CronJob template still on the old release).
+**Round 3's lesson (the review of 1f06074, must 1):** the version check read our images' tag and held it to the
+release, but the render tags them with the commit (`render.py`, `{registry}/{service}:{sha}`), so it failed every
+real install while the tests passed, since the fake answered the tag the check wanted. The release is now read
+from the deployment's own `OSPREY_RELEASE_VERSION`, and a correct candidate in the render's `:<commit>@<digest>` shape
+is tested to pass. The stuck rollout is tested
 in the status kubectl reports for it (one copy, maxSurge 1: 2 replicas, 1 updated, 1 ready, 1 unavailable). A walk over
 every node of the YAML (not over `entries()`) injects an unplaced key and requires the run to stop.
 
