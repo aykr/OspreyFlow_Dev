@@ -341,7 +341,11 @@ classification strip, and the GOV.UK footer below the workspace; the top bar bel
 with the same controls and names, re-themed by the tokens. There is no service-name band (GOV.UK's
 service navigation) under the header: the owner removed it everywhere on 4 November 2026 to give the
 workspace its height back (ADR-132 Amendment 5). The service's name is in the page title,
-"<service> – GOV.UK", on the Glass and on the sign-in page alike.
+"<service> – GOV.UK", on the Glass and on the sign-in page alike. On every workspace screen (every place,
+Admin included, but not Home or the sign-in page) the header and the banner are compact (ADR-132
+Amendment 8): the header about 32 pixels with a 20-pixel logo, its place links kept at 24 pixels; the
+banner one 22-pixel line in 14-pixel type, its words and its *Service phase* region unchanged. The
+classification strip and this bar are untouched.
 
 One row, 40px. From the left:
 
@@ -477,8 +481,9 @@ and the Glass's view last open (this replaces the Studio rail's *Back to the inv
 another case in the Studio reloads the page; the view to return to is kept in the tab's session
 storage, so *Back* still returns to it (`shell/placeMemory.ts`). Messages is not kept: it is drawn for
 one node, which a reload does not keep, so *Back* returns to the view open before it. Under the GOV.UK
-brand the banner is a GOV.UK notification banner, its title the place: 91 pixels tall at 1440 wide,
-title and one line, taken from the workspace's height.
+brand the banner is a GOV.UK notification banner folded into one row (ADR-132 Amendment 8): "You are
+in …" starts the row at its size, still the region's heading and name, followed by the rest. It is 32
+pixels at 1440 wide, where the title band over one line had taken 91.
 
 **Admin** is reached from the switcher and Home, not the rail (ADR-110 Amendment 14). It is a side
 list of sections in their groups (ADR-145 decision 5; §3.3's *Admin area* has them), each behind its

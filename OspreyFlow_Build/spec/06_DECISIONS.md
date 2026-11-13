@@ -35869,6 +35869,55 @@ synthetic."**
    `shell-harness.html?host=demo.service.gov.uk` for the gov.uk side); red first
    (`process/lanes/platform-b/gate/D-*`).
 
+### ADR-132, Amendment 8 (13 November 2026) — the GOV.UK look compact on the workspace's screens
+
+Status: written 13 November 2026 by the platform lane under the orchestrator's reservation of the same day.
+This is the owner's ruling of 13 November, on osprey-small's GOV.UK look inside a case: "The top of the page
+is still very heavy, it makes the actual workspace very small." Each point names the test that fails if it
+stops being true (rule 12). Every case below was red at main 054f24b, each assertion on its own, and the
+dark, light and Home cases were green there, as they must stay. Measured in Chromium at 1440×1000 on the
+places harness with the demonstration's deployment (its banner words, no phase), in CSS pixels; the owner's
+screenshot figures are about 1.32 times these.
+
+1. **Where.** Under GOV.UK, every workspace screen's top is compact: a case's workspace in each place, and
+   Admin. Home and the sign-in page keep the full frame. The rule is the slim footer's (Amendment 7):
+   `BrandFrame` is compact unless a screen claims the full frame (`useFullFooter`). The orchestrator agreed
+   this reading of "inside a case's workspace".
+   - Test: `BrandFrame.test.tsx`, *is compact on a workspace screen* and *is full while Home or the sign-in
+     page is shown* (red with the frame compact everywhere); `keyboard/shell.spec.ts`, *govuk: Home keeps
+     the full header and banner* (61 and 41 px, as at 054f24b).
+2. **A slim header.** About 32 px, from 61. The logo is 20 px high, the place links are kept, and each link
+   keeps WCAG 2.2's 24 px minimum target size.
+   - Test: `shell.spec.ts`, *govuk: a case's workspace gains at least 100 px of height*: the header is at
+     most 48 px and its *Places* navigation is visible (61 at 054f24b).
+3. **The banner on one slim line.** About 22 px, from 41, in 14 px type. Its words are unchanged, and it is
+   still the *Service phase* region.
+   - Test: the same case. The region holds the deployment's words exactly and is at most 30 px (41 at
+     054f24b).
+4. **The context banner in one row** (ADR-145 decision 3's GOV.UK notification banner). It no longer has a
+   title band over its content: "You are in …" starts the row, at the row's size, as the region's level-2
+   heading and its name. Case · Boards, the case and what it reads follow, each set off by a separator. The
+   row is about 32 px, from 91. This holds in every place that draws the banner: the Glass, the Ingest
+   Studio, Rules and Monitoring and Admin.
+   - Test: `shell.spec.ts`, *govuk: the context bar is one row* in each of the four places: the region by
+     its name, its level-2 heading, at most 40 px; in the Glass the heading is on Case's row and before it.
+     It was 91 px at 054f24b (59 in Admin).
+   - Test: `places.test.tsx`, *under GOV.UK is one row*: no title band, the heading first, then a separator.
+5. **The gain.** The canvas starts 105 px higher: at 152, from 257. That is about 139 px at the owner's
+   scale. The target is at least 100 CSS px; the orchestrator restated the owner's 130 at the screenshot's
+   scale.
+   - Test: *govuk: a case's workspace gains at least 100 px of height* (the content's top at most 157).
+6. **Untouched.** The OFFICIAL marking strip (20 px, a handling marking), the Osprey toolbar and the
+   canvas's toolbars; the dark and light looks; Home and the sign-in page.
+   - Test: the strip's height in the gain's case; *ospreyflow dark/light: a case's workspace top is as it
+     was* (the content at 130 and the banner at 41, as at 054f24b); *govuk: Home keeps the full header and
+     banner*.
+7. **Keyboard and axe.** Each place's banner and the shell keep their keyboard cases (`shell.spec.ts`, rule
+   13). `every-harness.spec.ts` scans the places harness's demonstration state (`banner=1`, and with Rules
+   and Monitoring) in the dark, light and GOV.UK looks. When the *More views* menu is drawn open over the
+   now-higher row, it covers the case button and a separator. Their contrast cannot be measured there, so
+   they are listed in `contrastFindings.json`; their own colours give 18.34:1 and 19.59:1.
+
 ### ADR-114, Amendment 41 (12 November 2026) — A shared key asked by the front proxy, on all three names, against a bcrypt hash set on the server
 
 Status: as built by the platform-b lane (step gate-b), at the owner's request of 12 November 2026, for a
