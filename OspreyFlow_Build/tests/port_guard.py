@@ -60,6 +60,7 @@ PORT_SETTINGS: dict[str, str] = {
     "VALKEY_PORT": "6379",
     "CLICKHOUSE_HTTP_PORT": "8123",
     "LITELLM_PORT": "4000",
+    "OPENSEARCH_PORT": "9200",
 }
 #: The host each port setting is paired with; a remote host is not this machine's deployment.
 _HOST_OF = {
@@ -68,6 +69,7 @@ _HOST_OF = {
     "VALKEY_PORT": "VALKEY_HOST",
     "CLICKHOUSE_HTTP_PORT": "CLICKHOUSE_HOST",
     "LITELLM_PORT": "LITELLM_HOST",
+    "OPENSEARCH_PORT": "OPENSEARCH_HOST",
 }
 #: Each setting that points a test at a service by its address.
 URL_SETTINGS: tuple[str, ...] = (
