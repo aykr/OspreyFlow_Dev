@@ -37070,10 +37070,16 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    `text_owning_unit = principal.org_unit` for `kind: text`, and a Document whose text a reader cannot read is still
    found by its title. `text` is the standard analyser with lowercase and asciifolding, offsets and positions kept
    for highlighting and phrases. A text is written in Postgres (`store_document_text`), outside the graph's
-   transaction, so its write records the node in the outbox after it commits; a crash between the two is what the
-   drift check finds.
+   transaction, so it has an outbox of its own in Postgres (`search_text_pending`), written in the text's own
+   transaction and drained by the same indexer: a text never committed is never queued, and one committed always is.
    Every field, keyword ones included, uses `similarity: boolean`, so no score depends on documents a reader cannot
-   see. Only what the Glass already receives in a `Node` response is searchable: the document is built through the
+   see. **Strict ranking (the owner's ruling, 13 November):** no score depends on how rare a word is, and there is
+   no fuzzy expansion; a name is matched by trigrams, edge n-grams and the Conduit's own Double Metaphone key (a
+   keyword computed before indexing), with no phonetic, fuzzy, synonym or stemming analysis inside OpenSearch.
+   `tests/services/search_index/test_mapping_strict_ranking.py` holds it; its four plants (BM25 on a name's words
+   and on the text, a phonetic filter added, the trigrams removed) are each red
+   (`process/lanes/rules/v052-index/strict-ranking-plants.txt`). Groups counting records is the query side's
+   (ADR-149). Only what the Glass already receives in a `Node` response is searchable: the document is built through the
    same serialisation, with `withhold_sources` applied as for a reader of the node's own dataset, so no source-system
    identifier is indexed (rule 7), and a `gazetteer-*` node carries its `name` only (ADR-147 Amendments 1 and 3).
    **The index is named per deployment:** its alias comes from settings (`search.index_alias`, default
