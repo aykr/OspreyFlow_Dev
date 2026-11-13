@@ -1,0 +1,31 @@
+CI run 43471935601 at 627745f, job 'test' (132045782034): 13172 passed, 23 skipped, 5 errors, all five at setup of
+tests/cli/test_cli_dependencies.py's 'small' fixture: uv pip install --offline 'pyyaml>=6' -> 'pyyaml was not found in the cache'.
+
+The CI condition, reproduced: a project pinning pyyaml==6.0.3 locked with cache A, then 'uv sync' with a fresh cache B (as
+CI's job does: setup-uv sets a fresh UV_CACHE_DIR, then uv sync). B holds the wheel but not the index page; an offline
+unpinned 'uv pip install pyyaml>=6' against B fails the same way. The test run against B (and an empty cache, offline):
+
+== red, main d701f48's fixture, UV_CACHE_DIR=B:
+  ╰─▶ Because pyyaml was not found in the cache and you require pyyaml>=6, we
+ERROR ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_help_from_the_small_install
+ERROR ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_images_push_from_the_small_install_reaches_its_own_work
+ERROR ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_release_from_the_small_install_runs_in_the_checkout
+ERROR ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_run_from_the_small_install_runs_in_the_checkout
+ERROR ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_a_checkout_without_httpx_is_refused_in_words
+2 passed, 5 errors in 0.32s
+== main's fixture, the developer's own cache, UV_CACHE_DIR unset (why it passed locally):
+7 passed in 1.29s
+== green, the fixture copying PyYAML from the running environment, UV_CACHE_DIR=B:
+7 passed in 1.20s
+== green, an empty cache with UV_OFFLINE=1:
+7 passed in 1.17s
+
+== rule 15, the fixed fixture still sees the defect it exists for: conduit_client.py importing httpx at load
+   (the shape 58bcfc3 gave it), UV_CACHE_DIR=B, then restored by git checkout:
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_no_module_of_the_command_loads_more_than_pyyaml
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_help_from_the_small_install
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_images_push_from_the_small_install_reaches_its_own_work
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_release_from_the_small_install_runs_in_the_checkout
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_run_from_the_small_install_runs_in_the_checkout
+FAILED ../OspreyFlow_Build/tests/cli/test_cli_dependencies.py::test_a_checkout_without_httpx_is_refused_in_words
+6 failed, 1 passed in 0.86s

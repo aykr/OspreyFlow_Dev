@@ -11,6 +11,7 @@ The orchestrator's ruling: keep decision 3 (no new dependency)."""
 from __future__ import annotations
 
 import ast
+import importlib.metadata
 import os
 import shutil
 import subprocess
@@ -70,8 +71,14 @@ def test_the_check_sees_a_load_time_import_in_the_shape_conduit_client_had() -> 
 
 @pytest.fixture(scope="module")
 def small(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """A fresh environment (none of the checkout's packages) with the package's declared dependencies alone,
-    from uv's cache. Its Python, run with `-I`, sees only it and `cli/`."""
+    """A fresh environment (none of the checkout's packages) with the package's declared dependency alone:
+    PyYAML's files copied from the environment running these tests. Its Python, run with `-I`, sees only it
+    and `cli/`.
+
+    Not `uv pip install --offline pyyaml`: CI run 43471935601 (627745f), all five tests below erroring at
+    setup with "pyyaml was not found in the cache". A cache that `uv sync` filled from the lock holds the
+    wheel but not the index's page for it, which an unpinned offline resolve needs, so that install worked
+    only where the cache had resolved PyYAML before (a developer's, not CI's fresh one)."""
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("uv is not on PATH")
@@ -80,7 +87,15 @@ def small(tmp_path_factory: pytest.TempPathFactory) -> Path:
     venv = tmp_path_factory.mktemp("small") / "venv"
     subprocess.run([uv, "venv", "-q", "--no-project", "--python", sys.executable, str(venv)], check=True)
     python = venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-    subprocess.run([uv, "pip", "install", "-q", "--offline", "--python", str(python), "pyyaml>=6"], check=True)
+    site = Path(subprocess.run([str(python), "-I", "-c", "import sysconfig; print(sysconfig.get_paths()['purelib'])"],
+                               capture_output=True, text=True, check=True).stdout.strip())
+    pyyaml = importlib.metadata.distribution("PyYAML")
+    for file in pyyaml.files or ():
+        if file.parts[0] == ".." or "__pycache__" in file.parts:
+            continue  # its console scripts (none) and byte-code, which the small environment makes itself
+        (site / file).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(Path(str(pyyaml.locate_file(file))), site / file)
+    assert subprocess.run([str(python), "-I", "-c", "import yaml"], capture_output=True).returncode == 0
     assert subprocess.run([str(python), "-I", "-c", "import httpx"], capture_output=True).returncode != 0
     return python
 
