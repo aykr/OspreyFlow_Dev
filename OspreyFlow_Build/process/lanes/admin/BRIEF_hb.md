@@ -8,7 +8,7 @@ Branch `lane/admin-hb` from main. **Offline only** (R1 holds the server). Opus, 
 ## Files
 
 `OspreyFlow_Build/scripts/lanes_heartbeat.sh` and `OspreyFlow_Build/tests/test_lanes_heartbeat.py` (and, if a
-lane's own instructions need it, the launcher's prompt text in `scripts/lanes_launch.sh` as one added line; nothing
+lane's own instructions need it, the launcher's prompt text in `OspreyFlow_Build/scripts/lanes_launch.sh` as one added line; nothing
 else of the launcher).
 
 ## 1 · A lane says its stages: a new verb
