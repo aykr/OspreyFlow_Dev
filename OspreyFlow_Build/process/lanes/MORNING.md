@@ -32,6 +32,14 @@ count records).
    `concurrency: {group: ci-${{ github.ref }}, cancel-in-progress: true}` to ci.yml's push runs. Your word, since
    it is `.github`. Meanwhile I push in batches.
 
+4. **platform-b's lease was refused by its session's permission check (audit 4c's live run).** The step is
+   `stack_lease.sh acquire platform-b …` for test_entra_people_live.py's new Amendment 15 section: the real table's
+   columns, a sign-in never overwriting what an administrator set, the setter's own limits read in the
+   transaction, tenant isolation, and the resolver with a real token. Admin declined to run it on its lease, and I
+   have not run it for platform-b either, since that would launder the refusal. Your choice: approve the lease in
+   platform-b's window (or allow `stack_lease.sh acquire` for that lane), or run it yourself. 4c is otherwise built
+   (A–E, ea0c7ba, red first). Every other lane's leases work.
+
 ## Done overnight
 
 - Landed and pushed: deps-opensearch, step 2 (the manifest), step 3a with data safety and docs' D2/D3/D8,
