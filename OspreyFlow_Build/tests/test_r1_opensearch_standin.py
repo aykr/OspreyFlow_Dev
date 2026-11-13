@@ -15,6 +15,7 @@ signer (rule 15).
 
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import json
 import threading
@@ -45,9 +46,11 @@ class _OpenSearch(BaseHTTPRequestHandler):
 
     def _answer(self) -> None:
         length = int(self.headers.get("Content-Length") or 0)
-        body = self.rfile.read(length).decode() if length else ""
+        raw = self.rfile.read(length) if length else b""
+        body = raw.decode(errors="replace")
         self.seen.append({"method": self.command, "path": self.path, "body": body,
-                          "authorization": self.headers.get("Authorization")})  # fmt: skip
+                          "authorization": self.headers.get("Authorization"),
+                          "encoding": self.headers.get("Content-Encoding")})  # fmt: skip
         data = json.dumps({"reached": self.path, "method": self.command}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -182,3 +185,89 @@ def test_s3_on_the_same_stand_in_is_as_it_was(domain: tuple[str, StandIn]) -> No
         urllib.request.urlopen(request)
     assert refused.value.code == 403
     assert b"<Code>AccessDenied</Code>" in refused.value.read()
+
+
+# -- what the domain admits and refuses beyond the signature (the review of 6998234) --
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/ospreyflow-*/_search", "/a,b/_search", "/ospreyflow/_doc/person:123",
+     "/ospreyflow/_doc/a%2Fb", "/ospreyflow/./_search", "/ospreyflow/_search/"],
+)  # fmt: skip
+def test_paths_botocore_signs_for_es_are_admitted(domain: tuple[str, StandIn], path: str) -> None:
+    """For every service but S3, SigV4's canonical URI is the path normalised and percent-encoded
+    again (botocore's `SigV4Auth`); a stand-in hashing the wire path refuses a wildcard index, a
+    comma list or an id with ':' that the real domain admits, and would invite a client "fix"."""
+    base, stand_in = domain
+    status, answer = _send(base, _signed(_session(stand_in), "GET", path))
+    assert status == 200, answer
+    assert _OpenSearch.seen and _OpenSearch.seen[-1]["path"] == path
+
+
+def _at(stand_in: StandIn, offset: dt.timedelta) -> None:
+    now = stand_in.clock()
+    stand_in.clock = lambda: now + offset
+
+
+@pytest.mark.parametrize(("minutes", "admitted"), [(4, True), (-4, True), (6, False), (-6, False)])
+def test_the_domain_allows_five_minutes_of_clock_skew_not_s3s_fifteen(
+    domain: tuple[str, StandIn], minutes: int, admitted: bool
+) -> None:
+    base, stand_in = domain
+    request = _signed(_session(stand_in), "GET", "/_cluster/health")
+    _at(stand_in, dt.timedelta(minutes=minutes))
+    status, answer = _send(base, request)
+    if admitted:
+        assert status == 200, answer
+    else:
+        assert status == 403 and "Signature expired" in answer["message"], answer
+        assert _OpenSearch.seen == []
+
+
+@pytest.mark.parametrize(
+    ("size", "admitted"), [(10 * 1024 * 1024, True), (10 * 1024 * 1024 + 1, False)]
+)
+def test_a_body_over_the_poc_domains_ten_mib_is_refused_413(
+    domain: tuple[str, StandIn], size: int, admitted: bool
+) -> None:
+    """t3.medium.search's largest request payload is 10 MiB; a bulk over it is the domain's 413,
+    whoever signed it, never passed on to OpenSearch."""
+    base, stand_in = domain
+    body = b"{" + b" " * (size - 2) + b"}"
+    status, answer = _send(base, _signed(_session(stand_in), "POST", "/_bulk", body))
+    if admitted:
+        assert status == 200, answer
+    else:
+        assert status == 413 and "10485760" in answer["Message"], answer
+        assert _OpenSearch.seen == []
+
+
+def test_a_refusal_names_the_account_and_the_domain(domain: tuple[str, StandIn]) -> None:
+    base, stand_in = domain
+    status, answer = _send(base, _signed(_session(stand_in, OTHER_ROLE), "GET", "/"))
+    assert status == 403
+    assert "arn:aws:es:eu-west-2:123456789012:domain/ospreyflow-poc-search/" in answer["message"], (
+        answer
+    )
+
+
+def test_a_compressed_body_reaches_opensearch_with_its_encoding(
+    domain: tuple[str, StandIn],
+) -> None:
+    """opensearch-py's `http_compress` sends gzip, `content-encoding: gzip`: passed on with it."""
+    import gzip
+
+    base, stand_in = domain
+    body = gzip.compress(b'{"size": 1}')
+    headers = {"content-type": "application/json", "content-encoding": "gzip",
+               "x-amz-content-sha256": hashlib.sha256(body).hexdigest()}  # fmt: skip
+    url = f"https://{DOMAIN}/ospreyflow/_search"
+    request = AWSRequest(method="POST", url=url, data=body, headers=headers)
+    session = _session(stand_in)
+    SigV4Auth(
+        Credentials(session.access_key, session.secret, session.token), "es", "eu-west-2"
+    ).add_auth(request)
+    status, answer = _send(base, request)
+    assert status == 200, answer
+    assert _OpenSearch.seen[-1]["encoding"] == "gzip"

@@ -105,7 +105,7 @@ spec:
       securityContext: {fsGroup: 1000}
       containers:
         - name: opensearch
-          image: localhost:5001/opensearchproject/opensearch:2.17.1
+          image: localhost:5001/${OPENSEARCH_IMAGE}
           env:
             - {name: discovery.type, value: single-node}
             - {name: DISABLE_SECURITY_PLUGIN, value: "true"}

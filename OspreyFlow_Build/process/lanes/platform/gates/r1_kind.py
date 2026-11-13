@@ -70,11 +70,13 @@ NAMES = {
     f"sts.{REGION}.amazonaws.com": "s3-standin",
     SEARCH_HOST: "s3-standin",  # checked there as the domain, then proxied to the OpenSearch pod
 }
+#: The engine behind the domain's stand-in, the poc manifest's OpenSearch_2.17 (one tag, kept here alone).
+OPENSEARCH_IMAGE = "opensearchproject/opensearch:2.17.1"
 THIRD_PARTY = {  # the managed stores' stand-ins' images, through AWS's mirror of Docker Hub's (no pull limit): Valkey is its own publisher there, not under docker/library
     "postgres:16.4": "public.ecr.aws/docker/library/postgres:16.4",
     "valkey/valkey:8.0": "public.ecr.aws/valkey/valkey:8.0",
     # The engine behind the domain's stand-in: the poc manifest's OpenSearch_2.17.
-    "opensearchproject/opensearch:2.17.1": "public.ecr.aws/opensearchproject/opensearch:2.17.1",
+    OPENSEARCH_IMAGE: f"public.ecr.aws/{OPENSEARCH_IMAGE}",
 }
 
 
@@ -240,7 +242,8 @@ def standins_text(password: str) -> str:
     from harness.cloud_platform.connections import POSTGRES_MAX_CONNECTIONS
 
     text = (HERE / "r1_kind_standins.yaml").read_text()
-    return text.replace("${PASSWORD}", password).replace("${MAX_CONNECTIONS}", str(POSTGRES_MAX_CONNECTIONS))
+    return (text.replace("${PASSWORD}", password).replace("${MAX_CONNECTIONS}", str(POSTGRES_MAX_CONNECTIONS))
+            .replace("${OPENSEARCH_IMAGE}", OPENSEARCH_IMAGE))
 
 
 def entra_clients() -> dict[str, str]:
@@ -503,6 +506,20 @@ def s3_exec(code: str) -> str:
 # -- the platform's blocks, stood in for ------------------------------------------------------------
 
 
+def _work() -> Path:
+    """The runbooks' `$WORK` (step 1 exports it: `${TMPDIR:-/tmp}/ospreyflow-$NS`)."""
+    return Path(os.environ.get("WORK") or Path(os.environ.get("TMPDIR", "/tmp")) / f"ospreyflow-{NS}")
+
+
+def operator_choices(name: str) -> dict[str, str]:
+    """What R1's operator exports before a runbook, as *What it needs* asks: for the decommission, the
+    backups kept (the brief: the bucket kept with the last set) for 30 days. Never over a choice
+    already in the environment, and nothing for the install."""
+    if name != "DECOMMISSION" or "BACKUPS" in os.environ:
+        return {}
+    return {"BACKUPS": "keep", "BACKUP_RETENTION_DAYS": "30"}
+
+
 def stand_in(runbook: str, step: str) -> None:
     """What the platform team does for a `bash platform` block, by the step it stands in."""
     folder = FOLDER
@@ -523,6 +540,20 @@ def stand_in(runbook: str, step: str) -> None:
     elif runbook == "DECOMMISSION" and step.startswith("7."):
         # The pull request applied: what the Terraform made, removed, but the kept backups bucket and
         # key (taken out of the state first); the lifecycle rule is not modelled by the stand-in.
+        # First the choice the block requires (ADR-148 Amendment 13: keep or destroy, no default),
+        # refused as the block refuses it, then recorded where step 8 reads it.
+        choice = os.environ.get("BACKUPS", "")
+        if choice not in ("keep", "destroy"):
+            raise SystemExit("BACKUPS: choose keep or destroy for the backups bucket and its key (there is no default)")
+        if choice == "destroy":
+            raise SystemExit("stand-in: BACKUPS=destroy is not modelled (R1 keeps its backups); say what the platform does there")
+        days = os.environ.get("BACKUP_RETENTION_DAYS", "")
+        if not days.isdigit() or int(days) < 1:
+            raise SystemExit("BACKUP_RETENTION_DAYS: the retention you agree for the kept backups, in days")
+        work = _work()
+        work.mkdir(parents=True, exist_ok=True)
+        (work / "backups").write_text(f"{choice}\n")
+        print(f"stand-in: backups {choice}, retention {days} days (the lifecycle rule not modelled)")
         made = state().get("terraform_made", [])
         for line in made:
             kind, name = line.split()[:2]
@@ -550,7 +581,7 @@ def stand_in(runbook: str, step: str) -> None:
         kubectl("delete", "mutatingwebhookconfiguration", "r1-irsa-standin", "--ignore-not-found")
         print("stand-in: the Terraform's removal applied; kept: the backups bucket and its key")
     elif runbook == "DECOMMISSION" and step.startswith("8.") and "STATE:?" in os.environ.get("R1_BLOCK", ""):
-        work = Path(os.environ.get("TMPDIR", "/tmp")) / f"ospreyflow-{NS}"
+        work = _work()
         work.mkdir(parents=True, exist_ok=True)
         (work / "state.txt").write_text("")  # the kept resources were taken out; the rest destroyed
         names = json.loads(s3_exec("import json, pathlib; print(json.dumps([p.name for p in pathlib.Path('/data').iterdir() if p.is_dir()]))"))
@@ -559,7 +590,7 @@ def stand_in(runbook: str, step: str) -> None:
         print(f"stand-in: {work}/state.txt (empty) and buckets.txt ({len(names)} buckets)")
     elif runbook == "DECOMMISSION" and step.startswith("8."):
         # The disks, as the platform team lists them: kind has no EBS, so the cluster's volumes.
-        work = Path(os.environ.get("TMPDIR", "/tmp")) / f"ospreyflow-{NS}"
+        work = _work()
         (work / "volumes.json").write_text(kubectl("get", "pv", "-o", "json"))
         print(f"stand-in: {work}/volumes.json, the cluster's volumes (the platform team's listing)")
     else:
@@ -642,7 +673,8 @@ def runbook(name: str, start: int) -> None:
     node = sh("docker", "inspect", "-f", "{{.NetworkSettings.Networks.kind.IPAddress}}", "osprey-r1-control-plane").strip()
     env = {**os.environ, "CONFIG": str(CONFIG), "R1": str(Path(__file__)), "R1_PY": sys.executable,
            "PATH": f"{LOCAL_BIN}:{os.environ['PATH']}",
-           "OSPREY_CURL_OPTS": f"--cacert {ca() / 'ca.crt'} --resolve {GLASS}:443:{node}"}
+           "OSPREY_CURL_OPTS": f"--cacert {ca() / 'ca.crt'} --resolve {GLASS}:443:{node}",
+           **operator_choices(name)}
     print(f"running {name} from block {start}; record {log}")
     with log.open("w") as out:
         out.write(f"# {name}.md as rendered, run from block {start} at {os.environ.get('R1_HEAD', 'the copy (no .git)')}\n")

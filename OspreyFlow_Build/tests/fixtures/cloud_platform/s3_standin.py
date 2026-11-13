@@ -59,6 +59,10 @@ from xml.sax.saxutils import escape
 AWS_MANAGED_S3_KEY = "arn:aws:kms:aws-managed:alias/aws/s3"
 #: S3's own tolerance for a request's clock (`RequestTimeTooSkewed`).
 SKEW = dt.timedelta(minutes=15)
+#: An OpenSearch Service domain's tolerance: five minutes ("Signature expired"), not S3's fifteen.
+DOMAIN_SKEW = dt.timedelta(minutes=5)
+#: The poc domain's largest request payload (t3.medium.search: 10 MiB), answered 413 above it.
+DOMAIN_MAX_BODY = 10 * 1024 * 1024
 UNSIGNED = "UNSIGNED-PAYLOAD"
 STREAMING = ("STREAMING-",)
 S3_NS = "http://s3.amazonaws.com/doc/2006-03-01/"
@@ -421,6 +425,11 @@ class StandIn:
             when = dt.datetime.strptime(amz_date, "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.UTC)
         except ValueError as error:
             raise Refused(403, "AccessDenied", "AWS authentication requires a valid Date or x-amz-date header") from error
+        if service == "es" and abs(self.clock() - when) > DOMAIN_SKEW:
+            earliest = (self.clock() - DOMAIN_SKEW).strftime("%Y%m%dT%H%M%SZ")
+            raise Refused(403, "RequestTimeTooSkewed",
+                          f"Signature expired: {amz_date} is now earlier than {earliest} "
+                          f"({self.clock():%Y%m%dT%H%M%SZ} - 5 min.)")  # fmt: skip
         if abs(self.clock() - when) > SKEW:
             raise Refused(
                 403,
@@ -453,8 +462,9 @@ class StandIn:
             f"{n}:{' '.join(headers.get(n, '').split())}\n" for n in names
         )
         canonical = "\n".join(
-            [method, path or "/", canonical_query, canonical_headers, signed_headers, payload_hash]
-        )
+            [method, _canonical_path(path, service), canonical_query, canonical_headers,
+             signed_headers, payload_hash]
+        )  # fmt: skip
         scope = f"{day}/{region}/{service}/aws4_request"
         to_sign = "\n".join(
             ["AWS4-HMAC-SHA256", amz_date, scope, hashlib.sha256(canonical.encode()).hexdigest()]
@@ -561,6 +571,26 @@ def _role_of(arn: str) -> str:
     """An assumed role's session ARN as its role's (`aws:PrincipalArn` is the role's)."""
     match = re.match(r"arn:aws:sts::(\d+):assumed-role/([^/]+)/.+", arn)
     return f"arn:aws:iam::{match.group(1)}:role/{match.group(2)}" if match else arn
+
+
+def _canonical_path(path: str, service: str) -> str:
+    """SigV4's canonical URI: S3's is the path as sent; every other service's (OpenSearch's `es`
+    among them) is the path with its dot segments removed and percent-encoded once more, as
+    botocore's `SigV4Auth` signs it (so `a,b`, `*`, `:` and an encoded `/` hash as the real
+    domain hashes them)."""
+    if service == "s3":
+        return path or "/"
+    kept: list[str] = []
+    for part in path.split("/"):
+        if part == "..":
+            if kept:
+                kept.pop()
+        elif part and part != ".":
+            kept.append(part)
+    normalized = ("/" if path.startswith("/") else "") + "/".join(kept)
+    if path.endswith("/") and kept:
+        normalized += "/"
+    return urllib.parse.quote(normalized or "/", safe="/~")
 
 
 def _uri(text: str, encode_slash: bool) -> str:
@@ -719,13 +749,24 @@ class Handler(BaseHTTPRequestHandler):
         stand_in = self.server.stand_in
         host = headers.get("host", "").rsplit(":", 1)[0]
         action = f"es:ESHttp{method.capitalize()}"
-        resource = f"arn:aws:es:{stand_in.region}:domain/{host.split('.', 1)[0]}"
+        # The domain's own ARN: its account (its roles'), its name (`vpc-<name>-<id>.<region>...`).
+        account = domain["roles"][0].split(":")[4] if domain["roles"] else ""
+        name = host.split(".", 1)[0].removeprefix("vpc-").rsplit("-", 1)[0]
+        path = self.path.partition("?")[0]
+        resource = f"arn:aws:es:{stand_in.region}:{account}:domain/{name}{path}"
 
         def refuse(message: str) -> None:
             stand_in.refusals.append(("es", message))
             data = json.dumps({"message": message}).encode()
             self._send(403, data, {"Content-Type": "application/json"})
 
+        # Before anything else, as the domain's front answers it.
+        if len(raw_body) > DOMAIN_MAX_BODY:
+            stand_in.refusals.append(("es", "413"))
+            words = {"Message": f"Request size exceeded {DOMAIN_MAX_BODY} bytes"}
+            data = json.dumps(words).encode()
+            self._send(413, data, {"Content-Type": "application/json"})
+            return
         if not headers.get("authorization"):
             refuse(f"User: anonymous is not authorized to perform: {action} on resource: {resource}")
             return
@@ -740,7 +781,7 @@ class Handler(BaseHTTPRequestHandler):
         if _role_of(principal.arn) not in domain["roles"]:
             refuse(f"User: {principal.arn} is not authorized to perform: {action} on resource: {resource}")
             return
-        passed = {k: v for k, v in headers.items() if k == "content-type"}
+        passed = {k: v for k, v in headers.items() if k in ("content-type", "content-encoding")}
         request = urllib.request.Request(domain["upstream"] + self.path, data=raw_body or None,
                                          method=method, headers=passed)  # fmt: skip
         try:
@@ -748,6 +789,9 @@ class Handler(BaseHTTPRequestHandler):
                 status, data, kind = answer.status, answer.read(), answer.headers.get("Content-Type")
         except urllib.error.HTTPError as error:
             status, data, kind = error.code, error.read(), error.headers.get("Content-Type")
+        except TimeoutError:
+            words = {"message": "upstream: no answer in 60 s"}
+            status, data, kind = 504, json.dumps(words).encode(), None
         except OSError as error:
             status, data, kind = 502, json.dumps({"message": f"upstream: {error}"}).encode(), None
         self._send(status, data, {"Content-Type": kind or "application/json"})

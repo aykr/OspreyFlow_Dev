@@ -6,11 +6,13 @@ v052-r1 verifier, 13 November 2026)."""
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 from harness.cloud_platform.connections import POSTGRES_MAX_CONNECTIONS
 
@@ -59,64 +61,15 @@ def test_the_kind_deployment_searches_with_the_domain_as_the_poc_does() -> None:
 
 def test_the_domains_host_answers_at_the_stand_in_inside_the_cluster() -> None:
     """The endpoint the Terraform gives the pods is the domain's own VPC name, which CoreDNS
-    sends to the S3/STS stand-in (where the domain is checked), and the stand-ins'
-    certificate names it."""
+    sends to the S3/STS stand-in (where the domain is checked); the stand-ins' certificate is
+    made for every name in `NAMES` (`r1_kind.platform`), so naming it there names it in the
+    certificate too."""
     r1_kind = _r1_kind()
     host = r1_kind.SEARCH_HOST
     assert re.fullmatch(
         rf"vpc-{r1_kind.NS}-search-[a-z0-9]+\.{r1_kind.REGION}\.es\.amazonaws\.com", host
     )
     assert r1_kind.NAMES[host] == "s3-standin"
-
-
-def test_the_terraform_stand_in_answers_the_domains_url(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """Every expression the rendered poc Terraform's Secrets read has the apply's answer; the
-    search secret's is the domain's endpoint over HTTPS (never a missing value the install
-    stops on)."""
-    from tests.harness.test_cloud_platform_render import _artefacts, _config
-
-    r1_kind = _r1_kind()
-    monkeypatch.setattr(r1_kind, "STATE", tmp_path)
-    roles = {
-        "ospreyflow": "arn:s",
-        "ospreyflow-backup": "arn:b",
-        "ospreyflow-backup-clickhouse": "arn:c",
-    }
-    values = r1_kind._terraform_values("ospreyflow-poc-x-", roles)
-    tf = _artefacts(_config("poc"))["terraform/opensearch.tf"]
-    expressions = [
-        e.strip() for e in re.findall(r"^\s+\w+\s*=\s*(.+)$", tf.split("data = {", 1)[1], re.M)
-    ]
-    assert expressions == ['"https://${aws_opensearch_domain.search.endpoint}"']
-    assert values[expressions[0]] == f"https://{r1_kind.SEARCH_HOST}"
-
-
-def test_the_domain_admits_the_namespaces_role_alone_and_proxies_to_its_opensearch(
-    monkeypatch,
-) -> None:  # type: ignore[no-untyped-def]
-    """The stand-in's domain admits what the Terraform's access policy admits,
-    `aws_iam_role.service` (the `ospreyflow` service account's role), never a backup role,
-    and sends what it admits to the OpenSearch pod in the platform's namespace."""
-    r1_kind = _r1_kind()
-    jwks = '{"keys": []}'
-    discovery = '{"issuer": "https://kubernetes.default.svc.cluster.local"}'
-    monkeypatch.setattr(
-        r1_kind, "kubectl", lambda *a, **k: jwks if a[-1] == "/openid/v1/jwks" else discovery
-    )
-    account = f"arn:aws:iam::{r1_kind.ACCOUNT}"
-    roles = {
-        "ospreyflow": f"{account}:role/ospreyflow-poc-service",
-        "ospreyflow-backup": f"{account}:role/ospreyflow-poc-backup",
-        "ospreyflow-backup-clickhouse": f"{account}:role/ospreyflow-poc-backup-clickhouse",
-    }
-    config = r1_kind.s3_config("ospreyflow-poc-x-", roles)
-    assert config["domains"] == [
-        {
-            "host": r1_kind.SEARCH_HOST,
-            "roles": [roles["ospreyflow"]],
-            "upstream": f"http://opensearch.{r1_kind.MANAGED}.svc.cluster.local:9200",
-        }
-    ]
 
 
 def test_the_opensearch_behind_the_domain_is_the_poc_manifests_engine() -> None:
@@ -141,6 +94,9 @@ def test_the_opensearch_behind_the_domain_is_the_poc_manifests_engine() -> None:
     assert container["image"].removeprefix("localhost:5001/") in r1_kind.THIRD_PARTY
     env = {e["name"]: e["value"] for e in container["env"]}
     assert env["DISABLE_SECURITY_PLUGIN"] == "true" and env["discovery.type"] == "single-node"
+    # Its disk carries the label decommission step 7 deletes it by.
+    [claim] = sts["spec"]["volumeClaimTemplates"]
+    assert claim["metadata"]["labels"] == {"app": "opensearch"}
     service = next(
         d for d in docs if d["kind"] == "Service" and d["metadata"]["name"] == "opensearch"
     )
@@ -155,6 +111,9 @@ def test_the_decommissions_terraform_removal_takes_the_domain_with_it(
     deleted with its disk."""
     r1_kind = _r1_kind()
     monkeypatch.setattr(r1_kind, "STATE", tmp_path)
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setenv("BACKUPS", "keep")
+    monkeypatch.setenv("BACKUP_RETENTION_DAYS", "30")
     r1_kind.save(prefix="ospreyflow-poc-x-", terraform_made=[])
     calls: list[tuple[str, ...]] = []
     live = {
@@ -192,3 +151,138 @@ def test_the_decommissions_terraform_removal_takes_the_domain_with_it(
         "app=opensearch",
         "--ignore-not-found",
     ) in deleted
+
+
+def _step7(r1_kind, tmp_path: Path, monkeypatch) -> list[dict]:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(r1_kind, "STATE", tmp_path / "state")
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    r1_kind.save(prefix="ospreyflow-poc-x-", terraform_made=[])
+    live = {"region": "eu-west-2", "roles": [], "buckets": [], "domains": []}
+    monkeypatch.setattr(
+        r1_kind, "kubectl", lambda *a, **k: json.dumps(live) if "configmap" in a else ""
+    )
+    monkeypatch.setattr(r1_kind, "s3_exec", lambda code: "[]")
+    given: list[dict] = []
+    monkeypatch.setattr(r1_kind, "s3_standin", given.append)
+    return given
+
+
+def test_decommission_step_7_records_the_backups_choice_step_8_reads(
+    tmp_path: Path, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    """Step 8's last block refuses without `$WORK/backups`, which only step 7's platform block
+    writes (`echo "$BACKUPS" > "$WORK/backups"`): the stand-in for step 7 writes it as that block
+    does."""
+    r1_kind = _r1_kind()
+    _step7(r1_kind, tmp_path, monkeypatch)
+    monkeypatch.setenv("BACKUPS", "keep")
+    monkeypatch.setenv("BACKUP_RETENTION_DAYS", "30")
+    r1_kind.stand_in("DECOMMISSION", "7. Remove what the Terraform made")
+    assert (tmp_path / f"ospreyflow-{r1_kind.NS}" / "backups").read_text() == "keep\n"
+
+
+@pytest.mark.parametrize(
+    ("backups", "days", "says"),
+    [
+        (None, "30", "no default"),
+        ("maybe", "30", "no default"),
+        ("keep", None, "retention"),
+        ("keep", "0", "retention"),
+        ("destroy", None, "destroy"),
+    ],
+)
+def test_decommission_step_7_refuses_what_its_block_refuses(
+    backups, days, says, tmp_path: Path, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    """No choice, an unknown one, or keep without a retention stop step 7 before anything is
+    removed, as the block's own `:?` and `case` do; destroy, which the stand-in does not model
+    (R1 keeps), is refused by name rather than run as keep."""
+    r1_kind = _r1_kind()
+    given = _step7(r1_kind, tmp_path, monkeypatch)
+    for name, value in (("BACKUPS", backups), ("BACKUP_RETENTION_DAYS", days)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    with pytest.raises(SystemExit, match=says):
+        r1_kind.stand_in("DECOMMISSION", "7. Remove what the Terraform made")
+    assert given == [] and not (tmp_path / f"ospreyflow-{r1_kind.NS}" / "backups").exists()
+
+
+def test_the_operator_brings_r1s_choice_to_the_decommission(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """R1 keeps its backups (the brief: the decommission's leftovers checked, the bucket kept with
+    the last set), so the driver gives the decommission BACKUPS=keep and a retention, as an
+    operator would export them; never to the install, and never over a choice already in the
+    environment."""
+    r1_kind = _r1_kind()
+    monkeypatch.delenv("BACKUPS", raising=False)
+    monkeypatch.delenv("BACKUP_RETENTION_DAYS", raising=False)
+    assert r1_kind.operator_choices("DECOMMISSION") == {
+        "BACKUPS": "keep",
+        "BACKUP_RETENTION_DAYS": "30",
+    }
+    assert r1_kind.operator_choices("INSTALL") == {}
+    monkeypatch.setenv("BACKUPS", "destroy")
+    assert r1_kind.operator_choices("DECOMMISSION") == {}
+
+
+def _kind_render(tmp_path: Path, monkeypatch) -> Path:  # type: ignore[no-untyped-def]
+    """R1's own osprey.yaml rendered on the kind platform settings, as `r1_kind.py` renders it."""
+    from harness.render import render
+    from tools.cp_policy_check import _resolver
+
+    from schemas.deployment import OspreyConfig
+
+    monkeypatch.setenv(
+        "OSPREY_PLATFORM_FOLDERS", str(Path(__file__).parent / "fixtures/cloud_platform/platforms")
+    )
+    raw = yaml.safe_load((GATES / "r1_kind_osprey.yaml").read_text(encoding="utf-8"))
+    folder = tmp_path / "render"
+    for name, text in render(
+        OspreyConfig.model_validate(raw), resolver=_resolver
+    ).artefacts.items():
+        (folder / name).parent.mkdir(parents=True, exist_ok=True)
+        (folder / name).write_text(text)
+    return folder
+
+
+def test_the_terraform_stand_in_makes_the_domains_secret_and_admits_what_its_policy_admits(
+    tmp_path: Path, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    """Install step 2's stand-in, run over R1's own render: the search Secret the pods read is made
+    with the domain's endpoint, and the domain admits exactly the principals the rendered access
+    policy names, each mapped to its ARN as the apply would answer it (never a list of its own)."""
+    r1_kind = _r1_kind()
+    folder = _kind_render(tmp_path, monkeypatch)
+    monkeypatch.setattr(r1_kind, "STATE", tmp_path / "state")
+    applied: list[dict] = []
+    configs: list[dict] = []
+    discovery = '{"issuer": "https://kubernetes.default.svc.cluster.local"}'
+    monkeypatch.setattr(
+        r1_kind,
+        "kubectl",
+        lambda *a, **k: '{"keys": []}' if a[-1] == "/openid/v1/jwks" else discovery,
+    )
+    monkeypatch.setattr(r1_kind, "apply", applied.extend)
+    monkeypatch.setattr(r1_kind, "s3_standin", configs.append)
+    monkeypatch.setattr(r1_kind, "irsa_webhook", lambda roles: None)
+    r1_kind.terraform(folder)
+
+    tf = (folder / "terraform/opensearch.tf").read_text()
+    secret = re.search(r'resource "kubernetes_secret" "\w+" \{\n(.*?)^\}\n', tf, re.S | re.M).group(
+        1
+    )  # type: ignore[union-attr]
+    name = re.search(r'name\s*=\s*"([^"]+)"', secret).group(1)  # type: ignore[union-attr]
+    [made] = [d for d in applied if d["kind"] == "Secret" and d["metadata"]["name"] == name]
+    assert {k: base64.b64decode(v).decode() for k, v in made["data"].items()} == {
+        "proxy_url": f"https://{r1_kind.SEARCH_HOST}"
+    }
+
+    policy = re.search(r'data "aws_iam_policy_document" "search" \{(.*?)\n\}', tf, re.S).group(1)  # type: ignore[union-attr]
+    identifiers = re.findall(r"identifiers\s*=\s*\[(.*?)\]", policy)
+    roles = r1_kind.state()["roles"]
+    values = r1_kind._terraform_values(r1_kind.state()["prefix"], roles)
+    admitted = [values[i.strip()] for group in identifiers for i in group.split(",")]
+    [config] = configs
+    assert [d["roles"] for d in config["domains"]] == [admitted]
+    assert admitted == [roles["ospreyflow"]] and roles["ospreyflow-backup"] not in admitted
