@@ -78,6 +78,9 @@ CVE-2026-112397 exp:2026-12-14
 CVE-2026-112398 exp:2026-12-14
 CVE-2026-112399 exp:2026-12-14
 CVE-2026-112400 exp:2026-12-14
+# Found by GitHub run 43385169520 (13 November 2026), on the same terms: a heap overflow in *saving*
+# a TIFF through libtiff, and this deployment saves no image through Pillow.
+CVE-2026-128067 exp:2026-12-14
 CVE-2026-112402 exp:2026-12-14
 CVE-2026-112403 exp:2026-12-14
 CVE-2026-112404 exp:2026-12-14
