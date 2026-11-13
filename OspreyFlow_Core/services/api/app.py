@@ -1540,7 +1540,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # which an open delta socket also asks before each message (`_socket_standing`).
     app.state.people_store = resources.people_store
     app.state.identity_admin = (
-        EntraPeopleAdmin(resources.people_store)
+        EntraPeopleAdmin(
+            resources.people_store,
+            own_clients=(
+                resources.principal_resolver.claim_mapping.client_id,
+                resources.principal_resolver.claim_mapping.api_client_id,
+            ),
+        )
         if resources.people_store is not None
         else IdentityAdmin(
             config,

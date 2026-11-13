@@ -1,0 +1,8 @@
+E       Failed: DID NOT RAISE UnknownRoleError
+
+../OspreyFlow_Build/tests/services/api/test_entra_people.py:754: Failed
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_the_deployment_s_own_applications_are_never_registered_as_dashboards[glass]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_the_deployment_s_own_applications_are_never_registered_as_dashboards[api]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_the_deployment_s_own_applications_are_never_registered_as_dashboards[api-upper]
+3 failed, 56 deselected in 3.48s
