@@ -81,6 +81,12 @@ case already (ADR-099 Amendment 2), so a search never joins across cases.
     - **Amazon OpenSearch Service** lists ICU Analysis as "Included on all domains". Phonetic Analysis is in the
       same table of pre-installed plugins, not among the optional ones, but its row does not say "all domains".
     - To be seen with `GET _cat/plugins` on a lane stack and on the poc domain (step 3a) once the demo is over.
+    - **Plugins search relies on: none.** Every analyser the index uses (keyword normaliser, edge n-grams, trigrams,
+      the standard tokenizer, lowercase, ASCII folding) is in core OpenSearch's analysis-common. The phonetic codes
+      are made in Python and stored as plain keywords. So no feature depends on what a domain's `_cat/plugins`
+      lists, and nothing needs to check it. If a domain does offer analysis-phonetic, it is not used.
+    - **The 10 MiB request cap:** a search or suggestion body is a few kilobytes, because the query is at most 200
+      characters. The index's bulk writes are the rules lane's (ADR-150).
 
   **What strict costs against the owner's scope:**
 
