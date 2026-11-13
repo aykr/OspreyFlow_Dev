@@ -1,12 +1,13 @@
 """ADR-150 decision 2, offline: every `_bulk` request the indexer and the rebuild send is at most
 `MAX_BULK_BYTES` (10 MiB, the smallest `http.max_content_length` of an Amazon OpenSearch instance),
 measured in the bytes the client actually sends, with an action never parted from its document; one
-action that alone is over the cap is raised and nothing of the batch is sent; and a 413 from
-OpenSearch is raised, never swallowed, so the outbox keeps the batch (it is not cleared).
+action that alone is over the cap is set aside (returned as refused, the rest sent); and a 413 from
+OpenSearch is raised, never swallowed, so the outbox keeps the batch (it is not cleared) and a
+rebuild leaves nothing behind.
 
-The stand-in client refuses a body over its limit with the 413 OpenSearch answers (rule 15: the
-fake models the refusal, not only the grant), serialising the body as the real client's
-`_bulk_body` does.
+`FakeOpenSearch` refuses a body over its limit with the 413 OpenSearch answers (rule 15: the fake
+models the refusal, not only the grant), serialising the body as the real client's `_bulk_body`
+does.
 """
 
 from __future__ import annotations
@@ -17,72 +18,19 @@ from typing import Any
 
 import pytest
 from opensearchpy import TransportError
-from opensearchpy.client.utils import _bulk_body
-from opensearchpy.serializer import JSONSerializer
 
 from ontology.loader import load_default_ontology
 from ports.index_feed import PendingIndex
 from services.search_index import indexer as indexer_module
-from services.search_index.indexer import IndexWriteError, SearchIndexer, write_actions
+from services.search_index.indexer import SearchIndexer, building_alias, write_actions
 from services.search_index.rebuild import rebuild
+from tests.services.search_index.fake_opensearch import FakeOpenSearch
 
 CAP = 4096
 
 
-class _Indices:
-    def __init__(self) -> None:
-        self.aliases: dict[str, set[str]] = {}
-        self.indexes: set[str] = set()
-
-    async def exists_alias(self, *, name: str) -> bool:
-        return any(name in names for names in self.aliases.values())
-
-    async def exists(self, *, index: str) -> bool:
-        return index in self.indexes
-
-    async def create(self, *, index: str, body: Any) -> None:
-        self.indexes.add(index)
-        self.aliases[index] = set()
-
-    async def put_alias(self, *, index: str, name: str) -> None:
-        self.aliases[index].add(name)
-
-    async def get_alias(self, *, name: str) -> dict[str, Any]:
-        return {i: {} for i, names in self.aliases.items() if name in names}
-
-    async def update_aliases(self, *, body: dict[str, Any]) -> None:
-        for action in body["actions"]:
-            for op, spec in action.items():
-                names = self.aliases[spec["index"]]
-                names.add(spec["alias"]) if op == "add" else names.discard(spec["alias"])
-
-    async def delete(self, *, index: str) -> None:
-        self.indexes.discard(index)
-        self.aliases.pop(index, None)
-
-    async def refresh(self, *, index: str) -> None:
-        return None
-
-
-class _OpenSearch:
-    """`bulk` as OpenSearch answers it: a body over `limit` bytes is refused with a 413."""
-
-    def __init__(self, limit: int) -> None:
-        self.limit = limit
-        self.transport = type("T", (), {"serializer": JSONSerializer()})()
-        self.indices = _Indices()
-        self.requests: list[bytes] = []
-
-    async def bulk(self, *, body: Any) -> dict[str, Any]:
-        sent = _bulk_body(self.transport.serializer, body)
-        sent = sent if isinstance(sent, bytes) else sent.encode("utf-8")
-        if len(sent) > self.limit:
-            raise TransportError(413, "Request Entity Too Large", {})
-        self.requests.append(sent)
-        return {"errors": False, "items": []}
-
-    async def count(self, *, index: str) -> dict[str, int]:
-        return {"count": 0}
+def _OpenSearch(limit: int) -> FakeOpenSearch:
+    return FakeOpenSearch(limit=limit)
 
 
 class _Source:
@@ -168,15 +116,17 @@ async def test_the_cap_counts_bytes_not_characters(monkeypatch: pytest.MonkeyPat
     assert _lines(client.requests) == body
 
 
-async def test_one_action_alone_over_the_cap_is_raised_and_nothing_sent(
+async def test_one_action_alone_over_the_cap_is_set_aside_and_the_rest_sent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """It can never be sent: returned as refused, never dropped unsaid, and it holds nothing else
+    back (the indexer records it, `test_refused.py`)."""
     monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
     client = _OpenSearch(limit=CAP)
     body = _index_pair(0, 10) + _index_pair(1, CAP) + _index_pair(2, 10)
-    with pytest.raises(IndexWriteError, match="n1"):
-        await write_actions(client, body)  # type: ignore[arg-type]
-    assert client.requests == []
+    refused = await write_actions(client, body)  # type: ignore[arg-type]
+    assert [r.doc_id for r in refused] == ["n1"] and "over the" in refused[0].reason
+    assert _lines(client.requests) == body[:2] + body[4:]
 
 
 async def test_a_413_is_raised_and_the_outbox_keeps_the_batch(
@@ -215,10 +165,10 @@ async def test_the_rebuild_sends_within_the_cap(monkeypatch: pytest.MonkeyPatch)
     built = await rebuild(source, _Texts(), client, "a", load_default_ontology(), page=300)  # type: ignore[arg-type]
     assert built.nodes == 300
     assert len(client.requests) > 1 and all(len(r) <= CAP for r in client.requests)
-    assert "a" in client.indices.aliases[built.index]
+    assert "a" in client.aliases[built.index]
 
 
-async def test_a_413_in_the_rebuild_is_raised_and_the_alias_not_moved(
+async def test_a_413_in_the_rebuild_is_raised_and_leaves_nothing_behind(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
@@ -230,3 +180,19 @@ async def test_a_413_in_the_rebuild_is_raised_and_the_alias_not_moved(
         await rebuild(source, _Texts(), client, "a", load_default_ontology(), page=300)  # type: ignore[arg-type]
     assert raised.value.status_code == 413
     assert (await client.indices.get_alias(name="a")) == {"a-initial": {}}
+    # Its own index is deleted, and the building alias with it: no change goes to a stray index.
+    assert set(client.docs) == {"a-initial"}
+    assert not await client.indices.exists_alias(name=building_alias("a"))
+
+
+async def test_a_lone_surrogate_is_measured_as_the_client_sends_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """opensearch-py's transport encodes with `surrogatepass`; so does the cap's measure, and a
+    property holding a lone surrogate is sent, not raised before it is (which would hold the
+    outbox)."""
+    monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
+    client = _OpenSearch(limit=CAP)
+    body = [{"index": {"_index": "a", "_id": "n0"}}, {"name": "x\ud800y"}]
+    assert await write_actions(client, body) == []  # type: ignore[arg-type]
+    assert len(client.requests) == 1

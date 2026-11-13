@@ -12,7 +12,7 @@ from ports.index_feed import IndexFeedSource
 from schemas.domain import OntologySchema
 
 from .document import fingerprint, node_document, text_document, text_document_id
-from .indexer import SearchIndexer, TextFeedSource, building_alias
+from .indexer import SearchIndexer, TextFeedSource, building_alias, refused_index
 from .mapping import index_body
 
 
@@ -35,33 +35,55 @@ async def rebuild(
     """Every live node into a new index named with its build time, then the alias moved onto it and
     the old indexes deleted, so a reader never sees a half-built index. The outboxes are left alone:
     their rows are re-applied after the move, idempotently."""
-    index = f"{alias}-{datetime.now(UTC).strftime('%Y%m%dt%H%M%S%f')}"
+    # An index a rebuild that crashed left under the building alias would take every change too,
+    # and a second one under it refuses every write (an alias of two indexes with no write index).
+    building = building_alias(alias)
+    if await client.indices.exists_alias(name=building):
+        for left in (await client.indices.get_alias(name=building)).keys():
+            await client.indices.delete(index=left, ignore_unavailable=True)
+    started = datetime.now(UTC)
+    index = f"{alias}-{started.strftime('%Y%m%dt%H%M%S%f')}"
     await client.indices.create(index=index, body=index_body())
-    await client.indices.put_alias(index=index, name=building_alias(alias))
-    indexer = SearchIndexer(source, texts, client, alias, schema)
-    nodes, after = 0, None
-    while True:
-        ids = await source.live_node_ids(after=after, limit=page)
-        if not ids:
-            break
-        await indexer.index_nodes(ids, index=index)
-        nodes += len(ids)
-        after = ids[-1]
-    await client.indices.refresh(index=index)
-    old = (
-        list((await client.indices.get_alias(name=alias)).keys())
-        if await client.indices.exists_alias(name=alias)
-        else []
-    )
-    actions: list[dict[str, Any]] = [{"remove": {"index": o, "alias": alias}} for o in old]
-    actions += [
-        {"add": {"index": index, "alias": alias}},
-        {"remove": {"index": index, "alias": building_alias(alias)}},
-    ]
-    await client.indices.update_aliases(body={"actions": actions})
+    try:
+        await client.indices.put_alias(index=index, name=building)
+        indexer = SearchIndexer(source, texts, client, alias, schema)
+        nodes, after = 0, None
+        while True:
+            ids = await source.live_node_ids(after=after, limit=page)
+            if not ids:
+                break
+            await indexer.index_nodes(ids, index=index)
+            nodes += len(ids)
+            after = ids[-1]
+        await client.indices.refresh(index=index)
+        old = (
+            list((await client.indices.get_alias(name=alias)).keys())
+            if await client.indices.exists_alias(name=alias)
+            else []
+        )
+        actions: list[dict[str, Any]] = [{"remove": {"index": o, "alias": alias}} for o in old]
+        actions += [
+            {"add": {"index": index, "alias": alias}},
+            {"remove": {"index": index, "alias": building}},
+        ]
+        await client.indices.update_aliases(body={"actions": actions})
+    except BaseException:
+        # A failed rebuild leaves nothing behind: its index, and the building alias with it, go;
+        # the alias stays on the index it was on.
+        await client.indices.delete(index=index, ignore_unavailable=True)
+        raise
     for o in old:
         if o != index:
             await client.indices.delete(index=o)
+    # The record of documents set aside is now this rebuild's: what it refused, and what the
+    # indexer refused while it ran. Older records, of documents since rebuilt, go; a failed
+    # rebuild never reaches here, so it loses no record.
+    if await client.indices.exists(index=refused_index(alias)):
+        await client.delete_by_query(
+            index=refused_index(alias),
+            body={"query": {"range": {"at": {"lt": started.isoformat()}}}},
+            refresh=True,
+        )
     documents = int((await client.count(index=index))["count"])
     return Rebuilt(index=index, nodes=nodes, documents=documents)
 
@@ -73,10 +95,37 @@ class Drift:
     missing: list[str] = field(default_factory=list)
     extra: list[str] = field(default_factory=list)
     stale: list[str] = field(default_factory=list)
+    #: Missing because OpenSearch refused them for good, each with its recorded reason.
+    refused: dict[str, str] = field(default_factory=dict)
+    #: The outboxes still held rows when the check ran: a change on its way shows as drift.
+    pending: bool = False
 
     @property
     def none(self) -> bool:
-        return not (self.missing or self.extra or self.stale)
+        return not (self.missing or self.extra or self.stale or self.refused)
+
+
+async def _refused(client: AsyncOpenSearch, alias: str) -> dict[str, str]:
+    """The record of documents set aside (`indexer.refused_index`): id -> reason."""
+    index = refused_index(alias)
+    if not await client.indices.exists(index=index):
+        return {}
+    await client.indices.refresh(index=index)
+    found: dict[str, str] = {}
+    answer = await client.search(
+        index=index, body={"query": {"match_all": {}}, "sort": ["_doc"]}, scroll="2m", size=1000
+    )
+    scroll = answer.get("_scroll_id")
+    try:
+        while answer["hits"]["hits"]:
+            for hit in answer["hits"]["hits"]:
+                found[hit["_id"]] = str(hit["_source"].get("reason", ""))
+            answer = await client.scroll(scroll_id=scroll, scroll="2m")
+            scroll = answer.get("_scroll_id")
+    finally:
+        if scroll:
+            await client.clear_scroll(scroll_id=scroll)
+    return found
 
 
 async def _indexed(client: AsyncOpenSearch, alias: str) -> dict[str, str]:
@@ -107,10 +156,14 @@ async def drift(
     *,
     page: int = 1000,
 ) -> Drift:
-    """The graph's live nodes against the index, by id and fingerprint (ADR-150 decision 5)."""
+    """The graph's live nodes against the index, by id and fingerprint (ADR-150 decision 5). It
+    holds every indexed id and fingerprint, and every expected id, in memory: about 150 bytes a
+    document, so some 4.5 GB at thirty million documents (a streaming check is CARRIES' row)."""
+    pending = bool(await source.pending_index(1)) or bool(await texts.pending_text_index(1))
     await client.indices.refresh(index=alias)
     indexed = await _indexed(client, alias)
-    report = Drift(index_documents=len(indexed))
+    set_aside = await _refused(client, alias)
+    report = Drift(index_documents=len(indexed), pending=pending)
     expected: set[str] = set()
     after = None
     while True:
@@ -135,6 +188,8 @@ async def drift(
                     report.stale.append(document["id"])
         after = ids[-1]
     report.extra = sorted(set(indexed) - expected)
+    report.refused = {d: set_aside[d] for d in sorted(report.missing) if d in set_aside}
+    report.missing = [d for d in report.missing if d not in report.refused]
     report.missing.sort()
     report.stale.sort()
     return report

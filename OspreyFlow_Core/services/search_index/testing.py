@@ -43,7 +43,10 @@ async def throwaway_index(
             dict(texts or {}),
             schema or load_default_ontology(),
         )
-        await write_actions(client, body)
+        refused = await write_actions(client, body)
+        if refused:
+            # A fixture index is exactly the nodes given, or none: never one quietly short.
+            raise AssertionError(f"the fixture index refused {refused}")
         await client.indices.refresh(index=index)
         yield client, index
     finally:
