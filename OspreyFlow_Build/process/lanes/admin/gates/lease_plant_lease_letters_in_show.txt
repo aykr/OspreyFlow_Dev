@@ -1,0 +1,41 @@
+# plant: lease_letters_in_show
+# replaced: 'names_lease() { [[ "$1" =~ $LEASE_RE ]]; }'
+# with: 'names_lease() { [[ "$1" == *lease* ]]; }'
+# run: pytest -k 'release'
+
+...FF.                                                                   [100%]
+=================================== FAILURES ===================================
+________ test_a_note_saying_release_that_names_the_owner_is_the_owners _________
+
+hb = <function hb.<locals>.run at 0x110e5dee0>
+
+    def test_a_note_saying_release_that_names_the_owner_is_the_owners(hb) -> None:
+        _all_beat(hb)
+        assert hb("beat", "case", "waiting-for-owner", "the owner's word on the release notes").returncode == 0
+        show = hb("show")
+>       assert _needs(show) == ["case is waiting for you: the owner's word on the release notes"]
+E       assert [] == ['case is wai...elease notes']
+E         
+E         Right contains one more item: "case is waiting for you: the owner's word on the release notes"
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:1004: AssertionError
+____ test_a_lane_blocked_on_a_release_is_blocked_not_waiting_for_the_lease _____
+
+hb = <function hb.<locals>.run at 0x110e91120>
+
+    def test_a_lane_blocked_on_a_release_is_blocked_not_waiting_for_the_lease(hb) -> None:
+        _all_beat(hb)
+        assert hb("beat", "glass", "blocked", "waiting for R1 to release the test server").returncode == 0
+        show = hb("show")
+>       assert _needs(show) == ["glass is blocked: waiting for R1 to release the test server"]
+E       AssertionError: assert [] == ['glass is bl... test server']
+E         
+E         Right contains one more item: 'glass is blocked: waiting for R1 to release the test server'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:1012: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_note_saying_release_that_names_the_owner_is_the_owners
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_lane_blocked_on_a_release_is_blocked_not_waiting_for_the_lease
+2 failed, 4 passed, 63 deselected in 5.56s

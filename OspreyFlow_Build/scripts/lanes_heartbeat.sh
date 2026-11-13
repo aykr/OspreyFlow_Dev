@@ -218,6 +218,11 @@ estimates() {
   echo
 }
 
+# A note waiting for a test stack names the lease: the word itself, never the letters inside "release" (13 November
+# 2026: "waiting for R1 to release the test server" was read as waiting for the lease, and left NEEDS YOU).
+LEASE_RE='(^|[^[:alpha:]])[Ll]ease([^[:alpha:]]|$)'
+names_lease() { [[ "$1" =~ $LEASE_RE ]]; }
+
 # `show` is one screen: a heading and at most one note line per lane, with the step it is on (the owner,
 # 8 November 2026: no scrolling). `show --full` adds every step as a checklist.
 show() {
@@ -241,19 +246,19 @@ show() {
             echo "$lane has been quiet since $at while $state" >> "$mine"   # the orchestrator's check asks it
           fi ;;
         waiting-for-owner)
-          case "$note" in
-            *"lease"*) echo "$lane is waiting for the lease: $note" >> "$mine" ;;   # the orchestrator passes it
+          if names_lease "$note"; then echo "$lane is waiting for the lease: $note" >> "$mine"   # the orchestrator passes it
+          else case "$note" in
             # Only a note that names the owner is the owner's: lanes beat this state while they wait on
             # the orchestrator (a merge, a slot, a stack), and on 10 November 2026 those reached Needs you.
             *[Oo]wner*) echo "$lane is waiting for you: $note" >> "$needs" ;;
             *) echo "$lane is waiting for the orchestrator: $note" >> "$mine" ;;
-          esac ;;
+          esac; fi ;;
         blocked)
-          case "$note" in
-            *"lease"*) echo "$lane is waiting for the lease: $note" >> "$mine" ;;   # the orchestrator passes it
+          if names_lease "$note"; then echo "$lane is waiting for the lease: $note" >> "$mine"   # the orchestrator passes it
+          else case "$note" in
             *"usage limit"*) echo "$lane stopped at its usage limit on account $(cat "$DIR/$lane.account" 2>/dev/null || echo default): switch it (lanes_launch.sh switch $lane --account <name>) or write a fallback line" >> "$needs" ;;
             *) echo "$lane is blocked: $note" >> "$needs" ;;
-          esac ;;
+          esac; fi ;;
         paused) ago="paused $(mins "$a")m ago" ;;   # a paused lane is never stalled
         ready-to-merge) echo "$lane is ready to merge (since $at)" >> "$mine" ;;
       esac
@@ -465,7 +470,7 @@ sub state_of { my ($r) = @_; my ($lane, $step, $status) = @$r[0, 1, 3];
     return "waiting to merge" if $bs eq "ready-to-merge";
     return "blocked" if $bs eq "blocked";
     if ($bs eq "waiting-for-owner") {   # the same reading as `show`: only a note naming the owner is the owner'"'"'s
-      return "waiting for a test stack" if $bn =~ /lease/;
+      return "waiting for a test stack" if $bn =~ /(?<![[:alpha:]])[Ll]ease(?![[:alpha:]])/;   # the word, as `show` reads it
       return "needs you: " . shortnote($bn) if $bn =~ /[Oo]wner/;
       return "waiting for the orchestrator";
     } }
@@ -518,7 +523,7 @@ my $full = $ENV{P_FULL};
 sub words_of { my ($s, $n) = @_;   # the beat'"'"'s state in plain words, read as `show` reads it
   return "ready to merge" if $s eq "ready-to-merge";
   if ($s eq "waiting-for-owner") {
-    return "waiting for a test stack" if $n =~ /lease/;
+    return "waiting for a test stack" if $n =~ /(?<![[:alpha:]])[Ll]ease(?![[:alpha:]])/;
     return $n =~ /[Oo]wner/ ? "waiting for you" : "waiting for the orchestrator" }
   return $s }
 sub stages_of { my ($lane) = @_; my ($step, @s);
