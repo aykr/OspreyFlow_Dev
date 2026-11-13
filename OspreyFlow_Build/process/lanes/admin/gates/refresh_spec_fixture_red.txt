@@ -1,0 +1,39 @@
+PLANT: the fixture names a parameter the library does not send (nonce)
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Core/apps/workspace/), logged at osprey-runs/admin.meta/runs/20261113T131331Z-6eddf4ed/log: npx playwright test --config keyboard/playwright.config.ts refresh-sign-in --reporter=line -g fixtures/silent-round-request
+
+Running 1 test using 1 worker
+
+[1/1] keyboard/refresh-sign-in.spec.ts:226:1 › the silent round is the request the live Keycloak test sends (fixtures/silent-round-request.json)
+  1) keyboard/refresh-sign-in.spec.ts:226:1 › the silent round is the request the live Keycloak test sends (fixtures/silent-round-request.json) 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Object {
+        "client_id": "osprey-glass",
+        "code_challenge_method": "S256",
+    -   "nonce": "planted",
+        "prompt": "none",
+        "redirect_uri": "<origin>/",
+        "response_type": "code",
+        "scope": "openid",
+      }
+
+      235 |   );
+      236 |   expect(new URL(`${IDP}/protocol/openid-connect/auth`).pathname.replace("/realms/osprey", "")).toBe(SILENT_ROUND.path);
+    > 237 |   expect(fixed).toEqual(SILENT_ROUND.fixed);
+          |                 ^
+      238 |   expect([...sent!.keys()].filter((k) => SILENT_ROUND.random.includes(k)).sort()).toEqual([...SILENT_ROUND.random].sort());
+      239 | });
+      240 |
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:237:17
+
+    Error Context: test-results/refresh-sign-in-the-silent-33d7f--silent-round-request-json-/error-context.md
+
+
+  1 failed
+    keyboard/refresh-sign-in.spec.ts:226:1 › the silent round is the request the live Keycloak test sends (fixtures/silent-round-request.json) 
+Wall time: 5 s, exit 1 (no stack, no lease; set-up before it 10 s)
+exit=1

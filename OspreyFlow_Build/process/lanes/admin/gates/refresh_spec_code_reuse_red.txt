@@ -1,0 +1,28 @@
+PLANT: the fake's used-code check removed; the reuse case resends the library's own exchange whole
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Core/apps/workspace/), logged at osprey-runs/admin.meta/runs/20261113T131350Z-4cb11415/log: npx playwright test --config keyboard/playwright.config.ts refresh-sign-in --reporter=line -g exchanged once
+
+Running 1 test using 1 worker
+
+[1/1] keyboard/refresh-sign-in.spec.ts:241:1 › a code is exchanged once: the fake refuses it again, as Keycloak does
+  1) keyboard/refresh-sign-in.spec.ts:241:1 › a code is exchanged once: the fake refuses it again, as Keycloak does 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 400
+    Received: 200
+
+      256 |     [`${IDP}/protocol/openid-connect/token`, first],
+      257 |   );
+    > 258 |   expect(again).toBe(400);
+          |                 ^
+      259 | });
+      260 |
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:258:17
+
+    Error Context: test-results/refresh-sign-in-a-code-is--78496-s-it-again-as-Keycloak-does/error-context.md
+
+
+  1 failed
+    keyboard/refresh-sign-in.spec.ts:241:1 › a code is exchanged once: the fake refuses it again, as Keycloak does 
+Wall time: 5 s, exit 1 (no stack, no lease; set-up before it 12 s)
+exit=1

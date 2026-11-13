@@ -1,11 +1,11 @@
 // ADR-050 Amendment 3: a refresh keeps the person signed in and where they were. This drives the real
 // Glass (`/`, `main.tsx` and `App.tsx`, not a harness) and the real `oidc-client-ts`, with its hidden
 // `prompt=none` frame, against a fake identity provider served at the transport (`page.route`, which
-// answers the page's frames too). Rule 15: the fake refuses what Keycloak 26 refuses, as
-// `tests/harness/test_refresh_silent_sign_in_keycloak.py` measures it against the real one — with no
-// session, `prompt=none` is answered by an error on the redirect (`login_required`, or the
-// `interaction_required` and `consent_required` Keycloak also sends), with `state` and `iss`, never a
-// code; an unregistered `redirect_uri` or client is refused outright; and a code is exchanged once,
+// answers the page's frames too). Rule 15: the fake refuses as Keycloak 26 does where
+// `tests/harness/test_refresh_silent_sign_in_keycloak.py` measures the real one — with no session,
+// `prompt=none` answered `login_required` on the redirect with `state` and `iss`, never a code — and,
+// beyond what was measured live, with `interaction_required` and `consent_required`, which OIDC Core
+// §3.1.2.6 names for `prompt=none` and Keycloak documents but no live case here provokes; an unregistered `redirect_uri` or client is refused outright; and a code is exchanged once,
 // for the PKCE verifier its challenge names and the `redirect_uri` it was given to, else
 // `invalid_grant`. The request the library sends is held to `fixtures/silent-round-request.json`,
 // which the live Keycloak test sends as it is. The Conduit is faked with only what the sign-in and
@@ -132,6 +132,9 @@ async function fakeIdentityProviderAndConduit(page: Page, idp: FakeIdentityProvi
   });
 }
 
+// Home or Admin is drawn only after the silent round, whose hidden frame loads the whole workspace
+// from the development server (on the test server, at times past the default five seconds).
+const afterTheRound = expect.configure({ timeout: 15_000 });
 const signInScreen = (page: Page) => page.getByRole("heading", { name: "Sign in", exact: true });
 const home = (page: Page) => page.getByRole("heading", { level: 1, name: /, Ada$/ });
 const admin = (page: Page) => page.getByRole("navigation", { name: "Admin sections" });
@@ -141,11 +144,11 @@ test("a refresh with a live identity-provider session lands signed in, on Home, 
   const idp = { session: true, silentRounds: 0 };
   await fakeIdentityProviderAndConduit(page, idp);
   await page.goto("/");
-  await expect(home(page)).toBeVisible();
+  await afterTheRound(home(page)).toBeVisible();
   await expect(signInScreen(page)).toHaveCount(0);
 
   await page.reload();
-  await expect(home(page)).toBeVisible();
+  await afterTheRound(home(page)).toBeVisible();
   await expect(signInScreen(page)).toHaveCount(0);
   // One silent round per load, and only one.
   expect(idp.silentRounds).toBe(2);
@@ -155,12 +158,12 @@ test("a refresh in Admin lands in Admin, not on Home", async ({ page }) => {
   const idp = { session: true, silentRounds: 0 };
   await fakeIdentityProviderAndConduit(page, idp);
   await page.goto("/");
-  await expect(home(page)).toBeVisible();
+  await afterTheRound(home(page)).toBeVisible();
   await openAdmin(page);
-  await expect(admin(page)).toBeVisible();
+  await afterTheRound(admin(page)).toBeVisible();
 
   await page.reload();
-  await expect(admin(page)).toBeVisible();
+  await afterTheRound(admin(page)).toBeVisible();
   await expect(home(page)).toHaveCount(0);
   await expect(signInScreen(page)).toHaveCount(0);
 });
@@ -183,12 +186,12 @@ test("the place is kept in this tab only: a new tab with the same identity-provi
   await fakeIdentityProviderAndConduit(page, idp);
   await page.goto("/");
   await openAdmin(page);
-  await expect(admin(page)).toBeVisible();
+  await afterTheRound(admin(page)).toBeVisible();
 
   const other = await context.newPage();
   await fakeIdentityProviderAndConduit(other, idp);
   await other.goto("/");
-  await expect(home(other)).toBeVisible();
+  await afterTheRound(home(other)).toBeVisible();
 });
 
 test("a kept Admin for a person whose rights do not open it lands on Home, and Home is kept", async ({ page }) => {
@@ -203,7 +206,7 @@ test("a kept Admin for a person whose rights do not open it lands on Home, and H
     }
   });
   await page.goto("/");
-  await expect(home(page)).toBeVisible();
+  await afterTheRound(home(page)).toBeVisible();
   await expect(admin(page)).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("ospreyflow.place"))).toBe("home");
 });
@@ -224,7 +227,7 @@ test("the silent round is the request the live Keycloak test sends (fixtures/sil
   const idp: FakeIdentityProvider = { session: true, silentRounds: 0, asked: [] };
   await fakeIdentityProviderAndConduit(page, idp);
   await page.goto("/");
-  await expect(home(page)).toBeVisible();
+  await afterTheRound(home(page)).toBeVisible();
   const [sent] = idp.asked!;
   const origin = new URL(page.url()).origin;
   const fixed = Object.fromEntries(
@@ -237,18 +240,20 @@ test("the silent round is the request the live Keycloak test sends (fixtures/sil
 
 test("a code is exchanged once: the fake refuses it again, as Keycloak does", async ({ page }) => {
   const idp: FakeIdentityProvider = { session: true, silentRounds: 0 };
-  let codeUrl = "";
+  let first = "";
   page.on("request", (r) => {
-    if (r.url().includes("code=code-")) codeUrl = r.url();
+    if (r.method() === "POST" && r.url().endsWith("/protocol/openid-connect/token") && !first) first = r.postData() ?? "";
   });
   await fakeIdentityProviderAndConduit(page, idp);
   await page.goto("/");
-  await expect(home(page)).toBeVisible();
-  const code = new URL(codeUrl).searchParams.get("code");
+  await afterTheRound(home(page)).toBeVisible();
+  // The library's own exchange, sent again whole: the same code, verifier and redirect_uri. Only
+  // the code having been used can refuse it.
+  expect(new URLSearchParams(first).get("code_verifier")).toBeTruthy();
   const again = await page.evaluate(
-    async ([token, code]) =>
-      (await fetch(token!, { method: "POST", body: new URLSearchParams({ grant_type: "authorization_code", client_id: "osprey-glass", code: code!, redirect_uri: `${location.origin}/`, code_verifier: "x" }) })).status,
-    [`${IDP}/protocol/openid-connect/token`, code],
+    async ([token, body]) =>
+      (await fetch(token!, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body })).status,
+    [`${IDP}/protocol/openid-connect/token`, first],
   );
   expect(again).toBe(400);
 });
