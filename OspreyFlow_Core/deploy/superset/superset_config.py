@@ -15,6 +15,7 @@ verified against.
 import base64
 import json
 import os
+import urllib.request
 from urllib.parse import quote
 
 from flask_appbuilder.security.manager import AUTH_OAUTH
@@ -43,44 +44,96 @@ AUTH_ROLES_MAPPING = {
     "data_engineer": ["Gamma"],
 }
 
-_internal = os.environ.get("SUPERSET_IDP_INTERNAL", "http://keycloak:8080/realms/osprey")
-_public = os.environ.get("SUPERSET_IDP_PUBLIC", "http://id.ospreyflow.localhost/realms/osprey")
-OAUTH_PROVIDERS = [
-    {
-        "name": "keycloak",
-        "icon": "fa-key",
-        "token_key": "access_token",
-        "remote_app": {
-            "client_id": os.environ.get("SUPERSET_OIDC_CLIENT_ID", "osprey-superset"),
-            "client_secret": os.environ["SUPERSET_OIDC_CLIENT_SECRET"],
-            "api_base_url": f"{_internal}/protocol/openid-connect/",
-            "access_token_url": f"{_internal}/protocol/openid-connect/token",
-            "authorize_url": f"{_public}/protocol/openid-connect/auth",
-            "client_kwargs": {"scope": "openid profile"},
-            # The id_token is verified: signature against the realm's keys, fetched over the
-            # internal network; audience, nonce and issuer. A browser sign-in's id_token carries
-            # the public issuer — the address the person signed in at — even though Superset
-            # fetches it internally (measured: the internal issuer was refused, `invalid_claim`);
-            # `SUPERSET_IDP_ISSUER` names another for a realm with a fixed hostname. Without
-            # `jwks_uri` every sign-in was refused ("Missing jwks_uri in metadata", found live 11
-            # October 2026).
-            "jwks_uri": f"{_internal}/protocol/openid-connect/certs",
-            "issuer": os.environ.get("SUPERSET_IDP_ISSUER", _public),
-        },
-    }
-]
-
-
 #: Rendered on the cloud-platform profile, whose people sign in with Entra ID (ADR-148 decision 9).
 _ENTRA = os.environ.get("SUPERSET_SIGN_IN", "").lower() == "entra"
 
+if not _ENTRA:
+    _internal = os.environ.get("SUPERSET_IDP_INTERNAL", "http://keycloak:8080/realms/osprey")
+    _public = os.environ.get("SUPERSET_IDP_PUBLIC", "http://id.ospreyflow.localhost/realms/osprey")
+    OAUTH_PROVIDERS = [
+        {
+            "name": "keycloak",
+            "icon": "fa-key",
+            "token_key": "access_token",
+            "remote_app": {
+                "client_id": os.environ.get("SUPERSET_OIDC_CLIENT_ID", "osprey-superset"),
+                "client_secret": os.environ["SUPERSET_OIDC_CLIENT_SECRET"],
+                "api_base_url": f"{_internal}/protocol/openid-connect/",
+                "access_token_url": f"{_internal}/protocol/openid-connect/token",
+                "authorize_url": f"{_public}/protocol/openid-connect/auth",
+                "client_kwargs": {"scope": "openid profile"},
+                # The id_token is verified: signature against the realm's keys, fetched over the
+                # internal network; audience, nonce and issuer. A browser sign-in's id_token carries
+                # the public issuer — the address the person signed in at — even though Superset
+                # fetches it internally (measured: the internal issuer was refused, `invalid_claim`);
+                # `SUPERSET_IDP_ISSUER` names another for a realm with a fixed hostname. Without
+                # `jwks_uri` every sign-in was refused ("Missing jwks_uri in metadata", found live 11
+                # October 2026).
+                "jwks_uri": f"{_internal}/protocol/openid-connect/certs",
+                "issuer": os.environ.get("SUPERSET_IDP_ISSUER", _public),
+            },
+        }
+    ]
+
+else:
+    # ADR-148 Amendment 9: Superset is its own app registration in the client's tenant, and asks Entra
+    # for an ID token (its own sign-in) and a delegated token for OspreyFlow's API scope, which it
+    # spends on the Conduit's `GET /v1/me` and `/v1/me/rights` alone (the Conduit admits Superset's
+    # client there and nowhere else). Every address is the tenant's own: no `common` or
+    # `organizations` endpoint, so a person of another tenant is refused by Entra before Superset.
+    _tenant = os.environ["SUPERSET_ENTRA_TENANT"]
+    _authority = os.environ.get("SUPERSET_ENTRA_AUTHORITY", "https://login.microsoftonline.com")
+    _entra = f"{_authority.rstrip('/')}/{_tenant}"
+    OAUTH_PROVIDERS = [
+        {
+            "name": "entra",
+            "icon": "fa-windows",
+            "token_key": "access_token",
+            "remote_app": {
+                "client_id": os.environ["SUPERSET_OIDC_CLIENT_ID"],
+                "client_secret": os.environ["SUPERSET_OIDC_CLIENT_SECRET"],
+                "api_base_url": f"{_entra}/oauth2/v2.0/",
+                "access_token_url": f"{_entra}/oauth2/v2.0/token",
+                "authorize_url": f"{_entra}/oauth2/v2.0/authorize",
+                "client_kwargs": {"scope": f"openid profile {os.environ['SUPERSET_ENTRA_API_SCOPE']}"},
+                # The ID token is Superset's own (its audience Superset's registration), verified
+                # against the tenant's keys and its v2.0 issuer, whatever the API's token version.
+                "jwks_uri": f"{_entra}/discovery/v2.0/keys",
+                "issuer": f"https://login.microsoftonline.com/{_tenant}/v2.0",
+            },
+        }
+    ]
+
+#: Where Superset asks the Conduit who signed in (inside the deployment's network).
+_CONDUIT = os.environ.get("SUPERSET_CONDUIT_URL", "http://api:8000").rstrip("/")
+
+
+class NotForReports(Exception):
+    """The person holds neither `administer_system` nor `read_reports`: no Superset account. Raised
+    from `oauth_user_info`, which Flask-AppBuilder answers as a refused sign-in."""
+
+
+def _conduit(path: str, access_token: str) -> dict:  # type: ignore[type-arg]
+    """One read of the person's own principal, as the Conduit resolved it. Any refusal or failure
+    is raised, so the sign-in is refused: never an account on a guess (fails closed)."""
+    request = urllib.request.Request(
+        f"{_CONDUIT}{path}",
+        headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=10) as answer:  # noqa: S310 - the deployment's Conduit
+        return json.load(answer)
+
 
 class OspreySecurityManager(SupersetSecurityManager):
-    """Reads who signed in from the access token the provider returned over the back channel —
-    never from anything the browser sent — including OspreyFlow's `roles` claim."""
+    """Reads who signed in from what came back over the back channel — never from anything the
+    browser sent. Keycloak: OspreyFlow's `roles` claim of the access token. Entra ID (ADR-148
+    Amendment 9): the Conduit's own resolution of the person (`GET /v1/me`, `/v1/me/rights`), since
+    an Entra token's `roles` are app roles, never OspreyFlow's."""
 
     def oauth_user_info(self, provider, response=None):  # type: ignore[no-untyped-def]
         token = (response or {}).get("access_token", "")
+        if _ENTRA:
+            return _entra_user_info(response or {}, token)
         payload = token.split(".")[1] if token.count(".") == 2 else ""
         padded = payload + "=" * (-len(payload) % 4)
         claims = json.loads(base64.urlsafe_b64decode(padded)) if payload else {}
@@ -90,11 +143,34 @@ class OspreySecurityManager(SupersetSecurityManager):
             "last_name": claims.get("family_name", ""),
             "email": claims.get("email")
             or f"{claims.get('preferred_username', 'user')}@ospreyflow.invalid",
-            # ADR-148 Amendment 8: on Entra ID sign-in a token's `roles` are app roles an Entra
-            # administrator assigns, never OspreyFlow's; everyone is Gamma there until Superset's
-            # own step (CARRIES, P10 part 2).
-            "role_keys": [] if _ENTRA else claims.get("roles", []),
+            "role_keys": claims.get("roles", []),
         }
+
+
+def _entra_user_info(response: dict, access_token: str) -> dict:  # type: ignore[type-arg]
+    """The account is the Conduit's principal: its id (the Entra object id) is the username, and its
+    rights decide the role, re-read at every sign-in (`AUTH_ROLES_SYNC_AT_LOGIN`): `administer_system`
+    is Superset's Admin, `read_reports` its read-only Gamma, neither no account at all. Only the
+    displayed name comes from the ID token (verified by Superset's OAuth client against the tenant)."""
+    if not access_token:
+        raise NotForReports("no delegated token came back from Entra ID")
+    me = _conduit("/v1/me", access_token)
+    rights = set(_conduit("/v1/me/rights", access_token).get("rights", []))
+    if "administer_system" in rights:
+        role_keys = ["osprey-admin"]
+    elif "read_reports" in rights:
+        role_keys = ["reports_viewer"]
+    else:
+        raise NotForReports("neither administer_system nor read_reports: no reports account")
+    person = str(me["id"])
+    shown = response.get("userinfo") or {}
+    return {
+        "username": person,
+        "first_name": str(shown.get("given_name") or shown.get("name") or ""),
+        "last_name": str(shown.get("family_name") or ""),
+        "email": f"{person}@ospreyflow.invalid",
+        "role_keys": role_keys,
+    }
 
 
 CUSTOM_SECURITY_MANAGER = OspreySecurityManager
