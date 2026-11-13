@@ -517,3 +517,62 @@ def test_a_reader_cleared_for_a_list_refreshes_and_schedules_it(world: tuple[_Wo
     assert refreshed.status_code == 200 and refreshed.json()["list_name"] == SECRET_LIST, refreshed.text
     scheduled = client.put(f"/v1/admin/screening-lists/{SECRET_LIST}/schedule", json={"schedule": None})
     assert scheduled.status_code == 200, scheduled.text
+
+
+def test_each_audit_entry_about_a_list_records_the_lists_marking(world: tuple[_World, TestClient]) -> None:
+    """Admin › Audit admits a reader to an entry naming a list by the list's marking now and as the
+    entry recorded it (`audit_section._lists_clause`). The subscription, schedule and refresh
+    entries recorded none, so with the list's kept marking gone such an entry would have read as
+    OFFICIAL, P to everyone (CARRIES, the orchestrator's verification of lists at 5c862eb): each
+    now records it, the SECRET list's SECRET and the unmarked list's OFFICIAL, P. Red with the
+    entries recording no marking."""
+    w, client = world
+    _with_a_secret_list(w, client)
+    w.as_ = SECRET_ADMIN
+    client.post(f"/v1/admin/screening-lists/{SECRET_LIST}/refresh")
+    client.put(f"/v1/admin/screening-lists/{SECRET_LIST}/schedule", json={"schedule": {"every": "daily", "hour": 5}})
+    client.post("/v1/admin/screening-lists", json={**LIST, "location": "lists/other.json"})
+    # The SECRET list's subscription changed by the administrator cleared for it: its entry records
+    # SECRET, not the default an unmarked list's would show either way (the lane review, item 4).
+    resubscribed = client.post("/v1/admin/screening-lists", json={**LIST, "list_name": SECRET_LIST,
+                                                                  "location": "lists/secret.json"})  # fmt: skip
+    assert resubscribed.status_code in (200, 201), resubscribed.text
+    marked = {(r["action"], r["resolved_query"]["list_name"]): (  # type: ignore[index]
+        r["resolved_query"].get("list_classification"), r["resolved_query"].get("list_handling_code"))  # type: ignore[union-attr]
+        for r in w.audit.records if str(r["action"]).startswith("screening_list_")}  # fmt: skip
+    assert marked[("screening_list_refreshed", SECRET_LIST)] == ("SECRET", "P")
+    assert marked[("screening_list_schedule_set", SECRET_LIST)] == ("SECRET", "P")
+    assert marked[("screening_list_subscribed", SECRET_LIST)] == ("SECRET", "P")
+    assert marked[("screening_list_subscribed", "Synthetic list")] == ("OFFICIAL", "P")
+    assert marked[("screening_list_refreshed", "Synthetic list")] == ("OFFICIAL", "P")
+
+
+def test_a_scheduled_refreshs_audit_entry_records_the_lists_marking(world: tuple[_World, TestClient]) -> None:
+    """The fourth of a list's audit entries about it (the lane review of the audit follow-up, item 1):
+    a schedule's slot, run as the person who set it, through `_list_schedule_executor`'s own `refresh`
+    over the same stand-ins as the routes'. Its entry records the SECRET list's SECRET, so Admin ›
+    Audit admits it by that were the kept marking gone. Red with the marking left out of that write."""
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    from services.api.app import _list_schedule_executor
+
+    w, client = world
+    _with_a_secret_list(w, client)
+    store = client.portal.call(w.screening)
+    state = SimpleNamespace(
+        typology_rules=_Nothing(), datasets=None, graph=None, handling_scheme=load_uk_le_scheme(),
+        alerts_store=None, audit=w.audit, valkey=None, principal_resolver=_Resolver(),
+        screening_lists=store,
+    )  # fmt: skip
+    state.principal_resolver.resolve_for_owner_detailed = state.principal_resolver.resolve_for_owner  # type: ignore[attr-defined]
+    executor = _list_schedule_executor(SimpleNamespace(state=state))  # type: ignore[arg-type]
+    slot = datetime(2026, 11, 13, 5, tzinfo=UTC)
+    client.portal.call(partial(executor.refresh, SECRET_LIST, SECRET_ADMIN, slot))
+    scheduled = [r["resolved_query"] for r in w.audit.records
+                 if r["action"] == "screening_list_refreshed"
+                 and r["resolved_query"].get("trigger") == "schedule"]  # type: ignore[union-attr]  # fmt: skip
+    assert len(scheduled) == 1, w.audit.records
+    entry = scheduled[0]
+    assert entry["list_name"] == SECRET_LIST and entry["slot"] == slot.isoformat()  # type: ignore[index]
+    assert (entry["list_classification"], entry["list_handling_code"]) == ("SECRET", "P")  # type: ignore[index]

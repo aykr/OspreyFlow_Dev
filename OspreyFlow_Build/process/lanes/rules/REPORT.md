@@ -1,3 +1,35 @@
+# rules lane · report · rules-lists-audit: the CARRIES rows of the verification of lists at 5c862eb (13 November 2026)
+
+| Row | State | Proving test |
+| --- | --- | --- |
+| (a) Each half of the audit's list clause planted alone; a live case recorded above the list's marking and an R list; P52 with another reader; the route file in the red record's green files | done | live `test_an_entry_is_read_by_its_lists_marking_as_recorded_and_by_its_handling_code` (each of the four halves alone: L28f classification now, L28c code now, L28e classification as recorded, L28d code as recorded; L28b both recorded halves); route `test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance`, two readers (P52, P52b) |
+| (b) The list audit entries recording no marking | done: all five record the list's marking as it stood (`ScreeningListStore.audit_marking`): subscription, schedule, the route's refresh, a schedule slot's refresh, the operator's command | live `test_each_audit_entry_about_a_list_records_the_lists_marking` (L29; L29c, the SECRET list's own subscription, not the default); live `test_a_scheduled_refreshs_audit_entry_records_the_lists_marking` (L29b at `_list_schedule_executor`'s call site); `test_the_operators_refresh_records_the_lists_marking` (P53) |
+
+**The lane review** (after c15cc92: not yet, one MUST): the scheduled refresh's write untested (fixed, L29b); the operator's
+command recording no marking (fixed, P53); two of the clause's four halves never planted alone (fixed, L28e, L28f); the
+subscription's assertion equal to the default (fixed, L29c); Am 7 naming a function that does not exist (fixed). Logged, not
+fixed: the read's marking now is the markings row alone where `hidden()` falls back to the entries' (the two agree while every
+list keeps its row; Am 7); the `{list_classification, list_handling_code}` dict built in three places (`audit_marking`,
+`admin_people._list_marking_words`, `screening_refresh`), a tidy for a later step.
+
+**Gates after the review at 4347372** (on main a7bfb75; OspreyFlow_Core tree 8877cbc1e1f6d96c52cc73c58b15f2b65d70e72f). Offline plants:
+57 red, none broken, the tree clean (`lists/AM7_RED_RECORD.txt`). Live, on stack b under the rules lane's lease (taken
+2026-11-13T19:44:58Z, released after), at 9bc74de (Core tree 55ea7c28bc3e84b3d2f43e00b562475d956c297d; main a7bfb75 since changes
+only harness/{profiles,render}.py and scripts/refresh.py, no file a plant or live test touches): the two live files 41 passed
+(`gates/9bc74de.live-files.txt`); the live plants built green (150), 42 red, restored green (`lists/AM7_LIVE_RECORD.txt`; kept
+raw: `AM7_LIVE_RECORD.audit-355a255.txt`, `AM7_LIVE_RECORD.lists-merge.txt`). `make -k ci` exit 0; `make test` 1 failed, 13191 passed: the GPU preflight case known on this host
+(CARRIES), nothing of this step's (`gates/4347372.triage.txt`).
+
+**Before the review.** **Gates at 355a255** (on main d701f48; OspreyFlow_Core tree 25059a3c2146bbd30af73b9241a4911b2742d1ab). Offline
+plants: 56 red, none broken (`lists/AM7_RED_RECORD.txt`). Live, on stack b under the rules lane's lease (taken
+2026-11-13T18:12:54Z, released after): the two live files 40 passed (`gates/355a255.live-files.txt`); the live
+plants built green (149), L0 to L29 with L0b, L2b, L24b, L24c, L24d and L28b to L28d each red (38), restored green
+(now `lists/AM7_LIVE_RECORD.audit-355a255.txt`).
+Rebased after onto main 7374b63 (R1's merge: deploy/, docs/ and harness/ only, no file a plant touches), head c15cc92, Core tree
+17d9e89c275925758e1fc241e246c1412dea6d8e. `make -k ci` exit 0. `make test`: the GPU preflight case known on this host (CARRIES) and two
+vitest timeouts under the shared host's load, the two files 68 passed when re-run alone; nothing of this step's (`gates/c15cc92.triage.txt`;
+the run at 4550294, before b4712bf's cli fixture, kept raw).
+
 # rules lane · report · rules-lists, fifth pass: the orchestrator's re-check of 6bfc8d6 (13 November 2026)
 
 | Item | State | Proving test |

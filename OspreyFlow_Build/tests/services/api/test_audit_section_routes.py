@@ -745,7 +745,14 @@ def test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance
     never another's. Red with the route asking without it: None, which clears no list."""
     from services.api.screening import ListClearance
 
-    response = world.client.get("/v1/admin/audit", headers=_as("adm-1"))
-    assert response.status_code == 200, response.text
-    expected = ListClearance.of(TOKENS["adm-1"], load_uk_le_scheme())
-    assert world.reader.lists_cleared == [expected] and world.reader.writers_lists_cleared == [expected]
+    scheme = load_uk_le_scheme()
+    TOKENS["adm-low"] = Principal(id="adm-low", clearance="OFFICIAL", org_unit="unit-1",
+                                  roles=["osprey-admin"], receivable_handling_codes=["R"])  # fmt: skip
+    for who in ("adm-1", "adm-low"):
+        response = world.client.get("/v1/admin/audit", headers=_as(who))
+        assert response.status_code == 200, response.text
+    # Each reader's own: the SECRET administrator's, then the OFFICIAL one's who may receive R, so a
+    # route asking with one fixed clearance (the first reader's, or the scheme's whole) is red too.
+    expected = [ListClearance.of(TOKENS["adm-1"], scheme), ListClearance.of(TOKENS["adm-low"], scheme)]
+    assert expected[0] != expected[1]
+    assert world.reader.lists_cleared == expected and world.reader.writers_lists_cleared == expected

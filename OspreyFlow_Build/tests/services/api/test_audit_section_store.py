@@ -576,3 +576,37 @@ async def test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_l
     # A caller naming no clearance is shown no list's entry at all.
     rows, total = await world.reader.stream(A, StreamFilters(), offset=0, limit=50, rights=FULL, cases=False)
     assert _named(rows) == ["set_person_roles"] and total == 1
+
+
+async def test_an_entry_is_read_by_its_lists_marking_as_recorded_and_by_its_handling_code(
+    world: SimpleNamespace,
+) -> None:
+    """`_lists_clause`'s other halves (CARRIES, the orchestrator's verification of lists at 5c862eb):
+    an entry recorded at SECRET about a list now held at no marking (OFFICIAL, P) is read only by a
+    SECRET reader, never by its marking now alone; and an OFFICIAL, R list's entry only by a reader
+    who may receive R, by its code now or as recorded. Red with the recorded half gone: the OFFICIAL
+    reader read the SECRET entry; red with either code half gone: the reader without R read an R
+    entry."""
+    scheme = load_uk_le_scheme()
+    await world.raw.execute(
+        "INSERT INTO screening_list_markings (list_name, classification, handling_code) "
+        "VALUES ('Restricted now', 'OFFICIAL', 'R')"
+    )
+    await _record(world, A, "screening_list_refreshed", None, {
+        "list_name": "Raised then", "list_classification": "SECRET", "list_handling_code": "P"})  # fmt: skip
+    await _record(world, A, "screening_list_schedule_set", None, {"list_name": "Restricted now"})
+    await _record(world, A, "screening_list_subscribed", None, {
+        "list_name": "Recorded restricted", "list_classification": "OFFICIAL", "list_handling_code": "R"})  # fmt: skip
+    low = Principal(id="adm-low", clearance="OFFICIAL", org_unit="unit-a", roles=["osprey-admin"])
+    low_r = low.model_copy(update={"receivable_handling_codes": ["R"]})
+
+    async def named(reader: Principal) -> list[str]:
+        rows, total = await world.reader.stream(reader, StreamFilters(), offset=0, limit=50, rights=FULL,
+                                                cases=False, lists_cleared=ListClearance.of(reader, scheme))  # fmt: skip
+        assert total == len(rows)
+        return sorted(str(r.resolved_query["list_name"]) for r in rows)
+
+    assert await named(low) == []
+    assert await named(low_r) == ["Recorded restricted", "Restricted now"]
+    # The SECRET administrator, who may not receive R: the SECRET entry, and neither R one.
+    assert await named(A) == ["Raised then"]

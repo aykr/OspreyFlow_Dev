@@ -466,6 +466,17 @@ class ScreeningListStore:
             )
         return {r["list_name"]: (r["classification"], r["handling_code"]) for r in rows}
 
+    async def audit_marking(self, list_name: str) -> dict[str, str]:
+        """The list's marking as an audit entry about it records it (`list_classification`,
+        `list_handling_code`): what Admin › Audit admits a reader by beside the list's marking now
+        (`audit_section._lists_clause`), so the entry stays read by its marking even were the
+        list's kept marking gone (CARRIES, the orchestrator's verification of lists at 5c862eb).
+        A list with none is OFFICIAL, P, as every read of it takes it."""
+        async with self._pool.acquire() as conn:
+            kept = await _kept_marking(conn, list_name)
+        classification, code = kept or (DEFAULT_CLASSIFICATION, DEFAULT_HANDLING_CODE)
+        return {"list_classification": classification, "list_handling_code": code}
+
     # --- a list as a managed source (ADR-133 decision 4, stage (c)) ------------------------------
 
     async def subscribe(

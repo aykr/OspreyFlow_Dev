@@ -1,0 +1,63 @@
+Running on ospreyflow-test (stack b, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261113T181343Z-5d005aac/log: .venv/bin/python -m pytest ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py -q -p no:randomly
+........................................                                 [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+--------------------- 35 unmarked test(s) reached a store ----------------------
+tests/services/api/test_audit_section_store.py::test_a_page_and_its_total: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_reader_of_one_unit_sees_that_units_entries_alone: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_second_start_does_not_wait_behind_a_read_of_the_audit: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_start_never_waits_on_or_drops_a_build_under_way: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_start_returns_before_its_own_build: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_start_that_left_the_indexes_builds_them_once_free: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_a_system_unit_is_never_a_real_units: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_an_alert_is_served_only_while_its_reader_is_still_a_recipient: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_an_entry_is_read_by_its_lists_marking_as_recorded_and_by_its_handling_code: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_an_index_left_invalid_by_a_crashed_build_is_built_again: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_an_overdue_alert_is_raised_once_by_the_database: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_audit_writes_go_on_while_the_indexes_build: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_filters_never_widen_the_read: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_no_case_entry_without_the_safety_net: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_the_alert_setting_defaults_to_three_and_is_kept: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_the_build_survives_any_failure_and_close_still_closes: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_the_dataset_filter_reads_only_words_the_reader_is_shown: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_the_engines_history_pages_with_its_true_total: Postgres on port 55434
+tests/services/api/test_audit_section_store.py::test_the_indexes_are_built_concurrently_and_valid: Postgres on port 55434
+… and 15 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+2.90s call     tests/services/api/test_audit_section_store.py::test_the_engines_history_pages_with_its_true_total
+0.43s setup    tests/services/api/test_audit_section_store.py::test_an_entry_is_read_by_its_lists_marking_as_recorded_and_by_its_handling_code
+0.40s setup    tests/services/api/test_audit_section_store.py::test_an_alert_is_served_only_while_its_reader_is_still_a_recipient
+0.40s call     tests/services/api/test_audit_section_store.py::test_the_build_survives_any_failure_and_close_still_closes
+0.39s setup    tests/services/api/test_audit_section_store.py::test_the_build_survives_any_failure_and_close_still_closes
+0.38s setup    tests/services/api/test_audit_section_store.py::test_a_reader_of_one_unit_sees_that_units_entries_alone
+0.37s setup    tests/services/api/test_audit_section_store.py::test_a_start_that_left_the_indexes_builds_them_once_free
+0.37s setup    tests/services/api/test_audit_section_store.py::test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list
+0.36s setup    tests/services/api/test_audit_section_store.py::test_units_are_recorded_from_this_deployments_own_date
+0.36s setup    tests/services/api/test_audit_section_store.py::test_a_start_never_waits_on_or_drops_a_build_under_way
+0.35s setup    tests/services/api/test_audit_section_store.py::test_a_start_returns_before_its_own_build
+0.33s setup    tests/services/api/test_audit_section_store.py::test_the_engines_history_pages_with_its_true_total
+0.32s setup    tests/services/api/test_audit_section_store.py::test_the_alert_setting_defaults_to_three_and_is_kept
+0.32s setup    tests/services/api/test_audit_section_store.py::test_an_index_left_invalid_by_a_crashed_build_is_built_again
+0.32s setup    tests/services/api/test_audit_section_store.py::test_an_overdue_alert_is_raised_once_by_the_database
+0.32s call     tests/services/api/test_audit_section_store.py::test_a_start_never_waits_on_or_drops_a_build_under_way
+0.31s setup    tests/services/api/test_audit_section_store.py::test_audit_writes_go_on_while_the_indexes_build
+0.30s setup    tests/services/api/test_audit_section_store.py::test_filters_never_widen_the_read
+0.30s setup    tests/services/api/test_audit_section_store.py::test_no_case_entry_without_the_safety_net
+0.28s setup    tests/services/api/test_audit_section_store.py::test_the_dataset_filter_reads_only_words_the_reader_is_shown
+0.26s setup    tests/services/api/test_audit_section_store.py::test_the_pickers_writers_are_the_readers_units_alone
+0.26s call     tests/services/api/test_audit_section_store.py::test_a_start_that_left_the_indexes_builds_them_once_free
+0.26s setup    tests/services/api/test_audit_section_store.py::test_the_rule_audit_is_never_read_from_the_stream
+0.25s setup    tests/services/api/test_audit_section_store.py::test_a_second_start_does_not_wait_behind_a_read_of_the_audit
+0.24s setup    tests/services/api/test_audit_section_store.py::test_the_indexes_are_built_concurrently_and_valid
+0.24s setup    tests/services/api/test_audit_section_store.py::test_a_system_unit_is_never_a_real_units
+0.23s setup    tests/services/api/test_audit_section_store.py::test_a_page_and_its_total
+0.23s setup    tests/services/api/test_screening_list_routes.py::test_a_refresh_counts_only_the_admins_own_unit
+0.16s call     tests/services/api/test_audit_section_store.py::test_audit_writes_go_on_while_the_indexes_build
+0.11s call     tests/services/api/test_screening_list_routes.py::test_a_list_a_reader_is_not_cleared_for_is_answered_as_one_never_subscribed
+40 passed, 1 warning in 17.86s
+Wall time: 19 s, exit 0 (stack b, the lease rules took at 2026-11-13T18:12:54Z; set-up before it 14 s)

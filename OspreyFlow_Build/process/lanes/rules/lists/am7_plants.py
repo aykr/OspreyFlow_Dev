@@ -26,7 +26,11 @@ CLEARANCE = "../OspreyFlow_Build/tests/services/api/test_screening_clearance.py"
 #: After the orchestrator's verification of e911b90 (items 1, 3 and 5).
 CH_MIGRATION = "../OspreyFlow_Build/tests/test_analytics_clickhouse_migration.py"
 DUCK_MIGRATION = "../OspreyFlow_Build/tests/adapters/analytics_duckdb/test_alert_fact_sets_migration.py"
-FILES = (TESTS, SCREENING, WRITTEN, CLOSING, CLEARANCE, CH_MIGRATION, DUCK_MIGRATION)
+AUDIT_ROUTES = "../OspreyFlow_Build/tests/services/api/test_audit_section_routes.py"
+#: The lane review of the audit follow-up, item 2: the operator's refresh's audit entry.
+OPERATOR_REFRESH = "../OspreyFlow_Build/tests/test_refresh_screening_list_script.py"
+FILES = (TESTS, SCREENING, WRITTEN, CLOSING, CLEARANCE, CH_MIGRATION, DUCK_MIGRATION, AUDIT_ROUTES,
+         OPERATOR_REFRESH)
 
 #: (name, file under Core, the text as built, the text planted, the tests that must go red[, file])
 PLANTS: list[tuple[str, ...]] = [
@@ -430,7 +434,23 @@ PLANTS: list[tuple[str, ...]] = [
         "    lists_cleared = ListClearance.of(principal, handling_scheme)\n",
         "    lists_cleared = None\n",
         "test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance",
-        "../OspreyFlow_Build/tests/services/api/test_audit_section_routes.py",
+        AUDIT_ROUTES,
+    ),
+    (
+        "P52b the audit stream asked with one clearance for every reader, the scheme's whole (5c862eb, CARRIES a)",
+        "services/api/app.py",
+        "    lists_cleared = ListClearance.of(principal, handling_scheme)\n",
+        "    lists_cleared = ListClearance(tuple(handling_scheme.classification), tuple(handling_scheme.handling_codes))\n",
+        "test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance",
+        AUDIT_ROUTES,
+    ),
+    (
+        "P53 the operator's refresh's audit entry recording no marking (the lane review of the audit follow-up, item 2)",
+        "scripts/refresh_screening_list.py",
+        "                            **await store.audit_marking(list_name)},\n",
+        "                            },\n",
+        "test_the_operators_refresh_records_the_lists_marking",
+        OPERATOR_REFRESH,
     ),
     # --- after the orchestrator's verification of e911b90 -----------------------------------------
     (

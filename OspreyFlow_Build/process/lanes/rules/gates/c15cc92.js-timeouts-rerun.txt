@@ -1,0 +1,55 @@
+Running on ospreyflow-test (stack offline, osprey-runs/rules/OspreyFlow_Build/), logged at osprey-runs/rules.meta/runs/20261113T193557Z-731a918d/log: bash -c cd ../OspreyFlow_Core/apps/workspace && npx vitest run src/App.test.tsx src/matrix/MatrixView.test.tsx
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/root/osprey-runs/rules/OspreyFlow_Core/apps/workspace[39m
+
+ [32m✓[39m src/matrix/MatrixView.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 2170[2mms[22m[39m
+   [32m✓[39m MatrixView — the tables [2m(8)[22m
+     [33m[2m✓[22m[39m pages a long view and says plainly which rows are shown (rule 2)[33m 967[2mms[22m[39m
+   [32m✓[39m MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) [2m(3)[22m
+     [33m[2m✓[22m[39m PageDown and PageUp turn the page[33m 350[2mms[22m[39m
+ [32m✓[39m src/App.test.tsx [2m([22m[2m48 tests[22m[2m)[22m[33m 8845[2mms[22m[39m
+   [32m✓[39m windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) [2m(6)[22m
+     [33m[2m✓[22m[39m a token near expiry is renewed in the background, with no navigation, and the next call carries it[33m 1007[2mms[22m[39m
+     [33m[2m✓[22m[39m an unattended window lets its token lapse: no renewal, and nothing asked[33m 2556[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m68 passed[39m[22m[90m (68)[39m
+[2m   Start at [22m 19:35:58
+[2m   Duration [22m 9.84s[2m (tests 85%, environment 9%, transform 4%, import 2%)[22m
+
+
+Slowest 30 of 68 tests:
+  2556 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > an unattended window lets its token lapse: no renewal, and nothing asked
+  1007 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a token near expiry is renewed in the background, with no navigation, and the next call carries it
+   967 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > pages a long view and says plainly which rows are shown (rule 2)
+   350 ms  src/matrix/MatrixView.test.tsx > MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) > PageDown and PageUp turn the page
+   214 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence, then Back to the alert, returns to the same alert, still open
+   197 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > is two real tables, each with a caption, column headers and a row header per row
+   181 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > an unauthenticated load shows the sign-in screen and issues no /v1 call
+   167 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence says so on the alert when the view cannot be opened
+   146 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > the switcher and the cross-link move between the places, and coming back returns to the view that was open
+   138 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > after a reload in the Studio, Back returns to the Glass's last view on the open case
+   134 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > an alert of another case is opened by a reload into that case, on the alert's address
+   124 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > a refresh on Home with a case in the tab lands on Home; in the case, in that case
+   114 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a failed renewal leaves the page in place and asks to sign in again there
+   110 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > a case chosen on Home, carried over a full-page sign-in, opens that case, not the Home the tab kept
+   106 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > two triggers at once make one renewal, and both calls are answered with its token
+   104 ms  src/App.test.tsx > the launcher's hand-off (a person who has just signed in at the launcher) > React's development double-run does not start two sign-ins
+    84 ms  src/matrix/MatrixView.test.tsx > MatrixView — selection, the same one the canvas uses > opens on the page that holds the selection made on the canvas
+    78 ms  src/matrix/MatrixView.test.tsx > MatrixView — connection strength and rarity (ADR-139; user guide §5.11, §5.12) > shows what the Conduit gave for the reader, and nothing for a link it left out (rule 3)
+    78 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > sorts by a column, saying which way in aria-sort and in the caption
+    74 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > the journey's banner ends when the reader leaves the screen it opened
+    73 ms  src/matrix/MatrixView.test.tsx > MatrixView — connection strength and rarity (ADR-139; user guide §5.11, §5.12) > shows each link's strength as soon as it arrives, without waiting for the rarity
+    71 ms  src/matrix/MatrixView.test.tsx > MatrixView — connection strength and rarity (ADR-139; user guide §5.11, §5.12) > keeps the strengths when the rarity is refused, and says why the rarity is missing
+    65 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > neither the rail nor the banner holds Monitoring: Rules and Monitoring is a place of the switcher
+    63 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > an identity provider that cannot be reached is not said as an ended session
+    56 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > a refresh with a live identity-provider session is signed in silently, without the screen
+    56 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a call refused while nobody is there is not renewed; the person's first key press renews, and their call is answered
+    55 ms  src/App.test.tsx > a stale sign-in is noticed whichever screen's call finds it (3 October 2026) > a 401 on a call no Glass code watches (the Ingest Studio's) starts a silent renewal, not a redirect
+    55 ms  src/App.test.tsx > the launcher's hand-off (a person who has just signed in at the launcher) > arriving from the launcher starts the sign-in without a click and issues no /v1 call
+    54 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > a wrong-audience token refused by the Conduit shows the sign-in screen with the reason
+    54 ms  src/App.test.tsx > the launcher's hand-off (a person who has just signed in at the launcher) > the Glass tile's own sign-in screen keeps its heading
+Wall time: 11 s, exit 0 (no stack, no lease; set-up before it 11 s)
