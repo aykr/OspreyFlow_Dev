@@ -1,18 +1,11 @@
-# as of 2026-11-12T22:00Z
-rules	lists	second pass gating now (make test, make -k ci, live plants); then the orchestrator's review	13 Nov, morning	B
-rules-b	guides	done: merged 5675103; the guides' own text is docs' follow-up	done	A
-admin	P10	done: part 2 merged (e5e81bd); two patches for you	done	B
-case	P9	done: merged	done	B
-case-b	P12	done: part 2 merged (1a063a8); two patches for you	done	B
-studio-b	L1.9	done: part 2 merged (184b798)	done	B
+# as of 2026-11-13T12:40Z
+rules	lists	third pass: the audit read filtered by list clearance (MUST 3), shoulds 4-7, live records at the new head; then the orchestrator's re-check	13 Nov, evening	B
+admin	refresh	a refresh keeps you signed in and where you were (ADR-050 Am 3)	13 Nov, late	B
+admin	pg	Small's Postgres connections (ADR-114 Am 43), after refresh	14 Nov	B
+platform-b	ci-green	the 13 Nov push's CI run proves today's fixes; the pinned-digest hardening	13 Nov, evening	A
+platform	R1	prepared on the Mac; runs on kind after the owner's demo and the memory cap	after the demo	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
-admin	T1	part 5 merged 12 Nov; left: marks, sleeps, the ArcadeDB waits	after the demo	A
-rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
-orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
-demo	rebuild	done: at https://govuk.ospreyflow.app, walked by the owner; the memory cap after Friday's demo	done	A
-
-docs	D2e	P8's section of the Cloud Platform guide, once P8 is built	after 20 Nov	B
-docs	sites	items 1-3 and 7 merged; the publish diffs (4, 5) await the owner; screenshots after Friday	after Friday	B
-platform	R1	preparing on the Mac (no server) until Friday evening; then run on kind beside osprey-small (capped after the demo)	15 Nov	B
-platform-b	gate-b	the banner and the key prompt, merged by 08:30, deployed by 10:00 Friday	13 Nov, 10:00	A
+admin	T1	part 5 merged 12 Nov; left: marks, sleeps, the ArcadeDB waits	after v0.5.1	A
+demo	fixes-13nov	done: everything of 13 Nov live on osprey-small at 02f9337; the memory cap after the demo	done	A
+platform-b	gate-b	done: banner, key prompt, footer, one prompt, rail + Help all live	done	A
