@@ -163,3 +163,28 @@ def test_section_6a5_gives_one_s3_reads_cap_as_the_connector_holds_it() -> None:
     assert m
     cap = f"{int(m.group(1).replace('_', '')):,}"
     assert f"more than {cap} objects" in re.sub(r"\s+", " ", section(ADMIN, "### 6a.5"))
+
+
+# ---------------------------------------------------------------- what a backup set holds (§6a.8)
+
+
+def test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up() -> None:
+    """ADR-148 Amendment 13 decision 4: the shared claim's folders the deployment cannot make again join
+    the set's claims part, in every shape. §6a.8 names each folder the render backs up, says the claims run
+    is in every shape when it is, and never says the shared volume is not backed up while a part of it is."""
+    from tests.harness.test_cloud_platform_render import _config, _values
+
+    shapes = ["poc", "development", "production"]
+    shared = {s: [p["subPath"] for p in _values(_config(s))["backups"].get("shared") or []] for s in shapes}
+    text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.8"))
+    folders = sorted({folder for parts in shared.values() for folder in parts})
+    assert [f for f in folders if f"(`{f}`" not in text] == []
+    # ...and names no folder the render does not back up (one dropped from the set, still named here).
+    holds = re.search(r"The claims part holds(.*?)The pods that mount them", text)
+    named = re.findall(r"\(`([^`]+)`", holds.group(1)) if holds else []
+    assert [f for f in named if f not in folders] == []
+    if all(shared.values()):
+        assert "`ospreyflow-backup-claims` (the claims part, in every shape" in text
+        assert "in the poc shape, `ospreyflow-backup-claims`" not in text
+    if folders:
+        assert not re.search(r"`ospreyflow-shared`[^.]{0,40}is not backed up", text)
