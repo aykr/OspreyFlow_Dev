@@ -22,6 +22,11 @@ vi.mock("./canvas/GlassCanvas", () => ({
 }));
 vi.mock("./map/MapView", () => ({ MapView: () => null }));
 vi.mock("./timeline/Timeline", () => ({ Timeline: () => null }));
+// Superset's address (`deploymentReportsUrl`), none unless a case sets one (the owner's "Build a report", Amendment 15).
+vi.mock("./auth/oidcConfig", async () => {
+  const actual = await vi.importActual<typeof import("./auth/oidcConfig")>("./auth/oidcConfig");
+  return { ...actual, deploymentReportsUrl: vi.fn(() => null) };
+});
 
 let App!: typeof AppComponent;
 beforeAll(async () => {
@@ -54,6 +59,7 @@ vi.mock("./map/providers", async () => {
   return { ...actual, fetchMapConfig: vi.fn(() => new Promise(() => undefined)) };
 });
 
+import * as oidcConfig from "./auth/oidcConfig";
 import * as userManager from "./auth/userManager";
 import * as ontologySchema from "./ontology/schema";
 
@@ -325,5 +331,51 @@ describe("the owner's navigation (ADR-145 Amendment 15)", () => {
     expect(entries.at(-1)?.textContent).toBe("All cases");
     fireEvent.click(entries.at(-1)!);
     expect(await screen.findByRole("dialog", { name: "Cases" })).toBeTruthy();
+  });
+});
+
+// The owner's ruling of 13 November 2026 (Q2; ADR-145 Amendment 15): "Build a report" beside Reports, opening Superset
+// in a new tab, for a holder of manage_dashboards on a deployment with Superset, and for no one else.
+describe("Build a report beside Reports (ADR-145 Amendment 15)", () => {
+  const SUPERSET = "https://bi.example.test";
+  const withRights = (rights: string[]) => {
+    const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+      /\/v1\/me\/rights$/.test(String(input).split("?")[0]!) ? Promise.resolve(new Response(JSON.stringify({ rights }))) : held(input, init),
+    );
+  };
+  const link = () => screen.queryByRole("link", { name: /^Build a report/ });
+
+  test("is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab", async () => {
+    vi.mocked(oidcConfig.deploymentReportsUrl).mockReturnValue(SUPERSET);
+    withRights([...RIGHTS, "manage_dashboards"]);
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    const found = await screen.findByRole("link", { name: "Build a report (opens in new tab)" });
+    expect(found.getAttribute("href")).toBe(SUPERSET);
+    expect(found.getAttribute("target")).toBe("_blank");
+    expect(found.getAttribute("rel")).toBe("noopener noreferrer");
+    const reports = within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Reports" });
+    expect(reports.compareDocumentPosition(found) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const more = screen.getByRole("button", { name: /^More views/ });
+    expect(found.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test("is not offered to a Reports Viewer, who holds no manage_dashboards, where Superset is deployed", async () => {
+    vi.mocked(oidcConfig.deploymentReportsUrl).mockReturnValue(SUPERSET);
+    withRights(RIGHTS);
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await within(screen.getByRole("group", { name: "View" })).findByRole("button", { name: "Reports" });
+    expect(link()).toBeNull();
+  });
+
+  test("is not offered, even to a builder, where there is no Superset", async () => {
+    vi.mocked(oidcConfig.deploymentReportsUrl).mockReturnValue(null);
+    withRights([...RIGHTS, "manage_dashboards"]);
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await within(screen.getByRole("group", { name: "View" })).findByRole("button", { name: "Reports" });
+    expect(link()).toBeNull();
   });
 });

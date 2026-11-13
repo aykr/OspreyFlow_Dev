@@ -35,7 +35,7 @@ import { SessionPrompt } from "./auth/SessionPrompt";
 import { createTokenRenewal, type RenewedUser, type TokenRenewal, watchActivity } from "./auth/tokenRenewal";
 import { DISABLED_ACCOUNT_WORDS, isDisabledRefusal } from "./auth/disabledAccount";
 import { SignInScreen } from "./auth/SignInScreen";
-import { deploymentMarking, deploymentWelcome } from "./auth/oidcConfig";
+import { deploymentMarking, deploymentReportsUrl, deploymentWelcome } from "./auth/oidcConfig";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import { linkTypeName } from "./canvas/linkLabel";
 import { DocumentReader } from "./reader/DocumentReader";
@@ -57,7 +57,7 @@ import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip"
 import { LeftRail } from "./shell/LeftRail";
 import { MORE_VIEWS, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS, VIEW_SWITCH } from "./shell/railLayout";
 import { Drawer } from "./design/primitives/Drawer";
-import { TopBar } from "./shell/TopBar";
+import { BuildAReportLink, TopBar } from "./shell/TopBar";
 import { ContextBanner, crossLinkFor, useCaseContext } from "./shell/ContextBanner";
 import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { useLastGlassView } from "./shell/placeMemory";
@@ -1726,6 +1726,7 @@ export function App() {
   // dashboards view, unchanged inside. Someone offered none of the four (a Reports Viewer offered Figures alone) has
   // theirs in the switch itself. Each is offered by the rights that offered it before (`viewsFor`, `railEntries`);
   // the drawing board by `investigate`, as its routes ask.
+  const reportsUrl = deploymentReportsUrl();
   const offered = new Set<string>([...viewsFor(rights), ...railEntries(rights), ...(viewsFor(rights).includes("graph") ? ["boards"] : [])]);
   const { main: mainViews, more: otherViews } = splitViews(
     [...VIEW_SWITCH, ...MORE_VIEWS]
@@ -1806,6 +1807,12 @@ export function App() {
             : []
         }
         moreViews={app === "glass" && mainViews.length > 0 ? otherViews : []}
+        // The owner's ruling of 13 November 2026 (Q2; ADR-145 Amendment 15): *Build a report* beside Reports, opening
+        // Superset (the deployment's `bi.` address) in a new tab, for a holder of manage_dashboards where Superset is
+        // deployed. Superset refuses anyone else; the link is offered to no one else.
+        besideViews={
+          app === "glass" && reportsUrl && rights?.has("manage_dashboards") ? <BuildAReportLink href={reportsUrl} /> : undefined
+        }
         actions={
           view === "graph" ? (
             // `02_GLASS_FRONTEND.md` §10: the export drawer, for the whole case.

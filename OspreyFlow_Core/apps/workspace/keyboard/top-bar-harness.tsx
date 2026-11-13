@@ -10,7 +10,7 @@ import { applyHarnessBrand } from "./brandHarness";
 import "../src/design/primitives.css";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { LeftRail } from "../src/shell/LeftRail";
-import { TopBar } from "../src/shell/TopBar";
+import { BuildAReportLink, TopBar } from "../src/shell/TopBar";
 import { AccountMenu } from "../src/auth/AccountMenu";
 import { Button } from "../src/design/primitives/Button";
 import { CaseSwitcher } from "../src/investigation/CaseSwitcher";
@@ -174,6 +174,9 @@ createRoot(container).render(
       views={SWITCHED.main}
       // ADR-145 Amendment 15: Matrix, Figures, Ownership and Connection strength under More views, as `App.tsx` offers them.
       moreViews={SWITCHED.more}
+      // `?reports=1`: a builder on a deployment with Superset, *Build a report* beside Reports as `App.tsx` draws it
+      // (ADR-145 Amendment 15); the address is a stand-in, never followed.
+      besideViews={new URLSearchParams(window.location.search).get("reports") === "1" ? <BuildAReportLink href="https://bi.example.invalid" /> : undefined}
       actions={<Button>Export ⚙</Button>}
       account={
         <>

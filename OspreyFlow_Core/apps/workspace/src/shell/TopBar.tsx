@@ -8,6 +8,7 @@ import { DropdownPanel } from "../design/primitives/DropdownPanel";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import type { ReactNode } from "react";
 
+import { currentBrand } from "../brand/brand";
 import { BrandMark } from "./BrandMark";
 import "./chrome.css";
 
@@ -27,8 +28,11 @@ export interface TopBarProps {
   caseSwitcher?: ReactNode;
   search?: ReactNode;
   views?: readonly TopBarView[];
-  /** One click away under *More views* (ADR-145 Amendment 2: Matrix and Reports). */
+  /** One click away under *More views* (ADR-145 Amendments 2 and 15: Matrix, Figures, Ownership, Connection strength). */
   moreViews?: readonly TopBarView[];
+  /** Beside the view switch's last entry, before *More views*: the owner's *Build a report* (ADR-145 Amendment 15),
+   * a link out of the Glass, so outside the switch's group. */
+  besideViews?: ReactNode;
   /** What acts on the whole case, such as Export. */
   actions?: ReactNode;
   account: ReactNode;
@@ -36,7 +40,7 @@ export interface TopBarProps {
   onStart?: () => void;
 }
 
-export function TopBar({ app, places, caseSwitcher, search, views = [], moreViews = [], actions, account, onStart }: TopBarProps) {
+export function TopBar({ app, places, caseSwitcher, search, views = [], moreViews = [], besideViews, actions, account, onStart }: TopBarProps) {
   const moreOpen = moreViews.find((view) => view.pressed);
   return (
     <header className="app-header top-bar" data-app={app}>
@@ -65,6 +69,7 @@ export function TopBar({ app, places, caseSwitcher, search, views = [], moreView
           ))}
         </div>
       )}
+      {besideViews}
       {moreViews.length > 0 && (
         // ADR-145 Amendment 2: the views used less, one click away; the one open names the button.
         <DropdownPanel
@@ -97,5 +102,16 @@ export function TopBar({ app, places, caseSwitcher, search, views = [], moreView
         {account}
       </div>
     </header>
+  );
+}
+
+/** The owner's *Build a report* (ruling of 13 November 2026, Q2; ADR-145 Amendment 15): Superset's address in a new tab,
+ * said so in the link's own words. Drawn beside the view switch (`besideViews`) only for a holder of manage_dashboards
+ * where Superset is deployed; the caller decides that. */
+export function BuildAReportLink({ href }: { href: string }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={currentBrand() === "govuk" ? "govuk-link top-bar__out" : "top-bar__out"}>
+      Build a report (opens in new tab)
+    </a>
   );
 }

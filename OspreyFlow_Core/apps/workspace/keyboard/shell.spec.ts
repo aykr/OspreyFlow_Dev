@@ -707,3 +707,24 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     await expect(drawer.getByRole("button", { name: "Close Cases" })).toBeFocused();
   });
 }
+
+// The owner's ruling of 13 November 2026 (Q2; ADR-145 Amendment 15): *Build a report*, beside Reports and before More
+// views, is reached by Tab from Reports and is a link to Superset in a new tab, said so in its words; in the dark, light
+// and GOV.UK looks. (Who is offered it is `App.chrome.test.tsx`'s, on the real App.)
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  test(`${brand} ${theme}: Build a report follows Reports by keyboard, a link to Superset in a new tab`, async ({ page }) => {
+    await page.goto(`/keyboard/top-bar-harness.html?reports=1&brand=${brand}`);
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Reports" }).focus();
+    await page.keyboard.press("Tab");
+    const link = page.getByRole("link", { name: "Build a report (opens in new tab)" });
+    await expect(link).toBeFocused();
+    await expect(link).toHaveAttribute("href", "https://bi.example.invalid");
+    await expect(link).toHaveAttribute("target", "_blank");
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "More views" })).toBeFocused();
+    const box = (await link.boundingBox())!;
+    expect(box.height).toBeGreaterThanOrEqual(24);
+    registerCovered(REGISTRY, "build-a-report-by-keyboard");
+  });
+}

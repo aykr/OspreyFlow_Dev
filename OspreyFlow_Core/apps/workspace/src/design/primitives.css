@@ -414,6 +414,11 @@
    case's name and its scope badge as well as the window, so it is not a breakpoint. */
 .top-bar { box-sizing: border-box; min-height: var(--h-top-bar); flex: none; flex-wrap: wrap; padding-top: 0; padding-bottom: 0; }
 .top-bar__search { flex: 1 1 280px; min-width: 280px; max-width: 480px; }
+/* The owner's *Build a report* beside the view switch (ADR-145 Amendment 15): a link out to Superset, in a new tab,
+   underlined as a link and never drawn as a view; 24 px tall at least (WCAG 2.2, 2.5.8). Under GOV.UK `govuk-link`
+   gives its colour and focus. */
+.top-bar__out { display: inline-flex; align-items: center; min-height: 24px; white-space: nowrap; font-size: var(--fs-13); color: var(--text-primary); text-decoration: underline; text-underline-offset: 2px; }
+.top-bar__out:hover { color: var(--text-primary); text-decoration-thickness: 2px; }
 /* Narrow windows (ADR-115 Amendment 2): the two lines get room above and below. */
 @media (max-width: 1099px) {
   .top-bar { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
