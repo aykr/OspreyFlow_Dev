@@ -53,3 +53,12 @@ In progress. The studio lane, from 13 November 2026. The plan is `PLAN.md`; the 
 - **(p) Removal plants are not in the leak test.** It cannot plant reverted, withdrawn or superseded records,
   because `throwaway_index` indexes live nodes only. Rules' `test_feed_live.py` shows each such event leaving the
   index.
+- **(q) The index answers every "starts with" suggestion, and narrows a case-sensitive one.** The box asks
+  case-sensitively by default, but the index's stored prefixes ignore case.
+  - Options:
+    - answer from the index only when ignore case is on, leaving the default box on the graph's prefix scan,
+      which is the one that is slow at tens of millions;
+    - answer case-insensitively and so change what the box finds;
+    - ask the index for up to four times the page and keep only the matches in the typed case.
+  - Took the third. `more` is set whenever the index had more than it was asked (rule 2). "Contains" and
+    "exact" stay on the graph.
