@@ -56,7 +56,11 @@ def main() -> int:
         return 2
     print(f"# v052-fixes browser reds at {head}; each plant restored with `git checkout -- <file>`")
     stayed_green = 0
+    # Optional plant numbers as arguments run those alone (a later addition, without rerunning the rest).
+    only = {int(a) for a in sys.argv[1:]}
     for n, (what, edits, test_file, name) in enumerate(PLANTS, 1):
+        if only and n not in only:
+            continue
         bad = [(p, (WS / p).read_text().count(o)) for p, o, _ in edits if (WS / p).read_text().count(o) != 1]
         if bad:
             print(f"## {n}. {what}\nrefused: a planted string is not there exactly once: {bad}")
@@ -81,7 +85,8 @@ def main() -> int:
         elif not re.search(r"\d+ failed", out):
             stayed_green += 1
             print("NO TEST FAILED (the run failed otherwise): not a red")
-    print(f"# {len(PLANTS) - stayed_green} of {len(PLANTS)} red")
+    ran = len(only) if only else len(PLANTS)
+    print(f"# {ran - stayed_green} of {ran} red")
     return 1 if stayed_green else 0
 
 
