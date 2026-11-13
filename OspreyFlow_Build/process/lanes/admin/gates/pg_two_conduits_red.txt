@@ -1,0 +1,7 @@
+PLANT: test_two_conduits_at_their_ceiling_fit_the_rendered_postgres with the PostgreSQL image's own command (no max_connections: 100), as rendered before ADR-114 Amendment 43
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T123611Z-b2ddad53/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_postgres_connections.py -q -k two_conduits 2>&1 | grep -E "^E  |passed|failed|ConduitStartTime" | head -12
+E           asyncpg.exceptions.TooManyConnectionsError: sorry, too many clients already
+  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections.py:234: ConduitStartTime: a Conduit came up in 4.4 s (http://127.0.0.1:50467)
+  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections.py:234: ConduitStartTime: a Conduit came up in 3.4 s (http://127.0.0.1:38935)
+1 failed, 5 deselected, 2 warnings in 13.08s
+Wall time: 14 s, exit 0 (no stack, no lease; set-up before it 11 s)

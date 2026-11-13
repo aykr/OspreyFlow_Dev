@@ -1140,8 +1140,11 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
                     **cast(dict[str, str], service["environment"]),
                     "OPENSEARCH_JAVA_OPTS": sized.search_java_opts,
                 }
-            elif (command := postgres_command(sized)) is not None:
-                service["command"] = command
+            else:
+                service["command"] = postgres_command(sized)
+        elif entry.service == "postgres":
+            # ADR-114 Amendment 43: the connections the product's services may hold, every profile.
+            service["command"] = postgres_command()
         if entry.service == "keycloak":
             # ADR-114 Amendment 4 decision 4: one issuer, whichever door a token came through —
             # the browser's, by name through the proxy, or the services' inside the network.

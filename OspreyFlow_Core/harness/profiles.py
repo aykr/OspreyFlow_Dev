@@ -188,12 +188,45 @@ def store_memory(resources: ResourcesConfig) -> StoreMemory:
     )
 
 
-def postgres_command(memory: StoreMemory) -> list[str] | None:
-    """PostgreSQL's server command with the sized settings, or None for the image's own."""
-    if memory.postgres_shared_buffers_mib is None:
-        return None
+#: ADR-114 Amendment 43: what a deployment's own PostgreSQL allows at once, from the product's own
+#: numbers. Its image's default (100) was rendered until 13 November 2026, and one Conduit holds 49
+#: connections at rest (its 48 stores' asyncpg pools at `min_size`) and up to 197 under load (at
+#: `max_size`), beside Keycloak, the gateway, Superset and the report sync: a second Conduit was
+#: refused (`TooManyConnectionsError`; platform-b's stateless finding).
+#:
+#: The Conduit's stores' pools at their `max_size`, summed: 197 on 13 November 2026, measured
+#: by `tests/harness/test_postgres_connections.py`, which fails when a pool added or grown takes
+#: the sum past this, so the number below never silently falls short.
+CONDUIT_POOL_CEILING = 200
+#: Conduits allowed at their ceiling at once: the one a deployment runs, and a second (a replica,
+#: or a worker opening the same stores; a restart's old and new processes overlapping).
+CONDUITS_ALLOWED = 2
+#: Keycloak 26's own `db-pool-max-size` default, which the render does not change.
+KEYCLOAK_POOL_MAX = 100
+#: LiteLLM's `database_connection_pool_limit` (10 a worker) for its two, and Superset's
+#: SQLAlchemy pool (5 and 10 overflow) for two processes, with the report sync's mart pool (4):
+#: allowances, each the client's own default, not measurements.
+GATEWAY_POOL_MAX = 20
+SUPERSET_AND_REPORT_SYNC_MAX = 40
+#: For the owner's `psql`, a backup, and PostgreSQL's own three superuser slots.
+OPERATOR_RESERVE = 20
+POSTGRES_MAX_CONNECTIONS = (
+    CONDUITS_ALLOWED * CONDUIT_POOL_CEILING
+    + KEYCLOAK_POOL_MAX
+    + GATEWAY_POOL_MAX
+    + SUPERSET_AND_REPORT_SYNC_MAX
+    + OPERATOR_RESERVE
+)
+
+
+def postgres_command(memory: StoreMemory | None = None) -> list[str]:
+    """PostgreSQL's server command: `max_connections` always (ADR-114 Amendment 43), with the sized
+    memory settings when the deployment is sized (Amendment 33 decision 6)."""
+    command = ["postgres", "-c", f"max_connections={POSTGRES_MAX_CONNECTIONS}"]
+    if memory is None or memory.postgres_shared_buffers_mib is None:
+        return command
     return [
-        "postgres",
+        *command,
         "-c",
         f"shared_buffers={memory.postgres_shared_buffers_mib}MB",
         "-c",
