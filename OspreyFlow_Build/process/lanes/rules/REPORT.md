@@ -1,3 +1,25 @@
+# rules lane · report · rules-lists, fourth pass: the orchestrator's review of 7a1c760 (13 November 2026)
+
+MUST 1 was confirmed fixed. MUST 2 is redone to the owner's ruling of 9 November 2026: nothing of a withheld item is
+said, and nothing is moved by anyone who cannot see it.
+
+| Item | State | Proving test |
+| --- | --- | --- |
+| MUST 2. A hidden list's schedule listed in *Disable…* (its kind, count and place) and movable by one who cannot see it | done: left out of the plan; a withheld item (`person_ownership._WITHHELD_SQL`, by classification and code), so Disable is refused, 409 `withheld_items`, until a cleared administrator transfers it | `test_custom_roles_store.py`: `test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace`, `test_an_administrator_cleared_for_the_list_transfers_its_schedule`, `test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list` (L24, L24b, L25); `test_person_ownership_store.py`: two hidden cases in `test_each_item_left_out_is_said_to_be_withheld_and_never_named`, `test_a_list_schedule_the_administrator_is_cleared_for_is_not_withheld` |
+| S1. The transfer's audit by the list's own name | done (only visible lists are moved, by name) | the cleared case's audit check |
+| S2. Am 7's record ranges | done | — |
+| S3. Rule 12: named tests for the executor's refusal and the plan; `_holds`' code half; the must tests in the list | done | `test_a_party_held_at_its_lists_classification_under_another_code_is_not_reused` (P49b) |
+| S4. The schedule and refresh routes' check-then-write race | logged in Am 7 | — |
+
+**Gates.** Offline plants at this tree: 54 red, none broken (`lists/AM7_RED_RECORD.txt`). The offline files changed
+pass locally (`test_alert_citations_written.py`, `test_admin_roles_routes.py`, `test_admin_routes.py`,
+`test_person_ownership_route.py`). **Not yet run, and not claimed:** the live cases above, the live plants (now 31,
+L24b new), and `make test` and `make -k ci` at this head, all on the server, which is closed from 11:30 until the
+demo is over.
+
+**Out of map, this pass.** `services/api/person_ownership.py` (its withheld check), with
+`tests/services/api/test_person_ownership_store.py` and `test_admin_roles_routes.py` (its fake).
+
 # rules lane · report · rules-lists, third pass: the orchestrator's verification of e911b90 (12–13 November 2026)
 
 The verification confirmed the first review's items and found two more rule-3 reads, both fixed with tests
