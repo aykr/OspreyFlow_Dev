@@ -36897,3 +36897,36 @@ clients' own numbers and the render's own copies, Superset's worker count read f
 at or above each shape's least, the runbook's `db_parameter` line and headroom). Red before the change, and with
 Superset's term or the upgrade's term dropped from `connections.py`: `process/lanes/platform/poc-rds/red-1000.txt`. Not run against a real RDS: R1's PostgreSQL was a
 stand-in on kind.
+
+### ADR-148, Amendment 12 (13 November 2026) — The poc manifest: one source for the shape's containers, images, managed services, Entra registrations and egress, held to the render both ways
+
+**The finding** (13 November 2026): the client page's figures for the poc shape (its images and ECR repositories,
+every pod's count, requests and limits, the Jobs, the RDS class and its connections) were assembled by hand twice in
+one evening, from the render, `profile.yaml` and R1's logs, and each time a ruling changed a figure afterwards
+(ADR-114 Amendment 46's three turns). A figure kept by hand beside the render can drift from it unnoticed, and the
+client sizes its namespace and its quotas from that page.
+
+**Decision (the owner's route to v0.5.2, `process/lanes/ROUTE_052.md`: "the manifest is the one source"):**
+
+1. **`harness/cloud_platform/poc_manifest.yaml`** lists, for the cloud-platform profile's poc shape at v0.5.2: each
+   workload's kind, count, image repository, CPU and memory requests and limits and readiness check (Superset and the
+   report sync at one copy each, the owner, 13 November); the init containers; the backup CronJobs and the restore
+   Jobs with their steps' images and sizes; each ECR repository, ours (and where it is built from) or upstream (and
+   where it is copied from); the managed services (RDS's class, `max_connections` and databases; ElastiCache; the S3
+   buckets; OpenSearch's data nodes); the Entra ID registrations the client's administrator makes; and the egress
+   hosts. No other copy of these figures is kept.
+2. **Held to the render both ways** (`harness.cloud_platform.manifest.differences`): anything rendered and not listed,
+   anything listed and not rendered, and any count, image, size, readiness check, schedule or managed setting that
+   differs, is named. What v0.5.2 adds before the step that renders it carries `pending: <step>` (`v052-superset`,
+   `v052-opensearch`): absent from the render, it is no difference; rendered while still marked, it is one, so the
+   mark cannot outlive its step.
+3. **The client page's tables are printed from it** (`python -m harness.cloud_platform.manifest tables`), and
+   `check --config <osprey.yaml>` compares a deployment's own render with it. v0.5.2's install test (`v052-r1`) is
+   driven from it.
+4. **Its sizes are the profile's proposals, not measurements**, as `profile.yaml` says; step 4 (`v052-measure`)
+   measures them on the client-size load, and a changed figure changes the profile and the manifest together.
+
+**Tests that fail if it is violated:** `tests/harness/test_poc_manifest.py`: the manifest and the poc render agree; a
+plant on each side for each kind of entry (a workload, an init container, a Job, an image, an egress host, a
+database); fifteen size and setting plants; an entry rendered while marked pending; every pending mark naming a
+v0.5.2 step; the tables printed from the manifest alone. Red first: `process/lanes/platform/v052-manifest/red-first.txt`.
