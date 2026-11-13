@@ -105,11 +105,13 @@ async def test_the_pools_stand_in_keeps_a_transaction_whole() -> None:
     with pytest.raises(REFUSALS["not_null"], match="document_id"):
         await rows.execute("INSERT INTO search_text_pending (document_id) VALUES ($1)", None)
 
-    # A transaction after a failed statement it caught: Postgres refuses the rest, and the commit.
-    with pytest.raises(REFUSALS["aborted"]):
-        async with rows.acquire() as conn, conn.transaction():
-            with contextlib.suppress(REFUSALS["not_null"]):
-                await conn.execute("INSERT INTO search_text_pending (document_id) VALUES ($1)", None)
+    # A transaction after a failed statement it caught: Postgres refuses the rest, and keeps
+    # nothing of it at the commit (asyncpg raises nothing there).
+    async with rows.acquire() as conn, conn.transaction():
+        await conn.execute("INSERT INTO search_text_pending (document_id) VALUES ($1)", "d2")
+        with contextlib.suppress(REFUSALS["not_null"]):
+            await conn.execute("INSERT INTO search_text_pending (document_id) VALUES ($1)", None)
+        with pytest.raises(REFUSALS["aborted"]):
             await conn.execute("INSERT INTO search_text_pending (document_id) VALUES ($1)", "d3")
     assert len(rows.rows["search_text_pending"]) == 2
 

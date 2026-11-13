@@ -13,7 +13,8 @@ placeholders, a NULL in a column the store's own `CREATE TABLE` declares `NOT NU
 with a table's primary key (a `BIGSERIAL` key it fills itself, as Postgres does); a value of a type
 asyncpg's codec does not take for its column (`DataError`), and a column the table does not have;
 `ON CONFLICT DO NOTHING` keeps the row there. A transaction keeps all its statements or, on an
-exception, none, and after a failed statement it refuses the rest, as Postgres aborts it. What it
+exception, none; after a failed statement it refuses the rest and keeps nothing at commit, as
+Postgres aborts it. What it
 does not prove: that Postgres itself accepts the row, which is `tests/services/api/test_review_store.py`'s,
 live.
 """
@@ -143,11 +144,9 @@ class CandidateRows:
         try:
             yield
             if self._aborted:
-                # A statement failed and the caller went on: Postgres rolls back at commit.
+                # A statement failed and the caller caught it: Postgres answers the COMMIT with a
+                # ROLLBACK, and asyncpg raises nothing; nothing of the transaction is kept.
                 self.rows = before
-                raise asyncpg.exceptions.InFailedSQLTransactionError(
-                    "current transaction is aborted, commands ignored until end of transaction block"
-                )
         except BaseException:
             self.rows = before
             raise

@@ -52,7 +52,8 @@ WRITER = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-5")
 
 class CaseTexts:
     """The real text store, its outbox seen only for this case's own documents: the shared
-    Postgres's other rows (another case's, another test's) are neither drained nor removed."""
+    Postgres's other rows (another case's, another test's) are neither drained nor removed. Every
+    read and write is the store's own method; only the case's own rows are kept from it."""
 
     def __init__(self, store: ExtractionCandidateStore) -> None:
         self.store = store
@@ -63,14 +64,10 @@ class CaseTexts:
         await self.store.store_document_text(document_id, text, principal)
 
     async def pending_text_index(self, limit: int) -> list[tuple[int, str]]:
-        async with self.store._pool.acquire() as conn:  # noqa: SLF001 - the case's rows alone
-            rows = await conn.fetch(
-                "SELECT ref, document_id FROM search_text_pending WHERE document_id = ANY($1) "
-                "ORDER BY ref LIMIT $2",
-                sorted(self.documents),
-                limit,
-            )
-        return [(int(r["ref"]), str(r["document_id"])) for r in rows]
+        # The store's own read (rule 4: the read the indexer runs is the one tested), then this
+        # case's rows of it; read deep enough that other cases' rows ahead never hide its own.
+        rows = await self.store.pending_text_index(limit + 10_000)
+        return [r for r in rows if r[1] in self.documents][:limit]
 
     async def clear_pending_text_index(self, refs: Sequence[int]) -> None:
         await self.store.clear_pending_text_index(refs)
