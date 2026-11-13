@@ -207,3 +207,24 @@ async def test_a_change_during_a_rebuild_reaches_the_index_being_built_too(world
     await world.client.indices.refresh(index=building)
     assert await world.doc(a) is not None
     assert (await world.client.get(index=building, id=a))["_source"]["names"] == ["Midway"]
+
+
+async def test_a_throwaway_index_holds_exactly_the_nodes_given_and_is_gone_after() -> None:
+    from schemas.domain import AuditStub, Node
+    from services.search_index.testing import throwaway_index
+
+    def node(node_id: str, name: str, type_: str = "Person") -> Node:
+        return Node(id=node_id, type=type_, properties={"family_name": name, "title": name},
+                    provenance=PROVENANCE, handling=HANDLING,
+                    audit=AuditStub(created_at=WHEN, created_by="loader-1"), datasets=[DATASET])  # fmt: skip
+
+    nodes = [node("p-1", "Smith"), node("d-1", "Statement", "Document")]
+    async with throwaway_index(nodes, {"d-1": ("Mohamad at the docks", "unit-4")}) as (client, index):
+        hits = await client.search(index=index, body={"query": {"match_all": {}}})
+        assert {h["_id"] for h in hits["hits"]["hits"]} == {"p-1", "d-1", "text:d-1"}
+        name = index
+    gone = search_client()
+    try:
+        assert not await gone.indices.exists(index=name)
+    finally:
+        await gone.close()
