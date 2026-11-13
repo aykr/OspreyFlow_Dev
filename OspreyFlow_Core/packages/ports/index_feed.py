@@ -5,7 +5,8 @@ same transaction as the write. The indexer drains that outbox through this port 
 it reads each node as stored, **unfiltered by design**, to build the node's one search document
 with the node's own access fields (the query side enforces access, ADR-149). A separate `Protocol`
 from `GraphPort`, so that no route, which is given a `GraphPort`, can reach the unfiltered read
-(rule 4: `tests/services/test_index_feed_reach.py` holds that no route module names it).
+(rule 4: `tests/services/search_index/test_index_feed_reach.py` holds that no route module names
+it).
 """
 
 from __future__ import annotations

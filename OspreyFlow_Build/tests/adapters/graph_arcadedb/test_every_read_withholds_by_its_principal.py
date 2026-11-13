@@ -96,7 +96,7 @@ def test_every_read_in_the_adapter_withholds_by_its_caller_s_principal() -> None
     found = {m.name: offending_calls(m.read_text()) for m in modules}
     # The one system read the adapter makes for a caller that is not a reader: the search index
     # feed's (ADR-150 decision 2), unfiltered by design and whole, through `IndexFeedSource`, which no
-    # route reaches (`tests/services/test_index_feed_reach.py`). Named here by function, so any other
+    # route reaches (`tests/services/search_index/test_index_feed_reach.py`). Named here by function, so any other
     # read that drops its principal is still refused.
     found["adapter.py"] = [o for o in found["adapter.py"] if o[0] != "nodes_for_index"]
     assert found == {m.name: [] for m in modules}
