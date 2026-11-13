@@ -137,15 +137,16 @@ function Harness() {
             // The Glass's rail as `App.tsx` splits it (ADR-145 Amendment 2): Cases and Explore, the rest
             // under ⋯ More.
             <LeftRail
+              // ADR-145 Amendment 12: as `App.tsx` splits them.
               items={[
                 { id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined },
                 { id: "explore", label: "Explore", icon: "explore", onSelect: () => undefined },
+                { id: "questions", label: "Ask & Chat", icon: "questions", onSelect: () => undefined },
+                { id: "dashboards", label: "Dashboards", icon: "dashboards", onSelect: () => undefined },
               ]}
               more={[
-                { id: "ownership", label: "Ownership", icon: "ownership", onSelect: () => undefined },
                 { id: "history", label: "History", icon: "history", onSelect: () => undefined },
-                { id: "questions", label: "Questions", icon: "questions", onSelect: () => undefined },
-                { id: "dashboards", label: "Dashboards", icon: "dashboards", onSelect: () => undefined },
+                { id: "ownership", label: "Ownership", icon: "ownership", onSelect: () => undefined },
                 // ADR-139: Connection strength stayed in the Glass when Monitoring left it.
                 { id: "strength", label: "Connection strength", icon: "strength", onSelect: () => setView("strength") },
               ]}

@@ -111,7 +111,7 @@ afterEach(() => {
 });
 
 describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
-  test("24 controls stand before the canvas, in this order", async () => {
+  test("26 controls stand before the canvas, in this order", async () => {
     render(<App />);
     const canvas = await screen.findByRole("application", { name: "Network canvas" });
     await screen.findByRole("button", { name: "Open Prison intel in the Ingest Studio ↗" });
@@ -123,7 +123,8 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
       "Graph", "Map", "More views▾", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
       "Case", "Boards", expect.stringMatching(/^Case: Kestrel/), "Open Prison intel in the Ingest Studio ↗",
       // The rail, then the Graph's own toolbar over the canvas.
-      "Cases", "Explore", "More", "Help", "Show names",
+      // ADR-145 Amendment 12: Ask & Chat and Dashboards on the rail, then its Explore Details.
+      "Cases", "Explore", "Ask & Chat", "Dashboards", "Explore Details", "Help", "Show names",
       "Match strictness",
     ]); // prettier-ignore
   });

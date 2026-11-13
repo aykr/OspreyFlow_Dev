@@ -288,9 +288,10 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   // ADR-146 decision 2: Monitoring left the Glass; Rules and Monitoring is a place of the switcher.
   const rulesPlace = async () =>
     within(await screen.findByRole("navigation", { name: "Places" })).findByRole("button", { name: /^Rules and Monitoring/ });
-  // ADR-139: Connection strength, which stayed in the Glass, under the rail's More.
+  // ADR-139: Connection strength, which stayed in the Glass, under the rail's Explore Details
+  // (ADR-145 Amendment 12).
   const openStrength = async () => {
-    fireEvent.click(within(await screen.findByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "More" }));
+    fireEvent.click(within(await screen.findByRole("navigation", { name: "Workspace" })).getByRole("button", { name: /^Explore Details/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Connection strength" }));
   };
 
@@ -581,8 +582,8 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     note("figures");
     render(<App />);
     await screen.findByRole("note", { name: "Opened from an alert" });
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "More" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Dashboards" }));
+    // ADR-145 Amendment 12: Dashboards is on the rail itself.
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Dashboards" }));
     await screen.findByRole("region", { name: "Alert monitoring" });
     expect(screen.queryByRole("note", { name: "Opened from an alert" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Figures" }));

@@ -2,6 +2,7 @@
 // canvas's top left, what the canvas holds, the case's latest history steps to pick up from — each
 // restored as the History drawer restores one (spec 03 §3.1's route) — and the keys worth knowing,
 // each one the Glass has. It reopens with `?` or the rail's Help; closing it is remembered per person.
+import { GUIDE_FOR_PLACE } from "../home/guides";
 import { useEffect, useState } from "react";
 
 import { whenLabel } from "../home/homeData";
@@ -46,7 +47,7 @@ const KEYS: [string, string][] = [
   ["Enter", "Expand the focused node by one hop"],
   ["F", "Fit the graph to the window"],
   ["Esc", "Clear the selection"],
-  ["?", "Open this panel again"],
+  ["?", "Open or close this panel"],
 ];
 
 export interface WorkspaceWelcomeProps {
@@ -57,10 +58,14 @@ export interface WorkspaceWelcomeProps {
   nodeCount: number;
   onRestored: (snapshot: WorkingSetDelta) => void;
   onClose: () => void;
+  /** ADR-145 Amendment 12: the user guide, as Home's Glass card links it (ADR-145 Amendment 10):
+   * its address, and opening it, resolving to words when it could not. None, no link. */
+  guide?: { href: string; open: () => Promise<string | null> };
   now?: Date;
 }
 
-export function WorkspaceWelcome({ apiBaseUrl, bearerToken, investigationId, nodeCount, onRestored, onClose, now = new Date() }: WorkspaceWelcomeProps) {
+export function WorkspaceWelcome({ apiBaseUrl, bearerToken, investigationId, nodeCount, onRestored, onClose, guide, now = new Date() }: WorkspaceWelcomeProps) {
+  const [guideSaid, setGuideSaid] = useState("");
   const [steps, setSteps] = useState<HistoryStepSummary[] | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -90,7 +95,19 @@ export function WorkspaceWelcome({ apiBaseUrl, bearerToken, investigationId, nod
   }
 
   return (
-    <div role="dialog" aria-modal="false" aria-labelledby="workspace-welcome-title" className="workspace-welcome">
+    <div
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="workspace-welcome-title"
+      className="workspace-welcome"
+      // ADR-145 Amendment 12: Esc closes it, as its × does, from anywhere inside it.
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          onClose();
+        }
+      }}
+    >
       <div className="workspace-welcome__head">
         <h2 id="workspace-welcome-title">Welcome back</h2>
         <button type="button" className="btn btn--quiet workspace-welcome__close" aria-label="Close the welcome panel" onClick={onClose}>
@@ -116,6 +133,18 @@ export function WorkspaceWelcome({ apiBaseUrl, bearerToken, investigationId, nod
             ))}
           </ul>
         </>
+      )}
+      {guide && (
+        <p className="workspace-welcome__guide">
+          {/* The same link as Home's Glass card: the route itself asks for the token, so the click is
+              handled, a middle click too. */}
+          <a href={guide.href} target="_blank" rel="noopener"
+             onClick={(event) => { event.preventDefault(); setGuideSaid(""); void guide.open().then((words) => setGuideSaid(words ?? "")); }}
+             onAuxClick={(event) => { event.preventDefault(); setGuideSaid(""); void guide.open().then((words) => setGuideSaid(words ?? "")); }}>
+            {GUIDE_FOR_PLACE.glass?.words}
+          </a>
+          <span aria-live="polite">{guideSaid}</span>
+        </p>
       )}
       <h3 id="workspace-welcome-keys">Keys worth knowing</h3>
       <ul aria-labelledby="workspace-welcome-keys" className="workspace-welcome__keys">

@@ -192,12 +192,15 @@ narrowed.
 ```
 
 The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 1) holds the places the
-analyst goes to most (ADR-145 Amendment 2, the owner's choice of variant B): *Cases* and *Explore* (where
-to start in the case's data, ADR-100, §3.1), then **⋯ More**, a menu of the rest, one click away:
-*Ownership* (beneficial ownership and due diligence — ADR-109, §3.3), *History*, *Questions* (the case's
-questions to the model, ADR-098, §3.1), *Dashboards* (ADR-111 Amendment 3) and *Connection strength*
-(ADR-139, a tab of Monitoring until Monitoring left the Glass). *More*'s name says which of them is open
-("More, History open"). Monitoring (the one alert queue, its rules, the watches, held rows and the rule
+analyst goes to most (ADR-145 Amendment 2's variant B, as ADR-145 Amendment 12 amends it): *Cases*,
+*Explore* (where to start in the case's data, ADR-100, §3.1), *Ask & Chat* (the case's questions to the
+model, ADR-098, §3.1; named *Questions* until Amendment 12) and *Dashboards* (ADR-111 Amendment 3), then
+**⋯ Explore Details**, a menu of the rest, one click away, in this order: *History*, *Ownership*
+(beneficial ownership and due diligence — ADR-109, §3.3) and *Connection strength* (ADR-139, a tab of
+Monitoring until Monitoring left the Glass). *Explore Details*'s name says which of them is open
+("Explore Details, History open"). The rail's **Help** (and `?`) opens the keys panel, with the user
+guide's link, over whichever view is on screen, and a second press, Esc or its × closes it (Amendment
+12). Monitoring (the one alert queue, its rules, the watches, held rows and the rule
 audit — ADR-109, ADR-133, §3.3) is no longer the Glass's: it is *Rules and Monitoring*, a place of its
 own (§2.0a; ADR-146 decision 2). The rail is the Glass's alone:
 the Ingest Studio has no rail, and *Ingest Studio*, *Admin* and *Proposed types* left it for the place
@@ -384,7 +387,7 @@ One row, 40px. From the left:
 
 While the Ingest Studio is open the bar shows a brass line under it and drops what belongs only to
 the Glass (search, the view switch, Export). Rules and Monitoring is a place of the switcher (§2.0a);
-Ownership, History and Connection strength are under the rail's ⋯ More; the resolution threshold, named **Match strictness** for what
+History, Ownership and Connection strength are under the rail's ⋯ Explore Details; the resolution threshold, named **Match strictness** for what
 the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
 wide.
 

@@ -36050,3 +36050,34 @@ Red first: the cases above before the code (`onepass/red.raw.txt`), the browser 
   false.
 - A host with no dot (a bare `localhost`-style name) cannot take a `Domain`; a browser keeps the pass for
   that one name and asks again on the others.
+
+### ADR-145, Amendment 12 (13 November 2026) — The Glass's rail: Ask & Chat and Dashboards on it, ⋯ More renamed Explore Details, and Help over every view
+
+Status: as built by the platform-b lane (step rail), at the owner's rulings of 13 November 2026. It
+amends Amendment 2's variant B (the rail kept Cases and Explore, the rest under ⋯ More).
+
+1. **On the rail, in this order: Cases, Explore, Ask & Chat and Dashboards.** *Ask & Chat* is *Questions*
+   renamed: its rail entry and its drawer's title (the drawer's Close is named after it). Tests:
+   `App.chrome.test.tsx` (the 26 controls before the canvas, in order, red on main's order),
+   `keyboard/shell.spec.ts` `each rail entry is reached and pressed by keyboard`, `keyboard/questions.spec.ts`
+   (Close Ask & Chat).
+2. **⋯ More is renamed ⋯ Explore Details, and holds History, Ownership and Connection strength, in that
+   order.** Its name says which of them is open ("Explore Details, History open"); the menu marks it too.
+   Tests: `shell.test.tsx` (the order, the open-state name, the name with none open),
+   `keyboard/shell.spec.ts` `each destination under the rail's Explore Details is reached and chosen by
+   keyboard` (each activated end to end, Esc back onto the button; red with main's `LeftRail`,
+   `rail/keyboard-red.raw.txt`).
+3. **The rights filter is unchanged** (`railEntries`): a person without an entry's right does not see it
+   (`rights/visibility.test.ts`, unchanged).
+4. **Help, and the `?` key, open the keys panel over whichever view is on screen, and a second press closes
+   it; Esc and its × close it too.** It was drawn beside the graph alone, so in every other view Help did
+   nothing visible, and with it open did nothing either. It is now drawn in the column every view shares,
+   as an overlay. Tests: `App.help.test.tsx` (the real App: in the graph, Dashboards, Ownership and
+   Connection strength, by Help and by `?`, red on main, `rail/help-red.raw.txt`), and
+   `keyboard/shell.spec.ts` `the rail's Help opens and closes the keys panel by keyboard, as ? and Esc do`.
+5. **The panel carries the user guide's link**, as Home's Glass card does (Amendment 10's route, which
+   checks the person's rights itself), a 24px target. Tests: `App.help.test.tsx` (the link and its
+   address), the keyboard case above (reached by Tab and activated), and `a11y/every-harness.spec.ts`'s
+   `top-bar-harness.html?help=1` in the dark, light and GOV.UK looks.
+6. **The guides follow:** `02_GLASS_FRONTEND.md` §2's rail, and the user guide 1.49 (§5's rail, §6 *Ask &
+   Chat*), its PDF reprinted alone (`tests/test_docs_pdf.py`).

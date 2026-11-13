@@ -1,0 +1,19 @@
+# rail + Help, red first: App.help.test.tsx (the real App, jsdom) on main 13cf0c9, this Mac
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  apps/workspace/src/App.help.test.tsx > the rail's Help over every view the rail reaches > in the graph, Help opens the panel and a second press closes it
+AssertionError: expected <div role="dialog" …(3)>…(4)</div> to be null
+ FAIL  apps/workspace/src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Dashboards, Help opens the panel and a second press closes it
+ FAIL  apps/workspace/src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Connection strength, Help opens the panel and a second press closes it
+AssertionError: expected null not to be null
+ FAIL  apps/workspace/src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Ownership, Help opens the panel and a second press closes it
+AssertionError: expected null not to be null
+ FAIL  apps/workspace/src/App.help.test.tsx > the rail's Help over every view the rail reaches > in the graph, the ? key opens the panel and again closes it, and Esc closes it
+AssertionError: expected <div role="dialog" …(3)>…(4)</div> to be null
+ FAIL  apps/workspace/src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Dashboards, the ? key opens the panel and again closes it, and Esc closes it
+ FAIL  apps/workspace/src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Connection strength, the ? key opens the panel and again closes it, and Esc closes it
+AssertionError: expected null not to be null
+ FAIL  apps/workspace/src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Ownership, the ? key opens the panel and again closes it, and Esc closes it
+AssertionError: expected null not to be null
+ FAIL  apps/workspace/src/App.help.test.tsx > the rail's Help over every view the rail reaches > the panel carries the user guide's link, as Home's Glass card does
+TestingLibraryElementError: Unable to find an accessible element with the role "link" and name "Read the user guide (PDF)"
+      Tests  9 failed (9)

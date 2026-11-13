@@ -90,7 +90,8 @@ test("a proposal is accepted by keyboard, and its change reaches the view", asyn
 test("the drawer closes from its visible Close button, reached by keyboard", async ({ page }) => {
   // The owner, 9 October 2026: "how do I close the questions panel?" — Escape alone said nothing.
   await serve(page, [ANSWER]);
-  const close = page.getByRole("button", { name: "Close Questions" });
+  // ADR-145 Amendment 12: the drawer is Ask & Chat (Questions renamed), its Close named after it.
+  const close = page.getByRole("button", { name: "Close Ask & Chat" });
   await close.focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__QUESTIONS__?.closed ?? 0)).toBe(1);

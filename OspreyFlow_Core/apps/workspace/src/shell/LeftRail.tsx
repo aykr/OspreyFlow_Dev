@@ -1,8 +1,8 @@
 // The left rail (ADR-097 step 1, design review item 1): 44px of icons, each named for assistive
 // technology and on hover, and expandable to show the names. The places the analyst goes to rather
-// than works in. ADR-145 Amendment 2 (variant B): the rail keeps the ones used most (Cases, Explore)
-// and the rest are one click away under its ⋯ *More*. Monitoring left the Glass for Rules and
-// Monitoring, a place of its own (ADR-146 decision 2).
+// than works in. ADR-145 Amendment 12 (amending Amendment 2's variant B): the rail keeps Cases,
+// Explore, Ask & Chat and Dashboards, and the rest are one click away under its ⋯ *Explore Details*.
+// Monitoring left the Glass for Rules and Monitoring, a place of its own (ADR-146 decision 2).
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Icon, type ShellIcon } from "./icons";
@@ -17,7 +17,7 @@ export interface RailItem {
   pressed?: boolean;
 }
 
-/** The rail's ⋯ *More*: a menu of the destinations not on the rail itself. It closes on Escape
+/** The rail's ⋯ *Explore Details*: a menu of the destinations not on the rail itself. It closes on Escape
  * (focus back on ⋯), on a choice, on a click outside, and when focus leaves it, as `DropdownPanel`
  * does, so it never traps a keyboard user. */
 function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: boolean }) {
@@ -33,8 +33,11 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
-  // One name and one role, whatever is open: the destination open is marked inside the menu.
-  const label = "More";
+  // ADR-145 Amendment 12: named Explore Details, and, while one of its places is open, which
+  // ("Explore Details, History open"); the destination open is marked inside the menu too.
+  const name = "Explore Details";
+  const current = items.find((item) => item.pressed);
+  const label = current ? `${name}, ${current.label} open` : name;
   return (
     <div
       ref={wrapper}
@@ -62,10 +65,10 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
         onClick={() => setOpen((was) => !was)}
       >
         <span aria-hidden="true" className="left-rail__glyph">⋯</span>
-        {expanded && <span className="left-rail__name">More</span>}
+        {expanded && <span className="left-rail__name">{name}</span>}
       </button>
       {open && (
-        <div id={panelId} role="group" aria-label="More" className="menu-panel left-rail__more-panel">
+        <div id={panelId} role="group" aria-label={name} className="menu-panel left-rail__more-panel">
           {items.map((item) => (
             <button
               key={item.id}
@@ -92,7 +95,7 @@ export function LeftRail({
   onHelp,
 }: {
   items: readonly RailItem[];
-  /** One click away under ⋯ *More* (ADR-145 Amendment 2); none, no *More*. */
+  /** One click away under ⋯ *Explore Details* (ADR-145 Amendment 12); none, no menu. */
   more?: readonly RailItem[];
   onHelp?: () => void;
 }) {

@@ -761,6 +761,9 @@
 .workspace-welcome__head h2 { margin: 0; font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 700; }
 .workspace-welcome__close { min-width: var(--h-control-24); min-height: var(--h-control-24); padding: 0; }
 .workspace-welcome__summary { margin: var(--sp-8) 0 var(--sp-12); color: var(--text-secondary); }
+/* ADR-145 Amendment 12: the user guide's link, a 24px target (WCAG 2.2, 2.5.8), its words beside it. */
+.workspace-welcome__guide { margin: 0 0 var(--sp-8); display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
+.workspace-welcome__guide a { display: inline-flex; align-items: center; min-height: var(--h-control-24); }
 .workspace-welcome h3 { margin: var(--sp-12) 0 var(--sp-6); font-size: var(--fs-12); line-height: var(--lh-12); font-weight: 600; color: var(--text-secondary); }
 .workspace-welcome__history, .workspace-welcome__keys { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-4); }
 .workspace-welcome__step {

@@ -2,6 +2,7 @@
 // `App.tsx` renders (the mark, the case menu, the search box with its Filters icon, the view switch,
 // Export and the account menu), and the left rail beside it. `fetch` answers the case list; the
 // outcomes are exposed on `window.__TOPBAR__` for the specs.
+import { useCallback, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
@@ -17,13 +18,15 @@ import { GlobalSearch } from "../src/search/GlobalSearch";
 import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { createWorkingSet } from "../src/workingset/store";
+import { guideUrl } from "../src/home/guides";
+import { useHelpKey, WorkspaceWelcome } from "../src/welcome/WorkspaceWelcome";
 import type { OntologySchema } from "../../../packages/schemas/generated";
 
 declare global {
   interface Window {
     /** With `?canvas=1`: whether the real canvas holds a node, and how many it holds. */
     __TOPBAR_CANVAS__?: { hasNode: (id: string) => boolean; count: () => number };
-    __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean; rail: string[]; views: string[]; help?: number };
+    __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean; rail: string[]; views: string[]; help?: number; guide?: number };
   }
 }
 
@@ -97,6 +100,58 @@ if (!container) throw new Error("#root not found");
 
 const rail = (id: string) => () => window.__TOPBAR__!.rail.push(id);
 
+/** The rail as `App.tsx` splits it (ADR-145 Amendment 12), and its Help toggling the real keys panel,
+ * as `App.tsx` does: Help or `?` opens it, again closes it, and Esc or × closes it. */
+function RailWithHelp() {
+  // `?help=1`: the keys panel open from the start, for the scans (`a11y/every-harness.spec.ts`).
+  const [helpOpen, setHelpOpen] = useState(new URLSearchParams(window.location.search).get("help") === "1");
+  const toggle = useCallback(() => setHelpOpen((open) => !open), []);
+  useHelpKey(toggle);
+  return (
+    <>
+      <LeftRail
+        onHelp={() => {
+          window.__TOPBAR__!.help = (window.__TOPBAR__!.help ?? 0) + 1;
+          toggle();
+        }}
+        items={[
+          { id: "cases", label: "Cases", icon: "cases", onSelect: rail("cases") },
+          { id: "explore", label: "Explore", icon: "explore", onSelect: rail("explore") },
+          { id: "questions", label: "Ask & Chat", icon: "questions", onSelect: rail("questions") },
+          // ADR-111 Amendment 3: the Superset boards, drawn inside the Glass.
+          { id: "dashboards", label: "Dashboards", icon: "dashboards", onSelect: rail("dashboards") },
+        ]}
+        more={[
+          { id: "history", label: "History", icon: "history", onSelect: rail("history") },
+          { id: "ownership", label: "Ownership", icon: "ownership", onSelect: rail("ownership") },
+          // ADR-139: Connection strength, which stayed in the Glass.
+          { id: "strength", label: "Connection strength", icon: "strength", onSelect: rail("strength") },
+        ]}
+      />
+      {/* Beside the rail, never over it, as `App.tsx` places it in the column the views share. */}
+      {helpOpen && (
+        <div style={{ position: "relative", width: 0 }}>
+        <WorkspaceWelcome
+          apiBaseUrl="http://top-bar.invalid"
+          bearerToken="unused"
+          investigationId="inv-1"
+          nodeCount={0}
+          onRestored={() => undefined}
+          onClose={() => setHelpOpen(false)}
+          guide={{
+            href: guideUrl("http://top-bar.invalid", "user"),
+            open: () => {
+              window.__TOPBAR__!.guide = (window.__TOPBAR__!.guide ?? 0) + 1;
+              return Promise.resolve(null);
+            },
+          }}
+        />
+        </div>
+      )}
+    </>
+  );
+}
+
 createRoot(container).render(
   <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
     <ClassificationStrip marking="OFFICIAL" />
@@ -148,24 +203,7 @@ createRoot(container).render(
       }
     />
     <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-      <LeftRail
-        onHelp={() => { window.__TOPBAR__!.help = (window.__TOPBAR__!.help ?? 0) + 1; }}
-        // ADR-145 Amendment 2 (variant B): Cases and Explore on the rail, the rest under ⋯ More, as
-        // `App.tsx` splits them. Monitoring left the Glass for Rules and Monitoring (ADR-146 decision 2).
-        items={[
-          { id: "cases", label: "Cases", icon: "cases", onSelect: rail("cases") },
-          { id: "explore", label: "Explore", icon: "explore", onSelect: rail("explore") },
-        ]}
-        more={[
-          { id: "ownership", label: "Ownership", icon: "ownership", onSelect: rail("ownership") },
-          { id: "history", label: "History", icon: "history", onSelect: rail("history") },
-          { id: "questions", label: "Questions", icon: "questions", onSelect: rail("questions") },
-          // ADR-111 Amendment 3: the Superset boards, drawn inside the Glass.
-          { id: "dashboards", label: "Dashboards", icon: "dashboards", onSelect: rail("dashboards") },
-          // ADR-139: Connection strength, which stayed in the Glass.
-          { id: "strength", label: "Connection strength", icon: "strength", onSelect: rail("strength") },
-        ]}
-      />
+      <RailWithHelp />
       {wantsCanvas ? (
         <main style={{ flex: 1, position: "relative" }} aria-label="Canvas">
           <GlassCanvas

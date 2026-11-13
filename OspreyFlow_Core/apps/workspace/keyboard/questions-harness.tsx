@@ -57,7 +57,7 @@ function Panel() {
 
 createRoot(container).render(
   // Inside the Drawer, as `App.tsx` mounts it, so closing the drawer is provable here (rule 13).
-  <Drawer open onClose={() => { window.__QUESTIONS__!.closed = (window.__QUESTIONS__!.closed ?? 0) + 1; }} title="Questions">
+  <Drawer open onClose={() => { window.__QUESTIONS__!.closed = (window.__QUESTIONS__!.closed ?? 0) + 1; }} title="Ask & Chat">
     <Panel />
   </Drawer>,
 );

@@ -128,6 +128,7 @@ import { useOnReturn } from "./strength/useOnReturn";
 import { TimelineStrip } from "./timeline/TimelineStrip";
 import { lastChangeText } from "./history/lastChange";
 import type { HistoryStepSummary } from "./workingset/models";
+import { guideUrl, openGuide } from "./home/guides";
 import { setWelcomeDismissed, useHelpKey, welcomeDismissed, WorkspaceWelcome } from "./welcome/WorkspaceWelcome";
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
@@ -744,8 +745,9 @@ export function App() {
     welcomeDecided.current = true;
     setWelcomeOpen(!welcomeDismissed(principal.sub));
   }, [principal?.sub]);
-  const openWelcome = useCallback(() => setWelcomeOpen(true), []);
-  useHelpKey(openWelcome);
+  // ADR-145 Amendment 12: Help and `?` open the keys panel over any view, and close it again.
+  const toggleWelcome = useCallback(() => setWelcomeOpen((open) => !open), []);
+  useHelpKey(toggleWelcome);
   // ADR-097 Amendment 1: the cases, and the views of each (ADR-144 decision 5), reached from the rail.
   const [casesOpen, setCasesOpen] = useState(false);
   // ADR-144 and the owner's ruling of 8 November 2026 (Amendment 2): an opened view, shown on the
@@ -1622,18 +1624,21 @@ export function App() {
   // not investigate (opened under an embedded board, the timeline overlapped it).
   // ADR-097 step 1: the places the analyst goes to inside the Glass (ADR-145 Amendment 2 splits them
   // between the rail and its ⋯ More).
+  // ADR-145 Amendment 12: on the rail, in this order, Cases, Explore, Ask & Chat (Questions renamed)
+  // and Dashboards; under its Explore Details, History, Ownership and Connection strength.
   const railTools = [
     { id: "cases", label: "Cases", icon: "cases" as const, onSelect: () => setCasesOpen(true), pressed: casesOpen },
-    // ADR-109 ruling 5: enhanced due diligence — ultimate beneficial ownership.
-    { id: "ownership", label: "Ownership", icon: "ownership" as const, onSelect: () => setView("ownership"), pressed: view === "ownership" },
-    { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
     { id: "explore", label: "Explore", icon: "explore" as const, onSelect: () => setExploreOpen(true), pressed: exploreOpen },
-    { id: "questions", label: "Questions", icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
+    { id: "questions", label: "Ask & Chat", icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
     // ADR-111 Amendment 3: Superset dashboards, drawn inside the Glass.
     { id: "dashboards", label: "Dashboards", icon: "dashboards" as const, onSelect: () => setView("dashboards"), pressed: view === "dashboards" },
+    { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
+    // ADR-109 ruling 5: enhanced due diligence — ultimate beneficial ownership.
+    { id: "ownership", label: "Ownership", icon: "ownership" as const, onSelect: () => setView("ownership"), pressed: view === "ownership" },
     // ADR-139: Connection strength, which stayed in the Glass when Monitoring left (ADR-146 decision 2).
     { id: "strength", label: "Connection strength", icon: "strength" as const, onSelect: () => setView("strength"), pressed: view === "strength" },
   ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id));
+  const onTheRail = new Set(["cases", "explore", "questions", "dashboards"]);
   // ADR-145 Amendment 2: the view switch keeps Graph and Map; Matrix and Reports are under More views.
   // Someone offered none of Graph and Map (a Reports Viewer) has theirs in the switch itself.
   const allowedViews = [
@@ -1775,15 +1780,39 @@ export function App() {
           Glass's alone; the Studio has none. */}
       {app === "glass" && (
       <LeftRail
-        // ADR-145 Amendment 2 (variant B): the rail keeps Cases and Explore; Ownership, History,
-        // Questions and Dashboards are one click away under its ⋯ More; Monitoring, with its open
-        // count, is the banner's section.
-        items={railTools.filter((entry) => entry.id === "cases" || entry.id === "explore")}
-        more={railTools.filter((entry) => entry.id !== "cases" && entry.id !== "explore")}
-        onHelp={() => setWelcomeOpen(true)}
+        // ADR-145 Amendment 12 (amending Amendment 2's variant B): Cases, Explore, Ask & Chat and
+        // Dashboards on the rail; History, Ownership and Connection strength one click away under
+        // its Explore Details; Monitoring, with its open count, is the banner's section.
+        items={railTools.filter((entry) => onTheRail.has(entry.id))}
+        more={railTools.filter((entry) => !onTheRail.has(entry.id))}
+        onHelp={toggleWelcome}
       />
       )}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      {/* `position: relative` so the keys panel, over whichever view is on screen, is placed in it. */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
+      {/* ADR-145 Amendment 12: the keys panel over any view the rail reaches, not only the graph's
+          (it was drawn beside the graph alone, so Help did nothing visible elsewhere). */}
+      {app === "glass" && welcomeOpen && (
+        <WorkspaceWelcome
+          apiBaseUrl={API_BASE_URL}
+          bearerToken={bearerToken}
+          investigationId={investigationId}
+          nodeCount={counts.nodes}
+          onRestored={(snapshot) =>
+            applyRestoredSnapshot(workingSetRef.current.store, resyncFromNothing, snapshot)
+          }
+          onClose={() => {
+            setWelcomeOpen(false);
+            if (principal?.sub) setWelcomeDismissed(principal.sub, true);
+          }}
+          // The user guide, as Home's Glass card links it (ADR-145 Amendment 10); the route checks
+          // the person's rights itself.
+          guide={{
+            href: guideUrl(API_BASE_URL, "user"),
+            open: () => openGuide("user", { apiBaseUrl: API_BASE_URL, bearerToken }),
+          }}
+        />
+      )}
       {(view === "graph" || view === "map") && (
         // ADR-097 step 1: what belongs to this view alone, docked above it.
         <div role="toolbar" aria-label={view === "graph" ? "Graph view" : "Map view"} className="view-toolbar">
@@ -1997,21 +2026,6 @@ export function App() {
               <p role="alert" className="view-lens-banner">
                 {viewProblem}
               </p>
-            )}
-            {view === "graph" && welcomeOpen && !lens && (
-              <WorkspaceWelcome
-                apiBaseUrl={API_BASE_URL}
-                bearerToken={bearerToken}
-                investigationId={investigationId}
-                nodeCount={counts.nodes}
-                onRestored={(snapshot) =>
-                  applyRestoredSnapshot(workingSetRef.current.store, resyncFromNothing, snapshot)
-                }
-                onClose={() => {
-                  setWelcomeOpen(false);
-                  if (principal?.sub) setWelcomeDismissed(principal.sub, true);
-                }}
-              />
             )}
             {view === "graph" && (
               <GlassCanvas
@@ -2537,7 +2551,7 @@ export function App() {
           />
         )}
       </Drawer>
-      <Drawer open={questionsOpen} onClose={() => setQuestionsOpen(false)} title="Questions">
+      <Drawer open={questionsOpen} onClose={() => setQuestionsOpen(false)} title="Ask & Chat">
         <QuestionsPanel
           apiBaseUrl={API_BASE_URL}
           bearerToken={bearerToken}

@@ -89,37 +89,41 @@ test("the marking strip and the top bar take 20 and 44 pixels, and the rail 48 w
 
 test("each rail entry is reached and pressed by keyboard", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
-  // ADR-145 Amendment 2 (variant B): the rail keeps Cases and Explore. Monitoring is no longer the
-  // Glass's at all: Rules and Monitoring is a place of its own (ADR-146 decision 2).
-  for (const name of ["Cases", "Explore"]) {
-    await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name }).focus();
+  // ADR-145 Amendment 12: the rail keeps Cases, Explore, Ask & Chat (Questions renamed) and Dashboards.
+  // Monitoring is no longer the Glass's at all: Rules and Monitoring is a place of its own (ADR-146
+  // decision 2).
+  for (const name of ["Cases", "Explore", "Ask & Chat", "Dashboards"]) {
+    // Exact: "Explore" is also the start of "Explore Details" (ADR-145 Amendment 12).
+    await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name, exact: true }).focus();
     await page.keyboard.press("Enter");
   }
-  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["cases", "explore"]);
+  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["cases", "explore", "questions", "dashboards"]);
   // Watches are with the rules in Rules and Monitoring (ADR-146 decision 4), not the rail.
   await expect(page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Watches" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: /Monitoring/ })).toHaveCount(0);
   registerCovered(REGISTRY, "rail-entries-by-keyboard");
 });
 
-// ADR-145 Amendment 2 (rule 13): each destination under the rail's ⋯ More, opened and chosen by
-// keyboard, and Escape closes the menu back onto ⋯.
-test("each destination under the rail's More is reached and chosen by keyboard", async ({ page }) => {
+// ADR-145 Amendment 12 (rule 13): each destination under the rail's ⋯ Explore Details, in its order,
+// opened and chosen by keyboard, and Escape closes the menu back onto it.
+test("each destination under the rail's Explore Details is reached and chosen by keyboard", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
   const rail = page.getByRole("navigation", { name: "Workspace" });
-  for (const name of ["Ownership", "History", "Questions", "Dashboards", "Connection strength"]) {
-    await rail.getByRole("button", { name: "More" }).focus();
+  for (const name of ["History", "Ownership", "Connection strength"]) {
+    await rail.getByRole("button", { name: "Explore Details" }).focus();
     await page.keyboard.press("Enter");
-    await rail.getByRole("group", { name: "More" }).getByRole("button", { name }).focus();
+    const menu = rail.getByRole("group", { name: "Explore Details" });
+    await expect(menu.getByRole("button")).toHaveText(["History", "Ownership", "Connection strength"]);
+    await menu.getByRole("button", { name }).focus();
     await page.keyboard.press("Enter");
-    await expect(rail.getByRole("group", { name: "More" })).toHaveCount(0);
+    await expect(rail.getByRole("group", { name: "Explore Details" })).toHaveCount(0);
   }
-  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["ownership", "history", "questions", "dashboards", "strength"]);
-  await rail.getByRole("button", { name: "More" }).focus();
+  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["history", "ownership", "strength"]);
+  await rail.getByRole("button", { name: "Explore Details" }).focus();
   await page.keyboard.press("Enter");
   await page.keyboard.press("Escape");
-  await expect(rail.getByRole("group", { name: "More" })).toHaveCount(0);
-  await expect(rail.getByRole("button", { name: "More" })).toBeFocused();
+  await expect(rail.getByRole("group", { name: "Explore Details" })).toHaveCount(0);
+  await expect(rail.getByRole("button", { name: "Explore Details" })).toBeFocused();
   registerCovered(REGISTRY, "rail-more-by-keyboard");
 });
 
@@ -160,19 +164,39 @@ test("the rail shows its names, and hides them again, by keyboard", async ({ pag
   const rail = page.getByRole("navigation", { name: "Workspace" });
   await rail.getByRole("button", { name: "Show names" }).focus();
   await page.keyboard.press("Enter");
-  await expect(rail.getByText("Explore")).toBeVisible();
+  await expect(rail.getByText("Explore", { exact: true })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Hide names" })).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(rail.getByText("Explore")).toHaveCount(0);
+  await expect(rail.getByText("Explore", { exact: true })).toHaveCount(0);
   registerCovered(REGISTRY, "rail-shows-and-hides-names-by-keyboard");
 });
 
-// ADR-115 E6: Help at the rail's foot, by keyboard (it reopens the workspace's welcome panel).
-test("the rail's Help is reached and pressed by keyboard", async ({ page }) => {
+// ADR-115 E6 and ADR-145 Amendment 12 (rule 13): Help at the rail's foot, by keyboard, opens the keys
+// panel and a second press closes it; `?` does the same, and Esc closes it from inside; its user guide
+// link is reached by Tab and activated. (That it shows over every view of the real App is
+// `App.help.test.tsx`'s.)
+test("the rail's Help opens and closes the keys panel by keyboard, as ? and Esc do", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
-  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Help" }).focus();
+  const help = page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Help" });
+  const panel = page.getByRole("dialog", { name: "Welcome back" });
+  await help.focus();
   await page.keyboard.press("Enter");
-  expect(await page.evaluate(() => window.__TOPBAR__?.help)).toBe(1);
+  await expect(panel).toBeVisible();
+  await help.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel).toHaveCount(0);
+  expect(await page.evaluate(() => window.__TOPBAR__?.help)).toBe(2);
+  await page.locator("body").focus();
+  await page.keyboard.press("?");
+  await expect(panel).toBeVisible();
+  await page.keyboard.press("?");
+  await expect(panel).toHaveCount(0);
+  await page.keyboard.press("?");
+  await panel.getByRole("link", { name: "Read the user guide (PDF)" }).focus();
+  await page.keyboard.press("Enter");
+  expect(await page.evaluate(() => window.__TOPBAR__?.guide)).toBe(1);
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
   registerCovered(REGISTRY, "help-from-the-rail-by-keyboard");
 });
 
