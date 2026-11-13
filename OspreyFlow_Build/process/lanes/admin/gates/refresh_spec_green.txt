@@ -1,0 +1,10 @@
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Core/apps/workspace/), logged at osprey-runs/admin.meta/runs/20261113T121531Z-cda5d6ce/log: npx playwright test --config keyboard/playwright.config.ts refresh-sign-in --reporter=line
+
+Running 4 tests using 1 worker
+
+[1/4] keyboard/refresh-sign-in.spec.ts:86:1 › a refresh with a live identity-provider session lands signed in, on Home, without the screen
+[2/4] keyboard/refresh-sign-in.spec.ts:100:1 › a refresh in Admin lands in Admin, not on Home
+[3/4] keyboard/refresh-sign-in.spec.ts:114:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated
+[4/4] keyboard/refresh-sign-in.spec.ts:127:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home
+  4 passed (15.9s)
+Wall time: 17 s, exit 0 (no stack, no lease; set-up before it 10 s)

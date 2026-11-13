@@ -1,0 +1,13 @@
+PLANT: signInAtLoad without its once-per-load memo
+     ✓ a refresh with a live identity-provider session lands signed in, without the screen 1ms
+     ✓ a refresh with no session: the fake refuses prompt=none as Keycloak does, and the screen shows with its own sentence 0ms
+     ✓ an identity provider that cannot be reached (the round throws or times out) also ends at the screen 0ms
+     × a silent failure never loops: the provider is asked once per load, however often the bootstrap runs 2ms
+     ✓ a page inside a frame never asks (the silent round's own frame would open another) 0ms
+     ✓ a hand-off with a live session signs in silently, with no full-page round trip 0ms
+     × a hand-off with no session starts the full-page sign-in once, as before 0ms
+     ✓ a hand-off whose sign-in cannot be started shows the screen with the sentence that says so 0ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/auth/signInAtLoad.test.ts > signInAtLoad > a silent failure never loops: the provider is asked once per load, however often the bootstrap runs
+AssertionError: expected "vi.fn()" to be called 1 times, but got 4 times
+ FAIL  src/auth/signInAtLoad.test.ts > signInAtLoad > a hand-off with no session starts the full-page sign-in once, as before

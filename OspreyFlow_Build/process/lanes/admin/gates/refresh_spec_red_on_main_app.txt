@@ -1,0 +1,236 @@
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Core/apps/workspace/), logged at osprey-runs/admin.meta/runs/20261113T121359Z-54640c50/log: npx playwright test --config keyboard/playwright.config.ts refresh-sign-in --reporter=line
+
+Running 4 tests using 1 worker
+
+[1/4] keyboard/refresh-sign-in.spec.ts:86:1 › a refresh with a live identity-provider session lands signed in, on Home, without the screen
+[WebServer] 12:14:02 PM [vite] Internal server error: Failed to resolve import "./shell/railLayout" from "src/App.tsx". Does the file exist?
+[WebServer]   Plugin: vite:import-analysis
+[WebServer]   File: /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/App.tsx:57:39
+[WebServer]   24 |  import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
+[WebServer]   25 |  import { LeftRail } from "./shell/LeftRail";
+[WebServer]   26 |  import { RAIL_LABELS, splitRail } from "./shell/railLayout";
+[WebServer]      |                                          ^
+[WebServer]   27 |  import { Drawer } from "./design/primitives/Drawer";
+[WebServer]   28 |  import { TopBar } from "./shell/TopBar";
+[WebServer]       at TransformPluginContext._formatLog (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8766:39)
+[WebServer]       at TransformPluginContext.error (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8763:14)
+[WebServer]       at normalizeUrl (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26632:18)
+[WebServer]       at async file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26702:30
+[WebServer]       at async Promise.all (index 25)
+[WebServer]       at async TransformPluginContext.transform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26668:4)
+[WebServer]       at async EnvironmentPluginContainer.transform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8545:14)
+[WebServer]       at async loadAndTransform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:20184:26)
+
+[WebServer] 12:14:02 PM [vite] (client) Pre-transform error: Failed to resolve import "./shell/railLayout" from "src/App.tsx". Does the file exist?
+[WebServer]   Plugin: vite:import-analysis
+[WebServer]   File: /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/App.tsx:57:39
+[WebServer]   24 |  import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
+[WebServer]   25 |  import { LeftRail } from "./shell/LeftRail";
+[WebServer]   26 |  import { RAIL_LABELS, splitRail } from "./shell/railLayout";
+[WebServer]      |                                          ^
+[WebServer]   27 |  import { Drawer } from "./design/primitives/Drawer";
+[WebServer]   28 |  import { TopBar } from "./shell/TopBar";
+
+[WebServer] 12:14:02 PM [vite] (client) Pre-transform error: Failed to resolve import "./shell/railLayout" from "src/App.tsx". Does the file exist?
+[WebServer]   Plugin: vite:import-analysis
+[WebServer]   File: /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/App.tsx:57:39
+[WebServer]   24 |  import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
+[WebServer]   25 |  import { LeftRail } from "./shell/LeftRail";
+[WebServer]   26 |  import { RAIL_LABELS, splitRail } from "./shell/railLayout";
+[WebServer]      |                                          ^
+[WebServer]   27 |  import { Drawer } from "./design/primitives/Drawer";
+[WebServer]   28 |  import { TopBar } from "./shell/TopBar";
+
+  1) keyboard/refresh-sign-in.spec.ts:86:1 › a refresh with a live identity-provider session lands signed in, on Home, without the screen 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: /, Ada$/, level: 1 })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('heading', { name: /, Ada$/, level: 1 }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: /, Ada$/, level: 1 })
+
+
+      88 |   await fakeIdentityProviderAndConduit(page, idp);
+      89 |   await page.goto("/");
+    > 90 |   await expect(home(page)).toBeVisible();
+         |                            ^
+      91 |   await expect(signInScreen(page)).toHaveCount(0);
+      92 |
+      93 |   await page.reload();
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:90:28
+
+    Error Context: test-results/refresh-sign-in-a-refresh--dcb5c--on-Home-without-the-screen/error-context.md
+
+
+[2/4] keyboard/refresh-sign-in.spec.ts:100:1 › a refresh in Admin lands in Admin, not on Home
+[WebServer] 12:14:08 PM [vite] (client) Pre-transform error: Failed to resolve import "./shell/railLayout" from "src/App.tsx". Does the file exist?
+[WebServer]   Plugin: vite:import-analysis
+[WebServer]   File: /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/App.tsx:57:39
+[WebServer]   24 |  import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
+[WebServer]   25 |  import { LeftRail } from "./shell/LeftRail";
+[WebServer]   26 |  import { RAIL_LABELS, splitRail } from "./shell/railLayout";
+[WebServer]      |                                          ^
+[WebServer]   27 |  import { Drawer } from "./design/primitives/Drawer";
+[WebServer]   28 |  import { TopBar } from "./shell/TopBar";
+
+[WebServer] 12:14:08 PM [vite] Internal server error: Failed to resolve import "./shell/railLayout" from "src/App.tsx". Does the file exist?
+[WebServer]   Plugin: vite:import-analysis
+[WebServer]   File: /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/App.tsx:57:39
+[WebServer]   24 |  import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
+[WebServer]   25 |  import { LeftRail } from "./shell/LeftRail";
+[WebServer]   26 |  import { RAIL_LABELS, splitRail } from "./shell/railLayout";
+[WebServer]      |                                          ^
+[WebServer]   27 |  import { Drawer } from "./design/primitives/Drawer";
+[WebServer]   28 |  import { TopBar } from "./shell/TopBar";
+[WebServer]       at TransformPluginContext._formatLog (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8766:39)
+[WebServer]       at TransformPluginContext.error (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8763:14)
+[WebServer]       at normalizeUrl (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26632:18)
+[WebServer]       at async file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26702:30
+[WebServer]       at async Promise.all (index 25)
+[WebServer]       at async TransformPluginContext.transform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26668:4)
+[WebServer]       at async EnvironmentPluginContainer.transform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8545:14)
+[WebServer]       at async loadAndTransform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:20184:26)
+
+  2) keyboard/refresh-sign-in.spec.ts:100:1 › a refresh in Admin lands in Admin, not on Home ───────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: /, Ada$/, level: 1 })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('heading', { name: /, Ada$/, level: 1 }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: /, Ada$/, level: 1 })
+
+
+      102 |   await fakeIdentityProviderAndConduit(page, idp);
+      103 |   await page.goto("/");
+    > 104 |   await expect(home(page)).toBeVisible();
+          |                            ^
+      105 |   await openAdmin(page);
+      106 |   await expect(admin(page)).toBeVisible();
+      107 |
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:104:28
+
+    Error Context: test-results/refresh-sign-in-a-refresh--f49b9--lands-in-Admin-not-on-Home/error-context.md
+
+
+[3/4] keyboard/refresh-sign-in.spec.ts:114:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated
+[WebServer] 12:14:13 PM [vite] (client) Pre-transform error: Failed to resolve import "./shell/railLayout" from "src/App.tsx". Does the file exist?
+[WebServer]   Plugin: vite:import-analysis
+[WebServer]   File: /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/App.tsx:57:39
+[WebServer]   24 |  import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
+[WebServer]   25 |  import { LeftRail } from "./shell/LeftRail";
+[WebServer]   26 |  import { RAIL_LABELS, splitRail } from "./shell/railLayout";
+[WebServer]      |                                          ^
+[WebServer]   27 |  import { Drawer } from "./design/primitives/Drawer";
+[WebServer]   28 |  import { TopBar } from "./shell/TopBar";
+
+[WebServer] 12:14:13 PM [vite] Internal server error: Failed to resolve import "./shell/railLayout" from "src/App.tsx". Does the file exist?
+[WebServer]   Plugin: vite:import-analysis
+[WebServer]   File: /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/App.tsx:57:39
+[WebServer]   24 |  import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
+[WebServer]   25 |  import { LeftRail } from "./shell/LeftRail";
+[WebServer]   26 |  import { RAIL_LABELS, splitRail } from "./shell/railLayout";
+[WebServer]      |                                          ^
+[WebServer]   27 |  import { Drawer } from "./design/primitives/Drawer";
+[WebServer]   28 |  import { TopBar } from "./shell/TopBar";
+[WebServer]       at TransformPluginContext._formatLog (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8766:39)
+[WebServer]       at TransformPluginContext.error (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8763:14)
+[WebServer]       at normalizeUrl (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26632:18)
+[WebServer]       at async file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26702:30
+[WebServer]       at async Promise.all (index 25)
+[WebServer]       at async TransformPluginContext.transform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26668:4)
+[WebServer]       at async EnvironmentPluginContainer.transform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8545:14)
+[WebServer]       at async loadAndTransform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:20184:26)
+
+  3) keyboard/refresh-sign-in.spec.ts:114:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Sign in', exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('heading', { name: 'Sign in', exact: true }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: 'Sign in', exact: true })
+
+
+      116 |   await fakeIdentityProviderAndConduit(page, idp);
+      117 |   await page.goto("/");
+    > 118 |   await expect(signInScreen(page)).toBeVisible();
+          |                                    ^
+      119 |   await expect(page.getByText("You see only what your role, clearance and cases allow.", { exact: false })).toBeVisible();
+      120 |   // Nothing about an error the person never met: the plain screen.
+      121 |   await expect(page.getByText(/could not be completed|could not be started/)).toHaveCount(0);
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:118:36
+
+    Error Context: test-results/refresh-sign-in-a-refresh--a6cf7-ilent-round-is-not-repeated/error-context.md
+
+
+[4/4] keyboard/refresh-sign-in.spec.ts:127:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home
+[WebServer] 12:14:19 PM [vite] (client) Pre-transform error: Failed to resolve import "./shell/railLayout" from "src/App.tsx". Does the file exist?
+[WebServer]   Plugin: vite:import-analysis
+[WebServer]   File: /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/App.tsx:57:39
+[WebServer]   24 |  import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
+[WebServer]   25 |  import { LeftRail } from "./shell/LeftRail";
+[WebServer]   26 |  import { RAIL_LABELS, splitRail } from "./shell/railLayout";
+[WebServer]      |                                          ^
+[WebServer]   27 |  import { Drawer } from "./design/primitives/Drawer";
+[WebServer]   28 |  import { TopBar } from "./shell/TopBar";
+
+[WebServer] 12:14:19 PM [vite] Internal server error: Failed to resolve import "./shell/railLayout" from "src/App.tsx". Does the file exist?
+[WebServer]   Plugin: vite:import-analysis
+[WebServer]   File: /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/App.tsx:57:39
+[WebServer]   24 |  import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
+[WebServer]   25 |  import { LeftRail } from "./shell/LeftRail";
+[WebServer]   26 |  import { RAIL_LABELS, splitRail } from "./shell/railLayout";
+[WebServer]      |                                          ^
+[WebServer]   27 |  import { Drawer } from "./design/primitives/Drawer";
+[WebServer]   28 |  import { TopBar } from "./shell/TopBar";
+[WebServer]       at TransformPluginContext._formatLog (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8766:39)
+[WebServer]       at TransformPluginContext.error (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8763:14)
+[WebServer]       at normalizeUrl (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26632:18)
+[WebServer]       at async file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26702:30
+[WebServer]       at async Promise.all (index 25)
+[WebServer]       at async TransformPluginContext.transform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:26668:4)
+[WebServer]       at async EnvironmentPluginContainer.transform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:8545:14)
+[WebServer]       at async loadAndTransform (file:///root/osprey-runs/admin/OspreyFlow_Core/node_modules/vite/dist/node/chunks/node.js:20184:26)
+
+  4) keyboard/refresh-sign-in.spec.ts:127:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.click: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /^Open Admin/ })
+
+
+      82 | const home = (page: Page) => page.getByRole("heading", { level: 1, name: /, Ada$/ });
+      83 | const admin = (page: Page) => page.getByRole("navigation", { name: "Admin sections" });
+    > 84 | const openAdmin = (page: Page) => page.getByRole("button", { name: /^Open Admin/ }).click();
+         |                                                                                     ^
+      85 |
+      86 | test("a refresh with a live identity-provider session lands signed in, on Home, without the screen", async ({ page }) => {
+      87 |   const idp = { session: true, silentRounds: 0 };
+        at openAdmin (/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:84:85)
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:131:9
+
+    Error Context: test-results/refresh-sign-in-the-place--36790-vider-session-opens-on-Home/error-context.md
+
+
+  4 failed
+    keyboard/refresh-sign-in.spec.ts:86:1 › a refresh with a live identity-provider session lands signed in, on Home, without the screen 
+    keyboard/refresh-sign-in.spec.ts:100:1 › a refresh in Admin lands in Admin, not on Home ────────
+    keyboard/refresh-sign-in.spec.ts:114:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated 
+    keyboard/refresh-sign-in.spec.ts:127:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home 
+Wall time: 80 s, exit 1 (no stack, no lease; set-up before it 11 s)
