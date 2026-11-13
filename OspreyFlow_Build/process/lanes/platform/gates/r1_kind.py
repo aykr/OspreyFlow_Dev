@@ -691,9 +691,9 @@ def checks() -> None:
     ok("it is mapped", r.status_code == 200, r.text[:300])
     for step in ("verify", "publish"):
         r = c.post(f"{base}/recipes/{rid}/{step}", headers=admin, json={})
-        ok(f"it is {step}{'ied' if step == 'verify' else 'ed'}", r.status_code == 200, r.text[:300])
+        ok(f"it is {'verified' if step == 'verify' else 'published'}", r.status_code == 200, r.text[:300])
     r = c.post(f"{base}/recipes/{rid}/run", headers=admin, json={})
-    ok("it runs, and makes entities", r.status_code == 200 and len(r.json().get("created_node_ids", [])) > 0, r.text[:300])
+    ok("it runs, and makes entities", r.status_code == 200 and r.json().get("nodes_created", 0) > 0, r.text[:300])
     r = c.post(f"/v1/investigations/{case}/search", headers=admin, json={"query": "R1Synthetic", "limit": 5})
     ok("what it loaded is found", r.status_code == 200 and r.json().get("nodes"), r.text[:300])
     for _ in range(30):
