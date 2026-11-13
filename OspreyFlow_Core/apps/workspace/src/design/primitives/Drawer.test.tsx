@@ -63,3 +63,32 @@ it("closes on an Escape pressed as soon as it is in the page", async () => {
   );
   expect(closed).toBe(1);
 });
+
+// ADR-145 Amendment 14 decision 2 (the owner, 13 November 2026: "the Cases panel covers the top
+// navigation"): a drawer opens under the workspace's top bar, and so under the GOV.UK header above it,
+// never over them; where there is no top bar (a harness, Admin's own frame) it starts at the top as before.
+it("opens under the top bar, never over the navigation above it", () => {
+  const bar = document.createElement("header");
+  bar.className = "top-bar";
+  bar.getBoundingClientRect = () => ({ top: 72, bottom: 112, left: 0, right: 1440, width: 1440, height: 40, x: 0, y: 72, toJSON: () => ({}) });
+  document.body.append(bar);
+  try {
+    render(
+      <Drawer open onClose={() => undefined} title="Cases">
+        <p>body</p>
+      </Drawer>,
+    );
+    expect(screen.getByRole("dialog", { name: "Cases" }).style.top).toBe("112px");
+  } finally {
+    bar.remove();
+  }
+});
+
+it("starts at the top where there is no top bar", () => {
+  render(
+    <Drawer open onClose={() => undefined} title="Cases">
+      <p>body</p>
+    </Drawer>,
+  );
+  expect(screen.getByRole("dialog", { name: "Cases" }).style.top).toBe("");
+});
