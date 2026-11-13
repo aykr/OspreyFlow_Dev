@@ -1,0 +1,19 @@
+=== plant B1-no-split (d4c0097, working tree with the cap)
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_a_batch_over_the_cap_goes_as_several_requests_each_within_it
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_the_cap_counts_bytes_not_characters
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_the_indexer_drains_a_batch_over_the_cap
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_the_rebuild_sends_within_the_cap
+4 failed, 5 passed in 0.59s
+=== plant B2-no-alone-check (d4c0097, working tree with the cap)
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_one_action_alone_over_the_cap_is_raised_and_nothing_sent
+1 failed, 8 passed in 0.57s
+=== plant B3-characters (d4c0097, working tree with the cap)
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_the_cap_counts_bytes_not_characters
+1 failed, 8 passed in 0.55s
+=== plant B4-413-swallowed (d4c0097, working tree with the cap)
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_a_413_is_raised_and_the_outbox_keeps_the_batch
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_a_413_in_the_rebuild_is_raised_and_the_alias_not_moved
+2 failed, 7 passed in 0.54s
+=== plant B5-cap-20mib (d4c0097, working tree with the cap)
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_the_cap_is_ten_mib
+1 failed, 8 passed in 0.62s

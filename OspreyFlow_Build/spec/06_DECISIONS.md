@@ -37032,6 +37032,15 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    once and every write is idempotent (a document is the node's current state, keyed by its id). It runs in the
    worker process on every shape that has an OpenSearch (ROUTE_052 requirement f), and does nothing where none is
    configured.
+   - **Each `_bulk` request is at most 10 MiB** (`indexer.MAX_BULK_BYTES`, the smallest `http.max_content_length`
+     of an Amazon OpenSearch instance), counted in the bytes the client sends, written by its own serialiser; the
+     indexer and the rebuild both send through `write_actions`, which cuts a larger batch into several requests and
+     never parts an action from its document. One action over the cap on its own is raised (`BulkTooLarge`, naming
+     the node) and nothing of the batch is sent. A 413 from OpenSearch is raised, never swallowed: the batch stays in
+     its outbox, the rebuild fails and its alias does not move. `tests/services/search_index/test_bulk_cap.py` holds
+     each sentence against a stand-in that refuses an oversized body with OpenSearch's 413; its five plants (no
+     split, no check of one action alone, characters counted for bytes, the 413 swallowed, the cap at 20 MiB) are
+     each red (`process/lanes/rules/v052-index/bulk-cap-plants.txt`).
 3. **One document per node, keyed by the node's id.** Never one per file (a Document's `object_ref` is
    content-addressed, so two Document nodes with different handling can share one) and never one per merged entity.
    **No cluster or `SAME_AS` field:** a cluster id would tell a reader that hidden members exist. Merged entities are
