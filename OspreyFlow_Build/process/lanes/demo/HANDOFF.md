@@ -22,3 +22,5 @@
 **Queued (orchestrator's word):** the slim header; the rail with Help; refresh. After the demo: the memory cap (`resources.memory_gib` 62 → 24, one `apply`, check, record ArcadeDB's heap and free memory; "unload when idle" needs code: `OLLAMA_KEEP_ALIVE` is fixed at -1 in `harness/render.py`); R1.
 
 **Open:** certificate renewal is manual before 10 Feb 2027 (DNS-01); remove the four demo accounts before anything goes public; the GOV.UK header still shows the crown; Superset's login has no banner; `install.yaml` names the old address.
+
+**Last commit before this pause:** 1aaa354. Nothing was running at the pause; the next session must not redo any deploy listed above.
