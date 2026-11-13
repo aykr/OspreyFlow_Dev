@@ -12,6 +12,20 @@ count records).
    test-file coverage check stays red on rules' branch, so 3c cannot merge to main. B does not wait on it: rules
    loads from its branch head.
 
+2. **The POC seed path vs the poc's marking ceiling (platform, ADR-148 Am 14).** Spec 08's synthetic data holds
+   SECRET items: HMP's network writes a SECRET conflict (`hmp_network.py:427`), and Fixture Corp writes a SECRET
+   edge (`fixture_corp.py:383`). The cloud-platform profile's default ceiling is OFFICIAL-SENSITIVE
+   (`harness/site.py:358`), so on a default poc the seed is refused partway through. Platform is building the safe
+   part regardless: the seed refuses **before any write** when the ceiling is below what it needs, naming both.
+   Your choice:
+   - **(a) platform's recommendation:** step 9 says a POC shown with spec 08's data declares
+     `site.highest_marking: SECRET` in its osprey.yaml. That is the client's choice, and the seed refuses otherwise.
+   - **(b)** The poc seed loads only what is at or below the ceiling. Spec 08's rows that rest on those SECRET items
+     are then missing on a POC (a cut of what spec 08 requires).
+   - **(c)** A POC variant of the two packs, re-marked at or below OFFICIAL-SENSITIVE with a restricted handling code
+     standing in for SECRET. This keeps every spec 08 row, but the scenarios' access cases then test codes, not
+     clearance.
+
 ## Done overnight
 
 - Landed and pushed: deps-opensearch, step 2 (the manifest), step 3a with data safety and docs' D2/D3/D8,
