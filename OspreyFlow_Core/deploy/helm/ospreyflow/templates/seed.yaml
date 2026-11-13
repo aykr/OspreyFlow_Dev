@@ -33,6 +33,9 @@ spec:
         {{- include "ospreyflow.labels" $ctx | nindent 8 }}
     spec:
       backoffLimit: 0
+      # Never longer than step 9 waits for it (5 minutes to start, 30 to run): a Job the block gave up
+      # on cannot write on beside the Conduit it puts back.
+      activeDeadlineSeconds: 2100
       template:
         metadata:
           labels:

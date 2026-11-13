@@ -45,3 +45,76 @@ FAILED tests/harness/test_cloud_platform_seed.py::test_a_failed_seed_puts_the_co
 FAILED tests/harness/test_cloud_platform_seed.py::test_the_seed_is_refused_while_the_conduits_pods_are_still_there
 4 failed, 5 passed in 1.92s
 Green: tests/harness, tests/cp_policy_check (Helm's cases skipped on the Mac), the seed suites: 1709 passed, 448 skipped (ClickHouse's B18 parameter deselected offline). The Helm-backed cases (the seed's keys and token; every rendered CronJob listed) run on the server, with their red by the allowlist entry removed.
+
+=== The reviews of 062a352 (my lane-reviewer's and the orchestrator's), round 1 ===
+
+Corrections to this record's earlier claims: B18's ClickHouse parameter was deselected in every run above, so 'B18 held on the live ClickHouse' (3194b30's message, the first Am 14 and friction row) was not shown; it is a leased run below or the step is not done. The Helm-backed cases' red was claimed, not recorded: it is recorded from the server below.
+
+The ceiling refused before any write, the unit from the people store (refused unsigned-in), the seeds given the case's unit, red first:
+FAILED tests/test_seed_poc.py::test_the_seeds_markings_are_the_packs_declared_ones
+FAILED tests/test_seed_poc.py::test_the_unit_is_the_first_administrators_own_from_their_sign_in
+FAILED tests/test_seed_poc.py::test_a_first_administrator_not_yet_signed_in_is_refused[never recorded]
+FAILED tests/test_seed_poc.py::test_a_first_administrator_not_yet_signed_in_is_refused[added ahead of sign-in]
+4 failed, 1 passed, 9 errors in 1.72s
+(9 errors at setup: the fixture now patches seed_poc._unit, which did not exist)
+
+Step 9 (no trap; Jobs left running; copies at none; backups not held; rebuild unbounded), red first:
+        [("never-starts", "did not start"), ("overruns", "ran past"), ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and the
+        [("never-starts", "did not start"), ("overruns", "ran past"), ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and the
+E         seed-20261113t232112 failed: read its log above; the Conduit and the worker are back
+E       assert (1 != 0 and 'ran past' in 'seed: c1\nseed: done, hmp, fixture-corp, scenarios in case c1\nseed-20261113t232112 failed: read its log above; the Conduit and the worker are back\n')
+_ test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[seed-fails-failed] _
+scenario = 'seed-fails', says = 'failed'
+        [("never-starts", "did not start"), ("overruns", "ran past"), ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and the
+        [("never-starts", "did not start"), ("overruns", "ran past"), ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and the
+__________________ test_a_failed_rebuild_is_deleted_and_named __________________
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5629/test_a_failed_rebuild_is_delet0')
+    def test_a_failed_rebuild_is_deleted_and_named(tmp_path: Any) -> None:
+        assert code != 0 and "search-rebuild-" in said and "failed" in said
+E        +  where False = any(<generator object test_a_failed_rebuild_is_deleted_and_named.<locals>.<genexpr> at 0x10741b030>)
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[never-starts-did not start]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[overruns-ran past]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[seed-fails-failed]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[create-fails-could not be started]
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_backups_are_held_for_the_seeds_length
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_conduit_already_at_none_is_refused_before_anything_changes
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_failed_rebuild_is_deleted_and_named
+7 failed, 10 passed in 6.30s
+
+Plant (step 9 without its exit trap; fresh PYTHONPYCACHEPREFIX):
+_________ test_a_failed_seed_puts_the_conduit_back_then_stops_by_name __________
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5659/test_a_failed_seed_puts_the_co0')
+    def test_a_failed_seed_puts_the_conduit_back_then_stops_by_name(tmp_path) -> None:  # type: ignore[no-untyped-def]
+        assert code != 0 and "seed-" in said and "failed" in said
+            ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and
+            ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and
+_ test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[seed-fails-failed] _
+scenario = 'seed-fails', says = 'failed'
+            ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and
+            ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_seed_runs_with_the_conduit_and_worker_at_none_then_puts_them_back
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_failed_seed_puts_the_conduit_back_then_stops_by_name
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[never-starts-did not start]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[overruns-ran past]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[seed-fails-failed]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[create-fails-could not be started]
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_backups_are_held_for_the_seeds_length
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_seed_is_refused_while_the_conduits_pods_are_still_there
+8 failed, 8 passed in 6.05s
+
+HMP's rerun at _run (the graph here, its events lost), red first:
+E           assert 0 == 1
+FAILED tests/test_seed_hmp_rerun.py::test_a_rerun_over_a_graph_whose_events_were_lost_refuses_in_words
+1 failed, 2 passed in 1.55s
+
+The restore's writers (the seed left out), red first: FAILED tests/harness/test_cloud_platform_seed.py::test_a_restore_refuses_to_run_beside_the_seed
+
+Green: tests/harness, tests/cp_policy_check, tests/cloud_platform_backup, the seed suites and scenarios/test_hmp_network: 1880 passed, 499 skipped (the ClickHouse parameters deselected offline; the Helm cases skipped on the Mac). One run of tests/cloud_platform_backup earlier showed 1 failed, 180 passed, not reproduced in two reruns (181 passed); its name was not captured, so it is watched in the gates.

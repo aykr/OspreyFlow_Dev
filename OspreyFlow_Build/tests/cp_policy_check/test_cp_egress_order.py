@@ -446,8 +446,16 @@ def test_every_cronjob_the_poc_chart_renders_is_in_the_manifest() -> None:
     """ADR-148 Amendment 12, rendered and not listed, read from Helm's own output rather than from
     the values keys the manifest's builder already knows: a new standing Job (the seed's, Amendment
     14) was invisible to the both-ways check while the manifest read only the keys it knew."""
-    from harness.cloud_platform import manifest
+    from harness.cloud_platform import SEED_JOB, manifest
 
     docs, _, _ = _render("poc")
     rendered = {d["metadata"]["name"] for d in docs if d["kind"] == "CronJob"}
-    assert rendered - set(manifest.load()["jobs"]) == set()
+    listed = manifest.load()["jobs"]
+    assert rendered - set(listed) == set()
+    # And the other way: every CronJob the manifest lists is one Helm renders.
+    assert {n for n, j in listed.items() if j["kind"] == "CronJob"} - rendered == set()
+    # The seed's own, as rendered: held suspended, bounded, no token.
+    seed = next(d for d in docs if d["kind"] == "CronJob" and d["metadata"]["name"] == SEED_JOB)
+    assert seed["spec"]["suspend"] is True
+    assert seed["spec"]["jobTemplate"]["spec"]["activeDeadlineSeconds"] == 2100
+    assert pod_spec(seed)["automountServiceAccountToken"] is False

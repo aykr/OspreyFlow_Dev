@@ -302,20 +302,14 @@ def search_index_values(
 #: The POC seed path's standing Job (ADR-148 Amendment 14): spec 08's seeds, started by the install
 #: runbook's optional block with the Conduit and the worker scaled to none.
 SEED_JOB = "ospreyflow-seed"
-#: What the seed reads of the case store's (the platform's RDS secret), as the Conduit is given it.
-_SEED_POSTGRES = ("POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "OSPREY_POSTGRES_USER",
-                  "POSTGRES_PASSWORD", "OSPREY_POSTGRES_PASSWORD", "POSTGRES_DB", "OSPREY_POSTGRES_DB")  # fmt: skip
-
-
 def seed_values(config: OspreyConfig, workloads: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """The chart's `seed` (the poc shape alone): the Conduit's image and size, the case store's
-    address and credentials as the Conduit has them, the graph's and ClickHouse's passwords by name,
-    and the case's unit (the tenant's own); nothing else of ours, and no AWS identity."""
+    address and credentials as the Conduit has them, and the graph's and ClickHouse's passwords by
+    name; nothing else of ours, and no AWS identity. The case's unit is not rendered: `seed_poc`
+    reads the first administrator's own from the people store at the run."""
     api = next(w for w in workloads if w["name"] == "api")
-    claims = _cp(config).claims
-    assert claims is not None  # the render refuses this profile without them
-    groups = getattr(claims.org_unit, "groups", None) or {}
-    unit = sorted(set(groups.values()))[0] if groups else "unit-1"
+    # The case store's, as the Conduit is given them: the platform's RDS secret's variables alone.
+    postgres = {name for name, (secret, _key) in managed_variables(config).items() if secret == "postgres"}
     return {
         "name": SEED_JOB,
         "label": "seed",
@@ -323,10 +317,9 @@ def seed_values(config: OspreyConfig, workloads: Sequence[dict[str, Any]]) -> di
         "resources": copy.deepcopy(api["resources"]),
         "command": ["/app/.venv/bin/python", "-m", "scripts.seed_poc"],
         "env": [
-            *(copy.deepcopy(e) for e in api.get("env", []) if e["name"] in _SEED_POSTGRES),
+            *(copy.deepcopy(e) for e in api.get("env", []) if e["name"] in postgres),
             {"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"},
             {"name": "CLICKHOUSE_PASSWORD", "secret": "CLICKHOUSE_PASSWORD"},
-            {"name": "OSPREY_ORG_UNIT", "value": unit},
         ],
     }
 
@@ -1240,7 +1233,10 @@ def render_cloud_platform(
         "podSecurity": {"user": UID, "group": UID},
         "networkPolicy": {"openEgress": False},
         # P9's backup and restore pods render beside the workloads; their rows by their names.
-        "egress": egress_policy(config, platform, profile, workloads, others=profile.egress.others),
+        # The seed's row only where its Job is rendered (the poc shape): no store admits a pod of
+        # that name elsewhere (ADR-148 Amendment 14).
+        "egress": egress_policy(config, platform, profile, workloads, others=[
+            o for o in profile.egress.others if o != "seed" or _cp(config).shape == "poc"]),
         "ingress": _ingress(config, platform, names, profile, environment),
         "environment": environment,
         "files": {

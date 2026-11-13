@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+import pytest
 from harness.cloud_platform import SEED_JOB
 
 from tests.harness.test_cloud_platform_render import _artefacts, _config, _values
@@ -49,8 +50,8 @@ def test_the_seed_holds_the_stores_it_writes_and_nothing_else_of_ours() -> None:
     ):
         assert needed in names
     assert not any(n.startswith(("VALKEY", "LITELLM", "OPENSEARCH", "MINIO")) for n in names)
-    # The case's unit: the tenant's own (claims.org_unit), not a default of the seed's.
-    assert {"name": "OSPREY_ORG_UNIT", "value": "unit-1"} in seed["env"]
+    # The case's unit is not rendered: the first administrator's own, from the people store.
+    assert "OSPREY_ORG_UNIT" not in names
 
 
 def test_the_seed_reaches_the_graph_clickhouse_and_the_case_store_alone() -> None:
@@ -62,22 +63,18 @@ def test_the_seed_reaches_the_graph_clickhouse_and_the_case_store_alone() -> Non
 
 
 def test_the_seed_is_the_pocs_alone() -> None:
-    assert "seed" not in _values(_config("development"))
-    assert "seed" not in _values(_config("production"))
+    for shape in ("development", "production"):
+        values = _values(_config(shape))
+        assert "seed" not in values
+        # No row either: no store admits a pod of that name where no seed is rendered.
+        assert "seed" not in [w["name"] for w in values["egress"]["workloads"]]
 
 
-def test_the_chart_renders_it_suspended_with_no_token() -> None:
-    chart = _artefacts(
-        _config("poc")
-    )  # the render's own files; the chart's template is checked by Helm
-    from harness.render import REPO_ROOT
-
-    template = (REPO_ROOT / "deploy/helm/ospreyflow/templates/seed.yaml").read_text(
-        encoding="utf-8"
-    )
-    assert "suspend: true" in template and "automountServiceAccountToken: false" in template
-    assert re.search(r"backoffLimit: 0", template)
-    assert "values.yaml" in chart
+def test_a_restore_refuses_to_run_beside_the_seed() -> None:
+    """ADR-148 Amendment 13 point 4: a restore refuses to run beside any pod that writes the stores
+    it replaces. The seed writes the graph and ClickHouse, so it is one of the restore's writers."""
+    values = _values(_config("poc"))
+    assert "seed" in values["backups"]["writers"]
 
 
 # -- the install runbook's optional seed block, run as written against a stub kubectl
@@ -85,17 +82,21 @@ def test_the_chart_renders_it_suspended_with_no_token() -> None:
 
 _KUBECTL = r"""#!/bin/bash
 # kubectl for the seed block: each call logged; the pods, the Jobs and their outcomes as $SCENARIO
-# says (ok | seed-fails | pods-stay).
+# says (ok | seed-fails | pods-stay | never-starts | overruns | create-fails | at-none |
+# rebuild-fails).
 echo "$*" >> "$CALLS"
 case "$*" in
-  *"get deployment/api"*"replicas"*) echo 2 ;;
+  *"get deployment/api"*"replicas"*) [ "$SCENARIO" = at-none ] && echo 0 || echo 2 ;;
   *"get deployment/worker"*"replicas"*) echo 1 ;;
   *"wait --for=delete pod"*) [ "$SCENARIO" != pods-stay ] ;;
-  *"create job"*) echo created ;;
+  *"create job"*"ospreyflow-seed"*) [ "$SCENARIO" != create-fails ] ;;
+  *"create job"*) true ;;
+  *"get pod"*"seed-"*"phase"*) [ "$SCENARIO" = never-starts ] && echo Pending || echo Succeeded ;;
   *"get pod"*"phase"*) echo Succeeded ;;
-  *"wait --for=jsonpath={.status.conditions[0].status}=True"*) true ;;
+  *"wait --for=jsonpath"*"job/seed-"*) [ "$SCENARIO" != overruns ] ;;
+  *"wait --for=jsonpath"*) true ;;
   *"get job seed-"*"succeeded"*) [ "$SCENARIO" = seed-fails ] || echo 1 ;;
-  *"get job search-"*"succeeded"*) echo 1 ;;
+  *"get job search-"*"succeeded"*) [ "$SCENARIO" = rebuild-fails ] || echo 1 ;;
   *"logs job/seed-"*) printf 'seed: c1\nseed: done, hmp, fixture-corp, scenarios in case c1\n' ;;
   *logs*) echo "search index rebuilt" ;;
   *) true ;;
@@ -160,16 +161,73 @@ def test_the_seed_runs_with_the_conduit_and_worker_at_none_then_puts_them_back(t
 def test_a_failed_seed_puts_the_conduit_back_then_stops_by_name(tmp_path) -> None:  # type: ignore[no-untyped-def]
     code, said, calls = _run_seed(tmp_path, "seed-fails")
     assert code != 0 and "seed-" in said and "failed" in said
-    assert any("deployment/api" in c and "--replicas=2" in c for c in calls), (
-        "left the Conduit at none"
-    )
+    assert _back(calls), "left the Conduit at none"
     assert not any("search-rebuild" in c for c in calls if "create job" in c)
+
+
+def _back(calls: list[str]) -> bool:
+    """The Conduit and the worker put back at their noted copies, and the backups resumed."""
+    api = any("deployment/api" in c and "--replicas=2" in c for c in calls)
+    worker = any("deployment/worker" in c and "--replicas=1" in c for c in calls)
+    backups = any("ospreyflow-backup" in c and '"suspend":false' in c for c in calls)
+    return api and worker and backups
+
+
+@pytest.mark.parametrize(
+    ("scenario", "says"),
+    [
+        ("never-starts", "did not start"),
+        ("overruns", "ran past"),
+        ("seed-fails", "failed"),
+        ("create-fails", "could not be started"),
+    ],
+)
+def test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back(
+    tmp_path: Any, scenario: str, says: str
+) -> None:
+    """A Job that did not start, ran past its bound or failed is deleted before the Conduit and
+    the worker are put back, so it can never write beside them; then the failure is named."""
+    code, said, calls = _run_seed(tmp_path, scenario)
+    assert code != 0 and says in said, said
+    assert _back(calls), "left the Conduit, the worker or the backups stopped"
+    if scenario != "create-fails":
+        deleted = next(
+            i for i, c in enumerate(calls) if c.startswith("-n ospreyflow-poc delete job seed-")
+        )
+        put_back = next(
+            i for i, c in enumerate(calls) if "deployment/api" in c and "--replicas=2" in c
+        )
+        assert deleted < put_back
+    assert not any("search-rebuild" in c for c in calls if "create job" in c)
+
+
+def test_the_backups_are_held_for_the_seeds_length(tmp_path: Any) -> None:
+    """The daily backup must not catch the seed halfway: suspended before the Conduit stops,
+    resumed when it is back."""
+    code, said, calls = _run_seed(tmp_path, "ok")
+    assert code == 0, said
+    held = next(
+        i for i, c in enumerate(calls) if "ospreyflow-backup" in c and '"suspend":true' in c
+    )
+    stopped = next(i for i, c in enumerate(calls) if "--replicas=0" in c)
+    assert held < stopped and _back(calls)
+
+
+def test_a_conduit_already_at_none_is_refused_before_anything_changes(tmp_path: Any) -> None:
+    """Copies noted as none (a run cut short before) would be put back as none and called back."""
+    code, said, calls = _run_seed(tmp_path, "at-none")
+    assert code != 0 and "at none" in said
+    assert not any("scale" in c or "create job" in c or "patch" in c for c in calls)
+
+
+def test_a_failed_rebuild_is_deleted_and_named(tmp_path: Any) -> None:
+    code, said, calls = _run_seed(tmp_path, "rebuild-fails")
+    assert code != 0 and "search-rebuild-" in said and "failed" in said
+    assert any(c.startswith("-n ospreyflow-poc delete job search-rebuild-") for c in calls)
 
 
 def test_the_seed_is_refused_while_the_conduits_pods_are_still_there(tmp_path) -> None:  # type: ignore[no-untyped-def]
     code, said, calls = _run_seed(tmp_path, "pods-stay")
     assert code != 0 and "still running" in said
     assert not any("create job" in c for c in calls), "seeded beside a running Conduit"
-    assert any("deployment/api" in c and "--replicas=2" in c for c in calls), (
-        "left the Conduit at none"
-    )
+    assert _back(calls), "left the Conduit at none"

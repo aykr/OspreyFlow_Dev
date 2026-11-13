@@ -21,8 +21,10 @@ the real id from `POST /v1/investigations`'s own response (or the Glass's
 
 This writes to both stores a real Conduit reads from: `build_hmp_graph`
 against the same ArcadeDB, then `AnalyticsPort.load_events` against the
-same persistent analytics DuckDB file (`ANALYTICS_DB_PATH`,
-`services/api/config.py`'s own default) — not a bypass of either.
+deployment's own analytics store, the one `OSPREY_ANALYTICS_ENGINE` names
+(DuckDB at `ANALYTICS_DB_PATH`, or ClickHouse; ADR-148 Amendment 14) — not
+a bypass of either. A rerun over a graph already here loads no events, and
+refuses in words when this case's are not there.
 
 Run as `PYTHONPATH=.:packages python -m scripts.seed_hmp_fixture ...` from
 the repo root — this module imports `demo_fixtures.hmp_graph`
@@ -51,6 +53,7 @@ from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
 from demo_fixtures.datasets import HMP
+from demo_fixtures.hmp import generate_hmp_events
 from demo_fixtures.hmp_graph import build_hmp_graph, lookup_person_ids
 from demo_fixtures.hmp_network import (
     FIRST_INCIDENT_REF,
@@ -62,7 +65,7 @@ from demo_fixtures.hmp_population import PRINCIPAL_SUBJECT_PRISON_NUMBER
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
 from ports.graph import GraphPort
-from schemas.analytics import EventRecord
+from schemas.analytics import EventFilter, EventListRequest, EventRecord
 from schemas.domain import Principal
 
 
@@ -159,6 +162,26 @@ async def _run(args: argparse.Namespace) -> int:
     # The deployment's own analytics store (ADR-148 Amendment 14): DuckDB at this path, ClickHouse
     # where the deployment names it; never a file of the seed's own that no Conduit reads.
     async with seed_analytics(args.analytics_db_path, scheme) as analytics:
+        # A rerun over a graph already here writes no events: say so if this case's are not there
+        # (the first run's events write failed after its graph committed), never "loaded" over
+        # nothing (rule 2). Recreating them would mean writing the graph twice.
+        first = generate_hmp_events(investigation_scope=scope)[0].event_id
+        if not any(e.event_id == first for e in events):
+            held = await analytics.list_events(
+                EventListRequest(
+                    filter=EventFilter(investigation_scope=scope, event_ids=[first]), limit=1
+                ),
+                principal,
+            )
+            if not held.events:
+                print(
+                    f"The HMP graph is here, but its events are not in case {scope}'s analytics "
+                    "store: an earlier seed's events write failed after its graph was written. "
+                    "Nothing was loaded; the events cannot be written again without writing the "
+                    "graph twice (restore the backup taken before the seed, then seed again).",
+                    file=sys.stderr,
+                )
+                return 1
         await analytics.load_events(events)
         # Insert-only, keyed by ref: a point already in the partition is not loaded twice.
         wanted = geometry_records()
