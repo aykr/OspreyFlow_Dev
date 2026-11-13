@@ -5,15 +5,17 @@ frozen once the owner has read that page**. Until then it may change only by a m
 Pydantic models in `packages/schemas` (generated to TypeScript) become the source of truth when they land. They
 will match this.
 
-**One route, `POST /v1/search`.** It is extended, not replaced, as `search.py` always said. It has the same right, the
-same audit, and no case check beyond the reader's case datasets. Suggestions stay on `POST /v1/suggest`, with their
-response unchanged (ADR-059 Amendment 1).
+**One route, `POST /v1/investigations/{id}/search`.** It is extended, not replaced, as `search.py` always said. It
+keeps the same right (Investigate), the same case-viewer check and the same audit. The new request fields are
+optional, and the response keeps `nodes`, so today's callers and access tests read it unchanged. Suggestions stay
+on `…/suggest`, with their response unchanged (ADR-059 Amendment 1).
 
 ## Request
 
 ```jsonc
 {
   "query": "Kestrel invoice",        // 1–200 characters; a longer one is refused (422), never cut
+  "limit": 20,                       // today's field, kept; ignored when page_size is given
   "group": null,                     // null = All; an entity type name ("Person"); or "mentions"
   "filters": {
     "datasets": ["ds-…"],            // optional; only the case's own; another is refused (422)
@@ -47,11 +49,11 @@ response unchanged (ADR-059 Amendment 1).
   "page": 1,
   "page_size": 20,
   "more": true,                      // another page exists
+  "nodes": [ /* Node records, today's shape, read from the graph: every node any result names */ ],
   "results": [
     {
       "node_ids": ["01J…", "01J…"],  // every visible record this result stands for (a merged entity: see note 2)
-      "type": "Person",
-      "label": "Kestrel Holdings",   // name or title, read from the graph
+      "type": "Person",              // the label is the Glass's own nodeLabel(nodes[…]), as everywhere else
       "match": {
         "band": "name_sounds",       // identifier | name_exact | name_words | name_sounds | name_typo |
                                      // mention_phrase | mention_words | mention_some
@@ -79,7 +81,7 @@ is one the reader may see.
 1. **What the counts count.** A group counts records, and `mentions` counts documents whose text matched. A Document
    found by its title and in its text counts once in Documents and once in Mentions. It is listed once under All, in
    its better band. `total` is the sum of the groups. Page A's second question asks the owner to confirm this.
-2. **A merged entity** is one result. Its `node_ids` are its visible members only, and its `label` comes from them.
+2. **A merged entity** is one result. Its `node_ids` are its visible members only, and `nodes` holds only those.
    A member the reader may not see adds nothing. It is grouped and counted under its best member's type, once.
 3. **The fallback** (OpenSearch unreachable) is today's exact search:
    - `source: "fallback"` and `limited: true`;
