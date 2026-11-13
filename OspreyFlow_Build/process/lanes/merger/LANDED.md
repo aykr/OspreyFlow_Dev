@@ -67,3 +67,4 @@ f5a6f3d fcdfec4 rules deps-opensearch (v0.5.2)
 19e28e1 6b4bb26 platform v052-manifest (v0.5.2, step 2)
 72c9303 89816c8 platform v052-datasafety (v0.5.2, step 3a and audit ruling 3)
 258b510 7ca69aa docs v052-sweep D2/D3/D8
+89ee482 528fef4 platform-b hygiene (v0.5.2)
