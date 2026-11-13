@@ -359,6 +359,65 @@ for (const brand of ["ospreyflow", "govuk"] as const) {
 }
 
 // ADR-132 Amendment 5 (4 November 2026): no service-name band, so the Glass follows the header.
+// ADR-132 Amendment 8 (the owner's ruling, 13 November 2026): under GOV.UK a workspace screen's top is
+// compact: a slim header (its places kept), the banner on one slim line (its words and landmark kept), and
+// the context bar's "You are in …" folded into the start of its own row (its region and name kept). The
+// OFFICIAL strip and the toolbar are untouched, and so are the dark and light looks and Home. Measured in
+// Chromium at 1440×1000 with the demonstration's banner words, as osprey-small shows them; at main 054f24b
+// the place's content started at 257 px under GOV.UK and at 130 in dark and light.
+const DEMO_WORDS = "Demonstration only: this is not a government service, and all data is synthetic.";
+const top = (page: import("@playwright/test").Page, selector: string) =>
+  page.locator(selector).first().evaluate((e) => { const b = e.getBoundingClientRect(); return { top: b.top, height: b.height, bottom: b.bottom }; });
+
+test("govuk: a case's workspace gains at least 100 px of height, the strip and toolbar untouched", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/keyboard/places-harness.html?banner=1&brand=govuk");
+  const content = await top(page, 'main[aria-label="Place content"]');
+  expect.soft(content.top, "the canvas starts at least 100 px higher than main's 257").toBeLessThanOrEqual(257 - 100);
+  expect.soft((await top(page, ".govuk-header")).height, "a slim header").toBeLessThanOrEqual(48);
+  await expect(page.locator(".govuk-header").getByRole("navigation", { name: "Places" })).toBeVisible();
+  const banner = page.getByRole("region", { name: "Service phase" });
+  await expect(banner).toHaveText(DEMO_WORDS);
+  expect.soft((await top(page, '[aria-label="Service phase"]')).height, "the banner on one slim line").toBeLessThanOrEqual(30);
+  expect((await top(page, ".classification-strip")).height, "the marking strip untouched").toBe(20);
+});
+
+for (const place of ["glass", "ingest", "rules", "admin"] as const) {
+  test(`govuk: the context bar is one row, "You are in" at its start, its region and name kept (${place})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`/keyboard/places-harness.html?banner=1&brand=govuk&place=${place}&rights=investigate,edit_pipelines,triage_alerts,read_alert_queue,manage_people`);
+    const name = { glass: "You are in the Glass", ingest: "You are in the Ingest Studio", rules: "You are in Rules and Monitoring", admin: "You are in Admin" }[place];
+    const region = page.getByRole("region", { name });
+    await expect(region.getByRole("heading", { level: 2, name })).toBeVisible();
+    const bar = await region.evaluate((e) => e.getBoundingClientRect().height);
+    expect(bar, "one row").toBeLessThanOrEqual(40);
+    if (place === "glass") {
+      const title = await region.getByRole("heading", { level: 2 }).boundingBox();
+      const caseSection = await region.getByRole("button", { name: "Case", exact: true }).boundingBox();
+      expect(Math.abs(title!.y + title!.height / 2 - (caseSection!.y + caseSection!.height / 2)), "on the same row as Case").toBeLessThan(6);
+      expect(title!.x, "at the row's start").toBeLessThan(caseSection!.x);
+    }
+  });
+}
+
+for (const theme of ["dark", "light"] as const) {
+  test(`ospreyflow ${theme}: a case's workspace top is as it was`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/keyboard/places-harness.html?banner=1");
+    if (theme === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+    expect((await top(page, 'main[aria-label="Place content"]')).top).toBe(130);
+    expect((await top(page, '[aria-labelledby="context-banner-title"]')).height).toBe(41);
+  });
+}
+
+test("govuk: Home keeps the full header and banner", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/keyboard/start-harness.html?brand=govuk");
+  await expect(page.locator(".govuk-header")).toBeVisible();
+  expect((await top(page, ".govuk-header")).height).toBe(61);
+  expect((await top(page, '[aria-label="Service phase"]')).height).toBe(41);
+});
+
 test("govuk: the header, the Glass and the footer are reached by Tab in that order", async ({ page }) => {
   await page.goto("/keyboard/shell-harness.html?brand=govuk");
   await page.getByRole("link", { name: "Skip to main content" }).waitFor({ state: "attached" });

@@ -77,7 +77,9 @@ export function BrandFrame({
   return (
     <>
       <SkipLink target={MAIN_CONTENT_ID} />
-      <div ref={above}>
+      {/* ADR-132 Amendment 8: under GOV.UK the header and the banner are slim on every workspace screen,
+          by the slim footer's own rule (Home and the sign-in page claim the full frame). */}
+      <div ref={above} className={claims === 0 ? "brand-chrome brand-chrome--compact" : "brand-chrome"}>
         {/* ADR-145 decision 3: the place switcher stands inside the GOV.UK header. */}
         <GovukHeader withPlaces />
         <PhaseBanner phase={appearance.phase} text={appearance.bannerText} />

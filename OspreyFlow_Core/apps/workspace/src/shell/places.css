@@ -48,3 +48,20 @@
 .govuk-notification-banner.context-banner--govuk { margin: 0; }
 .context-banner--govuk .govuk-notification-banner__content { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-8); padding-top: var(--sp-8); padding-bottom: var(--sp-8); }
 .context-banner--govuk .context-banner__cross { margin-left: auto; }
+
+/* ADR-132 Amendment 8 (the owner's ruling, 13 November 2026): under GOV.UK a workspace screen's top is
+   compact. The header slim, its logo smaller and its places kept; the banner on one slim line; the context
+   banner one row with its title at the row's start. Home and the sign-in page keep the full frame
+   (`brand-chrome--compact` is the slim footer's own rule, `brand/BrandFrame.tsx`). */
+[data-brand="govuk"] .brand-chrome--compact .govuk-header__container { padding-top: 4px; padding-bottom: 4px; min-height: 0; row-gap: 0; }
+[data-brand="govuk"] .brand-chrome--compact .govuk-header__logo { margin: 0; padding: 0; line-height: 0; }
+[data-brand="govuk"] .brand-chrome--compact .govuk-header__logotype { height: 20px; width: 108px; }
+/* 24 px: WCAG 2.2's minimum target size (2.5.8). */
+[data-brand="govuk"] .brand-chrome--compact .govuk-places__item { min-height: 24px; padding: 0 var(--sp-8); line-height: 24px; }
+[data-brand="govuk"] .brand-chrome--compact .govuk-phase-banner { padding-top: 1px; padding-bottom: 1px; }
+[data-brand="govuk"] .brand-chrome--compact .govuk-phase-banner__content { margin: 0; font-size: 14px; line-height: 20px; }
+[data-brand="govuk"] .brand-chrome--compact .govuk-phase-banner__content__tag { font-size: 14px; line-height: 16px; padding: 1px var(--sp-4); }
+.govuk-notification-banner.context-banner--folded { border-width: 0 0 0 5px; }
+.context-banner--folded .govuk-notification-banner__content { padding: 2px var(--sp-16); gap: var(--sp-8); }
+.context-banner--folded .govuk-notification-banner__title { margin: 0; font-size: 16px; line-height: 24px; font-weight: 700; color: var(--text-primary); }
+.context-banner--folded :is(.btn, .govuk-link) { min-height: 24px; padding-top: 0; padding-bottom: 0; line-height: 24px; }

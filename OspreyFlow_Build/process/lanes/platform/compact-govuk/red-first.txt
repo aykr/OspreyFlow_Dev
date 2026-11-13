@@ -1,0 +1,27 @@
+# ADR-132 Amendment 8, red first at main 054f24b (13 November 2026, the Mac, Chromium, 1440x1000, the places harness with the demonstration's banner words, CSS px)
+## Before (054f24b): GOV.UK header 61, banner 41, strip 20, toolbar 44, context bar 91 (Admin 59); the canvas at 257. Dark and light: the canvas at 130, the bar 41. Home under GOV.UK: header 61, banner 41.
+## The browser cases at 054f24b, each assertion soft (shell.spec.ts)
+    Error: the canvas starts at least 100 px higher than main's 257
+    Received:    257
+    Error: a slim header
+    Received:    61
+    Error: the banner on one slim line
+    Received:    41
+    Error: one row
+    Received:    91
+    Error: one row
+    Received:    91
+    Error: one row
+    Received:    91
+    Error: one row
+    Received:    59
+  5 failed
+  3 passed (4.4s)
+## The compact rule's unit case, the frame forced compact everywhere
+     × is full while Home or the sign-in page is shown 5ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 9 passed (10)
+## After: header 33, banner 23, strip 20, toolbar 44, the folded row 32; the canvas at 152: 105 CSS px gained (about 139 at the owner's 1.32 scale). Dark, light and Home as before (the same cases green).
+## shell.spec.ts at the head
+  55 passed (8.5s)
+## The full axe scan at the head (every harness, dark, light and GOV.UK): 1030 passed (15.2m)

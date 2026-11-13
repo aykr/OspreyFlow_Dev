@@ -73,8 +73,9 @@ const EXTRA_STATES: Record<string, string[]> = {
   // brand), and the rail's ⋯ More and the top bar's More views drawn open.
   // ADR-146 decision 2: Rules and Monitoring in the switcher with its count (inside the GOV.UK header
   // under that brand), and the place open, its banner a GOV.UK notification banner.
+  // ADR-132 Amendment 8: `banner=1` is the demonstration's deployment, the compact top under GOV.UK.
   "places-harness.html": [
-    "place=ingest", "place=admin", "badge=1", "open=more", "open=views",
+    "place=ingest", "place=admin", "badge=1", "open=more", "open=views", "banner=1", "banner=1&place=rules",
     "badge=1&rights=investigate,triage_alerts,read_alert_queue",
     "place=rules&rights=investigate,triage_alerts,read_alert_queue",
   ],

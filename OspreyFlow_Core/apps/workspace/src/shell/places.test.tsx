@@ -129,12 +129,17 @@ describe("the context banner", () => {
     expect(screen.getByRole("region", { name: "You are in Admin" }).textContent).toBe("You are in Admin");
   });
 
-  it("under GOV.UK starts its line with no separator, the place being the banner's title", () => {
+  // ADR-132 Amendment 8: under GOV.UK the banner is one row, its title at the row's start; no title band.
+  it("under GOV.UK is one row: the place at its start, as the region's heading and name, then each part set off", () => {
     applyBrand("govuk");
     render(<ContextBanner place="glass" sections={[{ id: "case", label: "Case", current: true, onSelect: () => {} }]} datasets={["Prison intel"]} />);
-    const content = document.querySelector(".govuk-notification-banner__content")!;
-    expect(content.firstElementChild?.className).not.toContain("context-banner__sep");
-    expect(content.querySelectorAll(".context-banner__sep").length).toBe(1);
+    const region = screen.getByRole("region", { name: "You are in the Glass" });
+    expect(region.querySelector(".govuk-notification-banner__header")).toBeNull();
+    const content = region.querySelector(".govuk-notification-banner__content")!;
+    expect(content.firstElementChild?.tagName).toBe("H2");
+    expect(content.firstElementChild?.textContent).toBe("You are in the Glass");
+    expect(content.children[1]?.className).toContain("context-banner__sep");
+    expect(content.querySelectorAll(".context-banner__sep").length).toBe(2);
   });
 
   it("carries Monitoring's open count on its section, said in its name", () => {

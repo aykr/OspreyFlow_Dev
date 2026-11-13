@@ -3,7 +3,8 @@
 // "You are in the Ingest Studio · for case Kestrel ▾"; "You are in Rules and Monitoring · Case Kestrel
 // ▾" (ADR-145 Amendment 4 decision 1); "You are in Admin".
 // A person who holds both the Glass and the Studio gets the cross-link between them, which keeps the
-// case they came from. Under the GOV.UK brand it is a GOV.UK notification banner (decision 3).
+// case they came from. Under the GOV.UK brand it is a GOV.UK notification banner (decision 3), folded
+// into one row (ADR-132 Amendment 8).
 //
 // In the Glass the banner carries the place's sections, Case · Boards (decision 1; Monitoring left
 // for Rules and Monitoring, ADR-146 decision 2); *Boards* is drawn as coming until its screens are
@@ -85,17 +86,10 @@ export function useCaseContext(
 
 export function ContextBanner({ place, sections = [], caseSwitcher, datasets, crossLink }: ContextBannerProps) {
   const govuk = currentBrand() === "govuk";
-  // Under GOV.UK the place is the banner's title, so its content line starts with no separator.
-  let first = true;
+  // The place opens the line in both brands (ADR-132 Amendment 8 folded GOV.UK's title into it), so each
+  // part after it is set off by a separator.
   const sepEl = <span className="context-banner__sep" aria-hidden="true">·</span>;
-  const next = () => {
-    if (govuk && first) {
-      first = false;
-      return null;
-    }
-    first = false;
-    return sepEl;
-  };
+  const next = () => sepEl;
   const line = (
     <>
       {sections.length > 0 && (
@@ -154,14 +148,16 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, cr
     </>
   );
   if (govuk) {
+    // ADR-132 Amendment 8 (the owner's ruling, 13 November 2026): one row, not GOV.UK's title band over its
+    // content. "You are in …" is still the region's heading and name, at the start of the row, at its size.
     return (
-      <div className="govuk-notification-banner context-banner--govuk" role="region" aria-labelledby="context-banner-title">
-        <div className="govuk-notification-banner__header">
-          <h2 className="govuk-notification-banner__title" id="context-banner-title">
+      <div className="govuk-notification-banner context-banner--govuk context-banner--folded" role="region" aria-labelledby="context-banner-title">
+        <div className="govuk-notification-banner__content">
+          <h2 className="govuk-notification-banner__title context-banner__place" id="context-banner-title">
             {YOU_ARE_IN[place]}
           </h2>
+          {line}
         </div>
-        <div className="govuk-notification-banner__content">{line}</div>
       </div>
     );
   }

@@ -156,12 +156,14 @@ function Harness() {
           Match strictness <input type="range" min={0} max={2} defaultValue={1} aria-label="Match strictness" />
         </label>
       </div>
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+      <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
         {variant !== "c" && (
           <LeftRail items={railItems} onHelp={() => undefined} />
         )}
+        {/* Under the rail's two items, wherever the row starts: a place from the page's top lay over
+            Explore once the GOV.UK top was made compact (ADR-132 Amendment 8; axe's target-size). */}
         {variant === "b" && (
-          <div style={{ position: "absolute", left: 6, top: 230 }}>
+          <div style={{ position: "absolute", left: 6, top: 84 }}>
             <MoreMenu label="More" compact items={["Ownership", "History", "Questions", "Dashboards"]} />
           </div>
         )}
