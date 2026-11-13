@@ -1,1 +1,2 @@
 At the head, offline on the Mac: tests/harness/test_poc_manifest.py and test_cloud_platform_poc.py: 75 passed. ruff (Core) clean; mypy harness/cloud_platform/manifest.py clean. python -m harness.cloud_platform.manifest check --config tests/fixtures/cloud_platform/poc.yaml (unpinned, as an operator runs it): the render agrees.
+After the rebase onto main 424e32b and ADR-148 Amendment 12: test_adr_reservations, test_spec_doc_paths, test_poc_manifest: 43 passed; tools.adr_reservations_check clean.
