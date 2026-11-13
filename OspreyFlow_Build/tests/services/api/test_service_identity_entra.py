@@ -383,3 +383,14 @@ def test_the_run_api_door_with_a_store_answering_none_or_too_slowly(
         assert answered.status_code == 503 and "could not be read" in answered.text
     else:
         assert answered.status_code not in (403, 503), (answered.status_code, answered.text)
+
+
+@pytest.mark.parametrize("claim", ["azp", "appid"])
+def test_a_client_claim_that_is_a_list_is_refused_on_the_run_api_not_an_error(
+    claim, jwks_url, keypair
+) -> None:
+    """A token is the caller's: a client claim of the wrong shape is refused, never a 500 (the lane
+    review of 2b42dea; the resolver's own case is test_auth_entra_dashboards.py's)."""
+    token = _app_token(keypair, **{claim: [AIRFLOW]})
+    with pytest.raises(ServiceIdentityRefused):
+        _verifier(jwks_url).client_of(token)

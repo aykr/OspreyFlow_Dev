@@ -702,3 +702,25 @@ def test_the_register_route_passes_the_application_id_on(client: Any) -> None:
         "application_id": "dddddddd-eeee-4fff-8000-111111111111"})  # fmt: skip
     assert made.status_code == 201, made.text
     assert client.identity.application_ids == ["dddddddd-eeee-4fff-8000-111111111111"]
+
+
+class _GrantsFail(_Grants):
+    async def revoke_everywhere(self, account_id: str, *, by: Principal) -> list[str]:
+        raise OSError("the case store is down")
+
+
+def test_a_failed_revoke_keeps_the_registration_so_a_retry_still_revokes(client: Any) -> None:
+    """The grants go first, while the registration still names the account: a failure leaves the
+    dashboard registered (its grants and the registration as they were), so removing it again finds
+    the account and revokes (the lane review of 2b42dea)."""
+    app.dependency_overrides[get_investigations] = lambda: _GrantsFail()
+    _as(ADMIN)
+    failed = TestClient(app, raise_server_exceptions=False).delete(
+        "/v1/admin/dashboards/osprey-dashboard-board"
+    )
+    assert failed.status_code == 500
+    assert ("deleted", "osprey-dashboard-board") not in client.identity.made
+    grants = _Grants()
+    app.dependency_overrides[get_investigations] = lambda: grants
+    assert client.delete("/v1/admin/dashboards/osprey-dashboard-board").status_code == 204
+    assert grants.revoked == [("sa-1", ADMIN.id)]

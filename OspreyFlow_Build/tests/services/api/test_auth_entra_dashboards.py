@@ -206,3 +206,13 @@ def test_a_store_too_slow_to_answer_is_a_503_within_the_bound(keypair, jwks_url)
     with pytest.raises(PrincipalLookupUnavailable):
         _resolve(_resolver(jwks_url, _Slow()), app_only_claims(), keypair)
     assert time.monotonic() - started < 10
+
+
+def test_an_audience_that_is_a_list_is_read_as_its_members(keypair, jwks_url) -> None:
+    """PyJWT admits an `aud` list holding the configured audience: its members are the API's own, so
+    a token whose client is one of them is refused, never a 500 (the lane review of 2b42dea)."""
+    dashboards = FakeDashboards()
+    dashboards.rows[(TENANT, CLIENT_ID)] = StoredDashboard(CLIENT_ID, "OFFICIAL", "unit-1", ())
+    with pytest.raises(PrincipalResolutionError, match="client"):
+        _resolve(_resolver(jwks_url, dashboards), app_only_claims(CLIENT_ID, aud=[CLIENT_ID]), keypair)
+    assert _resolve(_resolver(jwks_url, dashboards), app_only_claims(aud=[CLIENT_ID]), keypair).id == DASHBOARD

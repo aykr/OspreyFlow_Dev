@@ -778,7 +778,10 @@ def _verified_dashboard(claims: Mapping[str, Any], mapping: ClaimMapping) -> str
     named = [claims[c] for c in ("azp", "appid") if c in claims]
     texts = all(isinstance(c, str) for c in named)
     client = named[0] if named and texts and len(set(named)) == 1 else None
-    own = {mapping.client_id, mapping.api_client_id, claims.get("aud")}
+    # The audience a verified token names (one, or a list holding the configured one) is the API's.
+    aud = claims.get("aud")
+    audiences = [aud] if isinstance(aud, str) else aud if isinstance(aud, list) else []
+    own = {mapping.client_id, mapping.api_client_id, *(a for a in audiences if isinstance(a, str))}
     if not isinstance(client, str) or not _GUID.match(client) or client in own:
         raise PrincipalResolutionError(
             "token is app-only and its client is no dashboard identity's application"
@@ -1243,7 +1246,8 @@ class PrincipalResolver:
         store is read (`_verified_dashboard`); its principal built as every other is."""
         mapping = self._claim_mapping
         assert mapping.tenant_id is not None and self._dashboard_source is not None
-        # The API's own audience is refused there: a verified token's `aud` is the configured one.
+        # The API's own audience is refused there: a verified token's `aud` is, or holds, the
+        # configured one.
         application_id = _verified_dashboard(claims, mapping)
         try:
             stored = await asyncio.wait_for(

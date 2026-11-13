@@ -22,7 +22,7 @@ function serve(kind: "entra" | "keycloak") {
     vi.fn(async (url: string, init?: RequestInit) => {
       const path = new URL(url).pathname.replace("/v1/admin/", "");
       sent.push({ path: `${init?.method ?? "GET"} ${path}`, body: init?.body ? JSON.parse(String(init.body)) : null });
-      if (path === "sign-in") return json(200, { kind });
+      if (path === "dashboards/sign-in") return json(200, { kind });
       if (path === "/v1/handling-scheme") return json(200, { classification: ["OFFICIAL"] });
       if (path === "dashboards" && init?.method === "POST") {
         const body = JSON.parse(String(init.body)) as { application_id?: string };

@@ -1,0 +1,8 @@
+
+services/api/service_identity.py:159: TypeError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 22:46:38] "GET /jwks.json HTTP/1.1" 200 -
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_a_client_claim_that_is_a_list_is_refused_on_the_run_api_not_an_error[azp]
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_a_client_claim_that_is_a_list_is_refused_on_the_run_api_not_an_error[appid]
+2 failed, 31 deselected in 1.37s

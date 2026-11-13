@@ -1,0 +1,8 @@
+E       TypeError: unhashable type: 'list'
+
+packages/principal_auth/__init__.py:781: TypeError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 22:47:08] "GET /jwks.json HTTP/1.1" 200 -
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_audience_that_is_a_list_is_read_as_its_members
+1 failed, 18 deselected in 1.02s

@@ -765,3 +765,20 @@ async def test_on_keycloak_an_application_id_is_refused_in_words() -> None:
         await admin.create_dashboard(
             "Board", clearance="OFFICIAL", org_unit="u", application_id=DASHBOARD
         )
+
+
+def test_the_app_tells_the_entra_admin_its_own_applications() -> None:
+    """The call site the app starts with (`people_directory`): on Entra ID the admin is given the
+    claim mapping's Glass and API ids, so the refusal above holds in the running app (the lane
+    review of 2b42dea)."""
+    from types import SimpleNamespace
+
+    from services.api.app import people_directory
+
+    mapping = SimpleNamespace(client_id=GLASS_APP, api_client_id=API_APP)
+    resources = SimpleNamespace(
+        people_store=_Store(), principal_resolver=SimpleNamespace(claim_mapping=mapping)
+    )
+    admin = people_directory(resources, config=None)  # type: ignore[arg-type]
+    assert isinstance(admin, EntraPeopleAdmin)
+    assert admin.own_clients == {GLASS_APP, API_APP}
