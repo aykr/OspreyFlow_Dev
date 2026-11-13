@@ -1,0 +1,116 @@
+PLANT at 9093b5e: CONDUIT_POOL_CEILING=200, below the measured maximum: the ceiling check must fail
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T181523Z-830d8f6d/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_postgres_connections.py -v -s -k rendered_number_holds
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/admin/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 9 items / 8 deselected / 1 selected
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve FAILED
+
+=================================== FAILURES ===================================
+_ test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x789fe72034d0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6532/test_the_rendered_number_holds0')
+
+    def test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        command = _rendered(SMALL)[0]["postgres"]["command"]
+        assert command == postgres_command()
+>       print("\n".join(_the_product_at_once(command, monkeypatch, tmp_path)))
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py:378: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+command = ['postgres', '-c', 'max_connections=620']
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x789fe72034d0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6532/test_the_rendered_number_holds0')
+
+    def _the_product_at_once(
+        command: list[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> list[str]:
+        """Two Conduits and the other clients at their numbers, against `command`, step by step.
+        Returns what was measured; raises at the first refusal, naming its step."""
+        from tests.services.api.test_statelessness import _ConduitInstance
+    
+        for service, closed in CLOSED.items():
+            with socket.socket() as probe:
+                assert probe.connect_ex(("127.0.0.1", closed)) != 0, (
+                    f"{service}'s port {closed} is open"
+                )
+        (tmp_path / "hook").mkdir()
+        (tmp_path / "hook" / "sitecustomize.py").write_text(_RECORD_POOLS, encoding="utf-8")
+        arcade = http.server.ThreadingHTTPServer(("127.0.0.1", _free_port()), _EmptyArcadeDB)
+        threading.Thread(target=arcade.serve_forever, daemon=True).start()
+        conduits: list[Any] = []
+        said: list[str] = []
+        try:
+            with _postgres(command) as (port, password):
+                oidc = f"http://127.0.0.1:{CLOSED['OIDC']}"
+                pinned = {
+                    "POSTGRES_HOST": "127.0.0.1", "POSTGRES_PORT": str(port), "POSTGRES_USER": "osprey",
+                    "POSTGRES_PASSWORD": password, "POSTGRES_DB": "ospreyflow",
+                    "POSTGRES_SSLMODE": "disable",
+                    "ARCADEDB_HOST": "127.0.0.1", "ARCADEDB_HTTP_PORT": str(arcade.server_address[1]),
+                    "VALKEY_HOST": "127.0.0.1", "VALKEY_PORT": str(CLOSED["VALKEY"]),
+                    "CLICKHOUSE_HOST": "127.0.0.1", "CLICKHOUSE_HTTP_PORT": str(CLOSED["CLICKHOUSE"]),
+                    "MINIO_ENDPOINT": f"127.0.0.1:{CLOSED['MINIO']}",
+                    "LITELLM_HOST": "127.0.0.1", "LITELLM_PORT": str(CLOSED["LITELLM"]),
+                    "OIDC_ISSUER": f"{oidc}/realms/osprey", "OIDC_ADMIN_USERS_URL": f"{oidc}/admin",
+                    "OIDC_TOKEN_EXCHANGE_URL": f"{oidc}/token", "OSPREY_ANALYTICS_ENGINE": "duckdb",
+                    "PYTHONPATH": str(tmp_path / "hook"),
+                }  # fmt: skip
+                for name, value in pinned.items():
+                    monkeypatch.setenv(name, value)
+                clients = _Clients(f"postgresql://osprey:{password}@127.0.0.1:{port}/ospreyflow")
+                try:
+                    for n in range(1, CONDUITS_ALLOWED + 1):
+                        log = tmp_path / f"pools-{n}.jsonl"
+                        monkeypatch.setenv("OSPREY_TEST_POOL_LOG", str(log))
+                        before = asyncio.run(clients.held_by_the_server())
+                        try:
+                            conduits.append(_ConduitInstance(f"{oidc}/jwks"))
+                        except TimeoutError as exc:
+                            raise AssertionError(f"Conduit {n} did not come up: {exc}"[-800:]) from exc
+                        pools = _pools(log)
+                        at_rest = sum(p["min"] for p in pools)
+                        ceiling = sum(p["max"] for p in pools)
+                        added = asyncio.run(clients.held_by_the_server()) - before
+                        said.append(
+                            f"Conduit {n}: {len(pools)} pools opened, {at_rest} connections at their "
+                            f"min, {ceiling} at their max; it added {added} to the server"
+                        )
+                        assert added == at_rest, said
+                        entra = _entra_people_pool_max()
+>                       assert ceiling + entra <= CONDUIT_POOL_CEILING, (
+                            f"one Conduit's pools reach {ceiling} (+{entra} with Entra ID), past "
+                            f"CONDUIT_POOL_CEILING ({CONDUIT_POOL_CEILING}): raise it in profiles.py"
+                        )
+E                       AssertionError: one Conduit's pools reach 201 (+4 with Entra ID), past CONDUIT_POOL_CEILING (200): raise it in profiles.py
+E                       assert (201 + 4) <= 200
+
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py:337: AssertionError
+=============================== warnings summary ===============================
+tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections.py:324: ConduitStartTime: a Conduit came up in 4.8 s (http://127.0.0.1:36873)
+    conduits.append(_ConduitInstance(f"{oidc}/jwks"))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+---------------------- 1 unmarked test(s) reached a store ----------------------
+tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve: ClickHouse on port 59994, Valkey on port 59993
+============================= slowest 30 durations =============================
+8.57s call     tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+0.13s setup    tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+================== 1 failed, 8 deselected, 1 warning in 9.13s ==================
+Wall time: 10 s, exit 1 (no stack, no lease; set-up before it 10 s)
+exit=1

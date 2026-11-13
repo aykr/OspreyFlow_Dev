@@ -1,5 +1,5 @@
-GREEN: test_two_conduits_at_their_ceiling_and_every_other_client_fit_the_rendered_postgres, the rendered command (max_connections=660), unpiped
-Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T134105Z-ae14c5f6/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_postgres_connections.py -v -s
+GREEN at 9093b5e: the docker case, the rendered command, unpiped
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T181315Z-6a635a38/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_postgres_connections.py -v -s -k rendered_number_holds
 ============================= test session starts ==============================
 platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python
 port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
@@ -7,38 +7,30 @@ rootdir: /root/osprey-runs/admin/OspreyFlow_Build
 configfile: pytest.ini
 plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
 asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collecting ... collected 6 items
+collecting ... collected 9 items / 8 deselected / 1 selected
 
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_every_owned_postgres_is_rendered_with_the_products_number[lite] PASSED
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_every_owned_postgres_is_rendered_with_the_products_number[small] PASSED
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_every_owned_postgres_is_rendered_with_the_products_number[small-sized] PASSED
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_the_gateway_and_keycloak_are_rendered_with_the_pools_the_number_counts PASSED
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_an_existing_deployment_restarts_postgres_keycloak_and_the_gateway_on_apply PASSED
-../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_two_conduits_at_their_ceiling_and_every_other_client_fit_the_rendered_postgres Conduit 1: 48 pools opened, 50 connections at their min, 201 at their max; it added 50 to the server
+../OspreyFlow_Build/tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve Conduit 1: 48 pools opened, 50 connections at their min, 201 at their max; it added 50 to the server
 Conduit 2: 48 pools opened, 50 connections at their min, 201 at their max; it added 50 to the server
-all at once: 602 client connections, of 660
+all at once: 659 client connections, of 660
 PASSED
 
 =============================== warnings summary ===============================
-tests/harness/test_postgres_connections.py::test_two_conduits_at_their_ceiling_and_every_other_client_fit_the_rendered_postgres
-  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections.py:275: ConduitStartTime: a Conduit came up in 4.9 s (http://127.0.0.1:53853)
+tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections.py:324: ConduitStartTime: a Conduit came up in 5.1 s (http://127.0.0.1:52195)
     conduits.append(_ConduitInstance(f"{oidc}/jwks"))
 
-tests/harness/test_postgres_connections.py::test_two_conduits_at_their_ceiling_and_every_other_client_fit_the_rendered_postgres
-  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections.py:275: ConduitStartTime: a Conduit came up in 3.4 s (http://127.0.0.1:37849)
+tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+  /root/osprey-runs/admin/OspreyFlow_Build/tests/harness/test_postgres_connections.py:324: ConduitStartTime: a Conduit came up in 4.4 s (http://127.0.0.1:57567)
     conduits.append(_ConduitInstance(f"{oidc}/jwks"))
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+---------------------- 1 unmarked test(s) reached a store ----------------------
+tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve: ClickHouse on port 59994, Valkey on port 59993
 ============================= slowest 30 durations =============================
-13.87s call     tests/harness/test_postgres_connections.py::test_two_conduits_at_their_ceiling_and_every_other_client_fit_the_rendered_postgres
-0.21s call     tests/harness/test_postgres_connections.py::test_an_existing_deployment_restarts_postgres_keycloak_and_the_gateway_on_apply
-0.17s setup    tests/harness/test_postgres_connections.py::test_every_owned_postgres_is_rendered_with_the_products_number[lite]
-0.06s call     tests/harness/test_postgres_connections.py::test_every_owned_postgres_is_rendered_with_the_products_number[lite]
-0.05s call     tests/harness/test_postgres_connections.py::test_every_owned_postgres_is_rendered_with_the_products_number[small-sized]
-0.05s call     tests/harness/test_postgres_connections.py::test_every_owned_postgres_is_rendered_with_the_products_number[small]
-0.05s call     tests/harness/test_postgres_connections.py::test_the_gateway_and_keycloak_are_rendered_with_the_pools_the_number_counts
+16.94s call     tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
+0.25s setup    tests/harness/test_postgres_connections.py::test_the_rendered_number_holds_two_conduits_at_the_ceiling_every_other_client_and_the_reserve
 
-(11 durations < 0.005s hidden.  Use -vv to show these durations.)
-======================== 6 passed, 2 warnings in 14.84s ========================
-Wall time: 16 s, exit 0 (no stack, no lease; set-up before it 18 s)
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+================= 1 passed, 8 deselected, 2 warnings in 17.56s =================
+Wall time: 18 s, exit 0 (no stack, no lease; set-up before it 17 s)
 exit=0
