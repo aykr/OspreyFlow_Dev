@@ -771,6 +771,87 @@ def restore(which: str | None) -> None:
     _run_filled("restore-4", after)
 
 
+# -- a change after the set, and what the restore brings back ---------------------------------------------
+
+
+def _load_file(c: Any, admin: dict[str, str], case: str, name: str, csv: str) -> int:
+    """A file through the Ingest Studio as the check list loads one: upload, recipe, profile, map, verify,
+    publish, run. Answers the entities the run made; stops at the first refusal, its words recorded."""
+    base = f"/v1/investigations/{case}/ingest"
+    steps: list[tuple[str, Any]] = []
+    r = c.post(f"{base}/source-files", params={"name": name}, headers={**admin, "Content-Type": "text/csv"}, content=csv)
+    steps.append(("upload", r))
+    if r.status_code == 201:
+        r = c.post(f"{base}/recipes", headers=admin, json={
+            "label": name, "connector_profile": "generic-csv", "source_location": r.json()["source_location"],
+            "legal_basis": "synthetic test data (R1)",
+            "handling": {"classification": "OFFICIAL", "handling_code": "P", "originator": "unit-1", "owning_unit": "unit-1"}})
+        steps.append(("recipe", r))
+    if r.status_code == 201:
+        rid = r.json()["recipe_id"]
+        template = yaml.safe_load((HERE / "r1_kind_row_template.yaml").read_text())
+        for what, call in (("profile", lambda: c.get(f"{base}/recipes/{rid}/profile", headers=admin)),
+                           ("map", lambda: c.put(f"{base}/recipes/{rid}/row-template", headers=admin, json=template)),
+                           ("verify", lambda: c.post(f"{base}/recipes/{rid}/verify", headers=admin, json={})),
+                           ("publish", lambda: c.post(f"{base}/recipes/{rid}/publish", headers=admin, json={})),
+                           ("run", lambda: c.post(f"{base}/recipes/{rid}/run", headers=admin, json={}))):
+            r = call()
+            steps.append((what, r))
+            if r.status_code != 200:
+                break
+    what, last = steps[-1]
+    if last.status_code not in (200, 201) or what != "run":
+        raise SystemExit(f"the load of {name} stopped at {what}: {last.status_code} {last.text[:300]}")
+    return int(last.json().get("nodes_created", 0))
+
+
+def _found(c: Any, admin: dict[str, str], case: str, text: str) -> int:
+    r = c.post(f"/v1/investigations/{case}/search", headers=admin, json={"query": text, "limit": 5})
+    if r.status_code != 200:
+        raise SystemExit(f"search for {text} refused: {r.status_code} {r.text[:200]}")
+    return len(r.json().get("nodes") or [])
+
+
+def _source_files(c: Any, admin: dict[str, str], case: str) -> list[str]:
+    r = c.get(f"/v1/investigations/{case}/ingest/source-files", headers=admin)
+    if r.status_code != 200:
+        raise SystemExit(f"the source files refused: {r.status_code} {r.text[:200]}")
+    body = r.json()
+    items = body if isinstance(body, list) else body.get("files", [])
+    return [f.get("name", "") for f in items]
+
+
+def change() -> None:
+    """After the set: a second load into the check list's case, new entities in ArcadeDB and a new file
+    on the Ingest claim, both of which the restore must take away."""
+    c, case = door(), state()["case"]
+    admin = {"Authorization": f"Bearer {token()}"}
+    made = _load_file(c, admin, case, "r1-after-the-set.csv",
+                      "family_name,given_names,phone\nR1AfterTheSet,Person,+447700900789\n")
+    seen = (_found(c, admin, case, "R1AfterTheSet"), _found(c, admin, case, "R1Synthetic"))
+    files = _source_files(c, admin, case)
+    record("change").write_text(f"made {made}; found after/before {seen}; files {files}\n")
+    print(f"after the set: {made} entities made; R1AfterTheSet found {seen[0]}, R1Synthetic found {seen[1]}; files {files}")
+    if not made or not seen[0] or "r1-after-the-set.csv" not in files:
+        raise SystemExit("the change after the set did not take")
+
+
+def restored() -> None:
+    """After the restore: the change is gone and the set's load is there (check 9)."""
+    c, case = door(), state()["case"]
+    admin = {"Authorization": f"Bearer {token()}"}
+    after, before = _found(c, admin, case, "R1AfterTheSet"), _found(c, admin, case, "R1Synthetic")
+    files = _source_files(c, admin, case)
+    lines = [f"{'PASS' if after == 0 else 'FAIL'} the change after the set is gone from the graph: {after} found",
+             f"{'PASS' if before > 0 else 'FAIL'} the set's load is there: {before} found",
+             f"{'PASS' if 'r1-after-the-set.csv' not in files else 'FAIL'} the file after the set is gone from the "
+             f"Ingest claim; the set's is there: {'r1-people.csv' in files} ({files})"]
+    record("restored").write_text("\n".join(lines) + "\n")
+    print("\n".join(lines))
+    if any(line.startswith("FAIL") for line in lines) or "r1-people.csv" not in files:
+        raise SystemExit("the restore did not bring the set back")
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="command", required=True)
@@ -786,6 +867,8 @@ def main() -> None:
     rs = sub.add_parser("restore")
     rs.add_argument("--set")
     sub.add_parser("memory")
+    sub.add_parser("change")
+    sub.add_parser("restored")
     a = p.parse_args()
     os.chdir(CORE)
     if a.command == "platform":
@@ -800,6 +883,10 @@ def main() -> None:
         backup()
     elif a.command == "restore":
         restore(a.set)
+    elif a.command == "change":
+        change()
+    elif a.command == "restored":
+        restored()
     elif a.command == "memory":
         memory()
 
