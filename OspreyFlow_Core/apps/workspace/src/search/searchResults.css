@@ -1,0 +1,75 @@
+/* The search results page (ADR-145 Amendment 15 Part A). Tokens only (`design/tokens.css`). It fills the main area,
+   laid over the view the person left, which stays as it was beneath it. Under the GOV.UK brand the controls are the
+   package's own govuk-* classes; these rules only lay them out. Every control is at least 24 by 24 pixels. */
+.search-results {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: var(--sp-12);
+  padding: var(--sp-16) var(--sp-24);
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+.search-results__back {
+  justify-self: start;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.search-results--govuk .search-results__back { margin: 0; }
+.search-results__title { margin: 0; font-size: var(--fs-19); line-height: 1.3; font-weight: 600; }
+.search-results__title:focus, .search-results--govuk h2:focus { outline: none; }
+.search-results__total, .search-results__limited, .search-results__problem, .search-results__ask { margin: 0; }
+.search-results__limited { color: var(--text-secondary); }
+.search-results__columns { display: flex; flex-wrap: wrap; gap: var(--sp-24); align-items: flex-start; }
+.search-results__main { flex: 999 1 480px; min-width: 0; display: grid; gap: var(--sp-12); }
+.search-results__filters { flex: 1 1 220px; max-width: 320px; display: grid; gap: var(--sp-12); }
+.search-results__subtitle { margin: 0; font-size: var(--fs-14); font-weight: 600; }
+.search-results__fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: var(--sp-6); }
+.search-results__legend { padding: 0; font-weight: 600; }
+.search-results__check, .search-results__date { display: flex; align-items: center; gap: var(--sp-8); min-height: 24px; }
+.search-results__groups { display: flex; flex-wrap: wrap; gap: var(--sp-8); }
+.search-results__group {
+  min-height: 28px;
+  padding: var(--sp-4) var(--sp-12);
+  border: 1px solid var(--border);
+  border-radius: var(--r-panel);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.search-results--govuk .search-results__group { margin: 0; }
+.search-results__group[aria-pressed="true"] { border-color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--text-primary); }
+.search-results__count { color: var(--text-secondary); }
+.search-results__group[aria-pressed="true"] .search-results__count { color: var(--text-primary); }
+.search-results__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-12); }
+.search-results__item { display: grid; gap: var(--sp-6); padding: var(--sp-12); border: 1px solid var(--border-subtle); border-radius: var(--r-panel); background: var(--surface-panel); }
+.search-results__name { margin: 0; font-size: var(--fs-16); font-weight: 600; overflow-wrap: anywhere; }
+.search-results__meta, .search-results__passage { margin: 0; color: var(--text-secondary); overflow-wrap: anywhere; }
+.search-results__passage { color: var(--text-primary); }
+/* A matched word: bold and underlined, never a colour alone (WCAG 1.4.1), in the text's own colours. */
+.search-results__passage mark { background: transparent; color: inherit; font-weight: 700; text-decoration: underline; }
+.search-results__actions { display: flex; flex-wrap: wrap; gap: var(--sp-8); }
+.search-results--govuk .search-results__action, .search-results--govuk .search-results__clear { margin: 0; }
+.search-results__link {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.search-results__pages { display: flex; align-items: center; gap: var(--sp-16); }
+.search-results__none { display: grid; gap: var(--sp-8); justify-items: start; }
+.search-results__none p { margin: 0; }
