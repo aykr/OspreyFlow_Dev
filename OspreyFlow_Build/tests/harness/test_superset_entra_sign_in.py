@@ -181,8 +181,10 @@ def test_keycloak_s_provider_is_as_before_without_entra(monkeypatch) -> None:
         ((Right.ADMINISTER_SYSTEM, Right.READ_REPORTS), ["osprey-admin"]),
         ((Right.ADMINISTER_SYSTEM,), ["osprey-admin"]),
         ((Right.READ_REPORTS, Right.READ_REPORT_FEED), ["reports_viewer"]),
+        ((Right.MANAGE_DASHBOARDS, Right.READ_REPORTS), ["dashboard_builder"]),
+        ((Right.MANAGE_DASHBOARDS,), ["dashboard_builder"]),
     ],
-    ids=["admin", "admin-without-reports", "reports"],
+    ids=["admin", "admin-without-reports", "reports", "builder", "builder-without-reports"],
 )
 def test_the_role_is_the_conduit_s_rights_and_the_account_its_principal(
     monkeypatch, conduit: Conduit, rights: tuple[Right, ...], role_keys: list[str]
@@ -255,3 +257,15 @@ def test_small_s_rate_limit_address_is_as_before(monkeypatch) -> None:
     assert _superset(monkeypatch, {}).RATELIMIT_STORAGE_URI == "redis://valkey:6379/5"
     named = _superset(monkeypatch, {"SUPERSET_RATELIMIT_STORAGE": "redis://valkey:6379/5", "VALKEY_HOST": "x"})
     assert named.RATELIMIT_STORAGE_URI == "redis://valkey:6379/5"
+
+
+def test_a_builder_is_superset_s_alpha_and_a_reports_viewer_stays_read_only(monkeypatch) -> None:
+    """The owner's ruling of 13 November 2026 (Q2): a holder of `manage_dashboards` builds (Alpha:
+    charts and dashboards on the data sources it may read, the mart alone); a Reports Viewer is Gamma,
+    read-only; an administrator is Admin. Superset's own roles grant the rest, which the v0.5.2 R1 run's
+    dashboards check measures (a builder saves a chart, a Reports Viewer is refused)."""
+    mapping = _entra(monkeypatch).AUTH_ROLES_MAPPING
+    assert mapping["dashboard_builder"] == ["Alpha"]
+    assert mapping["reports_viewer"] == ["Gamma"] and mapping["osprey-admin"] == ["Admin"]
+    assert not {"Alpha", "Admin"} & {r for k, v in mapping.items() if k != "osprey-admin" and k != "dashboard_builder" for r in v}
+

@@ -435,6 +435,10 @@ def render_glass_settings(config: OspreyConfig, *, entra: EntraSignInConfig | No
         "appearance": config.appearance.told(),
         "version": deployment_version(),
     }
+    if config.reporting.superset:
+        # The owner's ruling of 13 November 2026 (Q2): where "Build a report" opens Superset, for a
+        # holder of `manage_dashboards`; Superset gives them its builder's role (ADR-148 Amendment 9).
+        settings["reports_url"] = sites(config).dashboards
     if entra is not None:
         del settings["identity_provider"], settings["realm"]
         settings["sign_in"] = {

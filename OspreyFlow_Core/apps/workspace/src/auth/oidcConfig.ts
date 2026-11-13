@@ -49,6 +49,8 @@ interface DeploymentSettings {
   welcome: WelcomeSettingsRead;
   /** How every page looks (ADR-132). */
   appearance: Appearance;
+  /** Superset's address, where "Build a report" opens it; `null` when Superset is not deployed. */
+  reportsUrl: string | null;
 }
 
 /** What the welcome page offers (ADR-115 decisions 3 and 8). */
@@ -108,6 +110,11 @@ function readEntraSignIn(raw: unknown): EntraSignIn | null {
   return { authority, clientId, scope };
 }
 
+/** Only a web address is ever followed; anything else is no Superset. */
+function readReportsUrl(raw: unknown): string | null {
+  return typeof raw === "string" && /^https?:\/\/[^\s/]+$/.test(raw) ? raw : null;
+}
+
 let deployment: DeploymentSettings | null = null;
 
 /** Reads `/deployment.json` once. A missing or unreadable file (the development server, which
@@ -128,6 +135,7 @@ export async function loadDeploymentSettings(
       appearance?: unknown;
       version?: unknown;
       sign_in?: unknown;
+      reports_url?: unknown;
     };
     const entra = readEntraSignIn(body.sign_in);
     if ((typeof body.identity_provider === "string" && body.identity_provider) || entra) {
@@ -139,6 +147,7 @@ export async function loadDeploymentSettings(
         marking: typeof body.marking === "string" && body.marking ? body.marking : null,
         welcome: readWelcome(body),
         appearance: readAppearance(body.appearance),
+        reportsUrl: readReportsUrl(body.reports_url),
       };
     }
   } catch {
@@ -149,6 +158,13 @@ export async function loadDeploymentSettings(
 /** The deployment's marking, or `null` where there is no deployment file (the development server). */
 export function deploymentMarking(): string | null {
   return deployment?.marking ?? null;
+}
+
+/** Superset's address, where "Build a report" opens it (the owner's ruling of 13 November 2026), or
+ * `null` when the deployment has no Superset or no deployment file: the link is then not offered. Who
+ * may see the link is the switch's (a holder of `manage_dashboards`); Superset refuses anyone else. */
+export function deploymentReportsUrl(): string | null {
+  return deployment?.reportsUrl ?? null;
 }
 
 /** The welcome page's settings, or the plain page where there is no deployment file. */

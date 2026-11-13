@@ -36978,8 +36978,15 @@ read no role, so everyone would have been Gamma. This amendment replaces that.
    route of the app.
 3. **The account is the Conduit's principal, and the role its rights**, read again at every sign-in
    (`AUTH_ROLES_SYNC_AT_LOGIN`): the username is the principal's id (the object id), never an ID-token claim;
-   `administer_system` is Superset's Admin, `read_reports` its read-only Gamma, and a person with neither is no
-   account. An Entra token's own `roles` are never read. Only the shown name comes from the ID token.
+   `administer_system` is Superset's Admin; `manage_dashboards` without it is Superset's builder, Alpha (the
+   owner's ruling of 13 November 2026, Q2), whom the Glass's "Build a report" (the case lane's, beside Reports)
+   sends to Superset at the address the Glass is told (`reports_url` in `/deployment.json`, only where Superset
+   is deployed); `read_reports` is its read-only Gamma; and a person with none of them is no account. An Entra
+   token's own `roles` are never read. Only the shown name comes from the ID token. Tests also:
+   `::test_a_builder_is_superset_s_alpha_and_a_reports_viewer_stays_read_only`,
+   `test_welcome_settings.py::test_superset_s_address_is_given_only_where_superset_is`, and the Glass's
+   `oidcConfig.test.ts` ("Superset's address, for Build a report"); a builder saving a chart, and a Reports
+   Viewer refused one, are the v0.5.2 R1 run's dashboards check (Amendment 11 point 7).
    Tests: `test_superset_entra_sign_in.py::test_the_role_is_the_conduit_s_rights_and_the_account_its_principal`,
    `::test_a_token_s_own_roles_are_never_read`, `::test_neither_right_is_no_account`.
 4. **Fails closed.** Any refusal or failure of either read (401, 403, the Conduit down, no token) raises from
@@ -36991,7 +36998,7 @@ read no role, so everyone would have been Gamma. This amendment replaces that.
    v0.5.2 R1 run's dashboards check is the first (Amendment 11 point 7).
 
 Records: `process/lanes/platform-b/v052/am9-superset-red-first.txt` (main's configuration and five plants, each red
-for its reason), `am9-conduit-red-first.txt` (five plants in the resolver, on admin's gate a7ec066).
+for its reason), `am9-conduit-red-first.txt` (five plants in the resolver, on admin's gate a7ec066), `q2-builder-red-first.txt` (five plants).
 
 ### ADR-148, Amendment 11 (13 November 2026) — Superset and the report sync rendered on the cloud-platform profile
 

@@ -42,3 +42,13 @@ def test_no_organisation_sign_in_names_no_label() -> None:
     settings = _settings({"network": {"public_origin": "http://localhost:9999"}})
     assert settings["organisation_sign_in"] is None
     assert settings["organisation_label"] is None
+
+
+def test_superset_s_address_is_given_only_where_superset_is() -> None:
+    """The owner's ruling of 13 November 2026 (Q2): "Build a report" opens Superset at its `bi.` name,
+    so the Glass is told it, and only where Superset is deployed (the file is otherwise as before)."""
+    small = {"profile": "small", "network": {"public_origin": "https://osprey.example.org"}}
+    assert "reports_url" not in _settings(small)
+    assert _settings({**small, "reporting": {"superset": True}})["reports_url"] == "https://bi.osprey.example.org"
+    assert "reports_url" not in _settings({**small, "reporting": {"sync": True}})
+

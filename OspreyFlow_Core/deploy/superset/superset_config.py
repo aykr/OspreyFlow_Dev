@@ -39,6 +39,9 @@ AUTH_USER_REGISTRATION_ROLE = "Gamma"
 AUTH_ROLES_SYNC_AT_LOGIN = True
 AUTH_ROLES_MAPPING = {
     "osprey-admin": ["Admin"],
+    # The owner's ruling of 13 November 2026 (Q2): a holder of `manage_dashboards` without
+    # `administer_system` builds reports (Superset's Alpha), from "Build a report" (Entra ID's role keys).
+    "dashboard_builder": ["Alpha"],
     "reports_viewer": ["Gamma"],
     "analyst": ["Gamma"],
     "data_engineer": ["Gamma"],
@@ -150,7 +153,8 @@ class OspreySecurityManager(SupersetSecurityManager):
 def _entra_user_info(response: dict, access_token: str) -> dict:  # type: ignore[type-arg]
     """The account is the Conduit's principal: its id (the Entra object id) is the username, and its
     rights decide the role, re-read at every sign-in (`AUTH_ROLES_SYNC_AT_LOGIN`): `administer_system`
-    is Superset's Admin, `read_reports` its read-only Gamma, neither no account at all. Only the
+    is Superset's Admin, `manage_dashboards` its builder (Alpha), `read_reports` its read-only Gamma,
+    none of them no account at all. Only the
     displayed name comes from the ID token (verified by Superset's OAuth client against the tenant)."""
     if not access_token:
         raise NotForReports("no delegated token came back from Entra ID")
@@ -158,10 +162,14 @@ def _entra_user_info(response: dict, access_token: str) -> dict:  # type: ignore
     rights = set(_conduit("/v1/me/rights", access_token).get("rights", []))
     if "administer_system" in rights:
         role_keys = ["osprey-admin"]
+    elif "manage_dashboards" in rights:
+        role_keys = ["dashboard_builder"]
     elif "read_reports" in rights:
         role_keys = ["reports_viewer"]
     else:
-        raise NotForReports("neither administer_system nor read_reports: no reports account")
+        raise NotForReports(
+            "neither administer_system, manage_dashboards nor read_reports: no reports account"
+        )
     person = str(me["id"])
     shown = response.get("userinfo") or {}
     return {
