@@ -1,0 +1,4 @@
+v052-manifest, before harness/cloud_platform/manifest.py existed:
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.45s
+E   ImportError: cannot import name 'manifest' from 'harness.cloud_platform' (/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/../OspreyFlow_Core/harness/cloud_platform/__init__.py)
