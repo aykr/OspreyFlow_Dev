@@ -1,0 +1,20 @@
+# test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days, red first (lane/docs-6a8, offline, closed ports, on the Mac)
+
+## 1. The new test against main's guide (7 days, the render 35)
+E       AssertionError: assert 'point-in-time restore for 35 days' in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `helm upgrade`, since its new backups claim cannot be added in place; the runbook gives the commands. '
+1 failed, 8 deselected in 3.55s
+
+## 2. The corrected guide, a stale warning planted back (35 days, 'only a set finished in the last 35 days')
+E       assert False
+1 failed, 8 deselected in 4.83s
+
+## 3. The render planted at its call site (terraform.py: backup_retention_period str(7), the sets kept 35)
+E       AssertionError: assert 'point-in-time restore for 7 days' in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `helm upgrade`, since its new backups claim cannot be added in place; the runbook gives the commands. '
+1 failed, 8 deselected in 2.10s
+
+## 3b. The render planted at 7 and the guide's days following it, the warning left out (a set outliving RDS's window unwarned)
+E       assert False
+1 failed, 8 deselected in 4.14s
+
+## 4. Green: the corrected guide against the real render
+1 passed, 8 deselected in 5.69s
