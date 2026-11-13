@@ -78,7 +78,7 @@ rules	UPG	S	done	Rehearse the v0.4.12 to v0.5.0 upgrade on the test server, befo
 platform-b	UPG-fix	S	done	Update from v0.4.12 refuses in words before writing anything and names the one-time `ospreyflow apply` route; a named update reaches its own deployment; files moved into place whole; apply starts a newly added service with its dependencies (ADR-114 Am 39; merged 1223cc8)
 rules	UPG-check	S	done	The real update from v0.4.12 to the published v0.5.0: the CHANGELOG's steps 1–4 green on osprey-upg (11 Nov 12:26), then osprey-small itself updated steps 1–5 (15:06)
 rules	hyg	S	done	Hygiene, three items: the key cap's own ink; the metrics harness panel scrolls (the rarity note); a scheduled load's notice reaches its owner in Needs you, owner alone, fixed words by kind (ADR-110 Am 19) ; a fault acting as the owner kept in the log (studio's finding) (merged 373b3dd)
-rules	lists	M	building	Live files remove the screening lists they load; one owner on two lists (ADR-146 Am 7): third pass, the audit read's list clearance (MUST 3)
+rules	lists	M	done	Live files remove the screening lists they load; one owner on two lists (ADR-146 Am 7): third pass, the audit read's list clearance (MUST 3)
 rules-b	T3b	S	done	The contrast probe's limits, made independent of the platform (shadows by their paint, covers judged, never a silent pass), shown on the server's Chromium; merged 2102d21 after three reviews
 rules-b	guides	S	done	The guides from Home, by the places a person may open (ADR-145 Am 10; the owner's request, 12 Nov): user, developer and administration guides served by the Conduit to a principal holding the place's right; merged 5675103, 12 Nov
 platform-b	carries	M	done	The upgrade path's carries (ADR-114 Am 40): one atomic writer for deployment.env, the refresh's lock, stage and pending record, every verb's lockout words, refusals that reach the operator through the redactor; merged f165de2 after three reviews, listed for the owner (it writes deployment.env)
@@ -97,6 +97,6 @@ platform-b	onepass	S	done	One key prompt for the deployment's three names (ADR-1
 platform-b	rail	S	done	The rail: Ask & Chat and Dashboards on it, Explore Details, Help over every view (ADR-145 Am 12; merged 4f31f9d; live 13 Nov)
 platform	home-access	S	done	Home's Your access and tasks, full width, the owner's words (ADR-145 Am 11; merged 4196468; live 13 Nov)
 platform	compact-govuk	S	done	The GOV.UK look compact in the workspace, no crown off gov.uk (ADR-132 Am 8; merged 6db2a4a + 23c4fbd; live 13 Nov)
-admin	refresh	M	building	A refresh keeps the person signed in and where they were (ADR-050 Am 3)
+admin	refresh	M	done	A refresh keeps the person signed in and where they were (ADR-050 Am 3) (merged)
 admin	pg	S	todo	A deployment's Postgres allows its services' connections at rest (ADR-114 Am 43)
 demo	fixes-13nov	S	done	osprey-small, 13 Nov: banner, footer, Home x2, key prompt, one prompt, rail + Help, compact header (orchestrator's deploys from HANDOFF after the lane closed)
