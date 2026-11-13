@@ -823,6 +823,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         orchestrator drafts the search navigation options by Sun 15 Nov. The Makefile's laurium-service run pins
         OPENSEARCH_PORT shut (77466b1).
 
+        **The owner, 13 Nov, about 22:00:** the docs lane's guide corrections (lane/docs-v052-sweep part one: the
+        cloud profile described as v0.5.1 is, each held to the code by tests/test_guides_cloud_platform.py) go into
+        **v0.5.1**, an exception to "no new work" for documentation only. The navigation decision (Parts A-E) is in
+        NAVIGATION_2026-11-13.md: A and B started (case), C/D/E awaiting estimates.
+
         **The owner's word, about 07:45:** once both demo fixes land (one key prompt, ADR-114 Am 42, platform-b; Home's
         "Your access and tasks", ADR-145 Am 11, platform), push main to the dev repo and publish the product repo
         again from the same commit (no tag), each recorded in PUSH_LOG.
