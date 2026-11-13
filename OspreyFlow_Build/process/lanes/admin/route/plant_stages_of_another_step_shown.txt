@@ -1,0 +1,30 @@
+# plant: stages_of_another_step_shown
+# replaced: 'if (defined $step && $step eq $pstep && @s) {'
+# with: 'if (defined $step && @s) {'
+# run: pytest -k 'stages_when_they_name'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_a_row_s_bar_is_its_lane_s_stages_when_they_name_its_step _________
+
+route = <function route.<locals>.view at 0x10636a660>
+hb = <function hb.<locals>.run at 0x10636a160>
+
+    def test_a_row_s_bar_is_its_lane_s_stages_when_they_name_its_step(route, hb) -> None:  # noqa: F811
+        assert hb("stages", "rules", "v052-index", "1|done|Plan", "2|now|Feed", "3|todo|Rebuild",
+                  "4|todo|Drift").returncode == 0  # fmt: skip
+        out = route(16)
+        assert "[███░░░] running, stage 2 of 4" in _row(out, "3c")
+        assert "[██████]" in _row(out, "2") and "[░░░░░░]" in _row(out, "3e")
+>       assert "stage" not in _row(out, "B")  # rules' stages are 3c's, not B's
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'stage' not in '  B   ★ rul... loaded once'
+E         
+E         'stage' is contained here:
+E            started, stage 2 of 4 · after 3c · Client-size synthetic data loaded once
+E         ?           +++++
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:170: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_row_s_bar_is_its_lane_s_stages_when_they_name_its_step
+1 failed, 15 deselected in 1.00s

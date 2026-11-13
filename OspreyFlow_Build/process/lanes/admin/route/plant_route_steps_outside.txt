@@ -1,0 +1,25 @@
+# plant: route_steps_outside
+# replaced: 'push @{ $outside{$lane} }, $step if $st ne "done" && !$onroute{"$lane:$step"} }'
+# with: 'push @{ $outside{$lane} }, $step if $st ne "done" }'
+# run: pytest -k 'outside_the_route'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________ test_the_steps_outside_the_route_are_one_line_a_lane _____________
+
+route = <function route.<locals>.view at 0x118f665c0>
+
+    def test_the_steps_outside_the_route_are_one_line_a_lane(route) -> None:
+        lines = _section(route(16), "OUTSIDE THIS ROUTE")
+        body = [line.strip() for line in lines[1:]]
+>       assert body == ["admin: D1", "docs: sites", "platform: P8"]
+E       AssertionError: assert ['admin: D1',...s', '+3 more'] == ['admin: D1',...platform: P8']
+E         
+E         At index 1 diff: 'case: v052-fixes' != 'docs: sites'
+E         Left contains one more item: '+3 more'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:200: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_steps_outside_the_route_are_one_line_a_lane
+1 failed, 15 deselected in 2.23s

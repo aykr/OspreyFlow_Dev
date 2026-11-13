@@ -1,0 +1,23 @@
+# plant: watch_shows_the_overview
+# replaced: 'if [ -f "$ROUTE" ]; then OVERVIEW_NEEDS="$seen" route_view; else'
+# with: 'if false; then OVERVIEW_NEEDS="$seen" route_view; else'
+# run: pytest -k 'overview_and_watch'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________________________ test_the_overview_and_watch __________________________
+
+route = <function route.<locals>.view at 0x1075823e0>
+hb = <function hb.<locals>.run at 0x107582160>
+
+    def test_the_overview_and_watch(route, hb) -> None:  # noqa: F811
+        assert "VIEW 1 · FOUNDATION FEATURES" in route(16, "--overview")
+        assert "VIEW 1 · FOUNDATION FEATURES" in route(16, "--full")
+        watched = hb("watch", "1", OSPREY_WATCH_PASSES="1", OSPREY_NOW=_at(16), **route.env).stdout
+>       assert "ROUTE TO V0.5.2" in watched and "VIEW 1" not in watched
+E       AssertionError: assert ('ROUTE TO V0.5.2' in 'OspreyFlow lanes · 20:35:20 · every 1s · Ctrl-C to stop\n\nOSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nC...                   free\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:244: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_overview_and_watch
+1 failed, 15 deselected in 7.23s

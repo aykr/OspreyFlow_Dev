@@ -1,0 +1,21 @@
+# plant: never_late
+# replaced: 'my $word = (@done < @route && $today > $last) ? "late"'
+# with: 'my $word = 0 ? "late"'
+# run: pytest -k 'target_undone_is_late'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________________ test_past_the_target_undone_is_late ______________________
+
+route = <function route.<locals>.view at 0x11373e340>
+
+    def test_past_the_target_undone_is_late(route) -> None:
+>       assert route(27).splitlines()[1].endswith("· late")
+E       AssertionError: assert False
+E        +  where False = <built-in method endswith of str object at 0x1118d33d0>('· late')
+E        +    where <built-in method endswith of str object at 0x1118d33d0> = 'ROUTE TO V0.5.2 · Thu 26 Nov · 1 day past · at risk'.endswith
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:132: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_past_the_target_undone_is_late
+1 failed, 15 deselected in 1.71s

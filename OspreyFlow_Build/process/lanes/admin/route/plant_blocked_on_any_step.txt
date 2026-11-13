@@ -1,0 +1,27 @@
+# plant: blocked_on_any_step
+# replaced: '      && names($beat{$plane}[1], $pstep)) { $state = "blocked" }'
+# with: '      ) { $state = "blocked" }'
+# run: pytest -k 'blocked_on_it'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_a_step_whose_lane_is_blocked_on_it_is_blocked ______________
+
+route = <function route.<locals>.view at 0x10698e5c0>
+hb = <function hb.<locals>.run at 0x10698e0c0>
+
+    def test_a_step_whose_lane_is_blocked_on_it_is_blocked(route, hb) -> None:  # noqa: F811
+        assert hb("beat", "rules", "blocked", "v052-index: the index service will not start").returncode == 0
+        out = route(16)
+>       assert " blocked" in _row(out, "3c") and " blocked" not in _row(out, "B")
+E       AssertionError: assert (' blocked' in '  3c  ★ rules        14–19 Nov [░░░░░░] blocked · The index feed: every change reaches the index' and ' blocked' not in '  B   ★ rul... loaded once'
+E        +  where '  3c  ★ rules        14–19 Nov [░░░░░░] blocked · The index feed: every change reaches the index' = _row('OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', '3c')
+E         
+E         ' blocked' is contained here:
+E             B   ★ rules        16–18 Nov [░░░░░░] blocked · after 3c · Client-size synthetic data loaded once
+E         ?                                         ++++++++)
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:153: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_step_whose_lane_is_blocked_on_it_is_blocked
+1 failed, 15 deselected in 1.31s

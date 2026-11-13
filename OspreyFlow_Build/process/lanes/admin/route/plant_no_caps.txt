@@ -1,0 +1,93 @@
+# plant: no_caps
+# replaced: 'my @shown = @items[0 .. ($#items < $cap - 1 ? $#items : $cap - 1)];'
+# with: 'my @shown = @items;'
+# run: pytest -k 'one_screen'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_the_route_view_is_one_screen_on_a_busy_route _______________
+
+route = <function route.<locals>.view at 0x114f3e5c0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4407/test_the_route_view_is_one_scr0')
+
+    def test_the_route_view_is_one_screen_on_a_busy_route(route, tmp_path) -> None:
+        rows = "".join(
+            f"{i}\tA step of the route with a long title that runs on and on, number {i}\tplatform\t"
+            f"2026-11-{14 + i % 10:02d}\t2026-11-{15 + i % 10:02d}\t{'y' if i % 2 else 'n'}\t-\t-\n"
+            for i in range(10, 23)
+        )
+        (tmp_path / "route.tsv").write_text(ROUTE.split("\n1\t")[0] + "\n" + rows, encoding="utf-8")
+        (tmp_path / "owner_due.tsv").write_text(
+            OWNER_DUE + "".join(f"orchestrator\t2026-11-{15 + i}\tAn item the orchestrator owes {i}\topen\n"
+                                for i in range(10)),  # fmt: skip
+            encoding="utf-8",
+        )
+        (tmp_path / "progress.tsv").write_text(
+            PROGRESS + "".join(f"lane{i}\tS{i}\tS\ttodo\tA step outside the route\n" for i in range(12)),
+            encoding="utf-8",
+        )
+        lines = route(16).splitlines()
+>       assert len(lines) <= 40, "\n".join(lines)
+E       AssertionError: OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)
+E         ROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track
+E           [░░░░░░░░░░░░░░░░░░░░] 0 of 13 steps done · [███░░░░░░░░░░] day 3 of 13
+E         
+E           10    platform     14–15 Nov [░░░░░░] not started · 1 day behind · A step of the route with a long title that runs…
+E           11  ★ platform     15–16 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…
+E           12    platform     16–17 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…
+E           13  ★ platform     17–18 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…
+E           14    platform     18–19 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…
+E           15  ★ platform     19–20 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…
+E           16    platform     20–21 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…
+E           17  ★ platform     21–22 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…
+E           18    platform     22–23 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…
+E           19  ★ platform     23–24 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…
+E           20    platform     14–15 Nov [░░░░░░] not started · 1 day behind · A step of the route with a long title that runs…
+E           21  ★ platform     15–16 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…
+E           22    platform     16–17 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…
+E         
+E         WAITING ON YOU · 2
+E           Tue 17 Nov · The acceptance bar's wording
+E           Wed 18 Nov · The search navigation decision (3e′ waits on it)
+E         WAITING ON THE ORCHESTRATOR · 12 open
+E           Sat 14 Nov · Scheduled runs on Entra: options (audit 1)
+E           Sun 15 Nov · An item the orchestrator owes 0
+E           Mon 16 Nov · The search access design page (A)
+E           Mon 16 Nov · An item the orchestrator owes 1
+E           Tue 17 Nov · An item the orchestrator owes 2
+E           Wed 18 Nov · An item the orchestrator owes 3
+E           Thu 19 Nov · An item the orchestrator owes 4
+E           Fri 20 Nov · An item the orchestrator owes 5
+E           Sat 21 Nov · An item the orchestrator owes 6
+E           Sun 22 Nov · An item the orchestrator owes 7
+E           Mon 23 Nov · An item the orchestrator owes 8
+E           Tue 24 Nov · An item the orchestrator owes 9
+E         AUDIT RULINGS [███░░░░░░░] 1 of 3 settled · in v0.5.2: 1 yes, 1 no, 1 owner to decide
+E         OUTSIDE THIS ROUTE · 20 steps
+E           admin: D1
+E           case: v052-fixes
+E           docs: sites
+E           lane0: S0
+E           lane1: S1
+E           lane10: S10
+E           lane11: S11
+E           lane2: S2
+E           lane3: S3
+E           lane4: S4
+E           lane5: S5
+E           lane6: S6
+E           lane7: S7
+E           lane8: S8
+E           lane9: S9
+E           platform: v052-measure, P8
+E           rules: v052-index, v052-load
+E           studio: v052-search
+E         FINISHED [███░░░░░░░░░░░░░░░░░] 3 of 23 steps merged
+E         Other views: lanes_heartbeat.sh --overview · --full · --lanes · summary
+E       assert 56 <= 40
+E        +  where 56 = len(['OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)', 'ROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track', ... 11  ★ platform     15–16 Nov [░░░░░░] not started · A step of the route with a long title that runs on and on,…', ...])
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:229: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_route_view_is_one_screen_on_a_busy_route
+1 failed, 15 deselected in 2.35s

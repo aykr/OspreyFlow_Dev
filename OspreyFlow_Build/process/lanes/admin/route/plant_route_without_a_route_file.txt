@@ -1,0 +1,22 @@
+# plant: route_without_a_route_file
+# replaced: '  "") if [ -f "$ROUTE" ]; then route_view; else overview; fi ;;'
+# with: '  "") route_view ;;'
+# run: pytest -k 'without_a_route'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_without_a_route_the_default_view_is_the_overview _____________
+
+route = <function route.<locals>.view at 0x10aa3e5c0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4409/test_without_a_route_the_defau0')
+
+    def test_without_a_route_the_default_view_is_the_overview(route, tmp_path) -> None:
+        (tmp_path / "route.tsv").unlink()
+        out = route(16)
+>       assert "VIEW 1 · FOUNDATION FEATURES" in out and "ROUTE TO" not in out
+E       AssertionError: assert ('VIEW 1 · FOUNDATION FEATURES' in 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO THE RELEASE · no date · 0 days left · on track\n  [...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:237: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_without_a_route_the_default_view_is_the_overview
+1 failed, 15 deselected in 2.43s
