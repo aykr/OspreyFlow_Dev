@@ -1,3 +1,22 @@
+# Morning, 14 November 2026 (the overnight run on the v0.5.2 route)
+
+Kept by the orchestrator through the night. The owner's words for the night: merge as ready, push main after green
+merges, sol lanes to ayan without the 80% limit, load B on the test server; page A ruled (strict ranking, groups
+count records).
+
+## Waiting on you
+
+1. **ci.yml for the index feed's live file (rules, step 3c).** The diff is on rules' branch:
+   `process/lanes/rules/v052-index/v052-index_ci_yml.diff`. It adds an `opensearch:2.17.1` service (single
+   node, security off, 512m heap) to the conformance job and runs `test_feed_live.py` there. Without it the
+   test-file coverage check stays red on rules' branch, so 3c cannot merge to main. B does not wait on it: rules
+   loads from its branch head.
+
+## Done overnight
+
+- Landed and pushed: deps-opensearch, step 2 (the manifest), step 3a with data safety and docs' D2/D3/D8,
+  platform-b hygiene, the ci.yml line for test_feed_live (your word, 5b894ff).
+
 # Morning, 7 November 2026
 
 Written by the orchestrator at 00:05 and updated at 07:05. Nothing has been pushed. Local `main` holds two merges: studio's L1.1 (`32c0f36`) and glass's L2.1 (`6e178b2`). Their friction rows are assembled.
