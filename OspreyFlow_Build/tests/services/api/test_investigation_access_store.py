@@ -136,6 +136,26 @@ async def test_removing_a_grant_removes_the_access(store: InvestigationStore) ->
         await store.get_authorized(case.id, COLLEAGUE, need=AccessLevel.VIEWER)
 
 
+async def test_an_account_removed_everywhere_holds_no_level_in_any_case(
+    store: InvestigationStore,
+) -> None:
+    """A dashboard identity removed from Admin › Dashboards (ADR-148 Amendment 10): every grant its
+    account holds goes, each recorded as a revoke; another account's grant in the same case stays."""
+    first = await store.create(AUTHOR, name="First")
+    second = await store.create(AUTHOR, name="Second")
+    await store.set_grant(first.id, "bob", AccessLevel.VIEWER, by=AUTHOR)
+    await store.set_grant(second.id, "bob", AccessLevel.VIEWER, by=AUTHOR)
+    await store.set_grant(second.id, "carol", AccessLevel.VIEWER, by=AUTHOR)
+
+    assert sorted(await store.revoke_everywhere("bob", by=AUTHOR)) == sorted([first.id, second.id])
+    for case in (first, second):
+        with pytest.raises(InvestigationNotFoundError):
+            await store.get_authorized(case.id, COLLEAGUE, need=AccessLevel.VIEWER)
+    assert await store.effective_level(second.id, OUTSIDER) is AccessLevel.VIEWER
+    assert [h.action for h in await store.access_history(first.id)][-1] == "revoke"
+    assert await store.revoke_everywhere("bob", by=AUTHOR) == []
+
+
 async def test_a_case_that_does_not_exist_is_not_found_at_every_level(
     store: InvestigationStore,
 ) -> None:

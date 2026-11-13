@@ -17421,11 +17421,27 @@ async def register_dashboard_route(
     dependencies=[Depends(require_right(Right.MANAGE_DASHBOARDS))],
 )
 async def remove_dashboard_route(
-    client_id: str, principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+    client_id: str,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    investigations: InvestigationsDep,
+    audit: AuditDep,
 ) -> Response:
+    """Removed, and every case grant its account holds revoked with it (ADR-148 Amendment 10): the
+    account is read before the registration goes, and a dashboard registered again later finds no
+    level waiting. One not registered is refused by the identity provider's own answer and revokes
+    nothing. The audit row counts the grants revoked; it never names their cases."""
+    accounts = [d.account_id for d in await identity_admin.list_dashboards()
+                if d.client_id == client_id]  # fmt: skip
     await identity_admin.delete_dashboard(client_id)
+    revoked = [
+        case
+        for account in accounts
+        for case in await investigations.revoke_everywhere(account, by=principal)
+    ]
     await audit.record(principal=principal, action="remove_dashboard",
-                       resolved_query={"client_id": client_id}, result_cardinality=1)  # fmt: skip
+                       resolved_query={"client_id": client_id, "grants_revoked": len(revoked)},
+                       result_cardinality=1)  # fmt: skip
     return Response(status_code=204)
 
 

@@ -426,6 +426,23 @@ class InvestigationStore:
             )
             await self._record(conn, investigation_id, by.id, "revoke", account_id, None)
 
+    async def revoke_everywhere(self, account_id: str, *, by: Principal) -> list[str]:
+        """Every case grant an account holds, removed and each recorded as a revoke: a dashboard
+        identity removed from Admin › Dashboards (ADR-148 Amendment 10). The cases it held a level
+        in, which the caller counts and never shows."""
+        async with self._pool.acquire() as conn, conn.transaction():
+            cases = [
+                str(row["investigation_id"])
+                for row in await conn.fetch(
+                    "DELETE FROM investigation_grants WHERE account_id = $1 "
+                    "RETURNING investigation_id",
+                    account_id,
+                )
+            ]
+            for investigation_id in cases:
+                await self._record(conn, investigation_id, by.id, "revoke", account_id, None)
+        return cases
+
     async def set_unit_level(
         self, investigation_id: str, level: AccessLevel | None, *, by: Principal
     ) -> None:

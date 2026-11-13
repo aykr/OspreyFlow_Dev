@@ -57,6 +57,7 @@ ALREADY_JOINED = "joined is already joined to an organisation account."
 class _Identity:
     def __init__(self) -> None:
         self.made: list[tuple[str, str]] = []
+        self.application_ids: list[str | None] = []
 
     async def list_people(self) -> list[PersonAccount]:
         return [PersonAccount(id="u1", username="osprey-demo-analyst", name="Demo Analyst", enabled=True, roles=["analyst"]),
@@ -125,9 +126,15 @@ class _Identity:
     async def create_dashboard(self, name: str, *, clearance: str, org_unit: str,
                                application_id: str | None = None) -> RegisteredDashboard:
         self.made.append((name, clearance))
+        self.application_ids.append(application_id)
         return RegisteredDashboard(dashboard=DashboardIdentity(client_id="osprey-dashboard-x", account_id="sa-1",
                                                                clearance=clearance, org_unit=org_unit), secret="s")  # fmt: skip
 
+
+    async def delete_dashboard(self, client_id: str) -> None:
+        if client_id not in {d.client_id for d in await self.list_dashboards()}:
+            raise PersonActionRefused("no_such_dashboard", f"{client_id} is not registered.")
+        self.made.append(("deleted", client_id))
 
     # ADR-114 Amendment 36: the Conduit's own credential, as Keycloak answered it.
     credential = "accepted"
@@ -660,3 +667,38 @@ def test_a_refused_join_is_said_in_words_and_not_audited(client: Any) -> None:
     assert client.audit.records == []
     empty = client.post("/v1/admin/people/u1/organisation-link", json={"subject": ""})
     assert empty.status_code == 422
+
+
+class _Grants:
+    def __init__(self) -> None:
+        self.revoked: list[tuple[str, str]] = []
+
+    async def revoke_everywhere(self, account_id: str, *, by: Principal) -> list[str]:
+        self.revoked.append((account_id, by.id))
+        return ["case-1", "case-2"]
+
+
+def test_removing_a_dashboard_revokes_every_case_grant_its_account_holds(client: Any) -> None:
+    """Its account (Keycloak's service account, Entra's application id) is what a case Author
+    granted Viewer to; a dashboard registered again later must not find those grants waiting
+    (ADR-148 Amendment 10, the lane review of 009a889). Nothing is revoked for one not registered."""
+    grants = _Grants()
+    app.dependency_overrides[get_investigations] = lambda: grants
+    _as(ADMIN)
+    assert client.delete("/v1/admin/dashboards/osprey-dashboard-board").status_code == 204
+    assert ("deleted", "osprey-dashboard-board") in client.identity.made
+    assert grants.revoked == [("sa-1", ADMIN.id)]
+    record = client.audit.records[-1]
+    assert record["action"] == "remove_dashboard"
+    assert record["resolved_query"] == {"client_id": "osprey-dashboard-board", "grants_revoked": 2}
+    refused = client.delete("/v1/admin/dashboards/osprey-dashboard-gone")
+    assert refused.status_code == 409 and grants.revoked == [("sa-1", ADMIN.id)]
+
+
+def test_the_register_route_passes_the_application_id_on(client: Any) -> None:
+    _as(ADMIN)
+    made = client.post("/v1/admin/dashboards", json={
+        "name": "Board", "clearance": "OFFICIAL", "org_unit": "verify",
+        "application_id": "dddddddd-eeee-4fff-8000-111111111111"})  # fmt: skip
+    assert made.status_code == 201, made.text
+    assert client.identity.application_ids == ["dddddddd-eeee-4fff-8000-111111111111"]
