@@ -359,6 +359,20 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         [AUDIT_CODES],
     ),
     (
+        "L28e an audit entry's list classification as recorded unread, its code as recorded kept (the lane review of the audit follow-up, item 3)",
+        "OspreyFlow_Core/services/api/audit_section.py",
+        "        f\"AND COALESCE(a.resolved_query->>'list_classification', 'OFFICIAL') = ANY({cls}) \"",
+        "        \"AND TRUE \"",
+        [AUDIT_CODES],
+    ),
+    (
+        "L28f an audit entry's list classification now unread, its code now kept (the lane review of the audit follow-up, item 3)",
+        "OspreyFlow_Core/services/api/audit_section.py",
+        "        f\"              WHERE m.list_name = {_LIST_NAMED}), 'OFFICIAL') = ANY({cls}) \"",
+        "        f\"              WHERE m.list_name = {_LIST_NAMED}), 'OFFICIAL') IS NOT NULL \"",
+        [f"{B}/services/api/test_audit_section_store.py::test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list"],
+    ),
+    (
         "L28c an audit entry's list code now unread (5c862eb, CARRIES a)",
         "OspreyFlow_Core/services/api/audit_section.py",
         "        f\"              WHERE m.list_name = {_LIST_NAMED}), 'P') = ANY({codes}) \"",
@@ -377,6 +391,22 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         "OspreyFlow_Core/services/api/screening.py",
         '        return {"list_classification": classification, "list_handling_code": code}',
         "        return {}",
+        [f"{ROUTES}::test_each_audit_entry_about_a_list_records_the_lists_marking",
+         f"{ROUTES}::test_a_scheduled_refreshs_audit_entry_records_the_lists_marking"],
+    ),
+    (
+        "L29b a scheduled refresh's audit entry recording no marking, at its own call site (the lane review of the audit follow-up, item 1)",
+        "OspreyFlow_Core/services/api/app.py",
+        '                            "trigger": "schedule", "slot": slot.isoformat(),\n'
+        "                            **await state.screening_lists.audit_marking(list_name)},\n",
+        '                            "trigger": "schedule", "slot": slot.isoformat()},\n',
+        [f"{ROUTES}::test_a_scheduled_refreshs_audit_entry_records_the_lists_marking"],
+    ),
+    (
+        "L29c a subscription's audit entry recording another list's marking, at its own call site (the lane review of the audit follow-up, item 4)",
+        "OspreyFlow_Core/services/api/app.py",
+        "**await screening_lists.audit_marking(body.list_name)},",
+        '**await screening_lists.audit_marking("Synthetic list")},',
         [f"{ROUTES}::test_each_audit_entry_about_a_list_records_the_lists_marking"],
     ),
 ]
