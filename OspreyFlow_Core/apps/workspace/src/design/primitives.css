@@ -816,8 +816,10 @@
 
 /* The cases, each once, with each case's views beneath it (ADR-144 decision 5), in the case menu and
    the Cases drawer alike. */
-.case-tree__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
-.case-tree__row { display: grid; gap: var(--sp-4); }
+/* One column, never wider than the list's box (`minmax(0, 1fr)`): a long view name otherwise widened the Cases drawer's
+   list past its 360 px and out of the window (ADR-145 Amendment 14 decision 1, the views harness's `long=1` scan). */
+.case-tree__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+.case-tree__row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
 .case-tree__row--view { padding-left: var(--sp-16); }
 .case-tree__line { display: flex; align-items: center; gap: var(--sp-8); min-height: var(--h-control-28); }
 .case-tree__name {

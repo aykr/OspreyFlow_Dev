@@ -10,7 +10,7 @@ import { PLAIN_APPEARANCE } from "../src/brand/brand";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { TopBar } from "../src/shell/TopBar";
 import { Drawer } from "../src/design/primitives/Drawer";
-import { ContextBanner, MODE_NOTE } from "../src/shell/ContextBanner";
+import { ContextBanner } from "../src/shell/ContextBanner";
 
 const brand = await applyHarnessBrand();
 // ADR-132 Amendment 7: `?banner=1` gives the deployment's own banner words (the owner's wording for
@@ -50,11 +50,7 @@ createRoot(container).render(
       // drawer must not cover either (ADR-145 Amendment 14 decision 2).
       <ContextBanner
         place="glass"
-        sections={[
-          { id: "case", label: "Graph", current: true, onSelect: () => undefined },
-          { id: "boards", label: "Drawing board", current: false, onSelect: () => undefined },
-        ]}
-        note={MODE_NOTE.graph}
+        onViews={() => undefined}
         caseSwitcher={<button type="button" className="btn">Case: Example</button>}
         datasets={["Prison intel"]}
         crossLink={{ label: "Open this case's data in the Ingest Studio ↗", onFollow: () => undefined }}

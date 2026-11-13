@@ -102,7 +102,8 @@ export function BoardsPlace({
       </h2>
       <p className="caption">
         {caseId
-          ? "Everything drawn is kept in this case's analyst layer. Deleting a board never deletes what was drawn."
+          ? // The owner's navigation decision (ADR-145 Amendment 15): the strip's note left; the board says it here.
+            "Drawing board: your sketch; it does not change the case's data. Everything drawn is kept in this case's analyst layer. Deleting a board never deletes what was drawn."
           : "Open a case to see its boards, or start a drawing as a case of its own."}
       </p>
       {problem && (

@@ -7,7 +7,7 @@
 // It enforces nothing: the Conduit lists only the views this reader may see, and refuses a share or
 // a delete by anyone but the creator. A member is never shown another's private view because the
 // server never sends it; the panel draws what it is given.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { currentBrand } from "../brand/brand";
 import "./views.css";
@@ -26,11 +26,18 @@ export interface ViewsPanelProps {
   onDeleted?: (viewId: string) => void;
   /** Bumped by the caller after it saves a view, so the list is read again. */
   refreshKey?: number;
+  /** Opened by the case line's *Views in this case* (ADR-145 Amendment 15): the panel takes focus, so the list is
+   * where the person is. */
+  takeFocus?: boolean;
 }
 
 type Asking = { id: string; what: "delete" } | null;
 
-export function ViewsPanel({ apiBaseUrl, bearerToken, caseId, me, openViewId = null, onOpen, onDeleted, refreshKey = 0 }: ViewsPanelProps) {
+export function ViewsPanel({ apiBaseUrl, bearerToken, caseId, me, openViewId = null, onOpen, onDeleted, refreshKey = 0, takeFocus = false }: ViewsPanelProps) {
+  const section = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (takeFocus) section.current?.focus();
+  }, [takeFocus]);
   const [views, setViews] = useState<CaseView[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [asking, setAsking] = useState<Asking>(null);
@@ -86,7 +93,7 @@ export function ViewsPanel({ apiBaseUrl, bearerToken, caseId, me, openViewId = n
 
   if (views === null) {
     return (
-      <section aria-labelledby={`views-in-${caseId}`} className="case-views">
+      <section ref={section} tabIndex={-1} aria-labelledby={`views-in-${caseId}`} className="case-views">
         {heading}
         <p className={govuk ? "govuk-body-s" : "caption"}>Loading the views…</p>
       </section>
@@ -94,7 +101,7 @@ export function ViewsPanel({ apiBaseUrl, bearerToken, caseId, me, openViewId = n
   }
 
   return (
-    <section aria-labelledby={`views-in-${caseId}`} className={govuk ? "case-views case-views--govuk" : "case-views"}>
+    <section ref={section} tabIndex={-1} aria-labelledby={`views-in-${caseId}`} className={govuk ? "case-views case-views--govuk" : "case-views"}>
       {heading}
       {views.length === 0 && problem ? null : views.length === 0 ? (
         <p className={govuk ? "govuk-body-s" : "caption"}>

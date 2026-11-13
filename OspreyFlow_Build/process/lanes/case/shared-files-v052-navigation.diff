@@ -1,0 +1,123 @@
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/contrastFindings.json b/OspreyFlow_Core/apps/workspace/a11y/contrastFindings.json
+index 786f7e5..d9283e1 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/contrastFindings.json
++++ b/OspreyFlow_Core/apps/workspace/a11y/contrastFindings.json
+@@ -1041,51 +1041,19 @@
+   }
+  },
+  "places-harness.html open=views (govuk)": {
+-  ".context-banner__sep:nth-child(4)": {
++  ".context-banner__sep:nth-child(7)": {
+    "text": "·",
+    "ratio": "unmeasurable",
+    "reason": "hidden at every point, under an opaque element over the words or clipped",
+    "own": 19.59,
+    "owner": "shell"
+   },
+-  ".govuk-notification-banner__content > .btn": {
+-   "text": "Case: Kestrel",
+-   "ratio": "unmeasurable",
+-   "reason": "hidden at every point, under an opaque element over the words or clipped",
+-   "own": 18.34,
+-   "owner": "shell"
+-  },
+-  ".context-banner__section.govuk-link:nth-child(2)": {
+-   "text": "Drawing board",
+-   "ratio": "unmeasurable",
+-   "reason": "hidden at every point, under an opaque element over the words or clipped",
+-   "own": 19.59,
+-   "owner": "shell"
+-  },
+-  ".context-banner__sep:nth-child(6)": {
+-   "text": "·",
++  "span:nth-child(8)": {
++   "text": "reads Prison intel",
+    "ratio": "unmeasurable",
+    "reason": "hidden at every point, under an opaque element over the words or clipped",
+    "own": 19.59,
+    "owner": "shell"
+   }
+- },
+- "places-harness.html open=views (dark)": {
+-  ".context-banner__sep:nth-child(8)": {
+-   "text": "·",
+-   "ratio": "unmeasurable",
+-   "reason": "hidden at every point, under an opaque element over the words or clipped",
+-   "own": 10.08,
+-   "owner": "shell"
+-  }
+- },
+- "places-harness.html open=views (light)": {
+-  ".context-banner__sep:nth-child(8)": {
+-   "text": "·",
+-   "ratio": "unmeasurable",
+-   "reason": "hidden at every point, under an opaque element over the words or clipped",
+-   "own": 7.6,
+-   "owner": "shell"
+-  }
+  }
+ }
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+index 7fd7441..8a24e1c 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+@@ -70,13 +70,13 @@ const EXTRA_STATES: Record<string, string[]> = {
+   ],
+   // ADR-145 decision 2: the banner in the Studio, with its way back, and in Admin.
+   // ADR-145 Amendment 2: Monitoring's badge (inside the GOV.UK notification banner under that
+-  // brand), and the rail's ⋯ Explore Details (ADR-145 Amendment 12) and the top bar's More views drawn
+-  // open.
++  // brand), and the top bar's More views drawn open; ADR-145 Amendment 15: the Explore panel from the rail, and the
++  // Cases panel from the case line's Views in this case, drawn open.
+   // ADR-146 decision 2: Rules and Monitoring in the switcher with its count (inside the GOV.UK header
+   // under that brand), and the place open, its banner a GOV.UK notification banner.
+   // ADR-132 Amendment 8: `banner=1` is the demonstration's deployment, the compact top under GOV.UK.
+   "places-harness.html": [
+-    "place=ingest", "place=admin", "badge=1", "open=more", "open=views", "banner=1", "banner=1&place=rules",
++    "place=ingest", "place=admin", "badge=1", "open=explore", "open=cases", "open=views", "banner=1", "banner=1&place=rules",
+     "badge=1&rights=investigate,triage_alerts,read_alert_queue",
+     "place=rules&rights=investigate,triage_alerts,read_alert_queue",
+   ],
+@@ -94,15 +94,15 @@ const EXTRA_STATES: Record<string, string[]> = {
+   // ADR-145 Amendment 2: the column's fresh-page default, the Inspector alone open.
+   "panel-frames-harness.html": ["defaults=1"],
+   // ADR-132 Amendment 7: the deployment's own banner words, in the dark, light and GOV.UK scans.
+-  // ADR-145 Amendment 12: the rail with Explore Details, and Help's keys panel open over it.
++  // ADR-145 Amendment 15: the rail of panel openers, and Help's keys panel open over it.
+   "top-bar-harness.html": ["help=1"],
+-  "shell-harness.html": ["banner=1", "banner=alone", "host=demo.service.gov.uk"],
++  "shell-harness.html": ["banner=1", "banner=alone", "host=demo.service.gov.uk", "drawer=1"],
+   // L2.3 part 1: the case screen's lightening, each prototype variant (the default is variant a).
+   "case-screen-options-harness.html": ["variant=today", "variant=b", "variant=c"],
+   // ADR-144 (L3.2b): case views as another member sees them, the Save as a view form, and the banner
+   // over an opened view.
+   // ADR-144 Amendment 3: the graph's *Views ▾*, closed, open on the case's views, and open on none.
+-  "views-harness.html": ["as=bob", "show=form", "show=lens", "show=merged", "show=merged&notes=open", "asking=delete", "show=menu", "show=menu&open=1", "show=menu&open=1&empty=1"],
++  "views-harness.html": ["in=drawer", "in=drawer&asking=delete", "in=drawer&long=1", "as=bob", "show=form", "show=lens", "show=merged", "show=merged&notes=open", "asking=delete", "show=menu", "show=menu&open=1", "show=menu&open=1&empty=1"],
+   // ADR-143 decisions 4 to 7 (L3.3): a board open with its drawn and loaded items, its inspector, its
+   // item and link forms and the withdrawal's question; another member's read-only view; a blank board;
+   // the boards list with a board from a view chosen, the edit form and an item's menu open, a drawing
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 5a29e55..791dcdc 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -854,12 +854,14 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
+   // sections, and Home's cards.
+   "switch-place-by-keyboard",
+   "banner-cross-link-by-keyboard",
+-  // ADR-145 Amendment 13: the sections are the mode toggle, Graph · Drawing board, with each mode's note.
+-  "banner-sections-by-keyboard",
++  // ADR-145 Amendment 15 (the owner's navigation decision, replacing Amendment 13's mode toggle): the case line's
++  // Views in this case opens the Cases panel, focus returned to it.
++  "case-line-views-by-keyboard",
+   "home-place-cards-by-keyboard",
+-  // ADR-145 Amendment 2 (variant B): the rail's More and each destination under it, More views, and a
+-  // folded panel of the column opened with one keypress.
+-  "rail-more-by-keyboard",
++  // ADR-145 Amendment 2 (variant B) and Amendment 15: each rail panel opened and closed, the view kept and focus
++  // returned to its opener (the rail's More left with Amendment 15), More views, and a folded panel of the column
++  // opened with one keypress.
++  "rail-panels-by-keyboard",
+   "more-views-by-keyboard",
+   "open-a-folded-panel-by-keyboard",
+   // ADR-145 Amendment 4 and ADR-146 decision 2 (L2.9): Rules and Monitoring, the fourth place, in the

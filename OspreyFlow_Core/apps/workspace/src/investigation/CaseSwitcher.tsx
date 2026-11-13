@@ -80,18 +80,6 @@ export function CaseSwitcher({
             }}
           />
           <hr className="menu-panel__rule" />
-          {onBrowse && (
-            <button
-              type="button"
-              className="menu-panel__item"
-              onClick={() => {
-                close();
-                onBrowse();
-              }}
-            >
-              All cases
-            </button>
-          )}
           {!creating && (
             <button type="button" className="menu-panel__item" onClick={() => setCreating(true)}>
               New case
@@ -104,6 +92,19 @@ export function CaseSwitcher({
               inputLabel="New case name"
               onCreated={onOpen}
             />
+          )}
+          {/* The owner's navigation decision (ADR-145 Amendment 15): the menu's last entry, opening the Cases panel. */}
+          {onBrowse && (
+            <button
+              type="button"
+              className="menu-panel__item"
+              onClick={() => {
+                close();
+                onBrowse();
+              }}
+            >
+              All cases
+            </button>
           )}
         </>
       )}

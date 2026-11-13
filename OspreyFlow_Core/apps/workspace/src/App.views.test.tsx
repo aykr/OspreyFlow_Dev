@@ -127,10 +127,12 @@ describe("Views ▾ by the graph (ADR-144 Amendment 3)", () => {
     await vi.waitFor(() => expect(screen.queryByRole("region", { name: "Open view" })).toBeNull());
   });
 
+  // The owner's navigation decision (ADR-145 Amendment 15): the Cases panel is opened at its views list from the case
+  // line's *Views in this case* (the rail's Cases left).
   test("the Cases drawer keeps its list of the case's views", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Cases" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "You are in the Glass" })).getByRole("button", { name: "Views in this case" }));
     const list = await screen.findByRole("list", { name: "Views in this case" });
     expect(within(list).getByText("Payments in March")).toBeTruthy();
   });

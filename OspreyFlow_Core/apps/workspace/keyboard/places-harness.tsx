@@ -7,10 +7,9 @@
 // and choosing another is the real `openCase`, which reloads the page as the Glass does (here, back
 // into this harness with `?investigation=` and `?view=`), so a cross-link that lost the case or the
 // view across that reload would show it; what was chosen is on `window.__PLACES__`.
-import { PANEL_OPENERS, RAIL_LABELS, railMark, splitRail } from "../src/shell/railLayout";
+import { MORE_VIEWS, ON_THE_RAIL, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS, VIEW_SWITCH } from "../src/shell/railLayout";
 import type { RailEntry } from "../src/rights/visibility";
-
-const RAIL_ENTRIES: RailEntry[] = ["cases", "explore", "questions", "dashboards", "history", "ownership", "strength"];
+import { Drawer } from "../src/design/primitives/Drawer";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -21,7 +20,7 @@ import { AdminPlace } from "../src/admin/AdminPlace";
 import { BrandFrame } from "../src/brand/BrandFrame";
 import { PLAIN_APPEARANCE } from "../src/brand/brand";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
-import { ContextBanner, crossLinkFor, glassMode, MODE_NOTE } from "../src/shell/ContextBanner";
+import { ContextBanner, crossLinkFor } from "../src/shell/ContextBanner";
 import { PlaceSwitcher } from "../src/shell/PlaceSwitcher";
 import { useLastGlassView } from "../src/shell/placeMemory";
 import { openCase } from "../src/investigation/cases";
@@ -53,8 +52,12 @@ function Harness() {
   const start = (params.get("place") as PlaceId | null) ?? (params.get("view") === "ingest" ? "ingest" : null) ?? places[0] ?? "glass";
   const [admin, setAdmin] = useState(start === "admin");
   const [view, setView] = useState<View>(start === "ingest" ? "ingest" : start === "rules" ? "alerts" : "graph");
+  const switched = splitViews(
+    [...VIEW_SWITCH, ...MORE_VIEWS].map((id) => ({ id, label: VIEW_LABELS[id], pressed: view === id, onSelect: () => setView(id) })),
+  );
   // The rail's panels, open or not (ADR-145 Amendment 14): each opener toggles its own, as `App.tsx`'s do.
   const [panels, setPanels] = useState<ReadonlySet<RailEntry>>(new Set());
+  const setPanel = (id: RailEntry) => setPanels((open) => new Set(open).add(id));
   const toggle = (id: RailEntry) =>
     setPanels((open) => {
       const next = new Set(open);
@@ -95,42 +98,23 @@ function Harness() {
         app={place === "ingest" ? "ingest" : place === "rules" ? "rules" : "glass"}
         // `?badge=1`: Rules and Monitoring with its open count, as `App.tsx` draws it (ADR-146 decision 2).
         places={<PlaceSwitcher places={places} current={place} onChoose={choose} counts={{ rules: params.has("badge") ? 3 : undefined }} />}
+        // The owner's navigation decision (ADR-145 Amendment 15): the one view switch and its More views, laid out by
+        // the same `splitViews` as `App.tsx`; Messages after them, as `App.tsx` adds it for a node.
         views={
           place === "glass"
-            ? (["graph", "map", "dossier"] as const).map((v) => ({
-                id: v,
-                label: { graph: "Graph", map: "Map", dossier: "Messages" }[v],
-                pressed: view === v,
-                onSelect: () => setView(v),
-              }))
+            ? [
+                ...switched.main,
+                { id: "dossier", label: "Messages", pressed: view === "dossier", onSelect: () => setView("dossier") },
+              ]
             : []
         }
-        // ADR-145 Amendment 2: Matrix and Reports one click away, as `App.tsx` offers them.
-        moreViews={
-          place === "glass"
-            ? (["matrix", "reports"] as const).map((v) => ({
-                id: v,
-                label: { matrix: "Matrix", reports: "Figures" }[v],
-                pressed: view === v,
-                onSelect: () => setView(v),
-              }))
-            : []
-        }
+        moreViews={place === "glass" ? switched.more : []}
         account={null}
       />
       <ContextBanner
         place={place}
-        sections={
-          place === "glass"
-            ? [
-                // ADR-145 Amendment 13: the mode toggle, as `App.tsx` draws it; neither current on a place of
-                // the rail's own, such as Connection strength (Amendment 14 decision 3, the same `glassMode`).
-                { id: "case", label: "Graph", current: glassMode(view) === "graph", onSelect: () => setView("graph") },
-                { id: "boards", label: "Drawing board", current: glassMode(view) === "board", onSelect: () => setView("boards") },
-              ]
-            : []
-        }
-        note={place === "glass" && glassMode(view) ? MODE_NOTE[glassMode(view)!] : undefined}
+        // Amendment 15: no mode toggle and no note; the case line's *Views in this case* opens the Cases panel.
+        onViews={place === "glass" ? () => setPanel("cases") : undefined}
         caseSwitcher={place === "admin" ? undefined : caseMenu}
         datasets={place === "glass" ? ["Prison intel"] : null}
         crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {
@@ -151,10 +135,10 @@ function Harness() {
           {place === "glass" && (
             // The Glass's rail as `App.tsx` splits it (ADR-145 Amendment 12, `shell/railLayout.ts`).
             <LeftRail
-              {...splitRail(RAIL_ENTRIES.map((id) => ({
+              {...splitRail(ON_THE_RAIL.map((id) => ({
                 id, label: RAIL_LABELS[id], icon: id,
-                onSelect: PANEL_OPENERS.includes(id) ? () => toggle(id) : () => setView(id as View),
-                // ADR-145 Amendment 14 decision 3: marked by the same `railMark` as `App.tsx`, never a copy.
+                onSelect: () => toggle(id),
+                // Marked by the same `railMark` as `App.tsx`, never a copy: expanded while its panel is open.
                 ...railMark(id, { view, open: panels }),
               })))}
               onHelp={() => undefined}
@@ -163,6 +147,12 @@ function Harness() {
           <main aria-label="Place content">
             <p>{`${place}, ${view}, on case ${caseId}`}</p>
           </main>
+          {/* Each open panel is a real drawer, as `App.tsx`'s are, so closing it returns focus to its opener. */}
+          {[...panels].map((id) => (
+            <Drawer key={id} open onClose={() => toggle(id)} title={id === "cases" ? "Cases" : RAIL_LABELS[id]}>
+              <p>{id === "cases" ? "The case's views, then every case." : `${RAIL_LABELS[id]}'s panel.`}</p>
+            </Drawer>
+          ))}
         </div>
       )}
     </div>
@@ -171,15 +161,18 @@ function Harness() {
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
-// `?open=more` or `?open=views`: the rail's ⋯ Explore Details or the top bar's More views drawn open, so the
-// accessibility scan sees the menu itself (`a11y/every-harness.spec.ts`).
+// `?open=views`: the top bar's More views drawn open; `?open=explore` or `?open=cases`: the Explore panel, or the Cases
+// panel from *Views in this case*, drawn open (ADR-145 Amendment 15), so the accessibility scan sees each
+// (`a11y/every-harness.spec.ts`).
 const opening = params.get("open");
 if (opening) {
   const press = () => {
     const button =
-      opening === "more"
-        ? document.querySelector<HTMLButtonElement>('nav[aria-label="Workspace"] button[aria-label^="Explore Details"]')
-        : [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("More views"));
+      opening === "explore"
+        ? document.querySelector<HTMLButtonElement>('nav[aria-label="Workspace"] button[aria-label="Explore"]')
+        : opening === "cases"
+          ? [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Views in this case")
+          : [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("More views"));
     if (button) button.click();
     else setTimeout(press, 50);
   };

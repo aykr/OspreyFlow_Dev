@@ -1,22 +1,15 @@
-// ADR-145 Amendment 14 decision 3: one place, one marker. A place is pressed while it is the view open; a
-// panel's opener is never pressed, only expanded while its panel is open.
+// ADR-145 Amendments 14 and 15: the rail holds panel openers alone (the owner's navigation decision); an opener
+// is never pressed, only expanded while its panel is open. A view's marker is the top bar's view switch.
 import { describe, expect, it } from "vitest";
 
 import { EXPLORE_DETAILS, ON_THE_RAIL, PANEL_OPENERS, railMark } from "./railLayout";
 
 describe("railMark", () => {
-  it("presses the place open and nothing else; expands a panel's opener and never presses it", () => {
-    const state = { view: "dashboards", open: new Set(["cases", "history"] as const) };
+  it("expands a panel's opener while its panel is open and never presses it; the rail holds openers alone (Amendment 15)", () => {
+    const state = { view: "dashboards", open: new Set(["history"] as const) };
     const marks = Object.fromEntries([...ON_THE_RAIL, ...EXPLORE_DETAILS].map((id) => [id, railMark(id, state)]));
-    expect(marks).toEqual({
-      cases: { expanded: true },
-      explore: { expanded: false },
-      questions: { expanded: false },
-      dashboards: { pressed: true },
-      history: { expanded: true },
-      ownership: { pressed: false },
-      strength: { pressed: false },
-    });
+    expect(marks).toEqual({ explore: { expanded: false }, questions: { expanded: false }, history: { expanded: true } });
+    expect(EXPLORE_DETAILS).toEqual([]);
   });
 
   it("names every panel opener among the rail's entries", () => {

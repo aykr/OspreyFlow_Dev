@@ -19,10 +19,14 @@ import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { createWorkingSet } from "../src/workingset/store";
 import { guideUrl } from "../src/home/guides";
-import { RAIL_LABELS, splitRail } from "../src/shell/railLayout";
+import { MORE_VIEWS, ON_THE_RAIL, RAIL_LABELS, splitRail, splitViews, VIEW_LABELS, VIEW_SWITCH } from "../src/shell/railLayout";
 import type { RailEntry } from "../src/rights/visibility";
 
-const RAIL_ENTRIES: RailEntry[] = ["cases", "explore", "questions", "dashboards", "history", "ownership", "strength"];
+// The rail and the view switch as `App.tsx` lays them out (the owner's navigation decision, ADR-145 Amendment 15).
+const RAIL_ENTRIES: readonly RailEntry[] = ON_THE_RAIL;
+const SWITCHED = splitViews(
+  [...VIEW_SWITCH, ...MORE_VIEWS].map((id) => ({ id, label: VIEW_LABELS[id], pressed: id === "graph", onSelect: () => window.__TOPBAR__!.views.push(id) })),
+);
 import { useHelpKey, WorkspaceWelcome } from "../src/welcome/WorkspaceWelcome";
 import type { OntologySchema } from "../../../packages/schemas/generated";
 
@@ -167,15 +171,9 @@ createRoot(container).render(
       search={
         <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" investigationId="inv-1" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} onApplyDelta={(delta) => workingSet.store.getState().applyDelta(delta)} />
       }
-      views={[
-        { id: "graph", label: "Graph", pressed: true, onSelect: () => window.__TOPBAR__!.views.push("graph") },
-        { id: "map", label: "Map", pressed: false, onSelect: () => window.__TOPBAR__!.views.push("map") },
-      ]}
-      // ADR-145 Amendment 2: Matrix and Reports (ADR-111) under More views, as `App.tsx` offers them.
-      moreViews={[
-        { id: "matrix", label: "Matrix", pressed: false, onSelect: () => window.__TOPBAR__!.views.push("matrix") },
-        { id: "reports", label: "Figures", pressed: false, onSelect: () => window.__TOPBAR__!.views.push("reports") },
-      ]}
+      views={SWITCHED.main}
+      // ADR-145 Amendment 15: Matrix, Figures, Ownership and Connection strength under More views, as `App.tsx` offers them.
+      moreViews={SWITCHED.more}
       actions={<Button>Export ⚙</Button>}
       account={
         <>

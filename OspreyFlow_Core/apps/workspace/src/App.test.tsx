@@ -419,8 +419,10 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     within(await screen.findByRole("navigation", { name: "Places" })).findByRole("button", { name: /^Rules and Monitoring/ });
   // ADR-139: Connection strength, which stayed in the Glass, under the rail's Explore Details
   // (ADR-145 Amendment 12).
+  // Connection strength is under the top bar's More views (the owner's navigation decision, ADR-145 Amendment 15).
   const openStrength = async () => {
-    fireEvent.click(within(await screen.findByRole("navigation", { name: "Workspace" })).getByRole("button", { name: /^Explore Details/ }));
+    await screen.findByRole("group", { name: "View" });
+    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Connection strength" }));
   };
 
@@ -511,7 +513,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     const rail = await screen.findByRole("navigation", { name: "Workspace" });
     expect(within(rail).queryByRole("button", { name: "Watches" })).toBeNull();
     expect(within(rail).queryByRole("button", { name: /Monitoring/ })).toBeNull();
-    expect(within(await screen.findByRole("navigation", { name: "In the Glass" })).queryByRole("button", { name: /Monitoring/ })).toBeNull();
+    expect(within(await screen.findByRole("region", { name: "You are in the Glass" })).queryByRole("button", { name: /Monitoring/ })).toBeNull();
     fireEvent.click(await rulesPlace());
     expect(await screen.findByRole("region", { name: "You are in Rules and Monitoring" })).toBeTruthy();
     expect((await rulesPlace()).getAttribute("aria-current")).toBe("page");
@@ -711,11 +713,12 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     note("figures");
     render(<App />);
     await screen.findByRole("note", { name: "Opened from an alert" });
-    // ADR-145 Amendment 12: Dashboards is on the rail itself.
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Dashboards" }));
+    // ADR-145 Amendment 15: Dashboards is the view switch's Reports, and Figures is under its More views.
+    fireEvent.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Reports" }));
     await screen.findByRole("region", { name: "Alert monitoring" });
     expect(screen.queryByRole("note", { name: "Opened from an alert" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Figures" }));
+    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Figures" }));
     await screen.findByRole("heading", { name: "Figures" });
     expect(screen.queryByRole("note", { name: "Opened from an alert" })).toBeNull();
   });

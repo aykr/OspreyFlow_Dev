@@ -41,8 +41,17 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
       if (e.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", onKeyDown);
-    ref.current?.focus();
-    return () => document.removeEventListener("keydown", onKeyDown);
+    // Closing returns focus to whatever opened it (the owner's navigation decision, ADR-145 Amendment 15): its rail
+    // opener, or *Views in this case*. Not when focus has already gone somewhere else the person chose.
+    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    const drawer = ref.current;
+    drawer?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      const now = document.activeElement;
+      const lost = now === null || now === document.body || (drawer !== null && drawer.contains(now));
+      if (opener?.isConnected && lost) opener.focus();
+    };
   }, [open]);
 
   // Measured before the first paint, and again whenever the chrome or the window changes size (the bar

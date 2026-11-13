@@ -55,10 +55,10 @@ import { requestOpening, takeOpening } from "./admin/needsYou/openings";
 import { AccountMenu } from "./auth/AccountMenu";
 import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
 import { LeftRail } from "./shell/LeftRail";
-import { RAIL_LABELS, railMark, splitRail } from "./shell/railLayout";
+import { MORE_VIEWS, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS, VIEW_SWITCH } from "./shell/railLayout";
 import { Drawer } from "./design/primitives/Drawer";
 import { TopBar } from "./shell/TopBar";
-import { ContextBanner, crossLinkFor, glassMode, MODE_NOTE, useCaseContext } from "./shell/ContextBanner";
+import { ContextBanner, crossLinkFor, useCaseContext } from "./shell/ContextBanner";
 import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { useLastGlassView } from "./shell/placeMemory";
 import { keepPlace, placeAtLoad, placeOnScreen, restorePlace } from "./auth/refreshPlace";
@@ -786,7 +786,9 @@ export function App() {
   }, []);
   useHelpKey(toggleWelcome);
   // ADR-097 Amendment 1: the cases, and the views of each (ADR-144 decision 5), reached from the rail.
-  const [casesOpen, setCasesOpen] = useState(false);
+  // The Cases panel, and where it opened (Amendment 15): at its views list from *Views in this case*, or whole from
+  // the case menu's *All cases*.
+  const [casesOpen, setCasesOpen] = useState<false | "views" | "all">(false);
   // ADR-144 and the owner's ruling of 8 November 2026 (Amendment 2): an opened view, shown on the
   // canvas as a read-only lens over the case, and `viewsRead` bumped to read the views again.
   const [lens, setLens] = useState<Lens | null>(null);
@@ -1703,41 +1705,44 @@ export function App() {
       }}
     />
   );
-  // ADR-145 Amendment 12: the rail's places, split and ordered by `shell/railLayout.ts` (Cases, Explore,
-  // Ask & Chat and Dashboards on it; History, Ownership and Connection strength under Explore Details).
-  // ADR-145 Amendment 14 decision 3: one place, one marker, as `railMark` says. A panel's opener toggles its
-  // panel, so a second press closes what its `aria-expanded` says is open.
+  // The owner's navigation decision of 13 November 2026 (ADR-145 Amendment 15, amending Amendments 2 and 12): the
+  // rail holds the panel openers alone, Explore, Ask & Chat and History (`shell/railLayout.ts`), each toggling its
+  // panel and marked expanded while it is open, never pressed (`railMark`); opening or closing one never changes
+  // the view.
   const railOpen = new Set<RailEntry>(
-    ([["cases", casesOpen], ["explore", exploreOpen], ["questions", questionsOpen], ["history", historyOpen]] as const)
+    ([["explore", exploreOpen], ["questions", questionsOpen], ["history", historyOpen]] as const)
       .filter(([, open]) => open)
       .map(([id]) => id),
   );
   const mark = (id: RailEntry) => railMark(id, { view, open: railOpen });
   const railTools = [
-    { id: "cases", label: RAIL_LABELS.cases, icon: "cases" as const, onSelect: () => setCasesOpen((open) => !open), ...mark("cases") },
     { id: "explore", label: RAIL_LABELS.explore, icon: "explore" as const, onSelect: () => setExploreOpen((open) => !open), ...mark("explore") },
     { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: () => setQuestionsOpen((open) => !open), ...mark("questions") },
-    // ADR-111 Amendment 3: Superset dashboards, drawn inside the Glass.
-    { id: "dashboards", label: RAIL_LABELS.dashboards, icon: "dashboards" as const, onSelect: () => setView("dashboards"), ...mark("dashboards") },
     { id: "history", label: RAIL_LABELS.history, icon: "history" as const, onSelect: () => setHistoryOpen((open) => !open), ...mark("history") },
-    // ADR-109 ruling 5: enhanced due diligence — ultimate beneficial ownership.
-    { id: "ownership", label: RAIL_LABELS.ownership, icon: "ownership" as const, onSelect: () => setView("ownership"), ...mark("ownership") },
-    // ADR-139: Connection strength, which stayed in the Glass when Monitoring left (ADR-146 decision 2).
-    { id: "strength", label: RAIL_LABELS.strength, icon: "strength" as const, onSelect: () => setView("strength"), ...mark("strength") },
   ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id));
   const railSplit = splitRail(railTools);
-  // ADR-145 Amendment 2: the view switch keeps Graph and Map; Matrix and Reports are under More views.
-  // Someone offered none of Graph and Map (a Reports Viewer) has theirs in the switch itself.
-  const allowedViews = [
-    { id: "graph", label: "Graph", pressed: view === "graph", onSelect: () => setView("graph") },
-    { id: "map", label: "Map", pressed: view === "map", onSelect: () => setView("map") },
-    // `02_GLASS_FRONTEND.md` §6: the screen-reader-navigable rendering of the same data.
-    { id: "matrix", label: "Matrix", pressed: view === "matrix", onSelect: () => setView("matrix") },
-    // ADR-145 Amendment 4 decision 8: the case's Figures, replacing ADR-111's Reports view.
-    { id: "reports", label: "Figures", pressed: view === "reports", onSelect: () => setView("reports") },
-  ].filter((v) => (viewsFor(rights) as string[]).includes(v.id));
-  const mainViews = allowedViews.filter((v) => v.id === "graph" || v.id === "map");
-  const otherViews = allowedViews.filter((v) => v.id !== "graph" && v.id !== "map");
+  // Amendment 15: one view switch in the top bar, Graph · Map · Drawing board · Reports, then More views with Matrix,
+  // Figures, Ownership and Connection strength; exactly one view is current. *Reports* is ADR-111 Amendment 3's
+  // dashboards view, unchanged inside. Someone offered none of the four (a Reports Viewer offered Figures alone) has
+  // theirs in the switch itself. Each is offered by the rights that offered it before (`viewsFor`, `railEntries`);
+  // the drawing board by `investigate`, as its routes ask.
+  const offered = new Set<string>([...viewsFor(rights), ...railEntries(rights), ...(viewsFor(rights).includes("graph") ? ["boards"] : [])]);
+  const { main: mainViews, more: otherViews } = splitViews(
+    [...VIEW_SWITCH, ...MORE_VIEWS]
+      .filter((id) => offered.has(id))
+      .map((id) => ({
+        id,
+        label: VIEW_LABELS[id],
+        pressed: view === id,
+        onSelect:
+          id === "boards"
+            ? () => {
+                setBoardToOpen(null);
+                setView("boards");
+              }
+            : () => setView(id),
+      })),
+  );
   const showsWorkingSetTools =
     // Rules and Monitoring is a place of its own (ADR-146 decision 2), not a view over the working set.
     showsInspector(rights) && !["ingest", "alerts", "dossier", "reports", "dashboards"].includes(view);
@@ -1827,33 +1832,17 @@ export function App() {
           cross-link between the Glass and the Studio for a person who holds both. */}
       <ContextBanner
         place={app}
-        // ADR-145 decision 1: the Glass's mode toggle, named Graph · Drawing board by Amendment 13 (the
-        // owner, 13 November 2026); the drawing board is ADR-143's (L3.3). Monitoring left for Rules and
-        // Monitoring (ADR-146 decision 2), its count with it.
-        sections={
-          app === "glass"
-            ? [
-                // ADR-145 Amendment 14 decision 3: Graph is current on a view of the case's data alone; on a
-                // place of the rail's own (Dashboards, Ownership, Connection strength) neither is.
-                { id: "case", label: "Graph", current: glassMode(view) === "graph", onSelect: () => setView(landingView(rights)) },
-                {
-                  id: "boards",
-                  label: "Drawing board",
-                  current: glassMode(view) === "board",
-                  onSelect: () => {
-                    setBoardToOpen(null);
-                    setView("boards");
-                  },
-                },
-              ]
-            : []
-        }
+        // The owner's navigation decision (ADR-145 Amendment 15): no mode toggle and no note in the Glass; its views
+        // are the top bar's one switch. The case line's *Views in this case* opens the Cases panel at its views.
+        onViews={app === "glass" ? () => setCasesOpen("views") : undefined}
         caseSwitcher={
           <CaseSwitcher
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
             currentId={investigationId}
-            onBrowse={() => setBrowsingCases(true)}
+            // Amendment 15: the menu's last entry, *All cases*, opens the Cases panel (its *Browse all cases* the
+            // full list).
+            onBrowse={() => setCasesOpen("all")}
             onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
             // ADR-145 Amendment 14 decision 4: where the Glass's banner says what the case reads ("reads …", or
             // "reads no dataset"), the switcher's scope badge (ADR-115 Amendment 1 point 5) would say it again;
@@ -1862,8 +1851,6 @@ export function App() {
           />
         }
         // ADR-145 Amendment 13: the open mode's one line, read with the region.
-        // ADR-145 Amendment 14 decision 3: none on a place of the rail's own, which is not a mode.
-        note={app === "glass" && glassMode(view) ? MODE_NOTE[glassMode(view)!] : undefined}
         // ADR-145 decision 2: the Glass names what the case reads; the Studio's dataset is its own
         // choice, drawn by the Studio (`ingest/IngestStudio.tsx`), so the banner does not repeat it.
         datasets={app === "glass" ? caseContext.datasets : null}
@@ -2670,7 +2657,7 @@ export function App() {
         />
       </Drawer>
       {/* ADR-144 decision 5: the open case's *Views in this case*, then every case once with its views. */}
-      <Drawer open={casesOpen} onClose={() => setCasesOpen(false)} title="Cases">
+      <Drawer open={casesOpen !== false} onClose={() => setCasesOpen(false)} title="Cases">
         <div className="drawer-stack">
           {investigationId && (
             <ViewsPanel
@@ -2680,6 +2667,7 @@ export function App() {
               me={principal?.sub ?? ""}
               openViewId={lens?.opened.view.id ?? null}
               refreshKey={viewsRead}
+              takeFocus={casesOpen === "views"}
               onOpen={(chosen) => {
                 setCasesOpen(false);
                 void openLens(chosen.id);
