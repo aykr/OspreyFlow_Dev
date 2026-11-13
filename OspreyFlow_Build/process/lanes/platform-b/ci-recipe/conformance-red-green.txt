@@ -1,0 +1,15 @@
+CI run 43493501712 at 9c1fdfe, job conformance (132120473634): 1 failed, 3476 passed, 26 skipped:
+  FAILED tests/ingest/test_committed_recipes_pin.py::test_every_committed_recipe_passes_the_pin_check[r1_kind_row_template.yaml]
+  ValidationError: 5 validation errors for Recipe (id, version, label, connector, ontology_version: Field required)
+
+Cause, deterministic (not flaky): R1's af1803a committed process/lanes/platform/gates/r1_kind_row_template.yaml, the body
+of PUT /recipes/{id}/row-template, whose top-level row_template is how the test finds a committed recipe (by content,
+anywhere in the two trees). It passed at 0a55054 (run 43437345111) because the file was not there yet.
+
+Fix: the body nested under put_row_template (identical body, checked equal to main's), r1_kind.py's two reads take
+that key. The test is unchanged: a real recipe missing its id still fails it.
+
+== red, main 882edac:
+  FAILED ...test_every_committed_recipe_passes_the_pin_check[r1_kind_row_template.yaml]  (1 failed, 55 passed)
+== green:
+  55 passed in 2.10s

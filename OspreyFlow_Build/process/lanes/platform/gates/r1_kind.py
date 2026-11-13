@@ -723,7 +723,7 @@ def checks() -> None:
     rid = r.json()["recipe_id"]
     r = c.get(f"{base}/recipes/{rid}/profile", headers=admin)
     ok("its file is profiled", r.status_code == 200, f"{r.status_code} {r.text[:300]}")
-    template = yaml.safe_load((HERE / "r1_kind_row_template.yaml").read_text())
+    template = yaml.safe_load((HERE / "r1_kind_row_template.yaml").read_text())["put_row_template"]
     r = c.put(f"{base}/recipes/{rid}/row-template", headers=admin, json=template)
     ok("it is mapped", r.status_code == 200, r.text[:300])
     for step in ("verify", "publish"):
@@ -831,7 +831,7 @@ def _load_file(c: Any, admin: dict[str, str], case: str, name: str, csv: str) ->
         steps.append(("recipe", r))
     if r.status_code == 201:
         rid = r.json()["recipe_id"]
-        template = yaml.safe_load((HERE / "r1_kind_row_template.yaml").read_text())
+        template = yaml.safe_load((HERE / "r1_kind_row_template.yaml").read_text())["put_row_template"]
         for what, call in (("profile", lambda: c.get(f"{base}/recipes/{rid}/profile", headers=admin)),
                            ("map", lambda: c.put(f"{base}/recipes/{rid}/row-template", headers=admin, json=template)),
                            ("verify", lambda: c.post(f"{base}/recipes/{rid}/verify", headers=admin, json={})),
