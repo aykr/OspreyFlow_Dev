@@ -31,7 +31,8 @@ const DRAFT = { id: "r1", investigation_id: "c1", owner_id: "me", name: "Okafor"
   params: { typology: "sentence", pattern_id: "p", sentence: { subject: "Person" } } }; // prettier-ignore
 
 type Call = { method: string; path: string; body: unknown };
-function serve(routes: Record<string, (body: unknown) => Response>) {
+type Answer = (body: unknown) => Response | Promise<Response>;
+function serve(routes: Record<string, Answer>) {
   const calls: Call[] = [];
   vi.stubGlobal(
     "fetch",
@@ -49,7 +50,7 @@ function serve(routes: Record<string, (body: unknown) => Response>) {
 
 const DEPLOYMENT_WIDE = ontology("Person", "Prisoner", "Account", "Vessel");
 
-function world(over: Record<string, (body: unknown) => Response> = {}) {
+function world(over: Record<string, Answer> = {}) {
   return serve({
     "rules/datasets": () => json(200, [PRISON, FINANCE]),
     "alert-teams": () => json(200, [{ role_id: "team-7", display_name: "Prison intel", lead: false, members: [], member_count: 6 }]),
@@ -91,10 +92,20 @@ describe("the rule editor (ADR-146 decision 3)", () => {
   });
 
   it("says where its alerts go before saving, with how many of the team hold the case", async () => {
-    world();
+    // The teams answer after the dataset is chosen, as a slow real read can: the team select is
+    // drawn before its teams arrive, and a choice made then is of an option not yet there.
+    world({
+      "alert-teams": async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return json(200, [{ role_id: "team-7", display_name: "Prison intel", lead: false, members: [], member_count: 6 }]);
+      },
+    });
     editor();
     await choose("ds-prison");
-    fireEvent.change(await screen.findByLabelText("Alert goes to (team)"), { target: { value: "team:team-7" } });
+    const goesTo = await screen.findByLabelText("Alert goes to (team)");
+    // Choose the team only once it is offered: its membership is what the sentence counts.
+    await within(goesTo).findByRole("option", { name: "Prison intel only" });
+    fireEvent.change(goesTo, { target: { value: "team:team-7" } });
     expect(screen.getByLabelText("Where its alerts go").textContent).toBe(
       "Its alerts will appear in Alerts, seen by the 6 members of Prison intel who hold this case and the home case's Authors.",
     );
