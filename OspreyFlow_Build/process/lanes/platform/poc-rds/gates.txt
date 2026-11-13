@@ -1,0 +1,6 @@
+At the 4b head, offline on the Mac, ports pinned, OSPREY_LANE unset:
+pytest tests/harness/test_cloud_platform*.py tests/cp_policy_check tests/cloud_platform_backup tests/test_admin_guide.py tests/test_docs_pdf.py
+550 passed, 290 skipped, 1 warning in 150.65s (0:02:30)
+exit 0
+Then test_cloud_platform_poc.py again after connections.py's comments were rewrapped: 42 passed in 4.69s
+ruff check . (Core): All checks passed; mypy harness/cloud_platform: no issues; tools.docs_pdf check: exit 0
