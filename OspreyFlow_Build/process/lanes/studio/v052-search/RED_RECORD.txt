@@ -1,0 +1,27 @@
+== plant: the access filter moved to post_filter: NOT APPLIED on the first run (the formatter had rewrapped the line); its 23 passed proves nothing, and it is rerun at the end
+== plant: dis_max sums bands (tie_breaker 1)
+FAILED tests/services/api/test_search_index_query.py::test_every_dis_max_takes_the_best_band_alone
+1 failed, 22 passed in 0.43s
+== plant: a fuzzy typo band instead of trigrams
+FAILED tests/services/api/test_search_index_query.py::test_no_clause_expands_against_the_word_list
+FAILED tests/services/api/test_search_index_query.py::test_the_expansion_check_finds_a_planted_fuzzy_clause
+2 failed, 21 passed in 0.42s
+== plant: the query cut silently instead of refused
+FAILED tests/services/api/test_search_index_query.py::test_a_query_over_the_limit_is_refused_not_cut
+1 failed, 22 passed in 0.41s
+== plant: the access filter optional
+FAILED tests/services/api/test_search_index_query.py::test_a_body_cannot_be_built_without_an_access_filter
+1 failed, 22 passed in 0.42s
+== plant: the canonical form not asked
+FAILED tests/services/api/test_search_index_query.py::test_the_identifier_band_asks_the_canonical_form_too
+1 failed, 22 passed in 0.41s
+== restored
+23 passed in 0.41s
+== plant (rerun): the access filter moved to post_filter (limits hits, not counts)
+ OspreyFlow_Core/services/api/search_index_query.py | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+FAILED tests/services/api/test_search_index_query.py::test_the_access_filter_limits_hits_and_counts_alike
+FAILED tests/services/api/test_search_index_query.py::test_narrowing_filters_join_the_access_filter_never_replace_it
+2 failed, 21 passed in 0.44s
+== restored
+23 passed in 0.41s
