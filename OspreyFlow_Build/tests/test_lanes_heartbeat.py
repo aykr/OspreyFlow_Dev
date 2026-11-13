@@ -990,3 +990,32 @@ def test_default_views_run_at_once_do_not_mix_what_needs_you(hb, tmp_path) -> No
     for out in outs:
         assert _section(out, "NEEDS YOU:") == ["  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b"], out
     assert not [p.name for p in (tmp_path / "lanes").iterdir() if p.name.startswith((".overview.", ".merges.", ".ovneeds."))]
+
+
+# --- "release" is not "lease" (the orchestrator, 13 November 2026) --------------------------------------------
+# A note was read as waiting for a test stack whenever it held the letters "lease", so "waiting for R1 to release the
+# test server" went to the orchestrator's queue, not NEEDS YOU. The word itself is what counts.
+
+
+def test_a_note_saying_release_that_names_the_owner_is_the_owners(hb) -> None:
+    _all_beat(hb)
+    assert hb("beat", "case", "waiting-for-owner", "the owner's word on the release notes").returncode == 0
+    show = hb("show")
+    assert _needs(show) == ["case is waiting for you: the owner's word on the release notes"]
+    assert "waiting for the lease" not in show.stdout
+
+
+def test_a_lane_blocked_on_a_release_is_blocked_not_waiting_for_the_lease(hb) -> None:
+    _all_beat(hb)
+    assert hb("beat", "glass", "blocked", "waiting for R1 to release the test server").returncode == 0
+    show = hb("show")
+    assert _needs(show) == ["glass is blocked: waiting for R1 to release the test server"]
+    assert "waiting for the lease" not in show.stdout
+
+
+def test_the_default_view_reads_release_as_a_word_of_its_own(hb, tmp_path) -> None:
+    env = _overview_fixture(hb, tmp_path)
+    assert hb("beat", "admin", "waiting-for-owner", "A1: the owner's word on the release notes").returncode == 0
+    out = hb(**env).stdout
+    assert "  ADMIN · A1 · waiting for you · last heard 0m ago" in _section(out, "LANES NOW")
+    assert "A1 (admin, needs you)" in out and "waiting for a test stack" not in out
