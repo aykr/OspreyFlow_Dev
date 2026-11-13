@@ -198,9 +198,8 @@ class _Plan:
     elsewhere: int
     #: The marking each proposal's and watch's recipient must clear.
     marking_of: dict[tuple[str, str], str] = field(default_factory=dict)
-    #: Each list schedule's list, by the item's id (a list the administrator is not cleared for is
-    #: listed under an id that names nothing), and the list's marking, its recipient must clear.
-    list_of: dict[str, str] = field(default_factory=dict)
+    #: Each list schedule's list marking, by the list (only one the administrator is cleared for is
+    #: listed), which its recipient must clear.
     list_marking_of: dict[str, tuple[str, str]] = field(default_factory=dict)
 
 
@@ -319,34 +318,25 @@ async def _plan_items(
         )
         if row["schedule_case"]:
             case_of[("pipeline_schedule", row["recipe_id"])] = row["schedule_case"]
-    # A list's schedule, read through the lists' own clearance filter (ADR-146 Amendment 7 point
-    # 8, in the query: `screening._admitted_sql`; the orchestrator's verification of e911b90, item
-    # 2). One the administrator is not cleared for is listed, since it must go to someone, but as
-    # "a list you can't see", under an id that names nothing; its recipient must be cleared for it.
-    list_of: dict[str, str] = {}
+    # A list's schedule, read through the lists' own clearance filter, in the query (ADR-146
+    # Amendment 7 point 8; `screening._admitted_sql`). One the administrator is not cleared for is
+    # left out, its kind, number and place unsaid: `person_ownership`'s withheld check refuses the
+    # disable for it (409 `withheld_items`) until an administrator cleared for the list transfers it
+    # (the owner's ruling of 9 November 2026; the orchestrator's verification of 7a1c760). Its
+    # recipient must be cleared for the list too (`markings_hold`).
     list_marking_of: dict[str, tuple[str, str]] = {}
-    hidden = 0
     for row in await conn.fetch(
         "SELECT l.list_name, COALESCE(m.classification, 'OFFICIAL') AS classification, "
-        "COALESCE(m.handling_code, 'P') AS handling_code, "
-        f"({_admitted_sql('l', 2)}) AS admitted "
+        "COALESCE(m.handling_code, 'P') AS handling_code "
         f"FROM screening_lists l{_markings_join('l')} "
-        "WHERE l.schedule_owner = $1 ORDER BY l.list_name",
+        f"WHERE l.schedule_owner = $1 AND {_admitted_sql('l', 2)} ORDER BY l.list_name",
         person,
         list(lists_cleared.classifications),
         list(lists_cleared.codes),
     ):
-        if row["admitted"]:
-            item_id, label = (
-                row["list_name"],
-                f"The refresh schedule of the list {row['list_name']}",
-            )
-        else:
-            hidden += 1
-            item_id, label = f"hidden-list-{hidden}", "The refresh schedule of a list you can't see"
-        items.append(OwnedItem(kind="list_schedule", id=item_id, label=label))
-        list_of[item_id] = row["list_name"]
-        list_marking_of[item_id] = (row["classification"], row["handling_code"])
+        label = f"The refresh schedule of the list {row['list_name']}"
+        items.append(OwnedItem(kind="list_schedule", id=row["list_name"], label=label))
+        list_marking_of[row["list_name"]] = (row["classification"], row["handling_code"])
     l38 = await l38_owned_items(conn, person, admin_unit=admin_unit, cleared=cleared, top=top)
     marking_of: dict[tuple[str, str], str] = {}
     for kind, sql in _MARKING_SQL.items():
@@ -372,7 +362,7 @@ async def _plan_items(
     items.extend(l38)
     elsewhere = int(await conn.fetchval(_ELSEWHERE_SQL, person, admin_unit) or 0)
     return _Plan(items=items, case_of=case_of, elsewhere=elsewhere, marking_of=marking_of,
-                 list_of=list_of, list_marking_of=list_marking_of)  # fmt: skip
+                 list_marking_of=list_marking_of)  # fmt: skip
 
 
 _RANK = {level.value: level.rank for level in AccessLevel}
@@ -822,10 +812,7 @@ class AdminPeopleStore:
                         conn, item.id, by.id, "grant", to, AccessLevel.AUTHOR
                     )
                 else:
-                    # A list's schedule by its list (an id naming nothing, for one the administrator
-                    # may not see).
-                    target = plan.list_of[item.id] if item.kind == "list_schedule" else item.id
-                    changed = await conn.execute(_TRANSFER_SQL[item.kind], target, to, person)
+                    changed = await conn.execute(_TRANSFER_SQL[item.kind], item.id, to, person)
                     if changed.endswith(" 0"):
                         raise DisableRefused(
                             "changed_meanwhile", f"{item.label} changed while it was transferred"

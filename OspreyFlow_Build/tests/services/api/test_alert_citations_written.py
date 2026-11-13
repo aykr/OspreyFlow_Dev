@@ -298,6 +298,18 @@ async def test_a_party_held_below_its_lists_marking_now_is_not_reused() -> None:
     assert handling.classification == "SECRET"
 
 
+async def test_a_party_held_at_its_lists_classification_under_another_code_is_not_reused() -> None:
+    """`_holds`' other half (the orchestrator's verification of 7a1c760, rule 12): the party is held
+    SECRET, as list B is now, but under code C, list B's being P. A handling code is not ranked
+    (`screening._lowers`), so it is not reused, and the match is cited to a party of its own at
+    SECRET, P. Red with the code unread: the C party was reused."""
+    held = _party("old-b", ENTRY_B, "SECRET")
+    held.handling = held.handling.model_copy(update={"handling_code": "C"})
+    ids, written, handling = await _cited_handling(HeldParties([held]), ENTRY_B)
+    assert [(w.handling.classification, w.handling.handling_code) for w in written] == [("SECRET", "P")]
+    assert ids == [written[0].id] and (handling.classification, handling.handling_code) == ("SECRET", "P")
+
+
 async def test_a_party_held_at_its_lists_marking_is_reused() -> None:
     """The same, the party held at the list's marking: found and reused, nothing written."""
     graph = HeldParties([_party("b-party", ENTRY_B, "SECRET")])

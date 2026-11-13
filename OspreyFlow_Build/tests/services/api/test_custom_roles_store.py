@@ -457,28 +457,28 @@ async def test_the_people_lock_lets_one_holder_in_at_a_time(world: SimpleNamespa
 
 
 # --- a person's list schedules in Disable…, by the lists' clearance ---------------------------------
-# A person's list schedules in *Disable…*'s plan and transfer, read by the lists' clearance (the
-# orchestrator's verification of lane/rules-lists at e911b90, item 2; ADR-146 Amendment 7 point 8;
-# rules 3 and 4).
+# A person's list schedules in *Disable…*'s plan and transfer, read by the lists' clearance (ADR-146
+# Amendment 7 point 8; the orchestrator's verifications of lane/rules-lists at e911b90, item 2, and at
+# 7a1c760; the owner's ruling of 9 November 2026, `person_ownership.WITHHELD_WORDS`; rules 3 and 4).
 #
-# The plan read every schedule the person owned by name, with no clearance filter, and a transfer
-# checked no list's marking. So an OFFICIAL administrator saw a SECRET list's name, and could hand
-# its schedule to an OFFICIAL person, whose scheduled refreshes then ran as someone not cleared for
-# it. Now the plan reads through `screening._admitted_sql`: a list the administrator is cleared for
-# by name, one they are not as "a list you can't see" under an id that names nothing; and a
-# schedule goes only to someone cleared for the list's classification and handling code
-# (`markings_hold`). Each case was shown red by a plant at its call site
-# (`process/lanes/rules/lists/AM7_RED_RECORD.txt`). Live: the real stores on a throwaway schema
-# (`world` above).
+# The plan read every schedule the person owned by name, and a transfer checked no list's marking:
+# an OFFICIAL administrator saw a SECRET list's name and could hand its schedule to an OFFICIAL
+# person, whose scheduled refreshes then ran as someone not cleared for it. Now a list's schedule
+# the administrator is not cleared for is left out of the plan, nothing of it said (its kind, its
+# number, its place among the others), and *Transfer and disable* is refused for it as for every
+# withheld item (409 `withheld_items`) until an administrator cleared for the list transfers it;
+# its recipient must be cleared for the list (`markings_hold`). Each case was shown red by a plant
+# at its call site (`process/lanes/rules/lists/AM7_LIVE_RECORD.txt`). Live: the real stores on a
+# throwaway schema (`world` above).
 
 OFFICIAL_ADMIN = Principal(id="adm-o", clearance="OFFICIAL", org_unit=UNIT, roles=["osprey-admin"])
 ENGINEER = ["analyst", "data_engineer"]
-HIDDEN_LABEL = "The refresh schedule of a list you can't see"
 
 
-async def _schedules(world: SimpleNamespace) -> None:
-    """Ana sets the schedules of an unmarked list and of a SECRET one."""
-    for name in ("Plain list", "Secret list"):
+async def _schedules(world: SimpleNamespace, *names: str) -> None:
+    """Ana sets the schedules of an unmarked list and of a SECRET one (named first, so the hidden
+    one would sort among the visible ones if its place were said)."""
+    for name in names or ("A secret list", "Plain list"):
         await world.raw.execute(
             "INSERT INTO screening_lists (list_name, source, location, use_for, subscribed_by, "
             "subscribed_at, schedule_owner) VALUES ($1, 'csv', 'x', 'screening', 'ana', $2, 'ana')",
@@ -486,65 +486,79 @@ async def _schedules(world: SimpleNamespace) -> None:
         )  # fmt: skip
     await world.raw.execute(
         "INSERT INTO screening_list_markings (list_name, classification, handling_code) "
-        "VALUES ('Secret list', 'SECRET', 'P')"
+        "VALUES ('A secret list', 'SECRET', 'P')"
     )
 
 
-async def test_the_plan_names_only_the_lists_its_administrator_is_cleared_for(world: SimpleNamespace) -> None:
-    """Each way: the SECRET administrator is shown both lists by name; the OFFICIAL one the plain
-    list by name and the other as one they can't see, its name nowhere in the plan. Red with the
-    schedules read unfiltered: the OFFICIAL administrator was shown "Secret list"."""
-    await _schedules(world)
-    cleared = await world.people.plan("ana", admin=ADMIN, scheme=SCHEME)
-    assert [(i.id, i.label) for i in cleared.items] == [
-        ("Plain list", "The refresh schedule of the list Plain list"),
-        ("Secret list", "The refresh schedule of the list Secret list"),
-    ]
-    official = await world.people.plan("ana", admin=OFFICIAL_ADMIN, scheme=SCHEME)
-    assert [(i.id, i.label) for i in official.items] == [
-        ("Plain list", "The refresh schedule of the list Plain list"),
-        ("hidden-list-1", HIDDEN_LABEL),
-    ]
-    assert "Secret list" not in official.model_dump_json()
+async def _owners(world: SimpleNamespace) -> dict[str, str]:
+    return dict(await world.raw.fetch("SELECT list_name, schedule_owner FROM screening_lists"))
 
 
-async def test_a_hidden_lists_schedule_goes_only_to_someone_cleared_for_it(world: SimpleNamespace) -> None:
-    """The OFFICIAL administrator gives the hidden list's schedule to an OFFICIAL person: refused
-    in words naming neither the list nor its marking, and nothing moved. To a SECRET person: moved,
-    by the list's own name, which the administrator never saw. Red with no list marking checked:
-    the OFFICIAL person was given it."""
-    await _schedules(world)
-    who = recipients([_person("bea", ENGINEER), _person("sam", ENGINEER, clearance="SECRET")], {}, {})
-    plain = OwnedTransfer(kind="list_schedule", id="Plain list", to="bea")
-    with pytest.raises(DisableRefused) as refused:
-        await world.people.transfer(
-            "ana", [plain, OwnedTransfer(kind="list_schedule", id="hidden-list-1", to="bea")], who,
-            by=OFFICIAL_ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME,
-        )  # fmt: skip
-    assert refused.value.words == f"{HIDDEN_LABEL}: bea is not cleared for the list; choose someone who is"
-    assert "Secret" not in refused.value.words and "SECRET" not in refused.value.words
-    owners = dict(await world.raw.fetch("SELECT list_name, schedule_owner FROM screening_lists"))
-    assert owners == {"Plain list": "ana", "Secret list": "ana"}
-    moved, _ = await world.people.transfer(
-        "ana", [plain, OwnedTransfer(kind="list_schedule", id="hidden-list-1", to="sam")], who,
-        by=OFFICIAL_ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME,
-    )  # fmt: skip
-    assert [(i.id, to) for i, to in moved] == [("Plain list", "bea"), ("hidden-list-1", "sam")]
-    owners = dict(await world.raw.fetch("SELECT list_name, schedule_owner FROM screening_lists"))
-    assert owners == {"Plain list": "bea", "Secret list": "sam"}
-
-
-async def test_a_lists_schedule_a_cleared_administrator_sees_still_goes_only_to_someone_cleared(
+async def test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace(
     world: SimpleNamespace,
 ) -> None:
-    """The SECRET administrator sees the SECRET list, and still may not give its schedule to an
+    """The uncleared way: the OFFICIAL administrator's plan holds the plain list alone, by name, and
+    nothing of the other (no kind, no count, no place). Transferring what they see commits, and the
+    disable is then refused in the owner's words for withheld items, which name nothing; the SECRET
+    list stays Ana's. Naming it in a transfer is answered as a list that does not exist. Red with
+    the schedules read unfiltered: "A secret list" was in the plan; red with the list left out of
+    the withheld check: the disable went ahead with it still Ana's."""
+    from services.api.person_ownership import WITHHELD_ERROR, WITHHELD_WORDS
+
+    await _schedules(world)
+    plan = await world.people.plan("ana", admin=OFFICIAL_ADMIN, scheme=SCHEME)
+    assert [(i.kind, i.id, i.label) for i in plan.items] == [
+        ("list_schedule", "Plain list", "The refresh schedule of the list Plain list")]  # fmt: skip
+    said = plan.model_dump_json().lower()
+    assert "secret" not in said and "can't see" not in said and "hidden" not in said
+    who = recipients([_person("bea", ENGINEER), _person("sam", ENGINEER, clearance="SECRET")], {}, {})
+    plain = OwnedTransfer(kind="list_schedule", id="Plain list", to="bea")
+    answers = []
+    for name in ("A secret list", "No such list"):
+        with pytest.raises(DisableRefused) as refused:
+            await world.people.transfer(
+                "ana", [plain, OwnedTransfer(kind="list_schedule", id=name, to="sam")], who,
+                by=OFFICIAL_ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME,
+            )  # fmt: skip
+        answers.append((refused.value.error, refused.value.words.replace(name, "<name>")))
+    assert answers[0] == answers[1] and answers[0][0] == "not_in_plan"
+    await world.people.transfer("ana", [plain], who, by=OFFICIAL_ADMIN, audit=world.audit,
+                                admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
+    with pytest.raises(DisableRefused) as withheld:
+        await world.people.refuse_if_withheld("ana", admin=OFFICIAL_ADMIN, scheme=SCHEME)
+    assert (withheld.value.error, withheld.value.words, withheld.value.items) == (WITHHELD_ERROR, WITHHELD_WORDS, [])
+    assert await _owners(world) == {"Plain list": "bea", "A secret list": "ana"}
+
+
+async def test_an_administrator_cleared_for_the_list_transfers_its_schedule(world: SimpleNamespace) -> None:
+    """The cleared way: the SECRET administrator sees both lists by name and moves both, the SECRET
+    list's to a SECRET person; nothing is then withheld from them, and the disable may go ahead.
+    The audit names the list moved."""
+    await _schedules(world)
+    plan = await world.people.plan("ana", admin=ADMIN, scheme=SCHEME)
+    assert [i.id for i in plan.items] == ["A secret list", "Plain list"]
+    who = recipients([_person("bea", ENGINEER), _person("sam", ENGINEER, clearance="SECRET")], {}, {})
+    transfers = [OwnedTransfer(kind="list_schedule", id="A secret list", to="sam"),
+                 OwnedTransfer(kind="list_schedule", id="Plain list", to="bea")]  # fmt: skip
+    await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME)
+    await world.people.refuse_if_withheld("ana", admin=ADMIN, scheme=SCHEME)
+    assert await _owners(world) == {"Plain list": "bea", "A secret list": "sam"}
+    moved = await world.raw.fetch(
+        "SELECT resolved_query->>'id' AS id FROM audit_log WHERE action = 'transfer_owned_item'"
+    )
+    assert sorted(r["id"] for r in moved) == ["A secret list", "Plain list"]
+
+
+async def test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list(world: SimpleNamespace) -> None:
+    """The SECRET administrator sees the SECRET list and still may not give its schedule to an
     OFFICIAL person (its refreshes would run as them). Red with `markings_hold` not reading the
     list's marking: given."""
     await _schedules(world)
     who = recipients([_person("bea", ENGINEER)], {}, {})
-    transfers = [OwnedTransfer(kind="list_schedule", id=n, to="bea") for n in ("Plain list", "Secret list")]
+    transfers = [OwnedTransfer(kind="list_schedule", id=n, to="bea") for n in ("A secret list", "Plain list")]
     with pytest.raises(DisableRefused) as refused:
         await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit,
                                     admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
     assert refused.value.words == (
-        "The refresh schedule of the list Secret list: bea is not cleared for the list; choose someone who is")  # fmt: skip
+        "The refresh schedule of the list A secret list: bea is not cleared for the list; choose someone who is")  # fmt: skip
+    assert await _owners(world) == {"Plain list": "ana", "A secret list": "ana"}
