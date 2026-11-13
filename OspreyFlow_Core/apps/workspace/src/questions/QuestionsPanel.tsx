@@ -325,7 +325,8 @@ export function QuestionsPanel({
         }}
         style={{ display: "grid", gap: "var(--sp-8)" }}
       >
-        <fieldset style={{ border: 0, margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
+        {/* Rows far enough apart that each radio keeps its 24px target (WCAG 2.2, 2.5.8). */}
+        <fieldset style={{ border: 0, margin: 0, padding: 0, display: "grid", gap: "var(--sp-8)" }}>
           <legend style={{ fontSize: "var(--fs-12)", padding: 0, marginBottom: "var(--sp-4)" }}>Read from</legend>
           {READ_FROM_CHOICES.map((choice) => {
             const unavailable = choice.value === "case" || (choice.value === "selection" && !hasSelection);

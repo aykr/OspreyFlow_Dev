@@ -164,7 +164,7 @@ test("asking, then reaching a [G-n] from the answer by Tab, selects what it stan
   await page.keyboard.type("Who is connected to n0?");
   await page.keyboard.press("Control+Enter");
   await expect(page.getByRole("button", { name: "Select [G-1] on the canvas" })).toHaveCount(2);
-  expect(scopes).toEqual([{ question: "Who is connected to n0?", selected_node_ids: [], selected_link_ids: [] }]);
+  expect(scopes).toEqual([{ question: "Who is connected to n0?", selected_node_ids: [], selected_link_ids: [], read_from: "graph" }]);
   const state = () => page.evaluate(() => ({ nodes: window.__KEYBOARD__!.selection, edge: window.__KEYBOARD__!.selectedEdge }));
   await page.getByLabel("Your question").focus();
 
@@ -217,7 +217,8 @@ test("the model engine is reached from the question by Shift+Tab, changed by key
   await expect(page.getByLabel("Your question")).toBeFocused();
   await page.keyboard.type("Who wrote about the plant?");
   await page.keyboard.press("Control+Enter");
-  await expect(page.getByText("Answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeVisible();
+  // Exact: "Will be answered by …" (ADR-135 Amendment 12) above the question holds these words too.
+  await expect(page.getByText("Answered by This deployment's own model (qwen2.5:7b-instruct)", { exact: true })).toBeVisible();
   expect((scopes[0] as { engine?: string }).engine).toBe("local");
   registerCovered(REGISTRY, "choose-the-model-engine-by-keyboard");
 });
@@ -268,6 +269,8 @@ test("what to read from is chosen by arrow keys, the Conduit says what will be r
   await page.keyboard.type("Who wrote about the plant?");
   await page.keyboard.press("Control+Enter");
   await expect.poll(() => scopes.length).toBe(1);
+  // The choice is closed while the question is asked: wait for the answer before moving it again.
+  await expect(page.getByText("Dana Mercer wrote about it [1].")).toBeVisible();
   expect((scopes[0] as { read_from?: string; selected_node_ids?: string[] }).read_from).toBe("graph");
   expect((scopes[0] as { selected_node_ids?: string[] }).selected_node_ids).toEqual([]);
   await everything.focus();
