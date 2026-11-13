@@ -1,0 +1,56 @@
+# gates at e7aecf6 (lane/platform-b-onepass on main a3df0f4), this Mac, ports pinned closed, no lease, Docker not running (its targets fail for that alone) Re-run after fixing the stateless report's citation (its own commit): citation-check green.
+All checks passed!
+Success: no issues found in 470 source files
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-ingest] Error 1
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-api] Error 1
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-workspace] Error 1
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-harness] Error 1
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-ner] Error 1
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-worker] Error 1
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-report-sync] Error 1
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-superset] Error 1
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-laurium] Error 1
+  34 passed (13.8s)
+make: *** [core-check] Error 2
+licence-check: 80 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+licence-check: 354 packages, all allowed.
+licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
+design-check: no finding outside DESIGN.md §9, and Core's DESIGN.md is the contract
+colour-drift-check: every colour in the Glass is one DESIGN.md holds
+ui-words-check: no "target model" in the Glass's copy (tests/test_ui_words_check.py holds the proof)
+============================== 8 passed in 0.62s ===============================
+failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make: *** [opentofu-check] Error 1
+failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make: *** [chart-check] Error 1
+    raise HelmFailed(f"helm template failed: {done.stderr or done.stdout}")
+tools.helm_chart.HelmFailed: helm template failed: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make: *** [cp-policy-check] Error 1
+schemas-check: 602 generated types match committed output.
+authorized-query-check: 165 files under services/api, no offenders.
+demo-guide-check: 12 registered demo(s), all documented.
+domain-model-coverage-check: 104 class(es), 0 allowlisted, no new drift.
+route-coverage-check: 421 route(s), 0 allowlisted, no new drift.
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allowlist shrinks to zero as the decision log's own prose is edited to state each constraint without the private pointer.
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+test-file-coverage-check: 1022 test file(s), 0 allowlisted, no new drift.
+doc-citations-check: 1 citation(s) name a file that does not exist. A named test that is not there reads as a guarantee and is worse than no name:
+make: *** [citation-check] Error 1
+================ 17 passed, 2 skipped, 746 deselected in 0.81s =================
+================== 141 passed, 13 skipped in 68.59s (0:01:08) ==================
+adr-reservations-check: every heading above the baseline is reserved.
+============================== 10 passed in 9.34s ==============================
+no-branches-check: 1639 files, no branch named.
+============================== 12 passed in 0.68s ==============================
+no-langchain-check: no LangChain, spaCy or Laurium outside Laurium's own image (source).
+============================== 28 passed in 1.53s ==============================
