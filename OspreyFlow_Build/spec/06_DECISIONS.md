@@ -36847,3 +36847,42 @@ Conduit's pools are not changed.**
   `gates/pg_two_conduits_green.txt`, and reds with the image's own 100, at 250 (the second Conduit cannot start), near
   the formula (the reserve refused), with the ceiling below the measured maximum, and with a pool hidden from the
   record (the at-rest check), `gates/pg_two_conduits_red*.txt`.
+
+### ADR-114, Amendment 46 (13 November 2026) — The cloud-platform profile's RDS: `db.t4g.large` in every shape, `max_connections` 1000 in its parameter group
+
+**The finding** (R1 on kind, finding 15; the orchestrator's review of 4b, 13 November 2026): the install runbook asked
+for a managed PostgreSQL allowing at least 750 connections, while the Terraform rendered the poc and development shapes'
+RDS as a `db.t4g.small`. RDS's default there is `LEAST({DBInstanceClassMemory/9531392}, 5000)`, about 190; forcing 750
+onto its 2 GiB by parameter group risks its memory. Amendment 43's cloud-platform row ("`db.t4g.small`, `.large` in
+production … RDS's default, from the instance's memory … a carry") described that, and left it open.
+
+**Decision (the owner, 13 November 2026), correcting Amendment 43's cloud-platform row and closing its point 5 for this
+profile:**
+
+1. **`db.t4g.large` (8 GiB) in every shape**, poc and development as production, as the client's page asks in every
+   sizing option (`harness/cloud_platform/terraform.py`, `RDS_INSTANCE_CLASS`).
+2. **`max_connections` set to 1000** in an `aws_db_parameter_group` (family `postgres16`, `apply_method` `pending-reboot`,
+   since the parameter is static in PostgreSQL) attached to the instance. With MoJ's `cloud-platform-terraform-rds-instance`
+   module in the client's environments repository, the install runbook gives the module's equivalent,
+   `db_parameter = [{ name = "max_connections", value = "1000", apply_method = "pending-reboot" }]`, and says it takes
+   effect at creation, and on an existing instance only at its next reboot.
+3. **1000 against each shape's derived least** (`harness/cloud_platform/connections.py`, `least_for`): three Conduits'
+   worth at their pools' ceiling with the running loads' allowance (an update's old and new Conduit, and the worker
+   opening the same stores: 3 × (220 + 20)), the gateway's 10, an operator's reserve of 20, and Superset and the report
+   sync from v0.5.2 at the copies the shape renders (each Superset two gunicorn workers at SQLAlchemy's 5 + 10 and 8
+   queries to the mart; each report sync 4), doubled by an upgrade in progress. The owner ruled one copy of each in the
+   poc shape (13 November 2026), as development renders: **834** there, and **918** in production's two of each; 1000
+   leaves 166 and 82 to spare, stated in INSTALL.md and the administration guide (§6a, 1.93). Sized now for v0.5.2 so
+   the client's database does not change between v0.5.1, which renders neither Superset nor the report sync, and
+   v0.5.2.
+
+**Not decided here:** the Conduit's pool sizes from settings are Amendment 45's.
+
+**Tests that fail if it is violated:** `tests/harness/test_cloud_platform_poc.py`:
+`test_the_rendered_rds_sets_max_connections_to_1000_in_its_parameter_group` (each fixture: the group, its family, the
+parameter, `pending-reboot`, the instance attached, the class) and
+`test_the_install_says_how_many_connections_the_managed_postgres_must_allow` (the least counted a second time from the
+clients' own numbers and the render's own copies, Superset's worker count read from its entrypoint, the rendered 1000
+at or above each shape's least, the runbook's `db_parameter` line and headroom). Red before the change, and with
+Superset's term or the upgrade's term dropped from `connections.py`: `process/lanes/platform/poc-rds/red-1000.txt`. Not run against a real RDS: R1's PostgreSQL was a
+stand-in on kind.

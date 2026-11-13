@@ -1,0 +1,34 @@
+4b revised (the owner, 13 Nov: max_connections = 1000 in the RDS parameter group), before the change:
+E       AttributeError: module 'harness.cloud_platform.runbooks' has no attribute 'SUPERSET_WORKERS'
+E       AssertionError: no aws_db_parameter_group
+E       assert None
+E       AssertionError: no aws_db_parameter_group
+E       assert None
+E       AssertionError: no aws_db_parameter_group
+E       assert None
+FAILED tests/harness/test_cloud_platform_poc.py::test_the_install_says_how_many_connections_the_managed_postgres_must_allow
+FAILED tests/harness/test_cloud_platform_poc.py::test_the_rendered_rds_sets_max_connections_to_1000_in_its_parameter_group[poc]
+FAILED tests/harness/test_cloud_platform_poc.py::test_the_rendered_rds_sets_max_connections_to_1000_in_its_parameter_group[development]
+FAILED tests/harness/test_cloud_platform_poc.py::test_the_rendered_rds_sets_max_connections_to_1000_in_its_parameter_group[production]
+4 failed, 38 deselected in 9.39s
+Plant 1: Superset's term dropped (SUPERSET_COPIES = 0):
+E       AssertionError: assert 766 == 918
+E        +  where 766 = <module 'harness.cloud_platform.runbooks' from '/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/../OspreyFlow_Core/harness/cloud_platform/runbooks.py'>.POSTGRES_LEAST_CONNECTIONS
+1 failed, 41 deselected in 4.15s
+Plant 2: the upgrade term dropped (UPGRADE_OVERLAP = 1):
+E       AssertionError: assert 834 == 918
+E        +  where 834 = <module 'harness.cloud_platform.runbooks' from '/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/../OspreyFlow_Core/harness/cloud_platform/runbooks.py'>.POSTGRES_LEAST_CONNECTIONS
+1 failed, 41 deselected in 4.77s
+Restored:
+1 passed, 41 deselected in 4.96s
+
+Revised to the render's own copies (the owner, 13 Nov: one Superset and one report sync on poc): least 834 on poc and development, 918 in production.
+Plant 1: Superset's term dropped from least_connections:
+1
+E       AssertionError: assert 758 == 834
+E        +  where 758 = <function least_for at 0x106def600>(False)
+Plant 2: the upgrade's term dropped (UPGRADE_OVERLAP = 1):
+E       AssertionError: assert 792 == 834
+E        +  where 792 = <function least_for at 0x104517600>(False)
+Restored:
+1 passed, 41 deselected in 0.56s

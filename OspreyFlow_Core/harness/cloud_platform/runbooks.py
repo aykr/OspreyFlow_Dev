@@ -22,9 +22,23 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from harness.cloud_platform.connections import (  # noqa: F401 - the figures, read from here too
+    CONDUIT_POOL_CEILING,
+    GATEWAY_POOL_MAX,
+    OPERATOR_RESERVE,
+    POSTGRES_MAX_CONNECTIONS,
+    REPORT_SYNC_POOL,
+    RUNNING_LOADS_ALLOWED,
+    SQLALCHEMY_POOL,
+    SUPERSET_MART_QUERIES,
+    SUPERSET_WORKERS,
+    UPGRADE_OVERLAP,
+    least_connections,
+    least_for,
+)
 from harness.cloud_platform.decommission_check import DISK_NAMESPACE_TAG, KINDS
 from harness.cloud_platform.settings import PlatformSettings
-from harness.cloud_platform.terraform import BUCKETS, ecr_repositories
+from harness.cloud_platform.terraform import BUCKETS, RDS_INSTANCE_CLASS, ecr_repositories
 from harness.cloud_platform_backups import BUCKET_SUFFIX, KEPT_AT_DECOMMISSION
 from schemas.deployment import OspreyConfig, generated_folder
 
@@ -33,21 +47,6 @@ CHART = "deploy/helm/ospreyflow"
 RENDER = '"$PY" -m harness.render --config "$CONFIG"'
 
 _FENCE = re.compile(r"^```bash( platform)?\n(.*?)^```\n", re.S | re.M)
-
-
-#: The managed PostgreSQL's least `max_connections` (R1 on kind, finding 15). The Conduit's figures are
-#: ADR-114 Amendment 43's (lane/admin-pg: `harness.profiles`, where a running Conduit's own pools hold
-#: them; `test_cloud_platform_poc.py` holds these equal to them once it merges): one Conduit's pools at
-#: their `max_size`, and the one connection each running load holds outside them.
-CONDUIT_POOL_CEILING = 220
-RUNNING_LOADS_ALLOWED = 20
-GATEWAY_POOL_MAX = 10
-OPERATOR_RESERVE = 20
-#: Two Conduits (an update's old and new pods, side by side), the worker (which opens the same stores),
-#: the gateway, and an operator's reserve. No Keycloak or Superset on this profile.
-POSTGRES_MAX_CONNECTIONS = (
-    3 * (CONDUIT_POOL_CEILING + RUNNING_LOADS_ALLOWED) + GATEWAY_POOL_MAX + OPERATOR_RESERVE
-)
 
 
 def command_blocks(text: str, *, on_the_platform: bool) -> list[str]:
@@ -96,6 +95,7 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
     theirs = " ".join(s.name for s in (secrets.postgres, secrets.redis, secrets.s3))
     if cp.tls_secret:  # the certificate the platform's team makes for the deployment's name (R1)
         theirs += f" {cp.tls_secret}"
+    least = least_for(cp.environment == "production")
     rollouts = "\n".join(
         f'kubectl -n "$NS" rollout status {w["kind"].lower()}/{w["name"]} --timeout=900s'
         for w in values["workloads"]
@@ -126,10 +126,16 @@ two app registrations in tenant `{claims.tenant_id}`, the Glass (application id 
 and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the Glass is
 granted), with the claims `cloud_platform.claims` names.
 
-**The managed PostgreSQL** allows a `max_connections` of at least {POSTGRES_MAX_CONNECTIONS}: two Conduits
-side by side during an update, the worker, the gateway and a reserve (ADR-114 Amendment 43's figures). RDS
-derives it from the instance's memory unless its parameter group sets it (a db.t3.medium gives about 410),
-so set it there; with too few, the new Conduit of an update stops at `TooManyConnectionsError`.
+**The managed PostgreSQL** allows a `max_connections` of {POSTGRES_MAX_CONNECTIONS}. The least it must allow in this
+shape is {least}: two Conduits side by side during an update, the worker, the gateway and a reserve (ADR-114
+Amendment 43's figures), with Superset and the report sync (from v0.5.2, as many copies as this shape renders)
+doubled by an upgrade in progress. {POSTGRES_MAX_CONNECTIONS} is set for every shape, the production shape's least
+({least_for(True)}) among them, so this shape has more room: {POSTGRES_MAX_CONNECTIONS - least} to spare. The Terraform
+renders it as a {RDS_INSTANCE_CLASS} (8 GiB) with a parameter group setting it. In the environments repository,
+with `cloud-platform-terraform-rds-instance`, set it on the module:
+`db_parameter = [{{ name = "max_connections", value = "{POSTGRES_MAX_CONNECTIONS}", apply_method = "pending-reboot" }}]`.
+`max_connections` is static in PostgreSQL: it takes effect at creation, and on an existing instance only at
+its next reboot. With too few, the new Conduit of an update stops at `TooManyConnectionsError`.
 {_bare_connector_hosts(cp.connector_hosts)}
 ## 1. The settings and the namespace
 

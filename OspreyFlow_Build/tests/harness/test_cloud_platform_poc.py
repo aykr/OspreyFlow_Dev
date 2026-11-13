@@ -629,13 +629,12 @@ def test_every_workload_that_serves_a_port_says_when_it_is_ready(poc: dict[str, 
 def test_the_install_says_how_many_connections_the_managed_postgres_must_allow(
     runbooks: dict[str, str],
 ) -> None:
-    """R1 on kind, finding 15: a new Conduit beside the old one in a rolling update failed at start with
-    `TooManyConnectionsError` (the stand-in allows PostgreSQL's 100; one Conduit held 51 at rest). A
-    managed Postgres's limit follows its instance class unless its parameter group sets it, so the
-    install says the least to set: two Conduits (the update's old and new), the worker opening the same
-    stores, the gateway and an operator's reserve. The Conduit's figures are ADR-114 Amendment 43's
-    (`harness.profiles` once lane/admin-pg merges, held there by a running Conduit's own pools); this
-    test takes them from there when they are, and never keeps a second count beside them."""
+    """R1 on kind, finding 15, and the owner's decisions of 13 November 2026: the managed PostgreSQL
+    allows 1000, set in its parameter group, which covers the least it must allow with Superset and
+    the report sync rendered (v0.5.2) and an upgrade in progress. The figures are counted here a
+    second time on purpose, from the clients' own numbers, so dropping a term from runbooks.py's
+    floor (Superset's, or the upgrade's) is red; the Conduit's are ADR-114 Amendment 43's, taken
+    from `harness.profiles` where they are."""
     import importlib
 
     from harness.cloud_platform import runbooks as rb
@@ -644,15 +643,60 @@ def test_the_install_says_how_many_connections_the_managed_postgres_must_allow(
     for name in ("CONDUIT_POOL_CEILING", "RUNNING_LOADS_ALLOWED", "GATEWAY_POOL_MAX", "OPERATOR_RESERVE"):
         if hasattr(profiles, name):
             assert getattr(rb, name) == getattr(profiles, name), name
-    assert rb.POSTGRES_MAX_CONNECTIONS == (
-        2 * (rb.CONDUIT_POOL_CEILING + rb.RUNNING_LOADS_ALLOWED)
-        + rb.CONDUIT_POOL_CEILING + rb.RUNNING_LOADS_ALLOWED  # the worker opens the same stores
-        + rb.GATEWAY_POOL_MAX + rb.OPERATOR_RESERVE
-    )
+    # Superset's own worker count, as its entrypoint starts it.
+    entrypoint = (Path(rb.__file__).parents[2] / "deploy/superset/osprey_entrypoint.py").read_text()
+    assert f'"--workers", "{rb.SUPERSET_WORKERS}"' in entrypoint
+    def least(superset: int, report_sync: int) -> int:
+        conduits = 3 * (220 + 20)  # an update's old and new Conduit, and the worker's stores
+        superset_copy = 2 * (5 + 10) + 8  # two gunicorn workers at SQLAlchemy's 5 + 10; 8 mart queries
+        upgrade = 2  # every Deployment's old and new copies side by side during an upgrade
+        return conduits + 10 + 20 + upgrade * (superset * superset_copy + report_sync * 4)
+
+    from harness.cloud_platform import DEVELOPMENT_REPLICAS
+    from harness.cluster import REPLICAS
+
+    # The render's own copies (the owner, 13 Nov: one of each on poc; production's two).
+    assert (DEVELOPMENT_REPLICAS["superset"], DEVELOPMENT_REPLICAS["report-sync"]) == (1, 1)
+    assert least(1, 1) == 834 and least(2, 2) == 918
+    assert rb.least_for(False) == least(1, 1)
+    assert rb.least_for(True) == least(REPLICAS["superset"], REPLICAS["report-sync"])
+    assert rb.POSTGRES_MAX_CONNECTIONS == 1000  # the owner's figure (13 November 2026)
+    assert rb.POSTGRES_MAX_CONNECTIONS >= max(rb.least_for(False), rb.least_for(True))
     needs = runbooks["INSTALL.md"]
     needs = needs[needs.index("**What it needs.**") : needs.index("## 1.")]
-    assert f"`max_connections` of at least {rb.POSTGRES_MAX_CONNECTIONS}" in needs
-    assert "parameter group" in needs and "Amendment 43" in needs
+    assert "`max_connections` of 1000" in needs
+    assert "least it must allow in this\nshape is 834" in needs and "166 to spare" in needs
+    assert "(918)" in needs and "more room" in needs
+    assert "Amendment 43" in needs and "db.t4g.large" in needs
+    # The client's environments repository: MoJ's cloud-platform-terraform-rds-instance module.
+    assert (
+        'db_parameter = [{ name = "max_connections", value = "1000", '
+        'apply_method = "pending-reboot" }]'
+    ) in needs
+    assert "at creation" in needs and "reboot" in needs
+
+
+@pytest.mark.parametrize("fixture", ["poc", "development", "production"])
+def test_the_rendered_rds_sets_max_connections_to_1000_in_its_parameter_group(fixture: str) -> None:
+    """The parameter group in our Terraform, attached to the instance, family postgres16:
+    max_connections is static in PostgreSQL, so pending-reboot; the class every shape's."""
+    files = _artefacts(_config(fixture))
+    terraform = "\n".join(t for n, t in files.items() if n.startswith("terraform/"))
+    group = re.search(r'resource "aws_db_parameter_group" "postgres" \{(.*?)\n\}', terraform, re.S)
+    assert group, "no aws_db_parameter_group"
+    body = group.group(1)
+    assert re.search(r'family\s*=\s*"postgres16"', body)
+    parameter = re.search(r"parameter \{(.*?)\}", body, re.S)
+    assert parameter
+    assert re.search(r'name\s*=\s*"max_connections"', parameter.group(1))
+    assert re.search(r'value\s*=\s*"1000"', parameter.group(1))
+    assert re.search(r'apply_method\s*=\s*"pending-reboot"', parameter.group(1))
+    instance = re.search(r'resource "aws_db_instance" "postgres" \{(.*?)\n\}', terraform, re.S)
+    assert instance
+    assert re.search(
+        r"parameter_group_name\s*=\s*aws_db_parameter_group\.postgres\.name", instance.group(1)
+    )
+    assert re.search(r'instance_class\s*=\s*"db\.t4g\.large"', instance.group(1))
 
 
 def test_the_decommission_s_settings_hold_after_step_7_removes_their_secret(
@@ -694,3 +738,4 @@ def test_the_decommission_s_settings_hold_after_step_7_removes_their_secret(
     (tmp_path / "work" / "prefix").unlink()
     neither = run(None)
     assert neither.returncode != 0 and "PREFIX=" in neither.stdout + neither.stderr
+

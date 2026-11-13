@@ -1,0 +1,8 @@
+At the 4b head, offline on the Mac, ports pinned, OSPREY_LANE unset:
+pytest tests/harness/test_cloud_platform*.py tests/cp_policy_check tests/cloud_platform_backup tests/test_admin_guide.py tests/test_docs_pdf.py
+550 passed, 290 skipped, 1 warning in 150.65s (0:02:30)
+exit 0
+Then test_cloud_platform_poc.py again after connections.py's comments were rewrapped: 42 passed in 4.69s
+ruff check . (Core): All checks passed; mypy harness/cloud_platform: no issues; tools.docs_pdf check: exit 0
+After the rebase onto main 3f18d71 and ADR-114 Amendment 46: test_adr_reservations, test_spec_doc_paths, test_cloud_platform_poc, test_docs_pdf, test_admin_guide: 132 passed; tools.adr_reservations_check: every heading above the baseline is reserved.
+Revised to the render's own copies (one Superset and one report sync on poc): ruff (Core) clean; mypy harness/cloud_platform clean; adr_reservations_check clean; cloud-platform, policy, backup, guide, PDF, reservation and doc-path suites: 560 passed, 290 skipped.

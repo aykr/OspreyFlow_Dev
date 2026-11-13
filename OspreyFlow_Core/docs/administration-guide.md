@@ -14,10 +14,13 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.90** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.93** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.93 | 2026-11-13 | §6a: the least connections counted from the copies each shape renders (the owner's ruling: one Superset and one report sync in poc and development), 834 there and 918 in production, so the 1000 leaves 166 and 82 to spare. PDF reprinted alone. |
+| 1.92 | 2026-11-13 | §6a: the managed PostgreSQL's `max_connections` set to 1000 in its RDS parameter group (the owner's decisions), not left to the class's default; the least it must allow, 918, with Superset and the report sync (from v0.5.2) and an upgrade in progress, so 82 to spare; the `db_parameter` line for MoJ's RDS module, and that the setting takes effect at creation or the next reboot. PDF reprinted alone. |
+| 1.91 | 2026-11-13 | §6a: the managed PostgreSQL rendered as a `db.t4g.large` in every shape, the poc's too (the owner's ruling), whose RDS default allows the 750 connections the install asks for with no parameter group; a smaller class needs one, and the memory to match. PDF reprinted alone. |
 | 1.90 | 2026-11-13 | §6a, from R1 (the cloud-platform install's acceptance on kind): the `ospreyflow` command installed by `uv tool install ./cli`; the managed PostgreSQL's `max_connections` of at least 750 (ADR-114 Amendment 43), set in the RDS parameter group; and what a healthy restore's log ends with. PDF reprinted alone. |
 | 1.89 | 2026-11-13 | Appendix A: `network.access_key` (the shared key the front proxy asks for, ADR-114 Amendments 41 and 42) and `appearance.banner_text` (the banner's own words, ADR-132 Amendment 7), from the schema (`tools.admin_guide_options`), missed when they were added. PDF reprinted alone. |
 | 1.88 | 2026-11-12 | New §6a.9, the model route on a shared platform: the model gateway (LiteLLM), always rendered; an engine as your organisation's own AI gateway (by a token) or Amazon Bedrock in London (by the gateway's own IAM role, no key stored anywhere), with `kind`, `auth` and `region`, London alone and a model's own id; what is refused, in words; `gateway.tf`'s role, policy and service account, and what the platform team applies; the gateway's own way out, its engines' hosts and STS; what *Admin › Models* allows and refuses, in its own words; for a newly declared Bedrock engine, the Terraform before the new values, since only it makes the gateway's service account (also in §10.1); Laurium's key cross-referenced; what is not yet tried against AWS or your own gateway (ADR-135 Amendments 4, 7 and 8). §6a.5: an engine removed in *Admin › Models* keeps its host open while `osprey.yaml` declares it. *Coming* and the questions for the platform's team renumbered 6a.10 and 6a.11; nothing of the model route was listed as coming. PDF made by the orchestrator at merge. |
@@ -1096,8 +1099,14 @@ and the kept backups' removal when their retention ends (run with the decommissi
 the last backup it keeps). The install asks for the Entra app registrations before its first block,
 and its step 2 checks the certificate Secret `cloud_platform.tls_secret` names, when it names one.
 The install's *What it needs* names the `ospreyflow` command's own install (`uv tool install ./cli`)
-and the least `max_connections` the managed PostgreSQL must allow, set in RDS's parameter group: two
-Conduits side by side in an update, the worker, the gateway and a reserve. Its last section, *Against
+and the managed PostgreSQL's `max_connections` of 1000, set in its parameter group. The least it must
+allow is 834 in the poc and development shapes and 918 in production: two Conduits side by side in an
+update, the worker, the gateway and a reserve, with Superset and the report sync (from v0.5.2: one copy
+of each in poc and development, two in production) doubled by an upgrade in progress. 1000, set in every
+shape, leaves 166 and 82 to spare. The Terraform renders RDS as a `db.t4g.large` (8 GiB) in every shape, with a
+parameter group setting it; with MoJ's `cloud-platform-terraform-rds-instance` module the install gives
+the module's `db_parameter` line instead. The setting is static: it takes effect when the instance is
+created, and on an existing one only at its next reboot. Its last section, *Against
 the client's real tenant*, is no block to run: what only the real Entra tenant can show. The
 decommission removes a restore's Jobs before the claims, which they would otherwise keep, and its
 settings keep the bucket prefix, so it can be taken up in a new shell after step 7. **Both were run
