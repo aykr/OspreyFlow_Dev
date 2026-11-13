@@ -1957,6 +1957,9 @@ since ADR-145 Amendment 2 — open to anyone who
   never a second expansion path. Opening it over 50,000 nodes and 250,000 links stays inside §5's
   2.5 s first frame. Proven by `apps/workspace/keyboard/matrix.spec.ts` (rule 13),
   `src/matrix/MatrixView.test.tsx`, `src/App.matrix.test.tsx`, `src/matrix/MatrixView.budget.test.tsx`
+  (timed alone, after the rest of `npm test`, by `vitest.budget.config.ts`: beside 369 other files it
+  read 3.2–3.4 s where alone it reads about 1.2 s, a measure of its neighbours, not of the view;
+  `src/testing/budgetRun.test.ts` fails if a budget file is left in the parallel run or in neither)
   and `a11y/every-harness.spec.ts`'s scans of `keyboard/matrix-harness.html`. What the canvas alone
   holds — a folded group, a link hidden from the view, a type left out from the legend, the
   resolution clusters drawn as one — the Matrix does not reflect: it lists the working set.
