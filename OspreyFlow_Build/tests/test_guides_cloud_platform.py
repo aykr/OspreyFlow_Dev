@@ -147,11 +147,15 @@ def test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days() -> None
     text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.8"))
     assert f"point-in-time restore for {days} days" in text
     sets = _rendered("days", "backups.tf")  # the sets' own expiry, the bucket's lifecycle rule
-    assert f"against the sets' {sets}" in text
+    assert f"against the sets' {sets}:" in text
     # A set outliving RDS's window cannot be restored with its database, and §6a.8 must say which; one that does not
-    # outlive it can, and §6a.8 must not warn of a window that does not exist.
+    # outlive it can, and §6a.8 must not warn of a window that does not exist (in any of the old warning's words).
     caveat = f"only a set finished in the last {days} days"
-    assert (caveat in text) if int(days) < int(sets) else ("only a set finished in the last" not in text)
+    if int(days) < int(sets):
+        assert caveat in text
+    else:
+        stale = ["only a set finished in the last", "no database to pair with it", "is not to be restored"]
+        assert [words for words in stale if words in text] == []
 
 
 def test_section_6a5_gives_one_s3_reads_cap_as_the_connector_holds_it() -> None:
