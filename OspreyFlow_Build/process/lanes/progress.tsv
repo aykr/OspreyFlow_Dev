@@ -105,3 +105,13 @@ platform-b	v052-superset	M	todo	v0.5.2: Superset on Entra ID, embedded dashboard
 admin	v052-identities	M	todo	v0.5.2: dashboard identities and report sync on Entra ID (ADR-148 Am 10)
 platform	v052-standin	M	todo	v0.5.2: R1's Entra stand-in signs (token, authorize)
 platform-b	v052-r1	L	todo	v0.5.2: R1 on kind with a dashboards check (with platform)
+platform	v052-manifest	M	todo	v0.5.2 step 2: the poc manifest and its render test
+platform	v052-opensearch	M	todo	v0.5.2 step 3a: OpenSearch on poc
+rules	v052-index	L	todo	v0.5.2 step 3c: the index feed, rebuild, drift check
+rules	v052-load	M	todo	v0.5.2 B: client-size synthetic data, loaded once
+studio	v052-search	L	todo	v0.5.2 step 3d: the search service
+case	v052-fixes	S	todo	v0.5.2 step 3e: the Glass's screen fixes
+case	v052-results	M	todo	v0.5.2 step 3e′: the search results layout
+platform	v052-measure	S	todo	v0.5.2 step 4: the measurement session
+docs	v052-sweep	S	todo	v0.5.2 step 5: the wording sweep
+admin	v052-heartbeat	M	todo	The heartbeat's route view (the owner, 13 Nov)

@@ -106,3 +106,13 @@ platform-b	v052-superset	Four places, the Glass and Admin	Client install
 admin	v052-identities	Four places, the Glass and Admin	Client install
 platform	v052-standin	Housekeeping	Client install
 platform-b	v052-r1	Housekeeping	Client install
+platform	v052-manifest	Housekeeping	Client install
+platform	v052-opensearch	Four places, the Glass and Admin	Client install
+rules	v052-index	Four places, the Glass and Admin	Client install
+rules	v052-load	Housekeeping	Client install
+studio	v052-search	Four places, the Glass and Admin	Client install
+case	v052-fixes	Four places, the Glass and Admin	Client install
+case	v052-results	Four places, the Glass and Admin	Client install
+platform	v052-measure	Housekeeping	Client install
+docs	v052-sweep	Housekeeping	Client install
+admin	v052-heartbeat	Housekeeping	Housekeeping

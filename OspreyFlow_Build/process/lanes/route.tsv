@@ -1,0 +1,17 @@
+# target	v0.5.2	2026-11-26
+# The route to v0.5.2 (the owner, 13 Nov 2026). Kept by the orchestrator; the heartbeat's default view reads it.
+# Tab-separated: id, title, lane, start (YYYY-MM-DD), end (YYYY-MM-DD), critical (y/n), after (ids, comma, or -), progress
+# (lane:step in progress.tsv whose status gives this step's state; "-" for the orchestrator's own or the owner's).
+1	v0.5.1 cut: as R1 tested it, the upgrade rehearsal and the CHANGELOG	orchestrator	2026-11-14	2026-11-17	n	-	-
+2	The poc manifest and its render test	platform	2026-11-14	2026-11-15	n	-	platform:v052-manifest
+3a	OpenSearch on poc: render, Terraform, sign-in, what the client provides	platform	2026-11-16	2026-11-17	n	2	platform:v052-opensearch
+3b	Superset and report sync on Entra	platform-b	2026-11-14	2026-11-19	n	2	platform-b:v052-superset
+3c	The index feed: every change reaches the index, rebuild, drift check	rules	2026-11-14	2026-11-19	y	-	rules:v052-index
+3d	The search service: names, full text, ranking, groups, suggestions, access	studio	2026-11-14	2026-11-20	y	A	studio:v052-search
+3e	The Glass's screen fixes	case	2026-11-14	2026-11-16	n	-	case:v052-fixes
+3e′	The search results layout (after the owner's navigation decision)	case	2026-11-18	2026-11-20	y	3d,NAV	case:v052-results
+B	Client-size synthetic data loaded once, left loaded	rules	2026-11-16	2026-11-18	y	3c	rules:v052-load
+4	The measurement session on that load	platform	2026-11-23	2026-11-23	y	3c,3d,3e′,B	platform:v052-measure
+5	Feature freeze and the wording sweep	docs	2026-11-24	2026-11-24	y	4	docs:v052-sweep
+6	The install test on the candidate, from the manifest, with spec 08's scenarios	platform-b	2026-11-25	2026-11-25	y	5	platform-b:v052-r1
+7	Cut v0.5.2; print the page tables; the demos when the owner says	orchestrator	2026-11-26	2026-11-26	y	6	-
