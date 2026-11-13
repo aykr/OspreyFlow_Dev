@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node scripts/sync_govuk_assets.mjs && vite",
     "build": "node scripts/sync_govuk_assets.mjs && vite build",
-    "test": "vitest run",
+    "test": "vitest run && vitest run --config vitest.budget.config.ts",
+    "test:budget": "vitest run --config vitest.budget.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:perf": "playwright test --config perf/playwright.config.ts",
     "test:a11y": "playwright test --config a11y/playwright.config.ts",

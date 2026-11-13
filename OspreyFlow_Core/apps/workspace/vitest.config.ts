@@ -3,6 +3,9 @@ import { defineConfig } from "vitest/config";
 
 import SlowestReporter from "./src/testing/slowestReporter";
 
+/** The files that time a performance budget; `vitest.budget.config.ts` runs them, one at a time. */
+export const BUDGET_TESTS = "src/**/*.budget.test.{ts,tsx}";
+
 export default defineConfig({
   // Needed from Phase 7 Stage 6c Part 2 on, for `src/**/*.test.tsx`'s own `@testing-library/react`
   // component-render tests (`watches/*.test.tsx`) — every `*.test.ts` before this stage was pure
@@ -36,6 +39,12 @@ export default defineConfig({
     // (`npm test`, the fast/no-infra tier) the same way Python's own
     // `make test` excludes its live-infra files; `npm run test:integration`
     // runs it explicitly, from `make test-all`/CI's `conformance` job.
-    exclude: ["**/node_modules/**", "**/*.integration.test.ts"],
+    // `*.budget.test.{ts,tsx}` times §5's first-frame budget (`02_GLASS_FRONTEND.md` §5, a CI gate by
+    // rule 10), so it runs alone: `npm test` runs it second, by `vitest.budget.config.ts`, with no
+    // other file sharing the machine. Inside this run it shared the CPU with 369 other files and
+    // read 3245–3428 ms where it reads ~1240 ms alone (13 November 2026, CI run 43426503300 and this
+    // Mac): a measure of the neighbours, not of the view. `src/testing/budgetRun.test.ts` fails if
+    // a budget file is in neither run.
+    exclude: ["**/node_modules/**", "**/*.integration.test.ts", BUDGET_TESTS],
   },
 });
