@@ -33,3 +33,23 @@ In progress. The studio lane, from 13 November 2026. The plan is `PLAN.md`; the 
     Told the orchestrator.
 - **(h) Until stage 8's access filter exists, the route answers through today's search, saying it is limited.** No
   index query is ever built without the filter (`build_search_body` refuses).
+- **(i) The owner ruled on page A on 13 Nov (about 22:40):** strict ranking as recommended, and groups count
+  records, with the screen saying "records". The response shape is frozen at ee7a16d.
+- **(j) Merged entities are merged within one page of visible hits.**
+  - Options: merge across all matches; or merge within the page.
+  - Took the page. It is how case views merge today (`case_views._collapsed`, among the shown nodes). It reads
+    links only among hits already shown to be visible, and it needs no graph read per match. A member on a later
+    page is listed there separately.
+- **(k) The search access filter refuses a principal with no case limit.** `datasets is None` is the Conduit's
+  background work, never a reader's search.
+- **(l) The fallback lists at most 100 deep,** the most today's search returns. Its counts are never shown as exact.
+- **(m) Only an index that cannot answer falls back** (unreachable, timed out, 404 for an unbuilt alias, 429 or
+  5xx). A query OpenSearch refuses (400) is our defect, so it is raised, not hidden behind "results limited".
+- **(n) Highlight marks are private-use characters** (U+E000, U+E001), not control characters. OpenSearch trims a
+  fragment's edges of everything up to U+0020 (found live).
+- **(o) Two index defects in rules' files are fixed as a diff, not committed** (`rules_index_fixes.diff`): the
+  trigram analyser's positions, and a text document's date. They were found live by the bands test, and 61 live
+  cases pass with the diff applied. Rules' session was gone, so the diff went to the orchestrator.
+- **(p) Removal plants are not in the leak test.** It cannot plant reverted, withdrawn or superseded records,
+  because `throwaway_index` indexes live nodes only. Rules' `test_feed_live.py` shows each such event leaving the
+  index.
