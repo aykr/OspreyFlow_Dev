@@ -8,5 +8,5 @@ orchestrator	2026-11-14	Entra: the two app registrations, guests in v0.5.1?, the
 orchestrator	2026-11-14	Acceptance bar confirmed; the ADR (audit 5)	done
 orchestrator	2026-11-14	Every ruling since 1 Nov that cut something required, one list	done
 orchestrator	2026-11-14	The effect of audit 1, 3, 4c, 4d on 26 Nov	done
-owner	2026-11-14	Rule which audit fixes join v0.5.2 (1, 3, 4b, 4c in; 4d after, recommended)	open
-owner	2026-11-14	OpenSearch on poc: IRSA with SigV4 and no FGAC? No backups of the index, deleted at decommission? (3a waits)	open
+owner	2026-11-14	Rule which audit fixes join v0.5.2 (1, 3, 4b, 4c in; 4d after, recommended)	done
+owner	2026-11-14	OpenSearch on poc: IRSA with SigV4 and no FGAC? No backups of the index, deleted at decommission? (3a waits)	done

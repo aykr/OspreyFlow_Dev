@@ -1,6 +1,6 @@
 # The five audit rulings (the owner, 13 Nov). Tab-separated: id, ruling, state, in v0.5.2 (yes|no|owner to decide)
-1	Scheduled runs under Entra: fix in v0.5.2 (options to the owner first); v0.5.1 notes: loads started by hand	options pending	owner to decide
-2	Laurium document reading: estimate the smallest screen; not built yet	estimate pending	no
-3	Data safety: shared storage backed up; PITR matches 35 days; decommission asks keep or destroy	effect on 26 Nov pending	owner to decide
-4	Entra: two registrations (answer today); guests behind a setting; admin fallback and groups (estimates)	answers pending	owner to decide
-5	Acceptance bar: spec 08 in the step 6 install test, from the manifest; an ADR records it	confirmation pending	yes
+1	Scheduled runs on Entra, option A (the owner's stored identity, access re-read at run time); v0.5.1 notes: loads started by hand	ruled: in v0.5.2 (admin)	yes
+2	Laurium document reading: route the reader's Deep read to Laurium, ~1 day; not built yet	estimated, not built	no
+3	Data safety: shared storage in the backup; PITR 35 days; decommission asks keep or destroy	ruled: in v0.5.2 (platform)	yes
+4	Entra: 4a told the client; 4b guests behind a setting (admin) and 4c admin fallback (platform-b) in v0.5.2; 4d groups to roles after v0.5.2	ruled	yes
+5	Acceptance bar: spec 08 in the step 6 install test, from the manifest; an ADR records it	ruled	yes

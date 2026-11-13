@@ -812,6 +812,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         or defers something the client page or an ADR requires goes to the owner first (the orchestrator's ruling (a)
         of 11 Nov deferred Superset without asking).
 
+        **The owner's rulings, 13 Nov, about 21:00:** audit 1 (scheduled runs, option A), 3 (data safety), 4b (guests
+        behind a setting) and 4c (the administrator fallback) join v0.5.2, and 26 Nov is at risk with the slack used;
+        4d (groups to roles) after v0.5.2; OpenSearch on poc signs in by IRSA and SigV4, with no FGAC, and has no index
+        backup of its own (rebuilt from the graph; deleted at decommission).
+
         **The owner's word, about 07:45:** once both demo fixes land (one key prompt, ADR-114 Am 42, platform-b; Home's
         "Your access and tasks", ADR-145 Am 11, platform), push main to the dev repo and publish the product repo
         again from the same commit (no tag), each recorded in PUSH_LOG.
