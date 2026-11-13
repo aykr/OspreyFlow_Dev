@@ -850,16 +850,20 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "help-from-the-rail-by-keyboard",
   // ADR-132: the skip link, under both brands.
   "skip-to-main-content-by-keyboard",
-  // ADR-145 decisions 1–3: the place switcher (both brands), the banner's cross-link and its
-  // sections, and Home's cards.
+  // ADR-145 decisions 1–3: the place switcher (both brands), the banner's cross-link, and Home's cards (the
+  // banner's sections left the Glass with Amendment 15).
   "switch-place-by-keyboard",
   "banner-cross-link-by-keyboard",
-  // ADR-145 Amendment 13: the sections are the mode toggle, Graph · Drawing board, with each mode's note.
-  "banner-sections-by-keyboard",
+  // ADR-145 Amendment 15 (the owner's navigation decision, replacing Amendment 13's mode toggle): the case line's
+  // Views in this case opens the Cases panel, focus returned to it.
+  "case-line-views-by-keyboard",
+  // ...and the case menu's All cases, which opens the same panel, focus returned to the menu's button.
+  "all-cases-by-keyboard",
   "home-place-cards-by-keyboard",
-  // ADR-145 Amendment 2 (variant B): the rail's More and each destination under it, More views, and a
-  // folded panel of the column opened with one keypress.
-  "rail-more-by-keyboard",
+  // ADR-145 Amendment 2 (variant B) and Amendment 15: each rail panel opened and closed, the view kept and focus
+  // returned to its opener (the rail's More left with Amendment 15), More views, and a folded panel of the column
+  // opened with one keypress.
+  "rail-panels-by-keyboard",
   "more-views-by-keyboard",
   "open-a-folded-panel-by-keyboard",
   // ADR-145 Amendment 4 and ADR-146 decision 2 (L2.9): Rules and Monitoring, the fourth place, in the
@@ -869,6 +873,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "back-to-the-glass-from-rules-and-monitoring-by-keyboard",
   "open-an-alert-from-home-by-keyboard",
   "open-rules-and-monitoring-from-home-by-keyboard",
+  // ADR-145 Amendment 15 (the owner's ruling, Q2): Build a report beside Reports, a link to Superset in a new tab.
+  "build-a-report-by-keyboard",
 ] as const);
 
 /** Rules and Monitoring (ADR-146 decisions 2 and 6, L2.9): its tabs, an alert opened at its own

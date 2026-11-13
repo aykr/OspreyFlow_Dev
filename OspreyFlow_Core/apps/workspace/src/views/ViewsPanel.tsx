@@ -7,7 +7,7 @@
 // It enforces nothing: the Conduit lists only the views this reader may see, and refuses a share or
 // a delete by anyone but the creator. A member is never shown another's private view because the
 // server never sends it; the panel draws what it is given.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { currentBrand } from "../brand/brand";
 import "./views.css";
@@ -26,11 +26,18 @@ export interface ViewsPanelProps {
   onDeleted?: (viewId: string) => void;
   /** Bumped by the caller after it saves a view, so the list is read again. */
   refreshKey?: number;
+  /** Opened by the case line's *Views in this case* (ADR-145 Amendment 15): the panel takes focus, so the list is
+   * where the person is. */
+  takeFocus?: boolean;
 }
 
 type Asking = { id: string; what: "delete" } | null;
 
-export function ViewsPanel({ apiBaseUrl, bearerToken, caseId, me, openViewId = null, onOpen, onDeleted, refreshKey = 0 }: ViewsPanelProps) {
+export function ViewsPanel({ apiBaseUrl, bearerToken, caseId, me, openViewId = null, onOpen, onDeleted, refreshKey = 0, takeFocus = false }: ViewsPanelProps) {
+  const section = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (takeFocus) section.current?.focus();
+  }, [takeFocus]);
   const [views, setViews] = useState<CaseView[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [asking, setAsking] = useState<Asking>(null);
@@ -86,7 +93,7 @@ export function ViewsPanel({ apiBaseUrl, bearerToken, caseId, me, openViewId = n
 
   if (views === null) {
     return (
-      <section aria-labelledby={`views-in-${caseId}`} className="case-views">
+      <section ref={section} tabIndex={-1} aria-labelledby={`views-in-${caseId}`} className="case-views">
         {heading}
         <p className={govuk ? "govuk-body-s" : "caption"}>Loading the views…</p>
       </section>
@@ -94,7 +101,7 @@ export function ViewsPanel({ apiBaseUrl, bearerToken, caseId, me, openViewId = n
   }
 
   return (
-    <section aria-labelledby={`views-in-${caseId}`} className={govuk ? "case-views case-views--govuk" : "case-views"}>
+    <section ref={section} tabIndex={-1} aria-labelledby={`views-in-${caseId}`} className={govuk ? "case-views case-views--govuk" : "case-views"}>
       {heading}
       {views.length === 0 && problem ? null : views.length === 0 ? (
         <p className={govuk ? "govuk-body-s" : "caption"}>
@@ -177,6 +184,11 @@ interface ActionsProps {
 }
 
 function Actions({ govuk, view, mine, asking, onOpen, onShare, onAskDelete, onDelete, onCancel }: ActionsProps) {
+  // ADR-145 Amendment 14 decision 1 (the owner, 13 November 2026: Open covered the Private tag and the
+  // buttons wrapped to four lines in the 360 px Cases drawer): under GOV.UK a row's actions are GOV.UK links,
+  // as a summary list's actions are, on one line under the view's name and tag. The question before a delete
+  // keeps GOV.UK's buttons: it is the one place a choice is made.
+  const action = govuk ? "govuk-link case-views__link" : "btn btn--quiet case-views__button";
   const button = govuk ? "govuk-button govuk-button--secondary case-views__button" : "btn btn--quiet case-views__button";
   if (asking?.id === view.id) {
     return (
@@ -195,16 +207,16 @@ function Actions({ govuk, view, mine, asking, onOpen, onShare, onAskDelete, onDe
   }
   return (
     <span className="case-views__actions">
-      <button type="button" className={button} aria-label={`Open ${view.name}`} onClick={onOpen}>
+      <button type="button" className={action} aria-label={`Open ${view.name}`} onClick={onOpen}>
         Open
       </button>
       {mine && !view.shared && (
-        <button type="button" className={button} aria-label={`Share with the case: ${view.name}`} onClick={onShare}>
+        <button type="button" className={action} aria-label={`Share with the case: ${view.name}`} onClick={onShare}>
           Share with the case
         </button>
       )}
       {mine && (
-        <button type="button" className={button} aria-label={`Delete ${view.name}`} onClick={onAskDelete}>
+        <button type="button" className={action} aria-label={`Delete ${view.name}`} onClick={onAskDelete}>
           Delete
         </button>
       )}

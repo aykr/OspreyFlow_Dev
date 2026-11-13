@@ -92,7 +92,8 @@ describe("the rail's Explore Details and the top bar's More views", () => {
         items={[{ id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined }]}
         more={[
           { id: "ownership", label: "Ownership", icon: "ownership", onSelect: () => chose("ownership") },
-          { id: "history", label: "History", icon: "history", onSelect: () => chose("history"), pressed: true },
+          // As `App.tsx` sends it: History opens a drawer, so it is expanded, never pressed (ADR-145 Amendment 14).
+          { id: "history", label: "History", icon: "history", onSelect: () => chose("history"), expanded: true },
         ]}
       />,
     );
@@ -107,6 +108,43 @@ describe("the rail's Explore Details and the top bar's More views", () => {
     fireEvent.click(menu.getByRole("button", { name: "Ownership" }));
     expect(chose).toHaveBeenCalledWith("ownership");
     expect(screen.queryByRole("group", { name: "Explore Details" })).toBeNull();
+  });
+
+  // ADR-145 Amendment 14 decision 3: with a panel open over a place of its own, the name and the menu's
+  // mark follow the place, the one marker.
+  it("names the place open, not a panel open over it", () => {
+    render(
+      <LeftRail
+        items={[{ id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined }]}
+        more={[
+          { id: "history", label: "History", icon: "history", onSelect: () => undefined, expanded: true },
+          { id: "ownership", label: "Ownership", icon: "ownership", onSelect: () => undefined, pressed: true },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Explore Details, Ownership open" }));
+    const menu = within(screen.getByRole("group", { name: "Explore Details" }));
+    expect(menu.getByRole("button", { name: "Ownership" }).getAttribute("aria-current")).toBe("page");
+    expect(menu.getByRole("button", { name: "History" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  // ADR-145 Amendment 14 decision 3: a place under Explore Details still has a visible marker, on the trigger;
+  // a panel of its own open (History's drawer) does not carry it.
+  it("carries the rail's marker when the place open is one of its own, and not for a panel", () => {
+    const { rerender } = render(
+      <LeftRail
+        items={[{ id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined, expanded: false }]}
+        more={[{ id: "ownership", label: "Ownership", icon: "ownership", onSelect: () => undefined, pressed: true }]}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Explore Details, Ownership open" }).getAttribute("data-current")).toBe("true");
+    rerender(
+      <LeftRail
+        items={[{ id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined, expanded: false }]}
+        more={[{ id: "history", label: "History", icon: "history", onSelect: () => undefined, expanded: true }]}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Explore Details, History open" }).getAttribute("data-current")).toBeNull();
   });
 
   it("is named Explore Details alone while none of its places is open", () => {

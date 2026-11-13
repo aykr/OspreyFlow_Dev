@@ -36731,6 +36731,191 @@ ADR-132 Amendment 8's one GOV.UK row is kept at 1440.
 is reprinted, as this step was asked (changing it needs that guide's own version and PDF); the marketing site's
 `three-places.html` names *Case · Boards* in two places (its owner's file, not changed here).
 
+### ADR-145, Amendment 14 (13 November 2026) — The Glass's screen fixes: drawers under the top navigation, the Views panel's rows fit, the dataset named once
+
+Status: as built by the case lane (v0.5.2 step 3e, `v052-fixes`) on the orchestrator's reservation, from the owner's
+four screen fixes of 13 November 2026, seen on the GOV.UK look, after the lane's own review and the orchestrator's
+independent one. The fourth fix (the strip's note on Alert monitoring, two rail items marked) was replaced the same
+evening by the owner's navigation decision and is recorded in Amendment 15, not here. Changes the words of three
+accepted texts, each named below: ADR-115 Amendment 1 point 5 (the scope badge, in the Glass), decision 2 of this ADR
+(the cross-link's words) and `02_GLASS_FRONTEND.md` §2.0a (the same). Fix 4's choice of which mention stays was the case
+lane's, accepted by the orchestrator for the owner, who may overrule it.
+
+1. **The Cases drawer's views fit.** In the 360 px drawer, under GOV.UK, the summary list drew a view's name, tag and
+   three full GOV.UK buttons in three columns: *Open* covered the *Private* tag and the buttons wrapped to four lines.
+   - Each row now has the name and the tag on one line, the tag at its end, and the actions on the line under them,
+     drawn as GOV.UK links (a summary list's actions are links in GOV.UK's own pattern). With the text enlarged the
+     actions wrap (WCAG 1.4.4) rather than overflow.
+   - The question before a delete keeps GOV.UK's buttons: it is the one place a choice is made.
+   - A long view name no longer widens the panel: the drawer's stack (`drawer-stack`), the panel and the case list each
+     have one `minmax(0, 1fr)` column. Before, a long name widened the 360 px drawer's content to 573 px and pushed its
+     tag out, in both looks. Found by this amendment's own long-name state.
+
+   Tests: `keyboard/views.spec.ts` *‹look›‹state›: in the Cases drawer each view's name, tag and actions fit*. It uses
+   the real drawer (`views-harness.html?in=drawer`), in dark, light and GOV.UK, by default, with a long name (`long=1`)
+   and while asking to delete (`asking=delete`). For each row it checks that the name and tag share a line, no action
+   lies over the tag, the actions are on one line, and all of it is inside the drawer; then a row is opened by
+   keyboard. It is red under GOV.UK with main's `ViewsPanel.tsx` and `views.css` planted, and red with the long name
+   before `drawer-stack`. `ViewsPanel.test.tsx` names the links and the question's buttons. `a11y/every-harness.spec.ts`
+   scans the three `in=drawer` states, and its `long=1` scan found the case list's own overflow (`case-tree__list`,
+   fixed the same way).
+2. **A drawer opens under the top navigation.** `.drawer` was fixed at `top: 0`, so every drawer covered the GOV.UK
+   header's places, the top bar and the context row with its case switcher and cross-link.
+   - The drawer (`design/primitives/Drawer.tsx`) now starts at the lowest bottom edge of the top bar and the context row
+     (`.top-bar`, `.context-banner`, `.context-banner--govuk`), never above the window.
+   - It is measured before the first paint, and again on resize, on the chrome's own resize and on scroll. Where none of
+     these exist (Admin's frame, a harness) it starts at the top as before.
+   - It is no longer announced as modal (`aria-modal` dropped): it neither traps focus nor makes the page inert, and
+     the navigation beside it stays usable.
+   - Closing it returns focus to whatever opened it, unless the person has moved focus elsewhere (Amendment 15).
+
+   Tests: `Drawer.test.tsx` *opens under the top bar…*, *…under the context row too…*, *is measured again when the
+   window is resized and when the page scrolls*, *is not announced as modal* and *starts at the top where there is no top
+   bar*. `keyboard/shell.spec.ts` *‹look›: an open drawer starts under the top bar and the context row, the navigation
+   above it uncovered* uses `shell-harness.html?drawer=1`, which now draws the context row. At 1440, and again after
+   narrowing to 900 where the row wraps, it checks the drawer's top against the chrome's bottom and that every header,
+   top-bar and row control in the drawer's columns is the topmost element at its own centre; Close is then reached by
+   Tab. It runs in dark, light and GOV.UK, red in all three with main's `Drawer.tsx` planted, and with the context row or
+   the resize listener left out.
+3. *(Replaced by Amendment 15 before merge: the strip and rail markers.)*
+4. **The dataset is named once.** The Glass's context row named the case's dataset three times: in the case switcher's
+   scope badge (ADR-115 Amendment 1 point 5), in "reads Prison intel" (decision 2) and in the cross-link "Open Prison
+   intel in the Ingest Studio ↗" (decision 2, spec 02 §2.0a).
+   - "reads …" stays, and a case reading none says "reads no dataset", where the badge said NO DATA.
+   - While the banner says what the case reads, the switcher draws no badge (`CaseSwitcher`'s `showScope`). While the
+     case's datasets are read or refused, the banner says nothing and the badge stays. In Rules and Monitoring and the
+     Studio, whose banners name no dataset, the badge stays.
+   - The cross-link reads *Open this case's data in the Ingest Studio ↗* for any number of datasets.
+
+   Tests: `App.chrome.test.tsx` on the real App:
+   - *the context row names the case's one dataset once*: red at the cross-link's name, and at the count with the badge
+     planted back;
+   - *a case that reads no dataset says so once, in the banner*;
+   - *the badge names the scope when the case's datasets cannot be read*;
+   - *the scope badge stays where the banner names no dataset* (Rules and Monitoring, the Studio).
+
+   `CaseSwitcher.test.tsx` *is left out with showScope false, and drawn by default*.
+5. **The record.** Every claimed red is on file, each a plant at the real call site, restored by `git checkout`:
+   - `process/lanes/case/gates/v052_fixes_unit_reds.py` and its log (jsdom, 34 of 34 red at 4cf8163, Amendment 15's
+     plants among them);
+   - `v052_fixes_browser_reds.py` and its logs (the keyboard cases, slot 2; all twelve plants in
+     `v052-fixes-browser-reds.062e079.log`);
+   - `v052-navigation-app-reds.log` (Amendment 15's App tests before Amendment 15).
+
+   The registry, `every-harness` and contrast-finding changes are the orchestrator's files, sent as one diff
+   (`process/lanes/case/shared-files-v052-navigation.diff`).
+
+**Not covered:** the user guide's screenshots of the context row and the Cases drawer; `DEMO_GUIDE.md`'s cross-link words
+(docs' files, after the freeze's sweep). Other overlays fixed to the viewport's top (`.view-over-cap`, the BPMN drawing)
+are dialogs, not drawers, and are left as they are.
+
+### ADR-145, Amendment 15 (13 November 2026) — The owner's navigation decision: one view switch, a rail of panels, the case line; and the search results layout
+
+Status: Part B as built by the case lane (v0.5.2 step 3e) on the orchestrator's reservation, from the owner's decision
+of 13 November 2026 (`process/lanes/NAVIGATION_2026-11-13.md`); Part A (step 3e′) recorded here when built. **Replaces
+Amendment 13** (the strip's *Graph · Drawing board* toggle and its note) and Amendment 14's third fix. **Changes
+Amendment 12** (the rail's layout) and **Amendment 2** (More views). The rule behind it, in the owner's words: every job
+has exactly one control. Everything that replaces the main area is in one view switch, the left rail only opens panels
+beside the current view, and there is one route to cases and one place to manage saved views.
+
+1. **One view switch.** The top bar's *View* group reads *Graph · Map · Drawing board · Reports*, then *More views* with
+   *Matrix, Figures, Ownership, Connection strength*, in those orders.
+   - *Reports* is the on-screen name of ADR-111 Amendment 3's dashboards view, unchanged inside (Alert monitoring
+     first, then the Superset boards). *Figures* keeps its name.
+   - Exactly one view is current: pressed in the group, or named on *More views* (`menu-button--pressed`) when it is
+     one of its own.
+   - Each view is offered by the rights that offered it before (`viewsFor`, `railEntries`). The drawing board is
+     offered by `investigate`, as its routes ask. Someone offered none of the four has theirs in the switch itself.
+   - The order and names are in `shell/railLayout.ts` (`VIEW_SWITCH`, `MORE_VIEWS`, `VIEW_LABELS`, `splitViews`),
+     which `App.tsx` and the keyboard harnesses read alike.
+2. **The strip names no mode.** The Glass's context row has no *Graph · Drawing board* links and no note, and the
+   region has no description. The drawing board's own screen says "Drawing board: your sketch; it does not change the
+   case's data." (`boards/BoardsPlace.tsx`).
+3. **The rail holds panel openers alone:** *Explore, Ask & Chat, History*, then *Help* and the names toggle. *Cases*,
+   *Dashboards* and *Explore Details* left it.
+   - An opener is never pressed. It is `aria-expanded` while its panel is open (`aria-haspopup="dialog"`), and a second
+     press closes it (`railMark`).
+   - Opening or closing a panel never changes the view.
+   - Closing a panel, by its opener, Escape or its *Close*, returns focus to the opener (`Drawer`).
+4. **The case line:** "You are in the Glass · Case ‹switcher› · Views in this case · reads …".
+   - The word *Case* is visible before the switcher. It is hidden from assistive technology, whose name for the switcher
+     already begins "Case:".
+   - The switcher's last entry is *All cases*, which opens the Cases panel. That panel's *Browse all cases* still opens
+     the full list.
+   - *Views in this case* opens the same panel with its *Views in this case* list focused (open, share, delete).
+   - The graph toolbar's *Views ▾* (ADR-144 Amendment 3) stays.
+   - Rules and Monitoring keeps its switcher without the word, and the Studio its "for ‹switcher›".
+5. ***Build a report*** (the owner's ruling of 13 November 2026, Q2). A link beside *Reports*, before *More views*: "Build
+   a report (opens in new tab)".
+   - It opens Superset's address, the deployment's `bi.` origin (`deploymentReportsUrl()` in `auth/oidcConfig.ts`,
+     platform-b's reader, taken as written so the two branches merge as one change), in a new tab
+     (`rel="noopener noreferrer"`).
+   - It is shown only where Superset is deployed and to a holder of `manage_dashboards`; Superset's builder role refuses
+     anyone else.
+   - It is a link out of the Glass, never a view, so it stands outside the switch's group (`TopBar`'s `besideViews`,
+     `BuildAReportLink`).
+   - A builder offered no *Reports* (the built-in Administrator: `manage_dashboards` without `read_reports`) has it
+     after their own switch: the right to build is the test, not the right to read (a gap the lane-reviewer found,
+     decided so by the lane under the never-stop rule, the owner free to overrule).
+
+   Tests:
+   - `App.chrome.test.tsx` *Build a report beside Reports*, on the real App: offered to a builder where Superset is
+     deployed, with its address, new tab and place; not offered to a Reports Viewer; not offered, even to a builder,
+     without Superset. Each is red by its plant (`v052-fixes-unit-reds.log`, plants 20 to 22).
+   - `keyboard/shell.spec.ts` *‹look›: Build a report follows Reports by keyboard, a link to Superset in a new tab*, in
+     dark, light and GOV.UK (registry `build-a-report-by-keyboard`).
+   - `every-harness` scans `top-bar-harness.html?reports=1`.
+6. **Tests**, each red first (`v052-navigation-app-reds.log`; plants 11 to 19 in `v052-fixes-unit-reds.log`; the browser
+   plants in `v052-fixes-browser-reds.log`).
+   - `App.chrome.test.tsx`'s *the owner's navigation* block, on the real App: the switch's order and its one current
+     view; the drawing board's line; the strip without modes; the rail's five buttons; each opener opening without
+     changing the view, closing on a second press and returning focus; the case line's parts in order; *Views in this
+     case* focusing the views; *All cases* last and opening the panel. Also *25 controls stand before the canvas*.
+   - `App.help.test.tsx`, `App.matrix.test.tsx`, `App.test.tsx` and `App.views.test.tsx` reach views through the switch
+     and the panel through the case line.
+   - `keyboard/shell.spec.ts`:
+     - *each rail entry is reached and pressed by keyboard* (none of the three that left);
+     - *each rail panel is opened and closed by keyboard, the view kept and focus returned to its opener* (registry
+       `rail-panels-by-keyboard`, replacing `rail-more-by-keyboard`);
+     - *each view is chosen by keyboard: Graph, Map, Drawing board and Reports, the rest under More views*;
+     - *the case line's Views in this case opens the Cases panel by keyboard* (registry `case-line-views-by-keyboard`,
+       replacing `banner-sections-by-keyboard`);
+     - *‹look›: exactly one view is current, and a rail panel changes none of it*, in dark, light and GOV.UK;
+     - GOV.UK's context row at 1440 and 1024 with the case line.
+   - `a11y/every-harness.spec.ts` scans the places harness with the Explore panel and the Cases panel open (`open=explore`,
+     `open=cases`). The contrast findings under the open *More views* are updated.
+   - The registry, `every-harness` and contrast-finding changes are the orchestrator's (one diff, Amendment 14 decision 5).
+
+7. **After the lane review (13 November 2026).** What the review of Part B found, each red first:
+   - *One offer list.* What a person is offered is `shell/railLayout.ts`'s `offeredViews`, read by `App.tsx` and both
+     keyboard harnesses (which copied every view before, whatever their `?rights=`). A view of the switch not offered
+     gives way to `viewToLandOn` (the landing view where offered, else the first offered), so exactly one view is
+     current for every person: `App.chrome.test.tsx`'s *Part B after review* block (a Reports Viewer's switch; an
+     investigator's; the built-in Administrator with Connection strength current; a drawing board, and Ownership,
+     chosen before the rights arrive giving way; exactly one current; *All cases* in the Studio opening the picker;
+     the Cases panel returning focus to the case menu; *Views in this case* a toggle), plants 23 to 34 of
+     `v052-fixes-unit-reds.log`.
+   - *Focus.* `Drawer.test.tsx`'s three focus cases (to its opener; left where the person moved it; to the caller's
+     `returnFocusTo` where the opener is gone). Help's keys panel returns focus to Help (`keyboard/shell.spec.ts`
+     *the rail's Help opens and closes the keys panel*). The drawer's `lost` guard has no plant of its own: React DOM
+     already puts back focus a commit moved off an element still in the page, so removing the guard changes nothing a
+     test can see (the reds script says so).
+   - *The board's line.* An open board says it is a sketch, above the board and across it, not as a column beside it
+     (`BoardsPlace.test.tsx`; `keyboard/boards.spec.ts` *a board is opened from the boards list by keyboard*, which
+     measures it).
+   - *The keyboard.* *the case menu's All cases opens the Cases panel by keyboard, and focus returns to the case menu*
+     (registry `all-cases-by-keyboard`). The registry check stands last in `shell.spec.ts`, read on one worker as CI
+     runs it; *Build a report*'s case stood after it, and the check was red for that reason in the c9ae729 run.
+   - The browser plants for each are in `v052-fixes-browser-reds.062e079.log`.
+
+**Not covered:** the user guide's and the architecture guide's pages on the places, the rail and the context row
+(docs', after the freeze's sweep); the rail's dead *Explore Details* menu (`LeftRail.tsx`'s `RailMore`,
+`railLayout.ts`'s empty `EXPLORE_DETAILS`, `shell.test.tsx`'s cases for it) and the banner's unused `sections` and
+`note` props, left for a later clean-up with their tests; `case-screen-options-harness.tsx`, L2.3's prototype of the old variants, left as the
+record it is.
+
+**Part A (step 3e′), the search results layout:** to be recorded here when built.
+
 ### ADR-144, Amendment 3 (13 November 2026) — *Views ▾* by the graph: the case's saved views one click from the canvas
 
 Status: as built by the platform-b lane (step modes) at the owner's ruling of 13 November 2026, on the

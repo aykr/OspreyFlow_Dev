@@ -123,18 +123,16 @@ describe("the rail's Help over every view the rail reaches", () => {
   const rail = () => screen.getByRole("navigation", { name: "Workspace" });
   const panel = () => screen.queryByRole("dialog", { name: "Welcome back" });
 
-  /** A place reached from the rail: on it, or in its menu (named More before Amendment 12). */
-  async function openFromRail(name: string): Promise<void> {
-    if (name === "Map") {
-      fireEvent.click(await screen.findByRole("button", { name: "Map" }));
-      return;
-    }
-    const direct = within(rail()).queryByRole("button", { name });
+  /** A view, from the top bar's one view switch or its More views (the owner's navigation decision, ADR-145
+   * Amendment 15; it was the rail's before). */
+  async function openView(name: string): Promise<void> {
+    const group = await screen.findByRole("group", { name: "View" });
+    const direct = within(group).queryByRole("button", { name });
     if (direct) {
       fireEvent.click(direct);
       return;
     }
-    fireEvent.click(within(rail()).getByRole("button", { name: /^(More|Explore Details)/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
     fireEvent.click(await screen.findByRole("button", { name }));
   }
 
@@ -149,14 +147,14 @@ describe("the rail's Help over every view the rail reaches", () => {
   const VIEWS: [string, string | null][] = [
     ["the graph", null],
     ["the map", "Map"],
-    ["Dashboards", "Dashboards"],
+    ["Reports", "Reports"],
     ["Ownership", "Ownership"],
     ["Connection strength", "Connection strength"],
   ];
 
   test.each(VIEWS)("in %s, Help opens the panel and a second press closes it", async (_view, place) => {
     await signedInWithThePanelClosed();
-    if (place) await openFromRail(place);
+    if (place) await openView(place);
     const help = within(rail()).getByRole("button", { name: "Help" });
     fireEvent.click(help);
     expect(panel()).not.toBeNull();
@@ -166,7 +164,7 @@ describe("the rail's Help over every view the rail reaches", () => {
 
   test.each(VIEWS)("in %s, the ? key opens the panel and again closes it, and Esc closes it", async (_view, place) => {
     await signedInWithThePanelClosed();
-    if (place) await openFromRail(place);
+    if (place) await openView(place);
     fireEvent.keyDown(window, { key: "?" });
     expect(panel()).not.toBeNull();
     fireEvent.keyDown(window, { key: "?" });
@@ -198,7 +196,7 @@ describe("the rail's Help over every view the rail reaches", () => {
   test("the panel opened at sign-in shows on the graph alone; asked for by Help, over any view", async () => {
     render(<App />);
     await screen.findByRole("dialog", { name: "Welcome back" }); // opened at a first sign-in
-    await openFromRail("Dashboards");
+    await openView("Reports");
     expect(panel()).toBeNull();
     fireEvent.click(within(rail()).getByRole("button", { name: "Help" }));
     expect(panel()).not.toBeNull();
@@ -206,7 +204,7 @@ describe("the rail's Help over every view the rail reaches", () => {
   });
 });
 
-// ADR-145 Amendment 12, against the real App: the rail's order, Explore Details' order, and Ask & Chat.
+// ADR-145 Amendments 12 and 15, against the real App: the rail's order and Ask & Chat.
 describe("the rail as the real App draws it", () => {
   const signedInPerson = {
     access_token: "a-token",
@@ -231,17 +229,14 @@ describe("the rail as the real App draws it", () => {
     });
   });
 
-  test("Cases, Explore, Ask & Chat and Dashboards on the rail; History, Ownership and Connection strength under Explore Details", async () => {
+  // The owner's navigation decision (ADR-145 Amendment 15, amending Amendment 12): the panel openers alone.
+  test("the rail holds Explore, Ask & Chat and History, then Help and the names toggle; no Cases, Dashboards or Explore Details", async () => {
     render(<App />);
     const rail = await screen.findByRole("navigation", { name: "Workspace" });
-    await within(rail).findByRole("button", { name: "Dashboards" });
-    const names = within(rail).getAllByRole("button").map((b) => b.getAttribute("aria-label"));
-    expect(names.slice(0, 5)).toEqual(["Cases", "Explore", "Ask & Chat", "Dashboards", "Explore Details"]);
-    fireEvent.click(within(rail).getByRole("button", { name: "Explore Details" }));
-    const menu = within(rail).getByRole("group", { name: "Explore Details" });
-    expect(within(menu).getAllByRole("button").map((b) => b.textContent)).toEqual(["History", "Ownership", "Connection strength"]);
-    fireEvent.click(within(menu).getByRole("button", { name: "History" }));
-    expect(within(rail).getByRole("button", { name: "Explore Details, History open" })).toBeTruthy();
+    await within(rail).findByRole("button", { name: "Ask & Chat" });
+    expect(within(rail).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Explore", "Ask & Chat", "History", "Help", "Show names"]);
+    fireEvent.click(within(rail).getByRole("button", { name: "History" }));
+    expect(within(rail).getByRole("button", { name: "History" }).getAttribute("aria-expanded")).toBe("true");
   });
 
   test("Ask & Chat opens its drawer under its own name", async () => {

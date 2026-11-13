@@ -10,6 +10,7 @@ import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
+import { Drawer } from "../src/design/primitives/Drawer";
 import { CaseList } from "../src/investigation/CaseList";
 import { SaveViewForm } from "../src/views/SaveViewForm";
 import { ViewLensBanner } from "../src/views/ViewLensBanner";
@@ -38,7 +39,9 @@ const CASES = [
 ];
 const views: Record<string, { id: string; case_id: string; name: string; created_by: string; created_at: string; shared: boolean; chosen: number }[]> = {
   c1: [
-    { id: "v-private", case_id: "c1", name: "Alice's own", created_by: "alice", created_at: at, shared: false, chosen: 3 },
+    // `?long=1`: a view with a long name, which must wrap beside its tag rather than push it out (ADR-145 Amendment 14).
+    { id: "v-private", case_id: "c1", name: params.get("long") === "1" ? "Alice's own: every payment between the three Ledger accounts in March and April" : "Alice's own",
+      created_by: "alice", created_at: at, shared: false, chosen: 3 },
     { id: "v-shared", case_id: "c1", name: "Payments in March", created_by: "alice", created_at: at, shared: true, chosen: 4 },
   ],
   c2: [{ id: "v-hmp", case_id: "c2", name: "Visits this week", created_by: "alice", created_at: at, shared: true, chosen: 2 }],
@@ -83,7 +86,7 @@ const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 const show = params.get("show");
 
-// `?asking=delete`: the panel drawn asking "Delete this view?", for the axe scan; no spec uses it.
+// `?asking=delete`: the panel drawn asking "Delete this view?", for the axe scan and the drawer-fit case (`views.spec.ts`).
 if (params.get("asking") === "delete") {
   const ask = () => {
     const button = document.querySelector<HTMLButtonElement>('button[aria-label="Delete Alice\'s own"]');
@@ -139,6 +142,25 @@ if (show === "menu" && params.get("open") === "1") {
   requestAnimationFrame(press);
 }
 
+const listed = (
+  <>
+    <ViewsPanel
+      apiBaseUrl="http://keyboard-test.invalid"
+      bearerToken="unused"
+      caseId="c1"
+      me={reader}
+      onOpen={(view) => (window.__VIEWS__!.opened = view.id)}
+    />
+    <CaseList
+      apiBaseUrl="http://keyboard-test.invalid"
+      bearerToken="unused"
+      currentId="c1"
+      onOpen={() => undefined}
+      onOpenView={(caseId, view) => (window.__VIEWS__!.openedView = { caseId, viewId: view.id })}
+    />
+  </>
+);
+
 createRoot(container).render(
   <div style={{ display: "grid", gap: "var(--sp-16)", padding: "var(--sp-12)", background: "var(--surface-panel)" }}>
     {show === "menu" && <ByTheGraph />}
@@ -172,19 +194,16 @@ createRoot(container).render(
         onCancel={() => undefined}
       />
     )}
-    <ViewsPanel
-      apiBaseUrl="http://keyboard-test.invalid"
-      bearerToken="unused"
-      caseId="c1"
-      me={reader}
-      onOpen={(view) => (window.__VIEWS__!.opened = view.id)}
-    />
-    <CaseList
-      apiBaseUrl="http://keyboard-test.invalid"
-      bearerToken="unused"
-      currentId="c1"
-      onOpen={() => undefined}
-      onOpenView={(caseId, view) => (window.__VIEWS__!.openedView = { caseId, viewId: view.id })}
-    />
+    {params.get("in") === "drawer" ? (
+      // ADR-145 Amendment 14 decision 1: `?in=drawer` draws the panel and the list as `App.tsx`'s Cases drawer
+      // does, in the real 360 px drawer, where the owner saw Open cover the Private tag.
+      <Drawer open onClose={() => undefined} title="Cases">
+        <div className="drawer-stack">
+          {listed}
+        </div>
+      </Drawer>
+    ) : (
+      listed
+    )}
   </div>,
 );

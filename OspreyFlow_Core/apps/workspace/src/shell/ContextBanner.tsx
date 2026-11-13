@@ -6,10 +6,10 @@
 // case they came from. Under the GOV.UK brand it is a GOV.UK notification banner (decision 3), folded
 // into one row (ADR-132 Amendment 8).
 //
-// In the Glass the banner carries the place's mode toggle, Graph · Drawing board (decision 1, named so
-// by Amendment 13; Monitoring left for Rules and Monitoring, ADR-146 decision 2), with the open mode's
-// one-line note (Amendment 13), part of the region and its description, so a screen reader reads it
-// with the region. A section with no `onSelect` is drawn as coming. Not drawn in the Studio: its dataset
+// In the Glass the banner is the case line (the owner's navigation decision of 13 November 2026, ADR-145
+// Amendment 15, replacing Amendment 13's mode toggle and note): "Case ‹switcher› · Views in this case · reads …".
+// Graph, Map, Drawing board and Reports are the top bar's one view switch. `sections` and `note` remain for a
+// place that has them; the Glass passes none. A section with no `onSelect` is drawn as coming. Not drawn in the Studio: its dataset
 // ("Dataset ‹name› ▾"), which the Studio chooses itself, in its own *Dataset* select
 // (`ingest/IngestStudio.tsx`, Lane 1's) — the banner would need a hook there to name it — and that
 // dataset's "feeds n cases" (no route gives a dataset's cases as the reader may see them, and an
@@ -48,14 +48,12 @@ export interface ContextBannerProps {
   /** The names of the datasets the open case reads; `null` while read or when refused. */
   datasets?: readonly string[] | null;
   crossLink?: CrossLink | null;
+  /** The case line's *Views in this case* (the owner's navigation decision, ADR-145 Amendment 15): opens the Cases
+   * panel at its views list. In the Glass only. */
+  onViews?: () => void;
+  /** Whether the Cases panel *Views in this case* opens is open (its `aria-expanded`). */
+  viewsOpen?: boolean;
 }
-
-/** The Glass's two modes in one line each (ADR-145 Amendment 13, the owner's words of 13 November 2026):
- * the graph is the case's data; a drawing board is a sketch beside it. */
-export const MODE_NOTE = {
-  graph: "Graph: the case's data. Saved views are under Views or Cases.",
-  board: "Drawing board: your sketch; it does not change the case's data.",
-} as const;
 
 const YOU_ARE_IN: Record<PlaceId, string> = {
   glass: `You are in ${PLACE_NAME.glass.replace(/^The /, "the ")}`,
@@ -95,7 +93,7 @@ export function useCaseContext(
   return read && read.id === investigationId ? read : { name: null, datasets: null };
 }
 
-export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink }: ContextBannerProps) {
+export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink, onViews, viewsOpen = false }: ContextBannerProps) {
   const govuk = currentBrand() === "govuk";
   // The place opens the line in both brands (ADR-132 Amendment 8 folded GOV.UK's title into it), so each
   // part after it is set off by a separator.
@@ -132,16 +130,41 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
           </nav>
         </>
       )}
-      {(place === "glass" || place === "rules") && caseSwitcher && (
+      {place === "glass" && caseSwitcher && (
+        // The owner's navigation decision (ADR-145 Amendment 15): "Case ‹switcher› · Views in this case · reads …",
+        // with the word "Case" visible; the switcher's name keeps its own "Case:" for a screen reader.
+        <>
+          {next()}
+          <span className="context-banner__label" aria-hidden="true">Case</span>
+          {caseSwitcher}
+          {onViews && (
+            <>
+              {next()}
+              <button
+                type="button"
+                className={govuk ? "govuk-link context-banner__section" : "context-banner__section"}
+                aria-haspopup="dialog"
+                aria-expanded={viewsOpen}
+                onClick={onViews}
+              >
+                Views in this case
+              </button>
+            </>
+          )}
+        </>
+      )}
+      {place === "rules" && caseSwitcher && (
         <>
           {next()}
           {caseSwitcher}
         </>
       )}
-      {place === "glass" && datasets && datasets.length > 0 && (
+      {/* ADR-145 Amendment 14 decision 4: a case reading none says so here, as the scope badge's NO DATA did
+          (ADR-115 Amendment 1 point 5); while the datasets are read or refused, nothing, and the badge stays. */}
+      {place === "glass" && datasets && (
         <>
           {next()}
-          <span>reads {names(datasets)}</span>
+          <span>{datasets.length > 0 ? `reads ${names(datasets)}` : "reads no dataset"}</span>
         </>
       )}
       {place === "ingest" && caseSwitcher && (
@@ -191,7 +214,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
 }
 
 /** The cross-link between the Glass and the Studio for a person who holds both (decision 2): from
- * the Glass, to the Studio on the same case; from the Studio, back to the case in the Glass. */
+ * the Glass, to the Studio on the same case (its words not naming the datasets, Amendment 14); from the Studio, back to the case in the Glass. */
 export function crossLinkFor(
   place: PlaceId,
   places: readonly PlaceId[],
@@ -201,8 +224,9 @@ export function crossLinkFor(
 ): CrossLink | null {
   if (!places.includes("glass") || !places.includes("ingest")) return null;
   if (place === "glass") {
-    const what = datasets && datasets.length === 1 ? datasets[0] : "this case's data";
-    return { label: `Open ${what} in the Ingest Studio ↗`, onFollow: go.toStudio };
+    // ADR-145 Amendment 14 decision 4: the row names the case's datasets once, in "reads …"; the
+    // cross-link does not name them again.
+    return { label: "Open this case's data in the Ingest Studio ↗", onFollow: go.toStudio };
   }
   if (place === "ingest") {
     return { label: caseName ? `← Back to case ${caseName} in the Glass` : "← Back to the case in the Glass", onFollow: go.toGlass };

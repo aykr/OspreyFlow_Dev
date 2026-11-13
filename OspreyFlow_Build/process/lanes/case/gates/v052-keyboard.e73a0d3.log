@@ -1,0 +1,160 @@
+# at e73a0d3 plus shell.spec.ts:327's regex taking the real switcher's ▾ (committed after), with process/lanes/case/shared-files-v052-navigation.diff applied (git apply; reverted after with git checkout of the three files)
+# first run: 2 failed, this case and the registry check after its worker restarted
+# OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts keyboard/views.spec.ts keyboard/boards.spec.ts
+
+Running 117 tests using 3 workers
+
+  ✓    1 keyboard/views.spec.ts:25:1 › a view is opened from Views in this case by keyboard (601ms)
+  ✓    2 keyboard/shell.spec.ts:14:1 › / outside a text field moves focus to search (655ms)
+  ✓    3 keyboard/boards.spec.ts:39:1 › a board is opened from the boards list by keyboard (694ms)
+  ✓    4 keyboard/views.spec.ts:32:1 › a private view is shared with the case by keyboard, by its creator (205ms)
+  ✓    6 keyboard/boards.spec.ts:50:1 › a blank board is made by keyboard (304ms)
+  ✓    5 keyboard/shell.spec.ts:23:1 › add many from a list is opened from the search box, counted and cancelled, by keyboard (343ms)
+  ✓    7 keyboard/views.spec.ts:41:1 › a view is deleted by keyboard after asking once, and nothing else is (184ms)
+  ✓   10 keyboard/views.spec.ts:53:1 › a view of another case is opened from the cases list by keyboard (209ms)
+  ✓    9 keyboard/boards.spec.ts:60:1 › a board is made from the selection by keyboard (302ms)
+  ✓   11 keyboard/views.spec.ts:60:1 › a view is named and saved from its form by keyboard (176ms)
+  ✓   13 keyboard/views.spec.ts:71:1 › Back to the case is reached from the banner over an opened view by keyboard (160ms)
+  ✓   12 keyboard/boards.spec.ts:75:1 › a board is made from a view of the case by keyboard (268ms)
+  ✓    8 keyboard/shell.spec.ts:48:1 › add many from a list, added from the search box by keyboard, puts the nodes on the canvas (772ms)
+  ✓   15 keyboard/boards.spec.ts:90:1 › a private board is shared with the case by keyboard (203ms)
+  ✓   14 keyboard/views.spec.ts:81:1 › a view is opened from Views by the graph by keyboard, and Back to the case closes it (228ms)
+  ✓   18 keyboard/views.spec.ts:109:1 › Views by the graph says how to make one when the case has none, by keyboard (233ms)
+  ✓   16 keyboard/shell.spec.ts:76:1 › the marking strip and the top bar take 20 and 44 pixels, and the rail 48 with 36px buttons (291ms)
+  ✓   17 keyboard/boards.spec.ts:98:1 › an item is declared by keyboard: marked, graded and sourced, its type's name filled from its label (395ms)
+  ✓   19 keyboard/views.spec.ts:119:1 › a merged drawing's notes are opened and closed from its view's banner by keyboard (169ms)
+  ✓   20 keyboard/shell.spec.ts:90:1 › each rail entry is reached and pressed by keyboard (256ms)
+  ✓   22 keyboard/views.spec.ts:132:1 › another member of the case is shown nothing of a private view, and no share or delete (183ms)
+  ✓   24 keyboard/views.spec.ts:145:1 › every registered case view action has its own proving test case above (0ms)
+  ✓   21 keyboard/boards.spec.ts:132:1 › an item is declared by keyboard with a document of the case as its source and an icon of its own (327ms)
+  ✓   25 keyboard/views.spec.ts:156:5 › ospreyflow dark: in the Cases drawer each view's name, tag and actions fit (185ms)
+  ✓   23 keyboard/shell.spec.ts:106:1 › each rail panel is opened and closed by keyboard, the view kept and focus returned to its opener (375ms)
+  ✓   26 keyboard/boards.spec.ts:150:1 › an item with neither a source note nor a document is refused before it is sent (231ms)
+  ✓   27 keyboard/views.spec.ts:156:5 › ospreyflow dark&long=1: in the Cases drawer each view's name, tag and actions fit (158ms)
+  ✓   30 keyboard/views.spec.ts:156:5 › ospreyflow dark&asking=delete: in the Cases drawer each view's name, tag and actions fit (210ms)
+  ✓   28 keyboard/shell.spec.ts:134:1 › each view is chosen by keyboard: Graph, Map, Drawing board and Reports, the rest under More views (301ms)
+  ✓   29 keyboard/boards.spec.ts:160:1 › a refusal is said in the Conduit's own words, naming the ceiling (268ms)
+  ✓   31 keyboard/views.spec.ts:156:5 › ospreyflow light: in the Cases drawer each view's name, tag and actions fit (158ms)
+  ✓   32 keyboard/shell.spec.ts:160:1 › the column opens with the Inspector only, and each folded panel opens with one keypress (194ms)
+  ✓   33 keyboard/boards.spec.ts:170:1 › an item is inspected by keyboard (215ms)
+  ✓   34 keyboard/views.spec.ts:156:5 › ospreyflow light&long=1: in the Cases drawer each view's name, tag and actions fit (165ms)
+  ✓   35 keyboard/shell.spec.ts:173:1 › the rail shows its names, and hides them again, by keyboard (276ms)
+  ✓   36 keyboard/boards.spec.ts:181:1 › an item is moved by the arrow keys, and the board keeps where it is (239ms)
+  ✓   37 keyboard/views.spec.ts:156:5 › ospreyflow light&asking=delete: in the Cases drawer each view's name, tag and actions fit (177ms)
+  ✓   40 keyboard/views.spec.ts:156:5 › govuk light: in the Cases drawer each view's name, tag and actions fit (231ms)
+  ✓   38 keyboard/shell.spec.ts:189:1 › the rail's Help opens and closes the keys panel by keyboard, as ? and Esc do (376ms)
+  ✓   41 keyboard/views.spec.ts:156:5 › govuk light&long=1: in the Cases drawer each view's name, tag and actions fit (163ms)
+  ✓   39 keyboard/boards.spec.ts:201:1 › a link is drawn from the selected item by keyboard (425ms)
+  ✓   42 keyboard/shell.spec.ts:224:3 › ospreyflow: the place switcher lists only the places the rights open, and moves between them by keyboard (228ms)
+  ✓   43 keyboard/views.spec.ts:156:5 › govuk light&asking=delete: in the Cases drawer each view's name, tag and actions fit (198ms)
+  ✓   44 keyboard/boards.spec.ts:214:1 › a link is drawn from an item's menu, opened by Shift+F10 (300ms)
+  ✓   45 keyboard/shell.spec.ts:224:3 › govuk: the place switcher lists only the places the rights open, and moves between them by keyboard (235ms)
+  ✓   47 keyboard/shell.spec.ts:247:1 › a reader's switcher offers the Glass alone (163ms)
+  ✓   46 keyboard/boards.spec.ts:228:1 › an item is edited by keyboard (280ms)
+  ✓   48 keyboard/shell.spec.ts:256:1 › Rules and Monitoring carries the count, and the Glass is returned to its last view by keyboard (217ms)
+  ✓   49 keyboard/boards.spec.ts:245:1 › an item is withdrawn by keyboard after asking once, with the links drawn to it named (386ms)
+  ✓   50 keyboard/shell.spec.ts:282:1 › the banner's cross-link goes to the Studio and back to the same case and view by keyboard (326ms)
+  ✓   51 keyboard/boards.spec.ts:285:1 › an item is inspected from its menu by keyboard (214ms)
+  ✓   52 keyboard/shell.spec.ts:303:1 › from Messages, the cross-link and a case change in the Studio come Back to the view before it (268ms)
+  ✓   53 keyboard/boards.spec.ts:292:1 › an item is edited from its menu by keyboard (233ms)
+  ✓   54 keyboard/shell.spec.ts:322:1 › the case line's Views in this case opens the Cases panel by keyboard, and focus returns to it (220ms)
+  ✓   55 keyboard/boards.spec.ts:304:1 › an item is withdrawn from its menu by keyboard after asking once (271ms)
+  ✓   56 keyboard/shell.spec.ts:343:1 › the case menu's All cases opens the Cases panel by keyboard, and focus returns to the case menu (186ms)
+  ✓   57 keyboard/boards.spec.ts:314:1 › the menu key opens an item's menu too (230ms)
+  ✓   58 keyboard/shell.spec.ts:364:3 › ospreyflow dark: exactly one view is current, and a rail panel changes none of it (212ms)
+  ✓   59 keyboard/boards.spec.ts:323:1 › another member's drawn item on one's own board offers no Edit, Withdraw or picture (198ms)
+  ✓   60 keyboard/shell.spec.ts:364:3 › ospreyflow light: exactly one view is current, and a rail panel changes none of it (217ms)
+  ✓   61 keyboard/boards.spec.ts:335:1 › a loaded item's menu offers no Edit or Withdraw (194ms)
+  ✓   62 keyboard/shell.spec.ts:364:3 › govuk light: exactly one view is current, and a rail panel changes none of it (214ms)
+  ✓   63 keyboard/boards.spec.ts:343:1 › a picture is added to a drawn item by keyboard (277ms)
+  ✓   64 keyboard/shell.spec.ts:388:1 › an alert on Home, focused, is opened at its address by Enter (241ms)
+  ✓   65 keyboard/boards.spec.ts:362:1 › a picture on the board is chosen for a drawn item by keyboard (238ms)
+  ✓   66 keyboard/shell.spec.ts:400:1 › Rules and Monitoring's card opens by its key, and a case is chosen for it by keyboard (224ms)
+  ✓   67 keyboard/boards.spec.ts:375:1 › Same is decided on a suggested match by keyboard, writing one decision and merging nothing (202ms)
+  ✓   68 keyboard/shell.spec.ts:419:1 › Home's cards are the places the rights open, each reached by Tab and opened by keyboard (220ms)
+  ✓   69 keyboard/boards.spec.ts:386:1 › Not the same is decided on a suggested match by keyboard (195ms)
+  ✓   70 keyboard/shell.spec.ts:440:3 › ospreyflow: the skip link is the first Tab stop, visible on focus, and Enter moves focus to the main content (169ms)
+  ✓   71 keyboard/boards.spec.ts:394:1 › a drawing is started with no case by keyboard: its dataset, its case and its board (177ms)
+  ✓   72 keyboard/shell.spec.ts:440:3 › govuk: the skip link is the first Tab stop, visible on focus, and Enter moves focus to the main content (135ms)
+  ✓   73 keyboard/boards.spec.ts:405:1 › an open board shows the case's Alerts panel, its rows words with nothing to open (179ms)
+  ✓   74 keyboard/shell.spec.ts:470:1 › govuk: a case's workspace gains at least 100 px of height, the strip and toolbar untouched (244ms)
+  ✓   75 keyboard/boards.spec.ts:414:1 › Back to the boards is reached from a board by keyboard (196ms)
+  ✓   76 keyboard/shell.spec.ts:485:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (glass) (221ms)
+  ✓   77 keyboard/boards.spec.ts:421:1 › another member sees a shared board read-only: nothing to declare, edit or withdraw (207ms)
+  ✓   78 keyboard/shell.spec.ts:485:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (ingest) (195ms)
+  ✓   79 keyboard/boards.spec.ts:437:1 › drawn items are promoted from the sheet by keyboard (276ms)
+  ✓   80 keyboard/shell.spec.ts:485:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (rules) (193ms)
+  ✓   81 keyboard/boards.spec.ts:463:1 › a drawer the promotion routes do not admit is offered no Promote… (193ms)
+  ✓   82 keyboard/shell.spec.ts:485:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (admin) (201ms)
+  ✓   83 keyboard/boards.spec.ts:471:1 › the promotion sheet closes on Escape, back to Promote… (195ms)
+  ✓   85 keyboard/boards.spec.ts:483:1 › every registered board action has its own proving test case above (0ms)
+  ✓   84 keyboard/shell.spec.ts:513:3 › govuk 1440: the context row with the case line is at most 40 px, its parts inside the region (202ms)
+  ✓   87 keyboard/shell.spec.ts:513:3 › govuk 1024: the context row with the case line is at most 72 px, its parts inside the region (206ms)
+  ✓   86 keyboard/boards.spec.ts:495:1 › pointer: dragging an item moves it (293ms)
+  ✓   88 keyboard/shell.spec.ts:527:3 › ospreyflow dark: a case's workspace top is as it was (175ms)
+  ✓   90 keyboard/shell.spec.ts:527:3 › ospreyflow light: a case's workspace top is as it was (171ms)
+  ✓   89 keyboard/boards.spec.ts:507:1 › pointer: dragging the link handle onto another item opens the link form between them (316ms)
+  ✓   91 keyboard/shell.spec.ts:537:3 › govuk: Home keeps the full header and banner (218ms)
+  ✓   92 keyboard/boards.spec.ts:520:1 › pointer: Alt-dragging an item draws a link instead of moving it (345ms)
+  ✓   93 keyboard/shell.spec.ts:537:3 › govuk: the sign-in page keeps the full header and banner (184ms)
+  ✓   95 keyboard/shell.spec.ts:549:3 › govuk off gov.uk: the header's crown is not drawn, the GOV.UK link kept (137ms)
+  ✓   94 keyboard/boards.spec.ts:534:1 › pointer: right-click offers Draw a link from here (227ms)
+  ✓   96 keyboard/shell.spec.ts:549:3 › govuk on gov.uk: the header's crown is drawn, the GOV.UK link kept (132ms)
+  ✓   97 keyboard/shell.spec.ts:557:1 › govuk: the header, the Glass and the footer are reached by Tab in that order (131ms)
+  ✓   98 keyboard/shell.spec.ts:586:3 › ospreyflow dark: the deployment's banner words add no Tab stop and are read in their region (137ms)
+  ✓   99 keyboard/shell.spec.ts:586:3 › ospreyflow light: the deployment's banner words add no Tab stop and are read in their region (141ms)
+  ✓  100 keyboard/shell.spec.ts:586:3 › govuk light: the deployment's banner words add no Tab stop and are read in their region (133ms)
+  ✓  101 keyboard/shell.spec.ts:600:1 › govuk off gov.uk: the one-line footer's links are reached by Tab, and nothing of the Crown is drawn (128ms)
+  ✓  102 keyboard/shell.spec.ts:612:1 › govuk on gov.uk: the full footer, Crown copyright reached by Tab (128ms)
+  ✘  103 keyboard/shell.spec.ts:623:1 › every registered shell action has its own proving test case above (4ms)
+  ✓  104 keyboard/shell.spec.ts:630:1 › govuk: the GOV.UK logo is not underlined at rest (122ms)
+  ✓  105 keyboard/shell.spec.ts:642:1 › govuk: no service-name band is drawn, and the page title names the service (123ms)
+  ✓  106 keyboard/shell.spec.ts:658:5 › govuk: the sign-in page's content lines up with the GOV.UK header at 1440px (146ms)
+  ✓  107 keyboard/shell.spec.ts:658:5 › govuk: the sign-in page's content lines up with the GOV.UK header at 800px (139ms)
+  ✓  108 keyboard/shell.spec.ts:658:5 › govuk: the sign-in page's content lines up with the GOV.UK header at 375px (137ms)
+  ✓  109 keyboard/shell.spec.ts:658:5 › govuk: the start page's content lines up with the GOV.UK header at 1440px (152ms)
+  ✓  110 keyboard/shell.spec.ts:658:5 › govuk: the start page's content lines up with the GOV.UK header at 800px (156ms)
+  ✓  111 keyboard/shell.spec.ts:658:5 › govuk: the start page's content lines up with the GOV.UK header at 375px (151ms)
+  ✓  112 keyboard/shell.spec.ts:697:3 › ospreyflow dark: an open drawer starts under the top bar and the context row, the navigation above it uncovered (169ms)
+  ✓  113 keyboard/shell.spec.ts:697:3 › ospreyflow light: an open drawer starts under the top bar and the context row, the navigation above it uncovered (278ms)
+  ✓  114 keyboard/shell.spec.ts:697:3 › govuk light: an open drawer starts under the top bar and the context row, the navigation above it uncovered (180ms)
+  ✓  115 keyboard/shell.spec.ts:742:3 › ospreyflow dark: Build a report follows Reports by keyboard, a link to Superset in a new tab (187ms)
+  ✓  116 keyboard/shell.spec.ts:742:3 › ospreyflow light: Build a report follows Reports by keyboard, a link to Superset in a new tab (189ms)
+  ✓  117 keyboard/shell.spec.ts:742:3 › govuk light: Build a report follows Reports by keyboard, a link to Superset in a new tab (202ms)
+
+
+  1) keyboard/shell.spec.ts:623:1 › every registered shell action has its own proving test case above 
+
+    Error: SHELL_ACTIONS: keyboard action(s) registered with no proving test case: build-a-report-by-keyboard
+
+       at actionRegistry.ts:73
+
+      71 |   const missing = actions.filter((id) => !seen.has(id));
+      72 |   if (missing.length > 0) {
+    > 73 |     throw new Error(
+         |           ^
+      74 |       `${registryName}: keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
+      75 |     );
+      76 |   }
+        at assertAllCovered (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts:73:11)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/shell.spec.ts:624:3
+
+    Error Context: test-results/shell-every-registered-she-b56c2-own-proving-test-case-above/error-context.md
+
+  1 failed
+    keyboard/shell.spec.ts:623:1 › every registered shell action has its own proving test case above 
+  116 passed (14.8s)
+# exit 1
+
+# the registry check holds its set in each worker's memory, so it is read with one worker, as CI's two-core runner gives:
+# OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts --workers=1
+  ✘  46 keyboard/shell.spec.ts:623:1 › every registered shell action has its own proving test case above (2ms)
+  1) keyboard/shell.spec.ts:623:1 › every registered shell action has its own proving test case above 
+  1 failed
+    keyboard/shell.spec.ts:623:1 › every registered shell action has its own proving test case above 
+  59 passed (11.7s)
+# exit 1
+# 1 failed: build-a-report-by-keyboard's case (e08f11a) stood below the registry check, so it had not run; the check moved to the end of the file (committed after). Again, one worker:
+  ✓  60 keyboard/shell.spec.ts:756:1 › every registered shell action has its own proving test case above (0ms)
+  60 passed (12.4s)
+# exit 0

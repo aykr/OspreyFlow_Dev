@@ -70,13 +70,13 @@ const EXTRA_STATES: Record<string, string[]> = {
   ],
   // ADR-145 decision 2: the banner in the Studio, with its way back, and in Admin.
   // ADR-145 Amendment 2: Monitoring's badge (inside the GOV.UK notification banner under that
-  // brand), and the rail's ⋯ Explore Details (ADR-145 Amendment 12) and the top bar's More views drawn
-  // open.
+  // brand), and the top bar's More views drawn open; ADR-145 Amendment 15: the Explore panel from the rail, and the
+  // Cases panel from the case line's Views in this case, drawn open.
   // ADR-146 decision 2: Rules and Monitoring in the switcher with its count (inside the GOV.UK header
   // under that brand), and the place open, its banner a GOV.UK notification banner.
   // ADR-132 Amendment 8: `banner=1` is the demonstration's deployment, the compact top under GOV.UK.
   "places-harness.html": [
-    "place=ingest", "place=admin", "badge=1", "open=more", "open=views", "banner=1", "banner=1&place=rules",
+    "place=ingest", "place=admin", "badge=1", "open=explore", "open=cases", "open=views", "banner=1", "banner=1&place=rules",
     "badge=1&rights=investigate,triage_alerts,read_alert_queue",
     "place=rules&rights=investigate,triage_alerts,read_alert_queue",
   ],
@@ -94,15 +94,16 @@ const EXTRA_STATES: Record<string, string[]> = {
   // ADR-145 Amendment 2: the column's fresh-page default, the Inspector alone open.
   "panel-frames-harness.html": ["defaults=1"],
   // ADR-132 Amendment 7: the deployment's own banner words, in the dark, light and GOV.UK scans.
-  // ADR-145 Amendment 12: the rail with Explore Details, and Help's keys panel open over it.
-  "top-bar-harness.html": ["help=1"],
-  "shell-harness.html": ["banner=1", "banner=alone", "host=demo.service.gov.uk"],
+  // ADR-145 Amendment 15: the rail of panel openers, and Help's keys panel open over it.
+  // ADR-145 Amendment 15: Build a report beside Reports, for a builder where Superset is deployed.
+  "top-bar-harness.html": ["help=1", "reports=1"],
+  "shell-harness.html": ["banner=1", "banner=alone", "host=demo.service.gov.uk", "drawer=1"],
   // L2.3 part 1: the case screen's lightening, each prototype variant (the default is variant a).
   "case-screen-options-harness.html": ["variant=today", "variant=b", "variant=c"],
   // ADR-144 (L3.2b): case views as another member sees them, the Save as a view form, and the banner
   // over an opened view.
   // ADR-144 Amendment 3: the graph's *Views ▾*, closed, open on the case's views, and open on none.
-  "views-harness.html": ["as=bob", "show=form", "show=lens", "show=merged", "show=merged&notes=open", "asking=delete", "show=menu", "show=menu&open=1", "show=menu&open=1&empty=1"],
+  "views-harness.html": ["in=drawer", "in=drawer&asking=delete", "in=drawer&long=1", "as=bob", "show=form", "show=lens", "show=merged", "show=merged&notes=open", "asking=delete", "show=menu", "show=menu&open=1", "show=menu&open=1&empty=1"],
   // ADR-143 decisions 4 to 7 (L3.3): a board open with its drawn and loaded items, its inspector, its
   // item and link forms and the withdrawal's question; another member's read-only view; a blank board;
   // the boards list with a board from a view chosen, the edit form and an item's menu open, a drawing
@@ -369,8 +370,8 @@ test("the scan found the harness pages", () => {
 // state. axe's target-size counts a target a menu covers all but a sliver of as too small (it skips one
 // covered wholly); in the browser the menu is on top (`elementFromPoint` at every sampled point of its
 // items). GOV.UK's context row is one row under the top bar since Amendment 8, so *More views*, drawn open,
-// lay over its sections and left 4 px of *Boards (coming)* showing. Since ADR-145 Amendment 13 renamed them
-// *Graph · Drawing board* nothing is reported there, so the list is empty and kept for the next such state. Every other rule still runs on those
+// lay over its sections and left 4 px of *Boards (coming)* showing. The sections left the case line with ADR-145
+// Amendment 15, and nothing is reported there now, so the list is empty and kept for the next such state. Every other rule still runs on those
 // nodes, and each entry must still be reported, so it fails once the menu no longer lies over them. Keyed by
 // a scanned title; each value a class the dropped nodes' markup carries.
 const UNDER_AN_OPEN_OVERLAY: Record<string, readonly string[]> = {};

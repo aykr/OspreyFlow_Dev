@@ -13,8 +13,12 @@ export interface CaseSwitcherProps {
   bearerToken: string;
   currentId: string;
   onOpen: (id: string) => void;
-  /** Show the full list of cases (the picker) over the workspace. Absent: no such button. */
+  /** *All cases*: in the Glass the Cases panel, elsewhere the case picker over the workspace (ADR-145 Amendment 15).
+   * Absent: no such button. */
   onBrowse?: () => void;
+  /** Whether the case's scope badge is drawn beside its name (ADR-115 Amendment 1 point 5). False where the
+   * row already says what the case reads (the Glass's banner, ADR-145 Amendment 14 decision 4). */
+  showScope?: boolean;
 }
 
 export function CaseSwitcher({
@@ -23,6 +27,7 @@ export function CaseSwitcher({
   currentId,
   onOpen,
   onBrowse,
+  showScope = true,
 }: CaseSwitcherProps) {
   const [cases, setCases] = useState<CaseListing[]>([]);
   const [creating, setCreating] = useState(false);
@@ -44,7 +49,7 @@ export function CaseSwitcher({
 
   const current = cases.find((entry) => entry.id === currentId);
   const currentName = current ? caseLabel(current) : "Current case";
-  const scope = scopeBadge(current?.datasets);
+  const scope = showScope ? scopeBadge(current?.datasets) : null;
   return (
     <>
     {/* ADR-097 step 3: the bar shows the case's name alone; "Case:" stays for a screen reader. */}
@@ -76,18 +81,6 @@ export function CaseSwitcher({
             }}
           />
           <hr className="menu-panel__rule" />
-          {onBrowse && (
-            <button
-              type="button"
-              className="menu-panel__item"
-              onClick={() => {
-                close();
-                onBrowse();
-              }}
-            >
-              All cases
-            </button>
-          )}
           {!creating && (
             <button type="button" className="menu-panel__item" onClick={() => setCreating(true)}>
               New case
@@ -100,6 +93,19 @@ export function CaseSwitcher({
               inputLabel="New case name"
               onCreated={onOpen}
             />
+          )}
+          {/* The owner's navigation decision (ADR-145 Amendment 15): the menu's last entry, opening the Cases panel. */}
+          {onBrowse && (
+            <button
+              type="button"
+              className="menu-panel__item"
+              onClick={() => {
+                close();
+                onBrowse();
+              }}
+            >
+              All cases
+            </button>
           )}
         </>
       )}

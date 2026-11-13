@@ -8,7 +8,8 @@ export type Rights = ReadonlySet<string> | null;
 // ADR-145 decision 1: the Ingest Studio, Admin and Proposed types left the rail for the place
 // switcher (`shell/places.ts`); proposed types are decided on the Studio's Model tab since L2.7.
 // ADR-146 decision 2: Monitoring left the Glass for Rules and Monitoring, a place of its own; its
-// Connection strength (ADR-139), which is not alerts, stayed in the Glass under the rail's More.
+// Connection strength (ADR-139), which is not alerts, stayed in the Glass, under More views since ADR-145
+// Amendment 15.
 export type RailEntry = "cases" | "ownership" | "history" | "explore" | "questions" | "dashboards" | "strength";
 export type GlassView = "graph" | "map" | "matrix" | "reports";
 

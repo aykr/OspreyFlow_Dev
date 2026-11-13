@@ -102,7 +102,15 @@ describe("ViewsPanel", () => {
     expect(list).not.toBeNull();
     const tags = Array.from(document.querySelectorAll("strong.govuk-tag")).map((t) => t.textContent);
     expect(tags).toEqual(["Private", "Shared"]);
-    expect(screen.getByRole("button", { name: "Share with the case: Alice's own" }).className).toContain("govuk-button");
+    // ADR-145 Amendment 14 decision 1: a row's actions are GOV.UK links, as a summary list's are; the
+    // question before a delete keeps GOV.UK's buttons.
+    for (const name of ["Open Alice's own", "Share with the case: Alice's own", "Delete Alice's own"]) {
+      expect(screen.getByRole("button", { name }).className).toContain("govuk-link");
+      expect(screen.getByRole("button", { name }).className).not.toContain("govuk-button");
+    }
+    screen.getByRole("button", { name: "Delete Alice's own" }).click();
+    expect((await screen.findByRole("button", { name: "Delete view" })).className).toContain("govuk-button--warning");
+    expect(screen.getByRole("button", { name: "Cancel" }).className).toContain("govuk-button");
   });
 
   it("says a failed list as a failure, not as no views, and clears it when a later read succeeds", async () => {
