@@ -243,3 +243,19 @@ def test_the_overview_and_watch(route, hb) -> None:  # noqa: F811
     assert "VIEW 1 · FOUNDATION FEATURES" in route(16, "--full")
     watched = hb("watch", "1", OSPREY_WATCH_PASSES="1", OSPREY_NOW=_at(16), **route.env).stdout
     assert "ROUTE TO V0.5.2" in watched and "VIEW 1" not in watched
+
+
+def test_a_step_whose_lane_has_posted_stages_under_way_reads_running(route, hb) -> None:  # noqa: F811
+    """The owner's rule (13 Nov): from the lanes' own records, not typed by hand. Stages posted for the
+    step with any done or under way read running though its progress row still says todo; stages all
+    still to do do not; blocked wins; done only ever from the merged progress row."""
+    assert hb("stages", "case", "v052-fixes", "1|done|Plan", "2|todo|Build").returncode == 0
+    assert hb("stages", "rules", "v052-load", "1|todo|Plan", "2|todo|Load").returncode == 0
+    out = route(16)
+    assert " running, stage 2 of 2" in _row(out, "3e")  # progress row: todo
+    assert " not started" in _row(out, "B")
+    assert hb("beat", "case", "blocked", "v052-fixes: the screens will not build").returncode == 0
+    assert " blocked" in _row(route(16), "3e")
+    assert hb("stages", "case", "v052-fixes", "1|done|Plan", "2|done|Build").returncode == 0
+    assert hb("beat", "case", "working", "v052-fixes all stages done").returncode == 0
+    assert " done" not in _row(route(16), "3e") and " running" in _row(route(16), "3e")

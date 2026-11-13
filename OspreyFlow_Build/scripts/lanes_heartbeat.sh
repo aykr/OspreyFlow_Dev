@@ -699,7 +699,10 @@ for my $r (@route) {
     if (defined $step && $step eq $pstep && @s) {
       my ($at) = ((grep { $_->[1] eq "now" } @s), (grep { $_->[1] eq "blocked" } @s),
                   (grep { $_->[1] eq "todo" } @s));
-      my $n = $at ? $at->[0] : scalar @s; $frac = $n / @s; $staged = "stage $n of " . scalar @s } }
+      my $n = $at ? $at->[0] : scalar @s; $frac = $n / @s; $staged = "stage $n of " . scalar @s;
+      # The owner`s rule: from the lanes` own records. A stage done or under way is the step running,
+      # though its progress row says todo; blocked still wins, and done comes from the merged row alone.
+      $state = "running" if $state eq "not started" && grep { $_->[1] eq "done" || $_->[1] eq "now" } @s } }
   push @$r, $state, $frac, $staged;
   push @done, $r if $state eq "done";
   push @risk, $r if $state ne "done" && $crit eq "y" && day_of($end) < $today;

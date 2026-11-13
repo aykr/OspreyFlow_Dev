@@ -1,0 +1,24 @@
+# red: stages under way read running, before the code, ce590e7, 2026-11-13T20:40:12Z
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______ test_a_step_whose_lane_has_posted_stages_under_way_reads_running _______
+
+route = <function route.<locals>.view at 0x1079f6700>
+hb = <function hb.<locals>.run at 0x1079f6480>
+
+    def test_a_step_whose_lane_has_posted_stages_under_way_reads_running(route, hb) -> None:  # noqa: F811
+        """The owner's rule (13 Nov): from the lanes' own records, not typed by hand. Stages posted for the
+        step with any done or under way read running though its progress row still says todo; stages all
+        still to do do not; blocked wins; done only ever from the merged progress row."""
+        assert hb("stages", "case", "v052-fixes", "1|done|Plan", "2|todo|Build").returncode == 0
+        assert hb("stages", "rules", "v052-load", "1|todo|Plan", "2|todo|Load").returncode == 0
+        out = route(16)
+>       assert " running, stage 2 of 2" in _row(out, "3e")  # progress row: todo
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       assert ' running, stage 2 of 2' in "  3e    case         14–15 Nov [██████] not started, stage 2 of 2 · 1 day behind · The Glass's screen fixes"
+E        +  where "  3e    case         14–15 Nov [██████] not started, stage 2 of 2 · 1 day behind · The Glass's screen fixes" = _row('OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', '3e')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:255: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_step_whose_lane_has_posted_stages_under_way_reads_running
+1 failed, 16 deselected in 4.02s
