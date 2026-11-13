@@ -43,17 +43,19 @@ priority for the server, merges and reviews; **this step needs no server** until
    own**. These are versioned:
    - its **domain model**: a live version, an open draft, and earlier versions restorable (`DatasetModelView`,
      `RevertModelInput`);
-   - each **recipe**, by `recipe_version`. Ingest Studio says "recipe", not "pipeline"; check what Admin calls it;
+   - each **pipeline**, by its version (`recipe_version` in the code). **The owner, 13 Nov: use the word the screens
+     show, which is "Pipeline"** (the Ingest Studio's tab and its own button, `ingest/dag/PipelineStudio.tsx`).
+     "Recipe" is the code's word. Use "pipeline" in every chapter and page of both sites;
    - **every load**, recorded by `load_id` with the recipe version that made it, and revertable.
 
-   The chapter's current text never versions a dataset, but "Pipeline v3" and "each pipeline" should read as the
-   product says.
+   The chapter's current text never versions a dataset. "Pipeline v3" and "each pipeline" are right and stay.
 
-   **Proposed sub-line:** "Every load is recorded with the recipe version that made it, and can be reverted. The
-   dataset's model is versioned: one live, one draft, and every earlier version can be restored."
+   **The sub-line (accepted by the owner, 13 Nov):** "Every load is recorded with the pipeline version that made it,
+   and can be reverted. The dataset's model is versioned: one live, one draft, and every earlier version can be
+   restored."
 
    **Drawing:**
-   - the timeline of loads, each tagged "recipe v3", one struck through as reverted;
+   - the timeline of loads, each tagged "pipeline v3", one struck through as reverted (accepted by the owner);
    - a model card "Model v14 · live / v15 · draft";
    - no version on the dataset itself.
 
@@ -68,7 +70,15 @@ priority for the server, merges and reviews; **this step needs no server** until
    - the "How it is built" paragraph;
    - six names on the Team page only;
    - the neither-site-names-Laurium test.
-7. **Do not build "Not decided, so not built".** The orchestrator has given the owner its view.
+7. **HANDOVER's "Not decided, so not built": the owner's decisions of 13 Nov, all to build:**
+   - page headings in Atkinson Hyperlegible Next, not serif;
+   - no animated step-by-step guides for ospreyflow.net until after launch (not built);
+   - one quiet line near the bottom of ospreyflow.org linking to ospreyflow.net;
+   - the full UK public sector page, with the GOV.UK animation, on ospreyflow.org only. ospreyflow.net gives a short
+     services angle and links to it (one source, no drift);
+   - a version badge only if it is generated from the release at build time (the CHANGELOG's latest released
+     version or the tag), with a test that fails when the badge and the release differ. It never reads a typed
+     number.
 8. **Screenshots** (needs the frozen demo, so the server): later, on the orchestrator's word.
 9. **No repository created, nothing published,** and the current six-page site unchanged, all until the owner says.
 
