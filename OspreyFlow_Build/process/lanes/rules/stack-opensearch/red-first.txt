@@ -1,0 +1,299 @@
+FFFFFFFFFFFFFFFF                                                         [100%]
+=================================== FAILURES ===================================
+____ test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[b] ____
+
+lease = <function lease.<locals>.run at 0x1119a9da0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4427/test_every_server_stack_s_open0')
+stack = 'b'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_every_server_stack_s_opensearch_is_started_and_stopped_with_it(lease, tmp_path: Path, stack: str) -> None:
+        lease("acquire", "rules", "a run", stack)
+        script, log = _recording_docker(tmp_path)
+        _DOCKER["recording"] = script
+        try:
+            assert lease("up", "rules", docker="recording").returncode == 0
+            assert lease("down", "rules", docker="recording").returncode == 0
+        finally:
+            del _DOCKER["recording"]
+        calls = _start_stop(log)
+>       assert f"osprey-test-{stack}-opensearch" in calls[0].split()[1:], calls
+E       AssertionError: ['start osprey-test-b-arcadedb osprey-test-b-pg osprey-test-b-valkey osprey-test-b-objectstore osprey-test-b-clickhous...'stop osprey-test-b-arcadedb osprey-test-b-pg osprey-test-b-valkey osprey-test-b-objectstore osprey-test-b-clickhouse']
+E       assert 'osprey-test-b-opensearch' in ['osprey-test-b-arcadedb', 'osprey-test-b-pg', 'osprey-test-b-valkey', 'osprey-test-b-objectstore', 'osprey-test-b-clickhouse']
+
+../OspreyFlow_Build/tests/test_stack_lease.py:546: AssertionError
+____ test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[c] ____
+
+lease = <function lease.<locals>.run at 0x111a3c720>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4427/test_every_server_stack_s_open1')
+stack = 'c'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_every_server_stack_s_opensearch_is_started_and_stopped_with_it(lease, tmp_path: Path, stack: str) -> None:
+        lease("acquire", "rules", "a run", stack)
+        script, log = _recording_docker(tmp_path)
+        _DOCKER["recording"] = script
+        try:
+            assert lease("up", "rules", docker="recording").returncode == 0
+            assert lease("down", "rules", docker="recording").returncode == 0
+        finally:
+            del _DOCKER["recording"]
+        calls = _start_stop(log)
+>       assert f"osprey-test-{stack}-opensearch" in calls[0].split()[1:], calls
+E       AssertionError: ['start osprey-test-c-arcadedb osprey-test-c-pg osprey-test-c-valkey osprey-test-c-objectstore osprey-test-c-clickhous...'stop osprey-test-c-arcadedb osprey-test-c-pg osprey-test-c-valkey osprey-test-c-objectstore osprey-test-c-clickhouse']
+E       assert 'osprey-test-c-opensearch' in ['osprey-test-c-arcadedb', 'osprey-test-c-pg', 'osprey-test-c-valkey', 'osprey-test-c-objectstore', 'osprey-test-c-clickhouse']
+
+../OspreyFlow_Build/tests/test_stack_lease.py:546: AssertionError
+____ test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[d] ____
+
+lease = <function lease.<locals>.run at 0x111a3c9a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4427/test_every_server_stack_s_open2')
+stack = 'd'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_every_server_stack_s_opensearch_is_started_and_stopped_with_it(lease, tmp_path: Path, stack: str) -> None:
+        lease("acquire", "rules", "a run", stack)
+        script, log = _recording_docker(tmp_path)
+        _DOCKER["recording"] = script
+        try:
+            assert lease("up", "rules", docker="recording").returncode == 0
+            assert lease("down", "rules", docker="recording").returncode == 0
+        finally:
+            del _DOCKER["recording"]
+        calls = _start_stop(log)
+>       assert f"osprey-test-{stack}-opensearch" in calls[0].split()[1:], calls
+E       AssertionError: ['start osprey-test-d-arcadedb osprey-test-d-pg osprey-test-d-valkey osprey-test-d-objectstore osprey-test-d-clickhous...'stop osprey-test-d-arcadedb osprey-test-d-pg osprey-test-d-valkey osprey-test-d-objectstore osprey-test-d-clickhouse']
+E       assert 'osprey-test-d-opensearch' in ['osprey-test-d-arcadedb', 'osprey-test-d-pg', 'osprey-test-d-valkey', 'osprey-test-d-objectstore', 'osprey-test-d-clickhouse']
+
+../OspreyFlow_Build/tests/test_stack_lease.py:546: AssertionError
+____ test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[e] ____
+
+lease = <function lease.<locals>.run at 0x111a3cea0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4427/test_every_server_stack_s_open3')
+stack = 'e'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_every_server_stack_s_opensearch_is_started_and_stopped_with_it(lease, tmp_path: Path, stack: str) -> None:
+        lease("acquire", "rules", "a run", stack)
+        script, log = _recording_docker(tmp_path)
+        _DOCKER["recording"] = script
+        try:
+            assert lease("up", "rules", docker="recording").returncode == 0
+            assert lease("down", "rules", docker="recording").returncode == 0
+        finally:
+            del _DOCKER["recording"]
+        calls = _start_stop(log)
+>       assert f"osprey-test-{stack}-opensearch" in calls[0].split()[1:], calls
+E       AssertionError: ['start osprey-test-e-arcadedb osprey-test-e-pg osprey-test-e-valkey osprey-test-e-objectstore osprey-test-e-clickhous...'stop osprey-test-e-arcadedb osprey-test-e-pg osprey-test-e-valkey osprey-test-e-objectstore osprey-test-e-clickhouse']
+E       assert 'osprey-test-e-opensearch' in ['osprey-test-e-arcadedb', 'osprey-test-e-pg', 'osprey-test-e-valkey', 'osprey-test-e-objectstore', 'osprey-test-e-clickhouse']
+
+../OspreyFlow_Build/tests/test_stack_lease.py:546: AssertionError
+____ test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[f] ____
+
+lease = <function lease.<locals>.run at 0x111a3d260>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4427/test_every_server_stack_s_open4')
+stack = 'f'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_every_server_stack_s_opensearch_is_started_and_stopped_with_it(lease, tmp_path: Path, stack: str) -> None:
+        lease("acquire", "rules", "a run", stack)
+        script, log = _recording_docker(tmp_path)
+        _DOCKER["recording"] = script
+        try:
+            assert lease("up", "rules", docker="recording").returncode == 0
+            assert lease("down", "rules", docker="recording").returncode == 0
+        finally:
+            del _DOCKER["recording"]
+        calls = _start_stop(log)
+>       assert f"osprey-test-{stack}-opensearch" in calls[0].split()[1:], calls
+E       AssertionError: ['start osprey-test-f-arcadedb osprey-test-f-pg osprey-test-f-valkey osprey-test-f-objectstore osprey-test-f-clickhous...'stop osprey-test-f-arcadedb osprey-test-f-pg osprey-test-f-valkey osprey-test-f-objectstore osprey-test-f-clickhouse']
+E       assert 'osprey-test-f-opensearch' in ['osprey-test-f-arcadedb', 'osprey-test-f-pg', 'osprey-test-f-valkey', 'osprey-test-f-objectstore', 'osprey-test-f-clickhouse']
+
+../OspreyFlow_Build/tests/test_stack_lease.py:546: AssertionError
+____ test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[g] ____
+
+lease = <function lease.<locals>.run at 0x111a3d8a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4427/test_every_server_stack_s_open5')
+stack = 'g'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_every_server_stack_s_opensearch_is_started_and_stopped_with_it(lease, tmp_path: Path, stack: str) -> None:
+        lease("acquire", "rules", "a run", stack)
+        script, log = _recording_docker(tmp_path)
+        _DOCKER["recording"] = script
+        try:
+            assert lease("up", "rules", docker="recording").returncode == 0
+            assert lease("down", "rules", docker="recording").returncode == 0
+        finally:
+            del _DOCKER["recording"]
+        calls = _start_stop(log)
+>       assert f"osprey-test-{stack}-opensearch" in calls[0].split()[1:], calls
+E       AssertionError: ['start osprey-test-g-arcadedb osprey-test-g-pg osprey-test-g-valkey osprey-test-g-objectstore osprey-test-g-clickhous...'stop osprey-test-g-arcadedb osprey-test-g-pg osprey-test-g-valkey osprey-test-g-objectstore osprey-test-g-clickhouse']
+E       assert 'osprey-test-g-opensearch' in ['osprey-test-g-arcadedb', 'osprey-test-g-pg', 'osprey-test-g-valkey', 'osprey-test-g-objectstore', 'osprey-test-g-clickhouse']
+
+../OspreyFlow_Build/tests/test_stack_lease.py:546: AssertionError
+_____ test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[b] _____
+
+lease = <function lease.<locals>.run at 0x111a3dc60>, stack = 'b'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_a_server_stack_pins_its_own_opensearch_never_the_closed_port(lease, stack: str) -> None:
+        pins = _export_line(lease("acquire", "rules", "a run", stack))
+>       assert pins["OPENSEARCH_PORT"] == _OPENSEARCH[stack]
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'OPENSEARCH_PORT'
+
+../OspreyFlow_Build/tests/test_stack_lease.py:553: KeyError
+_____ test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[c] _____
+
+lease = <function lease.<locals>.run at 0x111a3e200>, stack = 'c'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_a_server_stack_pins_its_own_opensearch_never_the_closed_port(lease, stack: str) -> None:
+        pins = _export_line(lease("acquire", "rules", "a run", stack))
+>       assert pins["OPENSEARCH_PORT"] == _OPENSEARCH[stack]
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'OPENSEARCH_PORT'
+
+../OspreyFlow_Build/tests/test_stack_lease.py:553: KeyError
+_____ test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[d] _____
+
+lease = <function lease.<locals>.run at 0x111a3e5c0>, stack = 'd'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_a_server_stack_pins_its_own_opensearch_never_the_closed_port(lease, stack: str) -> None:
+        pins = _export_line(lease("acquire", "rules", "a run", stack))
+>       assert pins["OPENSEARCH_PORT"] == _OPENSEARCH[stack]
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'OPENSEARCH_PORT'
+
+../OspreyFlow_Build/tests/test_stack_lease.py:553: KeyError
+_____ test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[e] _____
+
+lease = <function lease.<locals>.run at 0x111a3ea20>, stack = 'e'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_a_server_stack_pins_its_own_opensearch_never_the_closed_port(lease, stack: str) -> None:
+        pins = _export_line(lease("acquire", "rules", "a run", stack))
+>       assert pins["OPENSEARCH_PORT"] == _OPENSEARCH[stack]
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'OPENSEARCH_PORT'
+
+../OspreyFlow_Build/tests/test_stack_lease.py:553: KeyError
+_____ test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[f] _____
+
+lease = <function lease.<locals>.run at 0x111a3ee80>, stack = 'f'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_a_server_stack_pins_its_own_opensearch_never_the_closed_port(lease, stack: str) -> None:
+        pins = _export_line(lease("acquire", "rules", "a run", stack))
+>       assert pins["OPENSEARCH_PORT"] == _OPENSEARCH[stack]
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'OPENSEARCH_PORT'
+
+../OspreyFlow_Build/tests/test_stack_lease.py:553: KeyError
+_____ test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[g] _____
+
+lease = <function lease.<locals>.run at 0x111a3f1a0>, stack = 'g'
+
+    @pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+    def test_a_server_stack_pins_its_own_opensearch_never_the_closed_port(lease, stack: str) -> None:
+        pins = _export_line(lease("acquire", "rules", "a run", stack))
+>       assert pins["OPENSEARCH_PORT"] == _OPENSEARCH[stack]
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'OPENSEARCH_PORT'
+
+../OspreyFlow_Build/tests/test_stack_lease.py:553: KeyError
+_______ test_stack_a_has_no_opensearch_and_is_pinned_to_the_closed_port ________
+
+lease = <function lease.<locals>.run at 0x111a3f560>
+
+    def test_stack_a_has_no_opensearch_and_is_pinned_to_the_closed_port(lease) -> None:
+        pins = _export_line(lease("acquire", "studio", "a run"))  # stack a
+>       assert pins["OPENSEARCH_PORT"] == "59999"
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'OPENSEARCH_PORT'
+
+../OspreyFlow_Build/tests/test_stack_lease.py:558: KeyError
+____________ test_a_stack_whose_opensearch_is_not_running_is_not_up ____________
+
+lease = <function lease.<locals>.run at 0x111a3f740>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4427/test_a_stack_whose_opensearch_0')
+
+    def test_a_stack_whose_opensearch_is_not_running_is_not_up(lease, tmp_path: Path) -> None:
+        """`remote` refuses a stack with its OpenSearch stopped, as for any other of its containers."""
+        lease("acquire", "rules", "a run", "b")
+        _DOCKER["os-down"] = _names_docker(down=("osprey-test-b-opensearch",))
+        try:
+            wt = _lane_worktree(tmp_path)
+            log = _remote_tools(tmp_path)
+            lease("status", docker="os-down")  # writes this docker stand-in onto PATH
+            ran = subprocess.run(
+                ["bash", str(SCRIPT), "remote", "rules", "--", "true"], cwd=wt,
+                env={**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+                     "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"},
+                capture_output=True, text=True, stdin=subprocess.DEVNULL,
+            )  # fmt: skip
+        finally:
+            del _DOCKER["os-down"]
+>       assert ran.returncode == 1, ran.stderr
+E       AssertionError: Running on ospreyflow-test (stack b, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261113T204324Z-958cd879/log: true
+E         
+E       assert 0 == 1
+E        +  where 0 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/scripts/stack_lease.sh', 'remote',...yflow-test (stack b, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261113T204324Z-958cd879/log: true\n').returncode
+
+../OspreyFlow_Build/tests/test_stack_lease.py:577: AssertionError
+______________ test_the_guard_knows_each_stack_s_opensearch_port _______________
+
+    def test_the_guard_knows_each_stack_s_opensearch_port() -> None:
+        from tests.port_guard import PORT_SETTINGS, stack_ports
+    
+>       assert PORT_SETTINGS["OPENSEARCH_PORT"] == "9200"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'OPENSEARCH_PORT'
+
+../OspreyFlow_Build/tests/test_stack_lease.py:585: KeyError
+__ test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane __
+
+lease = <function lease.<locals>.run at 0x111a3fb00>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4427/test_offline_runs_on_the_serve0')
+
+    def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(lease, tmp_path: Path) -> None:
+        log = _remote_tools(tmp_path)
+        wt = _lane_worktree(tmp_path)
+        ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "make", "-k", "test", "SKIP_JS=1")
+        assert ran.returncode == 1 and "holds no stack" in ran.stderr  # remote still needs a lease
+        env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+               "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+        log.write_text("")
+        off = subprocess.run(["bash", str(SCRIPT), "offline", "case", "--", "make", "-k", "test", "SKIP_JS=1"],
+                             cwd=wt / "OspreyFlow_Build", env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        assert off.returncode == 0, off.stderr
+        text = log.read_text()
+        assert "ospreyflow-test" in text
+        export = next(l for l in text.splitlines() if l.startswith("stdin export "))
+        for pin in ("ARCADEDB_HTTP_PORT=59991", "POSTGRES_PORT=59992", "VALKEY_PORT=59993", "CLICKHOUSE_HTTP_PORT=59994",
+                    "OPENSEARCH_PORT=59999"):
+>           assert pin in export, export
+E           AssertionError: stdin export ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 PYTEST_ADDOPTS=--durations=30 OSPREY_LEASE_DIR=$HOME/osprey-runs/case.meta/lease OSPREY_PORTS_LANE=case OSPREY_PORTS_SLOT=2 PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH
+E           assert 'OPENSEARCH_PORT=59999' in 'stdin export ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 PYTEST_ADDOPTS...prey-runs/case.meta/lease OSPREY_PORTS_LANE=case OSPREY_PORTS_SLOT=2 PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH'
+
+../OspreyFlow_Build/tests/test_stack_lease.py:655: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[b]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[c]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[d]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[e]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[f]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_every_server_stack_s_opensearch_is_started_and_stopped_with_it[g]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[b]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[c]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[d]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[e]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[f]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_a_server_stack_pins_its_own_opensearch_never_the_closed_port[g]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_stack_a_has_no_opensearch_and_is_pinned_to_the_closed_port
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_a_stack_whose_opensearch_is_not_running_is_not_up
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_guard_knows_each_stack_s_opensearch_port
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane
+16 failed, 71 deselected in 8.06s

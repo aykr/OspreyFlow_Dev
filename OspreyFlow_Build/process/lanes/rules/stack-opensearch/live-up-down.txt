@@ -1,0 +1,26 @@
+Lease on stack b taken by rules. Start it with: OspreyFlow_Build/scripts/stack_lease.sh up rules (the throwaway stack, not dev.yaml's, which binds the owner's 2480)
+Pin its ports for every live run: export ARCADEDB_HTTP_PORT=2492 POSTGRES_PORT=55434 VALKEY_PORT=6380 MINIO_ENDPOINT=localhost:9002 CLICKHOUSE_HTTP_PORT=18124 OPENSEARCH_PORT=19201 POSTGRES_PASSWORD=throwaway OSPREY_LANE=rules CLICKHOUSE_USER=osprey CLICKHOUSE_PASSWORD=throwaway
+Test stack b's Postgres (osprey-test-b-pg): max_connections 400.
+Test stack b up for rules: osprey-test-b-arcadedb osprey-test-b-pg osprey-test-b-valkey osprey-test-b-objectstore osprey-test-b-clickhouse osprey-test-b-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+after ~6s: {"cluster_name":"docker-cluster","status":"green","timed_out":false,"number_of_nodes":1,"number_of_data_nodes":1,"discovered_master":true,"discovered_cluster_manager":true,"active_primary_shards":0,"active_shards":0,"relocating_shards":0,"initializing_shards":0,"unassigned_shards":0,"delayed_unassigned_shards":0,"number_of_pending_tasks":2,"number_of_in_flight_fetch":0,"task_max_waiting_in_queue_millis":41,"active_shards_percent_as_number":100.0}
+{
+  "name" : "0348aa9470c2",
+  "cluster_name" : "docker-cluster",
+  "cluster_uuid" : "jdI8cKzASjKKyP0i-vKmAQ",
+  "version" : {
+    "distribution" : "opensearch",
+    "number" : "2.17.1",
+    "build_type" : "tar",
+    "build_hash" : "1893d20797e30110e5877170e44d42275ce5951e",
+    "build_date" : "2024-09-26T21:59:32.078798875Z",
+    "build_snapshot" : false,
+    "lucene_version" : "9.11.1",
+    "minimum_wire_compatibility_version" : "7.10.0",
+    "minimum_index_compatibility_version" : "7.0.0"
+  },
+  "tagline" : "The OpenSearch Project: https://opensearch.org/"
+}
+Test stack b down for rules: osprey-test-b-arcadedb osprey-test-b-pg osprey-test-b-valkey osprey-test-b-objectstore osprey-test-b-clickhouse osprey-test-b-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+after down: no answer on 19201 (exit 7)
+osprey-test-b-opensearch Exited (143) 10 seconds ago
+Lease on stack b released by rules.

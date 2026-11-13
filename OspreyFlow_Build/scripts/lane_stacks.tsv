@@ -8,6 +8,8 @@
 # half runs on the server; a stack with no ClickHouse row is pinned to the closed 59994.
 # Every port is guarded, the object stores included (8 November 2026: an offline run wrote to stack a's
 # object store on 9000 while it was unguarded).
+# Stacks b to g have their own OpenSearch (2.17.1, single node, security off, 512m heap; the orchestrator, 13 November
+# 2026, for ADR-150's index feed); a stack with no OpenSearch row is pinned to the closed 59999.
 # No port here is the owner's deployment's (2480, 5432, 80, 8080, 8081) or airbyte's (8000).
 a	arcadedb	osprey-probe-arcadedb-new	2491	ARCADEDB_HTTP_PORT	yes
 a	postgres	osprey-test-pg	55433	POSTGRES_PORT	yes
@@ -19,28 +21,34 @@ b	postgres	osprey-test-b-pg	55434	POSTGRES_PORT	yes
 b	valkey	osprey-test-b-valkey	6380	VALKEY_PORT	yes
 b	objectstore	osprey-test-b-objectstore	9002	MINIO_ENDPOINT	yes
 b	clickhouse	osprey-test-b-clickhouse	18124	CLICKHOUSE_HTTP_PORT	yes
+b	opensearch	osprey-test-b-opensearch	19201	OPENSEARCH_PORT	yes
 c	arcadedb	osprey-test-c-arcadedb	2493	ARCADEDB_HTTP_PORT	yes
 c	postgres	osprey-test-c-pg	55435	POSTGRES_PORT	yes
 c	valkey	osprey-test-c-valkey	6381	VALKEY_PORT	yes
 c	objectstore	osprey-test-c-objectstore	9004	MINIO_ENDPOINT	yes
 c	clickhouse	osprey-test-c-clickhouse	18125	CLICKHOUSE_HTTP_PORT	yes
+c	opensearch	osprey-test-c-opensearch	19202	OPENSEARCH_PORT	yes
 d	arcadedb	osprey-test-d-arcadedb	2494	ARCADEDB_HTTP_PORT	yes
 d	postgres	osprey-test-d-pg	55436	POSTGRES_PORT	yes
 d	valkey	osprey-test-d-valkey	6382	VALKEY_PORT	yes
 d	objectstore	osprey-test-d-objectstore	9006	MINIO_ENDPOINT	yes
 d	clickhouse	osprey-test-d-clickhouse	18126	CLICKHOUSE_HTTP_PORT	yes
+d	opensearch	osprey-test-d-opensearch	19203	OPENSEARCH_PORT	yes
 e	arcadedb	osprey-test-e-arcadedb	2495	ARCADEDB_HTTP_PORT	yes
 e	postgres	osprey-test-e-pg	55437	POSTGRES_PORT	yes
 e	valkey	osprey-test-e-valkey	6383	VALKEY_PORT	yes
 e	objectstore	osprey-test-e-objectstore	9008	MINIO_ENDPOINT	yes
 e	clickhouse	osprey-test-e-clickhouse	18127	CLICKHOUSE_HTTP_PORT	yes
+e	opensearch	osprey-test-e-opensearch	19204	OPENSEARCH_PORT	yes
 f	arcadedb	osprey-test-f-arcadedb	2496	ARCADEDB_HTTP_PORT	yes
 f	postgres	osprey-test-f-pg	55438	POSTGRES_PORT	yes
 f	valkey	osprey-test-f-valkey	6384	VALKEY_PORT	yes
 f	objectstore	osprey-test-f-objectstore	9010	MINIO_ENDPOINT	yes
 f	clickhouse	osprey-test-f-clickhouse	18128	CLICKHOUSE_HTTP_PORT	yes
+f	opensearch	osprey-test-f-opensearch	19205	OPENSEARCH_PORT	yes
 g	arcadedb	osprey-test-g-arcadedb	2497	ARCADEDB_HTTP_PORT	yes
 g	postgres	osprey-test-g-pg	55439	POSTGRES_PORT	yes
 g	valkey	osprey-test-g-valkey	6385	VALKEY_PORT	yes
 g	objectstore	osprey-test-g-objectstore	9012	MINIO_ENDPOINT	yes
 g	clickhouse	osprey-test-g-clickhouse	18129	CLICKHOUSE_HTTP_PORT	yes
+g	opensearch	osprey-test-g-opensearch	19206	OPENSEARCH_PORT	yes

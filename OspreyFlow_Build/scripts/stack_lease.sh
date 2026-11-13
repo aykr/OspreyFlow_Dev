@@ -72,6 +72,10 @@ ports_line() {
   elif ! grep -v '^#' "$TABLE" | awk -F'\t' -v s="$1" '$1 == s && $2 == "clickhouse" { f = 1 } END { exit !f }'; then
     printf ' CLICKHOUSE_HTTP_PORT=59994'
   fi
+  # A stack with no OpenSearch row (stack a), the closed 59999, so no client falls back to 9200.
+  if ! grep -v '^#' "$TABLE" | awk -F'\t' -v s="$1" '$1 == s && $2 == "opensearch" { f = 1 } END { exit !f }'; then
+    printf ' OPENSEARCH_PORT=59999'
+  fi
   echo
 }
 # The ssh host a stack runs on (scripts/lane_stack_hosts.tsv), or nothing for one on this machine.
@@ -438,7 +442,7 @@ case "$cmd" in
     h="$(offline_host)"
     [ -n "$h" ] || { echo "No host for offline runs: lane_stack_hosts.tsv names none (or set OSPREY_OFFLINE_HOST)." >&2; exit 1; }
     # The closed ports, no lane and no lease: the port guard refuses every live port, as for an offline run here.
-    run_on_host "$who" "$h" "ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994" "" "offline" "$@"
+    run_on_host "$who" "$h" "ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 OPENSEARCH_PORT=59999" "" "offline" "$@"
     ;;
   live)
     who="${2:?usage: stack_lease.sh live <lane> [--all | --base <ref>] [-- <pytest args…>]}"

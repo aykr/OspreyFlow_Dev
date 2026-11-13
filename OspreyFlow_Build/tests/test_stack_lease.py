@@ -227,7 +227,8 @@ def test_up_is_refused_to_a_lane_not_holding_the_lease(lease, tmp_path: Path) ->
     assert not log.exists()
 
 
-_STACK_B = ("osprey-test-b-arcadedb", "osprey-test-b-pg", "osprey-test-b-valkey", "osprey-test-b-objectstore", "osprey-test-b-clickhouse")
+_STACK_B = ("osprey-test-b-arcadedb", "osprey-test-b-pg", "osprey-test-b-valkey", "osprey-test-b-objectstore", "osprey-test-b-clickhouse",
+            "osprey-test-b-opensearch")
 
 
 def test_up_and_down_start_and_stop_only_the_holders_own_stack(lease, tmp_path: Path) -> None:
@@ -524,6 +525,69 @@ def test_every_server_stack_s_clickhouse_is_started_and_stopped_with_it(lease, t
 
 
 
+
+# --- An OpenSearch for each server stack (the orchestrator, 13 November 2026: ADR-150's index feed, v0.5.2) -------
+# The index feed and the search service run live against OpenSearch 2.17.1, single node, security off, a 512m heap,
+# one per server stack; stack a has none and is pinned to the closed port, as an offline run is.
+
+_OPENSEARCH = {"b": "19201", "c": "19202", "d": "19203", "e": "19204", "f": "19205", "g": "19206"}
+
+
+@pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+def test_every_server_stack_s_opensearch_is_started_and_stopped_with_it(lease, tmp_path: Path, stack: str) -> None:
+    lease("acquire", "rules", "a run", stack)
+    script, log = _recording_docker(tmp_path)
+    _DOCKER["recording"] = script
+    try:
+        assert lease("up", "rules", docker="recording").returncode == 0
+        assert lease("down", "rules", docker="recording").returncode == 0
+    finally:
+        del _DOCKER["recording"]
+    calls = _start_stop(log)
+    assert f"osprey-test-{stack}-opensearch" in calls[0].split()[1:], calls
+    assert f"osprey-test-{stack}-opensearch" in calls[1].split()[1:], calls
+
+
+@pytest.mark.parametrize("stack", sorted(_OPENSEARCH))
+def test_a_server_stack_pins_its_own_opensearch_never_the_closed_port(lease, stack: str) -> None:
+    pins = _export_line(lease("acquire", "rules", "a run", stack))
+    assert pins["OPENSEARCH_PORT"] == _OPENSEARCH[stack]
+
+
+def test_stack_a_has_no_opensearch_and_is_pinned_to_the_closed_port(lease) -> None:
+    pins = _export_line(lease("acquire", "studio", "a run"))  # stack a
+    assert pins["OPENSEARCH_PORT"] == "59999"
+
+
+def test_a_stack_whose_opensearch_is_not_running_is_not_up(lease, tmp_path: Path) -> None:
+    """`remote` refuses a stack with its OpenSearch stopped, as for any other of its containers."""
+    lease("acquire", "rules", "a run", "b")
+    _DOCKER["os-down"] = _names_docker(down=("osprey-test-b-opensearch",))
+    try:
+        wt = _lane_worktree(tmp_path)
+        log = _remote_tools(tmp_path)
+        lease("status", docker="os-down")  # writes this docker stand-in onto PATH
+        ran = subprocess.run(
+            ["bash", str(SCRIPT), "remote", "rules", "--", "true"], cwd=wt,
+            env={**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+                 "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"},
+            capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        )  # fmt: skip
+    finally:
+        del _DOCKER["os-down"]
+    assert ran.returncode == 1, ran.stderr
+    assert "not running: osprey-test-b-opensearch)" in ran.stderr, ran.stderr
+    assert not log.exists() or "rsync" not in log.read_text()
+
+
+def test_the_guard_knows_each_stack_s_opensearch_port() -> None:
+    from tests.port_guard import PORT_SETTINGS, stack_ports
+
+    assert PORT_SETTINGS["OPENSEARCH_PORT"] == "9200"
+    ports = stack_ports()
+    for stack, port in _OPENSEARCH.items():
+        assert ports[int(port)][0] == stack
+
 # --- A remote run survives a dropped ssh session (9 November 2026: studio's run lost its session an hour in) -----
 
 
@@ -587,7 +651,8 @@ def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(l
     text = log.read_text()
     assert "ospreyflow-test" in text
     export = next(l for l in text.splitlines() if l.startswith("stdin export "))
-    for pin in ("ARCADEDB_HTTP_PORT=59991", "POSTGRES_PORT=59992", "VALKEY_PORT=59993", "CLICKHOUSE_HTTP_PORT=59994"):
+    for pin in ("ARCADEDB_HTTP_PORT=59991", "POSTGRES_PORT=59992", "VALKEY_PORT=59993", "CLICKHOUSE_HTTP_PORT=59994",
+                "OPENSEARCH_PORT=59999"):
         assert pin in export, export
     assert "OSPREY_LANE" not in export
     # The lane's own Playwright ports on the server too, where lanes' copies run side by side (T2).
