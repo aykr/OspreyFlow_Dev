@@ -309,6 +309,7 @@ done
 kubectl -n <namespace> scale statefulset/arcadedb --replicas=1
 kubectl -n <namespace> rollout status statefulset/arcadedb
 kubectl -n <namespace> scale deployment/<each one noted> --replicas=<as noted>
+kubectl -n <namespace> rollout status deployment/<each one noted> --timeout=10m   # ready, so the door answers
 for c in ospreyflow-backup ospreyflow-backup-claims; do
   kubectl -n <namespace> patch cronjob "$c" -p '{"spec":{"suspend":false}}' 2>/dev/null
 done

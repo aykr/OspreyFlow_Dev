@@ -38,3 +38,16 @@ def test_the_runbook_says_what_a_healthy_restore_s_logs_end_with() -> None:
 def test_each_healthy_line_is_one_the_restore_prints() -> None:
     for quoted, (source, printed) in HEALTHY.items():
         assert printed in (CORE / source).read_text(encoding="utf-8"), (quoted, source)
+
+
+def test_a_restore_ends_when_what_it_started_is_ready() -> None:
+    """R1 on kind, finding 13: step 4 scaled each writer back and waited for ArcadeDB alone, so the
+    runbook ended while the Conduit was still starting: the first request after it was a 503 at the
+    door. Each one started again is waited for, before the backups resume."""
+    section = _cloud_platform_section()
+    step = section[section.index("# 4. Only when every Job finished") :]
+    step = step[: step.index("```")]
+    scale = step.index("scale deployment/<each one noted>")
+    waits = step.index("rollout status deployment/<each one noted>")
+    resume = step.index('"suspend":false')
+    assert scale < waits < resume
