@@ -122,3 +122,34 @@ describe("the footer on and off gov.uk", () => {
     expect(screen.getByText(/Crown copyright/)).toBeTruthy();
   });
 });
+
+// ADR-132 Amendment 8 (the owner's ruling, 13 November 2026): the header and the banner are slim on the
+// workspace's screens, by the slim footer's own rule; Home and the sign-in page keep the full frame. The
+// sizes are measured in a browser (`keyboard/shell.spec.ts`); this holds the rule that chooses them.
+describe("the compact top on the workspace's screens", () => {
+  function Home() {
+    useFullFooter();
+    return <p>Home</p>;
+  }
+  const chrome = (container: HTMLElement) => container.querySelector(".govuk-header")!.parentElement!;
+
+  it("is compact on a workspace screen", () => {
+    applyBrand("govuk");
+    const { container } = render(
+      <BrandFrame appearance={GOVUK} hostname="demo.ospreyflow.app">
+        <button type="button">Inside the Glass</button>
+      </BrandFrame>,
+    );
+    expect(chrome(container).className).toContain("brand-chrome--compact");
+  });
+
+  it("is full while Home or the sign-in page is shown", () => {
+    applyBrand("govuk");
+    const { container } = render(
+      <BrandFrame appearance={GOVUK} hostname="demo.ospreyflow.app">
+        <Home />
+      </BrandFrame>,
+    );
+    expect(chrome(container).className).not.toContain("brand-chrome--compact");
+  });
+});

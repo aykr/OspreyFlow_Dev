@@ -172,12 +172,18 @@ if (opening) {
   setTimeout(press, 0);
 }
 
+// ADR-132 Amendment 8: `?banner=1` is the demonstration's own deployment (osprey-small): its banner words
+// alone, no phase, so the height above a case's workspace is measured as the owner saw it.
+const DEMO_BANNER = "Demonstration only: this is not a government service, and all data is synthetic.";
+const demo = params.get("banner") === "1";
+
 createRoot(container).render(
   <BrandFrame
     appearance={
       brand === "govuk"
-        ? { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" }
-        : PLAIN_APPEARANCE
+        ? { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples",
+            ...(demo ? { phase: "none" as const, bannerText: DEMO_BANNER } : { phase: "beta" as const }) }
+        : { ...PLAIN_APPEARANCE, ...(demo ? { bannerText: DEMO_BANNER } : {}) }
     }
   >
     <Harness />

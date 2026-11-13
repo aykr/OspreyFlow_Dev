@@ -35,6 +35,23 @@ describe("GovukHeader", () => {
     expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 
+  // ADR-132 Amendment 8 (the owner's ruling of 13 November 2026): off gov.uk the header draws no crown, as the
+  // footer already does (Amendment 7); the GOV.UK word mark stays, still the link's name. On gov.uk, as it was.
+  it("draws no crown off gov.uk, the word mark kept", () => {
+    applyBrand("govuk");
+    const { container } = render(<GovukHeader hostname="govuk.ospreyflow.app" />);
+    const logo = container.querySelector(".govuk-header__logotype")!;
+    expect(logo.querySelector("g")).toBeNull();
+    expect(logo.querySelector(".govuk-logo-dot")).not.toBeNull();
+    expect(screen.getByRole("link", { name: /GOV\.UK/ })).toBeTruthy();
+  });
+
+  it("draws the crown on gov.uk", () => {
+    applyBrand("govuk");
+    const { container } = render(<GovukHeader hostname="prison-intelligence.service.gov.uk" />);
+    expect(container.querySelector(".govuk-header__logotype g")).not.toBeNull();
+  });
+
   it("leaves no style for the band in tokens.css", () => {
     const tokens = readFileSync(join(__dirname, "../../design/tokens.css"), "utf-8");
     expect(tokens).not.toContain("govuk-service-navigation");

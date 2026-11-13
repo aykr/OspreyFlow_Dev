@@ -35869,6 +35869,88 @@ synthetic."**
    `shell-harness.html?host=demo.service.gov.uk` for the gov.uk side); red first
    (`process/lanes/platform-b/gate/D-*`).
 
+### ADR-132, Amendment 8 (13 November 2026) — the GOV.UK look compact on the workspace's screens
+
+Status: written 13 November 2026 by the platform lane under the orchestrator's reservation of the same day.
+This is the owner's ruling of 13 November, on osprey-small's GOV.UK look inside a case: "The top of the page
+is still very heavy, it makes the actual workspace very small." Each point names the test that fails if it
+stops being true (rule 12). Each assertion is judged on its own (`expect.soft`). Each that tells this
+amendment from main was red at 054f24b. The two font-size assertions pass at main, where the title had a
+band of its own, so each was shown red by a fault planted in this amendment's own CSS (16 px against 19).
+The dark, light, Home and sign-in cases were green at 054f24b, as they must stay. The reds are in
+`process/lanes/platform/compact-govuk/red-first.txt`. Measured in Chromium at 1440×1000 on the
+places harness with the demonstration's deployment (its banner words, no phase), in CSS pixels; the owner's
+screenshot figures are about 1.32 times these.
+
+1. **Where.** Under GOV.UK, every workspace screen's top is compact: a case's workspace in each place, and
+   Admin. Home and the sign-in page keep the full frame. The rule is the slim footer's (Amendment 7):
+   `BrandFrame` is compact unless a screen claims the full frame (`useFullFooter`), and the claim is made
+   before the first paint (a layout effect), so Home and the sign-in page never show the compact top. No test
+   sees a single frame's paint: that half is held by the code alone. The orchestrator agreed this reading of
+   "inside a case's workspace".
+   - Test: `BrandFrame.test.tsx`, *is compact on a workspace screen* and *is full while Home or the sign-in
+     page is shown* (red with the frame compact everywhere); `keyboard/shell.spec.ts`, *govuk: Home keeps
+     the full header and banner* and *govuk: the sign-in page keeps the full header and banner* (61 and 41
+     px, as at 054f24b).
+2. **A slim header.** 33 px, from 61. The logo is 20 px high, the place links are kept, and each link
+   keeps WCAG 2.2's 24 px minimum target size.
+   - Test: `shell.spec.ts`, *govuk: a case's workspace gains at least 100 px of height*: the header is at
+     most 48 px and its *Places* navigation is visible (61 at 054f24b).
+3. **The banner on one slim line.** 23 px, from 41, in GOV.UK's 14 px type. Its words are unchanged, and it is
+   still the *Service phase* region.
+   - Test: the same case. The region holds the deployment's words exactly and is at most 30 px (41 at
+     054f24b).
+4. **The context banner in one row** (ADR-145 decision 3's GOV.UK notification banner). It no longer has a
+   title band over its content: "You are in …" starts the row, at the row's size, as the region's level-2
+   heading and its name, in the row's own type (19 px, bold). Case · Boards, the case and what it reads
+   follow, each set off by a separator. The row is 32 px, from 91. This holds in every place that draws the banner: the Glass, the Ingest
+   Studio, Rules and Monitoring and Admin.
+   - Test: `shell.spec.ts`, *govuk: the context bar is one row* in each of the four places: the region by
+     its name, its level-2 heading, at most 40 px, the heading's size the row's; in the Glass the heading is
+     on Case's row and before it, and Case at the row's size. At 054f24b the row was 91 px (59 in Admin), and
+     the heading stood 42.5 px off Case's row and after its start.
+   - Test: `places.test.tsx`, *under GOV.UK is one row*: no title band, the heading first, then a separator.
+5. **The gain.** The canvas starts 105 px higher: at 152, from 257. That is about 139 px at the owner's
+   scale. The target is at least 100 CSS px; the orchestrator restated the owner's 130 at the screenshot's
+   scale.
+   - Test: *govuk: a case's workspace gains at least 100 px of height* (the content's top at most 157).
+6. **Untouched.** The OFFICIAL marking strip (20 px, a handling marking), the Osprey toolbar (44 px) and
+   the canvas's toolbars; the dark and light looks; Home and the sign-in page.
+   - Test: the strip's and the toolbar's heights in the gain's case; *ospreyflow dark/light: a case's workspace top is as it
+     was* (the content at 130 and the banner at 41, as at 054f24b); *govuk: Home keeps the full header and
+     banner* and *govuk: the sign-in page keeps the full header and banner*.
+7. **Keyboard and axe.** Each place's banner and the shell keep their keyboard cases (`shell.spec.ts`, rule
+   13). `every-harness.spec.ts` scans the places harness's demonstration state (`banner=1`, and with Rules
+   and Monitoring) in the dark, light and GOV.UK looks. When the *More views* menu is drawn open over the
+   one row, it lies over the row. Two things follow from that.
+   - Contrast: the case button and a separator cannot be measured under the menu, so they are listed in
+     `contrastFindings.json`; their own colours give 18.34:1 and 19.59:1. Main's entry for "reads Prison
+     intel" went with the title band, since the menu no longer reaches it.
+   - Target size: the menu covers all of *Boards (coming)* but 4 px. axe's target-size counts that sliver
+     as a target too small, where it skips one covered wholly; in the browser the menu is on top at every
+     sampled point. In that one state the row's sections are left out of the scan
+     (`UNDER_AN_OPEN_OVERLAY`): its target-size result for the row's sections is dropped, and only that;
+     every other rule still runs on them, and they are scanned whole in every other state. The entry fails
+     once that result is no longer reported, and if its title is not a scanned look; each was shown red.
+   - The case-screen options harness placed its stand-in *More* menu at 230 px from the page's top, and so
+     over Explore once the top was compact (axe's target-size). It is now placed from its own row, on the
+     rail in every look, and its GOV.UK finding is the same as dark's and light's.
+8. **No crown in the header off gov.uk** (the owner's ruling, the same day, added to this amendment). Off
+   gov.uk the GOV.UK header draws no crown on any page (Home, the sign-in page and every workspace screen),
+   as its footer draws none there (Amendment 7). The logo is the GOV.UK word mark alone, its view box
+   cropped to it, still the link to gov.uk and named "GOV.UK". On a gov.uk host the crown is drawn as
+   before. The test is the footer's own, `isGovUkHost`. It is held in two places:
+   - the Glass's `GovukHeader`, given the frame's host;
+   - the identity provider's sign-in theme (`harness/govuk_chrome.js`), which takes the crown out by the
+     host it is served on. Its `HEADER` stays the full markup, the Glass's component as drawn on gov.uk.
+   - Test: `GovukHeader.test.tsx`, *draws no crown off gov.uk, the word mark kept* (red at 054f24b) and
+     *draws the crown on gov.uk*; `tests/keycloak_theme/govuk_sign_in.test.mjs`, the same pair, running
+     the theme's script on both hosts (red off gov.uk at 054f24b); `tests/harness/test_keycloak_theme_govuk.py`,
+     *the chrome takes the header's crown off gov.uk* (red against 054f24b's script);
+     `keyboard/shell.spec.ts`, *govuk off gov.uk: the header's crown is not drawn* (one crown drawn at
+     054f24b) and *govuk on gov.uk: the header's crown is drawn*. `govukChrome.test.tsx` holds the theme's
+     `HEADER` equal to the component drawn for a gov.uk host.
+
 ### ADR-114, Amendment 41 (12 November 2026) — A shared key asked by the front proxy, on all three names, against a bcrypt hash set on the server
 
 Status: as built by the platform-b lane (step gate-b), at the owner's request of 12 November 2026, for a

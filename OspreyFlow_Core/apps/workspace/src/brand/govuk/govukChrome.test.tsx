@@ -26,7 +26,18 @@ afterEach(() => applyBrand("ospreyflow"));
 describe("the sign-in page's GOV.UK header and footer", () => {
   it("are the Glass's own components", () => {
     applyBrand("govuk");
-    expect(constant("HEADER")).toBe(renderToStaticMarkup(<GovukHeader />));
+    // The full markup, as on gov.uk: off gov.uk the script itself takes the crown out (ADR-132 Amendment 8).
+    expect(constant("HEADER")).toBe(renderToStaticMarkup(<GovukHeader hostname="prison-intelligence.service.gov.uk" />));
     expect(constant("FOOTER")).toBe(renderToStaticMarkup(<GovukFooter organisation={null} />));
+  });
+
+  // ADR-132 Amendment 8: off gov.uk both crop the logo to the word mark the same way.
+  it("crop the header's logo off gov.uk as the Glass's component does", () => {
+    applyBrand("govuk");
+    const off = renderToStaticMarkup(<GovukHeader hostname="govuk.ospreyflow.app" />);
+    const viewBox = /viewBox="([^"]+)"/.exec(off)![1]!;
+    const width = /width="([^"]+)"/.exec(off)![1]!;
+    expect(SCRIPT).toContain(`logotype.setAttribute("viewBox", "${viewBox}")`);
+    expect(SCRIPT).toContain(`logotype.setAttribute("width", "${width}")`);
   });
 });
