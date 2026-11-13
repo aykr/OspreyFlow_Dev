@@ -98,7 +98,9 @@ candidate.
 **studio** (reopened): **step 3d, `v052-search`:** the search service.
 - **Draft the access design page (A) by Sun 15 Nov**, with rules, to the orchestrator.
 - Then the query side:
-  - names, using OpenSearch's analysers (fuzzy, phonetic where the managed domain's plugins allow; say which);
+  - names tolerant of typos, variants and sound-alikes, under the owner's strict-ranking ruling (13 Nov, page A):
+    three-letter fragments, stored prefixes and a Double Metaphone key computed by the Conduit; no word-rarity
+    scoring, no fuzzy or prefix expansion, no plugin relied on;
   - full text with highlighting;
   - ranking;
   - grouped counts and filters;
