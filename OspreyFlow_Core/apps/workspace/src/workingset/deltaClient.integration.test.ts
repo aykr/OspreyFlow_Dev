@@ -60,6 +60,13 @@ async function startServer(): Promise<ServerHandle> {
   return { port, vaultPort, token, process: proc };
 }
 
+/** A new case's body: since ADR-099 Amendment 12 item 6 a case names one dataset, or a new one, and
+ * the Conduit refuses one that names neither (422, GitHub run 43385169520's conformance job; the same
+ * shape as `tests/services/api/case_dataset.py`'s `new_case`). */
+function newCase(): string {
+  return JSON.stringify({ new_dataset_name: `Delta test data ${crypto.randomUUID().slice(0, 12)}` });
+}
+
 async function waitUntilReady(baseUrl: string, token: string): Promise<void> {
   const deadline = Date.now() + 20_000;
   let lastError: unknown;
@@ -67,7 +74,8 @@ async function waitUntilReady(baseUrl: string, token: string): Promise<void> {
     try {
       const response = await fetch(`${baseUrl}/v1/investigations`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: newCase(),
       });
       if (response.ok) return;
       lastError = new Error(`unexpected status ${response.status}`);
@@ -96,7 +104,8 @@ describe("deltaClient against the real Conduit WebSocket", () => {
   async function createInvestigation(): Promise<string> {
     const response = await fetch(`${baseUrl}/v1/investigations`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${server.token}` },
+      headers: { Authorization: `Bearer ${server.token}`, "Content-Type": "application/json" },
+      body: newCase(),
     });
     const body = (await response.json()) as { id: string };
     return body.id;
