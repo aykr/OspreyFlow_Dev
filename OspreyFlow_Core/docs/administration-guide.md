@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.91** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.92** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.92 | 2026-11-13 | §6a: the managed PostgreSQL's `max_connections` set to 1000 in its RDS parameter group (the owner's decisions), not left to the class's default; the least it must allow, 918, with Superset and the report sync (from v0.5.2) and an upgrade in progress, so 82 to spare; the `db_parameter` line for MoJ's RDS module, and that the setting takes effect at creation or the next reboot. PDF reprinted alone. |
 | 1.91 | 2026-11-13 | §6a: the managed PostgreSQL rendered as a `db.t4g.large` in every shape, the poc's too (the owner's ruling), whose RDS default allows the 750 connections the install asks for with no parameter group; a smaller class needs one, and the memory to match. PDF reprinted alone. |
 | 1.90 | 2026-11-13 | §6a, from R1 (the cloud-platform install's acceptance on kind): the `ospreyflow` command installed by `uv tool install ./cli`; the managed PostgreSQL's `max_connections` of at least 750 (ADR-114 Amendment 43), set in the RDS parameter group; and what a healthy restore's log ends with. PDF reprinted alone. |
 | 1.89 | 2026-11-13 | Appendix A: `network.access_key` (the shared key the front proxy asks for, ADR-114 Amendments 41 and 42) and `appearance.banner_text` (the banner's own words, ADR-132 Amendment 7), from the schema (`tools.admin_guide_options`), missed when they were added. PDF reprinted alone. |
@@ -1097,10 +1098,13 @@ and the kept backups' removal when their retention ends (run with the decommissi
 the last backup it keeps). The install asks for the Entra app registrations before its first block,
 and its step 2 checks the certificate Secret `cloud_platform.tls_secret` names, when it names one.
 The install's *What it needs* names the `ospreyflow` command's own install (`uv tool install ./cli`)
-and the least `max_connections` the managed PostgreSQL must allow: two Conduits side by side in an
-update, the worker, the gateway and a reserve. The Terraform renders RDS as a `db.t4g.large` in every
-shape, whose default allows more than that, so no parameter group is needed; a smaller class needs one
-that sets it, and the memory to hold that many connections (a `db.t4g.small` allows about 190). Its last section, *Against
+and the managed PostgreSQL's `max_connections` of 1000, set in its parameter group. The least it must
+allow is 918: two Conduits side by side in an update, the worker, the gateway and a reserve, with
+Superset and the report sync (from v0.5.2, two copies of each) doubled by an upgrade in progress; 1000
+leaves 82 to spare. The Terraform renders RDS as a `db.t4g.large` (8 GiB) in every shape, with a
+parameter group setting it; with MoJ's `cloud-platform-terraform-rds-instance` module the install gives
+the module's `db_parameter` line instead. The setting is static: it takes effect when the instance is
+created, and on an existing one only at its next reboot. Its last section, *Against
 the client's real tenant*, is no block to run: what only the real Entra tenant can show. The
 decommission removes a restore's Jobs before the claims, which they would otherwise keep, and its
 settings keep the bucket prefix, so it can be taken up in a new shell after step 7. **Both were run
