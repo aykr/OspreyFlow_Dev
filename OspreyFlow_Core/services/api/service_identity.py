@@ -20,6 +20,7 @@ from __future__ import annotations
 import jwt
 
 from principal_auth import (
+    DASHBOARD_APP_ROLE,
     DEFAULT_CLAIM_MAPPING,
     ENTRA_ALGORITHMS,
     LEEWAY_SECONDS,
@@ -60,6 +61,13 @@ class ServiceIdentityRefused(Exception):
 NOT_A_SERVICE_IDENTITY = (
     "the sign-in is not a service identity's: sign in with the client-credentials "
     "grant of the client the pipeline is owned externally by"
+)
+
+
+#: ADR-148 Amendment 10: a dashboard identity reads the report feed and never submits runs.
+DASHBOARD_IS_NO_SERVICE_IDENTITY = (
+    "the sign-in is a dashboard identity's: a dashboard reads the report feed and never "
+    "submits runs"
 )
 
 
@@ -161,4 +169,9 @@ class ServiceIdentityVerifier:
         ):
             # The Glass's own registration, or this API's: the deployment's, never an orchestrator.
             raise ServiceIdentityRefused(DEPLOYMENT_CLIENT_WORDS, status=403)
+        roles = claims.get("roles")
+        if isinstance(roles, list) and DASHBOARD_APP_ROLE in roles:
+            # Amendment 10: a client granted the dashboards' role is a dashboard's, registered or
+            # not.
+            raise ServiceIdentityRefused(DASHBOARD_IS_NO_SERVICE_IDENTITY, status=403)
         return client

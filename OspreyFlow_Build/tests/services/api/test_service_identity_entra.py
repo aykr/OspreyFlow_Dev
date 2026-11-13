@@ -284,3 +284,53 @@ async def test_the_run_apis_sign_in_reads_its_keys_in_their_own_threads_never_th
     assert client == AIRFLOW
     assert seen and seen[0].startswith("signing-keys"), seen
     assert max(gaps) < 0.2, max(gaps)
+
+
+# --- ADR-148 Amendment 10: a dashboard identity never submits runs -----------------------------------
+
+
+def test_a_token_carrying_the_dashboard_role_is_no_service_identity(jwks_url, keypair) -> None:
+    """Its client holds this API's `Dashboard.Read`: a dashboard's, registered here or not."""
+    from principal_auth import DASHBOARD_APP_ROLE
+
+    token = _app_token(keypair, roles=["Runs.Trigger", DASHBOARD_APP_ROLE])
+    with pytest.raises(ServiceIdentityRefused, match="dashboard") as refused:
+        _verifier(jwks_url).client_of(token)
+    assert refused.value.status == 403
+
+
+class _Dashboards:
+    """The deployment's store as the run API asks it: keyed by tenant and application id."""
+
+    tenant_id = TENANT
+
+    async def dashboard(self, tenant_id: str, application_id: str):  # type: ignore[no-untyped-def]
+        from principal_auth import StoredDashboard
+
+        if (tenant_id, application_id) == (TENANT, AIRFLOW):
+            return StoredDashboard(AIRFLOW, "OFFICIAL", "unit-1", ("P",))
+        return None
+
+
+@pytest.mark.parametrize("registered", [True, False], ids=["registered-dashboard", "not-a-dashboard"])
+def test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity(
+    jwks_url, keypair, registered
+) -> None:
+    """Through the real `get_service_identity`: a client Admin › Dashboards registered is refused
+    before anything is read, though its token holds no dashboard role; any other gets past this
+    door (to whatever the route's own dependencies then answer, here without the app's start)."""
+    from fastapi.testclient import TestClient
+    from services.api.app import app
+
+    before = {k: getattr(app.state, k, None) for k in ("service_identities", "people_store")}
+    app.state.service_identities = _verifier(jwks_url)
+    app.state.people_store = _Dashboards() if registered else None
+    try:
+        answered = TestClient(app, raise_server_exceptions=False).post(
+            "/v1/runs", json={}, headers={"Authorization": f"Bearer {_app_token(keypair)}"}
+        )
+    finally:
+        for key, value in before.items():
+            setattr(app.state, key, value)
+    refused = answered.status_code == 403 and "dashboard identity" in answered.text
+    assert refused is registered, (answered.status_code, answered.text)
