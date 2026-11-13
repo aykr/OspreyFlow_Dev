@@ -36757,3 +36757,60 @@ is kept. ADR-144 and Amendments 1 and 2 are otherwise unchanged.
 **Not covered:** the canvas toolbar is drawn by `GlassCanvas`, which the App tests stand in for (jsdom has no
 WebGL); the menu's place in the real toolbar is held by the code and the keyboard harness's toolbar, not by a test
 on the real canvas.
+
+### ADR-114, Amendment 43 (13 November 2026) — A deployment's own PostgreSQL allows what its services may hold
+
+**The finding** (platform-b's stateless step, 13 November 2026, `process/lanes/platform-b/stateless/REPORT.md`, a
+CARRIES row): a deployed Small's PostgreSQL was rendered with no `max_connections`, so the image's 100 applied, and one
+Conduit holds 50 at rest beside Keycloak, the gateway's database, Superset and any worker. A second Conduit, or a worker
+opening the same stores, met `TooManyConnectionsError`.
+
+**Measured** (13 November 2026, main 8176f38): the Conduit opens **48** asyncpg pools (`services/api`, none in
+`packages`): **49** connections at their `min_size` (at rest) and **197** at their `max_size` (under load). The other
+clients of a deployment's PostgreSQL: Keycloak (its own `db-pool-max-size`, 100 by default, not rendered), the gateway
+(LiteLLM, `database_connection_pool_limit` 10 a worker), Superset and the report sync where rendered. As rendered:
+
+| Profile | PostgreSQL | Before | After |
+| --- | --- | --- | --- |
+| local-lite | owned, compose | no `max_connections` (100) | 580 |
+| small | owned, compose (sized or not) | no `max_connections` (100) | 580 |
+| cluster | managed (`external.postgres`), not rendered | the operator's | the operator's |
+| cloud-platform | RDS PostgreSQL 16 (`db.t4g.small`, `.large` in production), not in-cluster | RDS's default, from the instance's memory | unchanged here: a carry (below) |
+
+**Decision: render `max_connections`, from the product's own number; the pools are not changed.**
+
+1. **The number** (`harness/profiles.py`, `POSTGRES_MAX_CONNECTIONS`): two Conduits at their pools' ceiling
+   (`CONDUITS_ALLOWED` × `CONDUIT_POOL_CEILING`, 2 × 200), Keycloak's pool (100), the gateway (20), Superset and the
+   report sync (40), and a reserve for an operator's `psql`, a backup and PostgreSQL's own superuser slots (20): **580**.
+   The Conduit's ceiling is guarded against the source: `tests/harness/test_postgres_connections.py` sums every
+   `create_pool(...)` call's `max_size` (a pool whose size is not written as a number is refused in words) and fails when
+   a pool added or grown takes the sum past 200, naming the file to raise it in. The others are each client's own
+   default, stated as allowances, not measurements.
+2. **Rendered on every owned PostgreSQL** as its command (`postgres -c max_connections=580`, with the sized memory
+   settings after it where the server is sized, Amendment 33 decision 6): in the store's own definition, never in
+   `deployment.env`, so the change restarts PostgreSQL alone.
+3. **Why not `min_size=0` instead, or as well.** Bounding the pools' minimum moves only the count at rest (49 to 0);
+   two Conduits under load still reach 394, past 100, so it does not remove the refusal, and it would put a connection's
+   set-up on the first query after each idle spell in 48 stores. A server with room for the peak has room for the rest;
+   the pools stay as they are. (Revisit if a deployment runs more than two Conduits, which `CONDUITS_ALLOWED` would then
+   name.)
+4. **A deployed Small picks it up on `ospreyflow apply`**: the rendered PostgreSQL's definition differs, so apply
+   restarts PostgreSQL, and nothing else (ADR-137's `services_to_restart`); a deployment not applied keeps 100 until it
+   is. PostgreSQL's memory per allowed connection is small (its lock table and process slots); the sized
+   `shared_buffers` are unchanged.
+5. **Not covered here, and carried:** a managed PostgreSQL (`external.postgres`, the cluster profile, cloud-platform's
+   RDS) sets its own limit. RDS's default comes from the instance's memory (`LEAST(DBInstanceClassMemory/9531392,
+   5000)`, about 190 on a `db.t4g.small`), below two Conduits' peak: a parameter group naming 580, or a larger class, is
+   the platform lane's (`harness/cloud_platform/terraform.py`), sent as a CARRIES row. Preflight saying so for a managed
+   PostgreSQL that allows fewer is part of the same carry.
+
+**Tests**, red first: `tests/harness/test_postgres_connections.py` — `::test_the_conduits_pools_at_their_max_fit_the_ceiling`
+and `::test_a_pool_added_past_the_ceiling_is_caught_in_the_real_call_sites_shape` (a pool planted as the stores write
+it, one over the room left: caught; an unsized one: refused in words); `::test_every_owned_postgres_is_rendered_with_the_products_number`
+(Lite, Small, Small sized); `::test_an_existing_deployment_restarts_its_postgres_alone_on_apply`;
+`::test_two_conduits_at_their_ceiling_fit_the_rendered_postgres` (docker: `postgres:16.4` with exactly the rendered
+command, two real Conduits started against it, then the connections their pools and the other services may still open
+taken to the number: none refused; red with the image's own command, `TooManyConnectionsError` once the two Conduits are
+up, `gates/pg_two_conduits_red.txt`). At the image's 100 both Conduits do come up at rest (98); the refusal is the next
+connection a pool, Keycloak or the gateway asks for, which is the production shape. `tests/harness/test_render_memory.py`'s
+two assertions on PostgreSQL's command follow the new first setting.
