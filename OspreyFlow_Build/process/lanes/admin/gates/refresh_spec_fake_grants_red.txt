@@ -1,0 +1,120 @@
+PLANT: the routed fake grants where Keycloak refuses (a code with no session, and its exchange): the cases that need a refusal must fail
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Core/apps/workspace/), logged at osprey-runs/admin.meta/runs/20261113T131252Z-07b33bfc/log: npx playwright test --config keyboard/playwright.config.ts refresh-sign-in --reporter=line -g falls to the Sign in screen|no session shows
+
+Running 4 tests using 1 worker
+
+[1/4] keyboard/refresh-sign-in.spec.ts:171:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated
+  1) keyboard/refresh-sign-in.spec.ts:171:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Sign in', exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('heading', { name: 'Sign in', exact: true }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: 'Sign in', exact: true })
+
+
+      173 |   await fakeIdentityProviderAndConduit(page, idp);
+      174 |   await page.goto("/");
+    > 175 |   await expect(signInScreen(page)).toBeVisible();
+          |                                    ^
+      176 |   await expect(page.getByText("You see only what your role, clearance and cases allow.", { exact: false })).toBeVisible();
+      177 |   // Nothing about an error the person never met: the plain screen.
+      178 |   await expect(page.getByText(/could not be completed|could not be started/)).toHaveCount(0);
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:175:36
+
+    Error Context: test-results/refresh-sign-in-a-refresh--a6cf7-ilent-round-is-not-repeated/error-context.md
+
+
+[2/4] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's login_required on the silent round falls to the Sign in screen, asked once
+  2) keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's login_required on the silent round falls to the Sign in screen, asked once 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Sign in', exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('heading', { name: 'Sign in', exact: true }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: 'Sign in', exact: true })
+
+
+      217 |     await fakeIdentityProviderAndConduit(page, idp);
+      218 |     await page.goto("/");
+    > 219 |     await expect(signInScreen(page)).toBeVisible();
+          |                                      ^
+      220 |     await expect(page.getByText(/could not be completed|could not be started/)).toHaveCount(0);
+      221 |     await page.waitForTimeout(1_500);
+      222 |     expect(idp.silentRounds).toBe(1);
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:219:38
+
+    Error Context: test-results/refresh-sign-in-Keycloak-s-5fd9f-e-Sign-in-screen-asked-once/error-context.md
+
+
+[3/4] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's interaction_required on the silent round falls to the Sign in screen, asked once
+  3) keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's interaction_required on the silent round falls to the Sign in screen, asked once 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Sign in', exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('heading', { name: 'Sign in', exact: true }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: 'Sign in', exact: true })
+
+
+      217 |     await fakeIdentityProviderAndConduit(page, idp);
+      218 |     await page.goto("/");
+    > 219 |     await expect(signInScreen(page)).toBeVisible();
+          |                                      ^
+      220 |     await expect(page.getByText(/could not be completed|could not be started/)).toHaveCount(0);
+      221 |     await page.waitForTimeout(1_500);
+      222 |     expect(idp.silentRounds).toBe(1);
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:219:38
+
+    Error Context: test-results/refresh-sign-in-Keycloak-s-76348-e-Sign-in-screen-asked-once/error-context.md
+
+
+[4/4] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's consent_required on the silent round falls to the Sign in screen, asked once
+  4) keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's consent_required on the silent round falls to the Sign in screen, asked once 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Sign in', exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('heading', { name: 'Sign in', exact: true }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: 'Sign in', exact: true })
+
+
+      217 |     await fakeIdentityProviderAndConduit(page, idp);
+      218 |     await page.goto("/");
+    > 219 |     await expect(signInScreen(page)).toBeVisible();
+          |                                      ^
+      220 |     await expect(page.getByText(/could not be completed|could not be started/)).toHaveCount(0);
+      221 |     await page.waitForTimeout(1_500);
+      222 |     expect(idp.silentRounds).toBe(1);
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:219:38
+
+    Error Context: test-results/refresh-sign-in-Keycloak-s-fa94e-e-Sign-in-screen-asked-once/error-context.md
+
+
+  4 failed
+    keyboard/refresh-sign-in.spec.ts:171:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated 
+    keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's login_required on the silent round falls to the Sign in screen, asked once 
+    keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's interaction_required on the silent round falls to the Sign in screen, asked once 
+    keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's consent_required on the silent round falls to the Sign in screen, asked once 
+Wall time: 28 s, exit 1 (no stack, no lease; set-up before it 11 s)
+exit=1

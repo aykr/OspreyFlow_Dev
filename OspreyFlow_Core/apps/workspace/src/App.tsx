@@ -28,7 +28,8 @@ import {
   type ResolvedPrincipal,
   type SignedInSession,
 } from "./auth/userManager";
-import { clearHandoff, readHandoff } from "./auth/launcherHandoff";
+import { clearHandoff, clearHandoffFromAddress, readHandoff } from "./auth/launcherHandoff";
+import { SILENT_AT_LOAD_TIMEOUT_SECONDS, signInAtLoad } from "./auth/signInAtLoad";
 import { installUnauthorisedWatch } from "./auth/unauthorised";
 import { SessionPrompt } from "./auth/SessionPrompt";
 import { createTokenRenewal, type RenewedUser, type TokenRenewal, watchActivity } from "./auth/tokenRenewal";
@@ -60,6 +61,7 @@ import { TopBar } from "./shell/TopBar";
 import { ContextBanner, crossLinkFor, useCaseContext } from "./shell/ContextBanner";
 import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { useLastGlassView } from "./shell/placeMemory";
+import { keepPlace, placeAtLoad, placeOnScreen, restorePlace } from "./auth/refreshPlace";
 import { fetchHandlingScheme, type HandlingScheme } from "./ingest/api";
 import { Button } from "./design/primitives/Button";
 import { AccountUnread } from "./auth/AccountUnread";
@@ -285,7 +287,15 @@ export function App() {
   // root (`shell/router.ts`).
   useState(() => noteAddress());
   const address = useAddress();
-  const autoSignInStartedRef = useRef(false);
+  // ADR-050 Amendment 3: the place this tab was on when it was refreshed, unless the address says
+  // where to go first (`auth/refreshPlace.ts`). Read once, before anything is drawn.
+  const [restored] = useState(() => {
+    const place = placeAtLoad(
+      { autoSignIn: handoff.autoSignIn, pathname: window.location.pathname, search: window.location.search },
+      sessionStorage,
+    );
+    return place ? restorePlace(place, initialInvestigationId() !== null, sessionStorage) : null;
+  });
   // Distinguishes "this token was just refused outright" (wrong audience, wrong claims — show the
   // reason, do not retry) from "this token merely expired mid-session" (retry silently, preserving
   // state) — both surface as a 401 on the same bootstrap call and are otherwise indistinguishable.
@@ -315,7 +325,8 @@ export function App() {
         return;
       }
       let signedIn = false;
-      if (isSignInRedirectCallback()) {
+      const carriedACallback = isSignInRedirectCallback();
+      if (carriedACallback) {
         try {
           const user = await completeSignInFromRedirect();
           clearRedirectCallbackParams();
@@ -334,21 +345,32 @@ export function App() {
             setSignInReason("Your sign-in could not be completed. Try again.");
         }
       }
-      // Arrived from the launcher and not signed in: start the sign-in now rather than show a
-      // screen whose only content is a button. Once per load (`autoSignInStartedRef` survives
-      // React's development double-run), never after a refusal (that returned above, with an
-      // `error` parameter), and never after a completed or failed callback. If it cannot be
-      // started, the screen appears with a plain sentence and its button still works.
-      if (!cancelled && !signedIn && handoff.autoSignIn && !autoSignInStartedRef.current) {
-        autoSignInStartedRef.current = true;
-        try {
-          await signIn();
-          return;
-        } catch {
-          if (!cancelled)
-            setSignInReason(
-              "Sign-in could not be started automatically. Press Sign in to try again.",
-            );
+      // ADR-050 Amendment 3: no token in memory (a refresh, a new tab, a hand-off): ask the identity
+      // provider's own session silently first, and show the screen only when it says no. Once per
+      // load, shared by React's development double-run (`auth/signInAtLoad.ts`); never after a
+      // refusal (that returned above, with an `error` parameter), and never after a completed or
+      // failed callback. A hand-off with no session starts the full-page sign-in, as before.
+      if (!cancelled && !signedIn && !carriedACallback) {
+        const outcome = await signInAtLoad({
+          silent: () => renewSilently({ silentRequestTimeoutInSeconds: SILENT_AT_LOAD_TIMEOUT_SECONDS }),
+          redirect: () => signIn(),
+          framed: window.parent !== window,
+          autoSignIn: handoff.autoSignIn,
+        });
+        if (cancelled || outcome.kind === "redirected") return;
+        if (outcome.kind === "signed-in") {
+          const user = outcome.user;
+          setBearerToken(user.access_token);
+          setSession(sessionFromUser(user));
+          scheduleRenewal(user.expires_at);
+          restoreViewStateAfterReauth();
+          // As the redirect's return to the root did: the hand-off is spent, so a later refresh
+          // returns to the place refreshed rather than to the hand-off's.
+          takeNotedAddress();
+          clearHandoff(sessionStorage);
+          clearHandoffFromAddress();
+        } else if (outcome.reason) {
+          setSignInReason(outcome.reason);
         }
       }
       if (!cancelled) setAuthChecked(true);
@@ -572,7 +594,9 @@ export function App() {
   // ADR-145 decision 1: Admin is a place of its own, outside any case, so a hand-off naming it opens
   // it even with a case open; a hand-off is only a wish, checked against the rights below.
   const [startChoice, setStartChoice] = useState<StartPlace | "start" | null>(() =>
-    handoff.view === "admin" ? "admin" : initialInvestigationId() ? null : handoff.view === "ingest" ? "ingest" : null,
+    restored
+      ? restored.startChoice
+      : handoff.view === "admin" ? "admin" : initialInvestigationId() ? null : handoff.view === "ingest" ? "ingest" : null,
   );
   const [investigationId, setInvestigationId] = useState<string | null>(
     initialInvestigationId(),
@@ -817,7 +841,10 @@ export function App() {
 
   const [view, setView] = useState<
     "graph" | "map" | "matrix" | "reports" | "dashboards" | "ingest" | "dossier" | "alerts" | "ownership" | "strength" | "boards"
-  >(handoff.view === "ingest" ? "ingest" : address.kind !== "none" ? "alerts" : "graph");
+  >(
+    (restored?.view as "graph" | "map" | "matrix" | "reports" | "dashboards" | "ingest" | "alerts" | "ownership" | "strength" | null | undefined) ??
+      (handoff.view === "ingest" ? "ingest" : address.kind !== "none" ? "alerts" : "graph"),
+  );
   // ADR-143 decision 5 (L3.3): a board opened at once, after a drawing with no case made its case.
   const [boardToOpen, setBoardToOpen] = useState<string | null>(null);
   // ADR-115 E6: the canvas toolbar's "Last change", read again as the working set changes.
@@ -925,6 +952,13 @@ export function App() {
   // ADR-145 decision 2: the Glass's view to come back to from the Studio (`shell/placeMemory.ts`).
   // The views kept are `KEPT_GLASS_VIEWS` (Messages is not), shared with the keyboard harness.
   const lastGlassView = useLastGlassView(view, "ingest", "graph");
+  // ADR-050 Amendment 3: the place on screen, kept for a refresh of this tab. Only once signed in and
+  // the rights are known, so the screens shown before (and the landing checks' corrections) are not
+  // taken for the person's place; the case list over a case is not a place of its own.
+  useEffect(() => {
+    if (!bearerToken || !rightsSettled || browsingCases) return;
+    keepPlace(placeOnScreen(startChoice, view, investigationId !== null, startPlaces(rights)), sessionStorage);
+  }, [bearerToken, rightsSettled, browsingCases, startChoice, view, investigationId, rights]);
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
   useEffect(() => {

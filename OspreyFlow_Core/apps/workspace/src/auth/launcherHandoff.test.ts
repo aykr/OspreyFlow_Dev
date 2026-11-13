@@ -8,7 +8,7 @@
 // a click, and which tab to land on.
 import { beforeEach, describe, expect, test } from "vitest";
 
-import { clearHandoff, HANDOFF_MAX_AGE_MS, readHandoff } from "./launcherHandoff";
+import { clearHandoff, clearHandoffFromAddress, HANDOFF_MAX_AGE_MS, readHandoff } from "./launcherHandoff";
 
 const NOW = 1_000_000;
 
@@ -127,5 +127,24 @@ describe("reading the launcher's hand-off", () => {
       view: "ingest",
     });
     expect(() => clearHandoff(broken)).not.toThrow();
+  });
+});
+
+// ADR-050 Amendment 3: after a sign-in that never left the page, the hand-off is taken out of the
+// address, so the next refresh is a refresh (back to the place refreshed), not the hand-off again.
+describe("clearHandoffFromAddress", () => {
+  test("a case switch's address loses from, view and investigation, and keeps the rest", () => {
+    window.history.replaceState(null, "", "/rules?investigation=c1&from=case&view=ingest&case_view=v1");
+    clearHandoffFromAddress();
+    expect(window.location.pathname).toBe("/rules");
+    expect(window.location.search).toBe("?case_view=v1");
+    // The next load reads no hand-off.
+    expect(readHandoff(window.location.search, sessionStorage).autoSignIn).toBe(false);
+  });
+
+  test("an address with no hand-off is left as it is", () => {
+    window.history.replaceState(null, "", "/?brand=govuk");
+    clearHandoffFromAddress();
+    expect(window.location.search).toBe("?brand=govuk");
   });
 });

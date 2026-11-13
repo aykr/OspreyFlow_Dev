@@ -1,0 +1,108 @@
+RED: keyboard/refresh-sign-in.spec.ts against App.tsx at the branch point e1f15e4 (main when this lane branched; re-recorded: the first record at 12:14 ran main's newer App.tsx, which does not compile on this branch, so was red for the wrong reason)
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Core/apps/workspace/), logged at osprey-runs/admin.meta/runs/20261113T122515Z-bea055cc/log: npx playwright test --config keyboard/playwright.config.ts refresh-sign-in --reporter=line
+
+Running 4 tests using 1 worker
+
+[1/4] keyboard/refresh-sign-in.spec.ts:86:1 › a refresh with a live identity-provider session lands signed in, on Home, without the screen
+  1) keyboard/refresh-sign-in.spec.ts:86:1 › a refresh with a live identity-provider session lands signed in, on Home, without the screen 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: /, Ada$/, level: 1 })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('heading', { name: /, Ada$/, level: 1 }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: /, Ada$/, level: 1 })
+
+
+      88 |   await fakeIdentityProviderAndConduit(page, idp);
+      89 |   await page.goto("/");
+    > 90 |   await expect(home(page)).toBeVisible();
+         |                            ^
+      91 |   await expect(signInScreen(page)).toHaveCount(0);
+      92 |
+      93 |   await page.reload();
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:90:28
+
+    Error Context: test-results/refresh-sign-in-a-refresh--dcb5c--on-Home-without-the-screen/error-context.md
+
+
+[2/4] keyboard/refresh-sign-in.spec.ts:100:1 › a refresh in Admin lands in Admin, not on Home
+  2) keyboard/refresh-sign-in.spec.ts:100:1 › a refresh in Admin lands in Admin, not on Home ───────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: /, Ada$/, level: 1 })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('heading', { name: /, Ada$/, level: 1 }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: /, Ada$/, level: 1 })
+
+
+      102 |   await fakeIdentityProviderAndConduit(page, idp);
+      103 |   await page.goto("/");
+    > 104 |   await expect(home(page)).toBeVisible();
+          |                            ^
+      105 |   await openAdmin(page);
+      106 |   await expect(admin(page)).toBeVisible();
+      107 |
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:104:28
+
+    Error Context: test-results/refresh-sign-in-a-refresh--f49b9--lands-in-Admin-not-on-Home/error-context.md
+
+
+[3/4] keyboard/refresh-sign-in.spec.ts:114:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated
+  3) keyboard/refresh-sign-in.spec.ts:114:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 0
+
+      122 |   // A silent failure never loops: still the one round after the screen has been up a while.
+      123 |   await page.waitForTimeout(3_000);
+    > 124 |   expect(idp.silentRounds).toBe(1);
+          |                            ^
+      125 | });
+      126 |
+      127 | test("the place is kept in this tab only: a new tab with the same identity-provider session opens on Home", async ({ page, context }) => {
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:124:28
+
+    Error Context: test-results/refresh-sign-in-a-refresh--a6cf7-ilent-round-is-not-repeated/error-context.md
+
+
+[4/4] keyboard/refresh-sign-in.spec.ts:127:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home
+  4) keyboard/refresh-sign-in.spec.ts:127:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.click: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /^Open Admin/ })
+
+
+      82 | const home = (page: Page) => page.getByRole("heading", { level: 1, name: /, Ada$/ });
+      83 | const admin = (page: Page) => page.getByRole("navigation", { name: "Admin sections" });
+    > 84 | const openAdmin = (page: Page) => page.getByRole("button", { name: /^Open Admin/ }).click();
+         |                                                                                     ^
+      85 |
+      86 | test("a refresh with a live identity-provider session lands signed in, on Home, without the screen", async ({ page }) => {
+      87 |   const idp = { session: true, silentRounds: 0 };
+        at openAdmin (/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:84:85)
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:131:9
+
+    Error Context: test-results/refresh-sign-in-the-place--36790-vider-session-opens-on-Home/error-context.md
+
+
+  4 failed
+    keyboard/refresh-sign-in.spec.ts:86:1 › a refresh with a live identity-provider session lands signed in, on Home, without the screen 
+    keyboard/refresh-sign-in.spec.ts:100:1 › a refresh in Admin lands in Admin, not on Home ────────
+    keyboard/refresh-sign-in.spec.ts:114:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated 
+    keyboard/refresh-sign-in.spec.ts:127:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home 
+Wall time: 80 s, exit 1 (no stack, no lease; set-up before it 16 s)

@@ -1,0 +1,439 @@
+PLANT: App.tsx without the drop of a case the account cannot open (caseIsOpenable): the refused kept case
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace
+
+ ❯ src/App.test.tsx (48 tests | 1 failed | 47 skipped) 1463ms
+   ❯ 06_DECISIONS.md ADR-050 — the sign-in gate (7)
+     ↓ an unauthenticated load shows the sign-in screen and issues no /v1 call
+     ↓ a refresh with a live identity-provider session is signed in silently, without the screen
+     ↓ a refresh on Home with a case in the tab lands on Home; in the case, in that case
+     × a kept case the person can no longer open is dropped, and the refresh lands on Home, kept as Home 1026ms
+     ↓ a case chosen on Home, carried over a full-page sign-in, opens that case, not the Home the tab kept
+     ↓ the silent round at load is asked once under React's development double-run, and a failure shows the screen once
+     ↓ a wrong-audience token refused by the Conduit shows the sign-in screen with the reason
+   ↓ the launcher's hand-off (a person who has just signed in at the launcher) (8)
+     ↓ arriving from the launcher starts the sign-in without a click and issues no /v1 call
+     ↓ React's development double-run does not start two sign-ins
+     ↓ once the sign-in has completed, the remembered tab choice is cleared
+     ↓ a plain load never starts a sign-in by itself
+     ↓ a refused sign-in is shown, not retried in a loop
+     ↓ if the sign-in cannot be started, the screen says so and the button still works
+     ↓ the Studio tile's sign-in screen says Ingest Studio, not the same words as the Glass's
+     ↓ the Glass tile's own sign-in screen keeps its heading
+   ↓ the tab the launcher asked for is the tab the Glass opens on (19)
+     ↓ after the Ingest Studio tile, the Ingest Studio is the one showing
+     ↓ choosing a case at the gate keeps the Studio tile's choice
+     ↓ the rail is at the far left and the places are in the bar, not the rail; the bar begins with the mark
+     ↓ neither the rail nor the banner holds Monitoring: Rules and Monitoring is a place of the switcher
+     ↓ inside the Ingest Studio the bar keeps only what belongs to it
+     ↓ a hand-off to the Studio opens the Glass for someone the Studio is not open to
+     ↓ a hand-off to Admin with a case open opens the Admin place, not Admin under the Glass
+     ↓ a hand-off to Admin for someone Admin is not open to lands on Home
+     ↓ after a reload in the Studio, Back returns to the Glass's last view on the open case
+     ↓ the switcher and the cross-link move between the places, and coming back returns to the view that was open
+     ↓ an alert of another case is opened by a reload into that case, on the alert's address
+     ↓ an alert's address opens the Glass, not Rules and Monitoring, for someone it is not offered to
+     ↓ the Reports Viewer's journey opens the case's Figures from an alert, and Back goes Home
+     ↓ the journey's banner ends when the reader leaves the screen it opened
+     ↓ the Reports Viewer's journey opens the Alert monitoring board filtered to the alert's rule
+     ↓ Rules and Monitoring draws none of the Glass's working-set tools
+     ↓ Open the evidence, then Back to the alert, returns to the same alert, still open
+     ↓ Open the evidence says so on the alert when the view cannot be opened
+     ↓ after the Glass tile, the graph is the one showing and the Studio is not
+   ↓ a stale sign-in is noticed whichever screen's call finds it (3 October 2026) (2)
+     ↓ a 401 on a call no Glass code watches (the Ingest Studio's) starts a silent renewal, not a redirect
+     ↓ a 401 for some other token does not start a renewal
+   ↓ windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) (6)
+     ↓ a token near expiry is renewed in the background, with no navigation, and the next call carries it
+     ↓ two triggers at once make one renewal, and both calls are answered with its token
+     ↓ a failed renewal leaves the page in place and asks to sign in again there
+     ↓ an identity provider that cannot be reached is not said as an ended session
+     ↓ an unattended window lets its token lapse: no renewal, and nothing asked
+     ↓ a call refused while nobody is there is not renewed; the person's first key press renews, and their call is answered
+   ↓ the principal shown is the Conduit's resolved one (ADR-148 Amendment 8) (3)
+     ↓ while /v1/me is asked: no clearance, no role and no account menu, whatever the token claims
+     ↓ when /v1/me does not answer: the same, never the token's
+     ↓ once /v1/me answers: its clearance and roles, the token's names
+   ↓ a person disabled in this deployment is told so (ADR-148 Amendment 8) (2)
+     ↓ the Conduit's disabled refusal is shown in its own words, not as a misconfiguration
+     ↓ any other refusal is never taken for a disabled account
+   ↓ when the Conduit cannot say who you are (ADR-148 Amendment 8) (1)
+     ↓ it says so, offers Try again and Sign out, and Try again reads it afresh
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > a kept case the person can no longer open is dropped, and the refresh lands on Home, kept as Home
+TestingLibraryElementError: Unable to find an element with the text: /^Signed in as/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mstyle[39m=[32m"display: flex; flex-direction: column; height: var(--workspace-height, 100vh);"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33maria-label[39m=[32m"Protective marking"[39m
+        [33mclass[39m=[32m"classification-strip"[39m
+        [33mrole[39m=[32m"note"[39m
+      [36m>[39m
+        [0mOFFICIAL[0m
+      [36m</div>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"app-header top-bar"[39m
+        [33mdata-app[39m=[32m"glass"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Osprey, go to Home"[39m
+          [33mclass[39m=[32m"brand-mark-button"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"brand-mark"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mviewBox[39m=[32m"0 0 48 48"[39m
+              [33mwidth[39m=[32m"20"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 6L25 11L45 26L25.5 30L9 42Z"[39m
+                [33mfill[39m=[32m"var(--brass)"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"brand-mark__name"[39m
+            [36m>[39m
+              [0mOsprey[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<nav[39m
+          [33maria-label[39m=[32m"Places"[39m
+          [33mclass[39m=[32m"place-switcher"[39m
+        [36m>[39m
+          [36m<ul[39m
+            [33mclass[39m=[32m"place-switcher__list"[39m
+          [36m>[39m
+            [36m<li>[39m
+              [36m<button[39m
+                [33maria-current[39m=[32m"page"[39m
+                [33mclass[39m=[32m"place-switcher__item"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mThe Glass[0m
+              [36m</button>[39m
+            [36m</li>[39m
+          [36m</ul>[39m
+        [36m</nav>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"top-bar__search"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"global-search"[39m
+            [33mdata-add[39m=[32m"true"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-search__field"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"combobox"[39m
+              [36m>[39m
+                [36m<input[39m
+                  [33maria-controls[39m=[32m"_r_0_"[39m
+                  [33maria-expanded[39m=[32m"false"[39m
+                  [33maria-label[39m=[32m"Search entities, identifiers, documents"[39m
+                  [33mclass[39m=[32m"input"[39m
+                  [33mplaceholder[39m=[32m"Search entities, identifiers, documents"[39m
+                  [33mrole[39m=[32m"combobox"[39m
+                  [33mvalue[39m=[32m""[39m
+                [36m/>[39m
+              [36m</div>[39m
+              [36m<button[39m
+                [33maria-expanded[39m=[32m"false"[39m
+                [33maria-label[39m=[32m"Add many from a list"[39m
+                [33mclass[39m=[32m"global-search__filters global-search__add"[39m
+                [33mtitle[39m=[32m"Add many from a list"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mfocusable[39m=[32m"false"[39m
+                  [33mheight[39m=[32m"14"[39m
+                  [33mviewBox[39m=[32m"0 0 16 16"[39m
+                  [33mwidth[39m=[32m"14"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M2 4h9M2 8h9M2 12h6M13 9v5M10.5 11.5h5"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"1.4"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-expanded[39m=[32m"false"[39m
+                [33maria-label[39m=[32m"Filters"[39m
+                [33mclass[39m=[32m"global-search__filters"[39m
+                [33mtitle[39m=[32m"Filters"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mfocusable[39m=[32m"false"[39m
+                  [33mheight[39m=[32m"14"[39m
+                  [33mviewBox[39m=[32m"0 0 16 16"[39m
+                  [33mwidth[39m=[32m"14"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M2 3h12l-4.5 5.5V13l-3-1.5V8.5z"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"1.4"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33maria-label[39m=[32m"View"[39m
+          [33mclass[39m=[32m"segmented"[39m
+          [33mrole[39m=[32m"group"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33maria-pressed[39m=[32m"true"[39m
+            [33mclass[39m=[32m"segmented__item"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mGraph[0m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-pressed[39m=[32m"false"[39m
+            [33mclass[39m=[32m"segmented__item"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mMap[0m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"menu"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33maria-expanded[39m=[32m"false"[39m
+            [33mclass[39m=[32m"btn menu-button"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"menu-button__label"[39m
+            [36m>[39m
+              [0mMore views[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+            [36m>[39m
+              [0m▾[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</d...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mstyle[39m=[32m"display: flex; flex-direction: column; height: var(--workspace-height, 100vh);"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33maria-label[39m=[32m"Protective marking"[39m
+        [33mclass[39m=[32m"classification-strip"[39m
+        [33mrole[39m=[32m"note"[39m
+      [36m>[39m
+        [0mOFFICIAL[0m
+      [36m</div>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"app-header top-bar"[39m
+        [33mdata-app[39m=[32m"glass"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Osprey, go to Home"[39m
+          [33mclass[39m=[32m"brand-mark-button"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"brand-mark"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mviewBox[39m=[32m"0 0 48 48"[39m
+              [33mwidth[39m=[32m"20"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 6L25 11L45 26L25.5 30L9 42Z"[39m
+                [33mfill[39m=[32m"var(--brass)"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"brand-mark__name"[39m
+            [36m>[39m
+              [0mOsprey[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<nav[39m
+          [33maria-label[39m=[32m"Places"[39m
+          [33mclass[39m=[32m"place-switcher"[39m
+        [36m>[39m
+          [36m<ul[39m
+            [33mclass[39m=[32m"place-switcher__list"[39m
+          [36m>[39m
+            [36m<li>[39m
+              [36m<button[39m
+                [33maria-current[39m=[32m"page"[39m
+                [33mclass[39m=[32m"place-switcher__item"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mThe Glass[0m
+              [36m</button>[39m
+            [36m</li>[39m
+          [36m</ul>[39m
+        [36m</nav>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"top-bar__search"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"global-search"[39m
+            [33mdata-add[39m=[32m"true"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-search__field"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"combobox"[39m
+              [36m>[39m
+                [36m<input[39m
+                  [33maria-controls[39m=[32m"_r_0_"[39m
+                  [33maria-expanded[39m=[32m"false"[39m
+                  [33maria-label[39m=[32m"Search entities, identifiers, documents"[39m
+                  [33mclass[39m=[32m"input"[39m
+                  [33mplaceholder[39m=[32m"Search entities, identifiers, documents"[39m
+                  [33mrole[39m=[32m"combobox"[39m
+                  [33mvalue[39m=[32m""[39m
+                [36m/>[39m
+              [36m</div>[39m
+              [36m<button[39m
+                [33maria-expanded[39m=[32m"false"[39m
+                [33maria-label[39m=[32m"Add many from a list"[39m
+                [33mclass[39m=[32m"global-search__filters global-search__add"[39m
+                [33mtitle[39m=[32m"Add many from a list"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mfocusable[39m=[32m"false"[39m
+                  [33mheight[39m=[32m"14"[39m
+                  [33mviewBox[39m=[32m"0 0 16 16"[39m
+                  [33mwidth[39m=[32m"14"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M2 4h9M2 8h9M2 12h6M13 9v5M10.5 11.5h5"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"1.4"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-expanded[39m=[32m"false"[39m
+                [33maria-label[39m=[32m"Filters"[39m
+                [33mclass[39m=[32m"global-search__filters"[39m
+                [33mtitle[39m=[32m"Filters"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mfocusable[39m=[32m"false"[39m
+                  [33mheight[39m=[32m"14"[39m
+                  [33mviewBox[39m=[32m"0 0 16 16"[39m
+                  [33mwidth[39m=[32m"14"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M2 3h12l-4.5 5.5V13l-3-1.5V8.5z"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"1.4"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33maria-label[39m=[32m"View"[39m
+          [33mclass[39m=[32m"segmented"[39m
+          [33mrole[39m=[32m"group"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33maria-pressed[39m=[32m"true"[39m
+            [33mclass[39m=[32m"segmented__item"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mGraph[0m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-pressed[39m=[32m"false"[39m
+            [33mclass[39m=[32m"segmented__item"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mMap[0m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"menu"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33maria-expanded[39m=[32m"false"[39m
+            [33mclass[39m=[32m"btn menu-button"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"menu-button__label"[39m
+            [36m>[39m
+              [0mMore views[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+            [36m>[39m
+              [0m▾[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</d...
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/App.test.tsx:190:18
+    188|     signedInAs("analyst-1", ["/v1/investigations/case-gone"]);
+    189|     render(<App />);
+    190|     await screen.findByText(/^Signed in as/);
+       |                  ^
+    191|     expect(screen.queryByRole("navigation", { name: "Workspace" })).to…
+    192|     expect(sessionStorage.getItem("ospreyflow.investigationId")).toBeN…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 47 skipped (48)
+   Start at  13:03:48
+   Duration  1.91s (tests 80%, environment 16%, import 3%, transform 1%)
+
+
+Slowest 1 tests:
+  1026 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > a kept case the person can no longer open is dropped, and the refresh lands on Home, kept as Home
+exit=1

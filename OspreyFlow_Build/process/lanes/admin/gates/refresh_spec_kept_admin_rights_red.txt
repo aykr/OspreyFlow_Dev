@@ -1,0 +1,32 @@
+PLANT: refreshPlace.placeOnScreen keeps the chosen place whatever the rights draw
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Core/apps/workspace/), logged at osprey-runs/admin.meta/runs/20261113T131407Z-93c76909/log: npx playwright test --config keyboard/playwright.config.ts refresh-sign-in --reporter=line -g rights do not open
+
+Running 1 test using 1 worker
+
+[1/1] keyboard/refresh-sign-in.spec.ts:197:1 › a kept Admin for a person whose rights do not open it lands on Home, and Home is kept
+  1) keyboard/refresh-sign-in.spec.ts:197:1 › a kept Admin for a person whose rights do not open it lands on Home, and Home is kept 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "home"
+    Received: "admin"
+
+    Call Log:
+    - Timeout 5000ms exceeded while waiting on the predicate
+
+      209 |   await afterTheRound(home(page)).toBeVisible();
+      210 |   await expect(admin(page)).toHaveCount(0);
+    > 211 |   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("ospreyflow.place"))).toBe("home");
+          |                                                                                            ^
+      212 | });
+      213 |
+      214 | for (const refusal of ["login_required", "interaction_required", "consent_required"] as const) {
+        at /root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/keyboard/refresh-sign-in.spec.ts:211:92
+
+    Error Context: test-results/refresh-sign-in-a-kept-Adm-6a4ca-ds-on-Home-and-Home-is-kept/error-context.md
+
+
+  1 failed
+    keyboard/refresh-sign-in.spec.ts:197:1 › a kept Admin for a person whose rights do not open it lands on Home, and Home is kept 
+Wall time: 10 s, exit 1 (no stack, no lease; set-up before it 11 s)
+exit=1

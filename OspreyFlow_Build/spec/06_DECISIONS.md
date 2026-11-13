@@ -36522,3 +36522,110 @@ More).
 
 **Not covered:** placement over each view is not measured by a test (the jsdom App test cannot, and the
 harness has no views); Superset's own pages are an iframe the panel overlays at its top left, closable.
+### ADR-050, Amendment 3 (13 November 2026) — A refresh keeps the person signed in and where they were
+
+**What the owner saw** on the demo (13 November 2026, govuk.ospreyflow.app): refreshing the page showed
+the Glass's own Sign in screen, although the identity provider still knew the person; and after signing
+in, the tab went into the case it last had open, skipping Home. Both were as built: tokens are held in
+memory only (ADR-050, `auth/userManager.ts`'s `InMemoryStorage`), so a reload starts with none, and the
+bootstrap showed the screen unless a hand-off (`?from=launcher|case`) started the full-page sign-in; the
+place on screen was not kept at all, only the case (`investigation/investigationId.ts`).
+
+1. **A silent sign-in at load, before the screen.** With no token in memory and no callback or refusal
+   on the address, the Glass asks the identity provider's own session once, silently: the `prompt=none`
+   round in a hidden frame that Amendment 1's renewal already makes (`renewSilently`,
+   `forceIframeAuth`, here with a 10-second timeout, `SILENT_AT_LOAD_TIMEOUT_SECONDS`, since the bundle
+   was loaded a moment before and the person is looking at a blank page). A person comes back: signed
+   in, no screen, the renewal scheduled as after any sign-in. Anything else — `login_required`,
+   `interaction_required`, `consent_required`, any other error, a timeout, an unreachable provider —
+   shows the Sign in screen with its own sentence (no reason line). A hand-off with no session still
+   starts its one full-page sign-in, as before; with a session it no longer needs one.
+   `auth/signInAtLoad.ts` holds the decision. **Nothing about where tokens are kept changes**: memory
+   only, no refresh token (Amendment 2), the long-lived credential in the identity provider's own
+   cookie. **Entra ID (ADR-148 Amendment 8) is not tested here**: the round is the library's, against
+   whichever authority the deployment names, so nothing in it is Keycloak's own, but no test runs it
+   against Entra or a fake of it. Where Entra cannot answer in a frame (a browser refusing its cookies
+   in a third-party frame), the round fails and the screen is shown, as before this amendment.
+2. **Never a loop.** The round is asked at most once per page load (one promise for the life of the
+   page, shared by React's development double-run), and a page that is itself in a frame never asks
+   (the only frame the workspace is loaded in is the round's own, `auth/callbackFrame.ts`). A failure
+   ends at the screen; nothing retries it. After a silent sign-in the hand-off is spent: `from`, `view`
+   and `investigation` leave the address (`clearHandoffFromAddress`; the case stays open, from session
+   storage), as the provider's return to the root used to, so the next refresh is a refresh. A refusal
+   at the top level (`error`, `error_description`, `error_uri`) now leaves the address with the
+   callback's own parameters (`clearRedirectCallbackParams`), so a refresh after one tries the silent
+   round rather than show the refusal again.
+3. **The place returned to is the place refreshed** (`auth/refreshPlace.ts`). Home stays Home (with a
+   case in the tab too), a case stays that case on the Glass view it had, and Admin, the Ingest Studio
+   and Rules and Monitoring stay themselves. Kept in this tab's `sessionStorage`
+   (`ospreyflow.place`, `REFRESH_PLACE_KEY`), written only once signed in and the rights are known,
+   never in `localStorage` and so never across tabs. **What the address says comes first**, including
+   what was noted before a full-page sign-in and is taken back after it: a hand-off now, or its stash
+   kept over the round trip (every case switch, alert-in-its-case and Rules-on-a-case reload writes
+   one, naming a tab or not); an alert's or Rules and Monitoring's address on screen or noted
+   (`router.ts`'s note, read and left for the bootstrap to take); a case named by `?investigation=`.
+   **It grants nothing:** each place is still drawn only for whom its rights open it, and a place
+   chosen that the rights do not open is drawn, and kept, as Home; the Glass views put back are only
+   those `App.tsx`'s landing check corrects (Graph, Map, Matrix, Figures), never Dashboards, Connection
+   strength or Ownership, which are drawn on the view alone; signing out forgets the place
+   (`forgetPlace` in `signOut`), so the next person in the tab starts where the address says; and a
+   kept case the person can no longer open is dropped by the check that already drops it
+   (`caseIsOpenable`, 9 October 2026: the Conduit answers it 403 or 404), so the refresh lands on
+   Home, and Home is what is kept.
+4. **The shared key's gate (ADR-114 Amendments 41 and 42).** On a deployment that asks for the key
+   (osprey-small), the frame's `prompt=none` request goes to `id.<host>`'s authorisation endpoint,
+   which is behind the key (only the token, keys and discovery document are open). **Proven at the HTTP
+   level**, through the real Caddy the deployment renders: a request carrying the pass that answering
+   the key on the Glass's name gave (`Domain=<host>`, Amendment 42) reaches the identity provider, and
+   its return to the Glass passes; without the pass it is answered 401 with the key's Basic challenge
+   and reaches nothing. **Not proven:** that a browser sends the `SameSite=Lax` pass with a hidden
+   frame's navigation from `<host>` to `id.<host>` (same-site, so the cookie rules say it should, and
+   Amendment 1's renewal already relies on the same request on osprey-small), and what a browser does
+   with the 401's challenge inside a hidden frame should the pass have lapsed (it may wait to the
+   round's timeout and then show the screen, or show its own prompt). **A deployed Small picks this up
+   with the next workspace image**; nothing is rendered differently and the realm is unchanged.
+
+**Tests**, red first.
+- `apps/workspace/keyboard/refresh-sign-in.spec.ts`: the real Glass and the real `oidc-client-ts` frame
+  against a routed fake provider that refuses as Keycloak 26 does where the live test measures it
+  (with no session, `login_required` on the redirect with `state` and `iss`, never a code) and,
+  beyond what was measured live, refuses an unregistered client or `redirect_uri`, answers
+  `interaction_required` and `consent_required` (OIDC Core §3.1.2.6's other `prompt=none` errors,
+  which no live case here provokes), and exchanges a code once, for its PKCE verifier and its
+  `redirect_uri`, else `invalid_grant`: signed in on Home without the screen; a refresh in Admin lands in Admin; no session
+  shows the screen and asks once; each of the three refusals falls to the screen, asked once; a new tab
+  is not given the place; a kept Admin for a person whose rights do not open it lands on Home and Home
+  is kept; a code is refused a second time; the request sent is `fixtures/silent-round-request.json`.
+  Green, all ten three times over (`gates/refresh_spec_green.txt`). Reds: 4 of 4 on e1f15e4's
+  `App.tsx` (no silent round); the place not put back, red after the reload in Admin
+  (`gates/refresh_place_not_kept_red.txt`); the place kept in `localStorage`, red at the new tab
+  (`gates/refresh_place_across_tabs_red.txt`); a fake that grants where Keycloak refuses, red in the
+  four refusal cases (`gates/refresh_spec_fake_grants_red.txt`); a fixture naming a parameter the
+  library does not send (`gates/refresh_spec_fixture_red.txt`); the used-code check removed, with
+  the library's own exchange resent whole (`gates/refresh_spec_code_reuse_red.txt`); the chosen place
+  kept whatever the rights draw (`gates/refresh_spec_kept_admin_rights_red.txt`).
+- `src/App.test.tsx`: a live session signed in silently without the screen, and asked once under
+  StrictMode (red on e1f15e4); a refresh on Home with a case in the tab lands on Home, in the case in
+  that case; a case chosen on Home and carried over a full-page sign-in opens that case, not the Home
+  the tab kept (red with the stash left out, `gates/refresh_case_switch_app_red.txt`); a kept case the
+  Conduit refuses lands on Home, kept as Home (red with the drop removed,
+  `gates/refresh_refused_case_red.txt`).
+- `src/auth/refreshPlace.test.ts` (each place returned to; the stash, the noted address, the address and
+  a named case first; a stale stash not; a place the rights do not offer kept as Home; the three
+  unchecked views not put back; sign out forgets; this tab only; 7 red on the first cut's module,
+  `gates/refresh_place_review_fixes_red.txt`). `src/auth/signInAtLoad.test.ts` (the decision given
+  what `renewSilently` returns; asked once, red with the memo removed,
+  `gates/refresh_never_loops_plant.txt`). `src/auth/userManager.test.ts` (the refusal's words leave
+  the address; sign out forgets the place, red without `forgetPlace`,
+  `gates/refresh_signout_keeps_place_red.txt`). `src/auth/launcherHandoff.test.ts` (the hand-off leaves
+  the address).
+- `tests/harness/test_refresh_silent_sign_in_keycloak.py`, against a real Keycloak 26.0 with the
+  rendered realm, sending the captured request: no session → `login_required` with the request's
+  `state` and Keycloak's `iss`, no code; a session → a code exchanged without a password, no refresh
+  token; after logout → `login_required` again, with `state` and `iss` (green
+  `gates/refresh_keycloak_green.txt`; red with the round sent without `prompt=none`,
+  `gates/refresh_keycloak_plant.txt`).
+- `tests/harness/test_refresh_silent_round_through_the_key.py`, through Caddy 2.11.4: green
+  `gates/refresh_key_gate_green.txt`; red with the pass set without `Domain=`, so the Glass's name's
+  alone, `gates/refresh_key_gate_red.txt`.
+- No Glass action is added and the Sign in screen is unchanged, so no keyboard step (rule 13).

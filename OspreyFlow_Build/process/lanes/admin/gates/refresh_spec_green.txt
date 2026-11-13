@@ -1,0 +1,38 @@
+GREEN: keyboard/refresh-sign-in.spec.ts, all ten cases, three times over (--repeat-each 3), at the working head, unpiped
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Core/apps/workspace/), logged at osprey-runs/admin.meta/runs/20261113T131157Z-0b525da8/log: npx playwright test --config keyboard/playwright.config.ts refresh-sign-in --reporter=line --repeat-each 3
+
+Running 30 tests using 3 workers
+
+[1/30] keyboard/refresh-sign-in.spec.ts:143:1 › a refresh with a live identity-provider session lands signed in, on Home, without the screen
+[2/30] keyboard/refresh-sign-in.spec.ts:143:1 › a refresh with a live identity-provider session lands signed in, on Home, without the screen
+[3/30] keyboard/refresh-sign-in.spec.ts:143:1 › a refresh with a live identity-provider session lands signed in, on Home, without the screen
+[4/30] keyboard/refresh-sign-in.spec.ts:157:1 › a refresh in Admin lands in Admin, not on Home
+[5/30] keyboard/refresh-sign-in.spec.ts:157:1 › a refresh in Admin lands in Admin, not on Home
+[6/30] keyboard/refresh-sign-in.spec.ts:157:1 › a refresh in Admin lands in Admin, not on Home
+[7/30] keyboard/refresh-sign-in.spec.ts:171:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated
+[8/30] keyboard/refresh-sign-in.spec.ts:171:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated
+[9/30] keyboard/refresh-sign-in.spec.ts:171:1 › a refresh with no session shows the Sign in screen with its own sentence, and the silent round is not repeated
+[10/30] keyboard/refresh-sign-in.spec.ts:184:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home
+[11/30] keyboard/refresh-sign-in.spec.ts:184:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home
+[12/30] keyboard/refresh-sign-in.spec.ts:184:1 › the place is kept in this tab only: a new tab with the same identity-provider session opens on Home
+[13/30] keyboard/refresh-sign-in.spec.ts:197:1 › a kept Admin for a person whose rights do not open it lands on Home, and Home is kept
+[14/30] keyboard/refresh-sign-in.spec.ts:197:1 › a kept Admin for a person whose rights do not open it lands on Home, and Home is kept
+[15/30] keyboard/refresh-sign-in.spec.ts:197:1 › a kept Admin for a person whose rights do not open it lands on Home, and Home is kept
+[16/30] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's login_required on the silent round falls to the Sign in screen, asked once
+[17/30] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's login_required on the silent round falls to the Sign in screen, asked once
+[18/30] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's login_required on the silent round falls to the Sign in screen, asked once
+[19/30] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's interaction_required on the silent round falls to the Sign in screen, asked once
+[20/30] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's interaction_required on the silent round falls to the Sign in screen, asked once
+[21/30] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's interaction_required on the silent round falls to the Sign in screen, asked once
+[22/30] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's consent_required on the silent round falls to the Sign in screen, asked once
+[23/30] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's consent_required on the silent round falls to the Sign in screen, asked once
+[24/30] keyboard/refresh-sign-in.spec.ts:215:3 › Keycloak's consent_required on the silent round falls to the Sign in screen, asked once
+[25/30] keyboard/refresh-sign-in.spec.ts:226:1 › the silent round is the request the live Keycloak test sends (fixtures/silent-round-request.json)
+[26/30] keyboard/refresh-sign-in.spec.ts:226:1 › the silent round is the request the live Keycloak test sends (fixtures/silent-round-request.json)
+[27/30] keyboard/refresh-sign-in.spec.ts:226:1 › the silent round is the request the live Keycloak test sends (fixtures/silent-round-request.json)
+[28/30] keyboard/refresh-sign-in.spec.ts:241:1 › a code is exchanged once: the fake refuses it again, as Keycloak does
+[29/30] keyboard/refresh-sign-in.spec.ts:241:1 › a code is exchanged once: the fake refuses it again, as Keycloak does
+[30/30] keyboard/refresh-sign-in.spec.ts:241:1 › a code is exchanged once: the fake refuses it again, as Keycloak does
+  30 passed (40.7s)
+Wall time: 41 s, exit 0 (no stack, no lease; set-up before it 11 s)
+exit=0

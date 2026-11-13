@@ -1,35 +1,33 @@
-# admin · T1 part 5 · report (12 November 2026): the up-check and the reaper, after two orchestrator reviews
+# admin · refresh (Step 1 of BRIEF.md) · report (13 November 2026): a refresh keeps the person signed in and where they were
 
-`lane/admin-t1p5` over main `9a4a0fb`, gated at `a23886c`. The reset is its own step (the split ruling); its code
-stays on `srv-wt/lane/admin-t1p5`. `SERVER_LOG_T1P5.md` has every finding and its red. (P10 part 2's report is in
-main's history at `33e402d`.)
+`lane/admin-refresh` over main `fa5d988`, gated at `6c691e8` (tree `635aef59`). ADR-050 Amendment 3 (written). Reviewed by
+my lane-reviewer at `8657a4b` (13 findings) and twice by the orchestrator (`8657a4b`, `4f31898`); every must closed, each
+with its red. Step 2 (Postgres connections, ADR-114 Am 43) is on its own branch, `lane/admin-pg`, not part of this merge.
 
-**What merges.** The per-worker store plugin named in the root conftest (`conftest-T1p4.diff`) and the flag dropped
-from `make test` (`makefile-T1p4.diff`, the owner's, against main as it stands); in `stack_lease.sh` and its tests
-(`stack-lease-T1p5.diff`, the orchestrator's): the up-check before `remote` and `live`; each run tagged and reaped
-when it ends and on TERM; `stop <lane>` to end a run (TERM to its group, a bounded wait, KILL, its exit written;
-Ctrl-C on the lane's machine ends only the follow); `reap <lane>` for what an ended run left, failing closed; the
-start call no longer holding ssh; a run's folder new or refused. Committed: `test_worker_isolation_wired.py`, the
-plants harness, `apply_diff.py` (all or nothing across files, whole lines, CRLF, no-newline), the reads audit, the
-log, the friction fragment and the gate records.
-
-| Gate, at `a23886c` with the three diffs applied | Result | Record |
+| Exit criterion (brief) | Met | Proving test (records in `gates/`) |
 | --- | --- | --- |
-| Plants, on the server (Linux) | 24 plants, 31 case runs, all red, 0 missed, 0 faults; the whole file green before (72) and after (50, main's script) | `gates/t1p5_plants_a23886c.txt` |
-| `make -k ci`, the server, offline | exit 0; cp-policy-check 0 violations | `gates/t1p5_a23886c.ci.raw.txt` |
-| `make test`, the server, offline, each part run | pytest 12,789 passed, the server's GPU case alone failed, the plugin's header `worker_isolation: 15 workers …`; live-collect ran (its counts in the log); test-js 3,135 passed and MatrixView's first-frame budget failed (a known perf-budget item, MORNING, failing on main under load too) | `gates/t1p5_a23886c.test.raw.txt` |
-| test-js, the Mac | 3,135 passed; MatrixView's budget failed in the full run (3,099 ms against 2,500), passed alone twice at `c2a0010` | `gates/t1p5_mac_a23886c.test-js.raw.txt` |
-| Hand-made reds | the old `pkill` (confined to the case's own group: this Mac runs another session's heartbeat watcher); the wired cases; the nested xdist case under an enclosing run of 15; the applier against the old one | `gates/t1p5_{pkill_plant,wired_red,wired_nested,apply_diff}.txt` |
+| Live IdP session → signed in, no screen | yes | `keyboard/refresh-sign-in.spec.ts` (real App, real `oidc-client-ts` frame); `App.test.tsx`; red on e1f15e4 |
+| No session → the screen with its sentence | yes | spec: no session, and each of `login_required`/`interaction_required`/`consent_required`; red with a fake that grants |
+| Home stays Home; a case that case; Admin Admin | yes | spec (Admin; kept Admin without rights → Home); `App.test.tsx` (Home with a case open; the case's workspace; a refused case → Home; a case switch over a full-page sign-in); `refreshPlace.test.ts` |
+| A silent failure never loops | yes | `signInAtLoad.test.ts` (red without the memo); spec asks once |
+| The fake refuses `prompt=none` with no session, as Keycloak does | yes | spec's fake (iss, state, PKCE, redirect_uri, code once; each refusal red-planted) |
+| One live case against a real Keycloak | yes, on a throwaway Keycloak 26.0 (no lane stack carries one) | `test_refresh_silent_sign_in_keycloak.py`, the library's captured request; green + plant |
+| The shared-key gate passes the round | at the HTTP level only | `test_refresh_silent_round_through_the_key.py` through Caddy 2.11.4, red with `Domain=` dropped; browser frame behaviour unmeasured (Am 3 says so) |
+| Keyboard | none new | the Sign in screen is unchanged |
 
-**Found on the way:** a run on a host starts with INT ignored, from main's own start call, so INT does nothing to a
-run (stopping one is `stop`); an attempt of mine to make INT work made gate runs uninterruptible and was taken out;
-the stand-in ssh hid exit codes and returned before its output closed, so two cases could not be red until it did as
-ssh does; the old applier could not apply a diff of two files at all; the nested xdist case did not fit inside `make
-test` at 15 workers until it ran offline.
+**Gates at `6c691e8`:** spec 30/30 (ten cases × 3), unpiped. `make test`: pytest 13,031 passed, 8 failed — the server's GPU
+case (known), six `test_lanes_groups.py` cases and `test_doc_citations_check.py`, all from main's own platform-b files
+(new steps not in `groups.tsv`; `ci4/committed-osprey-yaml.md` citing `OspreyFlow_Build/scripts/lanes_launch.sh`), none touched here;
+test-js 3,257 passed, MatrixView's first-frame budget failed (known). `make -k ci`: exit 2 on `citation-check` alone (the
+same citation). Records: `gates/6c691e8.{test,ci}.txt`.
 
-**Not shown red alone:** the reaper's re-read before TERM (a pid changing between the scan and the TERM cannot be
-timed; the re-read before KILL, the same function, is red); "no error lines in a run's log" (as root on the server
-every environment is readable).
+**Decisions taken** (Prompt L): 10 s timeout for the round at load (the bundle is warm; the person faces a blank page);
+`from`/`view`/`investigation` stripped after a silent sign-in, as the redirect's return to the root did (the case stays,
+from session storage); only views the landing check corrects are restored; the live Keycloak case on a throwaway container
+under `offline`, since no lane stack carries Keycloak; the waits after the round 15 s (the frame loads the dev server's
+whole bundle; Home past 5 s in 1 of 20 server runs); the Caddy and Keycloak cases import platform-b's fixtures (a shared
+fixture is a CARRIES row for after this merge).
 
-**Carried:** the INT row's text, for the orchestrator to add (not edited on the branch). **Decisions:** the
-orchestrator's rulings only (the split; the diffs' ownership; `stop`). Nothing of mine is running; no stack is held.
+**Commits:** `git log --oneline fa5d988..6c691e8` (13). **Requests:** none open (RDS and the shared fixture are CARRIES rows).
+**Questions for the owner:** none. **Still running:** nothing. The orchestrator's socket in PROMPT_L.md (`8906`) is stale;
+`6964` answered.

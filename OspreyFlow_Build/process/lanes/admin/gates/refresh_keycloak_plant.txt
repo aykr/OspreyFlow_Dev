@@ -1,0 +1,89 @@
+PLANT: the silent round sent without prompt=none (Keycloak answers its login page, 200, not the refusal)
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T124809Z-790d555d/log: bash -c cd ../OspreyFlow_Core; ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py -v
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/admin/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_no_session_keycloak_refuses_prompt_none_with_login_required FAILED [ 50%]
+../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuses_after_logout FAILED [100%]
+
+=================================== FAILURES ===================================
+____ test_with_no_session_keycloak_refuses_prompt_none_with_login_required _____
+
+keycloak = Keycloak(name='osprey-test-refresh-bdb94b31', origin='http://localhost:40513', admin_password='tB7zun9uZ6n7892V0me0Cw', redirect_uri='http://ospreyflow.localhost/')
+
+    def test_with_no_session_keycloak_refuses_prompt_none_with_login_required(
+        keycloak: Keycloak,
+    ) -> None:
+        with httpx.Client(follow_redirects=False, timeout=30) as browser:
+            answered, state = _silent_round(keycloak, browser)
+>       assert answered.status_code == 302, answered.status_code
+E       AssertionError: 200
+E       assert 200 == 302
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py:186: AssertionError
+_ test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuses_after_logout _
+
+keycloak = Keycloak(name='osprey-test-refresh-bdb94b31', origin='http://localhost:40513', admin_password='tB7zun9uZ6n7892V0me0Cw', redirect_uri='http://ospreyflow.localhost/')
+
+    def test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuses_after_logout(
+        keycloak: Keycloak,
+    ) -> None:
+        with httpx.Client(follow_redirects=False, timeout=30) as browser:
+            _sign_in_through_the_form(keycloak, browser)
+    
+            # The refresh: a new authorisation request, prompt=none, the same browser's cookies.
+            params, verifier = _authorise(keycloak, prompt_none=True)
+            answered = browser.get(
+                f"{keycloak.origin}/realms/{REALM}/protocol/openid-connect/auth", params=params
+            )
+            assert answered.status_code == 302, answered.status_code
+            back = _answer(answered.headers["location"])
+            assert "error" not in back, back
+            assert back.get("state") == params["state"]
+            assert back.get("iss") == f"{keycloak.origin}/realms/{REALM}", back
+            exchanged = browser.post(
+                f"{keycloak.origin}/realms/{REALM}/protocol/openid-connect/token",
+                data={"grant_type": "authorization_code", "client_id": GLASS_CLIENT_ID,
+                      "code": back["code"],
+                      "redirect_uri": keycloak.redirect_uri, "code_verifier": verifier},
+            )  # fmt: skip
+            assert exchanged.status_code == 200, exchanged.text
+            tokens = exchanged.json()
+            assert tokens["access_token"] and tokens["id_token"]
+            # ADR-050 Amendment 2: still no refresh token; the round above is the only renewal.
+            assert "refresh_token" not in tokens, sorted(tokens)
+    
+            # The session ended at the provider: the refusal is back, and the Glass shows its screen.
+            logout = browser.post(
+                f"{keycloak.origin}/realms/{REALM}/protocol/openid-connect/logout",
+                data={"client_id": GLASS_CLIENT_ID, "id_token_hint": tokens["id_token"]},
+            )
+            assert logout.status_code in (200, 204, 302), logout.status_code
+            for cookie in browser.cookies.jar:
+                cookie.secure = False
+            refused, state = _silent_round(keycloak, browser)
+>           assert refused.status_code == 302
+E           assert 200 == 302
+E            +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py:234: AssertionError
+============================= slowest 30 durations =============================
+88.70s setup    tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_no_session_keycloak_refuses_prompt_none_with_login_required
+1.69s teardown tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuses_after_logout
+1.06s call     tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_no_session_keycloak_refuses_prompt_none_with_login_required
+0.71s call     tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuses_after_logout
+
+(2 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_no_session_keycloak_refuses_prompt_none_with_login_required
+FAILED ../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py::test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuses_after_logout
+========================= 2 failed in 92.98s (0:01:32) =========================
+Wall time: 95 s, exit 1 (no stack, no lease; set-up before it 14 s)
+exit=1
