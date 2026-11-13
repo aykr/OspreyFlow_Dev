@@ -106,13 +106,24 @@ beat() {
   fi
 }
 
-# A lane's stages for its current step (brief hb, 13 November 2026): <lane>.stages, written whole (as `beat`
-# writes its file), the step and the time, then one `stage=<n>|<state>|<name>[|<note>]` line each. Every stage is
-# checked before anything is written, so a refused call leaves the earlier list as it was.
+# A lane's stages, one list a step (brief hb, 13 November 2026; kept per lane and step since the orchestrator's
+# hb2, 13 November: one file a lane let a post for a new step erase its earlier steps' lists): <lane>.<step>.stages,
+# the step's characters other than letters, digits, '.', '_' and '-' written '_' (`stage_file`). Written whole (as
+# `beat` writes its file), the step and the time, then one `stage=<n>|<state>|<name>[|<note>]` line each. Every stage
+# is checked before anything is written, so a refused call leaves the earlier list as it was. The views still read a
+# lane's one <lane>.stages from before, for the step it names.
+stage_file() { printf '%s/%s.%s.stages' "$DIR" "$1" "${2//[^A-Za-z0-9._-]/_}"; }
 stages() {
-  local usage='usage: stages <lane> "<step>" "<n>|<state>|<name>[|<note>]" ... | stages <lane> --clear'
+  local usage='usage: stages <lane> "<step>" "<n>|<state>|<name>[|<note>]" ... | stages <lane> --clear ["<step>"]'
   local lane="${1:?$usage}"; shift
-  if [ "${1:-}" = --clear ]; then rm -f "$DIR/$lane.stages"; echo "Stages cleared for $lane."; return 0; fi
+  if [ "${1:-}" = --clear ]; then
+    if [ -n "${2:-}" ]; then
+      rm -f "$(stage_file "$lane" "$2")"
+      if [ -f "$DIR/$lane.stages" ] && [ "$(field step "$DIR/$lane.stages" || true)" = "$2" ]; then rm -f "$DIR/$lane.stages"; fi
+      echo "Stages cleared for $lane, $2."; return 0
+    fi
+    rm -f "$DIR/$lane.stages" "$DIR/$lane".*.stages; echo "Stages cleared for $lane."; return 0
+  fi
   local step="${1:?$usage}"; shift
   [ $# -ge 1 ] || { echo "No stages given. A stage is <n>|<state>|<name>[|<note>]." >&2; exit 2; }
   local nl=$'\n' s n st name rest
@@ -128,8 +139,9 @@ stages() {
   if [ -f "$PROGRESS" ] && ! awk -F'\t' -v l="$lane" -v s="$step" '!/^#/ && $1 == l && $2 == s { f = 1 } END { exit !f }' "$PROGRESS"; then
     echo "Kept, but '$step' is not one of $lane's steps in the step table (progress.tsv): it shows once its beat is on a step of that name." >&2
   fi
-  { printf 'step=%s\nat=%s\n' "$step" "$(iso)"; printf 'stage=%s\n' "$@"; } > "$DIR/$lane.stages.tmp"
-  mv "$DIR/$lane.stages.tmp" "$DIR/$lane.stages"
+  local file; file="$(stage_file "$lane" "$step")"
+  { printf 'step=%s\nat=%s\n' "$step" "$(iso)"; printf 'stage=%s\n' "$@"; } > "$file.tmp"
+  mv "$file.tmp" "$file"
   echo "Stages: $lane, $step, $# stages."
 }
 
@@ -532,10 +544,15 @@ sub words_of { my ($s, $n) = @_;   # the beat'"'"'s state in plain words, read a
     return "waiting for a test stack" if $n =~ /(?<![[:alpha:]])[Ll]ease(?![[:alpha:]])/;
     return $n =~ /[Oo]wner/ ? "waiting for you" : "waiting for the orchestrator" }
   return $s }
-sub stages_of { my ($lane) = @_; my ($step, @s);
-  open(my $h, "<:encoding(UTF-8)", "$ENV{P_DIR}/$lane.stages") or return;
+sub stages_in { my ($f) = @_; my ($step, @s); open(my $h, "<:encoding(UTF-8)", $f) or return;
   while (<$h>) { chomp; if (/^step=(.*)$/) { $step = $1 } elsif (/^stage=(.*)$/) { my @p = split /\|/, $1, 4; push @s, \@p if @p >= 3 } }
   return ($step, @s) }
+# A lane`s stages for one step: its own file (`stage_file`), else the one file a lane kept before, when it names that step.
+sub stages_of { my ($lane, $want) = @_; return unless defined $want;
+  my ($step, @s) = stages_in("$ENV{P_DIR}/$lane." . ($want =~ s/[^A-Za-z0-9._-]/_/gr) . ".stages");
+  return ($step, @s) if defined $step && $step eq $want;
+  ($step, @s) = stages_in("$ENV{P_DIR}/$lane.stages");
+  return defined $step && $step eq $want ? ($step, @s) : () }
 { my %mark = (done => "✅", now => "⏳", todo => "—", blocked => "⛔");
   my (%rest, @order);
   print "LANES NOW\n";
@@ -543,7 +560,7 @@ sub stages_of { my ($lane) = @_; my ($step, @s);
     my ($lane, $state, $note, undef, undef, $ago) = @$l;
     if ($state eq "paused" || $state eq "idle" || $state eq "-") {
       my $k = $state eq "-" ? "no heartbeat" : $state; push @order, $k unless $rest{$k}; push @{ $rest{$k} }, $lane; next }
-    my ($step, @s) = stages_of($lane);
+    my ($step, @s) = stages_of($lane, $on{$lane});
     # A list is shown only for the step the lane is on (%on: the first step its beat names, else the step table'"'"'s
     # current one), never for one its note mentions in passing.
     @s = () unless defined $step && defined $on{$lane} && $on{$lane} eq $step;
@@ -657,7 +674,7 @@ route_view() {
 
 # shellcheck disable=SC2016   # perl, not the shell, expands these
 ROUTE_PL='
-use strict; use warnings; use utf8; use POSIX qw(floor strftime); use Time::Local qw(timegm);
+use strict; use warnings; use utf8; use Encode (); use POSIX qw(floor strftime); use Time::Local qw(timegm);
 sub rows { my ($f) = @_; my @r; open(my $h, "<:encoding(UTF-8)", $f) or return @r;
   while (<$h>) { chomp; next if /^#/ || !/\S/; push @r, [split /\t/, $_, -1] } return @r }
 sub cut { my ($s, $n) = @_; return $s if length $s <= $n; $s = substr($s, 0, $n - 1); $s =~ s/\s+\S*$//; return "$s…" }
@@ -668,11 +685,15 @@ sub bar { my ($frac, $w) = @_; $frac = 0 if $frac < 0; $frac = 1 if $frac > 1; m
   return "[" . ("█" x $f) . ("░" x ($w - $f)) . "]" }
 sub plural { my ($n, $one) = @_; return "$n $one" . ($n == 1 ? "" : "s") }
 sub names { my ($note, $step) = @_; return $note =~ /(?<![A-Za-z0-9.\-])\Q$step\E(?![A-Za-z0-9\-])/ }
-sub stages_of { my ($lane) = @_; my ($step, @s);
-  open(my $h, "<:encoding(UTF-8)", "$ENV{P_DIR}/$lane.stages") or return;
-  while (<$h>) { chomp; if (/^step=(.*)$/) { $step = $1 }
-    elsif (/^stage=(.*)$/) { my @p = split /\|/, $1, 4; push @s, \@p if @p >= 3 } }
+sub stages_in { my ($f) = @_; my ($step, @s); open(my $h, "<:encoding(UTF-8)", $f) or return;
+  while (<$h>) { chomp; if (/^step=(.*)$/) { $step = $1 } elsif (/^stage=(.*)$/) { my @p = split /\|/, $1, 4; push @s, \@p if @p >= 3 } }
   return ($step, @s) }
+# A lane`s stages for one step: its own file (`stage_file`), else the one file a lane kept before, when it names that step.
+sub stages_of { my ($lane, $want) = @_; return unless defined $want;
+  my ($step, @s) = stages_in("$ENV{P_DIR}/$lane." . ($want =~ s/[^A-Za-z0-9._-]/_/gr) . ".stages");
+  return ($step, @s) if defined $step && $step eq $want;
+  ($step, @s) = stages_in("$ENV{P_DIR}/$lane.stages");
+  return defined $step && $step eq $want ? ($step, @s) : () }
 
 my $today = floor($ENV{P_NOW} / 86400);
 my ($release, $target) = ("the release", undef);
@@ -690,20 +711,23 @@ for my $r (@route) {
   my ($id, $title, $lane, $start, $end, $crit, $after, $prog) = @$r;
   my ($plane, $pstep) = $prog =~ /^([^:]+):(.+)$/ ? ($1, $2) : (undef, undef);
   my $st = defined $pstep ? ($status{"$plane:$pstep"} // "todo") : "todo";
-  my $state = $st eq "done" ? "done" : ($st eq "building" || $st eq "review") ? "running" : "not started";
+  # In review: built, its gates passed, waiting to merge (the owner, 13 Nov: never "running"); done only when merged.
+  my $state = $st eq "done" ? "done" : $st eq "review" ? "built, waiting to merge"
+    : $st eq "building" ? "running" : "not started";
   if ($state ne "done" && defined $pstep && ($beat{$plane}[0] // "") eq "blocked"
       && names($beat{$plane}[1], $pstep)) { $state = "blocked" }
-  my ($frac, $staged) = ($state eq "done" ? 1 : 0, "");
-  if ($state ne "done" && defined $pstep) {
-    my ($step, @s) = stages_of($plane);
+  my ($frac, $staged, @listed) = ($state eq "done" || $state =~ /^built/ ? 1 : 0, "");
+  if ($state ne "done" && $state !~ /^built/ && defined $pstep) {
+    my ($step, @s) = stages_of($plane, $pstep);
     if (defined $step && $step eq $pstep && @s) {
       my ($at) = ((grep { $_->[1] eq "now" } @s), (grep { $_->[1] eq "blocked" } @s),
                   (grep { $_->[1] eq "todo" } @s));
       my $n = $at ? $at->[0] : scalar @s; $frac = $n / @s; $staged = "stage $n of " . scalar @s;
       # The owner`s rule: from the lanes` own records. A stage done or under way is the step running,
       # though its progress row says todo; blocked still wins, and done comes from the merged row alone.
-      $state = "running" if $state eq "not started" && grep { $_->[1] eq "done" || $_->[1] eq "now" } @s } }
-  push @$r, $state, $frac, $staged;
+      $state = "running" if $state eq "not started" && grep { $_->[1] eq "done" || $_->[1] eq "now" } @s;
+      @listed = @s if $state eq "running" || $state eq "blocked" } }
+  push @$r, $state, $frac, $staged, \@listed;
   push @done, $r if $state eq "done";
   push @risk, $r if $state ne "done" && $crit eq "y" && day_of($end) < $today;
 }
@@ -717,16 +741,24 @@ my $word = (@done < @route && $today > $last) ? "late" : @risk ? "at risk" : "on
 print "OSPREYFLOW · $ENV{P_CLOCK}\n";
 printf "ROUTE TO %s · %s · %s · %s\n", uc $release, (defined $target ? said($target) : "no date"),
   ($left >= 0 ? plural($left, "day") . " left" : plural(-$left, "day") . " past"), $word;
-printf "  %s %d of %d steps done · %s day %d of %d\n", bar(@route ? @done / @route : 0, 20), scalar @done,
-  scalar @route, bar($total ? $used / $total : 0, 13), $used, $total;
+my $built = grep { $_->[8] =~ /^built/ } @route;
+printf "  %s %d of %d steps done%s · %s day %d of %d\n", bar(@route ? @done / @route : 0, 20), scalar @done,
+  scalar @route, ($built ? " · $built built, waiting to merge" : ""), bar($total ? $used / $total : 0, 13), $used, $total;
 if (my ($r) = sort { day_of($a->[4]) <=> day_of($b->[4]) } @risk) {
   my $more = @risk > 1 ? sprintf(" (+%d more at risk)", @risk - 1) : "";
   print cut(sprintf("  At risk: %s %s (%s) was due %s", $r->[0], $r->[1], $r->[2], said($r->[4])),
     118 - length $more), "$more\n" }
 print "\n";
 
+# Each row, and under a running or blocked one its stages by name (the owner, 13 Nov: "stage 5 of 5" says nothing
+# without them). One screen, 40 lines: the rows are printed after the lists below are made, so their room is what the
+# lists leave. Past it, each row`s done stages fold to one "✅ n done" line; then its stages still to do to one
+# "— n to do" line; then each row`s list is one line (the done and the still to do counted, the stage under way or
+# blocked named); then rows from the last lose their lists, those steps counted.
+my %mark = (done => "✅", now => "⏳", todo => "—", blocked => "⛔");
+my @rows;
 for my $r (@route) {
-  my ($id, $title, $lane, $start, $end, $crit, $after, $prog, $state, $frac, $staged) = @$r;
+  my ($id, $title, $lane, $start, $end, $crit, $after, $prog, $state, $frac, $staged, $listed) = @$r;
   my (undef, $sd, $smo) = split / /, said($start); my (undef, $ed, $emo) = split / /, said($end);
   my $dates = $smo eq $emo ? ($sd eq $ed ? "$ed $emo" : "$sd–$ed $emo") : "$sd $smo–$ed $emo";
   my $late = $today - day_of($end);
@@ -736,9 +768,23 @@ for my $r (@route) {
   push @said, "after $after" if $state ne "done" && $after ne "-" && $after ne "";
   my $line = sprintf("  %-3s %s %-12s %-9s %s %s · %s", $id, ($crit eq "y" ? "★" : " "), $lane, $dates,
     bar($frac, 6), join(" · ", @said), $title);
-  print cut($line, 120), "\n";
+  push @rows, [cut($line, 120), $listed];
 }
-print "\n";
+sub stage_line { my ($n, $st, $name, $nt) = @{ $_[0] };
+  return cut(sprintf("        %s %s. %s%s", $mark{$st} // "?", $n, $name, defined $nt && $nt ne "" ? " · $nt" : ""), 120) }
+sub lines_of { my ($fold, $listed) = @_; my @s = @$listed; return () unless @s;
+  return map { stage_line($_) } @s if $fold == 0;
+  if ($fold == 3) {   # one line: the done counted, the stage under way or blocked named, the rest counted
+    my @at = grep { $_->[1] eq "now" || $_->[1] eq "blocked" } @s;
+    my $done = grep { $_->[1] eq "done" } @s; my $todo = grep { $_->[1] eq "todo" } @s;
+    return cut("        " . join(" · ", ($done ? "✅ $done done" : ()),
+      (map { "$mark{$_->[1]} $_->[0]. $_->[2]" } @at), ($todo ? "— $todo to do" : ())), 120) }
+  my @done = grep { $_->[1] eq "done" } @s; my @todo = grep { $_->[1] eq "todo" } @s;
+  my @rest = grep { $_->[1] ne "done" && ($fold < 2 || $_->[1] ne "todo") } @s;
+  return ((@done ? ("        ✅ " . scalar(@done) . " done") : ()), (map { stage_line($_) } @rest),
+          ($fold >= 2 && @todo ? ("        — " . scalar(@todo) . " to do") : ())) }
+my $head_lines = 4 + (@risk ? 1 : 0);
+my $tail = ""; open(my $tail_fh, ">:encoding(UTF-8)", \$tail) or die; my $screen = select($tail_fh);
 
 sub listed { my ($cap, @items) = @_; my @shown = @items[0 .. ($#items < $cap - 1 ? $#items : $cap - 1)];
   print "  ", cut($_, 116), "\n" for @shown; printf "  +%d more\n", @items - @shown if @items > @shown }
@@ -770,6 +816,17 @@ my $merged = grep { $_->[3] eq "done" } @progress;
 printf "FINISHED %s %d of %d steps merged\n", bar(@progress ? $merged / @progress : 0, 20), $merged,
   scalar @progress;
 print "Other views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n";
+select($screen); close $tail_fh; $tail = Encode::decode("UTF-8", $tail);
+my $room = 40 - $head_lines - 1 - scalar(split /\n/, $tail);
+my ($fold, @under, $shown, $hidden) = (0);
+for my $f (0 .. 3) { $fold = $f; @under = map { [lines_of($f, $_->[1])] } @rows;
+  $shown = @rows; $shown += @$_ for @under; last if $shown <= $room }
+$hidden = 0;
+for (my $i = $#under; $i >= 0 && $shown > $room - 1; $i--) {
+  next unless @{ $under[$i] }; $shown -= @{ $under[$i] }; $hidden++; $under[$i] = [] }
+for my $i (0 .. $#rows) { print $rows[$i][0], "\n"; print "$_\n" for @{ $under[$i] } }
+printf "        +%s more, their stages behind: lanes_heartbeat.sh --lanes\n", plural($hidden, "step") if $hidden;
+print "\n", $tail;
 '
 
 notify() {

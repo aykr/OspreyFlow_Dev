@@ -721,22 +721,35 @@ def test_stages_are_written_whole_and_a_second_call_replaces_them(hb, tmp_path) 
     lanes = tmp_path / "lanes"
     made = hb("stages", "studio", "L2", "1|done|Plan|ratified", "2|now|Build", "3|todo|Gate")
     assert made.returncode == 0, made.stderr
-    text = (lanes / "studio.stages").read_text().splitlines()
+    text = (lanes / "studio.L2.stages").read_text().splitlines()
     assert text[0] == "step=L2" and text[1].startswith("at=")
     assert text[2:] == ["stage=1|done|Plan|ratified", "stage=2|now|Build", "stage=3|todo|Gate"]
-    first = (lanes / "studio.stages").stat().st_ino
+    first = (lanes / "studio.L2.stages").stat().st_ino
     assert hb("stages", "studio", "L2", "1|done|Plan", "2|done|Build").returncode == 0
-    assert _stage_lines(lanes / "studio.stages") == ["stage=1|done|Plan", "stage=2|done|Build"]
+    assert _stage_lines(lanes / "studio.L2.stages") == ["stage=1|done|Plan", "stage=2|done|Build"]
     # Written beside it and moved over it, not rewritten in place: a view reading it meets the old list or the new one.
-    assert (lanes / "studio.stages").stat().st_ino != first
-    assert sorted(p.name for p in lanes.iterdir()) == ["studio.stages"]  # no temporary file left beside it
+    assert (lanes / "studio.L2.stages").stat().st_ino != first
+    assert sorted(p.name for p in lanes.iterdir()) == ["studio.L2.stages"]  # no temporary file left beside it
 
 
 def test_stages_clear_removes_the_list(hb, tmp_path) -> None:
     hb("stages", "studio", "L2", "1|now|Build")
     cleared = hb("stages", "studio", "--clear")
     assert cleared.returncode == 0
-    assert not (tmp_path / "lanes" / "studio.stages").exists()
+    assert not (tmp_path / "lanes" / "studio.L2.stages").exists()
+
+
+def test_stages_are_kept_per_step_and_clear_takes_one_step_or_all(hb, tmp_path) -> None:
+    """A post for a new step leaves the lane's earlier steps' lists (the orchestrator's hb2, 13 Nov)."""
+    lanes = tmp_path / "lanes"
+    assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+    assert hb("stages", "studio", "L3", "1|now|Plan").returncode == 0
+    assert sorted(p.name for p in lanes.iterdir()) == ["studio.L2.stages", "studio.L3.stages"]
+    assert hb("stages", "studio", "--clear", "L2").returncode == 0
+    assert sorted(p.name for p in lanes.iterdir()) == ["studio.L3.stages"]
+    (lanes / "studio.stages").write_text("step=L1\nstage=1|done|Plan\n", encoding="utf-8")  # from before
+    assert hb("stages", "studio", "--clear").returncode == 0
+    assert list(lanes.iterdir()) == []
 
 
 @pytest.mark.parametrize(
@@ -752,7 +765,7 @@ def test_stages_clear_removes_the_list(hb, tmp_path) -> None:
     ids=["state", "number", "empty-name", "no-name", "two-states", "newline"],
 )
 def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, bad, said) -> None:
-    path = tmp_path / "lanes" / "studio.stages"
+    path = tmp_path / "lanes" / "studio.L2.stages"
     assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
     before = path.read_text()
     refused = hb("stages", "studio", "L2", "1|done|Plan", "2|now|Build", bad)
@@ -764,7 +777,7 @@ def test_a_bad_stage_is_refused_in_words_and_nothing_is_written(hb, tmp_path, ba
 def test_a_step_of_more_than_one_line_is_refused(hb, tmp_path) -> None:
     refused = hb("stages", "studio", "L2\nstage=9|now|X", "1|now|Build")
     assert refused.returncode == 2 and "one line" in refused.stderr
-    assert not (tmp_path / "lanes" / "studio.stages").exists()
+    assert not (tmp_path / "lanes" / "studio.L2.stages").exists()
 
 
 def test_a_step_the_step_table_does_not_name_is_kept_with_a_warning(hb, tmp_path) -> None:
@@ -772,7 +785,7 @@ def test_a_step_the_step_table_does_not_name_is_kept_with_a_warning(hb, tmp_path
     step may not be in progress.tsv yet) but is said not to show until it is (review of 4ac8f81, finding 7)."""
     env = _overview_fixture(hb, tmp_path)
     made = hb("stages", "case", "C2: drawers", "1|now|Build", OSPREY_PROGRESS_FILE=env["OSPREY_PROGRESS_FILE"])
-    assert made.returncode == 0 and (tmp_path / "lanes" / "case.stages").exists()
+    assert made.returncode == 0 and (tmp_path / "lanes" / "case.C2__drawers.stages").exists()
     assert "'C2: drawers' is not one of case's steps in the step table" in made.stderr, made.stderr
     named = hb("stages", "case", "C2", "1|now|Build", OSPREY_PROGRESS_FILE=env["OSPREY_PROGRESS_FILE"])
     assert named.returncode == 0 and named.stderr == ""

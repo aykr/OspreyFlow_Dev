@@ -1,0 +1,40 @@
+E       AssertionError: assert ' built, waiting to merge' in '  3d  ★ studio       14–20 Nov [░░░░░░] running · after A · The search service: names, full text, ranking'
+E        +  where '  3d  ★ studio       14–20 Nov [░░░░░░] running · after A · The search service: names, full text, ranking' = _row('OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', '3d')
+E       AssertionError: assert 'running, stage 2 of 4' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index'
+E        +  where '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index' = _row('OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', '3c')
+E       AssertionError: assert [] == ['✅ 1. Plan',... '— 4. Drift']
+E         
+E         Right contains 4 more items, first extra item: '✅ 1. Plan'
+E         Use -v to get more diff
+E       AssertionError: assert '1 of 8 steps done · 1 built, waiting to merge' in 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n'
+E       AssertionError: OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)
+E         ROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track
+E           [░░░░░░░░░░░░░░░░░░░░] 0 of 13 steps done · [███░░░░░░░░░░] day 3 of 13
+E         
+E           0     lane0        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 0
+E           1     lane1        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 1
+E           2     lane2        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 2
+E           3     lane3        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 3
+E           4     lane4        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 4
+E           5     lane5        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 5
+E           6     lane6        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 6
+E           7     lane7        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 7
+E           8     lane8        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 8
+E           9     lane9        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 9
+E           10    lane10       14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 10
+E           11    lane11       14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 11
+E           12    lane12       14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 12
+E         
+E         WAITING ON YOU · 2
+E           Tue 17 Nov · The acceptance bar's wording
+E           Wed 18 Nov · The search navigation decision (3e′ waits on it)
+E         WAITING ON THE ORCHESTRATOR · 2 open
+E           Sat 14 Nov · Scheduled runs on Entra: options (audit 1)
+E           Mon 16 Nov · The search access design page (A)
+E         AUDIT RULINGS [███░░░░░░░] 1 of 3 settled · in v0.5.2: 1 yes, 1 no, 1 owner to decide
+E         OUTSIDE THIS ROUTE · 8 steps
+E           admin: D1
+E           case: v052-fixes
+E           docs: sites
+E           +3 more
+E         FINISHED [███░░░░░░░░░░░░░░░░░] 3 of 24 steps merged
