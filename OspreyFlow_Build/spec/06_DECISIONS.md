@@ -33878,7 +33878,7 @@ them hidden from a reader, would have been withheld from that reader whole. This
    refreshes). A list's schedule in *Disable…*'s plan is read through the same filter (`admin_people`): one the
    administrator is not cleared for is listed as "a list you can't see", under an id naming nothing, and goes
    only to someone cleared for the list's classification and code (`markings_hold`;
-   `test_disable_list_schedules.py`; the orchestrator's verification of e911b90, item 2). A refresh's file carries no marking, so an update
+   `test_custom_roles_store.py`'s list-schedule cases; the orchestrator's verification of e911b90, item 2). A refresh's file carries no marking, so an update
    keeps the marking the list holds (`apply_update`), never dropping it to OFFICIAL.
    *Limit:* a subscription (ADR-133) cannot name a marking yet, so a list first loaded by subscription is
    OFFICIAL, P. Studio lists (ADR-140 Amendment 13) are not read by the gate and are unchanged.

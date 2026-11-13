@@ -70,7 +70,7 @@ ROUTE_CASES = [f"{ROUTES}::{n}" for n in (
     "test_a_reader_cleared_for_a_list_refreshes_and_schedules_it",
 )]  # fmt: skip
 REFRESH_SECRET = f"{REFRESH}::test_a_marked_lists_match_found_by_a_cleared_deployer_carries_the_lists_marking"
-DISABLE = f"{B}/services/api/test_disable_list_schedules.py"
+DISABLE = f"{B}/services/api/test_custom_roles_store.py"
 TRENDS = f"{B}/conformance/analytics_port/test_suite.py::test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader"
 
 #: (name, file under the worktree, built text, planted text, the tests, in order)
