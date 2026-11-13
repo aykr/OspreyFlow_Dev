@@ -36,7 +36,7 @@ def test_the_proxy_and_its_skip_are_the_shared_module_s() -> None:
     for name in ("test_access_key_proxy.py", "test_refresh_silent_round_through_the_key.py"):
         source = (TESTS / "harness" / name).read_text(encoding="utf-8")
         assert {"proxy", "NEEDS_CADDY"} <= set(_imports_from(source, "access_key_proxy_fixtures")), name
-        assert "pytestmark = NEEDS_CADDY" in source, name
+        assert "pytestmark = [NEEDS_CADDY]" in source, name
 
 
 def test_the_check_sees_each_shape_of_the_import() -> None:

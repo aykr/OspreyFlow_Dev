@@ -1,0 +1,28 @@
+# test_write_store_marks: UnmarkableError on 'pytestmark = NEEDS_CADDY' (main 4dc9761, rules' main-4dc9761.nine.txt), from platform-b's hygiene (19466f3). Mac, offline, main 30970b0; fresh PYTHONPYCACHEPREFIX.
+
+== red, main:
+E   tools.write_store_marks.UnmarkableError: pytestmark = NEEDS_CADDY: mark this file by hand, since what NEEDS_CADDY holds is not known here
+1 failed, 15 passed in 8.93s
+
+== green, pytestmark = [NEEDS_CADDY] in both proxy test files:
+E   FileNotFoundError: [Errno 2] No such file or directory: '/Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/services/search_index/test_feed_live.py'
+1 failed, 15 passed in 10.25s
+
+== the marking tool on the two files themselves (tools.write_store_marks.marked), main then this branch:
+-- main:
+tests/harness/test_access_key_proxy.py: UnmarkableError: pytestmark = NEEDS_CADDY: mark this file by hand, since what NEEDS_CADDY holds is not known here
+tests/harness/test_refresh_silent_round_through_the_key.py: UnmarkableError: pytestmark = NEEDS_CADDY: mark this file by hand, since what NEEDS_CADDY holds is not known here
+-- this branch:
+tests/harness/test_access_key_proxy.py: marked, store and NEEDS_CADDY kept: True
+tests/harness/test_refresh_silent_round_through_the_key.py: marked, store and NEEDS_CADDY kept: True
+
+The green run's one failure is main's own, not this: Makefile:172 and ci.yml:1192 name tests/services/search_index/test_feed_live.py, which main's tree does not hold (the search lane's, unmerged), so the test's next file is not found. Reported to the orchestrator.
+
+== on the test server (stack_lease.sh offline platform-b; no stack, no lease), Caddy 2.11.4 from caddy:2.11.4-alpine, this branch:
+Running on ospreyflow-test (stack offline, osprey-runs/platform-b/), logged at osprey-runs/platform-b.meta/runs/20261113T235153Z-62fd5095/log: sh -c c=$HOME/osprey-runs/platform-b.meta/bin/caddy; $c version; cd OspreyFlow_Core && OSPREY_TEST_CADDY=$c .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly -q -rs ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py ../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py ../OspreyFlow_Build/tests/harness/test_access_key_proxy_fixtures_shared.py ../OspreyFlow_Build/tests/test_write_store_marks.py --tb=line 2>&1 | grep -E "^E |passed|failed|^/"
+v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=
+E   FileNotFoundError: [Errno 2] No such file or directory: '/root/osprey-runs/platform-b/OspreyFlow_Build/tests/services/search_index/test_feed_live.py'
+/usr/lib/python3.12/pathlib.py:1015: FileNotFoundError: [Errno 2] No such file or directory: '/root/osprey-runs/platform-b/OspreyFlow_Build/tests/services/search_index/test_feed_live.py'
+1 failed, 84 passed in 228.26s (0:03:48)
+Wall time: 233 s, exit 0 (no stack, no lease; set-up before it 30 s)
+(the one failure is main's missing test_feed_live.py, above; no UnmarkableError)
