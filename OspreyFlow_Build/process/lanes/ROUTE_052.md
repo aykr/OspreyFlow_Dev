@@ -1,8 +1,9 @@
 # The route to v0.5.2 · every lane's brief (the owner, 13 November 2026)
 
 **Aim (the owner's words): build each thing once, check each thing once.** Target **Thu 26 Nov**. The dated steps
-are in `route.tsv`, which the heartbeat reads. **v0.5.1 is cut on Tue 17 Nov with no new work and no new checks**,
-so nothing here merges before v0.5.1's candidate is cut.
+are in `route.tsv`, which the heartbeat reads. **v0.5.1 is cut with no new work and no new checks**, from commit
+9197ea6: its upgrade rehearsal and its publish (`make publish-user-repo COMMIT=9197ea6`) name that commit, so v0.5.2's
+branches merge to main as soon as they are ready (the owner lifted the earlier hold on 13 Nov, about 23:00).
 
 ## Scope: nothing else joins v0.5.2
 
