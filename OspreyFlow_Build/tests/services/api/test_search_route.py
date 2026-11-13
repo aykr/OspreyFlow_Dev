@@ -9,6 +9,7 @@ route calls it with the right arguments and audits.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
@@ -60,7 +61,7 @@ class _FakeAudit:
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client() -> Iterator[TestClient]:
     graph = _FakeGraph()
     audit = _FakeAudit()
     app.dependency_overrides[get_principal] = lambda: PRINCIPAL
