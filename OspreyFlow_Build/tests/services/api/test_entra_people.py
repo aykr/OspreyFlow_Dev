@@ -289,7 +289,8 @@ def test_what_entra_holds_is_refused_in_words(
 
 def test_people_is_told_the_deployment_signs_in_with_entra(client: Any) -> None:
     _as(ADMIN)
-    assert client.get("/v1/admin/sign-in").json() == {"kind": "entra"}
+    # ADR-148 Amendment 15: and the values set here, none without the fallback.
+    assert client.get("/v1/admin/sign-in").json() == {"kind": "entra", "administrator_sets": []}
 
 
 def test_the_sign_in_kind_needs_manage_people(client: Any) -> None:

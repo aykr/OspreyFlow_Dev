@@ -226,3 +226,13 @@ def test_an_open_socket_closes_when_what_the_administrator_set_changes(stored: S
     state = type("S", (), {"people_store": _StandingStore(stored)})()
     answer = asyncio.run(_socket_standing(type("A", (), {"state": state})(), raw))
     assert (answer == 1008) is closes and (answer is None) is not closes
+
+
+# --- what People is told ---
+
+
+@pytest.mark.parametrize("sets", [frozenset({"clearance", "org_unit"}), frozenset()], ids=["fallback", "none"])
+def test_people_is_told_which_values_are_set_here(sets: frozenset[str]) -> None:
+    response = _client(_Store(sets), _admin()).get("/v1/admin/sign-in")
+    assert response.status_code == 200, response.text
+    assert response.json() == {"kind": "entra", "administrator_sets": sorted(sets)}

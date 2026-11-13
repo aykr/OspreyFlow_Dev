@@ -145,6 +145,11 @@ class SignInKind(BaseModel):
     holds the accounts."""
 
     kind: Literal["keycloak", "entra"]
+    #: ADR-148 Amendment 15: on Entra ID, the values Admin › People sets here (the poc shape's
+    #: fallback); none means Entra sends every one, and Access is not offered.
+    administrator_sets: list[Literal["clearance", "org_unit", "handling_codes"]] = Field(
+        default_factory=list
+    )
 
 
 class AddPersonInput(BaseModel):

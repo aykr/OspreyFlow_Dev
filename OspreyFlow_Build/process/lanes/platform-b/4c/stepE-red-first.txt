@@ -1,0 +1,20 @@
+# 4c step E (ADR-148 Am 15): People on Entra offers Access for the values set here alone, told by GET /v1/admin/sign-in. Red first; each pytest with a fresh PYTHONPYCACHEPREFIX. Mac, offline.
+
+== (a) Access offered on Entra whatever the deployment sets:
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/admin/PeopleEntra.test.tsx > Admin › People on Entra ID sign-in > says Entra holds the accounts and offers add by object id, never invite, access, reset or remove
+ FAIL  src/admin/PeopleEntraAdministrator.test.tsx > Admin › People on Entra ID with the administrator fallback > without the fallback, Entra's People offers no Access (the control)
+      Tests  2 failed | 7 passed (9)
+
+== (b) every value editable on Entra, Entra's included:
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/admin/PeopleEntraAdministrator.test.tsx > Admin › People on Entra ID with the administrator fallback > says which values are set here, and Access offers those alone, sending Entra's back un
+      Tests  1 failed | 8 passed (9)
+
+== (c) the Conduit not saying which values are set here:
+FAILED test_entra_people_administrator_access.py::test_people_is_told_which_values_are_set_here[fallback]
+1 failed, 13 passed, 1 warning in 4.37s
+
+== green:
+      Tests  9 passed (9)
+14 passed, 1 warning in 3.98s
