@@ -70,3 +70,4 @@ f5a6f3d fcdfec4 rules deps-opensearch (v0.5.2)
 89ee482 528fef4 platform-b hygiene (v0.5.2)
 7addbe6 f630917 admin hb2 (the heartbeat's stages per step, names and built count)
 daa2733 58d2ea0 case v052-fixes (v0.5.2 step 3e and Part B), with its shared-files diff
+f7891fb e5fab5a platform-b caddy-mark (main's NEEDS_CADDY red)
