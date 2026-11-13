@@ -36950,3 +36950,96 @@ development tenant is Amendment 6's list.
   (the store, and the resolver with a real token, against PostgreSQL), `test_service_identity_entra.py` (the run API's
   two refusals, through the real `get_service_identity`), `tests/services/report_sync/test_report_sync.py` (the scope,
   the configuration, a pass), and the Glass's `DashboardsEntra.test.tsx`.
+
+### ADR-148, Amendment 9 (13 November 2026) — Superset on Entra ID: its own app registration, the person read from the Conduit, its role from their rights
+
+*v0.5.2 (the owner, 13 November 2026: Superset required on the client's poc; the orchestrator's rulings R2 and R3 of
+the same day). By platform-b. An access step: two review rounds, listed for the owner.*
+
+Amendment 8 point 6 left Superset off this profile: it signed in through Keycloak, and on `SUPERSET_SIGN_IN=entra`
+read no role, so everyone would have been Gamma. This amendment replaces that.
+
+1. **Superset is its own app registration in the client's tenant** (`cloud_platform.claims.superset_client_id`, an
+   application id; `ClaimMapping.superset_client_id`, never the Glass's nor the API's, refused otherwise). Its OAuth
+   provider is named `entra`, at the tenant's own v2.0 endpoints (`/<tenant>/oauth2/v2.0/{authorize,token}`, keys at
+   `/<tenant>/discovery/v2.0/keys`, issuer `https://login.microsoftonline.com/<tenant>/v2.0`), never `common` or
+   `organizations`, so a person of another tenant is refused by Entra ID before Superset. A confidential client: a
+   client secret, no PKCE. Its redirect is `https://bi.<host>/oauth-authorized/entra`.
+   Tests: `test_superset_entra_sign_in.py::test_the_provider_is_the_tenant_s_own_v2_endpoints_asking_for_the_api_s_scope`,
+   `::test_an_entra_setting_left_out_stops_superset_starting`, `::test_keycloak_s_provider_is_as_before_without_entra`.
+2. **It asks for a delegated token for this API's scope** (`openid profile api://<API>/<scope>`) and spends it on the
+   Conduit's `GET /v1/me` and `GET /v1/me/rights` alone. The Conduit admits a person's delegated token whose client
+   (`azp`, or `appid` on v1.0, one client) is Superset's registration, held to every check a Glass token is (the
+   tenant, the person's `oid`, this API's `scp`, no guest, not app-only), as that person with their stored roles,
+   and names its routes on the principal (`principal_auth.SUPERSET_ROUTES`), which the gate of Amendment 10 refuses
+   everywhere else (403 `route_not_admitted`). Without Superset's registration named, its token is another client's
+   and refused as before. Tests: `tests/services/api/test_auth_entra_superset.py` (each refusal by its own words;
+   the Glass's token still every route), and `test_route_gate.py`'s `KINDS` row "superset sign-in", which asks every
+   route of the app.
+3. **The account is the Conduit's principal, and the role its rights**, read again at every sign-in
+   (`AUTH_ROLES_SYNC_AT_LOGIN`): the username is the principal's id (the object id), never an ID-token claim;
+   `administer_system` is Superset's Admin, `read_reports` its read-only Gamma, and a person with neither is no
+   account. An Entra token's own `roles` are never read. Only the shown name comes from the ID token.
+   Tests: `test_superset_entra_sign_in.py::test_the_role_is_the_conduit_s_rights_and_the_account_its_principal`,
+   `::test_a_token_s_own_roles_are_never_read`, `::test_neither_right_is_no_account`.
+4. **Fails closed.** Any refusal or failure of either read (401, 403, the Conduit down, no token) raises from
+   `oauth_user_info`, and Flask-AppBuilder 5.0.2, as the pinned image ships it, answers that as a refused sign-in
+   (`flask_appbuilder/security/views.py` 692-714, read from the image). Never Gamma by default.
+   Test: `::test_any_refusal_or_failure_of_the_conduit_refuses_the_sign_in`, against a Conduit stand-in answering
+   with the real response models and refusing as the real one does.
+5. **Not yet measured live**: a browser signing in through the Entra stand-in on kind and the real tenant. The
+   v0.5.2 R1 run's dashboards check is the first (Amendment 11 point 7).
+
+Records: `process/lanes/platform-b/v052/am9-superset-red-first.txt` (main's configuration and five plants, each red
+for its reason), `am9-conduit-red-first.txt` (five plants in the resolver, on admin's gate a7ec066).
+
+### ADR-148, Amendment 11 (13 November 2026) — Superset and the report sync rendered on the cloud-platform profile
+
+*v0.5.2 (the owner's rulings of 13 November 2026: one copy of each on poc; the report mart a schema in `ospreyflow`,
+as on Small, and Superset's own database, three on the one instance). By platform-b.*
+
+1. **The refusal is gone.** `reporting.superset` and `reporting.sync` render on this profile; Superset on without
+   its registration (Amendment 9 point 1) is refused in words naming `cloud_platform.claims.superset_client_id`.
+   Tests: `test_cloud_platform_entra.py::test_superset_on_without_its_app_registration_is_refused_naming_the_setting`,
+   `::test_superset_and_the_report_sync_render_signing_in_with_entra_id`.
+2. **Copies**: one each on poc and in development, two each in production (`cluster.REPLICAS`), as the other
+   workloads.
+3. **Their settings are Entra ID's**: Superset's tenant, client id, the API's scope and the Conduit's address; the
+   report sync's token from the tenant's v2.0 endpoint with `REPORT_SYNC_SCOPE` `api://<API>/.default` (Amendment 10
+   reads it). The realm's `SUPERSET_IDP_*` are taken out with the realm's other settings (`REALM_SETTINGS`), and the
+   cluster's `SUPERSET_RATELIMIT_STORAGE` (`redis://valkey:6379/5`, a Valkey the profile does not run): Superset
+   builds its rate-limit address from the managed cache's secret, over TLS with its password, database 5 (a
+   replication group without cluster mode keeps numbered databases).
+   Tests: `::test_the_api_s_id_uri_names_superset_s_and_the_report_sync_s_scopes`,
+   `test_superset_entra_sign_in.py::test_the_rate_limits_go_to_the_managed_cache_over_tls_with_its_password`.
+4. **Egress**: Superset reaches the Conduit (`egress.paths`), the managed stores and Entra ID's sign-in host; the
+   report sync reaches Entra ID's too (`reach.sign_in`). The `bi.` door is rendered with Superset. A restore stops
+   both with the other writers, by the writers' own rule (each calls the Conduit), not a list.
+   Tests: `::test_superset_and_the_report_sync_reach_entra_id_and_superset_the_conduit`,
+   `::test_the_dashboards_door_is_rendered_with_superset`,
+   `::test_a_restore_stops_superset_and_the_report_sync_with_the_other_writers`,
+   `test_cloud_platform_render.py::test_entras_sign_in_host_is_the_one_host_p10_adds_and_who_reaches_it`.
+5. **Databases**: `ospreyflow` (the report mart its schema `osprey_reports`), the gateway's `litellm`, and
+   Superset's `superset`, which Superset's own start makes with the instance's master user, as on Small; no init
+   job. Point-in-time restore brings all three back together (`deploy/RUNBOOK.md`). Their connections are
+   counted by the platform lane's `harness/cloud_platform/connections.py` (ADR-114 Amendment 46: the least
+   from the copies each shape renders, one Superset and one report sync on poc, within the 1000 the RDS
+   parameter group sets), which this amendment does not count again.
+6. **Secrets and the install's words**: Superset's client secret is the one the client's Entra administrator makes,
+   and the report sync's dashboard identities are given as they are registered, both sensitive Terraform variables
+   (`superset_oidc_client_secret`, `report_sync_dashboards`), never minted nor a fixed `[]` an apply writes over.
+   `INSTALL.md` says what the Entra administrator registers before step 2 (Superset's registration, its redirect and
+   the API's scope; the API's `Dashboard.Read` app role and each identity), and a *Reports* section after sign-in
+   (registering a dashboard identity; the report sync's restart a later block; Power BI reading the mart through a
+   read-only login of its own, an option, not a step). Tests:
+   `::test_with_reporting_on_the_install_says_what_entra_s_administrator_registers_and_where_secrets_go`,
+   `::test_without_reporting_the_install_says_nothing_of_it`. The administration guide 1.91, §6a.
+7. **Carried to v052-r1** (step 9, with platform): the run on kind with Entra's stand-in signing (platform's step 8),
+   the install with reporting on, and a dashboards check (a dashboard opens embedded in the Glass for a person with
+   `read_reports`, is refused for one without and for one above the identity's clearance; Superset's sign-in as
+   point 3 of Amendment 9 says; the report sync filling the mart), backup and restore including `superset`, and
+   decommission. Embedding on Entra matches a board to its dashboard identity by the identity's `name`
+   (Amendment 10's registration), which is v0.5.2's step 5.
+
+Records: `process/lanes/platform-b/v052/am11-render-red-first.txt` (eight plants), `step7-runbooks-red-first.txt`
+(six plants), each red for its reason.
