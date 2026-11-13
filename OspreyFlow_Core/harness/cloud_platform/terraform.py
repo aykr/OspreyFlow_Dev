@@ -30,6 +30,14 @@ Attr = tuple[str, str]
 Block = tuple[str, list[Any]]  # ("resource \"x\" \"y\"", body)
 
 
+#: The managed PostgreSQL's class, in every shape (the owner's ruling, 13 November 2026): its RDS
+#: default `max_connections`, LEAST({DBInstanceClassMemory/9531392}, 5000), covers the
+#: `runbooks.POSTGRES_MAX_CONNECTIONS` INSTALL.md asks for with no parameter group, which on a
+#: smaller class (db.t4g.small, about 190) would force the connections onto too little memory.
+#: `test_the_rendered_rds_class_allows_the_connections_install_asks_for_by_default` holds it.
+RDS_INSTANCE_CLASS = "db.t4g.large"
+
+
 def _q(text: str) -> str:
     return json.dumps(text)
 
@@ -155,7 +163,7 @@ def render_terraform(
                     ("identifier", '"${var.namespace}-postgres"'),
                     ("engine", _q("postgres")),
                     ("engine_version", _q("16")),
-                    ("instance_class", _q("db.t4g.large" if production else "db.t4g.small")),
+                    ("instance_class", _q(RDS_INSTANCE_CLASS)),
                     ("allocated_storage", "100" if production else "20"),
                     ("max_allocated_storage", "1000" if production else "100"),
                     ("storage_encrypted", "true"),

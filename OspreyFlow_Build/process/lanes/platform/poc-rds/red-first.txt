@@ -1,0 +1,5 @@
+FAILED tests/harness/test_cloud_platform_poc.py::test_the_rendered_rds_class_allows_the_connections_install_asks_for_by_default[poc]
+FAILED tests/harness/test_cloud_platform_poc.py::test_the_rendered_rds_class_allows_the_connections_install_asks_for_by_default[development]
+FAILED tests/harness/test_cloud_platform_poc.py::test_install_names_the_class_and_that_its_default_suffices
+3 failed, 4 passed, 37 deselected in 1.14s
+(before: terraform.py rendered db.t4g.small outside production, about 112 by the test's bound (about 190 by AWS's figure), below 750; INSTALL.md named no class)

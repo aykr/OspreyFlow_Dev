@@ -24,7 +24,7 @@ from typing import Any
 
 from harness.cloud_platform.decommission_check import DISK_NAMESPACE_TAG, KINDS
 from harness.cloud_platform.settings import PlatformSettings
-from harness.cloud_platform.terraform import BUCKETS, ecr_repositories
+from harness.cloud_platform.terraform import BUCKETS, RDS_INSTANCE_CLASS, ecr_repositories
 from harness.cloud_platform_backups import BUCKET_SUFFIX, KEPT_AT_DECOMMISSION
 from schemas.deployment import OspreyConfig, generated_folder
 
@@ -128,8 +128,10 @@ granted), with the claims `cloud_platform.claims` names.
 
 **The managed PostgreSQL** allows a `max_connections` of at least {POSTGRES_MAX_CONNECTIONS}: two Conduits
 side by side during an update, the worker, the gateway and a reserve (ADR-114 Amendment 43's figures). RDS
-derives it from the instance's memory unless its parameter group sets it (a db.t3.medium gives about 410),
-so set it there; with too few, the new Conduit of an update stops at `TooManyConnectionsError`.
+derives it from the instance's memory unless its parameter group sets it. The Terraform renders a
+{RDS_INSTANCE_CLASS}, whose default allows more than {POSTGRES_MAX_CONNECTIONS}, so no parameter group is
+needed; a smaller class needs one that sets it, and the memory to hold that many connections (a db.t4g.small
+allows about 190 by default). With too few, the new Conduit of an update stops at `TooManyConnectionsError`.
 {_bare_connector_hosts(cp.connector_hosts)}
 ## 1. The settings and the namespace
 

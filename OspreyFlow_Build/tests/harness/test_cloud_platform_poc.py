@@ -694,3 +694,57 @@ def test_the_decommission_s_settings_hold_after_step_7_removes_their_secret(
     (tmp_path / "work" / "prefix").unlink()
     neither = run(None)
     assert neither.returncode != 0 and "PREFIX=" in neither.stdout + neither.stderr
+
+
+#: Each RDS instance class's memory, in GiB, as AWS lists it (Amazon RDS DB instance classes,
+#: "Hardware specifications for DB instance classes": db.t4g and db.m6g, 2-vCPU and up).
+RDS_CLASS_MEMORY_GIB = {
+    "db.t4g.micro": 1, "db.t4g.small": 2, "db.t4g.medium": 4, "db.t4g.large": 8,
+    "db.t4g.xlarge": 16, "db.t3.medium": 4, "db.m6g.large": 8,
+}  # fmt: skip
+#: What RDS takes for the operating system and its own processes before `DBInstanceClassMemory`;
+#: AWS does not publish it by class. One GiB is above what is seen (db.t3.medium's default of
+#: about 410 is 3.6 GiB of 4; db.t4g.small's about 190 is 1.7 GiB of 2), so a class passed here
+#: passes with room.
+RDS_RESERVED_GIB = 1
+
+
+def _rds_default_max_connections(instance_class: str) -> int:
+    """RDS for PostgreSQL's default parameter group: max_connections =
+    LEAST({DBInstanceClassMemory/9531392}, 5000)."""
+    usable = (RDS_CLASS_MEMORY_GIB[instance_class] - RDS_RESERVED_GIB) * 1024**3
+    return min(usable // 9531392, 5000)
+
+
+@pytest.mark.parametrize("fixture", ["poc", "development", "production"])
+def test_the_rendered_rds_class_allows_the_connections_install_asks_for_by_default(
+    fixture: str,
+) -> None:
+    """The owner's ruling, 13 Nov: INSTALL.md asks for max_connections >= the derived minimum
+    (runbooks.py), and the class Terraform renders gives it by RDS's own default, with no parameter
+    group forcing it onto too little memory. Shrinking the class, or raising the pools, is red."""
+    from harness.cloud_platform import runbooks as rb
+
+    terraform = "\n".join(
+        text for name, text in _artefacts(_config(fixture)).items() if name.startswith("terraform/")
+    )
+    rendered = re.findall(r'instance_class\s*=\s*"([^"]+)"', terraform)
+    assert len(rendered) == 1, rendered
+    assert _rds_default_max_connections(rendered[0]) >= rb.POSTGRES_MAX_CONNECTIONS, (
+        rendered[0], _rds_default_max_connections(rendered[0]), rb.POSTGRES_MAX_CONNECTIONS)  # fmt: skip
+
+
+def test_the_rds_default_formula_refuses_the_classes_too_small() -> None:
+    """The check itself shown red (rule 15): the classes R1's finding named fall short."""
+    from harness.cloud_platform import runbooks as rb
+
+    assert _rds_default_max_connections("db.t4g.small") < rb.POSTGRES_MAX_CONNECTIONS
+    assert _rds_default_max_connections("db.t3.medium") < rb.POSTGRES_MAX_CONNECTIONS
+    assert _rds_default_max_connections("db.t4g.large") >= rb.POSTGRES_MAX_CONNECTIONS
+
+
+def test_install_names_the_class_and_that_its_default_suffices(runbooks: dict[str, str]) -> None:
+    needs = runbooks["INSTALL.md"]
+    needs = needs[needs.index("**What it needs.**") : needs.index("## 1.")]
+    assert "db.t4g.large" in needs and "no parameter group" in needs
+    assert "db.t3.medium gives about 410" not in needs
