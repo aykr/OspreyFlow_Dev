@@ -36984,3 +36984,129 @@ days in every fixture; step 7 refusing without the choice, and keep and destroy 
 left), and in Helm's own output `tests/cp_policy_check/test_cp_egress_order.py` (the claims backup's read-only shared
 mounts; the search Jobs refused our Secret whole). Red first: `process/lanes/platform/v052-opensearch/` and
 `v052-datasafety/`; the policy check's first run red on the server (`cp-policy-red.txt`), then green.
+### ADR-098, Amendment 7 (13 November 2026) — Ask & Chat reads from what the person chooses, and needs no document
+
+Status: written 13 November 2026 by the rules-b lane (step v052D, parts D(i) and D(ii)) under the
+orchestrator's reservation of the same day; the owner's Part D of 13 November
+(`process/lanes/NAVIGATION_2026-11-13.md`). Decision 4 and Amendment 2 point 2 ("the model reads every Document in the
+case's view that the asker can see") are superseded where this says so; nothing else in ADR-098 changes. Each
+point names the test that fails if it stops being true (rule 12); the plants are recorded with their output in
+`process/lanes/rules-b/v052D/` (`server-plants.txt`, `glass-plants.txt`).
+
+1. **Read from.** A question reads from *Selected items* (the selection, everything one link from it, and the
+   Documents among them), *Everything on the graph* (every item, link and Document in the asker's view, or in
+   the case view asked in), or *Whole case*. The request's `read_from` is `selection`, `graph` or `case`; none
+   is the selection when something is selected, else the graph. The documents and the evidence brief (ADR-129)
+   are drawn from the one scope.
+   - Test: `test_questions_read_from.py`, *selected items reads the selection, its links and their documents*.
+     Red: with every Document in the view read, as before, a Document two links away reaches the model.
+   - Test: *everything on the graph reads every document whatever is selected*; *with nothing selected the
+     default is everything on the graph*.
+2. **Whole case is not built yet.** Until the case's search is called (part D(iii)), `case` is refused 422
+   `read_from_unavailable` with the reason in words, by the question and by *will read* alike, and never
+   falls back to the graph. The panel offers it disabled, with the same reason beneath.
+   - Test: *whole case is refused in words until the search service exists*. Red with the refusal replaced
+     by a fall-back to the graph.
+   - Test: `QuestionsPanel.test.tsx`, *offers Whole case disabled, with why*. Red with it enabled.
+3. **No refusal for want of documents.** `no_documents` (422) is gone. With no Document with text in the
+   scope, the model is told there are none and answers from the graph facts (the links and events), and the
+   answer's `read` summary says no document was read. Nothing in scope is 422 `nothing_to_read` in words: a
+   selection the asker's view does not hold, or an empty graph. A selected id the asker may not see gets the
+   same words as one that does not exist (rule 3).
+   - Test: *with no document the model answers from the links and events and the answer says so*. Red with
+     the old refusal planted back.
+   - Test: `test_questions.py`, *a case with no document the analyst can see is answered from its links*.
+   - Test: `test_questions_graph_facts.py`, *selecting a hidden id is the same as selecting one that is not
+     there* (the same request, and the same refusal's words).
+4. **What was read is said.** Every answer carries `read`: the documents read, the Documents in scope with no
+   text (an image; counted, never read), the other items, the links, the events counted, how many of the
+   selected items the asker's view holds, and the first one's display name. The summary is counted as the
+   asker and is kept with the answer (`case_questions.read`). It is shown to a later reader only as the answer
+   is, so only to a reader who may see every node, link and event it counted.
+   - Test: *the read summary counts the items, links, events and names the first selected*.
+   - Test: *a document with no text is counted apart*. Red with the count dropped.
+   - Test: *the read summary is kept with the answer and read back*. Red with it not kept.
+   - Test: `test_questions_store.py` (live), the round trip whole and an older row read back with `read` none.
+   - Test: *an answer whose summary counts a hidden document is not shown to a lower reader*.
+5. **Nothing the asker may not see is counted, quoted or cited (rules 3 and 4).** The summary, the prompt and
+   the citations for a case with a Document and an item above the asker equal those for the same case
+   without them, and a reader cleared for them is counted differently, so the comparison can fail.
+   - Test: *a hidden document and item are not counted, quoted or cited*. Red with the selected count taken
+     from the request rather than the view.
+   - Test: *the cleared reader is counted the hidden document and item*.
+6. **In the Glass** the choice is a radio group, *Read from*. *Selected items* is the default when something is
+   selected and is not offered when nothing is. "About: …" ("About: Tarbuck, Kyle and 1 other", "About:
+   everything on the graph") and "Will read: …" come from the Conduit (ADR-129 Amendment 4) and are never
+   counted in the Glass. Each answer says what it read, or that it read no document and came from the links
+   and events.
+   - Test: `QuestionsPanel.test.tsx`, *defaults to Selected items …*; *never counts in the Glass* (red with the
+     panel's own count); *choosing Everything on the graph asks the Conduit again and sends that choice* (red
+     with `read_from` not sent); *says under each answer what it read …*.
+   - Test: `keyboard/questions.spec.ts`, *what to read from is chosen by arrow keys …* (rule 13;
+     `choose-what-to-read-from-by-keyboard`).
+
+### ADR-129, Amendment 4 (13 November 2026) — the brief's scope is the question's, and *will read* says it first
+
+Status: written 13 November 2026 by the rules-b lane (v052D) under the orchestrator's reservation. Decision 1's
+scope ("the analyst's selection and one link around it, or the whole view with no selection") stands for the
+brief; what changes is that the Documents now come from the same scope (ADR-098 Amendment 7), and that a
+dry run says what a question will read before it is asked.
+
+1. **One scope.** `QuestionsService._gather` builds the scope once (`evidence_brief.scope_of`) and takes the
+   documents and the brief from it, within the one budget (rule 2, unchanged). *Everything on the graph* with
+   something selected builds the brief over the whole view, not the selection.
+   - Test: `test_questions_read_from.py`, *everything on the graph reads every document whatever is selected*
+     (Eli WARD, outside the selection's hop, is in the brief).
+2. **`POST /v1/investigations/{id}/questions/will-read`.** It takes the question's body without the question and
+   answers the `read` summary the question would carry, counted the same way. It is refused the same way
+   (`nothing_to_read`, `read_from_unavailable`, the typed 409 `limit_exceeded`), at the same right (`ask_model`)
+   and case level (Editor), and is audited (`will_read_question`). Nothing is sent to a model.
+   - Test: *will read counts what the question then reads and sends nothing*.
+   - Test: *will read past the budget is the same typed limit*.
+   - Test: `test_route_rights.py` (`will_read_route`: `ask_model`), `test_investigation_levels.py` (Editor),
+     `test_audit_kinds.py` (with `audit-v052D.patch`), `route-coverage-check` (with `spec03-v052D.patch`),
+     each red without its row or patch.
+
+### ADR-135, Amendment 12 (13 November 2026) — the engine that will answer, always named; those that cannot, with why
+
+Status: written 13 November 2026 by the rules-b lane (v052D) under the orchestrator's reservation. Decision 5
+(the choice offered for two or more engines, hidden below two) stands, and so do the rules on what may leave
+for a hosted engine: this only says what the routing will do.
+
+1. **Always named, by the routing's own decision.** *Will read* names the engine and model that will answer:
+   `RoutedModel.choose` on the question's own material (its shared handling and the case's datasets), the same
+   call asking makes. So an engine chosen but refused for this material is not named; the one that will
+   answer is. With no engine able to answer, *will read* gives the routing's refusal in words and names none.
+   The panel says "Will be answered by …" even when only one engine exists.
+   - Test: `test_questions_read_from.py`, *will read names the engine that will answer, not the one chosen*
+     (red with the chosen engine named); *names a hosted engine the material may reach*; *says in words when no
+     engine may answer*.
+   - Test: `QuestionsPanel.test.tsx`, *names the engine that will answer even when there is only one* (red with
+     the line drawn only when there is a choice); *says the routing's refusal when no engine may answer*.
+2. **Engines that cannot answer this question, with their reasons.** Every hosted engine with a key that cannot
+   answer is listed: one with no model for questions, one the case's data may not reach (as `GET
+   …/models/engines` judges it, so a dataset is named only to a caller the store names it to), and one this
+   question's handling may not reach. The panel shows them beneath the choice (`EnginePicker`'s `reasons`)
+   or, with no choice offered, on their own.
+   - Test: *will read lists an engine the material's own handling code may not reach* (red with that reason
+     dropped); *lists an engine the material's handling may not reach*; *lists an engine with no model for
+     questions*.
+   - Test: `QuestionsPanel.test.tsx`, *lists the engines that cannot answer this question with their reasons,
+     even with no choice to make*; *asks the case's own engines … disables one with the reason in words*.
+3. **A failed list is said as failed.** When the engines cannot be read, `EngineChoice.failed` is set and the
+   panel says the list could not be loaded and the question goes to the default, never that there are none.
+   - Test: `QuestionsPanel.test.tsx`, *says the engine list failed, never that there is none*. Red with the
+     words removed.
+
+### ADR-144, Amendment 4 (13 November 2026) — *Ask the model about these* for any selection
+
+Status: written 13 November 2026 by the rules-b lane (v052D) under the orchestrator's reservation. Decision 4
+stands (the selection saved as a private view, and the questions asked in it). Two things change with ADR-098
+Amendment 7. The selection bar offers *Ask the model about these…* whenever anything is selected, not only
+when the selection holds a Document. The view it saves is named for its items ("Questions on 3 items"), not
+its documents. In the view, *Read from* applies within what the view holds. The change is to the case lane's
+canvas files, sent as `process/lanes/rules-b/v052D/bar-v052D.patch`.
+
+- Test: `SelectionBar.test.tsx`, *offers Ask the model about these… whatever is selected, Document or not*.
+- Test: `keyboard/selection.spec.ts`, *the selection bar's Ask the model about these… saves the selection as a
+  private view, named for its items, and asks in it*.
