@@ -44,10 +44,25 @@ RUNNING_LOADS_ALLOWED = 20
 GATEWAY_POOL_MAX = 10
 OPERATOR_RESERVE = 20
 #: Two Conduits (an update's old and new pods, side by side), the worker (which opens the same stores),
-#: the gateway, and an operator's reserve. No Keycloak or Superset on this profile.
+#: the gateway, and an operator's reserve. No Keycloak on this profile.
 POSTGRES_MAX_CONNECTIONS = (
     3 * (CONDUIT_POOL_CEILING + RUNNING_LOADS_ALLOWED) + GATEWAY_POOL_MAX + OPERATOR_RESERVE
 )
+
+
+def postgres_max_connections(config: OspreyConfig) -> int:
+    """The least `max_connections` for this deployment: with Superset or the report sync on (ADR-148
+    Amendment 11), their allowance on top, the same figure Small's own PostgreSQL counts them by
+    (`harness.profiles.SUPERSET_AND_REPORT_SYNC_MAX`), never a second count."""
+    from harness.profiles import SUPERSET_AND_REPORT_SYNC_MAX
+
+    reporting = config.reporting.superset or config.reporting.sync
+    return POSTGRES_MAX_CONNECTIONS + (SUPERSET_AND_REPORT_SYNC_MAX if reporting else 0)
+
+
+def _and_reporting(config: OspreyConfig) -> str:
+    on = [n for n, o in (("Superset", config.reporting.superset), ("the report sync", config.reporting.sync)) if o]
+    return (", " + " and ".join(on)) if on else ""
 
 
 def command_blocks(text: str, *, on_the_platform: bool) -> list[str]:
@@ -126,8 +141,8 @@ two app registrations in tenant `{claims.tenant_id}`, the Glass (application id 
 and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the Glass is
 granted), with the claims `cloud_platform.claims` names.
 
-**The managed PostgreSQL** allows a `max_connections` of at least {POSTGRES_MAX_CONNECTIONS}: two Conduits
-side by side during an update, the worker, the gateway and a reserve (ADR-114 Amendment 43's figures). RDS
+**The managed PostgreSQL** allows a `max_connections` of at least {postgres_max_connections(config)}: two Conduits
+side by side during an update, the worker, the gateway{_and_reporting(config)} and a reserve (ADR-114 Amendment 43's figures). RDS
 derives it from the instance's memory unless its parameter group sets it (a db.t3.medium gives about 410),
 so set it there; with too few, the new Conduit of an update stops at `TooManyConnectionsError`.
 {_bare_connector_hosts(cp.connector_hosts)}

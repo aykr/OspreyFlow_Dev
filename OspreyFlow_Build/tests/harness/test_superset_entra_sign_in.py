@@ -106,7 +106,8 @@ def _superset(monkeypatch: pytest.MonkeyPatch, env: dict[str, str]) -> Any:
             "SUPERSET_OIDC_CLIENT_SECRET": "s", "SUPERSET_GUEST_TOKEN_SECRET": "g"}  # fmt: skip
     for name in ("SUPERSET_SIGN_IN", "SUPERSET_ENTRA_TENANT", "SUPERSET_OIDC_CLIENT_ID",
                  "SUPERSET_ENTRA_API_SCOPE", "SUPERSET_CONDUIT_URL", "SUPERSET_ENTRA_AUTHORITY",
-                 "SUPERSET_IDP_INTERNAL", "SUPERSET_IDP_PUBLIC", "SUPERSET_IDP_ISSUER"):  # fmt: skip
+                 "SUPERSET_IDP_INTERNAL", "SUPERSET_IDP_PUBLIC", "SUPERSET_IDP_ISSUER",
+                 "SUPERSET_RATELIMIT_STORAGE"):  # fmt: skip
         monkeypatch.delenv(name, raising=False)
     for name, value in {**base, **env}.items():
         monkeypatch.setenv(name, value)
@@ -235,3 +236,22 @@ def test_keycloak_s_sign_in_still_reads_the_realm_s_roles_claim(monkeypatch) -> 
     token = f"e30.{body.decode().rstrip('=')}.sig"
     info = _superset(monkeypatch, {}).OspreySecurityManager().oauth_user_info("keycloak", {"access_token": token})
     assert info["role_keys"] == ["osprey-admin"] and info["username"] == "ana"
+
+
+# --- its rate limits in the managed cache (ADR-148 Amendment 11) ---
+
+
+def test_the_rate_limits_go_to_the_managed_cache_over_tls_with_its_password(monkeypatch) -> None:
+    """The cloud-platform render gives no SUPERSET_RATELIMIT_STORAGE (the cluster's names a Valkey
+    the profile does not run); the cache's secret gives VALKEY_*, and VALKEY_TLS is the ConfigMap's."""
+    config = _superset(monkeypatch, {"VALKEY_HOST": "cache.example.internal", "VALKEY_PORT": "6380",
+                                     "VALKEY_PASSWORD": "p@ss/word", "VALKEY_TLS": "true"})  # fmt: skip
+    assert config.RATELIMIT_STORAGE_URI == "rediss://:p%40ss%2Fword@cache.example.internal:6380/5"
+
+
+def test_small_s_rate_limit_address_is_as_before(monkeypatch) -> None:
+    for name in ("VALKEY_HOST", "VALKEY_PORT", "VALKEY_PASSWORD", "VALKEY_TLS"):
+        monkeypatch.delenv(name, raising=False)
+    assert _superset(monkeypatch, {}).RATELIMIT_STORAGE_URI == "redis://valkey:6379/5"
+    named = _superset(monkeypatch, {"SUPERSET_RATELIMIT_STORAGE": "redis://valkey:6379/5", "VALKEY_HOST": "x"})
+    assert named.RATELIMIT_STORAGE_URI == "redis://valkey:6379/5"

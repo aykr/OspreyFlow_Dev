@@ -36,8 +36,8 @@ ours:
 egress:
   # On every render: the bucket (S3) and IRSA's role (STS). `{region}` is the platform's.
   always: ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com"]
-  # Entra ID's sign-in host, whose keys the Conduit reads to verify every token (P10 part 2): the
-  # Conduit's alone.
+  # Entra ID's sign-in host, whose keys the Conduit reads to verify every token (P10 part 2), where
+  # Superset signs people in and the report sync gets its token (ADR-148 Amendments 9 and 10).
   sign_in: ["login.microsoftonline.com"]
   # A model engine that names no `api_base` is reached at its provider's own host.
   engine_hosts:
@@ -63,7 +63,8 @@ egress:
   others: [backup, backup-claims, restore, restore-claims]
   reach:
     identity: [litellm]
-    sign_in: [api]
+    # Superset's sign-in and the report sync's token (ADR-148 Amendments 9 and 10) too.
+    sign_in: [api, superset, report-sync]
     # ClickHouse too: its BACKUP TO S3 runs as its own backup role (ADR-148 Amendment 7, P9), as do
     # P9's backup and restore pods.
     always: [api, worker, report-sync, clickhouse, backup, backup-claims, restore, restore-claims]
@@ -85,6 +86,8 @@ egress:
     api: [arcadedb, clickhouse, litellm, ner, superset, laurium]
     worker: [arcadedb, clickhouse, ner]
     report-sync: [api]
+    # Superset asks the Conduit who signed in (GET /v1/me, ADR-148 Amendment 9).
+    superset: [api]
     arcadedb: [arcadedb]
     clickhouse: [clickhouse, clickhouse-keeper]
     clickhouse-keeper: [clickhouse-keeper]

@@ -655,6 +655,26 @@ def test_the_install_says_how_many_connections_the_managed_postgres_must_allow(
     assert "parameter group" in needs and "Amendment 43" in needs
 
 
+
+def test_with_reporting_on_the_managed_postgresql_counts_superset_and_the_report_sync() -> None:
+    """ADR-148 Amendment 11: Superset's pools and the report sync's, by the figure Small's own
+    PostgreSQL counts them with (`harness.profiles`), on top of the bare deployment's; the install's
+    words say so."""
+    from harness.cloud_platform import runbooks as rb
+    from harness.profiles import SUPERSET_AND_REPORT_SYNC_MAX
+
+    bare = _config()
+    raw = bare.model_dump(mode="json", exclude_none=True)
+    raw["reporting"] = {"sync": True, "superset": True}
+    raw["cloud_platform"]["claims"]["superset_client_id"] = "cccccccc-dddd-4eee-8fff-000000000000"
+    reporting = OspreyConfig.model_validate(raw)
+    assert rb.postgres_max_connections(bare) == rb.POSTGRES_MAX_CONNECTIONS
+    assert rb.postgres_max_connections(reporting) == rb.POSTGRES_MAX_CONNECTIONS + SUPERSET_AND_REPORT_SYNC_MAX
+    install = _artefacts(reporting)["INSTALL.md"]
+    needs = install[install.index("**What it needs.**") : install.index("## 1.")]
+    assert f"`max_connections` of at least {rb.postgres_max_connections(reporting)}" in needs
+    assert "Superset and the report sync" in needs
+
 def test_the_decommission_s_settings_hold_after_step_7_removes_their_secret(
     runbooks: dict[str, str], tmp_path: Any
 ) -> None:

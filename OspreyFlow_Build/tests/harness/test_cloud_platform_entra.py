@@ -64,7 +64,8 @@ def _with_claims(**changes: Any) -> OspreyConfig:
 #: The realm's settings, named here and not read from the code under test (the lane-reviewer's
 #: finding 4): dropping one from `REALM_SETTINGS` must turn this red.
 REALM_NAMES = {"OIDC_TOKEN_EXCHANGE_URL", "OIDC_TOKEN_EXCHANGE_CLIENT_ID", "OIDC_ADMIN_USERS_URL",
-               "OSPREY_IDENTITY_ORIGIN"}  # fmt: skip
+               "OSPREY_IDENTITY_ORIGIN",
+               "SUPERSET_IDP_INTERNAL", "SUPERSET_IDP_PUBLIC", "SUPERSET_IDP_ISSUER"}  # fmt: skip
 
 
 def test_the_realms_settings_are_gone_and_entras_are_rendered() -> None:
@@ -202,12 +203,71 @@ def test_the_bare_profile_renders_with_reporting_at_its_defaults() -> None:
     assert not {"report-sync", "superset"} & {w["name"] for w in values["workloads"]}
 
 
-@pytest.mark.parametrize("switch", ["sync", "superset"])
-def test_report_sync_or_superset_switched_on_is_refused_naming_its_step(switch: str) -> None:
+SUPERSET_APP = "cccccccc-dddd-4eee-8fff-000000000000"
+
+
+def _reporting(*, sync: bool = True, superset: bool = True, superset_app: str | None = SUPERSET_APP) -> OspreyConfig:
     raw = _raw()
-    raw["reporting"] = {switch: True}
-    with pytest.raises(CloudPlatformNotRenderable, match="their own step after P10"):
-        _artefacts(OspreyConfig.model_validate(raw))
+    raw["reporting"] = {"sync": sync, "superset": superset}
+    if superset_app:
+        raw["cloud_platform"]["claims"]["superset_client_id"] = superset_app
+    return OspreyConfig.model_validate(raw)
+
+
+def test_superset_on_without_its_app_registration_is_refused_naming_the_setting() -> None:
+    """ADR-148 Amendment 9: Superset signs people in as its own app registration."""
+    with pytest.raises(CloudPlatformNotRenderable, match="cloud_platform.claims.superset_client_id"):
+        _artefacts(_reporting(superset_app=None))
+    # The report sync alone needs no registration of Superset's.
+    assert "report-sync" in {w["name"] for w in _values(_reporting(superset=False, superset_app=None))["workloads"]}
+
+
+def test_superset_and_the_report_sync_render_signing_in_with_entra_id() -> None:
+    """Amendments 9 and 11 (the orchestrator's ruling (a) of 11 November lifted by v0.5.2): both
+    rendered, one copy each on this development namespace; Superset at the tenant's own endpoints
+    as its registration asking the API's scope, the report sync's token from the tenant's v2.0
+    endpoint for the API's application permissions; nothing of the realm's."""
+    values = _values(_reporting())
+    environment = values["environment"]
+    assert {w["name"]: w["replicas"] for w in values["workloads"] if w["name"] in ("superset", "report-sync")} == {
+        "superset": 1, "report-sync": 1}  # fmt: skip
+    assert environment["SUPERSET_SIGN_IN"] == "entra"
+    assert environment["SUPERSET_ENTRA_TENANT"] == TENANT
+    assert environment["SUPERSET_OIDC_CLIENT_ID"] == SUPERSET_APP
+    assert environment["SUPERSET_ENTRA_API_SCOPE"] == f"api://{API}/access_as_user"
+    assert environment["SUPERSET_CONDUIT_URL"] == "http://api:8000"
+    assert environment["REPORT_SYNC_TOKEN_URL"] == (
+        f"https://login.microsoftonline.com/{TENANT}/oauth2/v2.0/token"
+    )
+    assert environment["REPORT_SYNC_SCOPE"] == f"api://{API}/.default"
+    assert json.loads(environment["OSPREY_CLAIM_MAPPING"])["superset_client_id"] == SUPERSET_APP
+    # The cluster's Valkey address and the realm's are not this profile's.
+    assert not {"SUPERSET_RATELIMIT_STORAGE", *REALM_NAMES} & set(environment)
+    assert not [v for v in environment.values() if "keycloak" in v or "valkey:6379" in v]
+
+
+def test_the_api_s_id_uri_names_superset_s_and_the_report_sync_s_scopes() -> None:
+    raw = _raw()
+    raw["reporting"] = {"sync": True, "superset": True}
+    raw["cloud_platform"]["claims"] |= {"superset_client_id": SUPERSET_APP,
+                                        "api_id_uri": "api://ospreyflow.example.org", "scope": "use"}  # fmt: skip
+    environment = _values(OspreyConfig.model_validate(raw))["environment"]
+    assert environment["SUPERSET_ENTRA_API_SCOPE"] == "api://ospreyflow.example.org/use"
+    assert environment["REPORT_SYNC_SCOPE"] == "api://ospreyflow.example.org/.default"
+
+
+def test_superset_and_the_report_sync_reach_entra_id_and_superset_the_conduit() -> None:
+    rows = {row["name"]: row for row in _values(_reporting())["egress"]["workloads"]}
+    reaching = sorted(n for n, r in rows.items() if "login.microsoftonline.com" in r.get("hosts", []))
+    assert reaching == ["api", "report-sync", "superset"]
+    assert [p["name"] for p in rows["superset"]["toPods"]] == ["api"]
+    assert {"superset", "report-sync", "workspace"} <= set(rows["api"]["fromPods"])
+
+
+def test_the_dashboards_door_is_rendered_with_superset() -> None:
+    hosts = [r["host"] for r in _values(_reporting())["ingress"]["rules"]]
+    assert any(h.startswith("bi.") for h in hosts)
+    assert not any(h.startswith("bi.") for h in (r["host"] for r in _values(_config())["ingress"]["rules"]))
 
 
 def test_no_rendered_value_names_keycloak_or_the_identity_host() -> None:

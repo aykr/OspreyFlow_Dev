@@ -218,6 +218,10 @@ export type ClientId1 = string;
  */
 export type ApiClientId = string;
 /**
+ * Superset's own app registration (application id), when reporting.superset is on: people sign in to Superset with it, and its delegated token reads the Conduit's GET /v1/me and /v1/me/rights alone (ADR-148 Amendment 9)
+ */
+export type SupersetClientId = string | null;
+/**
  * Default: api://<api_client_id>. The API's application id URI, which the Glass's scope names
  */
 export type ApiIdUri = string | null;
@@ -830,6 +834,7 @@ export interface EntraSignInConfig {
   tenant_id: TenantId;
   client_id: ClientId1;
   api_client_id: ApiClientId;
+  superset_client_id?: SupersetClientId;
   api_id_uri?: ApiIdUri;
   token_version?: TokenVersion;
   scope?: Scope;

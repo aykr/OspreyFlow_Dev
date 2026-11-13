@@ -242,4 +242,13 @@ TALISMAN_CONFIG = {
 # Reached only through the deployment's front proxy (ADR-114 Amendment 4), which is the only thing
 # that can send these headers: trust its scheme and host when building sign-in redirects.
 ENABLE_PROXY_FIX = True
-RATELIMIT_STORAGE_URI = os.environ.get("SUPERSET_RATELIMIT_STORAGE", "redis://valkey:6379/5")
+RATELIMIT_STORAGE_URI = os.environ.get("SUPERSET_RATELIMIT_STORAGE") or (
+    # A managed cache (the cloud-platform profile's ElastiCache, ADR-148 Amendment 11): its address and
+    # password from its secret, over TLS. Database 5, as on Small (a replication group without cluster
+    # mode keeps numbered databases).
+    f"{'rediss' if os.environ.get('VALKEY_TLS', '').lower() == 'true' else 'redis'}://"
+    f":{quote(os.environ.get('VALKEY_PASSWORD', ''), safe='')}"
+    f"@{os.environ['VALKEY_HOST']}:{os.environ.get('VALKEY_PORT', '6379')}/5"
+    if os.environ.get("VALKEY_HOST")
+    else "redis://valkey:6379/5"
+)
