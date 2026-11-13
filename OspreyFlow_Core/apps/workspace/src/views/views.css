@@ -11,8 +11,31 @@
 .case-views__button { min-height: var(--h-control-24); min-width: var(--h-control-24); }
 .case-views__danger { color: var(--error); }
 .case-views__problem { margin: 0; font-size: var(--fs-12); color: var(--error); }
-.case-views--govuk .govuk-summary-list__actions { display: flex; flex-wrap: wrap; gap: var(--sp-8); justify-content: flex-end; }
+/* ADR-145 Amendment 14 decision 1 (the owner, 13 November 2026): in the 360 px Cases drawer GOV.UK's summary
+   list put the name, the tag and three full buttons in three columns, so Open covered the Private tag and the
+   buttons wrapped to four lines. Each row is laid out as the drawer can hold it: the name and its tag on one
+   line, the tag at the end; the actions, as links, on one line under them. Selectors carry the list's own class
+   so they outrank GOV.UK's, which is loaded after this sheet. */
+.case-views--govuk .govuk-summary-list .govuk-summary-list__row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--sp-8); row-gap: var(--sp-4);
+  align-items: center; padding: var(--sp-8) 0; border-bottom: 1px solid var(--border-subtle);
+}
+.case-views--govuk .govuk-summary-list .govuk-summary-list__key,
+.case-views--govuk .govuk-summary-list .govuk-summary-list__value,
+.case-views--govuk .govuk-summary-list .govuk-summary-list__actions { display: block; width: auto; margin: 0; padding: 0; text-align: left; }
+.case-views--govuk .govuk-summary-list .govuk-summary-list__key { min-width: 0; overflow-wrap: anywhere; }
+.case-views--govuk .govuk-summary-list .govuk-summary-list__value { justify-self: end; }
+.case-views--govuk .govuk-summary-list .govuk-summary-list__value .govuk-tag { margin: 0; white-space: nowrap; }
+.case-views--govuk .govuk-summary-list .govuk-summary-list__actions { grid-column: 1 / -1; }
+.case-views--govuk .case-views__actions { flex-wrap: nowrap; gap: var(--sp-16); }
+.case-views--govuk .case-views__confirm { gap: var(--sp-8); }
 .case-views--govuk .case-views__button { margin-bottom: 0; }
+/* A button drawn as a GOV.UK link (its colour and underline are `govuk-link`'s); GOV.UK's small type, 16 px,
+   named outright as the banner's is (`shell/places.css`), with a 24 px target (WCAG 2.2, 2.5.8). */
+.case-views__link {
+  background: none; border: 0; margin: 0; padding: 0; cursor: pointer; white-space: nowrap;
+  font: inherit; font-size: 16px; line-height: 24px; min-height: 24px; min-width: 24px;
+}
 
 .view-tag {
   flex: none; padding: 0 var(--sp-6); border-radius: var(--r-chip); border: 1px solid var(--border);

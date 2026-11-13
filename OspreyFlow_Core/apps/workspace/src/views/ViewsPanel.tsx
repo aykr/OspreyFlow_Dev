@@ -177,6 +177,11 @@ interface ActionsProps {
 }
 
 function Actions({ govuk, view, mine, asking, onOpen, onShare, onAskDelete, onDelete, onCancel }: ActionsProps) {
+  // ADR-145 Amendment 14 decision 1 (the owner, 13 November 2026: Open covered the Private tag and the
+  // buttons wrapped to four lines in the 360 px Cases drawer): under GOV.UK a row's actions are GOV.UK links,
+  // as a summary list's actions are, on one line under the view's name and tag. The question before a delete
+  // keeps GOV.UK's buttons: it is the one place a choice is made.
+  const action = govuk ? "govuk-link case-views__link" : "btn btn--quiet case-views__button";
   const button = govuk ? "govuk-button govuk-button--secondary case-views__button" : "btn btn--quiet case-views__button";
   if (asking?.id === view.id) {
     return (
@@ -195,16 +200,16 @@ function Actions({ govuk, view, mine, asking, onOpen, onShare, onAskDelete, onDe
   }
   return (
     <span className="case-views__actions">
-      <button type="button" className={button} aria-label={`Open ${view.name}`} onClick={onOpen}>
+      <button type="button" className={action} aria-label={`Open ${view.name}`} onClick={onOpen}>
         Open
       </button>
       {mine && !view.shared && (
-        <button type="button" className={button} aria-label={`Share with the case: ${view.name}`} onClick={onShare}>
+        <button type="button" className={action} aria-label={`Share with the case: ${view.name}`} onClick={onShare}>
           Share with the case
         </button>
       )}
       {mine && (
-        <button type="button" className={button} aria-label={`Delete ${view.name}`} onClick={onAskDelete}>
+        <button type="button" className={action} aria-label={`Delete ${view.name}`} onClick={onAskDelete}>
           Delete
         </button>
       )}

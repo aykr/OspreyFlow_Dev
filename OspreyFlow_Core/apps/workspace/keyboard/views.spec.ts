@@ -145,3 +145,38 @@ test("another member of the case is shown nothing of a private view, and no shar
 test("every registered case view action has its own proving test case above", () => {
   assertAllCovered("VIEW_ACTIONS", VIEW_ACTIONS);
 });
+
+// ADR-145 Amendment 14 decision 1 (the owner, 13 November 2026, on the GOV.UK look: "Open covers the Private
+// tag, and the buttons wrap to four lines"): in the real 360 px Cases drawer each view's name, its tag and its
+// actions fit. Nothing overlaps, the actions are on one line, and all of it is inside the drawer. In each look
+// the scans use, and each action still chosen by keyboard.
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  test(`${brand} ${theme}: in the Cases drawer each view's name, tag and actions fit`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/keyboard/views-harness.html?in=drawer&brand=${brand}`);
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    const drawer = page.getByRole("dialog", { name: "Cases" });
+    await expect(drawer.getByText("Alice's own")).toBeVisible();
+    const rows = await page.evaluate(() => {
+      const box = (el: Element) => el.getBoundingClientRect();
+      const frame = box(document.querySelector("[role='dialog']")!);
+      return [...document.querySelectorAll("[data-view-id]")].map((row) => {
+        const tag = row.querySelector(".govuk-tag, .view-tag")!;
+        const actions = [...row.querySelectorAll("button")];
+        const overlaps = (a: DOMRect, b: DOMRect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+        const t = box(tag);
+        return {
+          id: row.getAttribute("data-view-id"),
+          tagCovered: actions.some((b) => overlaps(box(b), t)),
+          actionLines: new Set(actions.map((b) => Math.round(box(b).top))).size,
+          outside: [tag, ...actions].filter((el) => box(el).right > frame.right + 0.5 || box(el).left < frame.left - 0.5).length,
+        };
+      });
+    });
+    expect(rows.map((r) => r.id)).toEqual(["v-private", "v-shared"]);
+    for (const row of rows) expect(row, row.id!).toEqual({ id: row.id, tagCovered: false, actionLines: 1, outside: 0 });
+    await drawer.getByRole("button", { name: "Open Alice's own" }).focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => page.evaluate(() => window.__VIEWS__?.opened)).toBe("v-private");
+  });
+}

@@ -10,6 +10,7 @@ import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
+import { Drawer } from "../src/design/primitives/Drawer";
 import { CaseList } from "../src/investigation/CaseList";
 import { SaveViewForm } from "../src/views/SaveViewForm";
 import { ViewLensBanner } from "../src/views/ViewLensBanner";
@@ -139,6 +140,25 @@ if (show === "menu" && params.get("open") === "1") {
   requestAnimationFrame(press);
 }
 
+const listed = (
+  <>
+    <ViewsPanel
+      apiBaseUrl="http://keyboard-test.invalid"
+      bearerToken="unused"
+      caseId="c1"
+      me={reader}
+      onOpen={(view) => (window.__VIEWS__!.opened = view.id)}
+    />
+    <CaseList
+      apiBaseUrl="http://keyboard-test.invalid"
+      bearerToken="unused"
+      currentId="c1"
+      onOpen={() => undefined}
+      onOpenView={(caseId, view) => (window.__VIEWS__!.openedView = { caseId, viewId: view.id })}
+    />
+  </>
+);
+
 createRoot(container).render(
   <div style={{ display: "grid", gap: "var(--sp-16)", padding: "var(--sp-12)", background: "var(--surface-panel)" }}>
     {show === "menu" && <ByTheGraph />}
@@ -172,19 +192,16 @@ createRoot(container).render(
         onCancel={() => undefined}
       />
     )}
-    <ViewsPanel
-      apiBaseUrl="http://keyboard-test.invalid"
-      bearerToken="unused"
-      caseId="c1"
-      me={reader}
-      onOpen={(view) => (window.__VIEWS__!.opened = view.id)}
-    />
-    <CaseList
-      apiBaseUrl="http://keyboard-test.invalid"
-      bearerToken="unused"
-      currentId="c1"
-      onOpen={() => undefined}
-      onOpenView={(caseId, view) => (window.__VIEWS__!.openedView = { caseId, viewId: view.id })}
-    />
+    {params.get("in") === "drawer" ? (
+      // ADR-145 Amendment 14 decision 1: `?in=drawer` draws the panel and the list as `App.tsx`'s Cases drawer
+      // does, in the real 360 px drawer, where the owner saw Open cover the Private tag.
+      <Drawer open onClose={() => undefined} title="Cases">
+        <div style={{ display: "grid", gap: "var(--sp-8)" }}>
+          {listed}
+        </div>
+      </Drawer>
+    ) : (
+      listed
+    )}
   </div>,
 );
