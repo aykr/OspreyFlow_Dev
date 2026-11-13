@@ -37063,6 +37063,14 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
      value there is refused and set aside rather than left unindexed for a filter to miss. A write to the alias says
      `require_alias`, so a missing alias is a refusal, never a new unmapped index of its name. Held by
      `test_refused.py`, against `FakeOpenSearch`, which refuses each of these as OpenSearch does.
+   - **The query side's exclusion read** (the orchestrator's ruling of 13 November, for ADR-149's counts and
+     groups): `services/search_index/pending.pending_node_ids(source, texts, limit=…)` gives the ids of every node in
+     the graph's outbox and every Document in the text outbox, ids alone and read with no principal, since they are
+     only ever excluded (`must_not` on `node_id`), never shown. It reads at most `limit + 1` rows of each outbox, and
+     says `complete` false when either holds more than `limit`: a node may appear more than once, so a set built
+     from the first rows could miss one, and the query side then falls back to the graph. It is the only module
+     beside the indexer and the rebuild that names the feed's reads (`test_index_feed_reach.py`);
+     `test_pending.py` holds it.
    - **The plants** for each sentence of decisions 1 to 7 are code in `process/lanes/rules/v052-index/plants.py`,
      each run with a fresh bytecode cache, and each is red in its `PLANTS_RECORD.txt`, taken at the branch's head on
      the lane's leased stack.
@@ -37100,7 +37108,13 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    Every field, keyword ones included, uses `similarity: boolean`, so no score depends on documents a reader cannot
    see. **Strict ranking (the owner's ruling, 13 November):** no score depends on how rare a word is, and there is
    no fuzzy expansion; a name is matched by trigrams, edge n-grams and the Conduit's own Double Metaphone key (a
-   keyword computed before indexing), with no phonetic, fuzzy, synonym or stemming analysis inside OpenSearch.
+   keyword computed before indexing), with no phonetic, fuzzy, synonym or stemming analysis inside OpenSearch. The
+   trigrams come from an `ngram` tokenizer, each at its own position, so a query's `minimum_should_match` counts
+   them; an `ngram` token filter would put them all at one position, where a `match` reads them as synonyms and one
+   shared trigram makes a close name (found live by the studio lane on 13 November: "invoice" matched "Public
+   notice"; plant V59). A Document's text document carries its Document's `date`, so a date filter and the
+   newest-first order reach a mention (plant V60). An index made before either change has another mapping's
+   fingerprint, so the indexer stops until it is rebuilt (decision 4).
    `tests/services/search_index/test_mapping_strict_ranking.py` holds it, by an allow-list of the analysers,
    tokenizers and filters the mapping may name. That a text never committed is never queued, and one committed always
    is: `test_findings_inferred.py`'s `test_a_documents_text_and_its_outbox_row_are_one_transaction`, through the real
@@ -37132,6 +37146,9 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
      target before each write and at start (`check_mapping`). An index made for another mapping (an upgrade that
      changed it, not yet rebuilt, or an older replica in a rolling upgrade) is never written: the indexer raises
      `MappingOutOfDate`, keeps the outbox and says a rebuild is needed, rather than setting every document aside.
+     A delete does not depend on the mapping, so first every document of the batch is deleted from that index: a
+     node withdrawn, reverted or narrowed in place is missing from search until the rebuild, never left at its
+     older facts (it fails closed).
      So an upgrade that changes the mapping runs the rebuild (CARRIES' row, for the upgrade's owner);
      `test_an_index_made_for_another_mapping_is_never_written`.
    - **A failed rebuild leaves nothing behind:** its index is deleted, and the building alias with it, and the alias
@@ -37159,6 +37176,9 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    botocore's default chain; botocore is already a dependency), the owner's ruling for step 3a of 13 November;
    `none` or unset sends unsigned, as Lite and Small do, and as a platform's signing proxy would need. A test shows
    the `sigv4` path red against a stand-in domain that refuses an unsigned or wrongly signed request.
+   - **Retries:** `search_client(max_retries=…)`, opensearch-py's three by default for the indexer and the rebuild;
+     the query side passes 0, so an unreachable index costs one timeout a keystroke, not four
+     (`test_the_query_side_can_ask_for_no_retries`).
    - **The CA it trusts** is the bundle a deployment names in `SSL_CERT_FILE`, `AWS_CA_BUNDLE` or
      `REQUESTS_CA_BUNDLE`, the first set winning (OpenSSL's, then the AWS SDK's, then `requests`'s), trusted beside
      the system's own roots (opensearch-py's TLS context loads both), so an OpenSearch behind a private CA or a

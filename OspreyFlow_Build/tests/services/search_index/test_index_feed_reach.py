@@ -25,6 +25,9 @@ ALLOWED = {
     "packages/ports/index_feed.py",
     "services/search_index/indexer.py",
     "services/search_index/rebuild.py",
+    # The query side's exclusion read: ids alone, never shown (ADR-150 decision 2). The query side
+    # calls `pending_node_ids`, which names none of the reads.
+    "services/search_index/pending.py",
     "packages/adapters/graph_arcadedb/adapter.py",
     "services/api/review.py",
     "scripts/rebuild_search_index.py",

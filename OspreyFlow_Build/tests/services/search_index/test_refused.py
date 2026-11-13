@@ -342,6 +342,9 @@ async def test_an_index_made_for_another_mapping_is_never_written() -> None:
     indexer = SearchIndexer(graph, _Texts(), client, ALIAS, SCHEMA)  # type: ignore[arg-type]
     with pytest.raises(MappingOutOfDate, match="rebuild_search_index"):
         await ensure_index(client, ALIAS)  # type: ignore[arg-type]
+    # Its document already there at older facts, and the node then withdrawn: the delete does not
+    # depend on the mapping, so it is sent; the outbox still keeps the batch for after the rebuild.
+    client.docs["a-old"]["p-1"] = {"kind": "node", "id": "p-1", "datasets": ["ds-wide"]}
     with pytest.raises(MappingOutOfDate):
         await indexer.drain_once()
     assert graph.pending == ["p-1"] and client.docs["a-old"] == {}

@@ -32,3 +32,13 @@ def test_the_alias_is_the_deployments_own() -> None:
     assert SearchIndexConfig.from_env({}).alias == "ospreyflow-default"
     assert SearchIndexConfig.from_env({"OSPREY_DEPLOYMENT_NAME": "GovUK"}).alias == "ospreyflow-govuk"
     assert SearchIndexConfig.from_env({"OSPREY_SEARCH_INDEX_ALIAS": "x"}).alias == "x"
+
+
+def test_the_query_side_can_ask_for_no_retries() -> None:
+    """opensearch-py sends a request again after a connection error, three times by default: the
+    query side passes 0, so an unreachable index costs one timeout a keystroke, not four."""
+    from services.search_index.client import search_client
+
+    config = SearchIndexConfig.from_env({"OPENSEARCH_HOST": "h"})
+    assert search_client(config).transport.max_retries == 3
+    assert search_client(config, max_retries=0).transport.max_retries == 0

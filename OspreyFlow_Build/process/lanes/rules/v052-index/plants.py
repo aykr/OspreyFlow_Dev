@@ -40,6 +40,7 @@ REFUSED = f"{B}/services/search_index/test_refused.py"
 CA = f"{B}/services/search_index/test_client_ca.py"
 RANK = f"{B}/services/search_index/test_mapping_strict_ranking.py"
 LAURIUM = f"{B}/adapters/extract_laurium/test_findings_inferred.py"
+PENDING = f"{B}/services/search_index/test_pending.py"
 STAND_IN = "OspreyFlow_Build/tests/adapters/extract_laurium/review_queue.py"
 REACH_TEST = "OspreyFlow_Build/tests/services/search_index/test_index_feed_reach.py"
 #: Tests that need the leased stack; `--offline` leaves them, and every plant that names one, out.
@@ -316,8 +317,8 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      'if status < 300 or (op == "delete" and status == 404):',
      [f"{REFUSED}::test_a_delete_to_an_index_that_is_gone_is_raised_not_done"]),
     ("V69 written without checking the index's mapping", INDEXER,
-     "            for target in targets:\n                await check_mapping(self._client, target)\n",
-     "            pass\n",
+     "                    await check_mapping(self._client, target)\n",
+     "                    pass\n",
      [f"{REFUSED}::test_an_index_made_for_another_mapping_is_never_written"]),
     ("V70 a start accepts an index made for another mapping", INDEXER,
      "        await check_mapping(client, alias)\n        return\n", "        return\n",
@@ -332,6 +333,19 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ("V73 an index made without its mapping's fingerprint", MAPPING,
      '"_meta": {"mapping_fingerprint": MAPPING_FINGERPRINT}', '"_meta": {}',
      [f"{REFUSED}::test_a_document_over_the_cap_is_set_aside_and_the_outbox_moves_on"]),
+    # --- the query side's exclusion read ------------------------------------------------------------
+    ("V74 the exclusion set claimed whole when an outbox holds more", "OspreyFlow_Core/services/search_index/pending.py",
+     "    complete = len(rows) <= limit and len(text_rows) <= limit\n", "    complete = len(ids) <= limit\n",
+     [f"{PENDING}::test_more_rows_than_the_limit_is_never_claimed_whole"]),
+    ("V75 the text outbox left out of the exclusion", "OspreyFlow_Core/services/search_index/pending.py",
+     " | {d for _, d in text_rows[:limit]}", "",
+     [f"{PENDING}::test_both_outboxes_ids_alone_and_whole"]),
+    ("V76 under another mapping, the batch's deletes held back too", INDEXER,
+     "                    await self._withdraw_all(target, node_ids)\n", "",
+     [f"{REFUSED}::test_an_index_made_for_another_mapping_is_never_written"]),
+    ("V77 the query side's retries ignored", CLIENTPY,
+     '        "max_retries": max_retries,\n', "",
+     [f"{CLIENT}::test_the_query_side_can_ask_for_no_retries"]),
 ]
 
 
@@ -362,7 +376,7 @@ def _run(tests: list[str]) -> tuple[str, str]:
 def main() -> int:
     offline = "--offline" in sys.argv[1:]
     every = [OUTBOX, FEED, DOC, CLIENT, REACH, RUN, HARNESS, SIGV4, SEEDS, BULK, REFUSED, CA, RANK,
-             LAURIUM]  # fmt: skip
+             LAURIUM, PENDING]  # fmt: skip
     plants = PLANTS
     if offline:
         every = [t for t in every if t not in LIVE]

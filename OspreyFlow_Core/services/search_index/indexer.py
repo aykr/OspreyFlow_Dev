@@ -394,7 +394,11 @@ class SearchIndexer:
             targets.append(building_alias(self._alias))
         if index is None:
             for target in targets:
-                await check_mapping(self._client, target)
+                try:
+                    await check_mapping(self._client, target)
+                except MappingOutOfDate:
+                    await self._withdraw_all(target, node_ids)
+                    raise
         refused: dict[str, Refused] = {}
         sent: set[str] = set()
         for target in targets:
@@ -410,6 +414,20 @@ class SearchIndexer:
             refused.update((r.doc_id, r) for r in await write_actions(self._client, body))
         await record_refused(self._client, self._alias, list(refused.values()))
         await clear_refused(self._client, self._alias, sorted(sent - set(refused)))
+
+    async def _withdraw_all(self, target: str, node_ids: Sequence[str]) -> None:
+        """An index made for another mapping is never written, but a delete does not depend on the
+        mapping: every document of the batch is deleted from it, so a node withdrawn, reverted or
+        narrowed in place is missing from search until the rebuild, never left at its older facts.
+        Best effort: where the cluster refuses the deletes too, the outbox still holds the batch."""
+        body: list[dict[str, Any]] = []
+        for node_id in dict.fromkeys(node_ids):
+            body.append({"delete": {"_index": target, "_id": node_id}})
+            body.append({"delete": {"_index": target, "_id": text_document_id(node_id)}})
+        try:
+            await write_actions(self._client, body)
+        except IndexWriteError:
+            log.exception("search index: the batch's deletes from %s were refused too", target)
 
     async def drain_once(self) -> int:
         """One batch of each outbox; the number of outbox rows it cleared."""

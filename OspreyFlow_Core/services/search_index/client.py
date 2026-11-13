@@ -92,13 +92,18 @@ def _sigv4_auth(region: str) -> Any:
     return AWSV4SignerAsyncAuth(credentials, region, "es")
 
 
-def search_client(config: SearchIndexConfig | None = None) -> AsyncOpenSearch:
-    """The client, signed or not as the settings say."""
+def search_client(
+    config: SearchIndexConfig | None = None, *, max_retries: int = 3
+) -> AsyncOpenSearch:
+    """The client, signed or not as the settings say. `max_retries` is how often a request is sent
+    again after a connection error (opensearch-py's default, 3, for the indexer and the rebuild);
+    the query side passes 0, so an unreachable index costs one timeout a keystroke, not four."""
     config = config or SearchIndexConfig.from_env()
     kwargs: dict[str, Any] = {
         "hosts": [config.url],
         "connection_class": AsyncHttpConnection,
         "timeout": 30,
+        "max_retries": max_retries,
     }
     if config.ca_certs is not None:
         kwargs["ca_certs"] = config.ca_certs
