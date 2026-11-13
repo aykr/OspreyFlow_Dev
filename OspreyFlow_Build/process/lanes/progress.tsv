@@ -58,7 +58,7 @@ platform-b	P6	S	done	The case's gazetteer panel beside place search, by keyboard
 docs	D1	M	done	The website: drawing boards and three places, marked coming
 docs	D2a	M	done	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed) (merged 99d927d)
 docs	D2c	M	done	The Cloud Platform deployment guide: parts 1 (fb6b02c, 1.76), 2 (e1b7626, 1.81), 3 (0a4beef, 1.86) and 4, the model route (1.88, 12 Nov) merged; closed. P8's section is D2e, after the client's install
-platform	R1	L	building	The client install's acceptance (the owner, 12 Nov): the cloud-platform profile in shape: poc installed on kind by following P7b's install runbook exactly as written, checked, backed up and restored, then removed by the decommission runbook; every place the runbook is wrong or unclear a finding, fixed in the runbook and the product and run again. The v0.5.1 release is cut from the commit that passes it
+platform	R1	L	done	The client install's acceptance (the owner, 12 Nov): the cloud-platform profile in shape: poc installed on kind by following P7b's install runbook exactly as written, checked, backed up and restored, then removed by the decommission runbook; every place the runbook is wrong or unclear a finding, fixed in the runbook and the product and run again. The v0.5.1 release is cut from the commit that passes it (merged 9b80f1a)
 platform-b	P5b	S	done	Backups in a folder the administrator names at setup (ADR-114 Am 37) (merged f8df603)
 studio-b	L1.7a	S	done	The dulwich swap, then the Studio's tips patches after L2.7 (merged 6fae515)
 admin	L2.5c	S	done	Admin's Delete for a removed case's layer; refusals that name roles (merged f4eb985)
