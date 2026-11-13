@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.93** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.94** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.94 | 2026-11-13 | The `cloud-platform` profile against the ADR-148 audit of 13 November (docs' v0.5.2 sweep, part one). §6a.7: nothing acts as its owner on Entra ID, so loads are started by hand: a pipeline's schedule and watched folder, *Run now* in Operations, `ospreyflow run`, a scheduled rule, the daily check for lapsing KYC documents, a list's refresh schedule, a watch's runs and anyone else's rules, hotlists and watches at a load, each as built, with the scheduler's own words and why they never pause a schedule; §6a.10's "marked stopped" struck, as untrue. §6a.5: one S3 read's 1,000 objects, no SSE-KMS bucket, Athena's default catalog alone. §6a.8: RDS's point-in-time restore of 7 days against the sets' 35. §6a.11: two app registrations, not one; volume encryption by the storage class, a new question. §8, §9.5, §9.11: the same Entra limit where each runs as its owner. §9: *People and roles* on Entra ID, each refusal in its own words, no administrator's fallback for clearance or unit. §10a: on a shared platform, a proxied map provider added in Admin has no way out. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 1.93 | 2026-11-13 | §6a: the least connections counted from the copies each shape renders (the owner's ruling: one Superset and one report sync in poc and development), 834 there and 918 in production, so the 1000 leaves 166 and 82 to spare. PDF reprinted alone. |
 | 1.92 | 2026-11-13 | §6a: the managed PostgreSQL's `max_connections` set to 1000 in its RDS parameter group (the owner's decisions), not left to the class's default; the least it must allow, 918, with Superset and the report sync (from v0.5.2) and an upgrade in progress, so 82 to spare; the `db_parameter` line for MoJ's RDS module, and that the setting takes effect at creation or the next reboot. PDF reprinted alone. |
 | 1.91 | 2026-11-13 | §6a: the managed PostgreSQL rendered as a `db.t4g.large` in every shape, the poc's too (the owner's ruling), whose RDS default allows the 750 connections the install asks for with no parameter group; a smaller class needs one, and the memory to match. PDF reprinted alone. |
@@ -1365,6 +1366,12 @@ have the platform team apply the Terraform."). With nothing declared, every S3 o
 is refused. The workers share the namespace's role, so they hold these reads by IAM, though no way out
 to them.
 
+**What these reads do not do yet.** One S3 read takes no more than 1,000 objects under its folder: a
+folder holding more than 1,000 objects is refused whole, and nothing is written. A bucket whose
+objects are encrypted by a KMS key of its own (SSE-KMS) cannot be read, since the role is given no
+`kms:Decrypt`; one under S3's own encryption can. An Athena connection reads the default catalog,
+`AwsDataCatalog`, alone.
+
 **Narrow the managed networks.** The platform's file names its whole shared VPC, `172.20.0.0/16`, as
 the managed stores' network, so every pod that reaches the stores may reach every address in it on
 those ports, other tenants' managed stores included. Narrow it to our stores' own subnets once the
@@ -1549,9 +1556,29 @@ assigned in *Admin › People*, which keeps them in the deployment's own Postgre
   pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
   registration.
 
-**Not available on Entra yet**: a scheduled run acting as its owner (the owner cannot be resolved
-without Keycloak's users), and reporting (Superset and the report sync are refused at render on
-this profile until Superset signs in through Entra ID).
+**Nothing acts as its owner on Entra yet, so loads are started by hand.** The Conduit acts as a
+person who is not present only through Keycloak's token exchange, which Entra ID does not have, so
+on this profile everything that runs as its owner is refused:
+
+- **a pipeline's schedule and its watched folder** (developer guide, §6.3), and **Run now** in
+  *Admin › Operations*, which runs as the schedule's owner (section 9.11). Each slot is refused and
+  recorded in the scheduler's words, "the identity provider could not be reached to act as the
+  schedule's owner": here that means no owner can be acted as, while Entra itself may be answering.
+  Such a refusal says nothing about the owner, so it never counts toward the three that pause a
+  schedule, and the schedule is refused again at every slot until it is set to run by hand;
+- **`ospreyflow run`**, an orchestrator's trigger (section 8), which runs as the pipeline's owner: it
+  is refused, in words, and recorded;
+- **a rule that runs on a schedule** (user guide, §7.11), and **the daily check for KYC documents
+  that lapse**, which runs each KYC rule as the person who deployed it;
+- **a screening list's refresh schedule** (section 9.5): **Refresh now** still works;
+- **a watch's own runs**: the watch is tried again each minute and does nothing, with a warning in
+  the Conduit's log;
+- **at a load, anyone else's rules, hotlists and watches**: only those of the person who started the
+  load are judged.
+
+A load started by hand in the Ingest Studio (**Run now**, developer guide §3.9) runs as the person
+who starts it, and is not affected. Reporting is not available either: Superset and the report sync
+are refused at render on this profile until Superset signs in through Entra ID.
 
 **Not yet tried against a real tenant.** The token shapes above are as Microsoft documents them, and
 one real token from the organisation's development tenant is to settle each:
@@ -1620,7 +1647,10 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
 2. **The managed database with the stores.** PostgreSQL must agree with the stores, or anything
    withdrawn or deleted since the set comes back under today's grants. The platform team restores RDS
    to the set's finish time by its own point-in-time procedure; the deployment is pointed at it only
-   once nothing that writes runs (step 4).
+   once nothing that writes runs (step 4). **RDS keeps its point-in-time restore for 7 days**, as the
+   Terraform renders it (`backup_retention_period`), against the sets' 35: only a set finished in
+   the last 7 days can be restored with its database. An older set has no database to pair with it,
+   and is not to be restored.
 3. **No backup during the restore**: both CronJobs suspended, and any backup still running left to
    finish.
 4. **Everything that writes stopped**: the render's own list, `backups.writers` in `values.yaml`, each
@@ -1795,8 +1825,8 @@ first install:
 
 ### 6a.10 Coming
 
-- **On Entra ID**: a scheduled run acting as its owner (until then such a run is marked stopped),
-  reporting (Superset and the report sync signing in through Entra ID), display names (a person is
+- **On Entra ID**: anything that runs as its owner, a scheduled run among them (until then each is
+  refused, section 6a.7), reporting (Superset and the report sync signing in through Entra ID), display names (a person is
   shown by object id until then), and one real token from the organisation's tenant to settle the
   shapes section 6a.7 lists as untried.
 - **The backups' alert** on a failed or missing run, the production shape's restore, the restore
@@ -1851,7 +1881,11 @@ Added in this guide, beyond ADR-148's own list:
     each as a sensitive variable with no default, and its state then holds it (section 6a.3).
 11. **The app registrations**: who in the organisation registers the Glass (a single-page
     application, returning to the deployment's address with a trailing `/`) and this API (exposing
-    its scope), and makes the extension attributes or groups the claims name (section 6a.7).
+    its scope), and makes the extension attributes or groups the claims name (section 6a.7). They are
+    two registrations, `client_id` and `api_client_id`, not one.
+12. **Volume encryption**: whether the platform's storage class, `gp2-expand`, encrypts its volumes.
+    ArcadeDB's and ClickHouse's data, the shared volume and, in the poc shape, the Ingest root are
+    encrypted at rest only if it does; the render does not check.
 
 ## 7. The answers file, `install.yaml`
 
@@ -1910,7 +1944,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
 | `ospreyflow release export <dataset> --name <name> --release-version <version> --out <folder>` | Writes the dataset's release as a YAML bundle into a new, empty folder: `release.yaml` (`apiVersion: ospreyflow.io/v1`, `kind: DatasetRelease`, checked by `packages/schemas/release.schema.json`), the domain model, each published pipeline and each reference list's definition, and a small list's rows as a CSV named by its checksum. Never a credential, loaded data, case membership, an owner or a licensed screening list's rows. Does what Studio › Releases' *Export* does, as you: set `OSPREY_TOKEN` to your own sign-in token (and `OSPREY_API_URL` for another deployment's address). A pipeline marked above what you may view is left out, and the command says how many |
 | `ospreyflow release import <folder> --dataset <id> [--dry-run]` | Reads a bundle whole (every file's SHA-256, nothing it does not list) and lands the model, the pipelines and the lists as drafts in the dataset, each pipeline through the Studio's own save gates; with `--dry-run`, says what it would write and writes nothing. A refusal writes nothing. Nothing goes live: make the model live in the Studio |
-| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words |
+| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Refused where people sign in with Entra ID (`cloud-platform`): nothing acts as its owner there (section 6a.7) |
 | `ospreyflow map list` | Lists the map providers, each with its tier, whether its key is set (never the key) and its state; the local basemap, the place-name fonts and the prefetch areas |
 | `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
 | `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |
@@ -1986,6 +2020,18 @@ one.
 Everyone signs in through the deployment's identity provider; the password is only ever typed on
 its own sign-in page. What a person may do is their **roles**; what they may see is their
 **clearance**, unit and handling codes, and the cases they are given.
+
+**Where people sign in with Entra ID** (`cloud-platform`, section 6a.7), Entra holds their accounts,
+and *People and roles* gives them roles, adds them by object id before they first sign in, and
+disables them. What Entra holds is refused here, in words, each followed by "On this deployment
+Entra ID holds people's accounts…": inviting ("People are not invited here."), access ("A person's
+clearance, unit and handling codes are changed in Entra ID."), a sign-in's reset ("A sign-in is
+reset in Entra ID."), removing ("A person is not removed here: they would return, with no roles, at
+their next sign-in. Disable them instead, or remove them in Entra ID."), joining ("There is no
+organisation account to join.") and a dashboard identity ("Dashboard identities are not registered
+on this deployment yet."). No administrator can give a missing clearance or unit instead: a person
+whose token carries neither is refused at sign-in (section 6a.7). A person is shown by object id,
+not by name.
 
 ### 9.1 The Admin place
 
@@ -2272,7 +2318,8 @@ A rule can also run **when a screening list refreshes** (user guide, section 7).
 - **A scheduled refresh runs as the person who saved the schedule**, resolved afresh each time —
   never as the system. If they can no longer sign in or no longer hold `load_screening_lists`, that
   refresh is refused, recorded under **Latest refreshes** in words, and nothing is read; save the
-  schedule again as someone who holds the right.
+  schedule again as someone who holds the right. Where people sign in with Entra ID, nobody can be
+  acted as, so every scheduled refresh is refused there: refresh by hand (section 6a.7).
 - Each scheduled time runs once, whichever Conduit replica takes it; after downtime only the latest
   runs. A refresh that ran on its schedule says so under **Latest refreshes**.
 - Put each new download in the list's location before the scheduled hour: the schedule reads the file
@@ -2413,7 +2460,8 @@ dry run first.
 ### 9.11 Operations and Audit
 
 **Operations** (`operate_schedules`) has the schedules (pipeline, case, schedule, owner, next and last
-run; **Pause**, **Resume**, **Run now**, **Save schedule**) and **Promotions waiting for review**:
+run; **Pause**, **Resume**, **Run now**, **Save schedule**; **Run now** runs as the schedule's owner,
+so where people sign in with Entra ID it is refused, as every scheduled run is: section 6a.7) and **Promotions waiting for review**:
 the load, the dataset it goes into, who sent it, when, and how long it has waited. **Alert the
 reviewers and administrators after N days** (1 to 90) sets when a waiting promotion is overdue; an
 overdue one alerts the dataset's Authors who hold `review_promotions`, and administrators of its unit.
@@ -2578,6 +2626,12 @@ line (section 8).
   case reading a composite dataset or a drawing takes none.
 - **Prefetch areas**: areas whose tiles are fetched ahead of use, and **Fetch every area** by hand
   only, every 6 hours, every day or every week.
+
+**On a shared platform** (`cloud-platform`), a provider whose tiles the Conduit fetches (its proxy)
+is reached only through a way out the render made from `osprey.yaml`'s `map:` section (section
+6a.5). One added here is given none, so its tiles cannot be fetched until it is declared there, the
+deployment rendered again and the new values installed. **Build the basemap** is not available
+there (section 6a.1).
 
 Changes are in **History** and the audit log.
 

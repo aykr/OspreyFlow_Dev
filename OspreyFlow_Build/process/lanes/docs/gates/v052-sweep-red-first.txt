@@ -1,0 +1,14 @@
+# docs v052-sweep part one: tests/test_guides_cloud_platform.py, written before the guides changed, run against main's guides (d0ff521). On the Mac on closed ports, no stack, 2026-11-13T21:06:52Z. Seven red, each the guide lacking or contradicting what the code does; the two that pass read the code alone (the resolver's refusal) or plant a violation. The planted case's own red shows only once the guides carry the notes it removes.
+$ env ARCADEDB_HTTP_PORT=1 OSPREY_POSTGRES_PORT=1 POSTGRES_PORT=1 VALKEY_PORT=1 CLICKHOUSE_HTTP_PORT=1 ../OspreyFlow_Core/.venv/bin/python -m pytest -q -p no:cacheprovider -rf tests/test_guides_cloud_platform.py
+FAILED tests/test_guides_cloud_platform.py::test_every_owner_run_says_it_stops_on_entra
+FAILED tests/test_guides_cloud_platform.py::test_the_owner_run_check_flags_a_section_without_its_note
+FAILED tests/test_guides_cloud_platform.py::test_section_6a7_quotes_the_scheduled_runs_refusal_as_the_scheduler_words_it
+FAILED tests/test_guides_cloud_platform.py::test_no_guide_says_an_entra_scheduled_run_is_marked_stopped
+FAILED tests/test_guides_cloud_platform.py::test_section_9_quotes_each_entra_people_refusal
+FAILED tests/test_guides_cloud_platform.py::test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days
+FAILED tests/test_guides_cloud_platform.py::test_section_6a5_gives_one_s3_reads_cap_as_the_connector_holds_it
+7 failed, 2 passed in 0.26s
+
+## green: the guides as this branch changes them, 2026-11-13T21:06:52Z
+$ env ARCADEDB_HTTP_PORT=1 OSPREY_POSTGRES_PORT=1 POSTGRES_PORT=1 VALKEY_PORT=1 CLICKHOUSE_HTTP_PORT=1 ../OspreyFlow_Core/.venv/bin/python -m pytest -q -p no:cacheprovider -rf tests/test_guides_cloud_platform.py tests/test_admin_guide.py tests/test_guide_role_words.py
+116 passed in 0.40s

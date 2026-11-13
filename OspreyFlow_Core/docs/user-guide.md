@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.50** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.51** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.51 | 2026-11-13 | §7.5 and §7.11: where people sign in with Entra ID (a shared platform), a load judges only its starter's rules, hotlists and watches, a watch's own runs do not happen, and a scheduled rule is refused (administration guide §6a.7; docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
 | 1.50 | 2026-11-13 | §3, §4, §5 and §5.13–5.14: the Glass's mode toggle is **Graph · Drawing board** (it was *Case · Boards*), with a line saying what each mode is (ADR-145 Amendment 13); **Views ▾** by the graph lists the case's saved views and opens one, the Cases drawer keeping its list (ADR-144 Amendment 3). PDF reprinted alone. |
 | 1.49 | 2026-11-13 | §5 and §6: the rail as the owner ruled (ADR-145 Amendment 12): Cases, Explore, *Ask & Chat* (Questions renamed) and Dashboards on the rail; *⋯ More* is *⋯ Explore Details*, holding History, Ownership and Connection strength; Help (and **?**) opens the keys, with the user guide's link, over any view, and closes again. PDF reprinted alone. |
 | 1.48 | 2026-11-13 | §3: Home's *What you can do, and what you answer for* is now *Your access and tasks*, across the page below the two columns (ADR-145 Amendment 11, the owner's ruling): *Waiting for you*, "Nothing is waiting for you.", *Your access to each case*, each line "Editor: Operation Ledger (synthetic demo)". |
@@ -1077,6 +1078,10 @@ An alert on another analyst's hotlist is listed to you only when its owner share
 and says "read from data this case does not read", with no file and no row (section 5.6): a file name
 is as much a source as a row.
 
+**Where people sign in with Entra ID** (a deployment on a shared platform), a load judges only the
+rules, hotlists and watches of the person who started it, and a watch's own runs do not happen: the
+administration guide, §6a.7, says why.
+
 ### 7.6 The rule editor: a rule written as a sentence
 
 ![A rule written as a sentence, its drawn pattern, and its preview on the last 90 days](images/user/22-rule-sentences.png)
@@ -1279,6 +1284,8 @@ as you see it, and raises an alert for each new finding, once.
   says why. Changing the rule starts it again.
 - A rule for the whole deployment does not run on a schedule: it is judged within each case as that
   case's data loads.
+- **Where people sign in with Entra ID** (a deployment on a shared platform), a rule cannot act as
+  you while you are away, so its scheduled runs are refused (the administration guide, §6a.7).
 
 ### 7.12 A second person's approval
 

@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.33** · 2026-11-10 · For OspreyFlow v0.5.0 · Issued
+**Version 1.34** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.34 | 2026-11-13 | §6.3: where people sign in with Entra ID (a shared platform), neither a schedule nor a watched folder runs: loads are started by hand (administration guide §6a.7; docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
 | 1.33 | 2026-11-10 | Describes v0.5.0. §3: Releases as built (studio's L1.7), no longer *coming*. |
 | 1.32 | 2026-11-10 | Admin's L2.5c as built. §7.8: after the delete's dry run, an administrator may delete a removed case's layer on Admin → Datasets' screen; the merge is still the Ingest Studio's only. |
 | 1.31 | 2026-11-10 | Studio's L1.5 and platform's P5 as built. §3.2: the expert steps offered by + Step in expert mode, with `write_sql_transforms`; new §3.4b: the SQL transform and the fuzzy match, their sandbox and limits, disclosed in Test, runs and 4 Runs; Admin → Connections' four kinds. §7.8: proposed link types only on 1 Model (Admin's Proposed types removed), its count and *Needs you*. §9.1: a dataset's gazetteers. |
@@ -456,6 +457,10 @@ Either way it runs **as the person who last set it**, with every check their own
 run that is refused — they can no longer sign in, have lost the right, are no longer an Editor, or
 are cleared below the source — tells them on their alerts; **three refusals in a row pause it**.
 Admin → Operations lists every one, and 4 Runs every one of the dataset's.
+
+**Where people sign in with Entra ID** (a deployment on a shared platform), nothing can act as the
+person who set it, so neither a schedule nor a watched folder runs there: each run is refused, and
+loads are started by hand with **Run now** (administration guide, §6a.7).
 
 ### 6.4 Reverting a load
 
