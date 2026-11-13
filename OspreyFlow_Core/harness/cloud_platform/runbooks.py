@@ -288,10 +288,18 @@ A block fenced `bash later` is not part of that order: the words before it say w
 
 ## 1. The settings
 
+The bucket prefix is read from `{secrets.s3.name}`, which step 7 removes, and kept in `$WORK/prefix`: a
+shell opened after step 7 (to finish step 8, say) reads it back there. Give `PREFIX` yourself if that
+file has gone too.
+
 {_settings(config, platform)}
 ```bash
-export PREFIX="$(kubectl -n "$NS" get secret {secrets.s3.name} -o jsonpath='{{.data.{secrets.s3.keys["prefix"]}}}' | base64 -d)"
-test -n "$PREFIX" || {{ echo "no bucket prefix in {secrets.s3.name}"; false; }}
+if [ -z "${{PREFIX:-}}" ]; then
+  PREFIX="$(cat "$WORK/prefix" 2>/dev/null || kubectl -n "$NS" get secret {secrets.s3.name} -o jsonpath='{{.data.{secrets.s3.keys["prefix"]}}}' | base64 -d)"
+fi
+export PREFIX
+test -n "$PREFIX" || {{ echo "no bucket prefix in {secrets.s3.name} nor in $WORK/prefix: give it, PREFIX=<the buckets' prefix>"; false; }}
+printf '%s\n' "$PREFIX" > "$WORK/prefix"
 cp "$FOLDER/values.yaml" "$WORK/values.yaml" && rm -rf "$WORK/terraform" && cp -R "$FOLDER/terraform" "$WORK/terraform"
 ```
 

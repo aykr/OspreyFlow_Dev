@@ -74,3 +74,6 @@ E       AssertionError: assert ['workspace', 'api'] == []   (test_every_workload
 
 # R1 on kind, finding 15: a new Conduit in the re-install stopped at asyncpg TooManyConnectionsError (stand-in max 100; one Conduit held 51 at rest, 48 pools). Red:
 E       AttributeError: module 'harness.cloud_platform.runbooks' has no attribute 'POSTGRES_MAX_CONNECTIONS'
+
+# R1 on kind, finding 16: the decommission re-run from step 7 stopped at step 1: "no bucket prefix in s3-bucket-output" (step 7 had removed that Secret). Red:
+E       AssertionError: no bucket prefix in s3-bucket-output

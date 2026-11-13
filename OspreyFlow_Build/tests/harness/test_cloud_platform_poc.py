@@ -15,6 +15,7 @@ What a mistake would do, and the case that catches it (rule 12):
 
 from __future__ import annotations
 
+import base64
 import re
 import tomllib
 from pathlib import Path
@@ -652,3 +653,44 @@ def test_the_install_says_how_many_connections_the_managed_postgres_must_allow(
     needs = needs[needs.index("**What it needs.**") : needs.index("## 1.")]
     assert f"`max_connections` of at least {rb.POSTGRES_MAX_CONNECTIONS}" in needs
     assert "parameter group" in needs and "Amendment 43" in needs
+
+
+def test_the_decommission_s_settings_hold_after_step_7_removes_their_secret(
+    runbooks: dict[str, str], tmp_path: Any
+) -> None:
+    """R1 on kind, finding 16: step 1 read the bucket prefix from the Secret that step 7's Terraform
+    removal deletes, so a team whose decommission stopped at step 8 could not open a shell and go on:
+    step 1 itself refused. Step 1 keeps the prefix in its working folder, and a run after step 7 reads
+    it back there (or takes the PREFIX the team gives); with neither, it says how to give it."""
+    import subprocess
+
+    text = runbooks["DECOMMISSION.md"]
+    step = text[text.index("## 1. The settings") : text.index("## 2.")]
+    (_settings_block, prefix_block) = command_blocks(step, on_the_platform=False)
+    folder = tmp_path / "render"
+    (folder / "terraform").mkdir(parents=True)
+    (folder / "values.yaml").write_text("x: 1\n")
+    stub = tmp_path / "bin" / "kubectl"
+    stub.parent.mkdir()
+
+    def run(secret: str | None, **env: str) -> subprocess.CompletedProcess[str]:
+        answer = f"printf %s {base64.b64encode(secret.encode()).decode()}" if secret else "echo 'NotFound' >&2; exit 1"
+        stub.write_text(f"#!/bin/sh\n{answer}\n")
+        stub.chmod(0o755)
+        return subprocess.run(
+            ["bash", "-c", f'set -e\n{prefix_block}\necho "PREFIX=$PREFIX"'], capture_output=True, text=True,
+            env={"PATH": f"{stub.parent}:/usr/bin:/bin", "NS": "ospreyflow-poc", "FOLDER": str(folder),
+                 "WORK": str(tmp_path / "work"), **env},
+        )  # fmt: skip
+
+    (tmp_path / "work").mkdir()
+    first = run("ospreyflow-poc-1a2b3c4d-")
+    assert first.returncode == 0 and first.stdout.strip().endswith("PREFIX=ospreyflow-poc-1a2b3c4d-"), first.stderr
+    after_step_7 = run(None)  # a new shell, the Secret gone
+    assert after_step_7.returncode == 0, after_step_7.stdout + after_step_7.stderr
+    assert after_step_7.stdout.strip().endswith("PREFIX=ospreyflow-poc-1a2b3c4d-")
+    given = run(None, PREFIX="ospreyflow-poc-9z9z9z9z-")
+    assert given.stdout.strip().endswith("PREFIX=ospreyflow-poc-9z9z9z9z-")
+    (tmp_path / "work" / "prefix").unlink()
+    neither = run(None)
+    assert neither.returncode != 0 and "PREFIX=" in neither.stdout + neither.stderr
