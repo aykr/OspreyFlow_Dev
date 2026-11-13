@@ -28,6 +28,9 @@ function route(...ids: string[]) {
 }
 
 /** Ada and Dee are two degrees apart through Xan, and three through Ben and Cy. */
+/** How long the stand-in takes to answer a search for connections. */
+const ANSWER_MS = 300;
+
 async function serve(page: Page) {
   const asked = { connections: [] as unknown[], seeded: [] as unknown[] };
   const json = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -41,6 +44,9 @@ async function serve(page: Page) {
     asked.connections.push(body);
     const degree = body.degree ?? 2;
     const paths = degree === 2 ? [route("a", "x", "d")] : degree === 3 ? [route("a", "b", "c", "d")] : [];
+    // Answered as a real Conduit answers, after a while (GitHub run 43385169520: on a slow runner the
+    // routes arrived after the case had already tabbed past where they would be).
+    await new Promise((resolve) => setTimeout(resolve, ANSWER_MS));
     await r.fulfill(json({ degree, paths, more: false, searched_to: degree }));
   });
   await page.route("**/v1/investigations/inv-1/seed", async (r) => {
@@ -117,6 +123,8 @@ test("a route is put on the canvas, its nodes marked by degree, and the marks cl
   await chooseBySearch(page, "To", "De");
   await tabTo(page, /^Find connections$/);
   await page.keyboard.press("Enter");
+  // The routes come when the Conduit answers: tab on to one only once it is there.
+  await expect(page.getByRole("button", { name: "Add route 1 at 2 degrees to the canvas" })).toBeVisible();
   await tabTo(page, /^Add route 1 at 2 degrees to the canvas$/);
   await page.keyboard.press("Enter");
   await expect(page.getByText("On the canvas")).toBeVisible();
