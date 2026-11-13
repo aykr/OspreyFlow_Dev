@@ -128,6 +128,11 @@ One test, against a real OpenSearch on a lane stack, on synthetic data:
 - **Fallback.** When OpenSearch is unreachable, the bar falls back to today's search, which keeps its own existing
   access tests. The same test is not repeated there.
 
+## What the service returns
+
+The request and response the results page is built against are in `SEARCH_RESPONSE_SHAPE.md`. Every count, group,
+filter and passage in it comes from the filtered query above. It is frozen once the owner has read this page.
+
 ## Questions for the owner
 
 1. Strict ranking without word rarity or fuzzy expansion (recommended), or OpenSearch's default relevance with a
