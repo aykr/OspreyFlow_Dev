@@ -1,28 +1,52 @@
-# Admin lane · brief T1 part 4 · parallel live runs, built on a branch
+# Admin lane · brief refresh + pg · a refresh keeps you signed in; Small's Postgres connections (M)
 
-Written by the orchestrator, 10 November 2026 evening, for the admin session, **from main**. The mark commit stays for
-tomorrow morning, as planned. Size M.
+Written by the orchestrator, 13 November 2026, at the owner's word ("implement all the deferred topics"), for a
+**fresh admin session on `sol`**, from **main** (`git fetch`, branch `lane/admin-refresh` from `main`). Opus, medium.
+Two steps, in order; each is merged on its own.
 
-**The lane, the stacks, the merge rule.** Test stacks on the server only, Docker never started on this Mac. **Tonight the demo track (rules L2.11, studio L1.7, docs D2b) has first call on both local heavy slots and the stacks**: work offline first, and ask the orchestrator for a slot or stack, expecting to wait. `make test` through `stack_lease.sh offline <lane>`; a live check through `stack_lease.sh live <lane> -- --continue-on-collection-errors`. Never stop on a question: the strict option for access, logged. Take the `make -k ci` slot at every gate; lint from the branch's own diff. Your own lane-reviewer, then the gates. Report **by message**.
+## Step 1 · A refresh keeps the person signed in and where they were (ADR-050 Amendment 3, reserved for you)
 
-**Build:** part 4 of T1's brief, on its own branch, **touching no shared test file tonight**: pytest-xdist
-(licence-checked) across 4–8 workers against one stack, each worker isolated (its own ArcadeDB database names, Postgres
-schema or database, Valkey prefix or DB, ClickHouse database, object-store prefix), through the fixtures in one
-conftest place. Tests first: two workers writing the same names never see each other's rows; a planted cross-worker
-leak is caught; **rule 3's access-control live tests pass unchanged under it** (one live run on a stack when the
-demo track has freed them). Then measure the graph_port suite serial and parallel on one commit. Part 5 (the slow
-waits: the PID storyline, Gremlin chunking, the keep-alive) only if part 4 is done.
+**What the owner saw on the demo (13 Nov, govuk.ospreyflow.app):** refreshing the page shows the Glass's own Sign in
+screen; after signing in, the tab goes into the case it last had open, skipping Home. Both are as built: tokens are held
+in memory only (`apps/workspace/src/auth/userManager.ts`, `InMemoryStorage`, ADR-050), and `App.tsx`'s bootstrap
+(around lines 296–350) shows the screen unless `handoff.autoSignIn`; `initialInvestigationId()` reads the case from
+the URL or session storage. CARRIES has the row.
 
-**Exit.** Isolation proven red first; the same suite's wall time serial and parallel; a friction row.
+**Build:**
+1. At load, with no token in memory, the Glass first tries a **silent** sign-in against the identity provider's own
+   session (`prompt=none`, the same as ADR-050 Amendment 1's renewal, `signinSilent`), and shows the Sign in screen
+   only when that fails (`login_required` or any error). Tokens stay in memory only: nothing about ADR-050's storage
+   choice changes. Keycloak and Entra (P10, ADR-148 Am 8) both.
+2. **The place returned to is the place refreshed:** Home stays Home; a case stays that case; Admin, Studio and
+   Rules and Monitoring stay themselves. Keep it in this tab's session storage the way `placeMemory.ts` keeps the
+   Glass's view, and never across tabs.
+3. The shared-key gate (ADR-114 Am 41/42) is in front on osprey-small: the silent round trip goes through
+   `id.<host>` in a hidden frame. Check it still passes the gate with the pass cookie (Am 42 makes the pass cover
+   `id.`), and say so in the amendment.
 
-**Added at the owner's word (10 November evening): `make test` in parallel.** Once part 4's isolation is proven, apply
-the same workers to `make test` itself (offline, on the server's 16 cores): `-n auto` (or a measured N) with
-`--dist loadgroup`, the files that cannot share a process kept to one worker, and the order-dependence it exposes fixed
-or named. Prove it: the same commit's `make test` serial and parallel give the same pass and fail set, and the wall
-time before and after. Its Makefile half as a diff for the orchestrator.
+**Tests, red first (rules 12, 13, 15):**
+- a refresh with a live identity-provider session lands signed in without the screen;
+- a refresh with no session shows the screen with its sentence;
+- a refresh on Home lands on Home; in a case, in that case; in Admin, in Admin;
+- a silent failure never loops;
+- the fake identity provider refuses `prompt=none` when there is no session, as Keycloak does (rule 15's "what does
+  the real one refuse");
+- one live case against a real Keycloak on a lane stack;
+- keyboard: none new, unless the screen changes.
 
-**Decided by the orchestrator, 10 November evening (T1 part 4):** (a) the test stacks' Postgres `max_connections`
-raised to 400 through `OspreyFlow_Build/scripts/stack_lease.sh`'s `up` (ratified for that one setting; test stacks only, never
-`osprey-small` or the product's settings), with a test, red first; ClickHouse left unredirected (its live tests name
-their own databases), recorded in the friction row.
+## Step 2 · A deployment's Postgres allows what its services hold at rest (ADR-114 Amendment 43, reserved for you)
 
+From platform-b's stateless finding (process/lanes/platform-b/stateless/REPORT.md, CARRIES row): a deployed Small's
+Postgres is rendered with no `max_connections` (default 100), and one Conduit holds 50 at rest, beside Keycloak, the
+gateway's database, Superset and workers. A second Conduit replica, or a worker using the same stores, meets
+`TooManyConnectionsError`. Choose with evidence: render `max_connections` from the product's own number, or bound
+the Conduit's pools (`min_size=0` where idle is normal), or both. Measure the profiles (lite, small, cloud-platform's
+in-cluster Postgres if any) as rendered. Red: two Conduits against the rendered Postgres, refused before, up after.
+A deployed Small picks it up on `ospreyflow apply` and its next restart. Say so in the amendment.
+
+## Rules
+
+- Test stacks only, through `stack_lease.sh acquire admin "<purpose>" && <run>`. **osprey-small is never touched**:
+  the demo lane deploys, on the orchestrator's word.
+- Self-review with lane-reviewer, then the gates, then ready-to-merge for each step.
+- No push. No real data.
