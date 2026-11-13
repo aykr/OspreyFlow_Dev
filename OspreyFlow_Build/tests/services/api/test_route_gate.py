@@ -107,3 +107,46 @@ def test_a_principal_with_no_routes_named_is_never_refused_by_the_gate(as_princi
     client = as_principal(person)
     refused = [f"{m} {t}" for m, t, path in _asked() if _gate_refused(client, m, path)]
     assert refused == []
+
+
+@pytest.mark.parametrize(("kind", "routes"), KINDS, ids=[kind for kind, _ in KINDS])
+def test_a_principal_admitted_to_named_routes_never_opens_a_case_stream(
+    kind: str, routes: frozenset[str], as_principal: Any
+) -> None:
+    """The delta socket asks no `get_principal`, so the gate is its own: a principal admitted to
+    named routes alone is closed 1008 before its case is read or the socket accepted (the lane
+    review of 009a889). A person is still read as before."""
+    from services.api.app import app
+    from services.api.investigations import InsufficientAccessError
+    from starlette.websockets import WebSocketDisconnect
+
+    read: list[str] = []
+
+    class _Cases:
+        async def get_authorized(self, investigation_id: str, principal: Any, **_: Any) -> Any:
+            read.append(principal.id)
+            raise InsufficientAccessError(investigation_id)
+
+    class _Audit:
+        async def record(self, **_: Any) -> None:
+            return None
+
+    saved = {k: getattr(app.state, k, None) for k in ("investigations", "audit", "people_store")}
+    app.state.investigations, app.state.audit, app.state.people_store = _Cases(), _Audit(), None
+    try:
+        for principal, admitted in (
+            (Principal(id="dash", clearance="SECRET", org_unit="u", roles=["reports_viewer"],
+                       routes=sorted(routes)), False),  # fmt: skip
+            (Principal(id="person", clearance="SECRET", org_unit="u", roles=["analyst"]), True),
+        ):
+            client = as_principal(principal)
+            with pytest.raises(WebSocketDisconnect) as closed:
+                with client.websocket_connect(
+                    "/v1/investigations/case-1/stream", headers={"Authorization": "Bearer x"}
+                ) as socket:
+                    socket.receive_json()
+            assert closed.value.code == 1008
+            assert (principal.id in read) is admitted, f"{kind}: {principal.id}'s case was read"
+    finally:
+        for key, value in saved.items():
+            setattr(app.state, key, value)

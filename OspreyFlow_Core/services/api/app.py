@@ -20781,6 +20781,12 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
     except PrincipalLookupUnavailable:
         await websocket.close(code=status.WS_1013_TRY_AGAIN_LATER)
         return
+    # ADR-148 Amendment 10: the socket asks no `get_principal`, so the route gate is its own here. A
+    # principal admitted to named routes alone (a dashboard identity) opens no stream; nothing of
+    # the case is read for it.
+    if raw.routes is not None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
     # ADR-148 Amendment 8: a ticket minted before a disable or a change of roles stands no longer.
     if (refused := await _socket_standing(websocket.app, raw)) is not None:
         await websocket.close(code=refused)
