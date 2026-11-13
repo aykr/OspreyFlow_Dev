@@ -156,7 +156,7 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     await page.goto(`/keyboard/views-harness.html?in=drawer&brand=${brand}`);
     await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
     const drawer = page.getByRole("dialog", { name: "Cases" });
-    await expect(drawer.getByText("Alice's own")).toBeVisible();
+    await expect(drawer.getByRole("button", { name: "Open Alice's own" })).toBeVisible();
     const rows = await page.evaluate(() => {
       const box = (el: Element) => el.getBoundingClientRect();
       const frame = box(document.querySelector("[role='dialog']")!);

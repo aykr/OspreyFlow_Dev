@@ -1,0 +1,29 @@
+## plant 1: views.css and ViewsPanel.tsx as on main
+  ✓  1 keyboard/views.spec.ts:154:3 › ospreyflow dark: in the Cases drawer each view's name, tag and actions fit (534ms)
+  ✓  2 keyboard/views.spec.ts:154:3 › ospreyflow light: in the Cases drawer each view's name, tag and actions fit (144ms)
+  ✘  3 keyboard/views.spec.ts:154:3 › govuk light: in the Cases drawer each view's name, tag and actions fit (152ms)
+    Error: v-private
+    - Expected  - 2
+    + Received  + 2
+  1 failed
+  2 passed (1.8s)
+## plant 2: Drawer.tsx as on main (top 0)
+  ✘  1 keyboard/shell.spec.ts:671:3 › ospreyflow dark: an open drawer starts under the top bar, the navigation above it uncovered (273ms)
+  ✘  2 keyboard/shell.spec.ts:671:3 › ospreyflow light: an open drawer starts under the top bar, the navigation above it uncovered (183ms)
+  ✘  3 keyboard/shell.spec.ts:671:3 › govuk light: an open drawer starts under the top bar, the navigation above it uncovered (188ms)
+    Error: expect(received).toBeGreaterThanOrEqual(expected)
+    Expected: >= 64
+    Received:    0
+    Error: expect(received).toBeGreaterThanOrEqual(expected)
+    Expected: >= 64
+    Received:    0
+    Error: expect(received).toBeGreaterThanOrEqual(expected)
+    Expected: >= 166
+    Received:    0
+  3 failed
+## plant 3: glassMode answering graph for every view but boards (main's view !== boards)
+  ✘  1 keyboard/shell.spec.ts:334:1 › a rail place chosen by keyboard is the only marker: no Glass mode current, no mode's note (5.3s)
+    Error: expect(locator).not.toHaveAttribute(expected) failed
+    Expected: not "page"
+    Received: "page"
+  1 failed
