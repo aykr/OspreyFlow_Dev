@@ -1539,21 +1539,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-148 Amendment 8: on Entra ID sign-in, Admin › People writes the deployment's own store,
     # which an open delta socket also asks before each message (`_socket_standing`).
     app.state.people_store = resources.people_store
-    app.state.identity_admin = (
-        EntraPeopleAdmin(
-            resources.people_store,
-            own_clients=(
-                resources.principal_resolver.claim_mapping.client_id,
-                resources.principal_resolver.claim_mapping.api_client_id,
-            ),
-        )
-        if resources.people_store is not None
-        else IdentityAdmin(
-            config,
-            by_email=os.environ.get("OSPREY_SIGN_IN_EMAIL", "").lower() == "true",
-            organisation=os.environ.get("OSPREY_ORGANISATION_SIGN_IN") or None,
-        )
-    )
+    app.state.identity_admin = people_directory(resources, config)
     # ADR-111 Amendment 3: Superset dashboards inside the Glass; None when not configured.
     superset_settings = SupersetSettings.from_env()
     app.state.superset_embedder = SupersetEmbedder(superset_settings) if superset_settings else None
@@ -2125,6 +2111,22 @@ def get_analytics(request: Request) -> AnalyticsPort:
 
 def get_compute(request: Request) -> ComputePort:
     return request.app.state.compute  # type: ignore[no-any-return]
+
+
+def people_directory(resources: Any, config: ApiConfig) -> PeopleDirectory:
+    """Admin › People's and Dashboards' directory: the deployment's own store on Entra ID sign-in
+    (ADR-148 Amendment 8), told the Glass's and this API's own application ids, which it never
+    registers as dashboard identities (Amendment 10); Keycloak's admin API otherwise."""
+    if resources.people_store is not None:
+        mapping = resources.principal_resolver.claim_mapping
+        return EntraPeopleAdmin(
+            resources.people_store, own_clients=(mapping.client_id, mapping.api_client_id)
+        )
+    return IdentityAdmin(
+        config,
+        by_email=os.environ.get("OSPREY_SIGN_IN_EMAIL", "").lower() == "true",
+        organisation=os.environ.get("OSPREY_ORGANISATION_SIGN_IN") or None,
+    )
 
 
 async def get_principal(
@@ -4341,8 +4343,9 @@ async def _may_hold_a_level(
     # directory holds no people (`people` is None) and a registered dashboard is still a Viewer
     # and nothing more (ADR-148 Amendment 10). With no directory, an identity provider that
     # cannot answer leaves the grant as before: the deployment cannot tell.
+    admin = getattr(request.app.state, "identity_admin", None)
     try:
-        dashboards = {d.account_id for d in await get_identity_admin(request).list_dashboards()}
+        dashboards = {d.account_id for d in await admin.list_dashboards()} if admin else set()
     except IdentityAdminRefused:
         if people is None:
             return
@@ -17009,6 +17012,16 @@ async def sign_in_kind_route(identity_admin: IdentityAdminDep) -> SignInKind:
     return SignInKind(kind="entra" if isinstance(identity_admin, EntraPeopleAdmin) else "keycloak")
 
 
+@app.get(
+    "/v1/admin/dashboards/sign-in", dependencies=[Depends(require_right(Right.MANAGE_DASHBOARDS))]
+)
+async def dashboards_sign_in_kind_route(identity_admin: IdentityAdminDep) -> SignInKind:
+    """ADR-148 Amendment 10: the same answer for Admin › Dashboards, which asks an application id on
+    Entra ID and nothing on Keycloak; behind `manage_dashboards`, as Dashboards is, so an
+    administrator of dashboards alone is not refused it."""
+    return SignInKind(kind="entra" if isinstance(identity_admin, EntraPeopleAdmin) else "keycloak")
+
+
 @app.post(
     "/v1/admin/people/by-object-id",
     status_code=201,
@@ -17376,18 +17389,20 @@ async def remove_dashboard_route(
     investigations: InvestigationsDep,
     audit: AuditDep,
 ) -> Response:
-    """Removed, and every case grant its account holds revoked with it (ADR-148 Amendment 10): the
-    account is read before the registration goes, and a dashboard registered again later finds no
-    level waiting. One not registered is refused by the identity provider's own answer and revokes
-    nothing. The audit row counts the grants revoked; it never names their cases."""
+    """Removed, and every case grant its account holds revoked with it (ADR-148 Amendment 10), so a
+    dashboard registered again later finds no level waiting. The grants go first, while the
+    registration still names the account: if that fails, the dashboard stays registered and removing
+    it again revokes; if the removal then fails, it holds no level and is removed again. One not
+    registered revokes nothing and is refused by the identity provider's own answer. The audit row
+    counts the grants revoked; it never names their cases."""
     accounts = [d.account_id for d in await identity_admin.list_dashboards()
                 if d.client_id == client_id]  # fmt: skip
-    await identity_admin.delete_dashboard(client_id)
     revoked = [
         case
         for account in accounts
         for case in await investigations.revoke_everywhere(account, by=principal)
     ]
+    await identity_admin.delete_dashboard(client_id)
     await audit.record(principal=principal, action="remove_dashboard",
                        resolved_query={"client_id": client_id, "grants_revoked": len(revoked)},
                        result_cardinality=1)  # fmt: skip

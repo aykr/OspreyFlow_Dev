@@ -36959,12 +36959,18 @@ development tenant is Amendment 6's list.
   Keycloak's `osprey-dashboard-<slug>` carries. One dashboard of a name in a tenant (`UNIQUE (tenant_id, name)`, refused
   as 409 `dashboard_exists`). `DashboardIdentity.name` on both identity providers.
 - **Removing one revokes every case grant its account holds** (`InvestigationStore.revoke_everywhere`, each a recorded
-  revoke), so one registered again finds no level waiting. The audit row counts the grants and names no case.
+  revoke), so one registered again finds no level waiting. The grants go first, while the registration still names
+  the account: a failure leaves it registered, and removing it again revokes. The audit row counts the grants and
+  names no case.
 - **No case stream.** The delta socket asks no `get_principal`, so it refuses a principal admitted to named routes
   before its case is read.
 - **The deployment's own applications** (the Glass's, the API's, from the claim mapping) are refused as registrations.
 - The run API's read of the registrations is bounded as a person's stored roles are; past it, a 503. A client claim not
-  a string is a refusal, never a 500. A dashboard store beside a Keycloak mapping is refused at the start.
+  a string (`azp`, `appid`) is a refusal, never a 500, in the resolver and the run API alike; an `aud` list is read as
+  its members. A dashboard store beside a Keycloak mapping is refused at the start.
+- **Admin › Dashboards asks its own route** which identity provider signs people in
+  (`GET /v1/admin/dashboards/sign-in`, behind `manage_dashboards`), so an administrator of dashboards alone is not
+  refused People's.
 - The resolver's own-client defences are each held alone: the Glass's id, the API's id (a case whose audience is its
   `api://` URI) and the audience. The duplicate audience check is removed, so no defence stands only behind another.
 - **Access through the real `get_principal`** against the real case store (`test_investigation_access_store.py`):

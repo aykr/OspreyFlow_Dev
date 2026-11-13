@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import type { DashboardIdentity } from "../../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../../design/primitives";
-import { listDashboards, registerDashboard, removeDashboard, signInKind, type AdminApi } from "../api";
+import { dashboardsSignInKind, listDashboards, registerDashboard, removeDashboard, type AdminApi } from "../api";
 
 const utc = (iso: string) => `${iso.slice(0, 16).replace("T", " ")} UTC`;
 
@@ -44,7 +44,7 @@ export function Dashboards({ api }: { api: AdminApi }) {
 
   useEffect(() => {
     listDashboards(api).then(setDashboards).catch((e: Error) => setProblem(e.message));
-    signInKind(api)
+    dashboardsSignInKind(api)
       .then((k) => setEntra(k.kind === "entra"))
       .catch(() => setEntra(false));
     fetch(`${api.apiBaseUrl}/v1/handling-scheme`, { headers: { Authorization: `Bearer ${api.bearerToken}` } })
