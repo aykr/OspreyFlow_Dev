@@ -24,6 +24,7 @@ CLIENT = f"{B}/services/search_index/test_client.py"
 REACH = f"{B}/services/search_index/test_index_feed_reach.py"
 RUN = f"{B}/services/search_index/test_run.py"
 HARNESS = f"{B}/harness/test_search_index_render_and_restore.py"
+SIGV4 = f"{B}/services/search_index/test_client_sigv4.py"
 ADAPTER = "OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py"
 INDEXER = "OspreyFlow_Core/services/search_index/indexer.py"
 DOCUMENT = "OspreyFlow_Core/services/search_index/document.py"
@@ -135,6 +136,13 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ("V27 a restore leaves the index empty", "OspreyFlow_Core/harness/restore.py",
      "    rebuild_search_index(compose_file)\n", "",
      [f"{HARNESS}::test_the_restore_rebuilds_after_every_store_is_back"]),
+    ("V28 sigv4 asked for and nothing signed", "OspreyFlow_Core/services/search_index/client.py",
+     "    if config.signing == \"sigv4\":\n", "    if False:\n",
+     [f"{SIGV4}::test_a_sigv4_client_is_answered"]),
+    ("V29 signed for another service", "OspreyFlow_Core/services/search_index/client.py",
+     "    return AWSV4SignerAsyncAuth(credentials, region, \"es\")\n",
+     "    return AWSV4SignerAsyncAuth(credentials, region, \"aoss\")\n",
+     [f"{SIGV4}::test_a_sigv4_client_is_answered"]),
     ("V23 the host and port win over the URL", "OspreyFlow_Core/services/search_index/client.py",
      "        url = (env.get(\"OPENSEARCH_URL\") or \"\").strip()\n", "        url = \"\"\n",
      [f"{CLIENT}::test_the_url_wins_over_host_and_port"]),
@@ -161,7 +169,7 @@ def _run(tests: list[str]) -> tuple[str, str]:
 
 
 def main() -> int:
-    every = [OUTBOX, FEED, DOC, CLIENT, REACH, RUN, HARNESS]
+    every = [OUTBOX, FEED, DOC, CLIENT, REACH, RUN, HARNESS, SIGV4]
     state, line = _run(every)
     print(f"built: {state} - {line}")
     if state != "GREEN":
