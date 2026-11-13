@@ -1,0 +1,8 @@
+v052-datasafety (the ADR-148 audit's ruling 3), at d60b912:
+- On the Mac, offline, ports pinned: test_cloud_platform_*.py (data safety among them), test_poc_manifest.py,
+  cloud_platform_backup, test_admin_guide.py, test_cp_decommission_check.py: 579 passed, 51 skipped. Red first
+  (red-first.txt: 57 failed before the change, every one for the missing choice or the missing parts).
+- make cp-policy-check on the test server (offline lease, helm in Docker): 0 violations across the five synthetic
+  deployments; its suites 391 passed (cp-policy-green.txt). The two Helm-output tests of this step and 3a run by
+  name there: 9 passed, none skipped.
+- ruff (Core) clean; mypy harness/cloud_platform and cloud_platform_backups clean.
