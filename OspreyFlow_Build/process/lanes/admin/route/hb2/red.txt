@@ -1,40 +1,21 @@
-E       AssertionError: assert ' built, waiting to merge' in '  3d  ★ studio       14–20 Nov [░░░░░░] running · after A · The search service: names, full text, ranking'
-E        +  where '  3d  ★ studio       14–20 Nov [░░░░░░] running · after A · The search service: names, full text, ranking' = _row('OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', '3d')
-E       AssertionError: assert 'running, stage 2 of 4' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index'
-E        +  where '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index' = _row('OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', '3c')
-E       AssertionError: assert [] == ['✅ 1. Plan',... '— 4. Drift']
-E         
-E         Right contains 4 more items, first extra item: '✅ 1. Plan'
-E         Use -v to get more diff
-E       AssertionError: assert '1 of 8 steps done · 1 built, waiting to merge' in 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n'
-E       AssertionError: OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)
-E         ROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track
-E           [░░░░░░░░░░░░░░░░░░░░] 0 of 13 steps done · [███░░░░░░░░░░] day 3 of 13
-E         
-E           0     lane0        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 0
-E           1     lane1        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 1
-E           2     lane2        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 2
-E           3     lane3        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 3
-E           4     lane4        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 4
-E           5     lane5        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 5
-E           6     lane6        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 6
-E           7     lane7        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 7
-E           8     lane8        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 8
-E           9     lane9        14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 9
-E           10    lane10       14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 10
-E           11    lane11       14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 11
-E           12    lane12       14–20 Nov [████░░] running, stage 4 of 6 · A step of the route, number 12
-E         
-E         WAITING ON YOU · 2
-E           Tue 17 Nov · The acceptance bar's wording
-E           Wed 18 Nov · The search navigation decision (3e′ waits on it)
-E         WAITING ON THE ORCHESTRATOR · 2 open
-E           Sat 14 Nov · Scheduled runs on Entra: options (audit 1)
-E           Mon 16 Nov · The search access design page (A)
-E         AUDIT RULINGS [███░░░░░░░] 1 of 3 settled · in v0.5.2: 1 yes, 1 no, 1 owner to decide
-E         OUTSIDE THIS ROUTE · 8 steps
-E           admin: D1
-E           case: v052-fixes
-E           docs: sites
-E           +3 more
-E         FINISHED [███░░░░░░░░░░░░░░░░░] 3 of 24 steps merged
+# red: the tests of this change against main's own lanes_heartbeat.sh (main aea8de9), the tests at lane/admin-hb2 + the review's fixes
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_stages_are_written_whole_and_a_second_call_replaces_them
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bare_clear_is_refused_so_another_step_s_list_is_never_cleared_by_habit
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_stages_are_kept_per_step_and_clear_takes_one_step_or_all
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[state]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[number]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[empty-name]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[no-name]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[two-states]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_bad_stage_is_refused_in_words_and_nothing_is_written[newline]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_step_the_step_table_does_not_name_is_kept_with_a_warning
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_each_step_s_state_is_its_lane_s_own_and_done_only_when_merged
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_two_steps_of_one_lane_keep_their_own_stages
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_running_row_lists_its_stages_by_name_and_others_stay_one_line
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_review_rows_are_built_waiting_to_merge_and_the_headline_counts_them
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_route_view_is_one_screen_with_every_step_running
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_one_screen_with_every_step_running_on_a_day_a_step_is_at_risk
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_owner_s_fold_the_done_on_one_line_and_the_rest_in_full
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_step_with_spaces_a_slash_and_an_accent_is_found_where_it_was_written
+18 failed, 78 passed in 76.07s (0:01:16)

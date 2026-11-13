@@ -1,0 +1,6 @@
+# plant: budget_forgets_the_risk_line (scripts/lanes_heartbeat.sh), on lane/admin-hb2 at c7ba2b0 + the review's fixes
+# replaced: my $head_lines = 4 + (@risk ? 1 : 0);
+# with: my $head_lines = 4;
+# run: cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 .venv/bin/python -m pytest -q -p no:cacheprovider -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_one_screen_with_every_step_running_on_a_day_a_step_is_at_risk
+1 failed, 24 passed in 25.25s

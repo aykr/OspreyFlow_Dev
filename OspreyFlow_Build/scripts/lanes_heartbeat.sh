@@ -6,8 +6,10 @@
 #        (a lane at its usage limit is beaten from outside as: beat <lane> blocked "usage limit")
 #   lanes_heartbeat.sh stages <lane> "<step>" "<n>|<state>|<name>[|<note>]" ...
 #                                                     a lane states its current step's stages, numbered
-#        state: done | now | todo | blocked; a second call replaces the list (13 November 2026)
-#   lanes_heartbeat.sh stages <lane> --clear          the step is finished: its stages go
+#        state: done | now | todo | blocked; a second call for the same step replaces its list; each
+#        step keeps its own list (13 November 2026)
+#   lanes_heartbeat.sh stages <lane> --clear "<step>" the step is finished: its stages go
+#   lanes_heartbeat.sh stages <lane> --clear --all    every step's stages of the lane go
 #   lanes_heartbeat.sh nudge <lane> "<message>"     the orchestrator leaves a lane a message, shown
 #                                                     to it at its next beat (a session it cannot type into)
 #   lanes_heartbeat.sh [--full]                       the owner's default view (reorganised 13 November 2026):
@@ -108,21 +110,24 @@ beat() {
 
 # A lane's stages, one list a step (brief hb, 13 November 2026; kept per lane and step since the orchestrator's
 # hb2, 13 November: one file a lane let a post for a new step erase its earlier steps' lists): <lane>.<step>.stages,
-# the step's characters other than letters, digits, '.', '_' and '-' written '_' (`stage_file`). Written whole (as
+# each byte of the step other than an ASCII letter, digit, '.', '_' or '-' written '_' (`stage_file`, and the views'
+# `stages_of` in STAGES_PL, the one reader both views share). Written whole (as
 # `beat` writes its file), the step and the time, then one `stage=<n>|<state>|<name>[|<note>]` line each. Every stage
 # is checked before anything is written, so a refused call leaves the earlier list as it was. The views still read a
 # lane's one <lane>.stages from before, for the step it names.
-stage_file() { printf '%s/%s.%s.stages' "$DIR" "$1" "${2//[^A-Za-z0-9._-]/_}"; }
+stage_file() { local LC_ALL=C; printf '%s/%s.%s.stages' "$DIR" "$1" "${2//[^A-Za-z0-9._-]/_}"; }   # byte by byte, as the views read it
 stages() {
-  local usage='usage: stages <lane> "<step>" "<n>|<state>|<name>[|<note>]" ... | stages <lane> --clear ["<step>"]'
+  local usage='usage: stages <lane> "<step>" "<n>|<state>|<name>[|<note>]" ... | stages <lane> --clear "<step>" | stages <lane> --clear --all'
   local lane="${1:?$usage}"; shift
   if [ "${1:-}" = --clear ]; then
-    if [ -n "${2:-}" ]; then
-      rm -f "$(stage_file "$lane" "$2")"
-      if [ -f "$DIR/$lane.stages" ] && [ "$(field step "$DIR/$lane.stages" || true)" = "$2" ]; then rm -f "$DIR/$lane.stages"; fi
-      echo "Stages cleared for $lane, $2."; return 0
-    fi
-    rm -f "$DIR/$lane.stages" "$DIR/$lane".*.stages; echo "Stages cleared for $lane."; return 0
+    # Named, never implied: a lane with two steps in flight clears the one it finished, not both (hb2's review).
+    case "${2:-}" in
+      '') echo "Say which step's stages go: stages $lane --clear \"<step>\", or every step's: --clear --all." >&2; exit 2 ;;
+      --all) rm -f "$DIR/$lane.stages" "$DIR/$lane".*.stages; echo "Stages cleared for $lane, every step."; return 0 ;;
+    esac
+    rm -f "$(stage_file "$lane" "$2")"
+    if [ -f "$DIR/$lane.stages" ] && [ "$(field step "$DIR/$lane.stages" || true)" = "$2" ]; then rm -f "$DIR/$lane.stages"; fi
+    echo "Stages cleared for $lane, $2."; return 0
   fi
   local step="${1:?$usage}"; shift
   [ $# -ge 1 ] || { echo "No stages given. A stage is <n>|<state>|<name>[|<note>]." >&2; exit 2; }
@@ -435,9 +440,25 @@ overview() {
   done
   release_merges > "$merges"
   P_CLOCK="$(clock)" P_PROGRESS="$PROGRESS" P_GROUPS="$GROUPS_FILE" P_EST="$ESTIMATES" P_RELEASE="$RELEASE" P_FINISH="$FINISH" \
-    P_LANES="$lanes" P_MERGES="$merges" P_NEEDS="$needs" P_DIR="$DIR" P_FULL="$full" perl -CSD -e "$OVERVIEW_PL"
+    P_LANES="$lanes" P_MERGES="$merges" P_NEEDS="$needs" P_DIR="$DIR" P_FULL="$full" perl -CSD -e "$STAGES_PL$OVERVIEW_PL"
   rm -f "$lanes" "$merges" "$needs"; trap - EXIT
 }
+
+# shellcheck disable=SC2016   # perl, not the shell, expands these
+# The one reader of a lane`s stages, which both views run before their own program (hb2`s review: two copies drift).
+# A lane`s stages for one step: its own file (`stage_file`: the step`s UTF-8 bytes, each other than an ASCII letter,
+# digit, ".", "_" or "-" written "_"), else the one file a lane kept before, when it names that step.
+STAGES_PL='
+sub stages_in { my ($f) = @_; my ($step, @s); open(my $h, "<:encoding(UTF-8)", $f) or return;
+  while (<$h>) { chomp; if (/^step=(.*)$/) { $step = $1 } elsif (/^stage=(.*)$/) { my @p = split /\|/, $1, 4; push @s, \@p if @p >= 3 } }
+  return ($step, @s) }
+sub stage_name { my ($step) = @_; require Encode; return Encode::encode("UTF-8", $step) =~ s/[^A-Za-z0-9._-]/_/gr }
+sub stages_of { my ($lane, $want) = @_; return unless defined $want;
+  my ($step, @s) = stages_in("$ENV{P_DIR}/$lane." . stage_name($want) . ".stages");
+  return ($step, @s) if defined $step && $step eq $want;
+  ($step, @s) = stages_in("$ENV{P_DIR}/$lane.stages");
+  return defined $step && $step eq $want ? ($step, @s) : () }
+'
 
 # shellcheck disable=SC2016   # perl, not the shell, expands these
 OVERVIEW_PL='
@@ -544,15 +565,6 @@ sub words_of { my ($s, $n) = @_;   # the beat'"'"'s state in plain words, read a
     return "waiting for a test stack" if $n =~ /(?<![[:alpha:]])[Ll]ease(?![[:alpha:]])/;
     return $n =~ /[Oo]wner/ ? "waiting for you" : "waiting for the orchestrator" }
   return $s }
-sub stages_in { my ($f) = @_; my ($step, @s); open(my $h, "<:encoding(UTF-8)", $f) or return;
-  while (<$h>) { chomp; if (/^step=(.*)$/) { $step = $1 } elsif (/^stage=(.*)$/) { my @p = split /\|/, $1, 4; push @s, \@p if @p >= 3 } }
-  return ($step, @s) }
-# A lane`s stages for one step: its own file (`stage_file`), else the one file a lane kept before, when it names that step.
-sub stages_of { my ($lane, $want) = @_; return unless defined $want;
-  my ($step, @s) = stages_in("$ENV{P_DIR}/$lane." . ($want =~ s/[^A-Za-z0-9._-]/_/gr) . ".stages");
-  return ($step, @s) if defined $step && $step eq $want;
-  ($step, @s) = stages_in("$ENV{P_DIR}/$lane.stages");
-  return defined $step && $step eq $want ? ($step, @s) : () }
 { my %mark = (done => "✅", now => "⏳", todo => "—", blocked => "⛔");
   my (%rest, @order);
   print "LANES NOW\n";
@@ -668,7 +680,7 @@ route_view() {
     printf '%s\t%s\t%s\n' "$lane" "${st:--}" "$note" >> "$lanes"
   done
   P_CLOCK="$(clock)" P_NOW="$(now)" P_PROGRESS="$PROGRESS" P_ROUTE="$ROUTE" P_OWNER_DUE="$OWNER_DUE" \
-    P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_DIR="$DIR" perl -CSD -e "$ROUTE_PL"
+    P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_DIR="$DIR" perl -CSD -e "$STAGES_PL$ROUTE_PL"
   rm -f "$lanes" "$needs"; trap - EXIT
 }
 
@@ -685,15 +697,6 @@ sub bar { my ($frac, $w) = @_; $frac = 0 if $frac < 0; $frac = 1 if $frac > 1; m
   return "[" . ("█" x $f) . ("░" x ($w - $f)) . "]" }
 sub plural { my ($n, $one) = @_; return "$n $one" . ($n == 1 ? "" : "s") }
 sub names { my ($note, $step) = @_; return $note =~ /(?<![A-Za-z0-9.\-])\Q$step\E(?![A-Za-z0-9\-])/ }
-sub stages_in { my ($f) = @_; my ($step, @s); open(my $h, "<:encoding(UTF-8)", $f) or return;
-  while (<$h>) { chomp; if (/^step=(.*)$/) { $step = $1 } elsif (/^stage=(.*)$/) { my @p = split /\|/, $1, 4; push @s, \@p if @p >= 3 } }
-  return ($step, @s) }
-# A lane`s stages for one step: its own file (`stage_file`), else the one file a lane kept before, when it names that step.
-sub stages_of { my ($lane, $want) = @_; return unless defined $want;
-  my ($step, @s) = stages_in("$ENV{P_DIR}/$lane." . ($want =~ s/[^A-Za-z0-9._-]/_/gr) . ".stages");
-  return ($step, @s) if defined $step && $step eq $want;
-  ($step, @s) = stages_in("$ENV{P_DIR}/$lane.stages");
-  return defined $step && $step eq $want ? ($step, @s) : () }
 
 my $today = floor($ENV{P_NOW} / 86400);
 my ($release, $target) = ("the release", undef);
@@ -825,7 +828,7 @@ $hidden = 0;
 for (my $i = $#under; $i >= 0 && $shown > $room - 1; $i--) {
   next unless @{ $under[$i] }; $shown -= @{ $under[$i] }; $hidden++; $under[$i] = [] }
 for my $i (0 .. $#rows) { print $rows[$i][0], "\n"; print "$_\n" for @{ $under[$i] } }
-printf "        +%s more, their stages behind: lanes_heartbeat.sh --lanes\n", plural($hidden, "step") if $hidden;
+printf "        +%s more running, their stages left out to keep one screen\n", plural($hidden, "step") if $hidden;
 print "\n", $tail;
 '
 
@@ -879,5 +882,5 @@ case "${1:-}" in
   show) shift; show "${1:-}" ;;
   summary) summary ;;
   watch) shift; case "${1:-}" in --full) watch_loop "${2:-300}" --full ;; *) watch_loop "${1:-300}" "${2:-}" ;; esac ;;
-  *) echo "usage: lanes_heartbeat.sh [--full] | --lanes [--full] | beat <lane> <state> \"<note>\" | stages <lane> \"<step>\" \"<n>|<state>|<name>[|<note>]\" ... | stages <lane> --clear | nudge <lane> \"<message>\" | show | summary | watch [seconds] [--full] | watch --full [seconds]" >&2; exit 2 ;;
+  *) echo "usage: lanes_heartbeat.sh [--full] | --lanes [--full] | beat <lane> <state> \"<note>\" | stages <lane> \"<step>\" \"<n>|<state>|<name>[|<note>]\" ... | stages <lane> --clear \"<step>\" | stages <lane> --clear --all | nudge <lane> \"<message>\" | show | summary | watch [seconds] [--full] | watch --full [seconds]" >&2; exit 2 ;;
 esac

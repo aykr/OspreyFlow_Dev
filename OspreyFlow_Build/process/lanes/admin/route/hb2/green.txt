@@ -1,1 +1,3 @@
-head 1562a76 + the change: 92 passed in 73.62s (0:01:13)
+# green: lane/admin-hb2 at c7ba2b0 + the review's fixes (this commit)
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py
+96 passed in 76.45s (0:01:16)

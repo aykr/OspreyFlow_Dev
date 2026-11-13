@@ -1,0 +1,6 @@
+# plant: reader_sanitises_by_character (scripts/lanes_heartbeat.sh), on lane/admin-hb2 at c7ba2b0 + the review's fixes
+# replaced: return Encode::encode("UTF-8", $step) =~ s/[^A-Za-z0-9._-]/_/gr }
+# with: return $step =~ s/[^A-Za-z0-9._-]/_/gr }
+# run: cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 .venv/bin/python -m pytest -q -p no:cacheprovider -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_step_with_spaces_a_slash_and_an_accent_is_found_where_it_was_written
+1 failed, 24 passed in 23.37s

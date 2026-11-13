@@ -734,9 +734,16 @@ def test_stages_are_written_whole_and_a_second_call_replaces_them(hb, tmp_path) 
 
 def test_stages_clear_removes_the_list(hb, tmp_path) -> None:
     hb("stages", "studio", "L2", "1|now|Build")
-    cleared = hb("stages", "studio", "--clear")
+    cleared = hb("stages", "studio", "--clear", "L2")
     assert cleared.returncode == 0
     assert not (tmp_path / "lanes" / "studio.L2.stages").exists()
+
+
+def test_a_bare_clear_is_refused_so_another_step_s_list_is_never_cleared_by_habit(hb, tmp_path) -> None:
+    hb("stages", "studio", "L2", "1|now|Build")
+    refused = hb("stages", "studio", "--clear")
+    assert refused.returncode == 2 and "Say which step" in refused.stderr
+    assert (tmp_path / "lanes" / "studio.L2.stages").exists()
 
 
 def test_stages_are_kept_per_step_and_clear_takes_one_step_or_all(hb, tmp_path) -> None:
@@ -747,8 +754,15 @@ def test_stages_are_kept_per_step_and_clear_takes_one_step_or_all(hb, tmp_path) 
     assert sorted(p.name for p in lanes.iterdir()) == ["studio.L2.stages", "studio.L3.stages"]
     assert hb("stages", "studio", "--clear", "L2").returncode == 0
     assert sorted(p.name for p in lanes.iterdir()) == ["studio.L3.stages"]
-    (lanes / "studio.stages").write_text("step=L1\nstage=1|done|Plan\n", encoding="utf-8")  # from before
-    assert hb("stages", "studio", "--clear").returncode == 0
+    # The one file from before goes with the step it names, and only with that one.
+    (lanes / "studio.stages").write_text("step=L1\nstage=1|done|Plan\n", encoding="utf-8")
+    assert hb("stages", "studio", "--clear", "L3").returncode == 0
+    assert sorted(p.name for p in lanes.iterdir()) == ["studio.stages"]
+    assert hb("stages", "studio", "--clear", "L1").returncode == 0
+    assert list(lanes.iterdir()) == []
+    assert hb("stages", "studio", "L2", "1|done|Plan").returncode == 0
+    (lanes / "studio.stages").write_text("step=L1\nstage=1|done|Plan\n", encoding="utf-8")
+    assert hb("stages", "studio", "--clear", "--all").returncode == 0
     assert list(lanes.iterdir()) == []
 
 
