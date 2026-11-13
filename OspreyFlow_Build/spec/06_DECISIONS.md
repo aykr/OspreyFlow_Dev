@@ -33885,7 +33885,18 @@ them hidden from a reader, would have been withheld from that reader whole. This
    classification and code (`markings_hold`). Tests, each way:
    `test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace`,
    `test_an_administrator_cleared_for_the_list_transfers_its_schedule`,
-   `test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list`. A refresh's file carries no marking, so an update
+   `test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list`; and, for `_WITHHELD_SQL` and `owned_by`
+   (`test_person_ownership_store.py`), `test_each_item_left_out_is_said_to_be_withheld_and_never_named`'s
+   `list_schedule_above` and `list_schedule_of_a_restricted_code`, the other way
+   `test_a_list_schedule_the_administrator_is_cleared_for_is_not_withheld` and
+   `test_a_restricted_code_list_is_not_withheld_from_an_administrator_who_receives_it`. **In the audit**
+   (Admin › Audit's stream, `audit_section._lists_clause`; the orchestrator's re-check of 6bfc8d6, must 3): an
+   entry naming a screening list (a transfer of its schedule, which records the list's marking as moved, and
+   its subscription, schedule and refreshes, by `list_name`) is read only by a reader cleared for the list's
+   marking as it stands and as recorded, in the read's `WHERE`, so one left out is in no row, no total and no
+   picker; a caller naming no clearance is shown no list's entry. Tests, each way:
+   `test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list` (live) and
+   `test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance` (the route). A refresh's file carries no marking, so an update
    keeps the marking the list holds (`apply_update`), never dropping it to OFFICIAL.
    *Limit:* a subscription (ADR-133) cannot name a marking yet, so a list first loaded by subscription is
    OFFICIAL, P. Studio lists (ADR-140 Amendment 13) are not read by the gate and are unchanged.
@@ -34031,11 +34042,11 @@ them hidden from a reader, would have been withheld from that reader whole. This
    unchanged: their tests count the store's subscriptions. *Logged.*
 
 **Tests that would fail (rule 12).** The offline ones are shown red by plants at their real call sites
-(`process/lanes/rules/lists/AM7_RED_RECORD.txt`: P1 to P51, with P3b, P49b and P51b; a plant that breaks collection is
+(`process/lanes/rules/lists/AM7_RED_RECORD.txt`: P1 to P52, with P3b, P49b and P51b; a plant that breaks collection is
 recorded BROKEN, never red), headed by the commit it ran at and the code's identity with it. The new cases
 were also run against the code before the second pass (`REVIEW2_RED_BEFORE.txt`). The live ones, and CARRIES
 row 113's cross-file red, by `process/lanes/rules/lists/am7_live_plants.py` under the rules lane's lease
-(`AM7_LIVE_RECORD.txt` beside it: L0 to L27, with L0b, L2b and L24b, each red, headed by
+(`AM7_LIVE_RECORD.txt` beside it: L0 to L28, with L0b, L2b, L24b, L24c and L24d, each red, headed by
 the code's identity; L0, L4, L6 and L12 retargeted where the second pass moved their invariant, the runs
 before that kept raw beside it). The live files
 the change reaches, with `test_route_rights.py`, ran on the same lease (`process/lanes/rules/gates/`, each
@@ -34136,7 +34147,13 @@ failure outside those files triaged beside it).
   to one not cleared for it (1; item 2 of e911b90's verification, and 7a1c760's):
   `test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace`,
   `test_an_administrator_cleared_for_the_list_transfers_its_schedule`,
-  `test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list` (L24, L24b, L25).
+  `test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list` (L24, L24b, L25);
+  `test_each_item_left_out_is_said_to_be_withheld_and_never_named[list_schedule_above]`,
+  `[list_schedule_of_a_restricted_code]` (L24c), `test_a_list_schedule_the_administrator_is_cleared_for_is_not_withheld`,
+  `test_a_restricted_code_list_is_not_withheld_from_an_administrator_who_receives_it` (L24d).
+- An audit entry naming a list read, counted or offered to a reader not cleared for it (1; must 3 of the
+  re-check of 6bfc8d6): `test_an_entry_naming_a_list_is_read_only_by_a_reader_cleared_for_the_list` (L28),
+  `test_the_stream_and_its_picker_are_read_with_the_readers_own_lists_clearance` (P52).
 - A scheduled refresh run as an owner not cleared for the list (1):
   `test_an_owner_not_cleared_for_the_list_is_refused_in_words_and_nothing_is_read`,
   `test_an_owner_cleared_for_a_marked_list_refreshes_it` (L26).
