@@ -82,7 +82,8 @@ def kubectl(*args: str, stdin: str | None = None, check: bool = True) -> str:
 
 
 def apply(documents: list[dict[str, Any]]) -> None:
-    kubectl("apply", "-f", "-", stdin="\n---\n".join(json.dumps(d) for d in documents))
+    # One v1 List: kubectl reads a JSON stream as JSON, so a YAML `---` between documents is refused.
+    kubectl("apply", "-f", "-", stdin=json.dumps({"apiVersion": "v1", "kind": "List", "items": documents}))
 
 
 def record(name: str) -> Path:
