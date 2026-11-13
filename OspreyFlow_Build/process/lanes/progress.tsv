@@ -98,5 +98,5 @@ platform-b	rail	S	done	The rail: Ask & Chat and Dashboards on it, Explore Detail
 platform	home-access	S	done	Home's Your access and tasks, full width, the owner's words (ADR-145 Am 11; merged 4196468; live 13 Nov)
 platform	compact-govuk	S	done	The GOV.UK look compact in the workspace, no crown off gov.uk (ADR-132 Am 8; merged 6db2a4a + 23c4fbd; live 13 Nov)
 admin	refresh	M	done	A refresh keeps the person signed in and where they were (ADR-050 Am 3) (merged)
-admin	pg	S	todo	A deployment's Postgres allows its services' connections at rest (ADR-114 Am 43)
+admin	pg	S	done	A deployment's Postgres allows its services' connections at rest (ADR-114 Am 43) (merged 6aa02ff)
 demo	fixes-13nov	S	done	osprey-small, 13 Nov: banner, footer, Home x2, key prompt, one prompt, rail + Help, compact header (orchestrator's deploys from HANDOFF after the lane closed)
