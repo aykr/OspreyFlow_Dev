@@ -1,5 +1,11 @@
 # The search service's request and response (v0.5.2 step 3d, for the case lane's 3e′)
 
+**Frozen at ee7a16d, 13 November 2026, after the owner read page A (about 22:40).** A change from here goes through
+the orchestrator to the case lane. **The owner's ruling:**
+- groups count records, and the screen says "records";
+- ranking is strict: exact identifier, then close name, then mention, with no word-rarity scoring and no fuzzy or
+  prefix expansion.
+
 Draft by the studio lane, 13 November 2026. It goes with the access design page (`SEARCH_ACCESS_DESIGN.md`) and **is
 frozen once the owner has read that page**. Until then it may change only by a message to the case lane. The
 Pydantic models in `packages/schemas` (generated to TypeScript) become the source of truth when they land. They
