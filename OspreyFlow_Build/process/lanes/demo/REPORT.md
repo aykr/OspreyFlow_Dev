@@ -37,3 +37,9 @@ Commits: this report and the friction row only. Requests: none open. Nothing of 
 - The owner set the key. `network.access_key: true` (copy `osprey.yaml.before-access-key`), one apply: api and proxy restarted. All three names answer 401 with noindex. Four sign-ins PASS with the host-tool pass (`harness.access_key.pass_token`, never the key). The look-switch render gate passes.
 - Open: the GOV.UK header still shows the crown logo (Am 7 covers only the footer). Superset's own login page has no banner.
 - Main 4196468 deployed (Home's "Your access and tasks", ADR-145 Am 11): dry run (only `__pycache__`), rsync, `start --build` 40 s; `osprey.yaml` unchanged. Every check passes: the section spans full width below both columns, its sub-headings are smaller than its title, the lines read as expected, the gate (401 and noindex) holds on all three names, four sign-ins pass, banner and footer pass. Screenshots `access-tasks-{1440,1024}.png`. The browser on the owner's Mac went through the gate with the host-tool pass, held in memory only.
+- The demo was postponed and the freeze lifted (orchestrator's word, 11:5x). Main 33084d7 deployed (ADR-114 Am 42, one key prompt):
+  - The new `read()` accepted the live key file.
+  - Dry run: only `__pycache__`. One `apply`, not `start --build`: only harness files changed, and refresh never re-renders the Caddyfile or carries the key file. Only the proxy restarted.
+  - The key file was rewritten with `Domain={args[0]}` and the same pass.
+  - Checks: 401 and noindex without the pass. With the pass cookie scoped to the base name (not the key), all three names answer 200 with no prompt. Four sign-ins, Home, banner, footer and health all pass.
+  - Copies: `Caddyfile.before-onepass` and `access-key.caddy.before-onepass`.
