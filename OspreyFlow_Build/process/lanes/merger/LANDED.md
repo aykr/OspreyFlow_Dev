@@ -33,3 +33,4 @@ eec25d1 d84bbe8 case-b P12p2
 b4b570d eaaa9d4 studio carries
 5a8c2d8 eaede4c docs sites
 9aff917 8b7a34d platform-b ci-green
+a9af842 5ee595f platform-b gate-b+footer

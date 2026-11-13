@@ -763,11 +763,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 
         Both confirmed in the code and being fixed. It lands after the demo if its gates miss Friday's 11:30.
       - **Friday morning, re-ordered for your 06:30–09:30 absence:**
-        1. gate-b merged by 08:30;
+        1. gate-b merged by 08:30 (**done 06:55, a9af842**, with the footer);
         2. the demo lane deploys the banner only (the key prompt off) while you are away;
         3. **about 09:30, you run (2 minutes):**
            `ssh -t ospreyflow-test 'cd /opt/ospreyflow && sudo -u osprey PYTHONPATH=cli:.:packages .venv/bin/python -m harness.access_key set deploy/generated/small'`
-           (it asks for the key twice and shows nothing; I'll confirm the exact line once gate-b has merged);
+           (confirmed against the merged helper, a9af842: it asks for the key twice and shows nothing; the key is at
+           least 12 characters, no spaces at either end; the person's user name is `demo`);
         4. the demo lane switches the key prompt on and checks it, by 10:30.
 
         If the key isn't set by 11:00, the demo runs with the banner alone, behind your address allowlist.
