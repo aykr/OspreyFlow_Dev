@@ -34,6 +34,9 @@
 .context-banner__sep { color: var(--text-secondary); }
 .context-banner__cross { margin-left: auto; }
 .context-banner__sections { display: flex; gap: var(--sp-4); }
+/* ADR-145 Amendment 13: the open mode's one line, in the row when it fits and on a line of its own under
+   it when it does not (a flex item wraps whole). */
+.context-banner__note { color: var(--text-secondary); }
 .context-banner__section {
   font: inherit; min-height: 24px; padding: 0 var(--sp-6); background: transparent; border: 0; border-radius: var(--r-control);
   color: var(--text-secondary); cursor: pointer;
@@ -67,4 +70,7 @@
 .context-banner--folded .govuk-notification-banner__content { padding: var(--sp-2) var(--sp-16); gap: var(--sp-8); }
 /* The title at the row's own size (the notification banner's type), bold, as the place it names. */
 .context-banner--folded .govuk-notification-banner__title { margin: 0; font-size: inherit; line-height: inherit; font-weight: 700; color: var(--text-primary); }
+/* The mode's note in GOV.UK's 14 px type, as the banner above it (Amendment 8 decision 3): the row's 19 px
+   would not leave it room at 1440. */
+.context-banner--folded .context-banner__note { font-size: 14px; line-height: 20px; color: var(--text-primary); }
 .context-banner--folded :is(.btn, .govuk-link) { min-height: 24px; padding-top: 0; padding-bottom: 0; line-height: 24px; }

@@ -21,7 +21,7 @@ import { AdminPlace } from "../src/admin/AdminPlace";
 import { BrandFrame } from "../src/brand/BrandFrame";
 import { PLAIN_APPEARANCE } from "../src/brand/brand";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
-import { ContextBanner, crossLinkFor } from "../src/shell/ContextBanner";
+import { ContextBanner, crossLinkFor, MODE_NOTE } from "../src/shell/ContextBanner";
 import { PlaceSwitcher } from "../src/shell/PlaceSwitcher";
 import { useLastGlassView } from "../src/shell/placeMemory";
 import { openCase } from "../src/investigation/cases";
@@ -47,7 +47,7 @@ const params = new URLSearchParams(location.search);
 const rights = new Set((params.get("rights") ?? "investigate,read_alert_queue,edit_pipelines,manage_people").split(","));
 const places = placesFor(rights);
 const CASES: Record<string, string> = { kestrel: "Kestrel", harrier: "Harrier" };
-type View = "graph" | "map" | "dossier" | "matrix" | "reports" | "strength" | "alerts" | "ingest";
+type View = "graph" | "map" | "dossier" | "matrix" | "reports" | "strength" | "alerts" | "ingest" | "boards";
 
 function Harness() {
   const start = (params.get("place") as PlaceId | null) ?? (params.get("view") === "ingest" ? "ingest" : null) ?? places[0] ?? "glass";
@@ -115,11 +115,13 @@ function Harness() {
         sections={
           place === "glass"
             ? [
-                { id: "case", label: "Case", current: true, onSelect: () => setView("graph") },
-                { id: "boards", label: "Boards", current: false },
+                // ADR-145 Amendment 13: the mode toggle, as `App.tsx` draws it.
+                { id: "case", label: "Graph", current: view !== "boards", onSelect: () => setView("graph") },
+                { id: "boards", label: "Drawing board", current: view === "boards", onSelect: () => setView("boards") },
               ]
             : []
         }
+        note={place === "glass" ? (view === "boards" ? MODE_NOTE.board : MODE_NOTE.graph) : undefined}
         caseSwitcher={place === "admin" ? undefined : caseMenu}
         datasets={place === "glass" ? ["Prison intel"] : null}
         crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {

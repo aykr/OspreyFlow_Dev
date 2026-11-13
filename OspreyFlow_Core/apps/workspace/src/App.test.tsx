@@ -842,7 +842,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       // Round 3: said on the alert only; the Glass, visited next, carries no stale "could not be opened".
       fireEvent.click(within(await screen.findByRole("navigation", { name: "Places" })).getByRole("button", { name: /^The Glass/ }));
       await vi.waitFor(() => expect(window.location.pathname).not.toBe("/alerts/a1"));
-      expect(await screen.findByRole("button", { name: "Graph" })).toBeTruthy();
+      expect(await within(await screen.findByRole("group", { name: "View" })).findByRole("button", { name: "Graph" })).toBeTruthy();
       expect(screen.queryByText(/That view could not be opened/)).toBeNull();
     } finally {
       window.history.replaceState(null, "", "/");
@@ -853,7 +853,8 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     holdAllRequests();
     render(<App />);
 
-    const graph = await screen.findByRole("button", { name: "Graph" });
+    // The top bar's view switch; the banner's mode toggle is named Graph too (ADR-145 Amendment 13).
+    const graph = await within(await screen.findByRole("group", { name: "View" })).findByRole("button", { name: "Graph" });
     expect(graph.getAttribute("aria-pressed")).toBe("true");
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("glass");
   });

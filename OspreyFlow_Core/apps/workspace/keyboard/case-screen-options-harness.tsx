@@ -138,8 +138,8 @@ function Harness() {
       <ContextBanner
         place="glass"
         sections={[
-          { id: "case", label: "Case", current: true, onSelect: () => undefined },
-          { id: "boards", label: "Boards", current: false },
+          { id: "case", label: "Graph", current: true, onSelect: () => undefined },
+          { id: "boards", label: "Drawing board", current: false },
           { id: "monitoring", label: "Monitoring", current: false, onSelect: () => undefined },
         ]}
         caseSwitcher={

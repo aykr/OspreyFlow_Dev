@@ -6,9 +6,10 @@
 // case they came from. Under the GOV.UK brand it is a GOV.UK notification banner (decision 3), folded
 // into one row (ADR-132 Amendment 8).
 //
-// In the Glass the banner carries the place's sections, Case · Boards (decision 1; Monitoring left
-// for Rules and Monitoring, ADR-146 decision 2); *Boards* is drawn as coming until its screens are
-// built. Not drawn in the Studio: its dataset
+// In the Glass the banner carries the place's mode toggle, Graph · Drawing board (decision 1, named so
+// by Amendment 13; Monitoring left for Rules and Monitoring, ADR-146 decision 2), with the open mode's
+// one-line note (Amendment 13), part of the region and its description, so a screen reader reads it
+// with the region. A section with no `onSelect` is drawn as coming. Not drawn in the Studio: its dataset
 // ("Dataset ‹name› ▾"), which the Studio chooses itself, in its own *Dataset* select
 // (`ingest/IngestStudio.tsx`, Lane 1's) — the banner would need a hook there to name it — and that
 // dataset's "feeds n cases" (no route gives a dataset's cases as the reader may see them, and an
@@ -37,14 +38,24 @@ export interface BannerSection {
 
 export interface ContextBannerProps {
   place: PlaceId;
-  /** The place's sections (the Glass's Case · Boards). */
+  /** The place's sections (the Glass's Graph · Drawing board, ADR-145 Amendment 13). */
   sections?: readonly BannerSection[];
+  /** One line saying what the open mode is (ADR-145 Amendment 13): in the row when it fits there,
+   * under it when it does not; the region's description either way. */
+  note?: string;
   /** The case switcher, in the Glass and the Studio. */
   caseSwitcher?: ReactNode;
   /** The names of the datasets the open case reads; `null` while read or when refused. */
   datasets?: readonly string[] | null;
   crossLink?: CrossLink | null;
 }
+
+/** The Glass's two modes in one line each (ADR-145 Amendment 13, the owner's words of 13 November 2026):
+ * the graph is the case's data; a drawing board is a sketch beside it. */
+export const MODE_NOTE = {
+  graph: "Graph: the case's data. Saved views are under Views or Cases.",
+  board: "Drawing board: your sketch; it does not change the case's data.",
+} as const;
 
 const YOU_ARE_IN: Record<PlaceId, string> = {
   glass: `You are in ${PLACE_NAME.glass.replace(/^The /, "the ")}`,
@@ -84,11 +95,12 @@ export function useCaseContext(
   return read && read.id === investigationId ? read : { name: null, datasets: null };
 }
 
-export function ContextBanner({ place, sections = [], caseSwitcher, datasets, crossLink }: ContextBannerProps) {
+export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink }: ContextBannerProps) {
   const govuk = currentBrand() === "govuk";
   // The place opens the line in both brands (ADR-132 Amendment 8 folded GOV.UK's title into it), so each
   // part after it is set off by a separator.
   const next = () => <span className="context-banner__sep" aria-hidden="true">·</span>;
+  const described = note ? "context-banner-note" : undefined;
   const line = (
     <>
       {sections.length > 0 && (
@@ -139,6 +151,14 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, cr
           {caseSwitcher}
         </>
       )}
+      {note && (
+        <>
+          {next()}
+          <span id="context-banner-note" className="context-banner__note">
+            {note}
+          </span>
+        </>
+      )}
       {crossLink && (
         <button type="button" className={govuk ? "govuk-link context-banner__cross" : "btn btn--ghost context-banner__cross"} onClick={crossLink.onFollow}>
           {crossLink.label}
@@ -150,7 +170,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, cr
     // ADR-132 Amendment 8 (the owner's ruling, 13 November 2026): one row, not GOV.UK's title band over its
     // content. "You are in …" is still the region's heading and name, at the start of the row, at its size.
     return (
-      <div className="govuk-notification-banner context-banner--govuk context-banner--folded" role="region" aria-labelledby="context-banner-title">
+      <div className="govuk-notification-banner context-banner--govuk context-banner--folded" role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
         <div className="govuk-notification-banner__content">
           <h2 className="govuk-notification-banner__title context-banner__place" id="context-banner-title">
             {YOU_ARE_IN[place]}
@@ -161,7 +181,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, cr
     );
   }
   return (
-    <div className="context-banner" role="region" aria-labelledby="context-banner-title">
+    <div className="context-banner" role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
       <h2 className="context-banner__place" id="context-banner-title">
         {YOU_ARE_IN[place]}
       </h2>

@@ -58,7 +58,7 @@ import { LeftRail } from "./shell/LeftRail";
 import { RAIL_LABELS, splitRail } from "./shell/railLayout";
 import { Drawer } from "./design/primitives/Drawer";
 import { TopBar } from "./shell/TopBar";
-import { ContextBanner, crossLinkFor, useCaseContext } from "./shell/ContextBanner";
+import { ContextBanner, crossLinkFor, MODE_NOTE, useCaseContext } from "./shell/ContextBanner";
 import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { useLastGlassView } from "./shell/placeMemory";
 import { keepPlace, placeAtLoad, placeOnScreen, restorePlace } from "./auth/refreshPlace";
@@ -113,6 +113,7 @@ import { caseForDataset } from "./ingest/studio/datasets";
 import { buildLens, type Lens, lensWindow } from "./views/lens";
 import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
 import { ViewLensBanner } from "./views/ViewLensBanner";
+import { ViewsMenu } from "./views/ViewsMenu";
 import { ViewsPanel } from "./views/ViewsPanel";
 import { type CaseView, type CaseViewOpened, openView, saveView } from "./views/viewsApi";
 import { bringFactIntoView } from "./questions/graphFacts";
@@ -1817,15 +1818,16 @@ export function App() {
           cross-link between the Glass and the Studio for a person who holds both. */}
       <ContextBanner
         place={app}
-        // ADR-145 decision 1: the Glass's sections; Boards is ADR-143's drawing boards (L3.3).
-        // Monitoring left for Rules and Monitoring (ADR-146 decision 2), its count with it.
+        // ADR-145 decision 1: the Glass's mode toggle, named Graph · Drawing board by Amendment 13 (the
+        // owner, 13 November 2026); the drawing board is ADR-143's (L3.3). Monitoring left for Rules and
+        // Monitoring (ADR-146 decision 2), its count with it.
         sections={
           app === "glass"
             ? [
-                { id: "case", label: "Case", current: view !== "boards", onSelect: () => setView(landingView(rights)) },
+                { id: "case", label: "Graph", current: view !== "boards", onSelect: () => setView(landingView(rights)) },
                 {
                   id: "boards",
-                  label: "Boards",
+                  label: "Drawing board",
                   current: view === "boards",
                   onSelect: () => {
                     setBoardToOpen(null);
@@ -1844,6 +1846,8 @@ export function App() {
             onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
           />
         }
+        // ADR-145 Amendment 13: the open mode's one line, read with the region.
+        note={app === "glass" ? (view === "boards" ? MODE_NOTE.board : MODE_NOTE.graph) : undefined}
         // ADR-145 decision 2: the Glass names what the case reads; the Studio's dataset is its own
         // choice, drawn by the Studio (`ingest/IngestStudio.tsx`), so the banner does not repeat it.
         datasets={app === "glass" ? caseContext.datasets : null}
@@ -1961,7 +1965,7 @@ export function App() {
             }}
             address={addressedAlert && addressed ? { alertId: addressedAlert, state: addressed } : null}
             onOpenAlert={(alertId) => navigate(alertId ? alertPath(alertId) : "/")}
-            // L3.6: *Open the board* from a drawn watch's alert, in this case's Boards.
+            // L3.6: *Open the board* from a drawn watch's alert, on this case's Drawing board.
             onOpenBoard={(boardId) => {
               setBoardToOpen(boardId);
               setView("boards");
@@ -2128,6 +2132,19 @@ export function App() {
                   setQuestionsOpen(true);
                 }}
                 lens={lens !== null}
+                // ADR-144 Amendment 3: the case's saved views one click from the canvas; opening one is
+                // the drawer's own `openLens`.
+                viewsMenu={
+                  investigationId ? (
+                    <ViewsMenu
+                      apiBaseUrl={API_BASE_URL}
+                      bearerToken={bearerToken}
+                      caseId={investigationId}
+                      openViewId={lens?.opened.view.id ?? null}
+                      onOpen={(chosen) => void openLens(chosen.id)}
+                    />
+                  ) : undefined
+                }
                 onSelectionChange={(nodeIds) => {
                   setSelectedNodeIds(nodeIds);
                   const first = nodeIds[0];
