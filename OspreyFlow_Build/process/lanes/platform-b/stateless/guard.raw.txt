@@ -1,0 +1,9 @@
+# stateless, the guard test (test_ci_postgres_connections.py), this Mac, at 7b664a3
+## ci.yml as main has it
+E       AssertionError: the conformance job leaves Postgres at its default max_connections (100)
+1 failed in 0.20s
+## the diff, planted at 300
+E       AssertionError: max_connections 300 < the lane stacks' 400
+1 failed in 0.20s
+## the diff as written (400)
+1 passed in 0.19s

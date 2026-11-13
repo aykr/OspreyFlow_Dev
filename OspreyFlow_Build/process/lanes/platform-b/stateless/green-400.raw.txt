@@ -1,0 +1,4 @@
+# stateless, green: the same, the Postgres at max_connections 400 (the lane stacks' own, stack_lease.sh PG_CONNECTIONS)
+Conduit 1 up; client connections now held: 51
+Conduit 2 up; client connections now held: 101
+Conduit 3 up; client connections now held: 151
