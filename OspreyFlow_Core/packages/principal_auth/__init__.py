@@ -278,10 +278,11 @@ class ClaimMapping(BaseModel):
             or not _GUID.match(self.superset_client_id)
             or self.superset_client_id in (self.client_id, self.api_client_id)
         ):
-            # ADR-148 Amendment 9: its own registration in the Entra tenant, never the Glass's (whose
-            # tokens would then be held to Superset's two routes) nor the API's.
+            # ADR-148 Amendment 9: its own registration in the Entra tenant, never the Glass's
+            # (whose tokens would then be held to Superset's two routes) nor the API's.
             raise ValueError(
-                "`superset_client_id` must be Superset's own application id (a GUID) in an Entra ID "
+                "`superset_client_id` must be Superset's own application id (a GUID) in an Entra "
+                "ID "
                 "mapping, neither the Glass's nor the API's"
             )
         if self.tenant_id is None and (

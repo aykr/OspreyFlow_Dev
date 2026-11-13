@@ -184,7 +184,8 @@ def _refuse(config: OspreyConfig) -> None:
         # ADR-148 Amendment 9: Superset signs people in as its own app registration.
         raise CloudPlatformNotRenderable(
             "reporting.superset is on, and people sign in to Superset with Entra ID as its own app "
-            "registration: name it in cloud_platform.claims.superset_client_id (its application id; "
+            "registration: name it in cloud_platform.claims.superset_client_id (its application "
+            "id; "
             "INSTALL.md says how to register it)"
         )
     from principal_auth import ClaimMapping
@@ -270,9 +271,9 @@ def person_given(config: OspreyConfig) -> set[str]:
     given = set(model_key_variables(config).values()) | set(connection_secret_variables(config))
     if config.mail is not None and config.mail.username:
         given.add("OSPREY_SMTP_PASSWORD")
-    # ADR-148 Amendment 11: Superset's client secret is the one the client's Entra administrator makes
-    # for its registration, never one minted here; and the report sync's dashboard identities (each
-    # an Entra registration's application id and secret, Amendment 10) are given as they are
+    # ADR-148 Amendment 11: Superset's client secret is the one the client's Entra administrator
+    # makes for its registration, never one minted here; and the report sync's dashboard identities
+    # (each an Entra registration's application id and secret, Amendment 10) are given as they are
     # registered, so a later apply writes the list given, never a fixed `[]` over it.
     if config.reporting.superset:
         given.add("SUPERSET_OIDC_CLIENT_SECRET")
@@ -1112,9 +1113,9 @@ def render_cloud_platform(
     environment.update({k: v for k, v in install.settings.items() if k not in REALM_SETTINGS})
     # Entra ID's, last, so nothing the cluster's realm wrote stands (ADR-148 Amendment 8).
     environment.update(entra_settings(config))
-    # Superset's rate limits in the managed cache, over TLS with its password (ADR-148 Amendment 11):
-    # `superset_config.py` builds the address from VALKEY_*, which the cache's secret gives; the
-    # cluster's `redis://valkey:6379/5` names a Valkey this profile does not run.
+    # Superset's rate limits in the managed cache, over TLS with its password (ADR-148 Amendment
+    # 11): `superset_config.py` builds the address from VALKEY_*, which the cache's secret gives;
+    # the cluster's `redis://valkey:6379/5` names a Valkey this profile does not run.
     environment.pop("SUPERSET_RATELIMIT_STORAGE", None)
     sources = _cp(config).connector_sources
     if _cp(config).connector_hosts or sources.declared():

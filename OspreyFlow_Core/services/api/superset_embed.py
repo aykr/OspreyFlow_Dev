@@ -57,14 +57,18 @@ class EmbeddableDashboard:
 
 
 def identity_for(slug: str, identities: Sequence[DashboardIdentity]) -> DashboardIdentity | None:
-    """The identity a board's slug names: by its name where it has one (Entra ID, where the client id
-    is the registration's application id, ADR-148 Amendments 10 and 11), else by Keycloak's client id
-    (`osprey-dashboard-<slug>`). A named identity is matched by its name alone."""
+    """The identity a board's slug names: by its name where it has one (Entra ID, where the client
+    id is the registration's application id, ADR-148 Amendments 10 and 11), else by Keycloak's
+    client id (`osprey-dashboard-<slug>`). A named identity is matched by its name alone."""
     return next(
         (
             d
             for d in identities
-            if (d.name == slug if d.name is not None else d.client_id == f"{DASHBOARD_PREFIX}{slug}")
+            if (
+                d.name == slug
+                if d.name is not None
+                else d.client_id == f"{DASHBOARD_PREFIX}{slug}"
+            )
         ),
         None,
     )

@@ -40,7 +40,8 @@ AUTH_ROLES_SYNC_AT_LOGIN = True
 AUTH_ROLES_MAPPING = {
     "osprey-admin": ["Admin"],
     # The owner's ruling of 13 November 2026 (Q2): a holder of `manage_dashboards` without
-    # `administer_system` builds reports (Superset's Alpha), from "Build a report" (Entra ID's role keys).
+    # `administer_system` builds reports (Superset's Alpha), from "Build a report" (Entra ID's role
+    # keys).
     "dashboard_builder": ["Alpha"],
     "reports_viewer": ["Gamma"],
     "analyst": ["Gamma"],
@@ -68,10 +69,10 @@ if not _ENTRA:
                 # The id_token is verified: signature against the realm's keys, fetched over the
                 # internal network; audience, nonce and issuer. A browser sign-in's id_token carries
                 # the public issuer — the address the person signed in at — even though Superset
-                # fetches it internally (measured: the internal issuer was refused, `invalid_claim`);
-                # `SUPERSET_IDP_ISSUER` names another for a realm with a fixed hostname. Without
-                # `jwks_uri` every sign-in was refused ("Missing jwks_uri in metadata", found live 11
-                # October 2026).
+                # fetches it internally (measured: the internal issuer was refused,
+                # `invalid_claim`); `SUPERSET_IDP_ISSUER` names another for a realm with a fixed
+                # hostname. Without `jwks_uri` every sign-in was refused ("Missing jwks_uri in
+                # metadata", found live 11 October 2026).
                 "jwks_uri": f"{_internal}/protocol/openid-connect/certs",
                 "issuer": os.environ.get("SUPERSET_IDP_ISSUER", _public),
             },
@@ -79,10 +80,10 @@ if not _ENTRA:
     ]
 
 else:
-    # ADR-148 Amendment 9: Superset is its own app registration in the client's tenant, and asks Entra
-    # for an ID token (its own sign-in) and a delegated token for OspreyFlow's API scope, which it
-    # spends on the Conduit's `GET /v1/me` and `/v1/me/rights` alone (the Conduit admits Superset's
-    # client there and nowhere else). Every address is the tenant's own: no `common` or
+    # ADR-148 Amendment 9: Superset is its own app registration in the client's tenant, and asks
+    # Entra for an ID token (its own sign-in) and a delegated token for OspreyFlow's API scope,
+    # which it spends on the Conduit's `GET /v1/me` and `/v1/me/rights` alone (the Conduit admits
+    # Superset's client there and nowhere else). Every address is the tenant's own: no `common` or
     # `organizations` endpoint, so a person of another tenant is refused by Entra before Superset.
     _tenant = os.environ["SUPERSET_ENTRA_TENANT"]
     _authority = os.environ.get("SUPERSET_ENTRA_AUTHORITY", "https://login.microsoftonline.com")
@@ -98,7 +99,9 @@ else:
                 "api_base_url": f"{_entra}/oauth2/v2.0/",
                 "access_token_url": f"{_entra}/oauth2/v2.0/token",
                 "authorize_url": f"{_entra}/oauth2/v2.0/authorize",
-                "client_kwargs": {"scope": f"openid profile {os.environ['SUPERSET_ENTRA_API_SCOPE']}"},
+                "client_kwargs": {
+                    "scope": f"openid profile {os.environ['SUPERSET_ENTRA_API_SCOPE']}"
+                },
                 # The ID token is Superset's own (its audience Superset's registration), verified
                 # against the tenant's keys and its v2.0 issuer, whatever the API's token version.
                 "jwks_uri": f"{_entra}/discovery/v2.0/keys",
@@ -152,10 +155,10 @@ class OspreySecurityManager(SupersetSecurityManager):
 
 def _entra_user_info(response: dict, access_token: str) -> dict:  # type: ignore[type-arg]
     """The account is the Conduit's principal: its id (the Entra object id) is the username, and its
-    rights decide the role, re-read at every sign-in (`AUTH_ROLES_SYNC_AT_LOGIN`): `administer_system`
-    is Superset's Admin, `manage_dashboards` its builder (Alpha), `read_reports` its read-only Gamma,
-    none of them no account at all. Only the
-    displayed name comes from the ID token (verified by Superset's OAuth client against the tenant)."""
+    rights decide the role, re-read at every sign-in (`AUTH_ROLES_SYNC_AT_LOGIN`):
+    `administer_system` is Superset's Admin, `manage_dashboards` its builder (Alpha),
+    `read_reports` its read-only Gamma, none of them no account at all. Only the displayed name
+    comes from the ID token (verified by Superset's OAuth client against the tenant)."""
     if not access_token:
         raise NotForReports("no delegated token came back from Entra ID")
     me = _conduit("/v1/me", access_token)
@@ -251,9 +254,9 @@ TALISMAN_CONFIG = {
 # that can send these headers: trust its scheme and host when building sign-in redirects.
 ENABLE_PROXY_FIX = True
 RATELIMIT_STORAGE_URI = os.environ.get("SUPERSET_RATELIMIT_STORAGE") or (
-    # A managed cache (the cloud-platform profile's ElastiCache, ADR-148 Amendment 11): its address and
-    # password from its secret, over TLS. Database 5, as on Small (a replication group without cluster
-    # mode keeps numbered databases).
+    # A managed cache (the cloud-platform profile's ElastiCache, ADR-148 Amendment 11): its address
+    # and password from its secret, over TLS. Database 5, as on Small (a replication group without
+    # cluster mode keeps numbered databases).
     f"{'rediss' if os.environ.get('VALKEY_TLS', '').lower() == 'true' else 'redis'}://"
     f":{quote(os.environ.get('VALKEY_PASSWORD', ''), safe='')}"
     f"@{os.environ['VALKEY_HOST']}:{os.environ.get('VALKEY_PORT', '6379')}/5"
