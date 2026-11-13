@@ -452,8 +452,11 @@ class EntraPeopleAdmin:
     Keycloak (the routes call either): roles and *Disable* written to the deployment's own store,
     everything Entra holds refused in words."""
 
-    def __init__(self, store: EntraPeopleStore) -> None:
+    def __init__(self, store: EntraPeopleStore, *, own_clients: Iterable[str | None] = ()) -> None:
         self.store = store
+        #: The Glass's and this API's own application ids, never a dashboard identity's: the
+        #: resolver refuses a token of either as a dashboard's (ADR-148 Amendment 10).
+        self.own_clients = frozenset(c.lower() for c in own_clients if c)
 
     async def aclose(self) -> None:
         """The store is the run resources' (`run_resources.py` closes it), not this admin's."""
@@ -536,6 +539,11 @@ class EntraPeopleAdmin:
             raise UnknownRoleError(
                 "on Entra ID a dashboard identity is its own app registration: give its "
                 "application id (the registration holds its secret)"
+            )
+        if application_id.lower() in self.own_clients:
+            raise UnknownRoleError(
+                f"{application_id} is this deployment's own application (the Glass's or the "
+                "API's), never a dashboard identity: give the dashboard's own app registration"
             )
         stored = await self.store.register_dashboard(
             application_id, dashboard_slug(name), clearance=clearance, org_unit=org_unit

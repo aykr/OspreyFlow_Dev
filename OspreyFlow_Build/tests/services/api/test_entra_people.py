@@ -739,6 +739,23 @@ async def test_on_entra_a_dashboard_is_refused_in_words_without_its_application_
     assert refused.value.error == "no_such_dashboard"
 
 
+GLASS_APP = "aaaaaaaa-1111-4222-8333-444444444444"
+API_APP = "bbbbbbbb-1111-4222-8333-444444444444"
+
+
+@pytest.mark.parametrize("own", [GLASS_APP, API_APP, API_APP.upper()], ids=["glass", "api", "api-upper"])
+async def test_the_deployment_s_own_applications_are_never_registered_as_dashboards(own: str) -> None:
+    """The resolver would refuse their tokens as a dashboard's, so a registration of either is a
+    mistake, refused in words before anything is written (the lane review of 009a889)."""
+    from services.api.identity_admin import UnknownRoleError
+
+    store = _Store()
+    admin = EntraPeopleAdmin(store, own_clients=[GLASS_APP, API_APP, None])  # type: ignore[arg-type]
+    with pytest.raises(UnknownRoleError, match="own"):
+        await admin.create_dashboard("Board", clearance="OFFICIAL", org_unit="u", application_id=own)
+    assert await store.dashboards() == []
+
+
 async def test_on_keycloak_an_application_id_is_refused_in_words() -> None:
     """Keycloak registers its own client for a dashboard; an application id is Entra's."""
     from services.api.identity_admin import IdentityAdmin, UnknownRoleError
