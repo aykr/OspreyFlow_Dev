@@ -781,6 +781,22 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         "Your access and tasks", ADR-145 Am 11, platform), push main to the dev repo and publish the product repo
         again from the same commit (no tag), each recorded in PUSH_LOG.
 
+        **Where things stand when you went offline (about 08:00):**
+        - **Live on osprey-small and checked:** the banner, the footer, the key prompt, and Home's "Your access and
+          tasks" (4196468).
+        - **Due:**
+          | What | Lane | Ready by | Deployed by |
+          | --- | --- | --- | --- |
+          | One key prompt for all three names (ADR-114 Am 42) | platform-b | about 10:00 | about 10:15 |
+          | Slim header, banner and context row in the workspace (ADR-132 Am 8) | platform | 10:45 | 11:15 |
+          | The rail: Ask & Chat and Dashboards on it, More renamed Explore Details, Help in every view (ADR-145 Am 12) | platform-b | 10:45 | 11:15 |
+
+          Whatever misses 10:45 goes after the demo, and nothing runs on the server from 11:30.
+        - **The push and publish:** as you said, once the key prompt and Home have both landed. The later changes go
+          with the next push, on your word.
+        - **When you're back:** try a fresh incognito window. You should get one key prompt (`demo` and your key),
+          then sign in.
+
         If the key isn't set by 11:00, the demo runs with the banner alone, behind your address allowlist.
       - **Your rulings (about 00:20):**
         - the session pass beside the hash, accepted;
