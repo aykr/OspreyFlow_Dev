@@ -6,7 +6,7 @@ silent sign-in at load sends its hidden frame to `id.<host>`'s authorisation end
 `harness.site.OPEN_ON_THE_IDENTITY_PROVIDER`).
 
 **What this proves, at the HTTP level only:** through the real Caddy the deployment renders
-(`test_access_key_proxy.py`'s fixture, whose `curl` keeps and sends cookies by RFC 6265's domain
+(`access_key_proxy_fixtures.py`'s, shared with `test_access_key_proxy.py`, whose `curl` keeps and sends cookies by RFC 6265's domain
 rules), a request carrying the pass that answering the key on the Glass's own name gave
 (`Domain=<host>`) reaches the identity provider, and its return to the Glass passes too; without
 the pass it is answered 401 with the key's Basic challenge and reaches nothing. **What it does not
@@ -20,7 +20,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .test_access_key_proxy import HOST, KEY, _Proxy, proxy, pytestmark  # noqa: F401  (the fixture, the skip)
+from .access_key_proxy_fixtures import HOST, KEY, NEEDS_CADDY, Proxy, proxy  # noqa: F401  (the fixture, by name)
+
+pytestmark = NEEDS_CADDY
+
 
 #: The silent round as `oidc-client-ts` builds it (`userManager.ts`'s `renewSilently`).
 SILENT_ROUND = (
@@ -33,7 +36,7 @@ FRAME = {"Sec-Fetch-Dest": "iframe", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Si
 
 
 def test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name(
-    proxy: _Proxy,  # noqa: F811
+    proxy: Proxy,  # noqa: F811
     tmp_path: Path,
 ) -> None:
     jar = tmp_path / "jar"
@@ -51,7 +54,7 @@ def test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass
 
 
 def test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing(
-    proxy: _Proxy,  # noqa: F811
+    proxy: Proxy,  # noqa: F811
 ) -> None:
     status, fields = proxy.ask(f"id.{HOST}", SILENT_ROUND, headers=FRAME)
     assert status == 401

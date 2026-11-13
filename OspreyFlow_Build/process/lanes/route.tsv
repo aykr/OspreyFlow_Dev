@@ -2,7 +2,7 @@
 # The route to v0.5.2 (the owner, 13 Nov 2026). Kept by the orchestrator; the heartbeat's default view reads it.
 # Tab-separated: id, title, lane, start (YYYY-MM-DD), end (YYYY-MM-DD), critical (y/n), after (ids, comma, or -), progress
 # (lane:step in progress.tsv whose status gives this step's state; "-" for the orchestrator's own or the owner's).
-1	v0.5.1 cut: as R1 tested it, the upgrade rehearsal and the CHANGELOG	orchestrator	2026-11-14	2026-11-17	n	-	-
+1	v0.5.1 cut: as R1 tested it, the upgrade rehearsal and the CHANGELOG	orchestrator	2026-11-14	2026-11-17	n	-	orchestrator:v051-cut
 2	The poc manifest and its render test	platform	2026-11-14	2026-11-15	n	-	platform:v052-manifest
 3a	OpenSearch on poc: render, Terraform, sign-in, what the client provides	platform	2026-11-16	2026-11-17	n	2	platform:v052-opensearch
 3b	Superset and report sync on Entra	platform-b	2026-11-14	2026-11-19	n	2	platform-b:v052-superset

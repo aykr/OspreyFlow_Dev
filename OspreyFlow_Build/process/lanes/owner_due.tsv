@@ -1,7 +1,7 @@
 # What the owner owes and what the orchestrator owes (the heartbeat's default view reads it). Tab-separated:
 # who (owner|orchestrator), due (YYYY-MM-DD), item, state (open|done)
 owner	2026-11-18	The search navigation decision (3e′ waits on it)	done
-orchestrator	2026-11-16	The search access design page (A)	open
+orchestrator	2026-11-16	The search access design page (A) — read by the owner 13 Nov: strict ranking; groups count records	done
 orchestrator	2026-11-14	Scheduled runs on Entra: options and a recommendation (audit 1)	done
 orchestrator	2026-11-14	Laurium screen estimate (audit 2)	done
 orchestrator	2026-11-14	Entra: the two app registrations, guests in v0.5.1?, the fallback and groups estimates (audit 4)	done

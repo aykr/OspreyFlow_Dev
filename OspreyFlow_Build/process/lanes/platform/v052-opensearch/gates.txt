@@ -1,0 +1,7 @@
+v052-opensearch (3a), at 88a1820:
+- make cp-policy-check on the test server (offline lease, helm in Docker): its first run red, 50 violations
+  (the search Jobs given our Secret whole, the IRSA role's account and token unlisted, no fsGroupChangePolicy:
+  cp-policy-red.txt); after the fix, the gate and its suites green, 386 passed (cp-policy-green.txt).
+- On the Mac, offline, ports pinned: test_cloud_platform_*.py, test_poc_manifest.py, cloud_platform_backup,
+  test_admin_guide.py, test_cp_decommission_check.py: 564 passed, 51 skipped.
+- ruff (Core) clean; mypy harness/cloud_platform clean; ruff on the Build files changed: no finding not on main.

@@ -1,0 +1,6 @@
+# plant: skips_the_owner_s_fold (scripts/lanes_heartbeat.sh), on lane/admin-hb2 at c7ba2b0 + the review's fixes
+# replaced: for my $f (0 .. 3) { $fold = $f;
+# with: for my $f (0, 3) { $fold = $f;
+# run: cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 .venv/bin/python -m pytest -q -p no:cacheprovider -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_owner_s_fold_the_done_on_one_line_and_the_rest_in_full
+1 failed, 24 passed in 25.51s

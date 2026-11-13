@@ -29,6 +29,7 @@ Conduits still read one folder. It is not spread across nodes; P8 removes it (a 
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import re
 from collections.abc import Sequence
@@ -156,16 +157,6 @@ def _refuse(config: OspreyConfig) -> None:
             "a cloud platform runs ArcadeDB (ADR-148 decision 5); components.graph_store is "
             f"{config.components.graph_store.value!r}"
         )
-    cp = config.cloud_platform
-    if (
-        cp is not None
-        and cp.shape == "poc"
-        and config.components.search is SearchBackend.OPENSEARCH
-    ):
-        raise CloudPlatformNotRenderable(
-            "the poc shape makes no OpenSearch domain (ADR-148 Amendment 5), so its Conduit would "
-            "reach for one that is not there: set components.search: postgres-fulltext"
-        )
     if config.components.source_path is not None:
         raise CloudPlatformNotRenderable(
             "a cloud platform pulls its images from its registry; components.source_path asks "
@@ -255,12 +246,57 @@ def managed_variables(config: OspreyConfig) -> dict[str, tuple[str, str]]:
         "VALKEY_PASSWORD": ("redis", "password"),
         "MINIO_BUCKET_PREFIX": ("s3", "prefix"),
     }
-    # The platform's OpenSearch (decision 4) is made by the namespace's Terraform and its address
-    # written to its secret, but no pod is given it: nothing in the Conduit reads an OpenSearch
-    # address yet (`services/api/search.py`: the index leg has not landed), and a pod naming a key
-    # fails
-    # to start without it. The index leg names its variable here when it lands.
+    if config.components.search is SearchBackend.OPENSEARCH:
+        # Decision 4, v0.5.2 step 3a: the domain's address, from the secret the namespace's
+        # Terraform writes, to the pods that read the stores (ADR-150 decision 7's OPENSEARCH_URL).
+        variables["OPENSEARCH_URL"] = ("opensearch", "url")
     return variables
+
+
+#: The search index's two standing Jobs (ADR-150, rules' 3c): each a CronJob held suspended,
+#: started by the runbooks with `kubectl create job --from=cronjob/<name>`; the rebuild ends every
+#: restore.
+SEARCH_INDEX_JOBS = {
+    "ospreyflow-search-rebuild": ("search-rebuild", "scripts.rebuild_search_index"),
+    "ospreyflow-search-drift": ("search-drift", "scripts.search_index_drift"),
+}
+
+
+def opensearch_settings(config: OspreyConfig, platform: PlatformSettings) -> dict[str, str]:
+    """How the pods sign their requests to the namespace's OpenSearch (v0.5.2 step 3a, ADR-150
+    decision 7): `sigv4` with the namespace's IAM role, as service `es` in the platform's region, or
+    `none` where the platform's own proxy signs. Nothing where the deployment does not search with
+    OpenSearch."""
+    if config.components.search is not SearchBackend.OPENSEARCH:
+        return {}
+    return {
+        "OPENSEARCH_SIGNING": platform.opensearch_signing,
+        "OPENSEARCH_REGION": platform.aws_region,
+    }
+
+
+def search_index_values(
+    platform: PlatformSettings, workloads: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
+    """The chart's `searchIndex`: the Conduit's image, settings and size, under the namespace's own
+    service account (the IRSA role the domain admits), for each standing Job."""
+    api = next(w for w in workloads if w["name"] == "api")
+    # The settings alone (no Secret of ours whole): the graph's password by name, and the domain's
+    # address from the platform's secret, as the Conduit is given it. Nothing else is read.
+    address = next(e for e in api.get("env", []) if e["name"] == "OPENSEARCH_URL")
+    return {
+        "serviceAccountName": platform.secrets.irsa.service_account,
+        "image": api["image"],
+        "resources": copy.deepcopy(api["resources"]),
+        "env": [
+            copy.deepcopy(address),
+            {"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"},
+        ],
+        "jobs": [
+            {"name": name, "label": label, "command": ["/app/.venv/bin/python", "-m", module]}
+            for name, (label, module) in SEARCH_INDEX_JOBS.items()
+        ],
+    }
 
 
 def person_given(config: OspreyConfig) -> set[str]:
@@ -1113,6 +1149,7 @@ def render_cloud_platform(
     environment.update({k: v for k, v in install.settings.items() if k not in REALM_SETTINGS})
     # Entra ID's, last, so nothing the cluster's realm wrote stands (ADR-148 Amendment 8).
     environment.update(entra_settings(config))
+    environment.update(opensearch_settings(config, platform))
     # Superset's rate limits in the managed cache, over TLS with its password (ADR-148 Amendment
     # 11): `superset_config.py` builds the address from VALKEY_*, which the cache's secret gives;
     # the cluster's `redis://valkey:6379/5` names a Valkey this profile does not run.
@@ -1184,6 +1221,8 @@ def render_cloud_platform(
         "workloads": workloads,
         "jobs": jobs,
     }
+    if config.components.search is SearchBackend.OPENSEARCH:
+        out["searchIndex"] = search_index_values(platform, workloads)
     # Decision 13 (ADR-148 Amendment 7, P9): the backups, added to these values, and its Terraform.
     from harness.cloud_platform_backups import add_backups
 

@@ -44,7 +44,9 @@ def _rows(values: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def test_every_rendered_workload_has_its_row(values: dict[str, Any]) -> None:
     others = set(load_profile().egress.others)
-    assert others == {"backup", "backup-claims", "restore", "restore-claims"}
+    # P9's backup and restore pods, and the search index's rebuild and drift check (v0.5.2 step 3a).
+    assert others == {"backup", "backup-claims", "restore", "restore-claims", "search-rebuild",
+                      "search-drift"}  # fmt: skip
     assert set(_rows(values)) == {w["name"] for w in values["workloads"]} | others
 
 
@@ -236,10 +238,14 @@ def test_each_host_is_reached_on_its_own_ports() -> None:
 
 
 def test_the_managed_stores_are_reached_on_their_own_ports() -> None:
-    """RDS's and ElastiCache's, and the OpenSearch domain's 443 where the Terraform makes one (not
-    in the poc shape, which takes no OpenSearch)."""
+    """RDS's and ElastiCache's, and the OpenSearch domain's 443 where the Terraform makes one: the
+    poc's too since v0.5.2 (the owner, 13 November 2026), and none where search is PostgreSQL's."""
     assert _values("development")["egress"]["managedPorts"] == [443, 5432, 6379]
-    assert _values("poc")["egress"]["managedPorts"] == [5432, 6379]
+    assert _values("poc")["egress"]["managedPorts"] == [443, 5432, 6379]
+    raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
+    raw["components"]["search"] = "postgres-fulltext"
+    plain = yaml.safe_load(render(OspreyConfig.model_validate(raw), resolver=_resolver).artefacts["values.yaml"])
+    assert plain["egress"]["managedPorts"] == [5432, 6379]
 
 
 @pytest.mark.parametrize(

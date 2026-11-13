@@ -1,3 +1,50 @@
+# Morning, 14 November 2026 (the overnight run on the v0.5.2 route)
+
+Kept by the orchestrator through the night. The owner's words for the night: merge as ready, push main after green
+merges, sol lanes to ayan without the 80% limit, load B on the test server; page A ruled (strict ranking, groups
+count records).
+
+## Waiting on you
+
+1. **ci.yml for the index feed's live file (rules, step 3c).** The diff is on rules' branch:
+   `process/lanes/rules/v052-index/v052-index_ci_yml.diff`. It adds an `opensearch:2.17.1` service (single
+   node, security off, 512m heap) to the conformance job and runs `test_feed_live.py` there. Without it the
+   test-file coverage check stays red on rules' branch, so 3c cannot merge to main. B does not wait on it: rules
+   loads from its branch head.
+
+2. **The POC seed path vs the poc's marking ceiling (platform, ADR-148 Am 14).** Spec 08's synthetic data holds
+   SECRET items: HMP's network writes a SECRET conflict (`hmp_network.py:427`), and Fixture Corp writes a SECRET
+   edge (`fixture_corp.py:383`). The cloud-platform profile's default ceiling is OFFICIAL-SENSITIVE
+   (`harness/site.py:358`), so on a default poc the seed is refused partway through. Platform is building the safe
+   part regardless: the seed refuses **before any write** when the ceiling is below what it needs, naming both.
+   Your choice:
+   - **(a) platform's recommendation:** step 9 says a POC shown with spec 08's data declares
+     `site.highest_marking: SECRET` in its osprey.yaml. That is the client's choice, and the seed refuses otherwise.
+   - **(b)** The poc seed loads only what is at or below the ceiling. Spec 08's rows that rest on those SECRET items
+     are then missing on a POC (a cut of what spec 08 requires).
+   - **(c)** A POC variant of the two packs, re-marked at or below OFFICIAL-SENSITIVE with a restricted handling code
+     standing in for SECRET. This keeps every spec 08 row, but the scenarios' access cases then test codes, not
+     clearance.
+
+3. **CI runs pile up on main (a proposal).** ci.yml has no `concurrency` group, so every push to main starts a
+   full ~80-minute run, and superseded ones are not cancelled. Overnight about ten queued and delayed v0.5.1's
+   re-run. A bulk cancel was refused by my permission check, so they ran to the end. Proposed: add
+   `concurrency: {group: ci-${{ github.ref }}, cancel-in-progress: true}` to ci.yml's push runs. Your word, since
+   it is `.github`. Meanwhile I push in batches.
+
+4. **platform-b's lease was refused by its session's permission check (audit 4c's live run).** The step is
+   `stack_lease.sh acquire platform-b …` for test_entra_people_live.py's new Amendment 15 section: the real table's
+   columns, a sign-in never overwriting what an administrator set, the setter's own limits read in the
+   transaction, tenant isolation, and the resolver with a real token. Admin declined to run it on its lease, and I
+   have not run it for platform-b either, since that would launder the refusal. Your choice: approve the lease in
+   platform-b's window (or allow `stack_lease.sh acquire` for that lane), or run it yourself. 4c is otherwise built
+   (A–E, ea0c7ba, red first). Every other lane's leases work.
+
+## Done overnight
+
+- Landed and pushed: deps-opensearch, step 2 (the manifest), step 3a with data safety and docs' D2/D3/D8,
+  platform-b hygiene, the ci.yml line for test_feed_live (your word, 5b894ff).
+
 # Morning, 7 November 2026
 
 Written by the orchestrator at 00:05 and updated at 07:05. Nothing has been pushed. Local `main` holds two merges: studio's L1.1 (`32c0f36`) and glass's L2.1 (`6e178b2`). Their friction rows are assembled.

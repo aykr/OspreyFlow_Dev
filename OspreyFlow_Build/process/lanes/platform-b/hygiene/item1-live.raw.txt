@@ -1,0 +1,110 @@
+# Item 1 live, on the test server's real GPU (stack_lease.sh offline platform-b: no stack, no lease), 13 November 2026.
+# Red: main 2b78820's test file sent in place of the fix. Green: the fix (660045f plus the stand-in's PATH leaving out the host's
+# own nvidia-smi folders, found by a first green attempt whose 'no readable GPU' stand-in still found /usr/bin/nvidia-smi).
+
+== red
+Running on ospreyflow-test (stack offline, osprey-runs/platform-b/), logged at osprey-runs/platform-b.meta/runs/20261113T193937Z-d914b505/log: sh -c cd OspreyFlow_Core && .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly -v ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/platform-b/OspreyFlow_Core/.venv/bin/python
+cachedir: .pytest_cache
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/platform-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 6 items
+
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_the_stream_reports_the_real_failure_when_nothing_has_been_rendered_yet PASSED [ 16%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_the_stream_reports_every_check_in_order_once_rendered PASSED [ 33%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_basemap_warns_when_a_local_provider_points_at_tiles_not_yet_built PASSED [ 50%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass FAILED [ 66%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_only_re_checks_exactly_one PASSED [ 83%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_an_unknown_check_name_is_a_clean_422_not_a_broken_stream PASSED [100%]
+
+=================================== FAILURES ===================================
+__________ test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass __________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6685/test_gpu_is_skipped_on_this_pl0')
+
+    def test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass(tmp_path: Path) -> None:
+        """`05_DEPLOYMENT.md` §2.1's own "skipped-with-reason (never a pass)" — the brief's named
+        skipped case, on the real platform this suite actually runs on."""
+        config_path = tmp_path / "osprey.yaml"
+        out_root = tmp_path / "generated"
+        client = _client(config_path, out_root)
+        client.put("/api/config", json={"profile": "local-lite"})
+        _generate(client)
+    
+        events = {e["check"]: e for e in _events(client.get("/api/preflight/stream").text)}
+>       assert events["gpu"]["status"] == "skip"
+E       AssertionError: assert 'pass' == 'skip'
+E         
+E         - skip
+E         + pass
+
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py:112: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/platform-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+1.74s call     tests/harness/test_webapp_preflight.py::test_the_stream_reports_the_real_failure_when_nothing_has_been_rendered_yet
+0.79s call     tests/harness/test_webapp_preflight.py::test_basemap_warns_when_a_local_provider_points_at_tiles_not_yet_built
+0.72s call     tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+0.69s call     tests/harness/test_webapp_preflight.py::test_the_stream_reports_every_check_in_order_once_rendered
+0.12s call     tests/harness/test_webapp_preflight.py::test_only_re_checks_exactly_one
+0.06s call     tests/harness/test_webapp_preflight.py::test_an_unknown_check_name_is_a_clean_422_not_a_broken_stream
+0.01s setup    tests/harness/test_webapp_preflight.py::test_the_stream_reports_the_real_failure_when_nothing_has_been_rendered_yet
+
+(11 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+==================== 1 failed, 5 passed, 1 warning in 4.82s ====================
+Wall time: 6 s, exit 1 (no stack, no lease; set-up before it 10 s)
+
+== green
+Running on ospreyflow-test (stack offline, osprey-runs/platform-b/), logged at osprey-runs/platform-b.meta/runs/20261113T194050Z-2f55629d/log: sh -c cd OspreyFlow_Core && .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly -v ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py; r=$?; echo "host GPU: $(nvidia-smi --query-gpu=driver_version,name --format=csv,noheader)"; exit $r
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/platform-b/OspreyFlow_Core/.venv/bin/python
+cachedir: .pytest_cache
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/platform-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 9 items
+
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_the_stream_reports_the_real_failure_when_nothing_has_been_rendered_yet PASSED [ 11%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_the_stream_reports_every_check_in_order_once_rendered PASSED [ 22%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_basemap_warns_when_a_local_provider_points_at_tiles_not_yet_built PASSED [ 33%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_where_none_can_be_read_and_passes_only_where_one_can PASSED [ 44%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_on_a_stand_in_gpu_host_the_gpu_passes_naming_its_driver PASSED [ 55%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_on_a_stand_in_host_without_a_readable_gpu_the_gpu_is_skipped_never_passed PASSED [ 66%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_on_a_stand_in_host_whose_driver_errors_the_gpu_fails PASSED [ 77%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_only_re_checks_exactly_one PASSED [ 88%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_an_unknown_check_name_is_a_clean_422_not_a_broken_stream PASSED [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/platform-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+1.83s call     tests/harness/test_webapp_preflight.py::test_the_stream_reports_the_real_failure_when_nothing_has_been_rendered_yet
+0.79s call     tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_where_none_can_be_read_and_passes_only_where_one_can
+0.76s call     tests/harness/test_webapp_preflight.py::test_basemap_warns_when_a_local_provider_points_at_tiles_not_yet_built
+0.76s call     tests/harness/test_webapp_preflight.py::test_the_stream_reports_every_check_in_order_once_rendered
+0.13s call     tests/harness/test_webapp_preflight.py::test_only_re_checks_exactly_one
+0.07s call     tests/harness/test_webapp_preflight.py::test_on_a_stand_in_gpu_host_the_gpu_passes_naming_its_driver
+0.07s call     tests/harness/test_webapp_preflight.py::test_on_a_stand_in_host_whose_driver_errors_the_gpu_fails
+0.07s call     tests/harness/test_webapp_preflight.py::test_on_a_stand_in_host_without_a_readable_gpu_the_gpu_is_skipped_never_passed
+0.06s call     tests/harness/test_webapp_preflight.py::test_an_unknown_check_name_is_a_clean_422_not_a_broken_stream
+0.01s setup    tests/harness/test_webapp_preflight.py::test_the_stream_reports_the_real_failure_when_nothing_has_been_rendered_yet
+
+(17 durations < 0.005s hidden.  Use -vv to show these durations.)
+========================= 9 passed, 1 warning in 5.17s =========================
+host GPU: 595.99.02, NVIDIA GeForce RTX 5060 Ti
+Wall time: 6 s, exit 0 (no stack, no lease; set-up before it 11 s)

@@ -1,8 +1,9 @@
 # The route to v0.5.2 · every lane's brief (the owner, 13 November 2026)
 
 **Aim (the owner's words): build each thing once, check each thing once.** Target **Thu 26 Nov**. The dated steps
-are in `route.tsv`, which the heartbeat reads. **v0.5.1 is cut on Tue 17 Nov with no new work and no new checks**,
-so nothing here merges before v0.5.1's candidate is cut.
+are in `route.tsv`, which the heartbeat reads. **v0.5.1 is cut with no new work and no new checks**, from commit
+9197ea6: its upgrade rehearsal and its publish (`make publish-user-repo COMMIT=9197ea6`) name that commit, so v0.5.2's
+branches merge to main as soon as they are ready (the owner lifted the earlier hold on 13 Nov, about 23:00).
 
 ## Scope: nothing else joins v0.5.2
 
@@ -97,7 +98,9 @@ candidate.
 **studio** (reopened): **step 3d, `v052-search`:** the search service.
 - **Draft the access design page (A) by Sun 15 Nov**, with rules, to the orchestrator.
 - Then the query side:
-  - names, using OpenSearch's analysers (fuzzy, phonetic where the managed domain's plugins allow; say which);
+  - names tolerant of typos, variants and sound-alikes, under the owner's strict-ranking ruling (13 Nov, page A):
+    three-letter fragments, stored prefixes and a Double Metaphone key computed by the Conduit; no word-rarity
+    scoring, no fuzzy or prefix expansion, no plugin relied on;
   - full text with highlighting;
   - ranking;
   - grouped counts and filters;
@@ -131,8 +134,13 @@ The default view and `watch` show this and nothing else needs reading. One scree
    one line saying which step and why.
 2. **The route:** one row per `route.tsv` step, with:
    - its lane and planned dates;
-   - its state, from the lane's own progress row and beat: not started, running, done, or blocked. **"Done" only
-     when its tests passed**, i.e. merged with its gates;
+   - its state, from the lane's own progress row and beat: not started, running, built and waiting to merge (its
+     progress row in review), done, or blocked. **"Done" only when its tests passed**, i.e. merged with its gates;
+     the headline counts the steps built and waiting to merge beside those done;
+   - under a running or blocked step, its stages by name, one line each (✅ done, ⏳ now, ⛔ blocked, — to do), from
+     the lane's own list for that step (`lanes_heartbeat.sh stages`, one list a step). When they would not fit one
+     screen, the done stages fold to one "✅ n done" line; then the stages still to do are counted; then each step's
+     list is one line; then the steps left over are counted on a line of their own;
    - days ahead or behind against its planned end;
    - what it waits on (its `after`);
    - critical-path rows marked.

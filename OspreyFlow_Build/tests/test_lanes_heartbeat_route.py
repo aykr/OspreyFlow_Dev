@@ -138,7 +138,8 @@ def test_past_the_target_undone_is_late(route) -> None:
 def test_each_step_s_state_is_its_lane_s_own_and_done_only_when_merged(route, tmp_path) -> None:
     out = route(16)
     assert " done" in _row(out, "2")
-    assert " running" in _row(out, "3c") and " running" in _row(out, "3d")  # building, in review
+    assert " running" in _row(out, "3c")  # building
+    assert " built, waiting to merge" in _row(out, "3d")  # in review
     assert " not started" in _row(out, "3e") and " not started" in _row(out, "1")
     # In review is not done: "done" only when the progress row says merged.
     (tmp_path / "progress.tsv").write_text(
@@ -259,3 +260,116 @@ def test_a_step_whose_lane_has_posted_stages_under_way_reads_running(route, hb) 
     assert hb("stages", "case", "v052-fixes", "1|done|Plan", "2|done|Build").returncode == 0
     assert hb("beat", "case", "working", "v052-fixes all stages done").returncode == 0
     assert " done" not in _row(route(16), "3e") and " running" in _row(route(16), "3e")
+
+
+# --- stages per (lane, step); their names under a row; built, waiting to merge (the owner, 13 Nov) ----
+
+
+def test_two_steps_of_one_lane_keep_their_own_stages(route, hb) -> None:  # noqa: F811
+    """A lane's post for a new step must not erase its earlier step's stages (platform's v052-standin post
+    emptied steps 2 and 3a's bars): the stages are kept per lane and step."""
+    assert hb("stages", "rules", "v052-index", "1|done|Plan", "2|now|Feed", "3|todo|Rebuild",
+              "4|todo|Drift").returncode == 0  # fmt: skip
+    assert hb("stages", "rules", "v052-load", "1|now|Plan", "2|todo|Load").returncode == 0
+    out = route(16)
+    assert "running, stage 2 of 4" in _row(out, "3c")
+    assert "running, stage 1 of 2" in _row(out, "B")
+
+
+def test_a_lane_s_stages_file_from_before_is_still_read_for_its_step(route, tmp_path) -> None:
+    """The one file a lane kept before (<lane>.stages) is read for the step it names."""
+    (tmp_path / "lanes" / "rules.stages").write_text(
+        "step=v052-index\nat=2026-11-13T20:00:00Z\nstage=1|done|Plan\nstage=2|now|Feed\n",
+        encoding="utf-8",
+    )
+    out = route(16)
+    assert "running, stage 2 of 2" in _row(out, "3c") and "stage" not in _row(out, "B")
+
+
+def _under(out: str, step: str) -> list[str]:
+    lines = out.splitlines()
+    at = lines.index(_row(out, step))
+    under = []
+    for line in lines[at + 1 :]:
+        if not line.startswith("        "):
+            break
+        under.append(line.strip())
+    return under
+
+
+def test_a_running_row_lists_its_stages_by_name_and_others_stay_one_line(route, hb) -> None:  # noqa: F811
+    assert hb("stages", "rules", "v052-index", "1|done|Plan", "2|now|Feed|the outbox", "3|blocked|Rebuild",
+              "4|todo|Drift").returncode == 0  # fmt: skip
+    assert hb("stages", "case", "v052-fixes", "1|todo|Plan").returncode == 0
+    out = route(16)
+    assert _under(out, "3c") == ["✅ 1. Plan", "⏳ 2. Feed · the outbox", "⛔ 3. Rebuild", "— 4. Drift"]
+    assert _under(out, "3e") == []  # not started: one line
+    assert _under(out, "2") == []  # done: one line
+    assert _under(out, "3d") == []  # built, waiting to merge: one line
+
+
+def test_review_rows_are_built_waiting_to_merge_and_the_headline_counts_them(route) -> None:
+    out = route(16)
+    assert "1 of 8 steps done · 1 built, waiting to merge" in out
+    row = _row(out, "3d")
+    assert "built, waiting to merge" in row and "running" not in row and "after A" in row
+    assert "running" in _row(out, "3c")  # building is still running
+
+
+def _all_running(hb, tmp_path: Path, end: str = "2026-11-20", crit: str = "n") -> None:  # noqa: F811
+    rows, progress = "", PROGRESS
+    for i in range(13):
+        rows += f"{i}\tA step of the route, number {i}\tlane{i}\t2026-11-14\t{end}\t{crit}\t-\tlane{i}:s{i}\n"
+        progress += f"lane{i}\ts{i}\tM\tbuilding\tStep {i}\n"
+        assert hb("stages", f"lane{i}", f"s{i}", "1|done|Plan", "2|done|Red tests", "3|done|Build",
+                  "4|now|Gates", "5|todo|Review", "6|todo|Merge").returncode == 0  # fmt: skip
+    (tmp_path / "route.tsv").write_text(ROUTE.split("\n1\t")[0] + "\n" + rows, encoding="utf-8")
+    (tmp_path / "progress.tsv").write_text(progress, encoding="utf-8")
+
+
+def test_the_route_view_is_one_screen_with_every_step_running(route, hb, tmp_path) -> None:  # noqa: F811
+    """Every step running with six stages each: the done stages fold to "✅ n done", a row's list to one
+    line, and the screen still holds 40 lines of at most 120, the steps whose lists do not fit counted."""
+    _all_running(hb, tmp_path)
+    lines = route(16).splitlines()
+    assert len(lines) <= 40, "\n".join(lines)
+    assert all(len(line) <= 120 for line in lines)
+    assert any(line.strip() == "✅ 3 done · ⏳ 4. Gates · — 2 to do" for line in lines), "\n".join(lines)
+    # The steps whose lists do not fit are counted on a line of their own, not by another list's "+N more".
+    assert "        +6 steps more running, their stages left out to keep one screen" in lines
+    assert "⏳ 4. Gates" in "\n".join(lines)
+
+
+def test_one_screen_with_every_step_running_on_a_day_a_step_is_at_risk(route, hb, tmp_path) -> None:  # noqa: F811
+    """The at-risk line is the headline's fifth: the stages' room is one line less (hb2's review)."""
+    _all_running(hb, tmp_path, end="2026-11-15", crit="y")
+    lines = route(16).splitlines()
+    assert any(line.startswith("  At risk:") for line in lines)
+    assert len(lines) <= 40, "\n".join(lines)
+    assert any(line.startswith("        +") and "more running" in line for line in lines)
+
+
+def test_the_owner_s_fold_the_done_on_one_line_and_the_rest_in_full(route, hb) -> None:  # noqa: F811
+    """When every list in full would not fit but folding the done stages does, that is the fold shown
+    (the owner, 13 Nov): "✅ n done", then each stage still under way, blocked or to do by name."""
+    six = ("1|done|Plan", "2|done|Red tests", "3|done|Build", "4|now|Gates", "5|todo|Review", "6|todo|Merge")
+    for lane, step in (("rules", "v052-index"), ("case", "v052-fixes"), ("rules", "v052-load")):
+        assert hb("stages", lane, step, *six).returncode == 0
+    out = route(16)
+    assert len(out.splitlines()) <= 40, out
+    for step in ("3c", "3e", "B"):
+        assert _under(out, step) == ["✅ 3 done", "⏳ 4. Gates", "— 5. Review", "— 6. Merge"], out
+
+
+def test_a_step_with_spaces_a_slash_and_an_accent_is_found_where_it_was_written(
+    route, hb, tmp_path  # noqa: F811
+) -> None:
+    """The writer (bash, here under LC_ALL=C, as launchd or a bare ssh runs it) and the views' one reader
+    (perl) name the file alike, byte by byte (hb2's review)."""
+    step = "ADR-147 Am 3/café"
+    (tmp_path / "route.tsv").write_text(ROUTE.replace("rules:v052-index", f"rules:{step}"), encoding="utf-8")
+    (tmp_path / "progress.tsv").write_text(PROGRESS.replace("v052-index", step), encoding="utf-8")
+    assert hb("stages", "rules", step, "1|done|Plan", "2|now|Feed", LC_ALL="C").returncode == 0
+    out = route(16)
+    assert "running, stage 2 of 2" in _row(out, "3c")
+    assert _under(out, "3c") == ["✅ 1. Plan", "⏳ 2. Feed"]

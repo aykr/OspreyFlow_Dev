@@ -120,3 +120,6 @@ case-b	v052-r1-driver	Housekeeping	Client install
 docs	v052-sweep-draft	Housekeeping	Client install
 rules-b	v052-ask	Four places, the Glass and Admin	Client install
 case-b	v052-selection	Four places, the Glass and Admin	Client install
+orchestrator	v051-cut	Housekeeping	Client install
+platform	v052-searchkind	Housekeeping	Client install
+platform-b	v052-4c	Four places, the Glass and Admin	Client install

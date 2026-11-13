@@ -37081,3 +37081,90 @@ as on Small, and Superset's own database, three on the one instance). By platfor
 
 Records: `process/lanes/platform-b/v052/am11-render-red-first.txt` (eight plants), `step7-runbooks-red-first.txt`
 (six plants), each red for its reason.
+
+### ADR-148, Amendment 12 (13 November 2026) — The poc manifest: one source for the shape's containers, images, managed services, Entra registrations and egress, held to the render both ways
+
+**The finding** (13 November 2026): the client page's figures for the poc shape (its images and ECR repositories,
+every pod's count, requests and limits, the Jobs, the RDS class and its connections) were assembled by hand twice in
+one evening, from the render, `profile.yaml` and R1's logs, and each time a ruling changed a figure afterwards
+(ADR-114 Amendment 46's three turns). A figure kept by hand beside the render can drift from it unnoticed, and the
+client sizes its namespace and its quotas from that page.
+
+**Decision (the owner's route to v0.5.2, `process/lanes/ROUTE_052.md`: "the manifest is the one source"):**
+
+1. **`harness/cloud_platform/poc_manifest.yaml`** lists, for the cloud-platform profile's poc shape at v0.5.2: each
+   workload's kind, count, image repository, CPU and memory requests and limits and readiness check (Superset and the
+   report sync at one copy each, the owner, 13 November); the init containers; the backup CronJobs and the restore
+   Jobs with their steps' images and sizes; each ECR repository, ours (and where it is built from) or upstream (and
+   where it is copied from); the managed services (RDS's class, `max_connections` and databases; ElastiCache; the S3
+   buckets; OpenSearch's data nodes); the Entra ID registrations the client's administrator makes; and the egress
+   hosts. No other copy of these figures is kept.
+2. **Held to the render both ways** (`harness.cloud_platform.manifest.differences`): anything rendered and not listed,
+   anything listed and not rendered, and any count, image, size, readiness check, schedule or managed setting that
+   differs, is named. What v0.5.2 adds before the step that renders it carries `pending: <step>` (`v052-superset`,
+   `v052-opensearch`): absent from the render, it is no difference; rendered while still marked, it is one, so the
+   mark cannot outlive its step.
+3. **The client page's tables are printed from it** (`python -m harness.cloud_platform.manifest tables`), and
+   `check --config <osprey.yaml>` compares a deployment's own render with it. v0.5.2's install test (`v052-r1`) is
+   driven from it.
+4. **Its sizes are the profile's proposals, not measurements**, as `profile.yaml` says; step 4 (`v052-measure`)
+   measures them on the client-size load, and a changed figure changes the profile and the manifest together.
+
+**Tests that fail if it is violated:** `tests/harness/test_poc_manifest.py`: the manifest and the poc render agree; a
+plant on each side for each kind of entry (a workload, an init container, a Job, an image, an egress host, a
+database); fifteen size and setting plants; an entry rendered while marked pending; every pending mark naming a
+v0.5.2 step; the tables printed from the manifest alone. Red first: `process/lanes/platform/v052-manifest/red-first.txt`.
+
+### ADR-148, Amendment 13 (13 November 2026) — OpenSearch on the poc shape, and data safety: the shared claim in the backups, RDS's point in time matching the sets, and the decommission's keep or destroy
+
+**The findings.** Amendment 5 made the poc shape refuse OpenSearch ("the poc makes no domain"), and its search was
+PostgreSQL's own; v0.5.2 brings search on OpenSearch to every shape (`process/lanes/ROUTE_052.md`). The ADR-148 audit
+found three defaults in Amendment 7's backups nobody had chosen: the set held the stores and the Ingest claim but not the
+shared claim's published pipelines and settings, so a restore brought data back without the recipes that made it; RDS
+kept point in time for 7 days while the sets are kept 35, so PostgreSQL could not be brought to the moment of a set more
+than a week old; and a decommission kept the backups bucket and its key because nothing asked.
+
+**Decision (the owner's rulings of 13 November 2026), amending Amendment 5's refusal and Amendment 7's backups and
+decommission:**
+
+1. **The poc shape's own OpenSearch domain**, as the standard shape's: OpenSearch 2.17, **two data nodes in two
+   availability zones** (`t3.medium.search`, 50 GiB each; two in every shape), inside the VPC on 443, HTTPS only (TLS
+   1.2), encrypted at rest and node to node. The poc refusal is removed.
+2. **Signed with the namespace's IAM role (IRSA, SigV4), with no fine-grained access control**: the domain's access
+   policy admits that role alone (`es:ESHttp*`); no internal users, no master password. Dataset access and handling codes
+   stay in our query (CLAUDE.md rule 3), not in a second policy in the domain. The pods that search or index (the
+   Conduit, the worker, and the index's rebuild and drift check) are given `OPENSEARCH_URL` from the platform's secret,
+   `OPENSEARCH_SIGNING` and `OPENSEARCH_REGION`, ADR-150 decision 7's one client contract. A platform whose own module
+   fronts the domain with a proxy that signs for us sets `opensearch_signing: none` in its platform file.
+3. **No index backup of our own**: the index is rebuilt from the graph (ADR-150). The rebuild and the drift check are
+   rendered as CronJobs held suspended, started by the runbooks (`kubectl create job --from=cronjob/<name>`), in the
+   Conduit's image under the namespace's own service account, holding the settings, the graph's password by name and the
+   domain's address alone. The recovery runbook's restore ends with the rebuild and the drift check, with their healthy
+   last lines. The domain is removed with the namespace's Terraform at decommission, and named if left in the state.
+4. **The shared claim's parts join the backup set and its restore**: the published pipelines (`data/recipes`), the model
+   settings and the map settings with the map key file (ADR-147), each a part of the set's claims part beside the Ingest
+   root, read-only to the backup; the pods that mount them are writers a restore refuses to run beside. The tiles and the
+   uploads' scratch are made again or are the Ingest's, and are not.
+5. **RDS keeps point in time for 35 days** (`backup_retention_period`), the sets' own expiry
+   (`cloud_platform_backups.EXPIRE_DAYS`), in every shape, so every kept set can be met by a point-in-time restore.
+6. **The decommission has no default for the backups.** Its step 7 refuses until `BACKUPS=keep` or `BACKUPS=destroy` is
+   given, and touches nothing before. `keep` sets the agreed retention on the bucket (Amendment 7's path, unchanged);
+   `destroy` empties and removes the bucket and schedules the key's deletion (thirty days, cancellable) there and then,
+   by the same text as step 9's removal when a kept retention ends. The choice is written to the run's folder; the
+   leftover check requires it and states it in its record (`backups: kept (the operator chose keep)` or `backups:
+   destroyed (the operator chose destroy)`), and with `destroy` a bucket or key still there is left behind. R1's
+   finding-6 guard (no removal of the backups in the run-in-order sequence) holds but for the `destroy` branch of a block
+   that refuses without the choice.
+
+**What the client provides:** two private subnets in two availability zones for the domain, and the egress networks
+reaching it; their platform team's answer on whether their OpenSearch module allows an IAM-only access policy without
+fine-grained access control (the owner's question to them).
+
+**Tests that fail if it is violated:** `tests/harness/test_cloud_platform_opensearch.py` (the domain, two nodes, two
+zones, IAM alone, no FGAC; the pods' address and signing; a platform that signs for us; the standing Jobs under the
+role; the runbooks' words; the manifest), `tests/harness/test_cloud_platform_data_safety.py` (the shared parts; RDS's 35
+days in every fixture; step 7 refusing without the choice, and keep and destroy run under bash with stand-in `aws` and
+`tofu`), `tests/cp_policy_check/test_cp_decommission_check.py` (the choice required and stated; destroy naming what is
+left), and in Helm's own output `tests/cp_policy_check/test_cp_egress_order.py` (the claims backup's read-only shared
+mounts; the search Jobs refused our Secret whole). Red first: `process/lanes/platform/v052-opensearch/` and
+`v052-datasafety/`; the policy check's first run red on the server (`cp-policy-red.txt`), then green.

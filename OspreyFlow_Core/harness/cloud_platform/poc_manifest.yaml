@@ -1,0 +1,205 @@
+# The cloud-platform profile, shape: poc, at v0.5.2: the one source for its containers, images, sizing,
+# managed services, Entra registrations and egress (ROUTE_052.md, "the manifest is the one source").
+#
+# Held to the render both ways by tests/harness/test_poc_manifest.py: anything rendered and not listed
+# here, or listed and not rendered, fails it, with every count, image, request, limit and readiness
+# check compared. `pending: <step>` marks what v0.5.2 adds and that step has not yet rendered: it may
+# be absent from the render, and once that step renders it the marker must go (rendered while still
+# marked pending fails too). `python -m harness.cloud_platform.manifest tables` prints the client
+# page's tables from this file.
+#
+# Sizes are the profile's proposals (profile.yaml `resources` and `poc.cpu_limits`), not measurements:
+# step 4 (v052-measure) measures them on the client-size load.
+version: v0.5.2
+shape: poc
+
+# One of each (the poc shape's DEVELOPMENT_REPLICAS); Superset and the report sync too (the owner, 13 Nov).
+workloads:
+  workspace:
+    kind: Deployment
+    count: 1
+    image: ospreyflow/workspace
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+    readiness: {check: "http://127.0.0.1:8080/", every_seconds: 5}
+  api:
+    kind: Deployment
+    count: 1
+    image: ospreyflow/api
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
+    readiness: {check: "http://127.0.0.1:8000/healthz", every_seconds: 5}
+  worker:
+    kind: Deployment
+    count: 1
+    image: ospreyflow/worker
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
+    readiness: none  # serves no port (R1, carried)
+  ner:
+    kind: Deployment
+    count: 1
+    image: ospreyflow/ner
+    requests: {cpu: 250m, memory: 1Gi}
+    limits: {cpu: "1", memory: 2Gi}
+    readiness: {check: "http://127.0.0.1:8000/healthz", every_seconds: 15}
+  laurium:
+    kind: Deployment
+    count: 1
+    image: ospreyflow/laurium
+    requests: {cpu: 250m, memory: 1Gi}
+    limits: {cpu: 500m, memory: 2Gi}
+    readiness: {check: "http://127.0.0.1:8000/healthz", every_seconds: 15}
+  litellm:
+    kind: Deployment
+    count: 1
+    image: berriai/litellm
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: 500m, memory: 1Gi}
+    readiness: {check: "http://localhost:4000/health/liveliness", every_seconds: 5}
+  arcadedb:
+    kind: StatefulSet
+    count: 1
+    image: arcadedata/arcadedb
+    requests: {cpu: "1", memory: 12Gi}
+    limits: {cpu: "2", memory: 12Gi}
+    readiness: {check: "http://127.0.0.1:2480/api/v1/ready", every_seconds: 10}
+  clickhouse:
+    kind: StatefulSet
+    count: 1
+    image: clickhouse/clickhouse-server
+    requests: {cpu: "1", memory: 8Gi}
+    limits: {cpu: "2", memory: 8Gi}
+    readiness: {check: "http://localhost:8123/ping", every_seconds: 5}
+  superset:
+    kind: Deployment
+    count: 1
+    image: ospreyflow/superset
+    requests: {cpu: 250m, memory: 1Gi}
+    limits: {cpu: 500m, memory: 2Gi}
+    readiness: {check: "http://127.0.0.1:8088/health", every_seconds: 10}
+    pending: v052-superset
+  report-sync:
+    kind: Deployment
+    count: 1
+    image: ospreyflow/report-sync
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+    readiness: none
+    pending: v052-superset
+
+# Containers that run to completion before their pod's own.
+init_containers:
+  litellm/litellm-db:
+    image: postgres
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+
+# The backups (ADR-148 Amendment 7) and the recovery runbook's restore. Every step runs in the
+# Conduit's image at its sizes, but ArcadeDB's restore step, in ArcadeDB's at ArcadeDB's.
+jobs:
+  ospreyflow-backup:
+    kind: CronJob
+    schedule: "15 2 * * *"
+    image: ospreyflow/api
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
+  ospreyflow-backup-claims:
+    kind: CronJob
+    schedule: "15 2 * * *"
+    image: ospreyflow/api
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
+  ospreyflow-restore-<set>:
+    kind: Job
+    when: a restore, by the recovery runbook
+    image: ospreyflow/api
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
+    steps: [verify, fetch-graph, writers, restore-graph, restore-analytics]
+    restore-graph: {image: arcadedata/arcadedb, requests: {cpu: "1", memory: 12Gi}, limits: {cpu: "2", memory: 12Gi}}
+  ospreyflow-restore-claims-<set>:
+    kind: Job
+    when: a restore, by the recovery runbook
+    image: ospreyflow/api
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
+    steps: [verify, restore-claims]
+
+  ospreyflow-search-rebuild:
+    kind: CronJob
+    schedule: suspended, started by the runbooks (a restore ends with it)
+    image: ospreyflow/api
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
+  ospreyflow-search-drift:
+    kind: CronJob
+    schedule: suspended, started by the runbooks
+    image: ospreyflow/api
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
+
+# Each image's repository in the client's ECR, which `ospreyflow images push` fills.
+images:
+  ospreyflow/workspace: {ours: true, built_from: apps/workspace/Dockerfile}
+  ospreyflow/api: {ours: true, built_from: services/api/Dockerfile}
+  ospreyflow/worker: {ours: true, built_from: services/worker/Dockerfile}
+  ospreyflow/ner: {ours: true, built_from: services/ner/Dockerfile}
+  ospreyflow/laurium: {ours: true, built_from: services/laurium/Dockerfile}
+  ospreyflow/superset: {ours: true, built_from: deploy/superset/Dockerfile, pending: v052-superset}
+  ospreyflow/report-sync: {ours: true, built_from: services/report_sync/Dockerfile, pending: v052-superset}
+  arcadedata/arcadedb: {ours: false, upstream: "arcadedata/arcadedb:26.10.1"}
+  clickhouse/clickhouse-server: {ours: false, upstream: "clickhouse/clickhouse-server:25.8.33.6"}
+  berriai/litellm: {ours: false, upstream: "ghcr.io/berriai/litellm"}
+  postgres: {ours: false, upstream: "postgres:16.4"}
+
+# What the namespace's Terraform makes (the client's environments repository, in practice).
+managed:
+  rds:
+    engine: postgres 16
+    class: db.t4g.large
+    max_connections: 1000  # ADR-114 Amendment 46, in its parameter group (pending-reboot)
+    point_in_time_days: 35  # the sets' own expiry (the ADR-148 audit's ruling 3)
+    databases:
+      ospreyflow: {}
+      litellm: {}
+      superset: {pending: v052-superset}
+  elasticache:
+    engine: redis 7.1
+    node_type: cache.t4g.micro
+    nodes: 1
+  s3:
+    buckets: [media, staging, site-images, tile-cache, backups]
+  opensearch:
+    engine: OpenSearch_2.17
+    instance_type: t3.medium.search
+    data_nodes: 2          # one in each of two availability zones; 50 GiB each
+    signing: sigv4         # the namespace's IAM role (IRSA); no fine-grained access control
+    # Not backed up: the index is rebuilt from the graph (ADR-150), after every restore.
+
+# The client's Entra ID: what its administrator registers (ADR-148 Amendments 8, 9 and 10).
+entra:
+  glass:
+    kind: single-page application
+    redirect: "https://<the deployment's name>/"
+    grants: [the API's access_as_user (delegated)]
+  api:
+    kind: web API
+    exposes: access_as_user
+    app_roles: [Dashboard.Read]
+  superset:
+    kind: web application, with a client secret
+    redirect: "https://bi.<the deployment's name>/oauth-authorized/<provider>"
+    grants: [the API's access_as_user (delegated)]
+    pending: v052-superset
+  report-sync:
+    kind: application (client credentials), with a client secret
+    grants: [the API's Dashboard.Read (application)]
+    pending: v052-superset
+
+# The hosts the namespace reaches beyond the cluster, each on 443. RDS, ElastiCache and the OpenSearch
+# domain are reached inside the VPC (the managed networks), on 5432, 6379 and 443.
+egress:
+  login.microsoftonline.com: {}
+  s3.eu-west-2.amazonaws.com: {}
+  sts.eu-west-2.amazonaws.com: {}

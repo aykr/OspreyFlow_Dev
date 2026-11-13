@@ -40,7 +40,7 @@ from harness.cloud_platform.decommission_check import DISK_NAMESPACE_TAG, KINDS
 from harness.cloud_platform.settings import PlatformSettings
 from harness.cloud_platform.terraform import BUCKETS, RDS_INSTANCE_CLASS, ecr_repositories
 from harness.cloud_platform_backups import BUCKET_SUFFIX, KEPT_AT_DECOMMISSION
-from schemas.deployment import OspreyConfig, generated_folder
+from schemas.deployment import OspreyConfig, SearchBackend, generated_folder
 
 RELEASE = "ospreyflow"
 CHART = "deploy/helm/ospreyflow"
@@ -113,6 +113,59 @@ def _reporting_section(config: OspreyConfig, values: dict[str, Any]) -> str:
         "It reads every row of the mart: who may hold that login is the client's decision.\n"
     )
     return "\n".join(lines) + "\n"
+
+
+def _opensearch_needs(config: OspreyConfig, platform: PlatformSettings) -> str:
+    """v0.5.2 step 3a: what the namespace's OpenSearch needs of the client, where the deployment
+    searches with it."""
+    if config.components.search is not SearchBackend.OPENSEARCH:
+        return ""
+    signing = (
+        "Every request is signed with SigV4 as the namespace's IAM role (IRSA): the domain's access "
+        "policy admits that role alone, with no fine-grained access control, so there is no user or "
+        "master password to keep."
+        if platform.opensearch_signing == "sigv4"
+        else "The platform's own proxy signs the requests to it (`opensearch_signing: none`), so the "
+        "pods send them unsigned to the address its secret names."
+    )
+    return (
+        "**The OpenSearch domain** (OpenSearch 2.17, two `t3.medium.search` data nodes with 50 GiB each, "
+        "one in each of two availability zones) needs two private subnets, in two availability zones, "
+        "in `subnet_ids`, and is reached inside the VPC on 443. " + signing + " The index is not "
+        "backed up: it is rebuilt from the graph, and a restore ends with that rebuild.\n"
+    )
+
+
+def _opensearch_goes(config: OspreyConfig) -> str:
+    if config.components.search is not SearchBackend.OPENSEARCH:
+        return ""
+    return (
+        " The OpenSearch domain goes with them, and its index is not kept: it was never backed up,"
+        " and a deployment made again rebuilds it from its graph."
+    )
+
+
+def _destroy_backups(namespace: str) -> str:
+    """The backups bucket emptied of every version and removed, then its key's deletion scheduled:
+    step 7 with `BACKUPS=destroy`, and step 9 when a kept retention ends (one text, so the two cannot
+    differ)."""
+    return f"""\
+B="${{PREFIX}}{BUCKET_SUFFIX}"
+aws s3api delete-bucket-policy --region "$REGION" --bucket "$B"
+while :; do
+  aws s3api list-object-versions --region "$REGION" --bucket "$B" --max-items 500 --output json \\
+    --query '{{Objects: [Versions, DeleteMarkers][][].{{Key: Key, VersionId: VersionId}}}}' > "$WORK/versions.json"
+  grep -q '"Key"' "$WORK/versions.json" || break
+  aws s3api delete-objects --region "$REGION" --bucket "$B" --delete "file://$WORK/versions.json" >/dev/null
+done
+aws s3api delete-bucket --region "$REGION" --bucket "$B"
+ACCOUNT=$(aws sts get-caller-identity --region "$REGION" --query Account --output text)
+printf '{{"Version": "2012-10-17", "Statement": [{{"Sid": "Administer", "Effect": "Allow", "Principal": {{"AWS": "arn:aws:iam::%s:root"}}, "Action": "kms:*", "Resource": "*"}}]}}' "$ACCOUNT" > "$WORK/key-policy.json"
+KEY=$(aws kms describe-key --region "$REGION" --key-id "alias/{namespace}-backups" --query KeyMetadata.Arn --output text)
+aws kms put-key-policy --region "$REGION" --key-id "$KEY" --policy-name default --policy "file://$WORK/key-policy.json"
+aws kms schedule-key-deletion --region "$REGION" --key-id "$KEY" --pending-window-in-days 30
+aws kms delete-alias --region "$REGION" --alias-name "alias/{namespace}-backups"
+"""
 
 
 def command_blocks(text: str, *, on_the_platform: bool) -> list[str]:
@@ -202,7 +255,7 @@ with `cloud-platform-terraform-rds-instance`, set it on the module:
 `db_parameter = [{{ name = "max_connections", value = "{POSTGRES_MAX_CONNECTIONS}", apply_method = "pending-reboot" }}]`.
 `max_connections` is static in PostgreSQL: it takes effect at creation, and on an existing instance only at
 its next reboot. With too few, the new Conduit of an update stops at `TooManyConnectionsError`.
-{_bare_connector_hosts(cp.connector_hosts)}
+{_opensearch_needs(config, platform)}{_bare_connector_hosts(cp.connector_hosts)}
 ## 1. The settings and the namespace
 
 {_settings(config, platform)}
@@ -484,26 +537,47 @@ test -z "$failed"
 
 ## 7. The namespace's resources (the platform team's pull request)
 
-First the kept bucket's lifecycle rule is set to the retention you agree, so the deployment's own
-35-day rule cannot expire the sets this decommission keeps; then, in the namespace's folder, the
-backups bucket and its key are taken out of the state, so the removal keeps them (`prevent_destroy`
-holds only while their file is there). Give the retention, in days, as `BACKUP_RETENTION_DAYS`. Then remove the
-deployment's resources (the files from `$FOLDER/terraform/`) from the namespace's folder in the
-environments repository and raise the pull request; the folder's other resources are the
-platform's and stay.
+**First, choose what happens to the backups bucket and its key: there is no default.** Give
+`BACKUPS=keep` or `BACKUPS=destroy`; the block refuses anything else, and touches nothing until you
+have. The choice is written to `$WORK/backups`, and step 8's record states it.
+
+- **keep**: the kept bucket's lifecycle rule is set to the retention you agree, so the deployment's
+  own 35-day rule cannot expire the sets this decommission keeps (give it, in days, as
+  `BACKUP_RETENTION_DAYS`). The sets stay readable: step 9 removes them when that retention ends,
+  and step 10 restores one.
+- **destroy**: every set goes now, and cannot be had back. The bucket's policy is removed, every
+  version of every object, then the bucket; then the key's policy is replaced by one keeping the
+  account's administration, and its deletion scheduled (thirty days, cancellable with
+  `aws kms cancel-key-deletion` until then).
+
+Either way the bucket and its key are then taken out of the state, in the namespace's folder, so the
+removal does not meet their `prevent_destroy`. Then remove the deployment's resources (the files from
+`$FOLDER/terraform/`) from the namespace's folder in the environments repository and raise the pull
+request; the folder's other resources are the platform's and stay.{_opensearch_goes(config)}
 
 ```bash platform
+: "${{BACKUPS:?choose keep or destroy for the backups bucket and its key (there is no default)}}"
+case "$BACKUPS" in
+  keep|destroy) ;;
+  *) echo "BACKUPS: choose keep or destroy for the backups bucket and its key (there is no default)"; false ;;
+esac
+if [ "$BACKUPS" = keep ]; then
 : "${{BACKUP_RETENTION_DAYS:?the retention you agree for the kept backups, in days}}"
 printf '{{"Rules": [{{"ID": "abort-unfinished-uploads", "Status": "Enabled", "Filter": {{"Prefix": ""}}, "AbortIncompleteMultipartUpload": {{"DaysAfterInitiation": 7}}}}, {{"ID": "retained-sets", "Status": "Enabled", "Filter": {{"Prefix": "sets/"}}, "Expiration": {{"Days": %d}}, "NoncurrentVersionExpiration": {{"NoncurrentDays": 7}}}}, {{"ID": "remove-expired-markers", "Status": "Enabled", "Filter": {{"Prefix": "sets/"}}, "Expiration": {{"ExpiredObjectDeleteMarker": true}}}}]}}' \\
   "$BACKUP_RETENTION_DAYS" > "$WORK/retention.json"
 aws s3api put-bucket-lifecycle-configuration --region "$REGION" --bucket "${{PREFIX}}{BUCKET_SUFFIX}" \\
   --lifecycle-configuration "file://$WORK/retention.json"
 aws s3api get-bucket-lifecycle-configuration --region "$REGION" --bucket "${{PREFIX}}{BUCKET_SUFFIX}" | grep -q retained-sets
+fi
+echo "$BACKUPS" > "$WORK/backups"
 M="${{TF_MODULE:+$TF_MODULE.}}"   # the deployment's module in the environments repository, if any
 removed=0
 for kept in {" ".join(KEPT_AT_DECOMMISSION)}; do tofu state rm "$M$kept" >/dev/null 2>&1 && removed=$((removed + 1)); done
 test "$removed" -gt 0 || {{ echo "no kept resource was in the state (is TF_MODULE right?): stop"; false; }}
 tofu state list | grep -E '(^|[.])({"|".join(re.escape(k) for k in KEPT_AT_DECOMMISSION)})$' && {{ echo "a kept resource is still in the state: stop"; false; }}
+if [ "$BACKUPS" = destroy ]; then
+{_destroy_backups(cp.namespace)}
+fi
 echo "Raise the pull request removing $FOLDER/terraform/'s files, and wait for it to be applied."
 ```
 
@@ -543,7 +617,7 @@ fi
 ```
 
 ```bash
-for listing in state.txt buckets.txt; do
+for listing in state.txt buckets.txt backups; do
   test -f "$WORK/$listing" || {{ echo "no $WORK/$listing: step 8's first block (the platform's) writes it"; false; }}
 done
 objects=()
@@ -559,11 +633,13 @@ seen=()
 test "${{#seen[@]}}" -gt 0 || {{ echo "no listing of the disks: give DISKS, or let the platform team run step 8's first block"; false; }}
 "$PY" -m harness.cloud_platform.decommission_check --values "$WORK/values.yaml" "${{objects[@]}}" "${{seen[@]}}" \\
   ${{TF_MODULE:+--module "$TF_MODULE"}} --state "$WORK/state.txt" --terraform "$WORK/terraform" \\
-  --buckets "$WORK/buckets.txt" --bucket-prefix "$PREFIX"
+  --buckets "$WORK/buckets.txt" --bucket-prefix "$PREFIX" --backups "$(cat "$WORK/backups")"
 ```
 
-The check names the backups bucket and its key as kept (`kept: the backups (retention)`), never as
-left behind, and fails on anything else.
+The check states the choice step 7 recorded (`backups: kept (the operator chose keep)`, or
+`backups: destroyed (the operator chose destroy)`). With keep, it names the backups bucket and its key
+as kept (`kept: the backups (retention)`), never as left behind; with destroy, either still there is
+left behind. It fails on anything else.
 
 ## 9. When the retention ends: the backups bucket, then its key
 
@@ -575,21 +651,7 @@ by one keeping the account's administration, and the deletion scheduled (thirty 
 A key deleted while the bucket still held a set would leave that set unreadable.
 
 ```bash later
-B="${{PREFIX}}{BUCKET_SUFFIX}"
-aws s3api delete-bucket-policy --region "$REGION" --bucket "$B"
-while :; do
-  aws s3api list-object-versions --region "$REGION" --bucket "$B" --max-items 500 --output json \\
-    --query '{{Objects: [Versions, DeleteMarkers][][].{{Key: Key, VersionId: VersionId}}}}' > "$WORK/versions.json"
-  grep -q '"Key"' "$WORK/versions.json" || break
-  aws s3api delete-objects --region "$REGION" --bucket "$B" --delete "file://$WORK/versions.json" >/dev/null
-done
-aws s3api delete-bucket --region "$REGION" --bucket "$B"
-ACCOUNT=$(aws sts get-caller-identity --region "$REGION" --query Account --output text)
-printf '{{"Version": "2012-10-17", "Statement": [{{"Sid": "Administer", "Effect": "Allow", "Principal": {{"AWS": "arn:aws:iam::%s:root"}}, "Action": "kms:*", "Resource": "*"}}]}}' "$ACCOUNT" > "$WORK/key-policy.json"
-KEY=$(aws kms describe-key --region "$REGION" --key-id "alias/{cp.namespace}-backups" --query KeyMetadata.Arn --output text)
-aws kms put-key-policy --region "$REGION" --key-id "$KEY" --policy-name default --policy "file://$WORK/key-policy.json"
-aws kms schedule-key-deletion --region "$REGION" --key-id "$KEY" --pending-window-in-days 30
-aws kms delete-alias --region "$REGION" --alias-name "alias/{cp.namespace}-backups"
+{_destroy_backups(cp.namespace)}
 ```
 
 ## 10. Restoring a kept set, after the decommission (the platform team's)

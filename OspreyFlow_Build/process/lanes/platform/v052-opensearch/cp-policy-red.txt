@@ -1,0 +1,60 @@
+Running on ospreyflow-test (stack offline, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform.meta/runs/20261113T210559Z-98275d80/log: make cp-policy-check
+cd ../OspreyFlow_Core && PYTHONPATH=.:packages:/root/osprey-runs/platform/OspreyFlow_Build .venv/bin/python -m tools.cp_policy_check
+development-sources.yaml: 64 manifests, 10 violation(s)
+development.yaml: 60 manifests, 10 violation(s)
+poc.yaml: 58 manifests, 10 violation(s)
+production-bedrock.yaml: 64 manifests, 10 violation(s)
+production.yaml: 60 manifests, 10 violation(s)
+  fs-group-walk: CronJob/ospreyflow-search-rebuild: fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes
+  whole-secret: CronJob/ospreyflow-search-rebuild/search-rebuild: reads ospreyflow-secrets whole
+  whole-secret: CronJob/ospreyflow-search-rebuild/search-rebuild: is given ospreyflow-secrets's OSPREY_LITELLM_MASTER_SECRET
+  token: CronJob/ospreyflow-search-rebuild: runs as ospreyflow, the bucket role's account
+  token: CronJob/ospreyflow-search-rebuild: mounts its service account's token
+  fs-group-walk: CronJob/ospreyflow-search-drift: fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes
+  whole-secret: CronJob/ospreyflow-search-drift/search-drift: reads ospreyflow-secrets whole
+  whole-secret: CronJob/ospreyflow-search-drift/search-drift: is given ospreyflow-secrets's OSPREY_LITELLM_MASTER_SECRET
+  token: CronJob/ospreyflow-search-drift: runs as ospreyflow, the bucket role's account
+  token: CronJob/ospreyflow-search-drift: mounts its service account's token
+  fs-group-walk: CronJob/ospreyflow-search-rebuild: fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes
+  whole-secret: CronJob/ospreyflow-search-rebuild/search-rebuild: reads ospreyflow-secrets whole
+  whole-secret: CronJob/ospreyflow-search-rebuild/search-rebuild: is given ospreyflow-secrets's OSPREY_LITELLM_MASTER_SECRET
+  token: CronJob/ospreyflow-search-rebuild: runs as ospreyflow, the bucket role's account
+  token: CronJob/ospreyflow-search-rebuild: mounts its service account's token
+  fs-group-walk: CronJob/ospreyflow-search-drift: fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes
+  whole-secret: CronJob/ospreyflow-search-drift/search-drift: reads ospreyflow-secrets whole
+  whole-secret: CronJob/ospreyflow-search-drift/search-drift: is given ospreyflow-secrets's OSPREY_LITELLM_MASTER_SECRET
+  token: CronJob/ospreyflow-search-drift: runs as ospreyflow, the bucket role's account
+  token: CronJob/ospreyflow-search-drift: mounts its service account's token
+  fs-group-walk: CronJob/ospreyflow-search-rebuild: fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes
+  whole-secret: CronJob/ospreyflow-search-rebuild/search-rebuild: reads ospreyflow-secrets whole
+  whole-secret: CronJob/ospreyflow-search-rebuild/search-rebuild: is given ospreyflow-secrets's OSPREY_LITELLM_MASTER_SECRET
+  token: CronJob/ospreyflow-search-rebuild: runs as ospreyflow, the bucket role's account
+  token: CronJob/ospreyflow-search-rebuild: mounts its service account's token
+  fs-group-walk: CronJob/ospreyflow-search-drift: fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes
+  whole-secret: CronJob/ospreyflow-search-drift/search-drift: reads ospreyflow-secrets whole
+  whole-secret: CronJob/ospreyflow-search-drift/search-drift: is given ospreyflow-secrets's OSPREY_LITELLM_MASTER_SECRET
+  token: CronJob/ospreyflow-search-drift: runs as ospreyflow, the bucket role's account
+  token: CronJob/ospreyflow-search-drift: mounts its service account's token
+  fs-group-walk: CronJob/ospreyflow-search-rebuild: fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes
+  whole-secret: CronJob/ospreyflow-search-rebuild/search-rebuild: reads ospreyflow-secrets whole
+  whole-secret: CronJob/ospreyflow-search-rebuild/search-rebuild: is given ospreyflow-secrets's OSPREY_LITELLM_MASTER_SECRET
+  token: CronJob/ospreyflow-search-rebuild: runs as ospreyflow, the bucket role's account
+  token: CronJob/ospreyflow-search-rebuild: mounts its service account's token
+  fs-group-walk: CronJob/ospreyflow-search-drift: fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes
+  whole-secret: CronJob/ospreyflow-search-drift/search-drift: reads ospreyflow-secrets whole
+  whole-secret: CronJob/ospreyflow-search-drift/search-drift: is given ospreyflow-secrets's OSPREY_LITELLM_MASTER_SECRET
+  token: CronJob/ospreyflow-search-drift: runs as ospreyflow, the bucket role's account
+  token: CronJob/ospreyflow-search-drift: mounts its service account's token
+  fs-group-walk: CronJob/ospreyflow-search-rebuild: fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes
+  whole-secret: CronJob/ospreyflow-search-rebuild/search-rebuild: reads ospreyflow-secrets whole
+  whole-secret: CronJob/ospreyflow-search-rebuild/search-rebuild: is given ospreyflow-secrets's OSPREY_LITELLM_MASTER_SECRET
+  token: CronJob/ospreyflow-search-rebuild: runs as ospreyflow, the bucket role's account
+  token: CronJob/ospreyflow-search-rebuild: mounts its service account's token
+  fs-group-walk: CronJob/ospreyflow-search-drift: fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes
+  whole-secret: CronJob/ospreyflow-search-drift/search-drift: reads ospreyflow-secrets whole
+  whole-secret: CronJob/ospreyflow-search-drift/search-drift: is given ospreyflow-secrets's OSPREY_LITELLM_MASTER_SECRET
+  token: CronJob/ospreyflow-search-drift: runs as ospreyflow, the bucket role's account
+  token: CronJob/ospreyflow-search-drift: mounts its service account's token
+cp-policy-check: 50 violation(s)
+make: *** [Makefile:244: cp-policy-check] Error 1
+Wall time: 11 s, exit 2 (no stack, no lease; set-up before it 17 s)

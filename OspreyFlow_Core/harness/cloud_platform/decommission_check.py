@@ -58,6 +58,15 @@ class Leftover:
     why: str
 
 
+#: The operator's two choices for the backups bucket and its key at a decommission; neither is
+#: assumed.
+BACKUP_CHOICES = ("keep", "destroy")
+_DESTROYING = (
+    "destroy was chosen for the backups, and it is still there: run DECOMMISSION.md's step 7 with "
+    "BACKUPS=destroy again (it empties the bucket, removes it and schedules the key's deletion)"
+)
+
+
 class ListingRefused(ValueError):
     """A listing the check cannot vouch for (the wrong account or region, or no answer at all): a
     listing that says nothing must not read as nothing left."""
@@ -68,8 +77,11 @@ class Leftovers:
     items: list[Leftover] = field(default_factory=list)
     not_ours: list[str] = field(default_factory=list)
     #: The decommission's one named exception (ADR-148 Amendment 7): the backups bucket and its key,
-    #: kept so no decommission makes a retained set unreadable. Reported, never a leftover.
+    #: kept so no decommission makes a retained set unreadable. Reported, never a leftover, when the
+    #: operator chose to keep them (the audit's ruling 3: there is no default).
     kept: list[str] = field(default_factory=list)
+    #: The operator's choice for the backups bucket and its key, `keep` or `destroy`.
+    backups: str = ""
 
 
 def _claim_patterns(values: dict[str, Any]) -> list[re.Pattern[str]]:
@@ -201,8 +213,15 @@ def check(
     disks_account: str | None = None,
     volumes: dict[str, Any] | None = None,
     module: str | None = None,
+    backups: str,
 ) -> Leftovers:
-    found = Leftovers()
+    """`backups` is the operator's choice for the backups bucket and its key (the ADR-148 audit's
+    ruling 3, v0.5.2: no default): `keep`, and they are reported as kept; `destroy`, and they are
+    the deployment's like anything else, left behind if they are still there."""
+    if backups not in BACKUP_CHOICES:
+        raise ValueError(f"the backups: choose keep or destroy, not {backups!r}")
+    found = Leftovers(backups=backups)
+    destroying = backups == "destroy"
     names = _our_names(values)
     namespace = _namespace(values)
     for listing in objects:
@@ -251,14 +270,18 @@ def check(
         if not address:
             continue
         resource = _ours_in_state(address, ours, module)
-        if resource in KEPT_AT_DECOMMISSION:
+        if resource in KEPT_AT_DECOMMISSION and destroying:
+            found.items.append(Leftover(f"terraform/{address}", _DESTROYING))
+        elif resource in KEPT_AT_DECOMMISSION:
             found.kept.append(f"terraform/{address}")
         elif resource is not None:
             found.items.append(Leftover(f"terraform/{address}", _state_why(resource)))
         else:
             found.not_ours.append(f"terraform/{address}")
     for bucket in (line.strip() for line in buckets.splitlines()):
-        if bucket == bucket_prefix + BUCKET_SUFFIX:
+        if bucket == bucket_prefix + BUCKET_SUFFIX and destroying:
+            found.items.append(Leftover(f"bucket/{bucket}", _DESTROYING))
+        elif bucket == bucket_prefix + BUCKET_SUFFIX:
             found.kept.append(f"bucket/{bucket}")
         elif bucket and bucket.startswith(bucket_prefix):
             found.items.append(
@@ -287,20 +310,36 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--terraform", required=True, type=Path)
     parser.add_argument("--buckets", required=True, type=Path)
     parser.add_argument("--bucket-prefix", required=True)
+    parser.add_argument(
+        "--backups", required=True, choices=BACKUP_CHOICES,
+        help="the operator's choice for the backups bucket and its key (no default)",
+    )  # fmt: skip
     args = parser.parse_args(argv)
     try:
         found = _run(args)
     except ListingRefused as refused:
         print(f"decommission check: refused: {refused}", file=sys.stderr)
         return 2
+    report(found)
+    return 1 if found.items else 0
+
+
+def report(found: Leftovers) -> None:
+    """The decommission's record: what was left alone, what was kept, the operator's choice for the
+    backups (stated whichever it was), and anything left behind."""
     for name in sorted(found.not_ours):
         print(f"left alone (not the deployment's): {name}")
     for name in found.kept:
         print(f"kept: the backups (retention): {name}")
+    if found.backups == "keep":
+        print("backups: kept (the operator chose keep)")
+    elif found.backups == "destroy":
+        left = any(i.why == _DESTROYING for i in found.items)
+        print("backups: " + ("destroy was chosen; still there (below)" if left else "destroyed")
+              + " (the operator chose destroy)")  # fmt: skip
     for item in found.items:
         print(f"LEFT BEHIND  {item.what}: {item.why}")
     print(f"decommission check: {len(found.items)} thing(s) left behind")
-    return 1 if found.items else 0
 
 
 def _run(args: argparse.Namespace) -> Leftovers:
@@ -317,6 +356,7 @@ def _run(args: argparse.Namespace) -> Leftovers:
         disks_account=args.disks_account,
         volumes=_json(args.volumes),
         module=args.module,
+        backups=args.backups,
     )
 
 

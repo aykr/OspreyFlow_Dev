@@ -1021,7 +1021,8 @@ def test_a_render_removes_what_its_last_render_wrote_and_this_one_does_not(tmp_p
     write(standard, out)
     assert (out / "terraform" / "opensearch.tf").is_file()
     (out / "notes.txt").write_text("the operator's own\n", encoding="utf-8")
-    poc = render(_config("poc"), resolver=_resolver)
+    # A later render that makes no domain (search PostgreSQL's own; the poc makes one since v0.5.2).
+    poc = render(_config("poc", components={"search": "postgres-fulltext"}), resolver=_resolver)
     write(poc, out)
     assert not (out / "terraform" / "opensearch.tf").exists()
     assert (out / "notes.txt").is_file()  # not ours: never removed

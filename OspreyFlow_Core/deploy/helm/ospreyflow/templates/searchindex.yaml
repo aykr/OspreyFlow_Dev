@@ -1,0 +1,68 @@
+{{- /*
+The search index's two standing Jobs (ADR-150, rules' v0.5.2 step 3c; platform's step 3a): the rebuild
+from the graph, and the drift check between the graph and the index. Each is a CronJob held suspended,
+so it never runs on a schedule: the runbooks start one with
+
+    kubectl -n <namespace> create job --from=cronjob/ospreyflow-search-rebuild search-rebuild-<when>
+
+and the recovery runbook's restore ends with the rebuild (the index is not backed up: it is rebuilt from
+the graph). Both run in the Conduit's image at its size, with the settings, the graph's password and the
+domain's address alone (never our Secret whole), under the namespace's own service
+account (`searchIndex.serviceAccountName`), the IRSA role the OpenSearch domain admits by SigV4.
+Rendered only when the deployment searches with OpenSearch.
+*/ -}}
+{{- with .Values.searchIndex }}
+{{- $root := $ }}
+{{- $s := . }}
+{{- range $s.jobs }}
+{{- $ctx := dict "name" .label "root" $root }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+spec:
+  # Never on a schedule: a template the runbooks start by name (`create job --from=cronjob/...`).
+  schedule: "0 0 1 1 *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "ospreyflow.labels" $ctx | nindent 8 }}
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            {{- include "ospreyflow.labels" $ctx | nindent 12 }}
+            ospreyflow.io/egress: "true"
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ $s.serviceAccountName }}
+          # The namespace's own account's token, for its IRSA role (SigV4 to the domain).
+          automountServiceAccountToken: true
+          {{- with $root.Values.imagePullSecrets }}
+          imagePullSecrets: {{ toJson . }}
+          {{- end }}
+          {{- with $root.Values.podSecurity }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: {{ .user }}
+            runAsGroup: {{ .group }}
+            fsGroup: {{ .group }}
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+          {{- end }}
+          containers:
+            {{- include "ospreyflow.container" (dict "w" (dict "name" .label "image" $s.image
+                  "command" .command "envFrom" true "noSecret" true "env" $s.env
+                  "resources" $s.resources)
+                "root" $root) | nindent 12 }}
+{{- end }}
+{{- end }}

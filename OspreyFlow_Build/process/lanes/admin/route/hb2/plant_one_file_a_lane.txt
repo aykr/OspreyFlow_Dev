@@ -1,0 +1,5 @@
+# plant: one_file_a_lane (scripts/lanes_heartbeat.sh)
+# replaced: stage_file() { printf '%s/%s.%s.stages' "$DIR" "$1" "${2//[^A-Za-z0-9._-]/_}"; }
+# with: stage_file() { printf '%s/%s.stages' "$DIR" "$1"; }
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_two_steps_of_one_lane_keep_their_own_stages
+1 failed, 21 passed in 21.16s
