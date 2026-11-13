@@ -126,10 +126,12 @@ def ca() -> Path:
 
 def certificate(name: str, hosts: list[str]) -> tuple[bytes, bytes]:
     d = ca()
-    if not (d / f"{name}.crt").exists():
+    san = "subjectAltName=" + ",".join(f"DNS:{h}" for h in hosts)
+    stale = not (d / f"{name}.san").exists() or (d / f"{name}.san").read_text() != san
+    if stale or not (d / f"{name}.crt").exists():  # made again whenever its names change
         sh("openssl", "req", "-newkey", "rsa:2048", "-nodes", "-subj", f"/CN={hosts[0]}",
            "-keyout", str(d / f"{name}.key"), "-out", str(d / f"{name}.csr"))
-        (d / f"{name}.san").write_text("subjectAltName=" + ",".join(f"DNS:{h}" for h in hosts))
+        (d / f"{name}.san").write_text(san)
         sh("openssl", "x509", "-req", "-in", str(d / f"{name}.csr"), "-CA", str(d / "ca.crt"),
            "-CAkey", str(d / "ca.key"), "-CAcreateserial", "-days", "14", "-extfile",
            str(d / f"{name}.san"), "-out", str(d / f"{name}.crt"))
@@ -283,7 +285,9 @@ def platform() -> None:
     image = standin_image()
     save(standin_image=image)
     apply([{"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": n}} for n in (MANAGED, NS)])
-    names = [f"{s}.{MANAGED}.svc.cluster.local" for s in ("postgres", "valkey", "s3-standin", "entra-standin", "irsa-webhook")]
+    # Both forms: a pod asks by the full name, the API server calls a webhook's service by `<svc>.<ns>.svc`.
+    names = [f"{s}.{MANAGED}.svc{tail}" for s in ("postgres", "valkey", "s3-standin", "entra-standin", "irsa-webhook")
+             for tail in (".cluster.local", "")]
     crt, key = certificate("standins", [*names, *NAMES])
     door_crt, door_key = certificate("door", [GLASS])
     apply([
