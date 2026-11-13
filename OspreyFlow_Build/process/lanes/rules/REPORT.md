@@ -10,7 +10,10 @@ plants: 56 red, none broken (`lists/AM7_RED_RECORD.txt`). Live, on stack b under
 2026-11-13T18:12:54Z, released after): the two live files 40 passed (`gates/355a255.live-files.txt`); the live
 plants built green (149), L0 to L29 with L0b, L2b, L24b, L24c, L24d and L28b to L28d each red (38), restored green
 (`lists/AM7_LIVE_RECORD.txt`; the lists step's record as merged kept as `AM7_LIVE_RECORD.lists-merge.txt`).
-**Not yet run, and not claimed:** `make test` and `make -k ci`, held until R1's gates are done.
+Rebased after onto main 7374b63 (R1's merge: deploy/, docs/ and harness/ only, no file a plant touches), head c15cc92, Core tree
+17d9e89c275925758e1fc241e246c1412dea6d8e. `make -k ci` exit 0. `make test`: the GPU preflight case known on this host (CARRIES) and two
+vitest timeouts under the shared host's load, the two files 68 passed when re-run alone; nothing of this step's (`gates/c15cc92.triage.txt`;
+the run at 4550294, before b4712bf's cli fixture, kept raw).
 
 # rules lane · report · rules-lists, fifth pass: the orchestrator's re-check of 6bfc8d6 (13 November 2026)
 

@@ -1,0 +1,22 @@
+Triage of the gates at c15cc92 (lane/rules-lists-audit on main 7374b63), OspreyFlow_Core tree 17d9e89c275925758e1fc241e246c1412dea6d8e, run offline on ospreyflow-test (no stack, no lease), the admin lane's gates running on the same host at the same time.
+
+make -k ci: exit 0 (c15cc92.ci.txt).
+
+make test: exit 2 (c15cc92.test.txt). Three failures, none in this step's code or tests:
+1. pytest, 1 failed, 13181 passed, 36 skipped: tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+   (assert 'pass' == 'skip'). Known on this host, not this lane's: CARRIES (platform-b, v0.5.1): the case assumes a host with
+   no readable GPU, and the test server has one.
+2. vitest, 1 failed, 3222 passed, 48 skipped (3271 in all): src/matrix/MatrixView.test.tsx > "pages a long view and says plainly which
+   rows are shown (rule 2)", Test timed out in 5000ms.
+3. vitest: src/App.test.tsx, Hook timed out in 10000ms.
+   Both were timeouts under the shared host's load. Re-run alone on the same host at the same head: 2 files, 68 passed
+   (c15cc92.js-timeouts-rerun.txt). Both files passed in full at 4550294 (3271 passed). This step changes no front-end file.
+
+The earlier run at 4550294 (on main d701f48; 4550294.{test,ci}.txt) is kept raw. make -k ci exit 0. make test: the same GPU case, and five
+set-up errors in tests/cli/test_cli_dependencies.py (uv pip install --offline pyyaml, no solution from uv's cache), which main's
+b4712bf fixes. Main had moved on (R1's merge), so the branch was rebased onto main 7374b63 and the gates were run again. In that run,
+test_cli_dependencies passes.
+
+The plant records (lists/AM7_LIVE_RECORD.txt, lists/AM7_RED_RECORD.txt) were taken at Core tree 25059a3c (head 355a255). Between that tree and
+17d9e89c, only deploy/, docs/ and harness/{cloud_platform,cluster.py} changed. No services/ file and no file a plant touches changed, so they
+were not run again.
