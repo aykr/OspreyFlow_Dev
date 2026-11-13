@@ -1,4 +1,4 @@
-// Home's *What you can do, and what you answer for* (ADR-145 Amendment 4 decision 12; L2.7), worked out
+// Home's *Your access and tasks* (ADR-145 Amendment 4 decision 12, Amendment 11; L2.7), worked out
 // for the person signed in from what they may already see: their own rights (`/v1/me/rights`), their
 // own roles, their own cases (`/v1/investigations`, each with their level) and their own *Needs you*
 // (`/v1/me/needs-you`, gated in the Conduit). Home adds no read of its own, so nothing listed here is

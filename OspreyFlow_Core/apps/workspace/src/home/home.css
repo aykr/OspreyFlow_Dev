@@ -71,7 +71,7 @@
   display: grid; grid-template-columns: var(--sp-12) minmax(0, 1fr); gap: var(--sp-6);
   font-size: var(--fs-12); line-height: var(--lh-12);
 }
-/* A list with no glyphs (Home's "What you can do, and what you answer for"): its items are text, not the grid. */
+/* A list with no glyphs (Home's "Your access and tasks"): its items are text, not the grid. */
 .home-facts--plain li { display: block; }
 .home-glyph { font-family: var(--mono); font-weight: 600; }
 .home-glyph--ok { color: var(--success); }
@@ -119,6 +119,9 @@
 .home-section__head h2 { margin: 0; font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 700; }
 .home-section__count { flex: none; white-space: nowrap; font-size: var(--fs-11); color: var(--text-tertiary); }
 .home-section__empty { font-size: var(--fs-13); color: var(--text-tertiary); padding: var(--sp-8) 0; }
+/* ADR-145 Amendment 11: *Your access and tasks*' sub-headings are set beneath its own title in every look
+   (an unstyled h3 is 1.17em, above the title's 19px on GOV.UK's scale); the section runs the full width. */
+.home-access h3, .home-access h4, .home-access summary.label { margin: var(--sp-16) 0 var(--sp-8); font-size: var(--fs-12); line-height: var(--lh-12); font-weight: 700; }
 .home-attention { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--border-subtle); }
 .home-attention li { border-bottom: 1px solid var(--border-subtle); }
 .home-attention__row {

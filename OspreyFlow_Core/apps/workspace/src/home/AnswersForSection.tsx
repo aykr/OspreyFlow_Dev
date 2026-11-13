@@ -1,6 +1,6 @@
-// Home's *What you can do, and what you answer for* (ADR-145 Amendment 4 decision 12; L2.7): the places
-// the person can open, what they can do there in plain words, their level in each case, and what they
-// answer for with what is waiting, each line opening where to act. *Why can I do this?* names the role
+// Home's *Your access and tasks* (ADR-145 Amendment 4 decision 12, Amendment 11; L2.7): the places the
+// person can open, what they can do there in plain words, their access to each case, and what is waiting
+// for them, each line opening where to act. *Why can I do this?* names the role
 // behind it. What it lists is `answersFor.ts`'s, from the person's own reads alone.
 import { useEffect, useState } from "react";
 
@@ -59,9 +59,9 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
   };
 
   return (
-    <section aria-labelledby="answers-for" className="home-section">
+    <section aria-labelledby="answers-for" className="home-section home-access">
       <div className="home-section__head">
-        <h2 id="answers-for">What you can do, and what you answer for</h2>
+        <h2 id="answers-for">Your access and tasks</h2>
       </div>
       {problem && <p role="alert">{problem}</p>}
       {unread.length > 0 && <p role="alert">{`Could not read ${unread.join(" or ")}; what is shown may be short.`}</p>}
@@ -74,10 +74,10 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
           </li>
         ))}
       </ul>
-      <h3 className="label">What you answer for</h3>
+      <h3 className="label">Waiting for you</h3>
       <ul className="home-facts home-facts--plain">
         {(!needsRead || cases === null) && <li>Reading…</li>}
-        {needsRead && cases !== null && shown.answers.length === 0 && unread.length === 0 && <li>Nothing waits for you.</li>}
+        {needsRead && cases !== null && shown.answers.length === 0 && unread.length === 0 && <li>Nothing is waiting for you.</li>}
         {shown.answers.map((a, i) => {
           const act = open(a.opens);
           const tip = `answer-why-${i}`;
@@ -101,10 +101,10 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
       </ul>
       {shown.levels.length > 0 && (
         <>
-          <h3 className="label">Your level in each case</h3>
+          <h3 className="label">Your access to each case</h3>
           <ul className="home-facts home-facts--plain">
             {shown.levels.map((l) => (
-              <li key={l.caseId}>{`${l.level} of ${l.name}`}</li>
+              <li key={l.caseId}>{`${l.level}: ${l.name}`}</li>
             ))}
           </ul>
         </>

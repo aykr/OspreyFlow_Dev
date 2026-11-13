@@ -46,8 +46,8 @@ export interface HomePageProps {
   account: ReactNode;
   marking: string | null;
   now?: Date;
-  /** ADR-145 Amendment 4 decision 12 (L2.7): *What you can do, and what you answer for*, drawn by
-   * App from the person's own reads (`home/AnswersForSection.tsx`). */
+  /** ADR-145 Amendment 4 decision 12 (L2.7), Amendment 11: *Your access and tasks*, drawn by App from
+   * the person's own reads (`home/AnswersForSection.tsx`), below the two columns at full width. */
   answers?: ReactNode;
   /** ADR-145 Amendment 10: opens a guide's PDF in a new tab, resolving to words when it could not.
    * Each guide is linked under its place's card (`guides.ts`), so only with a card the person's
@@ -362,7 +362,6 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
                 ))}
               </ul>
             </section>
-            {answers}
 
             <section className="home-section">
               <div className="home-section__head">
@@ -419,6 +418,10 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
             </section>
           </div>
         </div>
+
+        {/* ADR-145 Amendment 11 (the owner's ruling, 13 November 2026): *Your access and tasks* spans the
+            full width below the two columns, never inside the left one. */}
+        {answers}
       </main>
     </div>
   );

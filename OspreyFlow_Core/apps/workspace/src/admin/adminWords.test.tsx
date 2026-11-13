@@ -244,7 +244,7 @@ describe("Admin's words: roles by name, never people or ids", () => {
     }
   });
 
-  it("on Home's What you can do, and what you answer for, with every Why can I do this? open", async () => {
+  it("on Home's Your access and tasks, with every Why can I do this? open", async () => {
     render(
       <AnswersForSection apiBaseUrl="x" bearerToken="t" rights={new Set(EVERY_RIGHT_OF_ALL)} roles={["data_engineer", "osprey-admin", "right:read_export_ledger", "role:r1"]}
         onOpenCase={() => undefined} onOpenModel={() => undefined} onOpenOperations={() => undefined}

@@ -104,7 +104,7 @@ test("a Needs you request opens the Studio on its dataset's Model tab, and not o
   expect(await other.evaluate(() => sessionStorage.getItem("osprey.needsYou.opening"))).toContain("carrier-records");
 });
 
-// ADR-145 Amendment 4 decision 12 (L2.7): Home's What you can do, and what you answer for, by keyboard:
+// ADR-145 Amendment 4 decision 12 (L2.7): Home's Your access and tasks (Amendment 11), by keyboard:
 // each line's why read with it, a case, a Model tab and Operations opened, and Why can I do this? opened.
 test("what you answer for opens where to act, its why read with each line, by keyboard", async ({ page }) => {
   await page.goto("/keyboard/answers-harness.html");
@@ -131,6 +131,31 @@ test("what you answer for opens where to act, its why read with each line, by ke
   await expect(page.getByText("Given by your Data Engineer role.").first()).toBeVisible();
   registerCovered(REGISTRY, "read-why-i-can-do-this-by-keyboard");
 });
+
+// ADR-145 Amendment 11 (the owner's ruling, 13 November 2026): on Home, *Your access and tasks* spans the
+// full width below the two columns, never inside the left one, and its sub-headings are set beneath its own
+// title. Measured in a browser, at 1440 wide, in the dark, light and GOV.UK looks.
+for (const look of ["dark", "light", "govuk"] as const) {
+  test(`Home's access and tasks spans both columns below them, its sub-headings beneath its title (${look})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1200 });
+    await page.goto(`/keyboard/answers-harness.html?home=1${look === "govuk" ? "&brand=govuk" : ""}`);
+    if (look === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+    const section = page.locator("section[aria-labelledby='answers-for']");
+    await expect(section.getByRole("heading", { level: 2, name: "Your access and tasks" })).toBeVisible();
+    await expect(section.getByText("Editor: Operation Ledger (synthetic demo)")).toBeVisible();
+    const box = (await section.boundingBox())!;
+    const columns = page.locator(".home-columns > .home-column");
+    expect(await columns.count()).toBe(2);
+    const [left, right] = [(await columns.nth(0).boundingBox())!, (await columns.nth(1).boundingBox())!];
+    expect(Math.abs(box.x - left.x)).toBeLessThan(2);
+    expect(Math.abs(box.x + box.width - (right.x + right.width))).toBeLessThan(2);
+    expect(box.y).toBeGreaterThanOrEqual(Math.max(left.y + left.height, right.y + right.height));
+    expect(await page.locator(".home-column section[aria-labelledby='answers-for']").count()).toBe(0);
+    const size = (selector: string) => section.locator(selector).first().evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+    const title = await size("h2");
+    for (const sub of ["h3", "h4", "summary"]) expect(await size(sub)).toBeLessThan(title);
+  });
+}
 
 test("every registered Needs you action has its own proving test case above", () => {
   assertAllCovered("NEEDS_YOU_ACTIONS", NEEDS_YOU_ACTIONS);

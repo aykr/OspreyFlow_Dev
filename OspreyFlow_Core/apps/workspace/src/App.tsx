@@ -1512,7 +1512,7 @@ export function App() {
     requestOpening({ kind: "admin", section: "operations" });
     setStartChoice("admin");
   };
-  // ADR-145 Amendment 4 decision 12 (L2.7): Home's *What you can do, and what you answer for*.
+  // ADR-145 Amendment 4 decision 12 (L2.7): Home's *Your access and tasks* (Amendment 11).
   const answers =
     bearerToken && rights ? (
       <AnswersForSection
