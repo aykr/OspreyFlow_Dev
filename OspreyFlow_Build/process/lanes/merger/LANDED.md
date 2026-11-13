@@ -35,3 +35,4 @@ b4b570d eaaa9d4 studio carries
 9aff917 8b7a34d platform-b ci-green
 a9af842 5ee595f platform-b gate-b+footer
 680c86f 743069c platform-b stateless
+2b088f9 - orchestrator home-facts-plain fix
