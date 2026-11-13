@@ -43,3 +43,10 @@ FAILED tests/test_r1_kind_standins.py::test_the_terraform_stand_in_makes_the_dom
 1 failed, 12 passed in 0.59s
 
 Green: tests/test_r1_kind_standins.py and tests/test_r1_opensearch_standin.py 37 passed; with tests/cloud_platform_backup and tests/test_r1_entra_standin.py, 199 passed, 51 skipped (the stand-in's other users, after the canonical-path change).
+
+The recovery runbook's search step (a 6 h wait on condition=complete, which a failed Job never reaches), run as written against a stub kubectl:
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_the_restores_search_jobs_are_bounded_in_minutes
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_a_search_job_that_never_starts_stops_the_restore_by_name
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_a_search_job_that_fails_stops_the_restore_by_name_at_once
+3 failed, 7 passed in 3.32s
+Green: tests/harness/test_cloud_platform_opensearch.py 10 passed; every test reading RUNBOOK.md 267 passed, 21 skipped.
