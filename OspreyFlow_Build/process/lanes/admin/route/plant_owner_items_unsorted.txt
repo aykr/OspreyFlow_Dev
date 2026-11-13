@@ -1,0 +1,27 @@
+# plant: owner_items_unsorted
+# replaced: 'my @owner = map { said($_->[1]) . " · $_->[2]" } sort { $a->[1] cmp $b->[1] } grep'
+# with: 'my @owner = map { said($_->[1]) . " · $_->[2]" } grep'
+# run: pytest -k 'soonest_first_and_open'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_what_waits_on_the_owner_is_soonest_first_and_open_only __________
+
+route = <function route.<locals>.view at 0x106ac6660>
+hb = <function hb.<locals>.run at 0x106ac6160>
+
+    def test_what_waits_on_the_owner_is_soonest_first_and_open_only(route, hb) -> None:  # noqa: F811
+        assert hb("beat", "case", "blocked", "the fixture repository is gone").returncode == 0
+        lines = _section(route(16), "WAITING ON YOU")
+        text = "\n".join(lines)
+>       assert text.index("Tue 17 Nov · The acceptance bar's wording") < text.index("Wed 18 Nov · The search")
+E       assert 85 < 21
+E        +  where 85 = <built-in method index of str object at 0x106ab8370>("Tue 17 Nov · The acceptance bar's wording")
+E        +    where <built-in method index of str object at 0x106ab8370> = "WAITING ON YOU · 3\n  Wed 18 Nov · The search navigation decision (3e′ waits on it)\n  Tue 17 Nov · The acceptance bar's wording\n  case is blocked: the fixture repository is gone".index
+E        +  and   21 = <built-in method index of str object at 0x106ab8370>('Wed 18 Nov · The search')
+E        +    where <built-in method index of str object at 0x106ab8370> = "WAITING ON YOU · 3\n  Wed 18 Nov · The search navigation decision (3e′ waits on it)\n  Tue 17 Nov · The acceptance bar's wording\n  case is blocked: the fixture repository is gone".index
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:180: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_what_waits_on_the_owner_is_soonest_first_and_open_only
+1 failed, 15 deselected in 1.49s

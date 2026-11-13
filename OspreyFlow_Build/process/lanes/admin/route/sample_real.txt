@@ -1,0 +1,34 @@
+# The default view on today's real lanes and route (941a1b1, 2026-11-13T20:43:09Z); 120x40 at most
+OSPREYFLOW · Fri 13 Nov 2026, 20:43 UTC (20:43 UK time)
+ROUTE TO V0.5.2 · Thu 26 Nov · 13 days left · on track
+  [░░░░░░░░░░░░░░░░░░░░] 0 of 13 steps done · [░░░░░░░░░░░░░] day 0 of 13
+
+  1     orchestrator 14–17 Nov [░░░░░░] not started · v0.5.1 cut: as R1 tested it, the upgrade rehearsal and the…
+  2     platform     14–15 Nov [░░░░░░] not started · The poc manifest and its render test
+  3a    platform     16–17 Nov [██░░░░] running, stage 1 of 4 · after 2 · OpenSearch on poc: render, Terraform,…
+  3b    platform-b   14–19 Nov [███░░░] running, stage 3 of 6 · after 2 · Superset and report sync on Entra
+  3c  ★ rules        14–19 Nov [░░░░░░] not started · The index feed: every change reaches the index, rebuild, drift…
+  3d  ★ studio       14–20 Nov [█░░░░░] running, stage 1 of 8 · after A · The search service: names, full text,…
+  3e    case         14–16 Nov [█████░] running, stage 6 of 7 · The Glass's screen fixes
+  3e′ ★ case         18–20 Nov [░░░░░░] not started · after 3d,NAV · The search results layout (after the owner's…
+  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c · Client-size synthetic data loaded once, left loaded
+  4   ★ platform     23 Nov    [░░░░░░] not started · after 3c,3d,3e′,B · The measurement session on that load
+  5   ★ docs         24 Nov    [░░░░░░] not started · after 4 · Feature freeze and the wording sweep
+  6   ★ platform-b   25 Nov    [░░░░░░] not started · after 5 · The install test on the candidate, from the manifest,…
+  7   ★ orchestrator 26 Nov    [░░░░░░] not started · after 6 · Cut v0.5.2; print the page tables; the demos when the…
+
+WAITING ON YOU · 4
+  platform is waiting for you: v052-manifest ready (ADR-148 Am 12 written, 6b4bb26); v052-opensearch waits on the…
+  Sat 14 Nov · Rule which audit fixes join v0.5.2 (1, 3, 4b, 4c in; 4d after, recommended)
+  Sat 14 Nov · OpenSearch on poc: IRSA with SigV4 and no FGAC? No backups of the index, deleted at decommission? (3a…
+  +1 more
+WAITING ON THE ORCHESTRATOR · 1 open
+  Mon 16 Nov · The search access design page (A)
+AUDIT RULINGS [░░░░░░░░░░] 0 of 5 settled · in v0.5.2: 1 yes, 1 no, 3 owner to decide
+OUTSIDE THIS ROUTE · 11 steps
+  admin: T1, v052-identities, v052-heartbeat
+  docs: D2e, sites
+  platform: P8, P7a, P9b, part3, v052-standin
+  +1 more
+FINISHED [████████████████░░░░] 92 of 114 steps merged
+Other views: lanes_heartbeat.sh --overview · --full · --lanes · summary

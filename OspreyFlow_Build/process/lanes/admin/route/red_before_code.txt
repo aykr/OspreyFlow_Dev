@@ -1,0 +1,368 @@
+# red: the route view's tests against main's lanes_heartbeat.sh (485319b), before any code, 2026-11-13T20:29:39Z
+FFFFFFFFFFFFFF.F                                                         [100%]
+=================================== FAILURES ===================================
+__ test_the_headline_says_the_target_the_days_left_and_on_track_with_two_bars __
+
+route = <function route.<locals>.view at 0x1070e2700>
+
+    def test_the_headline_says_the_target_the_days_left_and_on_track_with_two_bars(route) -> None:
+        out = route(16)
+        head = out.splitlines()
+>       assert head[1] == "ROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track"
+E       AssertionError: assert 'Client-insta...ging: unknown' == 'ROUTE TO V0....ft · on track'
+E         
+E         - ROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track
+E         + Client-install chain expected to finish merging: unknown
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:113: AssertionError
+____ test_a_critical_step_past_its_planned_end_undone_is_at_risk_and_named _____
+
+route = <function route.<locals>.view at 0x10710ae80>
+
+    def test_a_critical_step_past_its_planned_end_undone_is_at_risk_and_named(route) -> None:
+        out = route(20)  # 3c (critical) was due on the 19th and is still building
+>       assert out.splitlines()[1].endswith("· at risk")
+E       AssertionError: assert False
+E        +  where False = <built-in method endswith of str object at 0x1071038a0>('· at risk')
+E        +    where <built-in method endswith of str object at 0x1071038a0> = 'Client-install chain expected to finish merging: unknown'.endswith
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:120: AssertionError
+___________ test_a_step_past_its_end_that_is_not_critical_is_no_risk ___________
+
+route = <function route.<locals>.view at 0x10710b4c0>
+
+    def test_a_step_past_its_end_that_is_not_critical_is_no_risk(route) -> None:
+        out = route(16)  # 3e (not critical) was due on the 15th
+>       assert out.splitlines()[1].endswith("· on track") and "At risk" not in out
+E       AssertionError: assert (False)
+E        +  where False = <built-in method endswith of str object at 0x1071036e0>('· on track')
+E        +    where <built-in method endswith of str object at 0x1071036e0> = 'Client-install chain expected to finish merging: unknown'.endswith
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:126: AssertionError
+_____________________ test_past_the_target_undone_is_late ______________________
+
+route = <function route.<locals>.view at 0x10710b740>
+
+    def test_past_the_target_undone_is_late(route) -> None:
+>       assert route(27).splitlines()[1].endswith("· late")
+E       AssertionError: assert False
+E        +  where False = <built-in method endswith of str object at 0x107103c90>('· late')
+E        +    where <built-in method endswith of str object at 0x107103c90> = 'Client-install chain expected to finish merging: unknown'.endswith
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:130: AssertionError
+______ test_each_step_s_state_is_its_lane_s_own_and_done_only_when_merged ______
+
+route = <function route.<locals>.view at 0x10710bce0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4376/test_each_step_s_state_is_its_0')
+
+    def test_each_step_s_state_is_its_lane_s_own_and_done_only_when_merged(route, tmp_path) -> None:
+        out = route(16)
+>       assert " done" in _row(out, "2")
+                          ^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:138: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nClient-install chain expected to finish merging: unknown\nOV...                   free\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
+step = '2'
+
+    def _row(out: str, step: str) -> str:
+>       return next(line for line in out.splitlines() if line.split()[:1] == [step]
+                    or line.split()[:2] == [step, "★"] or line.strip().startswith(f"{step} "))  # fmt: skip
+E       StopIteration
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:96: StopIteration
+______________ test_a_step_whose_lane_is_blocked_on_it_is_blocked ______________
+
+route = <function route.<locals>.view at 0x1071545e0>
+hb = <function hb.<locals>.run at 0x1071540e0>
+
+    def test_a_step_whose_lane_is_blocked_on_it_is_blocked(route, hb) -> None:  # noqa: F811
+        assert hb("beat", "rules", "blocked", "v052-index: the index service will not start").returncode == 0
+        out = route(16)
+>       assert " blocked" in _row(out, "3c") and " blocked" not in _row(out, "B")
+                             ^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:151: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nClient-install chain expected to finish merging: unknown\nOV...                   free\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
+step = '3c'
+
+    def _row(out: str, step: str) -> str:
+>       return next(line for line in out.splitlines() if line.split()[:1] == [step]
+                    or line.split()[:2] == [step, "★"] or line.strip().startswith(f"{step} "))  # fmt: skip
+E       StopIteration
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:96: StopIteration
+______ test_each_row_says_its_lane_dates_what_it_waits_on_and_days_behind ______
+
+route = <function route.<locals>.view at 0x107154b80>
+
+    def test_each_row_says_its_lane_dates_what_it_waits_on_and_days_behind(route) -> None:
+        out = route(16)
+>       row = _row(out, "B")
+              ^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:156: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nClient-install chain expected to finish merging: unknown\nOV...                   free\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
+step = 'B'
+
+    def _row(out: str, step: str) -> str:
+>       return next(line for line in out.splitlines() if line.split()[:1] == [step]
+                    or line.split()[:2] == [step, "★"] or line.strip().startswith(f"{step} "))  # fmt: skip
+E       StopIteration
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:96: StopIteration
+________ test_a_row_s_bar_is_its_lane_s_stages_when_they_name_its_step _________
+
+route = <function route.<locals>.view at 0x107155440>
+hb = <function hb.<locals>.run at 0x107154ea0>
+
+    def test_a_row_s_bar_is_its_lane_s_stages_when_they_name_its_step(route, hb) -> None:  # noqa: F811
+        assert hb("stages", "rules", "v052-index", "1|done|Plan", "2|now|Feed", "3|todo|Rebuild",
+                  "4|todo|Drift").returncode == 0  # fmt: skip
+        out = route(16)
+>       assert "[███░░░] stage 2 of 4" in _row(out, "3c")
+                                          ^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:166: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nClient-install chain expected to finish merging: unknown\nOV...                   free\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
+step = '3c'
+
+    def _row(out: str, step: str) -> str:
+>       return next(line for line in out.splitlines() if line.split()[:1] == [step]
+                    or line.split()[:2] == [step, "★"] or line.strip().startswith(f"{step} "))  # fmt: skip
+E       StopIteration
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:96: StopIteration
+_________ test_what_waits_on_the_owner_is_soonest_first_and_open_only __________
+
+route = <function route.<locals>.view at 0x1071559e0>
+hb = <function hb.<locals>.run at 0x107155580>
+
+    def test_what_waits_on_the_owner_is_soonest_first_and_open_only(route, hb) -> None:  # noqa: F811
+        assert hb("beat", "case", "blocked", "the fixture repository is gone").returncode == 0
+>       lines = _section(route(16), "WAITING ON YOU")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:176: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nClient-install chain expected to finish merging: unknown\nOV...                   free\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
+heading = 'WAITING ON YOU'
+
+    def _section(out: str, heading: str) -> list[str]:
+>       start = next(i for i, line in enumerate(out.splitlines()) if line.startswith(heading))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:101: StopIteration
+_____ test_what_waits_on_the_orchestrator_is_soonest_first_with_its_count ______
+
+route = <function route.<locals>.view at 0x10710b060>
+
+    def test_what_waits_on_the_orchestrator_is_soonest_first_with_its_count(route) -> None:
+>       lines = _section(route(16), "WAITING ON THE ORCHESTRATOR")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:184: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nClient-install chain expected to finish merging: unknown\nOV...                   free\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
+heading = 'WAITING ON THE ORCHESTRATOR'
+
+    def _section(out: str, heading: str) -> list[str]:
+>       start = next(i for i, line in enumerate(out.splitlines()) if line.startswith(heading))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:101: StopIteration
+________________ test_the_audit_rulings_are_one_line_with_a_bar ________________
+
+route = <function route.<locals>.view at 0x10710a980>
+
+    def test_the_audit_rulings_are_one_line_with_a_bar(route) -> None:
+>       line = next(line for line in route(16).splitlines() if line.startswith("AUDIT RULINGS"))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:190: StopIteration
+_____________ test_the_steps_outside_the_route_are_one_line_a_lane _____________
+
+route = <function route.<locals>.view at 0x1070e2980>
+
+    def test_the_steps_outside_the_route_are_one_line_a_lane(route) -> None:
+>       lines = _section(route(16), "OUTSIDE THIS ROUTE")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:196: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nClient-install chain expected to finish merging: unknown\nOV...                   free\n\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n'
+heading = 'OUTSIDE THIS ROUTE'
+
+    def _section(out: str, heading: str) -> list[str]:
+>       start = next(i for i, line in enumerate(out.splitlines()) if line.startswith(heading))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:101: StopIteration
+__________ test_the_finished_work_is_one_line_with_a_bar_and_a_count ___________
+
+route = <function route.<locals>.view at 0x10710a660>
+
+    def test_the_finished_work_is_one_line_with_a_bar_and_a_count(route) -> None:
+>       line = next(line for line in route(16).splitlines() if line.startswith("FINISHED"))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:203: StopIteration
+______________ test_the_route_view_is_one_screen_on_a_busy_route _______________
+
+route = <function route.<locals>.view at 0x1071542c0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-4376/test_the_route_view_is_one_scr0')
+
+    def test_the_route_view_is_one_screen_on_a_busy_route(route, tmp_path) -> None:
+        rows = "".join(
+            f"{i}\tA step of the route with a long title that runs on and on, number {i}\tplatform\t"
+            f"2026-11-{14 + i % 10:02d}\t2026-11-{15 + i % 10:02d}\t{'y' if i % 2 else 'n'}\t-\t-\n"
+            for i in range(10, 23)
+        )
+        (tmp_path / "route.tsv").write_text(ROUTE.split("\n1\t")[0] + "\n" + rows, encoding="utf-8")
+        (tmp_path / "owner_due.tsv").write_text(
+            OWNER_DUE + "".join(f"orchestrator\t2026-11-{15 + i}\tAn item the orchestrator owes {i}\topen\n"
+                                for i in range(10)),  # fmt: skip
+            encoding="utf-8",
+        )
+        (tmp_path / "progress.tsv").write_text(
+            PROGRESS + "".join(f"lane{i}\tS{i}\tS\ttodo\tA step outside the route\n" for i in range(12)),
+            encoding="utf-8",
+        )
+        lines = route(16).splitlines()
+>       assert len(lines) <= 40, "\n".join(lines)
+E       AssertionError: OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)
+E         Client-install chain expected to finish merging: unknown
+E         OVERALL: 3 of 23 steps done · 1 in review · 2 building · 17 not started
+E         
+E         Nothing needs you.
+E         
+E         LANES NOW
+E           PLATFORM · v052-measure · working · last heard 3810m ago
+E             platform at work
+E           RULES · v052-index · working · last heard 3810m ago
+E             rules at work
+E           STUDIO · v052-search · working · last heard 3810m ago
+E             studio at work
+E           CASE · v052-fixes · working · last heard 3810m ago
+E             case at work
+E           DOCS · sites · working · last heard 3810m ago
+E             docs at work
+E           ADMIN · D1 · working · last heard 3810m ago
+E             admin at work
+E         
+E         VIEW 1 · FOUNDATION FEATURES
+E           Ingest Studio: 0 of 0 done
+E           Four places, the Glass and Admin: 0 of 0 done
+E           Cases and drawing boards: 0 of 0 done
+E           Rules and alerting: 0 of 0 done
+E           Models and maps: 0 of 0 done
+E           Laurium: 0 of 0 done
+E         
+E         VIEW 2 · DEPLOYMENT
+E           Local-lite: 0 of 0 done
+E           Small (osprey-small runs unknown): 0 of 0 done
+E           Client install: 0 of 0 done
+E           After the client's install: 0 of 0 done
+E         
+E         RELEASE
+E           unknown, published unknown · merges since: not known (cut (none) not in this repository) · next: not set
+E         
+E         HOUSEKEEPING
+E         
+E           Housekeeping
+E             0 of 0 steps done
+E         
+E         NOT IN GROUPS.TSV
+E         
+E           Not grouped
+E             3 of 23 steps done
+E             V0.5.2 step 3c (v052-index, rules) · building · no estimate
+E             V0.5.2 step 3d (v052-search, studio) · in review · no estimate
+E             V0.5.2 step 3e (v052-fixes, case) · not started · no estimate
+E             V0.5.2 B (v052-load, rules) · not started · no estimate
+E             V0.5.2 step 4 (v052-measure, platform) · not started · no estimate
+E             The two new websites (sites, docs) · building · no estimate
+E             Nothing on a shared disk (P8, platform) · not started · no estimate
+E             The Conduit's pool sizes from settings (D1, admin) · not started · no estimate
+E             A step outside the route (S0, lane0) · not started · no estimate
+E             A step outside the route (S1, lane1) · not started · no estimate
+E             A step outside the route (S2, lane2) · not started · no estimate
+E             A step outside the route (S3, lane3) · not started · no estimate
+E             A step outside the route (S4, lane4) · not started · no estimate
+E             A step outside the route (S5, lane5) · not started · no estimate
+E             A step outside the route (S6, lane6) · not started · no estimate
+E             A step outside the route (S7, lane7) · not started · no estimate
+E             A step outside the route (S8, lane8) · not started · no estimate
+E             A step outside the route (S9, lane9) · not started · no estimate
+E             A step outside the route (S10, lane10) · not started · no estimate
+E             A step outside the route (S11, lane11) · not started · no estimate
+E         
+E         LANES
+E           Lane        Account  Session      On now                                                         Next
+E           platform    sol      not running  v052-measure (ungrouped / ungrouped)                           P8
+E           rules       sol      not running  v052-index (ungrouped / ungrouped)                             v052-load
+E           studio      sol      not running  v052-search (ungrouped / ungrouped)                            free
+E           case        sol      not running  v052-fixes (ungrouped / ungrouped)                             free
+E           docs        default  not running  sites (ungrouped / ungrouped)                                  free
+E           admin       default  not running  D1 (ungrouped / ungrouped)                                     free
+E         
+E         Every block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes
+E       assert 77 <= 40
+E        +  where 77 = len(['OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)', 'Client-install chain expected to finish merging: unknown', 'OVERALL: 3 of 23 steps done · 1 in review · 2 building · 17 not started', '', 'Nothing needs you.', '', ...])
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:227: AssertionError
+_________________________ test_the_overview_and_watch __________________________
+
+route = <function route.<locals>.view at 0x107155620>
+hb = <function hb.<locals>.run at 0x107154e00>
+
+    def test_the_overview_and_watch(route, hb) -> None:  # noqa: F811
+>       assert "VIEW 1 · FOUNDATION FEATURES" in route(16, "--overview")
+                                                 ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:239: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+day = 16, args = ('--overview',)
+
+    def view(day: int = 16, *args: str) -> str:
+        out = hb(*args, OSPREY_NOW=_at(day), **env)
+>       assert out.returncode == 0, out.stderr[-800:]
+E       AssertionError: usage: lanes_heartbeat.sh [--full] | --lanes [--full] | beat <lane> <state> "<note>" | stages <lane> "<step>" "<n>|<state>|<name>[|<note>]" ... | stages <lane> --clear | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]
+E         
+E       assert 2 == 0
+E        +  where 2 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', '-...ages <lane> --clear | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]\n').returncode
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:88: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_headline_says_the_target_the_days_left_and_on_track_with_two_bars
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_critical_step_past_its_planned_end_undone_is_at_risk_and_named
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_step_past_its_end_that_is_not_critical_is_no_risk
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_past_the_target_undone_is_late
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_each_step_s_state_is_its_lane_s_own_and_done_only_when_merged
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_step_whose_lane_is_blocked_on_it_is_blocked
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_each_row_says_its_lane_dates_what_it_waits_on_and_days_behind
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_row_s_bar_is_its_lane_s_stages_when_they_name_its_step
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_what_waits_on_the_owner_is_soonest_first_and_open_only
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_what_waits_on_the_orchestrator_is_soonest_first_with_its_count
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_audit_rulings_are_one_line_with_a_bar
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_steps_outside_the_route_are_one_line_a_lane
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_finished_work_is_one_line_with_a_bar_and_a_count
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_route_view_is_one_screen_on_a_busy_route
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_overview_and_watch
+15 failed, 1 passed in 20.70s

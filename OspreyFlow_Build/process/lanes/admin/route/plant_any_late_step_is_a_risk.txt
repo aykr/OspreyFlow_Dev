@@ -1,0 +1,22 @@
+# plant: any_late_step_is_a_risk
+# replaced: 'push @risk, $r if $state ne "done" && $crit eq "y" && day_of($end) < $today;'
+# with: 'push @risk, $r if $state ne "done" && day_of($end) < $today;'
+# run: pytest -k 'not_critical_is_no_risk'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_a_step_past_its_end_that_is_not_critical_is_no_risk ___________
+
+route = <function route.<locals>.view at 0x113d3e5c0>
+
+    def test_a_step_past_its_end_that_is_not_critical_is_no_risk(route) -> None:
+        out = route(16)  # 3e (not critical) was due on the 15th
+>       assert out.splitlines()[1].endswith("· on track") and "At risk" not in out
+E       AssertionError: assert (False)
+E        +  where False = <built-in method endswith of str object at 0x113183360>('· on track')
+E        +    where <built-in method endswith of str object at 0x113183360> = 'ROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · at risk'.endswith
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:128: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_step_past_its_end_that_is_not_critical_is_no_risk
+1 failed, 15 deselected in 2.23s

@@ -1,0 +1,20 @@
+# plant: pending_counted_settled
+# replaced: 'my $settled = grep { $_->[2] !~ /pending/ } @audit;'
+# with: 'my $settled = @audit;'
+# run: pytest -k 'audit_rulings'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________________ test_the_audit_rulings_are_one_line_with_a_bar ________________
+
+route = <function route.<locals>.view at 0x106c3e340>
+
+    def test_the_audit_rulings_are_one_line_with_a_bar(route) -> None:
+        line = next(line for line in route(16).splitlines() if line.startswith("AUDIT RULINGS"))
+>       assert "1 of 3 settled" in line and "in v0.5.2: 1 yes, 1 no, 1 owner to decide" in line
+E       AssertionError: assert ('1 of 3 settled' in 'AUDIT RULINGS [██████████] 3 of 3 settled · in v0.5.2: 1 yes, 1 no, 1 owner to decide')
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:193: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_audit_rulings_are_one_line_with_a_bar
+1 failed, 15 deselected in 2.49s

@@ -66,6 +66,12 @@ RELEASE="${OSPREY_RELEASE_FILE:-$(dirname "$PROGRESS")/release.tsv}"
 # a first line `# target <name>` names the release. A step not done whose `after` names a step not done is shown
 # as waiting on it, whatever its own status says.
 FINISH="${OSPREY_FINISH_FILE:-$(dirname "$PROGRESS")/finish.tsv}"
+# The route to the next release (ROUTE_052.md, the owner, 13 November 2026): route.tsv, what the owner and the
+# orchestrator owe (owner_due.tsv) and the audit rulings (audit.tsv), beside the step table. With a route.tsv,
+# the default view and watch show the route; without one, the overview.
+ROUTE="${OSPREY_ROUTE_FILE:-$(dirname "$PROGRESS")/route.tsv}"
+OWNER_DUE="${OSPREY_OWNER_DUE_FILE:-$(dirname "$PROGRESS")/owner_due.tsv}"
+AUDIT="${OSPREY_AUDIT_FILE:-$(dirname "$PROGRESS")/audit.tsv}"
 ACCOUNTS="${OSPREY_ACCOUNTS_FILE:-$HOME/.ospreyflow/accounts.conf}"   # lanes_launch.sh's own default
 mkdir -p "$DIR"
 
@@ -632,6 +638,140 @@ print $full ? "\nThe short view: lanes_heartbeat.sh · lane by lane: lanes_heart
   : "\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n";
 '
 
+# The route view (ROUTE_052.md, "The heartbeat's route view"): one screen, nothing else needing reading.
+route_view() {
+  local lanes needs lane st note
+  lanes="$(mktemp "$DIR/.route.XXXXXX")"; needs="$(mktemp "$DIR/.routeneeds.XXXXXX")"
+  # shellcheck disable=SC2064   # these files, now
+  trap "rm -f '$lanes' '$needs'" EXIT
+  NEEDS_COPY="$needs" show >/dev/null
+  if [ -n "${OVERVIEW_NEEDS:-}" ]; then cp "$needs" "$OVERVIEW_NEEDS"; fi
+  for lane in $LANES; do
+    st="$(field state "$DIR/$lane.beat" || true)"; note="$(field note "$DIR/$lane.beat" || true)"
+    printf '%s\t%s\t%s\n' "$lane" "${st:--}" "$note" >> "$lanes"
+  done
+  P_CLOCK="$(clock)" P_NOW="$(now)" P_PROGRESS="$PROGRESS" P_ROUTE="$ROUTE" P_OWNER_DUE="$OWNER_DUE" \
+    P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_DIR="$DIR" perl -CSD -e "$ROUTE_PL"
+  rm -f "$lanes" "$needs"; trap - EXIT
+}
+
+# shellcheck disable=SC2016   # perl, not the shell, expands these
+ROUTE_PL='
+use strict; use warnings; use utf8; use POSIX qw(floor strftime); use Time::Local qw(timegm);
+sub rows { my ($f) = @_; my @r; open(my $h, "<:encoding(UTF-8)", $f) or return @r;
+  while (<$h>) { chomp; next if /^#/ || !/\S/; push @r, [split /\t/, $_, -1] } return @r }
+sub cut { my ($s, $n) = @_; return $s if length $s <= $n; $s = substr($s, 0, $n - 1); $s =~ s/\s+\S*$//; return "$s…" }
+sub day_of { my ($d) = @_; my ($y, $m, $dd) = split /-/, $d; return floor(timegm(0, 0, 12, $dd, $m - 1, $y) / 86400) }
+sub said { my ($d) = @_; my ($y, $m, $dd) = split /-/, $d;
+  return strftime("%a %e %b", 0, 0, 12, $dd, $m - 1, $y - 1900) =~ s/  / /r }
+sub bar { my ($frac, $w) = @_; $frac = 0 if $frac < 0; $frac = 1 if $frac > 1; my $f = int($frac * $w + 0.5);
+  return "[" . ("█" x $f) . ("░" x ($w - $f)) . "]" }
+sub plural { my ($n, $one) = @_; return "$n $one" . ($n == 1 ? "" : "s") }
+sub names { my ($note, $step) = @_; return $note =~ /(?<![A-Za-z0-9.\-])\Q$step\E(?![A-Za-z0-9\-])/ }
+sub stages_of { my ($lane) = @_; my ($step, @s);
+  open(my $h, "<:encoding(UTF-8)", "$ENV{P_DIR}/$lane.stages") or return;
+  while (<$h>) { chomp; if (/^step=(.*)$/) { $step = $1 }
+    elsif (/^stage=(.*)$/) { my @p = split /\|/, $1, 4; push @s, \@p if @p >= 3 } }
+  return ($step, @s) }
+
+my $today = floor($ENV{P_NOW} / 86400);
+my ($release, $target) = ("the release", undef);
+if (open(my $h, "<:encoding(UTF-8)", $ENV{P_ROUTE})) {
+  while (<$h>) { chomp; ($release, $target) = ($1, $2) if /^# target\t([^\t]+)\t(\d{4}-\d\d-\d\d)/ } }
+my @route = grep { @$_ >= 8 } rows($ENV{P_ROUTE});
+my @progress = grep { @$_ >= 5 } rows($ENV{P_PROGRESS});
+my %status; $status{"$_->[0]:$_->[1]"} = $_->[3] for @progress;
+my %beat; for (grep { @$_ >= 3 } rows($ENV{P_LANES})) { $beat{$_->[0]} = [$_->[1], $_->[2]] }
+
+# Each step: its state from its lane`s own progress row ("done" only when merged, its gates passed) and beat
+# (blocked when the lane is blocked naming it), and a bar from the lane`s stages where they name its step.
+my (@done, @risk);
+for my $r (@route) {
+  my ($id, $title, $lane, $start, $end, $crit, $after, $prog) = @$r;
+  my ($plane, $pstep) = $prog =~ /^([^:]+):(.+)$/ ? ($1, $2) : (undef, undef);
+  my $st = defined $pstep ? ($status{"$plane:$pstep"} // "todo") : "todo";
+  my $state = $st eq "done" ? "done" : ($st eq "building" || $st eq "review") ? "running" : "not started";
+  if ($state ne "done" && defined $pstep && ($beat{$plane}[0] // "") eq "blocked"
+      && names($beat{$plane}[1], $pstep)) { $state = "blocked" }
+  my ($frac, $staged) = ($state eq "done" ? 1 : 0, "");
+  if ($state ne "done" && defined $pstep) {
+    my ($step, @s) = stages_of($plane);
+    if (defined $step && $step eq $pstep && @s) {
+      my ($at) = ((grep { $_->[1] eq "now" } @s), (grep { $_->[1] eq "blocked" } @s),
+                  (grep { $_->[1] eq "todo" } @s));
+      my $n = $at ? $at->[0] : scalar @s; $frac = $n / @s; $staged = "stage $n of " . scalar @s;
+      # The owner`s rule: from the lanes` own records. A stage done or under way is the step running,
+      # though its progress row says todo; blocked still wins, and done comes from the merged row alone.
+      $state = "running" if $state eq "not started" && grep { $_->[1] eq "done" || $_->[1] eq "now" } @s } }
+  push @$r, $state, $frac, $staged;
+  push @done, $r if $state eq "done";
+  push @risk, $r if $state ne "done" && $crit eq "y" && day_of($end) < $today;
+}
+
+my $first = (sort { $a <=> $b } map { day_of($_->[3]) } @route)[0] // $today;
+my $last = defined $target ? day_of($target) : $today;
+my $total = $last - $first + 1; my $used = $today - $first + 1;
+$used = 0 if $used < 0; $used = $total if $used > $total;
+my $left = $last - $today;
+my $word = (@done < @route && $today > $last) ? "late" : @risk ? "at risk" : "on track";
+print "OSPREYFLOW · $ENV{P_CLOCK}\n";
+printf "ROUTE TO %s · %s · %s · %s\n", uc $release, (defined $target ? said($target) : "no date"),
+  ($left >= 0 ? plural($left, "day") . " left" : plural(-$left, "day") . " past"), $word;
+printf "  %s %d of %d steps done · %s day %d of %d\n", bar(@route ? @done / @route : 0, 20), scalar @done,
+  scalar @route, bar($total ? $used / $total : 0, 13), $used, $total;
+if (my ($r) = sort { day_of($a->[4]) <=> day_of($b->[4]) } @risk) {
+  my $more = @risk > 1 ? sprintf(" (+%d more at risk)", @risk - 1) : "";
+  print cut(sprintf("  At risk: %s %s (%s) was due %s", $r->[0], $r->[1], $r->[2], said($r->[4])),
+    118 - length $more), "$more\n" }
+print "\n";
+
+for my $r (@route) {
+  my ($id, $title, $lane, $start, $end, $crit, $after, $prog, $state, $frac, $staged) = @$r;
+  my (undef, $sd, $smo) = split / /, said($start); my (undef, $ed, $emo) = split / /, said($end);
+  my $dates = $smo eq $emo ? ($sd eq $ed ? "$ed $emo" : "$sd–$ed $emo") : "$sd $smo–$ed $emo";
+  my $late = $today - day_of($end);
+  # The state, then only what is worth saying: its stage, days behind, what it waits on; then its title.
+  my @said = ($staged ? "$state, $staged" : $state);
+  push @said, plural($late, "day") . " behind" if $state ne "done" && $late > 0;
+  push @said, "after $after" if $state ne "done" && $after ne "-" && $after ne "";
+  my $line = sprintf("  %-3s %s %-12s %-9s %s %s · %s", $id, ($crit eq "y" ? "★" : " "), $lane, $dates,
+    bar($frac, 6), join(" · ", @said), $title);
+  print cut($line, 120), "\n";
+}
+print "\n";
+
+sub listed { my ($cap, @items) = @_; my @shown = @items[0 .. ($#items < $cap - 1 ? $#items : $cap - 1)];
+  print "  ", cut($_, 116), "\n" for @shown; printf "  +%d more\n", @items - @shown if @items > @shown }
+my @due = grep { @$_ >= 4 && $_->[3] eq "open" } rows($ENV{P_OWNER_DUE});
+my @owner = map { said($_->[1]) . " · $_->[2]" } sort { $a->[1] cmp $b->[1] } grep { $_->[0] eq "owner" } @due;
+my @needs; if (open(my $h, "<:encoding(UTF-8)", $ENV{P_NEEDS})) { @needs = grep { /\S/ } map { s/\s+$//r } <$h> }
+my @you = (@needs, @owner);   # what a lane says needs you first: never behind "+N more"
+print "WAITING ON YOU · ", (@you ? scalar @you : "nothing"), "\n"; listed(3, @you);
+my @orch = map { said($_->[1]) . " · $_->[2]" } sort { $a->[1] cmp $b->[1] }
+  grep { $_->[0] eq "orchestrator" } @due;
+print "WAITING ON THE ORCHESTRATOR · ", (@orch ? scalar(@orch) . " open" : "nothing"), "\n"; listed(4, @orch);
+
+my @audit = grep { @$_ >= 4 } rows($ENV{P_AUDIT});
+if (@audit) {
+  my $settled = grep { $_->[2] !~ /pending/ } @audit; my %in; $in{$_->[3]}++ for @audit;
+  my @in = map { "$in{$_} $_" } grep { $in{$_} } ("yes", "no", "owner to decide");
+  push @in, map { "$in{$_} $_" } grep { !/^(yes|no|owner to decide)$/ } sort keys %in;
+  printf "AUDIT RULINGS %s %d of %d settled · in %s: %s\n", bar($settled / @audit, 10), $settled,
+    scalar @audit, $release, join(", ", @in) }
+
+my %onroute = map { $_->[7] => 1 } @route; my %outside;
+for (@progress) { my ($lane, $step, undef, $st) = @$_;
+  push @{ $outside{$lane} }, $step if $st ne "done" && !$onroute{"$lane:$step"} }
+my @lanes = sort keys %outside; my $count = 0; $count += @{ $outside{$_} } for @lanes;
+print "OUTSIDE THIS ROUTE · ", ($count ? plural($count, "step") : "nothing"), "\n";
+listed(3, map { "$_: " . join(", ", @{ $outside{$_} }) } @lanes);
+
+my $merged = grep { $_->[3] eq "done" } @progress;
+printf "FINISHED %s %d of %d steps merged\n", bar(@progress ? $merged / @progress : 0, 20), $merged,
+  scalar @progress;
+print "Other views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n";
+'
+
 notify() {
   local msg="$1"
   if command -v osascript >/dev/null 2>&1; then
@@ -649,7 +789,8 @@ watch_loop() {
     if [ "$view" = "--full" ]; then
       show; cp "$DIR/.needs" "$seen"
     else
-      OVERVIEW_NEEDS="$seen" overview   # what needs the owner first, by show's reading, kept for the notifications
+      # What needs the owner first, by show's reading, kept for the notifications: the route, else the overview.
+      if [ -f "$ROUTE" ]; then OVERVIEW_NEEDS="$seen" route_view; else OVERVIEW_NEEDS="$seen" overview; fi
     fi
     # notify only for lines that are new since the last pass
     if [ -s "$seen" ]; then
@@ -671,7 +812,8 @@ watch_loop() {
 }
 
 case "${1:-}" in
-  "") overview ;;
+  "") if [ -f "$ROUTE" ]; then route_view; else overview; fi ;;
+  --overview) overview ;;
   --full) overview --full ;;
   stages) shift; stages "$@" ;;
   --lanes) shift; show "${1:-}" ;;
