@@ -1,0 +1,27 @@
+# plant: verifier_admits_the_role (OspreyFlow_Core/services/api/service_identity.py)
+# replaced: '        if isinstance(roles, list) and DASHBOARD_APP_ROLE in roles:'
+# with: '        if False:'
+# run: pytest -k 'dashboard_role_is_no_service'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______ test_a_token_carrying_the_dashboard_role_is_no_service_identity ________
+
+jwks_url = 'http://127.0.0.1:49654/jwks.json'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x12d4e5fb0>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x12d4e5f70>)
+
+    def test_a_token_carrying_the_dashboard_role_is_no_service_identity(jwks_url, keypair) -> None:
+        """Its client holds this API's `Dashboard.Read`: a dashboard's, registered here or not."""
+        from principal_auth import DASHBOARD_APP_ROLE
+    
+        token = _app_token(keypair, roles=["Runs.Trigger", DASHBOARD_APP_ROLE])
+>       with pytest.raises(ServiceIdentityRefused, match="dashboard") as refused:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ServiceIdentityRefused
+
+../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:297: Failed
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:47:54] "GET /jwks.json HTTP/1.1" 200 -
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_a_token_carrying_the_dashboard_role_is_no_service_identity
+1 failed, 109 deselected in 2.43s

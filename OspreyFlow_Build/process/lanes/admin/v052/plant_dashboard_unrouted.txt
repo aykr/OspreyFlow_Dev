@@ -1,0 +1,32 @@
+# plant: dashboard_unrouted (OspreyFlow_Core/packages/principal_auth/__init__.py)
+# replaced: '        routes = sorted(DASHBOARD_ROUTES)\n'
+# with: ''
+# run: pytest -k 'narrow_principal'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_a_registered_dashboard_s_token_is_its_narrow_principal __________
+
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x107a6d150>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x107a6d0b0>)
+jwks_url = 'http://127.0.0.1:49646/jwks.json'
+
+    def test_a_registered_dashboard_s_token_is_its_narrow_principal(keypair, jwks_url) -> None:
+        principal = _resolve(_resolver(jwks_url, FakeDashboards()), app_only_claims(), keypair)
+        assert principal.id == DASHBOARD
+        assert (principal.clearance, principal.org_unit) == ("OFFICIAL-SENSITIVE", "unit-2")
+        assert principal.receivable_handling_codes == ["R"]
+        assert principal.roles == ["reports_viewer"]
+>       assert set(principal.routes or ()) == DASHBOARD_ROUTES
+E       AssertionError: assert set() == frozenset({'G...eports/feed'})
+E         
+E         Extra items in the right set:
+E         'GET /v1/investigations/{investigation_id}/reports/feed'
+E         'GET /v1/investigations'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:96: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:47:51] "GET /jwks.json HTTP/1.1" 200 -
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_a_registered_dashboard_s_token_is_its_narrow_principal
+1 failed, 109 deselected in 2.38s
