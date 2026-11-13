@@ -36225,8 +36225,11 @@ place on screen was not kept at all, only the case (`investigation/investigation
    **It grants nothing:** each place is still drawn only for whom its rights open it, and a place
    chosen that the rights do not open is drawn, and kept, as Home; the Glass views put back are only
    those `App.tsx`'s landing check corrects (Graph, Map, Matrix, Figures), never Dashboards, Connection
-   strength or Ownership, which are drawn on the view alone; and signing out forgets the place
-   (`forgetPlace` in `signOut`), so the next person in the tab starts where the address says.
+   strength or Ownership, which are drawn on the view alone; signing out forgets the place
+   (`forgetPlace` in `signOut`), so the next person in the tab starts where the address says; and a
+   kept case the person can no longer open is dropped by the check that already drops it
+   (`caseIsOpenable`, 9 October 2026: the Conduit answers it 403 or 404), so the refresh lands on
+   Home, and Home is what is kept.
 4. **The shared key's gate (ADR-114 Amendments 41 and 42).** On a deployment that asks for the key
    (osprey-small), the frame's `prompt=none` request goes to `id.<host>`'s authorisation endpoint,
    which is behind the key (only the token, keys and discovery document are open). **Proven at the HTTP
@@ -36242,33 +36245,45 @@ place on screen was not kept at all, only the case (`investigation/investigation
 
 **Tests**, red first.
 - `apps/workspace/keyboard/refresh-sign-in.spec.ts`: the real Glass and the real `oidc-client-ts` frame
-  against a routed fake provider that refuses what Keycloak 26 refuses (an unregistered client or
-  `redirect_uri`; with no session `login_required`, `interaction_required` or `consent_required` with
-  `state` and `iss`; a code exchanged once, for its PKCE verifier and its `redirect_uri`, else
-  `invalid_grant`): signed in on Home without the screen; a refresh in Admin lands in Admin; no session
+  against a routed fake provider that refuses as Keycloak 26 does where the live test measures it
+  (with no session, `login_required` on the redirect with `state` and `iss`, never a code) and,
+  beyond what was measured live, refuses an unregistered client or `redirect_uri`, answers
+  `interaction_required` and `consent_required` (OIDC Core §3.1.2.6's other `prompt=none` errors,
+  which no live case here provokes), and exchanges a code once, for its PKCE verifier and its
+  `redirect_uri`, else `invalid_grant`: signed in on Home without the screen; a refresh in Admin lands in Admin; no session
   shows the screen and asks once; each of the three refusals falls to the screen, asked once; a new tab
   is not given the place; a kept Admin for a person whose rights do not open it lands on Home and Home
   is kept; a code is refused a second time; the request sent is `fixtures/silent-round-request.json`.
-  Reds: 4 of 4 on e1f15e4's `App.tsx` (no silent round); the place not put back, red after the reload
-  in Admin (`gates/refresh_place_not_kept_red.txt`); the place kept in `localStorage`, red at the new
-  tab (`gates/refresh_place_across_tabs_red.txt`).
+  Green, all ten three times over (`gates/refresh_spec_green.txt`). Reds: 4 of 4 on e1f15e4's
+  `App.tsx` (no silent round); the place not put back, red after the reload in Admin
+  (`gates/refresh_place_not_kept_red.txt`); the place kept in `localStorage`, red at the new tab
+  (`gates/refresh_place_across_tabs_red.txt`); a fake that grants where Keycloak refuses, red in the
+  four refusal cases (`gates/refresh_spec_fake_grants_red.txt`); a fixture naming a parameter the
+  library does not send (`gates/refresh_spec_fixture_red.txt`); the used-code check removed, with
+  the library's own exchange resent whole (`gates/refresh_spec_code_reuse_red.txt`); the chosen place
+  kept whatever the rights draw (`gates/refresh_spec_kept_admin_rights_red.txt`).
 - `src/App.test.tsx`: a live session signed in silently without the screen, and asked once under
   StrictMode (red on e1f15e4); a refresh on Home with a case in the tab lands on Home, in the case in
   that case; a case chosen on Home and carried over a full-page sign-in opens that case, not the Home
-  the tab kept (red with the stash left out, `gates/refresh_case_switch_app_red.txt`).
+  the tab kept (red with the stash left out, `gates/refresh_case_switch_app_red.txt`); a kept case the
+  Conduit refuses lands on Home, kept as Home (red with the drop removed,
+  `gates/refresh_refused_case_red.txt`).
 - `src/auth/refreshPlace.test.ts` (each place returned to; the stash, the noted address, the address and
   a named case first; a stale stash not; a place the rights do not offer kept as Home; the three
   unchecked views not put back; sign out forgets; this tab only; 7 red on the first cut's module,
   `gates/refresh_place_review_fixes_red.txt`). `src/auth/signInAtLoad.test.ts` (the decision given
   what `renewSilently` returns; asked once, red with the memo removed,
   `gates/refresh_never_loops_plant.txt`). `src/auth/userManager.test.ts` (the refusal's words leave
-  the address; sign out forgets the place). `src/auth/launcherHandoff.test.ts` (the hand-off leaves
+  the address; sign out forgets the place, red without `forgetPlace`,
+  `gates/refresh_signout_keeps_place_red.txt`). `src/auth/launcherHandoff.test.ts` (the hand-off leaves
   the address).
 - `tests/harness/test_refresh_silent_sign_in_keycloak.py`, against a real Keycloak 26.0 with the
   rendered realm, sending the captured request: no session → `login_required` with the request's
   `state` and Keycloak's `iss`, no code; a session → a code exchanged without a password, no refresh
-  token; after logout → `login_required` again (green `gates/refresh_keycloak_green.txt`; red with the
-  round sent without `prompt=none`, `gates/refresh_keycloak_plant.txt`).
+  token; after logout → `login_required` again, with `state` and `iss` (green
+  `gates/refresh_keycloak_green.txt`; red with the round sent without `prompt=none`,
+  `gates/refresh_keycloak_plant.txt`).
 - `tests/harness/test_refresh_silent_round_through_the_key.py`, through Caddy 2.11.4: green
-  `gates/refresh_key_gate_green.txt`; red with the pass not sent, `gates/refresh_key_gate_red.txt`.
+  `gates/refresh_key_gate_green.txt`; red with the pass set without `Domain=`, so the Glass's name's
+  alone, `gates/refresh_key_gate_red.txt`.
 - No Glass action is added and the Sign in screen is unchanged, so no keyboard step (rule 13).

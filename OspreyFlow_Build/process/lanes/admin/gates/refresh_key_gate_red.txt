@@ -1,6 +1,6 @@
-PLANT: the frame's round sent without the pass the key gave on the Glass's name
-Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T125035Z-88dbf5da/log: bash -c cd ../OspreyFlow_Core; d=$(mktemp -d); c=$(docker create caddy:2.11.4-alpine); docker cp -q $c:/usr/bin/caddy $d/caddy; docker rm -f $c >/dev/null; echo "OSPREY_TEST_CADDY=$d/caddy ($($d/caddy version | head -1))"; OSPREY_TEST_CADDY=$d/caddy ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py -v -rs; r=$?; rm -rf $d; exit $r
-OSPREY_TEST_CADDY=/tmp/tmp.tm5qup064S/caddy (v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=)
+PLANT: the pass set without Domain= (harness/access_key.py's snippet), so it is the Glass's name's alone: the frame's round to id.<host> must be asked for the key
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261113T131443Z-55cc3b02/log: bash -c cd ../OspreyFlow_Core; d=$(mktemp -d); c=$(docker create caddy:2.11.4-alpine); docker cp -q $c:/usr/bin/caddy $d/caddy; docker rm -f $c >/dev/null; echo "OSPREY_TEST_CADDY=$d/caddy ($($d/caddy version | head -1))"; OSPREY_TEST_CADDY=$d/caddy ~/.local/bin/uv run pytest -p no:cacheprovider ../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py -v -rs; r=$?; rm -rf $d; exit $r
+OSPREY_TEST_CADDY=/tmp/tmp.g87dAw9TH5/caddy (v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=)
 ============================= test session starts ==============================
 platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python
 port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
@@ -16,8 +16,8 @@ collecting ... collected 2 items
 =================================== FAILURES ===================================
 _ test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name _
 
-proxy = _Proxy(port=47869, stand_in=<tests.harness.test_access_key_proxy._StandIn object at 0x77e5a660c1a0>, token='nc4u2P4SCu...3mdDq3lxiau4yXySV5JyIo', folder=PosixPath('/tmp/pytest-of-root/pytest-6475/test_the_silent_round_from_the0'), body=b'')
-tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6475/test_the_silent_round_from_the0')
+proxy = _Proxy(port=35581, stand_in=<tests.harness.test_access_key_proxy._StandIn object at 0x706acde18200>, token='dIWSwjnVPG...hjMEsJ9XMLS9kjzgdcmVMA', folder=PosixPath('/tmp/pytest-of-root/pytest-6497/test_the_silent_round_from_the0'), body=b'')
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6497/test_the_silent_round_from_the0')
 
     def test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name(
         proxy: _Proxy,  # noqa: F811
@@ -28,22 +28,22 @@ tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6475/test_the_silent_round_from
         assert proxy.ask(HOST, "/", user="demo", key=KEY, jar=jar)[0] == 200
         before = len(proxy.stand_in.seen)
     
-        status, _ = proxy.ask(f"id.{HOST}", SILENT_ROUND, headers=FRAME)  # PLANT: the pass not sent
+        status, _ = proxy.ask(f"id.{HOST}", SILENT_ROUND, headers=FRAME, jar=jar)
 >       assert status == 200, "the silent round was asked for the key"
 E       AssertionError: the silent round was asked for the key
 E       assert 401 == 200
 
-../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py:46: AssertionError
+../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py:45: AssertionError
 ---------------------------- Captured stdout setup -----------------------------
-The key's hash is written to /tmp/pytest-of-root/pytest-6475/test_the_silent_round_from_the0/access-key.caddy.pending (readable by its owner alone).
+The key's hash is written to /tmp/pytest-of-root/pytest-6497/test_the_silent_round_from_the0/access-key.caddy.pending (readable by its owner alone).
 Now run `ospreyflow apply`: it puts the key in place and restarts the front proxy. Give people the user name 'demo' and the key, by a route other than this deployment.
 ============================= slowest 30 durations =============================
-1.49s setup    tests/harness/test_refresh_silent_round_through_the_key.py::test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name
-1.41s setup    tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing
-0.96s call     tests/harness/test_refresh_silent_round_through_the_key.py::test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name
-0.44s teardown tests/harness/test_refresh_silent_round_through_the_key.py::test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name
-0.08s teardown tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing
-0.02s call     tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing
-========================= 1 failed, 1 passed in 4.87s ==========================
-Wall time: 8 s, exit 1 (no stack, no lease; set-up before it 12 s)
+1.37s setup    tests/harness/test_refresh_silent_round_through_the_key.py::test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name
+1.21s setup    tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing
+0.84s call     tests/harness/test_refresh_silent_round_through_the_key.py::test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name
+0.43s teardown tests/harness/test_refresh_silent_round_through_the_key.py::test_the_silent_round_from_the_glass_passes_with_the_pass_given_on_the_glass_s_name
+0.28s teardown tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing
+0.01s call     tests/harness/test_refresh_silent_round_through_the_key.py::test_without_the_pass_the_silent_round_is_asked_for_the_key_and_reaches_nothing
+========================= 1 failed, 1 passed in 4.61s ==========================
+Wall time: 7 s, exit 1 (no stack, no lease; set-up before it 11 s)
 exit=1

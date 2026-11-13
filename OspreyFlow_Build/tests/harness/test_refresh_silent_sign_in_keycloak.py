@@ -234,3 +234,4 @@ def test_with_a_session_the_silent_round_signs_in_without_a_password_then_refuse
         assert refused.status_code == 302
         again = _answer(refused.headers["location"])
         assert again.get("error") == "login_required" and again.get("state") == state, again
+        assert again.get("iss") == f"{keycloak.origin}/realms/{REALM}", again
