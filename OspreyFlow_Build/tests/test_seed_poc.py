@@ -74,7 +74,10 @@ def test_a_seed_that_raises_fails_the_job_too(recorded, monkeypatch, capsys) -> 
     assert "hmp" in capsys.readouterr().err
 
 
-def test_no_first_administrator_is_refused_before_anything_is_written(recorded) -> None:  # type: ignore[no-untyped-def]
+def test_no_first_administrator_is_refused_before_anything_is_written(
+    recorded, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.delenv("OSPREY_FIRST_ADMINISTRATORS", raising=False)
     with pytest.raises(SystemExit):
         seed_poc.main([])
     with pytest.raises(SystemExit):
@@ -91,3 +94,15 @@ def test_the_real_seed_modules_are_the_ones_apply_runs() -> None:
         seed_scenarios.main,
     ]
     assert list(seed_poc.SEEDS) == ["hmp", "fixture-corp", "scenarios"]
+
+
+def test_the_author_is_the_deployments_first_administrator_by_default(
+    recorded, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    """In the Job, the case's first Author is read from the settings the Conduit is given
+    (`OSPREY_FIRST_ADMINISTRATORS`, the ConfigMap's), the first of them: no argument to render."""
+    monkeypatch.setenv(
+        "OSPREY_FIRST_ADMINISTRATORS", f"{ADMIN},50000000-0000-4000-8000-000000000002"
+    )
+    assert seed_poc.main([]) == 0
+    assert recorded["cases"][0]["grant_texts"] == [f"{ADMIN}=author"]

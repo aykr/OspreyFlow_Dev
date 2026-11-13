@@ -1,18 +1,18 @@
 """The POC seed path (ADR-148 Amendment 14): spec 08's three seeds into one named case, as the
-`ospreyflow-seed` Job runs them in the api image on a `cloud-platform` deployment, with the Conduit
-and the worker scaled to none for its length (the recovery runbook's seed block).
+`ospreyflow-seed` Job runs them in the api image on a `cloud-platform` deployment, with the
+Conduit and the worker scaled to none for its length (the recovery runbook's seed block).
 
 `harness.apply` seeds a local deployment the same way, but makes its case through the Conduit as
-Keycloak's verify identity; a cloud-platform deployment signs in with Entra ID, which has no such
-identity and no token exchange. So the case is made here, through the `InvestigationStore` the
-routes use (`scripts.case_seed`), by a seed principal no person signs in as, and its first Author
-is the deployment's first administrator (`cloud_platform.claims.first_administrators`, rendered
-into the Job's arguments): the one person sure to exist when the seed runs.
+Keycloak's verify identity; a cloud-platform deployment signs in with Entra ID, which has no
+such identity and no token exchange. So the case is made here, through the `InvestigationStore`
+the routes use (`scripts.case_seed`), by a seed principal no person signs in as, and its first
+Author is the deployment's first administrator (`cloud_platform.claims.first_administrators`,
+which the Job reads from the settings the Conduit is given): the one person sure to exist when
+the seed runs.
 
 A seed that fails stops the run there, named, and the Job fails with it: never "seeded" over a
-dataset that is not there (rule 2). Running it again reuses the case and adds only what is missing,
-as each seed does.
-"""
+dataset that is not there (rule 2). Running it again reuses the case and adds only what is
+missing, as each seed does."""
 
 from __future__ import annotations
 
@@ -46,8 +46,13 @@ def _seed_main(module: str) -> Callable[[list[str]], int]:
 
 def _parse(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="python -m scripts.seed_poc", description=__doc__)
+    first = os.environ.get("OSPREY_FIRST_ADMINISTRATORS", "").split(",")[0].strip()
     parser.add_argument(
-        "--author", required=True, help="The first administrator's Entra object id (oid)."
+        "--author",
+        default=first or None,
+        required=not first,
+        help="The case's first Author's Entra object id (oid); by default the deployment's first "
+        "administrator (OSPREY_FIRST_ADMINISTRATORS, the settings the Conduit is given).",
     )
     parser.add_argument("--case-name", default=CASE_NAME)
     parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
