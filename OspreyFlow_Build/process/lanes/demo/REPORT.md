@@ -18,3 +18,28 @@ Post-seed backup: `/srv/ospreyflow/backups/small/20261112T173107Z-small-2be985a�
 - Post-seed backup taken before the checks. Orchestrator approved.
 
 Commits: this report and the friction row only. Requests: none open. Nothing of mine is running; the server is frozen.
+
+## Later the same evening (owner's word, approved in this window): osprey-small moved to https://govuk.ospreyflow.app
+- Backup before the move: `/srv/ospreyflow/backups/small/20261112T180657Z-small-2be985a…`.
+- Let's Encrypt certificate by manual DNS-01 (certbot 2.9.0, installed by apt): three names, expires 10 Feb 2027.
+- Copied into `/etc/ospreyflow/tls/govuk.ospreyflow.app.{crt,key}` (osprey; the key mode 600).
+- `osprey.yaml`: `public_origin` and the TLS paths changed, `tls.ca` removed. Copy kept as `osprey.yaml.before-govuk-app-20261112T181854Z`.
+- One apply, then repair-sign-in. Every check passes at the new address: services, certificate, four sign-ins, a case, brand.
+- Switch scripts follow `public_origin`; not run.
+- Open: `install.yaml` still names the old address. Certificate renewal is manual.
+
+## Friday 13 November, morning (orchestrator's word): banner, footer, Home fix, shared key
+- Backup first: `/srv/ospreyflow/backups/small/20261113T065402Z-small-2be985a…` (taken with the Conduit running).
+- Code: main a9af842 (gate-b and the footer), then 2b088f9 (the Home fix). Each went through `git archive`, a dry run, then rsync excluding `osprey.yaml*` and `install.yaml*`. Each dry run deleted only `__pycache__`. One root-owned `__pycache__` had to be removed as root.
+- `apply` never builds images, so the Glass needed `start --build`: 117 s for a9af842, 12 s for 2b088f9.
+- `appearance.banner_text` set (copy `osprey.yaml.before-banner`). Checks: the banner shows on the Glass and on the sign-in page; no Crown marks in the footer; the slim footer on workspace screens; four sign-ins PASS.
+- The owner's report of a broken Home came from the `home-facts` glyph grid, which went live with Wednesday's rebuild (1aaf6ef), not from the footer. Fixed on main at 2b088f9 and deployed. Screenshots `landing-fixed-{1440,1024}.png`.
+- The owner set the key. `network.access_key: true` (copy `osprey.yaml.before-access-key`), one apply: api and proxy restarted. All three names answer 401 with noindex. Four sign-ins PASS with the host-tool pass (`harness.access_key.pass_token`, never the key). The look-switch render gate passes.
+- Open: the GOV.UK header still shows the crown logo (Am 7 covers only the footer). Superset's own login page has no banner.
+- Main 4196468 deployed (Home's "Your access and tasks", ADR-145 Am 11): dry run (only `__pycache__`), rsync, `start --build` 40 s; `osprey.yaml` unchanged. Every check passes: the section spans full width below both columns, its sub-headings are smaller than its title, the lines read as expected, the gate (401 and noindex) holds on all three names, four sign-ins pass, banner and footer pass. Screenshots `access-tasks-{1440,1024}.png`. The browser on the owner's Mac went through the gate with the host-tool pass, held in memory only.
+- The demo was postponed and the freeze lifted (orchestrator's word, 11:5x). Main 33084d7 deployed (ADR-114 Am 42, one key prompt):
+  - The new `read()` accepted the live key file.
+  - Dry run: only `__pycache__`. One `apply`, not `start --build`: only harness files changed, and refresh never re-renders the Caddyfile or carries the key file. Only the proxy restarted.
+  - The key file was rewritten with `Domain={args[0]}` and the same pass.
+  - Checks: 401 and noindex without the pass. With the pass cookie scoped to the base name (not the key), all three names answer 200 with no prompt. Four sign-ins, Home, banner, footer and health all pass.
+  - Copies: `Caddyfile.before-onepass` and `access-key.caddy.before-onepass`.
