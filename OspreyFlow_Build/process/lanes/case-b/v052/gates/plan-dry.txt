@@ -1,0 +1,12 @@
+egress (unlisted: example.com): refused
+render (agrees with the manifest): the deployment's render agrees
+38 checks planned
+SKIP workloads.superset: still pending
+SKIP workloads.report-sync: still pending
+SKIP images.ospreyflow/superset: still pending
+SKIP images.ospreyflow/report-sync: still pending
+SKIP entra.superset: still pending
+SKIP entra.report-sync: still pending
+SKIP egress.<the namespace's OpenSearch domain endpoint>: still pending
+SKIP managed.rds.databases.superset: still pending
+SKIP managed.opensearch: still pending
