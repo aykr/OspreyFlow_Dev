@@ -289,19 +289,25 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ),
     # --- after the orchestrator's verification of e911b90 (item 2; item 5's live red) ---------------
     (
-        "L24 a disable plan naming every list's schedule, its reader cleared or not (verification item 2)",
+        "L24 a disable plan naming every list's schedule, its reader cleared or not (verification of e911b90, item 2)",
         "OspreyFlow_Core/services/api/admin_people.py",
-        '        if row["admitted"]:\n',
-        "        if True:\n",
-        [f"{DISABLE}::test_the_plan_names_only_the_lists_its_administrator_is_cleared_for"],
+        "        f\"WHERE l.schedule_owner = $1 AND {_admitted_sql('l', 2)} ORDER BY l.list_name\",\n",
+        "        \"WHERE l.schedule_owner = $1 AND $2::text[] = $2 AND $3::text[] = $3 ORDER BY l.list_name\",\n",
+        [f"{DISABLE}::test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace"],
     ),
     (
-        "L25 a list's schedule given whatever the recipient's clearance (verification item 2)",
+        "L24b a hidden list's schedule left out of the withheld check (verification of 7a1c760)",
+        "OspreyFlow_Core/services/api/person_ownership.py",
+        "    WHERE l.schedule_owner = $1 AND NOT (\n",
+        "    WHERE FALSE AND l.schedule_owner = $1 AND NOT (\n",
+        [f"{DISABLE}::test_a_list_schedule_an_administrator_is_not_cleared_for_is_withheld_with_no_trace"],
+    ),
+    (
+        "L25 a list's schedule given whatever the recipient's clearance (verification of e911b90, item 2)",
         "OspreyFlow_Core/services/api/admin_people.py",
         '        if item.kind == "list_schedule" and list_markings is not None:\n',
         "        if False:\n",
-        [f"{DISABLE}::test_a_hidden_lists_schedule_goes_only_to_someone_cleared_for_it",
-         f"{DISABLE}::test_a_lists_schedule_a_cleared_administrator_sees_still_goes_only_to_someone_cleared"],
+        [f"{DISABLE}::test_a_lists_schedule_goes_only_to_someone_cleared_for_the_list"],
     ),
     (
         "L26 a scheduled refresh run as an owner not cleared for the list (verification item 2)",

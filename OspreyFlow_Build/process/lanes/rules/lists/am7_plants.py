@@ -434,6 +434,16 @@ PLANTS: list[tuple[str, ...]] = [
         WRITTEN,
     ),
     (
+        "P49b a listed party reused under another handling code (verification of 7a1c760, should 3)",
+        "services/api/kyc_rules.py",
+        "        return scheme.clears(found.classification, wanted.classification) and (\n"
+        "            found.handling_code == wanted.handling_code\n"
+        "        )",
+        "        return scheme.clears(found.classification, wanted.classification)",
+        "test_a_party_held_at_its_lists_classification_under_another_code_is_not_reused",
+        WRITTEN,
+    ),
+    (
         "P50 the alert facts' ALTERs issued at every start (verification item 5, its own red)",
         "packages/adapters/analytics_clickhouse/schema.py",
         "        if not await _has_column(client, table, column):\n            await client.command(statement)",
