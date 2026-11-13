@@ -309,3 +309,29 @@ def test_client_credentials_are_refused_as_entra_refuses_them(
     assert (got, answer["error"]) == (status, error), answer
     assert aadsts in answer["error_description"]
     assert "error_codes" in answer and "timestamp" in answer
+
+
+# ---- the record of what was granted (case-b's install test reads it) ------------------------------
+
+
+def test_each_grant_is_logged_once_and_no_refusal_is(standin: str, capfd: pytest.CaptureFixture[str]) -> None:
+    """`kubectl logs deployment/entra-standin` is how v052-r1's verifier sees which registrations
+    were used: one line per token issued, exactly `entra-standin: granted <grant_type>
+    client=<client_id> audience=<aud>`, and none of that form for a refused request."""
+    capfd.readouterr()
+    good = {"grant_type": "client_credentials", "client_id": REPORTS, "client_secret": REPORTS_SECRET,
+            "scope": f"api://{API}/.default"}  # fmt: skip
+    assert _post(_token_url(standin), good)[0] == 200
+    assert _post(_token_url(standin), {**good, "client_secret": "wrong"})[0] == 401
+    code, verifier = _glass_code(standin)
+    assert _post(_token_url(standin), {
+        "grant_type": "authorization_code", "client_id": GLASS, "code": code,
+        "redirect_uri": GLASS_REDIRECT, "code_verifier": verifier,
+    })[0] == 200  # fmt: skip
+    assert _post(_token_url(standin), {"grant_type": "authorization_code", "client_id": GLASS,
+                                       "code": "spent", "redirect_uri": GLASS_REDIRECT})[0] == 400  # fmt: skip
+    granted = [line for line in capfd.readouterr().err.splitlines() if " granted " in line]
+    assert granted == [
+        f"entra-standin: granted client_credentials client={REPORTS} audience={API}",
+        f"entra-standin: granted authorization_code client={GLASS} audience={API}",
+    ]

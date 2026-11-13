@@ -276,6 +276,7 @@ def entra_handler(config: dict[str, Any]) -> type[BaseHTTPRequestHandler]:
             }  # fmt: skip
             if client.get("roles"):
                 claims["roles"] = list(client["roles"])
+            self._granted("client_credentials", client_id, claims["aud"])
             self._send(200, {"token_type": "Bearer", "expires_in": TOKEN_SECONDS,
                              "ext_expires_in": TOKEN_SECONDS, "access_token": sign(claims)})  # fmt: skip
 
@@ -323,7 +324,14 @@ def entra_handler(config: dict[str, Any]) -> type[BaseHTTPRequestHandler]:
                 if held["nonce"]:
                     identity["nonce"] = held["nonce"]
                 answer["id_token"] = sign(identity)
+            self._granted("authorization_code", client_id, access["aud"])
             self._send(200, answer)
+
+        def _granted(self, grant: str, client_id: str, audience: str) -> None:
+            """The record v052-r1's verifier reads (`kubectl logs deployment/entra-standin`): one
+            line per token issued, never one for a refusal."""
+            sys.stderr.write(f"entra-standin: granted {grant} client={client_id} audience={audience}\n")
+            sys.stderr.flush()
 
         def log_message(self, fmt: str, *args: Any) -> None:
             sys.stderr.write("entra-standin: " + (fmt % args) + "\n")

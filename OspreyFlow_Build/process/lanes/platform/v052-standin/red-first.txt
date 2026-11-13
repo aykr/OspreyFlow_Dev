@@ -27,3 +27,8 @@ FAILED tests/test_r1_entra_standin.py::test_client_credentials_are_refused_as_en
 2 failed, 10 passed in 7.48s
 Restored:
 12 passed in 7.38s
+
+case-b's ask (one log line per token granted), before the change:
+FAILED tests/test_r1_entra_standin.py::test_each_grant_is_logged_once_and_no_refusal_is
+1 failed, 12 deselected in 1.29s
+After: 13 passed in 8.00s
