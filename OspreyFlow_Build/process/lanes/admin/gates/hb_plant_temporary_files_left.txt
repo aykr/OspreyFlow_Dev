@@ -1,0 +1,29 @@
+# plant: temporary_files_left
+# replaced: 'rm -f "$lanes" "$merges" "$needs"; trap - EXIT'
+# with: 'trap - EXIT'
+# run: pytest -k 'run_at_once_do_not_mix_what'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_default_views_run_at_once_do_not_mix_what_needs_you ___________
+
+hb = <function hb.<locals>.run at 0x110f598a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3914/test_default_views_run_at_once0')
+
+    def test_default_views_run_at_once_do_not_mix_what_needs_you(hb, tmp_path) -> None:
+        """The default view reads `show`'s lines from its own copy (review of 4ac8f81, finding 11); sixteen at once
+        each say the same, once."""
+        import concurrent.futures
+    
+        env = _overview_fixture(hb, tmp_path)
+        with concurrent.futures.ThreadPoolExecutor(8) as pool:
+            outs = list(pool.map(lambda _: hb(**env).stdout, range(16)))
+        for out in outs:
+            assert _section(out, "NEEDS YOU:") == ["  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b"], out
+>       assert not [p.name for p in (tmp_path / "lanes").iterdir() if p.name.startswith((".overview.", ".merges.", ".ovneeds."))]
+E       AssertionError: assert not ['.overview.guEEBV', '.ovneeds.MvjnFL', '.overview.hJq42z', '.overview.vbYPce', '.ovneeds.p007zC', '.overview.i0Hilo', ...]
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:992: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_default_views_run_at_once_do_not_mix_what_needs_you
+1 failed, 65 deselected in 2.92s

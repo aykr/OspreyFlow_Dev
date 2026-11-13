@@ -1,0 +1,27 @@
+# plant: list_shown_for_any_step_named
+# replaced: '@s = () unless defined $step && defined $on{$lane} && $on{$lane} eq $step;'
+# with: '@s = () unless defined $step && ((defined $on{$lane} && $on{$lane} eq $step) || $note =~ /(?<![A-Za-z0-9.\\-])\\Q$step\\E(?![A-Za-z0-9\\-])/);'
+# run: pytest -k 'finished_steps_list'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_a_finished_steps_list_is_not_shown_when_the_beat_mentions_that_step_after_its_own _
+
+hb = <function hb.<locals>.run at 0x113f9d940>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3903/test_a_finished_steps_list_is_0')
+
+    def test_a_finished_steps_list_is_not_shown_when_the_beat_mentions_that_step_after_its_own(hb, tmp_path) -> None:
+        """Review of 4ac8f81, finding 2: the list shows for the step the lane is on (the first its beat names), never for
+        one the note mentions in passing."""
+        env = _overview_fixture(hb, tmp_path)
+        assert hb("stages", "case", "C1", "1|done|Plan", "2|now|Build").returncode == 0
+        assert hb("beat", "case", "working", "C2: started; C1 merged").returncode == 0
+        now = _section(hb(**env).stdout, "LANES NOW")
+>       at = now.index("  CASE · C2 · working · last heard 0m ago")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: '  CASE · C2 · working · last heard 0m ago' is not in list
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:839: ValueError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_finished_steps_list_is_not_shown_when_the_beat_mentions_that_step_after_its_own
+1 failed, 65 deselected in 1.65s

@@ -1,0 +1,50 @@
+# plant: full_without_blocks
+# replaced: 'return block($title, @in) if $full;'
+# with: 'return block($title, @in) if 0;'
+# run: pytest -k 'one_line_a_group or owners_order'
+
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+__________ test_the_default_view_shows_its_blocks_in_the_owners_order __________
+
+hb = <function hb.<locals>.run at 0x111b598a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3916/test_the_default_view_shows_it0')
+
+    def test_the_default_view_shows_its_blocks_in_the_owners_order(hb, tmp_path) -> None:
+        """Adapted 13 November 2026 (brief hb): today's full blocks are kept under --full, in today's order."""
+        out = hb("--full", **_overview_fixture(hb, tmp_path)).stdout
+        assert out.splitlines()[1] == "Client-install chain expected to finish merging: 14 Nov (estimates as of 15:00 UTC)"
+        order = ["VIEW 1 · FOUNDATION FEATURES", *(f"  {f}\n" for f in _FEATURES), "VIEW 2 · DEPLOYMENT",
+                 *(f"  {d}\n" for d in _DEPLOYMENTS), "\nRELEASE\n", "\nHOUSEKEEPING\n", "  Housekeeping\n", "\nLANES\n"]
+>       at = [out.index(heading) for heading in order]
+              ^^^^^^^^^^^^^^^^^^
+E       ValueError: substring not found
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:582: ValueError
+________ test_the_views_are_one_line_a_group_naming_only_its_open_steps ________
+
+hb = <function hb.<locals>.run at 0x111b8c540>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3916/test_the_views_are_one_line_a_0')
+
+    def test_the_views_are_one_line_a_group_naming_only_its_open_steps(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        out = hb(**env).stdout
+        lines = out.splitlines()
+        assert "  Models and maps: 1 of 1 done" in lines
+        assert "  Ingest Studio: 1 of 3 done · open: L2 (studio, building), L3 (studio, not started)" in lines
+        assert "  Local-lite: 0 of 1 done · open: C2 (case, not started)" in lines
+        # A step waiting on the owner says so in two words here; its note is under NEEDS YOU and LANES NOW.
+        assert "  Four places, the Glass and Admin: 0 of 2 done · open: A1 (admin, needs you), A2 (admin, not started)" in lines
+        groups = out.split("VIEW 1 · FOUNDATION FEATURES\n")[1].split("\nRELEASE\n")[0].splitlines()
+        assert all(len(line) <= 120 for line in groups), "a group's line is cut to the screen"
+        assert not any(line.strip() in ("Ingest Studio", "Models and maps") for line in lines)  # no full block
+        assert "Ingest two (L2, studio)" not in out
+        full = hb("--full", **env).stdout
+>       assert "  Ingest Studio\n    1 of 3 steps done\n    Ingest two (L2, studio) · building · 12 Nov\n" in full
+E       AssertionError: assert '  Ingest Studio\n    1 of 3 steps done\n    Ingest two (L2, studio) · building · 12 Nov\n' in 'OSPREYFLOW · Fri 13 Nov 2026, 16:44 UTC (16:44 UK time)\nClient-install chain expected to finish merging: 14 Nov (est...g)                               H3\n\nThe short view: lanes_heartbeat.sh · lane by lane: lanes_heartbeat.sh --lanes\n'
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:901: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_shows_its_blocks_in_the_owners_order
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_views_are_one_line_a_group_naming_only_its_open_steps
+2 failed, 64 deselected in 3.11s

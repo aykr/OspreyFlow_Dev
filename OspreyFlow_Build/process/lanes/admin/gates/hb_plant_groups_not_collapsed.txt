@@ -1,0 +1,23 @@
+# plant: groups_not_collapsed
+# replaced: 'return block($title, @in) if $full;'
+# with: 'return block($title, @in) if 1;'
+# run: pytest -k 'one_line_a_group'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_the_views_are_one_line_a_group_naming_only_its_open_steps ________
+
+hb = <function hb.<locals>.run at 0x114d9d8a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3915/test_the_views_are_one_line_a_0')
+
+    def test_the_views_are_one_line_a_group_naming_only_its_open_steps(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        out = hb(**env).stdout
+        lines = out.splitlines()
+>       assert "  Models and maps: 1 of 1 done" in lines
+E       assert '  Models and maps: 1 of 1 done' in ['OSPREYFLOW · Fri 13 Nov 2026, 16:44 UTC (16:44 UK time)', 'Client-install chain expected to finish merging: 14 Nov (...not started', '', 'NEEDS YOU:', "  - admin is waiting for you: A1: the owner's ruling on the claim names, a or b", ...]
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:891: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_views_are_one_line_a_group_naming_only_its_open_steps
+1 failed, 65 deselected in 1.59s

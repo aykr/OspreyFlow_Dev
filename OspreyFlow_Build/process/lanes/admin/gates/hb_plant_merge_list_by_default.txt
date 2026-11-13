@@ -1,0 +1,38 @@
+# plant: merge_list_by_default
+# replaced: 'if (!$full) { }'
+# with: 'if (0) { }'
+# run: pytest -k 'merge_count'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__ test_release_is_one_line_with_its_merge_count_and_the_list_only_under_full __
+
+hb = <function hb.<locals>.run at 0x114c599e0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3919/test_release_is_one_line_with_0')
+
+    def test_release_is_one_line_with_its_merge_count_and_the_list_only_under_full(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        repo, cut = _repo_with_merges(tmp_path, 3)
+        release = (tmp_path / "release.tsv").read_text().replace("cut\t0000000", f"cut\t{cut}")
+        (tmp_path / "release.tsv").write_text(release)
+        env = {**env, "OSPREY_REPO": str(repo)}
+        out = hb(**env).stdout
+        assert _section(out, "RELEASE") == [
+            f"  v0.5.0, published 2026-11-11 06:35 UTC · 3 merges since {cut} · next: v0.5.1: the chain merged",
+        ]
+>       assert "step 1" not in out
+E       AssertionError: assert 'step 1' not in 'OSPREYFLOW ...sh --lanes\n'
+E         
+E         'step 1' is contained here:
+E            Nov · x1 step 1
+E         ?           ++++++
+E               13 Nov · x0 step 0
+E           HOUSEKEEPING
+E           ...
+E         
+E         ...Full output truncated (14 lines hidden), use '-vv' to show
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:963: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_release_is_one_line_with_its_merge_count_and_the_list_only_under_full
+1 failed, 65 deselected in 1.81s

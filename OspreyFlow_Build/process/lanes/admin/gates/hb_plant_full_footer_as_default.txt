@@ -1,0 +1,29 @@
+# plant: full_footer_as_default
+# replaced: 'print $full ? "\\nThe short view'
+# with: 'print 0 ? "\\nThe short view'
+# run: pytest -k 'where_the_full_view'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_the_default_view_says_where_the_full_view_is _______________
+
+hb = <function hb.<locals>.run at 0x1269598a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3921/test_the_default_view_says_whe0')
+
+    def test_the_default_view_says_where_the_full_view_is(hb, tmp_path) -> None:
+        env = _overview_fixture(hb, tmp_path)
+        out = hb(**env).stdout
+        assert out.splitlines()[-1] == "Every block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes"
+        full = hb("--full", **env).stdout
+>       assert full.splitlines()[-1] == "The short view: lanes_heartbeat.sh · lane by lane: lanes_heartbeat.sh --lanes"
+E       AssertionError: assert 'Every block ...at.sh --lanes' == 'The short vi...at.sh --lanes'
+E         
+E         - The short view: lanes_heartbeat.sh · lane by lane: lanes_heartbeat.sh --lanes
+E         ? ^^ ^^^ ^^^^ ^^
+E         + Every block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes
+E         ? ^^ ^^^^^ ^^^ ^^^^^^                     +++++++
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:979: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_default_view_says_where_the_full_view_is
+1 failed, 65 deselected in 4.56s

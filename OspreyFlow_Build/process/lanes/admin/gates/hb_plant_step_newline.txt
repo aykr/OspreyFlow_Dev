@@ -1,0 +1,22 @@
+# plant: step_newline
+# replaced: '  case "$step" in *"$nl"*) echo'
+# with: '  case "$step" in x-never) echo'
+# run: pytest -k 'more_than_one_line'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________________ test_a_step_of_more_than_one_line_is_refused _________________
+
+hb = <function hb.<locals>.run at 0x106a598a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3897/test_a_step_of_more_than_one_l0')
+
+    def test_a_step_of_more_than_one_line_is_refused(hb, tmp_path) -> None:
+        refused = hb("stages", "studio", "L2\nstage=9|now|X", "1|now|Build")
+>       assert refused.returncode == 2 and "one line" in refused.stderr
+E       assert (0 == 2)
+E        +  where 0 = CompletedProcess(args=['bash', '/Users/ayankar/dev/osprey-wt/admin-hb/OspreyFlow_Build/scripts/lanes_heartbeat.sh', 's...X' is not one of studio's steps in the step table (progress.tsv): it shows once its beat is on a step of that name.\n").returncode
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:766: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_step_of_more_than_one_line_is_refused
+1 failed, 65 deselected in 0.39s
