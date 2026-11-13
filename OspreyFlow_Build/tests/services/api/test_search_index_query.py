@@ -155,8 +155,9 @@ def test_the_bands_never_overlap() -> None:
     b = q.BAND_SCORES
     assert b["identifier"] > b["name_exact"] > b["name_words"] > b["name_sounds"] > b["name_typo"]
     assert b["name_typo"] > b["mention_phrase"] > b["mention_words"]
-    # A word is at least one character and a space: the limit bounds the words a query can hold.
-    assert (q.MAX_QUERY_CHARS + 1) // 2 < b["mention_words"]
+    # The standard tokenizer can make a word of every character (ideographs, "a-b-c"), so the
+    # limit itself bounds the words a query can hold (the lane review of d2b207a).
+    assert q.MAX_QUERY_CHARS < b["mention_words"]
 
 
 def test_a_query_over_the_limit_is_refused_not_cut() -> None:
@@ -282,8 +283,10 @@ def test_a_score_between_bands_is_a_defect_not_a_guess() -> None:
     """A score no band gives means a clause scored by something other than its fixed score (word
     rarity, say), which is exactly what page A rules out: it is refused, never filed under a
     band."""
-    with pytest.raises(ValueError, match="2950"):
+    with pytest.raises(q.ScoreOutsideBands):
         q.read_search_response(_reply([_hit("n1", 2950.0)]), page_size=5)
+    # A defect here, never the caller's mistake: not a `ValueError`, which the route makes a 422.
+    assert not issubclass(q.ScoreOutsideBands, ValueError)
 
 
 def test_the_marks_survive_opensearch_trimming_a_fragments_edges() -> None:
@@ -307,7 +310,10 @@ def test_a_snippet_is_text_and_marks_never_markup() -> None:
 
 def test_the_dataset_and_date_filters_are_offered_from_the_same_query() -> None:
     aggs = _body(case_datasets=["ds-1", "ds-2"])["aggs"]
-    assert aggs["datasets"] == {"terms": {"field": "datasets", "size": 3, "shard_size": 30}}
+    # The case's datasets alone: a visible record may also belong to datasets outside the case.
+    assert aggs["datasets"] == {
+        "terms": {"field": "datasets", "include": ["ds-1", "ds-2"], "size": 3, "shard_size": 30}
+    }
     assert aggs["earliest"] == {"min": {"field": "date"}}
     assert aggs["latest"] == {"max": {"field": "date"}}
 
@@ -375,3 +381,32 @@ def test_a_suggestion_can_be_limited_to_types() -> None:
     body = q.build_suggest_body("Smy", access_filter=ACCESS, limit=10, types=["Person"])
     assert {"terms": {"type": ["Person"]}} in body["query"]["bool"]["filter"]
     assert body["query"]["bool"]["filter"][0] == ACCESS
+
+
+def test_pending_nodes_are_left_out_of_a_search_and_a_suggestion() -> None:
+    """The orchestrator's ruling on page A: a node the index has not caught up with is never asked,
+    in the query itself, beside the access filter."""
+    for body in (
+        _body(pending=["p2", "p1", "p2"]),
+        q.build_suggest_body("Smy", access_filter=ACCESS, limit=10, pending=["p2", "p1"]),
+    ):
+        assert body["query"]["bool"]["must_not"] == [{"terms": {"node_id": ["p1", "p2"]}}]
+        assert body["query"]["bool"]["filter"][0] == ACCESS
+    assert "must_not" not in _body()["query"]["bool"]
+
+
+def test_a_suggestion_is_asked_as_typed() -> None:
+    """As the graph's prefix read asks it: never trimmed, so a prefix is never quietly another."""
+    body = q.build_suggest_body(" Sm", access_filter=ACCESS, limit=10)
+    clause = body["query"]["bool"]["must"][0]["dis_max"]["queries"][0]["constant_score"]["filter"]
+    assert clause["match"]["identifiers"]["query"] == " Sm"
+
+
+@pytest.mark.parametrize(
+    "kind",
+    ["simple_query_string", "span_multi", "intervals", "more_like_this", "wildcard", "regexp"],
+)
+def test_the_expansion_check_knows_every_expanding_query(kind: str) -> None:
+    body = _body()
+    body["query"]["bool"]["must"][0]["dis_max"]["queries"].append({kind: {}})
+    assert _expanding_clauses(body) == [kind]

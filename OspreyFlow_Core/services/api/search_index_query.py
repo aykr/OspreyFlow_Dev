@@ -1,5 +1,5 @@
-"""The query side of search on OpenSearch (ADR-149, reserved; v0.5.2 step 3d): request bodies built
-and replies read, with no client and no I/O, so every rule here is tested without a store.
+"""The query side of search on OpenSearch (ADR-149; v0.5.2 step 3d): request bodies built and
+replies read, with no client and no I/O, so every rule here is tested without a store.
 
 The index is the rules lane's (ADR-150): one document per node (`kind: node`) and one per Document's
 text (`kind: text`, `node_id` naming its node), each carrying its node's access facts. Its fields
@@ -10,8 +10,8 @@ A §3):
 
 1. **The access filter is required and sits in the query's own filter**, never in `post_filter`
    (which limits hits but not aggregations) and never in a `should`. So hits, counts and
-   suggestions are all limited by it. The filter itself is built elsewhere (stage 8, after the
-   owner reads page A); this module only refuses to build a body without one.
+   suggestions are all limited by it. The filter itself is `search_access.index_access_filter`;
+   this module only refuses to build a body without one.
 2. **No score depends on another document, and nothing expands against the index's word list.**
    Every scoring clause is a fixed score (`constant_score`), and bands are combined with `dis_max`
    at a tie-breaker of 0, so a hit's score is its best band's. No fuzzy, prefix, wildcard, regexp or
@@ -24,16 +24,15 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 from services.search_index.mapping import PREFIX_MAX_CHARS
 
+from schemas.search import MAX_QUERY_CHARS as MAX_QUERY_CHARS
+
 from .identifier_reading import search_alternative
 from .search import SUGGEST_MIN_CHARS
-
-#: Rule 2: a longer query is refused, not cut. It also bounds the one variable band (some words of a
-#: mention: a point a word), below the band above it.
-MAX_QUERY_CHARS = 200
 
 #: Rule 2: results deeper than this are refused, and the error says to narrow the search
 #: (`process/lanes/studio/SEARCH_RESPONSE_SHAPE.md`, note 4), never cut.
@@ -70,6 +69,10 @@ EXPANDING_QUERIES = frozenset(
         "match_phrase_prefix",
         "match_bool_prefix",
         "query_string",
+        "simple_query_string",
+        "span_multi",
+        "intervals",
+        "more_like_this",
     }
 )
 
@@ -96,6 +99,11 @@ def _require_length(text: str) -> str:
             f"a search is at most {MAX_QUERY_CHARS} characters; this one is {len(text)}"
         )
     return text
+
+
+def _left_out(pending: Sequence[str]) -> dict[str, Any]:
+    """The nodes the index has not yet caught up with, left out in the query itself."""
+    return {"must_not": [{"terms": {"node_id": sorted(set(pending))}}]} if pending else {}
 
 
 def _fixed(name: str, kind: str, condition: dict[str, Any]) -> dict[str, Any]:
@@ -130,8 +138,9 @@ def build_search_body(
     group: str | None = None,
     case_datasets: Sequence[str] = (),
     datasets: Sequence[str] | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
+    date_from: date | str | None = None,
+    date_to: date | str | None = None,
+    pending: Sequence[str] = (),
 ) -> dict[str, Any]:
     """A search's body (`process/lanes/studio/SEARCH_RESPONSE_SHAPE.md`).
 
@@ -139,7 +148,9 @@ def build_search_body(
       case, so the counts are asked for all of them.
     - `datasets` and the dates narrow the search and join the access filter, never replace it.
     - `group` (a type, or `MENTIONS`) narrows the list alone. It is a `post_filter`, so every
-      group's count stays whole. The access filter is never a `post_filter`."""
+      group's count stays whole. The access filter is never a `post_filter`.
+    - `pending` names nodes the index has not yet caught up with (the graph changed them after
+      their document was written): they are left out, never counted under stale facts."""
     access = _require_filter(access_filter)
     if page < 1 or page_size < 1:
         raise ValueError("a page and its size start at 1")
@@ -190,12 +201,16 @@ def build_search_body(
     if datasets:
         filters.append({"terms": {"datasets": list(datasets)}})
     if date_from or date_to:
-        span = {k: v for k, v in (("gte", date_from), ("lte", date_to)) if v}
+        span = {k: str(v) for k, v in (("gte", date_from), ("lte", date_to)) if v}
         filters.append({"range": {"date": span}})
 
     body: dict[str, Any] = {
         "query": {
-            "bool": {"filter": filters, "must": [{"dis_max": {"queries": bands, "tie_breaker": 0}}]}
+            "bool": {
+                "filter": filters,
+                **_left_out(pending),
+                "must": [{"dis_max": {"queries": bands, "tie_breaker": 0}}],
+            }
         },
         "sort": [
             {"_score": {"order": "desc"}},
@@ -236,9 +251,12 @@ def build_search_body(
                 },
             },
             "mentions": {"filter": {"term": {"kind": "text"}}},
+            # The case's datasets alone: a visible record may also belong to datasets outside the
+            # case, whose ids are not the reader's to see named and must not crowd out the case's.
             "datasets": {
                 "terms": {
                     "field": "datasets",
+                    "include": sorted(case_datasets),
                     "size": len(case_datasets) + 1,
                     "shard_size": 10 * (len(case_datasets) + 1),
                 }
@@ -262,11 +280,12 @@ def build_suggest_body(
     access_filter: dict[str, Any],
     limit: int,
     types: Sequence[str] | None = None,
+    pending: Sequence[str] = (),
 ) -> dict[str, Any]:
-    """Suggestions as the analyst types (ADR-059 Amendment 1, reserved): the stored prefixes of
-    node documents' identifiers and names, never a prefix query (rule 2 above)."""
+    """Suggestions as the analyst types (ADR-059 Amendment 1): the stored prefixes of node
+    documents' identifiers and names, never a prefix query (rule 2 above). The prefix is asked as
+    typed, as the graph's prefix read asks it."""
     access = _require_filter(access_filter)
-    prefix = _require_length(prefix).strip()
     if len(prefix) < SUGGEST_MIN_CHARS:
         raise ValueError(f"a suggestion needs at least {SUGGEST_MIN_CHARS} characters")
     if len(prefix) > PREFIX_MAX_CHARS:
@@ -290,6 +309,7 @@ def build_suggest_body(
                     {"term": {"kind": "node"}},
                     *([{"terms": {"type": list(types)}}] if types else []),
                 ],
+                **_left_out(pending),
                 "must": [
                     {
                         "dis_max": {
@@ -346,6 +366,10 @@ class IndexSearchResult:
 _BAND_BY_SCORE = {score: band for band, score in BAND_SCORES.items()}
 
 
+class ScoreOutsideBands(RuntimeError):
+    """A hit scored where no band scores: a defect here, never the caller's mistake."""
+
+
 def _band(score: float) -> str:
     """The band a score names. A score no band gives is refused: it means a clause was scored by
     something other than its fixed score, which rule 2 of this module rules out."""
@@ -353,7 +377,7 @@ def _band(score: float) -> str:
         return _BAND_BY_SCORE[int(score)]
     if score == int(score) and 1 <= score < BAND_SCORES["mention_words"]:
         return "mention_some"
-    raise ValueError(f"a hit scored {score}, which no band gives")
+    raise ScoreOutsideBands(f"a hit scored {score}, which no band gives")
 
 
 def _snippet(fragment: str) -> list[SnippetPart]:
