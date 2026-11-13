@@ -12,3 +12,11 @@ FAILED ../OspreyFlow_Build/tests/test_seed_scenarios.py::test_b18_the_seeded_sig
 3 failed, 15 passed, 1 deselected in 0.80s
 
 Green at the change: test_seed_analytics, test_seed_scenarios, test_demo_fixtures_are_product, test_data_folder 55 passed (the ClickHouse parameter of B18 deselected offline: it needs the live ClickHouse; test_case_seed needs the live Postgres).
+E   ImportError: cannot import name 'seed_poc' from 'scripts' (unknown location)
+
+Plant 1 (seed_poc ignores a seed's non-zero exit):
+__________ test_a_failed_seed_stops_the_run_by_name_and_fails_the_job __________
+    def test_a_failed_seed_stops_the_run_by_name_and_fails_the_job(recorded, capsys) -> None:  # type: ignore[no-untyped-def]
+FAILED ../OspreyFlow_Build/tests/test_seed_poc.py::test_a_failed_seed_stops_the_run_by_name_and_fails_the_job
+1 failed, 4 passed in 0.76s
+Green at the change: tests/test_seed_poc.py 5 passed.
