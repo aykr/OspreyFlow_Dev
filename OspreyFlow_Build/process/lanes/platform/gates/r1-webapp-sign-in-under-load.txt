@@ -1,0 +1,23 @@
+R1 (13 November 2026): the four test_webapp_sign_in.py cases that failed in a full run (CARRIES row 232),
+as this lane's record holds them. Excerpted for platform-b at the orchestrator's request.
+
+Where and what: on the Mac (not the test server), in OspreyFlow_Core, at lane/platform-r1 bb81a92, 17:39 UTC;
+one process (pytest-xdist installed but no -n given, and no addopts sets one). "Under load" means
+the full run, 2,278 cases in one process; what else the Mac was running then was not recorded. The
+command:
+
+  unset OSPREY_LANE; export ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994
+  uv run pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/harness ../OspreyFlow_Build/tests/cp_policy_check \
+      ../OspreyFlow_Build/tests/cloud_platform_backup 2>&1 | tail -3
+
+What it printed (all that was kept: the run was piped through tail -3):
+
+  FAILED ../OspreyFlow_Build/tests/harness/test_webapp_sign_in.py::test_a_token_minted_for_another_client_does_not_sign_in
+  FAILED ../OspreyFlow_Build/tests/harness/test_webapp_sign_in.py::test_a_session_from_before_a_restart_is_not_valid_afterwards
+  4 failed, 1780 passed, 494 skipped, 1 warning in 251.02s (0:04:11)
+
+Not kept, and so not known: the other two failing cases' names, and every case's assertion or error
+line. The file run alone straight after (17:43 UTC, same command on test_webapp_sign_in.py only, its
+FAILED and E lines grepped) printed none: every case passed; and passed again alone a second time.
+The lesson for this lane's records: a full run's failures are kept whole (FAILED and E lines), not
+its tail.
