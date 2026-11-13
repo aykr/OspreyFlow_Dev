@@ -663,3 +663,32 @@ def test_an_estimates_file_of_its_heading_alone_ends_no_view(hb, tmp_path) -> No
         out = hb(verb, OSPREY_PROGRESS_FILE=str(table))
         assert out.returncode == 0, (verb, out.returncode)
     assert _needs(hb("show", OSPREY_PROGRESS_FILE=str(table))) == ["case is waiting for you: Q1 for the owner"]
+
+
+def test_the_default_view_shows_the_path_to_the_release_with_what_each_step_waits_on(hb, tmp_path) -> None:
+    """The owner, 13 November 2026: the steps to the release, their expected times and their dependencies. A step
+    whose `after` names a step not done is shown waiting on it, whatever its own status says; one whose `after` is
+    all done shows its own status; a done step shows neither a time nor its dependencies."""
+    env = _overview_fixture(hb, tmp_path)
+    (tmp_path / "finish.tsv").write_text(
+        "# target v9.9.9\n# id, step, who, expected, after, status\n"
+        "1\tAcceptance run\tplatform\t15 Nov\t-\tbuilding\n"
+        "2\tA merged fix\tadmin\t13 Nov\t-\tdone\n"
+        "3\tCI green\tplatform-b\t16 Nov\t2\tbuilding\n"
+        "4\tPublish\towner\t17 Nov\t1, 3\ttodo\n"
+    )
+    out = hb(**env).stdout
+    assert "PATH TO V9.9.9 · 3 of 4 steps left\n" in out
+    lines = out[out.index("PATH TO"):].splitlines()[1:5]
+    assert lines == [
+        "  1.  Acceptance run · platform · in progress · expected 15 Nov",
+        "  2.  A merged fix · admin · done",
+        "  3.  CI green · platform-b · in progress · expected 16 Nov · after 2",
+        "  4.  Publish · owner · waiting on 1, 3 · expected 17 Nov · after 1, 3",
+    ]
+    assert out.index("PATH TO") < out.index("VIEW 1 · FOUNDATION FEATURES")
+
+
+def test_the_default_view_has_no_path_section_without_a_finish_file(hb, tmp_path) -> None:
+    out = hb(**_overview_fixture(hb, tmp_path)).stdout
+    assert "PATH TO" not in out

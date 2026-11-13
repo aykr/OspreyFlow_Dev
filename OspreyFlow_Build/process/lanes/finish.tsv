@@ -1,0 +1,16 @@
+# target v0.5.1
+# The path to the next release, kept by the orchestrator (the owner, 13 November 2026). Tab-separated: id, step,
+# who, expected, after (ids, comma-separated, or -), status (done | building | todo). The heartbeat's default view
+# shows each step not done as "waiting on" any step in its `after` that is not done.
+1	R1: the client install's acceptance on kind (P7b's runbooks as written)	platform	Sun 15 Nov	-	building
+2	R1's findings fixed in the runbook and the product, the affected parts run again	platform	Mon 16 Nov	1	todo
+3	Small's Postgres connections (ADR-114 Am 43): gates on the server	admin	Sat 14 Nov	1	building
+4	Rules lists' audit follow-ups: live plants and gates on the server	rules	Sat 14 Nov	1	building
+5	The ADR-135 Amendment 8 correction	platform-b	Sat 14 Nov	-	todo
+6	GitHub's test job on 0a55054 confirmed (run 43437345111)	platform-b	Fri 13 Nov, evening	-	building
+7	GitHub CI fully green at the release candidate	platform-b	Mon 16 Nov	2, 3, 4, 5, 6	todo
+8	The release candidate: the commit that passes R1, cut	orchestrator	Mon 16 Nov	2, 7	todo
+9	The upgrade from v0.5.0 rehearsed on the test server, at the candidate	rules	Mon 16 Nov	8	todo
+10	v0.5.1's CHANGELOG and release notes	orchestrator	Mon 16 Nov	8	todo
+11	The owner's word to publish	owner	Tue 17 Nov	9, 10	todo
+12	v0.5.1 published: the tag, the product repository, the release workflow	orchestrator	Tue 17 Nov	11	todo

@@ -53,6 +53,12 @@ ESTIMATES="${OSPREY_ESTIMATES_FILE:-$(dirname "$PROGRESS")/estimates.tsv}"
 # the allowed values) and the release it reports (release.tsv: key, value), both beside the step table.
 GROUPS_FILE="${OSPREY_GROUPS_FILE:-$(dirname "$PROGRESS")/groups.tsv}"
 RELEASE="${OSPREY_RELEASE_FILE:-$(dirname "$PROGRESS")/release.tsv}"
+# The path to the next release, in order, with what each step needs first (the owner, 13 November 2026: "list the
+# steps and their expected completion times ... show the dependencies between the steps"). finish.tsv, kept by
+# the orchestrator: id, step, who, expected, after (ids, comma-separated, or -), status (done | building | todo);
+# a first line `# target <name>` names the release. A step not done whose `after` names a step not done is shown
+# as waiting on it, whatever its own status says.
+FINISH="${OSPREY_FINISH_FILE:-$(dirname "$PROGRESS")/finish.tsv}"
 ACCOUNTS="${OSPREY_ACCOUNTS_FILE:-$HOME/.ospreyflow/accounts.conf}"   # lanes_launch.sh's own default
 mkdir -p "$DIR"
 
@@ -359,7 +365,7 @@ overview() {
     printf '%s\t%s\t%s\t%s\t%s\n' "$lane" "${st:--}" "$note" "$(account_of "$lane")" "$(where_of "$lane")" >> "$lanes"
   done
   release_merges > "$merges"
-  P_CLOCK="$(clock)" P_PROGRESS="$PROGRESS" P_GROUPS="$GROUPS_FILE" P_EST="$ESTIMATES" P_RELEASE="$RELEASE" \
+  P_CLOCK="$(clock)" P_PROGRESS="$PROGRESS" P_GROUPS="$GROUPS_FILE" P_EST="$ESTIMATES" P_RELEASE="$RELEASE" P_FINISH="$FINISH" \
     P_LANES="$lanes" P_MERGES="$merges" perl -CSD -e "$OVERVIEW_PL"
   rm -f "$lanes" "$merges"
 }
@@ -432,6 +438,29 @@ print "Client-install chain expected to finish merging: ", ($rel{chain} // "unkn
 { my %c; $c{$_->[3]}++ for @prog;   # the same figures as `show`'"'"'s OVERALL line (the owner, 11 November 2026)
   printf "OVERALL: %d of %d steps done · %d in review · %d building · %d not started\n\n",
     $c{done} // 0, scalar @prog, $c{review} // 0, $c{building} // 0, $c{todo} // 0 }
+
+# The path to the next release (finish.tsv): each step, who, when, and what it waits on.
+{ my @f = grep { @$_ >= 6 } rows($ENV{P_FINISH});
+  if (@f) {
+    my $target = "the next release";
+    if (open(my $h, "<:encoding(UTF-8)", $ENV{P_FINISH})) { while (<$h>) { $target = $1 if /^# target (.+?)\s*$/ } }
+    my %st = map { $_->[0] => $_->[5] } @f;
+    my %plainf = (done => "done", building => "in progress", todo => "not started");
+    my $left = grep { $_->[5] ne "done" } @f;
+    printf "PATH TO %s · %d of %d steps left\n", uc $target, $left, scalar @f;
+    for my $r (@f) {
+      my ($id, $step, $who, $when, $after, $status) = @$r;
+      my @after = grep { $_ ne "" && $_ ne "-" } split /\s*,\s*/, $after;
+      my @open = grep { ($st{$_} // "todo") ne "done" } @after;
+      my $state = $status eq "done" ? "done"
+        : @open ? "waiting on " . join(", ", @open) : ($plainf{$status} // $status);
+      my @parts = (cut($step, 58), $who, $state);
+      push @parts, "expected $when" if $status ne "done";
+      push @parts, "after " . join(", ", @after) if @after && $status ne "done";
+      printf "  %-3s %s\n", "$id.", join(" · ", @parts);
+    }
+    print "\n";
+  } }
 
 print "VIEW 1 · FOUNDATION FEATURES\n\n";
 for my $f ("Ingest Studio", "Four places, the Glass and Admin", "Cases and drawing boards", "Rules and alerting",
