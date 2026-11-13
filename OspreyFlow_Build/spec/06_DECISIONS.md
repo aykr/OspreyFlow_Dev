@@ -37020,10 +37020,14 @@ point names the test that fails if it stops being true (rule 12); the plants are
      there* (the same request, and the same refusal's words).
 4. **What was read is said.** Every answer carries `read`: the documents read, the Documents in scope with no
    text (an image; counted, never read), the other items, the links, the events counted, how many of the
-   selected items the asker's view holds, and the first one's display name. The summary is counted as the
-   asker and is kept with the answer (`case_questions.read`). It is shown to a later reader only as the answer
-   is, so only to a reader who may see every node, link and event it counted.
-   - Test: *the read summary counts the items, links, events and names the first selected*.
+   selected items the asker's view holds, and the first one's name as the canvas labels it by default
+   ("TARBUCK, Kyle": `canvas_label`, `labelChoices.ts`'s form; never an id). A selected link is counted only
+   when it is in the scope's links, so inside the timeline window. The summary is counted as the asker and
+   is kept with the answer (`case_questions.read`). It is shown to a later reader only as the answer is, so
+   only to a reader who may see every node, link and event it counted.
+   - Test: *the read summary counts the items, links, events and names the first selected* (red with the
+     brief's "Given FAMILY"); *about names the first selected as the canvas does, never by its id*.
+   - Test: *a selected link outside the window is not counted*. Red with the links counted from the view.
    - Test: *a document with no text is counted apart*. Red with the count dropped.
    - Test: *the read summary is kept with the answer and read back*. Red with it not kept.
    - Test: `test_questions_store.py` (live), the round trip whole and an older row read back with `read` none.
@@ -37043,7 +37047,10 @@ point names the test that fails if it stops being true (rule 12); the plants are
      panel's own count); *choosing Everything on the graph asks the Conduit again and sends that choice* (red
      with `read_from` not sent); *says under each answer what it read …*.
    - Test: `keyboard/questions.spec.ts`, *what to read from is chosen by arrow keys …* (rule 13;
-     `choose-what-to-read-from-by-keyboard`).
+     `choose-what-to-read-from-by-keyboard`): both choices sent, Selected items with the selected ids.
+   - The axe scan of the questions harness in dark, light and GOV.UK (`every-harness.spec.ts`).
+   - *Whole case*'s words are one wording, the server's (`ReadFromUnavailableError.words`), which the panel
+     shows before anything is asked. Test: *the panel says whole case in the server's own words*.
 
 ### ADR-129, Amendment 4 (13 November 2026) — the brief's scope is the question's, and *will read* says it first
 
@@ -37066,6 +37073,17 @@ dry run says what a question will read before it is asked.
    - Test: `test_route_rights.py` (`will_read_route`: `ask_model`), `test_investigation_levels.py` (Editor),
      `test_audit_kinds.py` (with `audit-v052D.patch`), `route-coverage-check` (with `spec03-v052D.patch`),
      each red without its row or patch.
+   - In a case view it is refused, as asking is, to anyone the view is private from. Test: `test_case_views.py`,
+     *will read in a private view is refused to another member* (red with the view check planted out).
+3. **When the panel asks it.** *Will read* is asked for the body the question would send. It is keyed on that
+   body (under *Everything on the graph* a click on the canvas sends nothing new, so asks nothing), debounced
+   by 300 ms, and asked again when the question box takes focus if the timeline window has moved since. While
+   it is being asked, the last answer is not shown. Ask stays open meanwhile: the answer's own `read` says what
+   was read. Each ask reads the scope's Documents and writes an audit row, at most once per settled change.
+   It is a call off the canvas's render path, so it adds nothing to the §5 frame budget.
+   - Test: `QuestionsPanel.test.tsx`, *asks nothing when the canvas's selection changes under Everything on the
+     graph* (red when keyed on the selection); *asks again when the timeline window has moved …* (red with no
+     refresh).
 
 ### ADR-135, Amendment 12 (13 November 2026) — the engine that will answer, always named; those that cannot, with why
 
@@ -37087,16 +37105,23 @@ for a hosted engine: this only says what the routing will do.
    answer is listed: one with no model for questions, one the case's data may not reach (as `GET
    …/models/engines` judges it, so a dataset is named only to a caller the store names it to), and one this
    question's handling may not reach. The panel shows them beneath the choice (`EnginePicker`'s `reasons`)
-   or, with no choice offered, on their own.
+   or, with no choice offered, on their own. While *will read* is pending or refused, the picker keeps the
+   case list's own reasons. When no engine may answer, the routing's refusal is said, but a caller the store
+   names no dataset to is told it without the datasets' names, by *will read* and by the question's own 409
+   alike; the decision is the routing's, unchanged.
    - Test: *will read lists an engine the material's own handling code may not reach* (red with that reason
      dropped); *lists an engine the material's handling may not reach*; *lists an engine with no model for
      questions*.
    - Test: `QuestionsPanel.test.tsx`, *lists the engines that cannot answer this question with their reasons,
-     even with no choice to make*; *asks the case's own engines … disables one with the reason in words*.
+     even with no choice to make*; *asks the case's own engines … disables one with the reason in words*; *keeps
+     the case's own reasons beneath the engine choice while will read is refused* (red with `[]` passed).
+   - Test: `test_questions_read_from.py`, *will read's refusal names no dataset to a caller the store names
+     none to*, and *ask's refusal …* (each red with the names left in).
 3. **A failed list is said as failed.** When the engines cannot be read, `EngineChoice.failed` is set and the
    panel says the list could not be loaded and the question goes to the default, never that there are none.
-   - Test: `QuestionsPanel.test.tsx`, *says the engine list failed, never that there is none*. Red with the
-     words removed.
+   An answer with no list is a failure too, not a list of none.
+   - Test: `QuestionsPanel.test.tsx`, *says the engine list failed, never that there is none* (red with the
+     words removed); *… when the answer holds no list* (red with it read as none).
 
 ### ADR-144, Amendment 4 (13 November 2026) — *Ask the model about these* for any selection
 
@@ -37105,7 +37130,8 @@ stands (the selection saved as a private view, and the questions asked in it). T
 Amendment 7. The selection bar offers *Ask the model about these…* whenever anything is selected, not only
 when the selection holds a Document. The view it saves is named for its items ("Questions on 3 items"), not
 its documents. In the view, *Read from* applies within what the view holds. The change is to the case lane's
-canvas files, sent as `process/lanes/rules-b/v052D/bar-v052D.patch`.
+canvas files, sent as `process/lanes/rules-b/v052D/bar-v052D.patch`; it is built when that patch, or case-b's
+shared action list carrying it, is merged, and not before.
 
 - Test: `SelectionBar.test.tsx`, *offers Ask the model about these… whatever is selected, Document or not*.
 - Test: `keyboard/selection.spec.ts`, *the selection bar's Ask the model about these… saves the selection as a
