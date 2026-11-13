@@ -122,7 +122,8 @@ class _Identity:
         return [DashboardIdentity(client_id="osprey-dashboard-board", account_id="sa-1"),
                 DashboardIdentity(client_id="osprey-dashboard-new", account_id="sa-2")]  # fmt: skip
 
-    async def create_dashboard(self, name: str, *, clearance: str, org_unit: str) -> RegisteredDashboard:
+    async def create_dashboard(self, name: str, *, clearance: str, org_unit: str,
+                               application_id: str | None = None) -> RegisteredDashboard:
         self.made.append((name, clearance))
         return RegisteredDashboard(dashboard=DashboardIdentity(client_id="osprey-dashboard-x", account_id="sa-1",
                                                                clearance=clearance, org_unit=org_unit), secret="s")  # fmt: skip

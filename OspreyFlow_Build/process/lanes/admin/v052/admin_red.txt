@@ -1,0 +1,47 @@
+# red: the Entra admin's dashboard tests before the code, a7ec066, 2026-11-13T20:22:07Z
+..FF                                                                     [100%]
+=================================== FAILURES ===================================
+_ test_a_dashboard_identity_is_registered_listed_and_removed_by_its_application_id _
+
+    async def test_a_dashboard_identity_is_registered_listed_and_removed_by_its_application_id() -> None:
+        """Entra holds the registration and its secret; Admin › Dashboards holds what it reads with. The
+        identity's account (what a case Author grants Viewer to) is its application id."""
+        store = _Store()
+        admin = EntraPeopleAdmin(store)  # type: ignore[arg-type]
+>       made = await admin.create_dashboard(
+            "Compliance board", clearance="OFFICIAL", org_unit="unit-2", application_id=DASHBOARD
+        )
+E       TypeError: EntraPeopleAdmin.create_dashboard() got an unexpected keyword argument 'application_id'
+
+../OspreyFlow_Build/tests/services/api/test_entra_people.py:684: TypeError
+___ test_on_entra_a_dashboard_is_refused_in_words_without_its_application_id ___
+
+    async def test_on_entra_a_dashboard_is_refused_in_words_without_its_application_id() -> None:
+        from services.api.identity_admin import (
+            DashboardExistsError,
+            PersonActionRefused,
+            UnknownRoleError,
+        )
+    
+        store = _Store()
+        admin = EntraPeopleAdmin(store)  # type: ignore[arg-type]
+        with pytest.raises(UnknownRoleError, match="application id"):
+>           await admin.create_dashboard("Board", clearance="OFFICIAL", org_unit="u")
+
+../OspreyFlow_Build/tests/services/api/test_entra_people.py:706: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <services.api.entra_people.EntraPeopleAdmin object at 0x13318b650>
+name = 'Board', clearance = 'OFFICIAL', org_unit = 'u'
+
+    async def create_dashboard(
+        self, name: str, *, clearance: str, org_unit: str
+    ) -> RegisteredDashboard:
+>       raise _refused("Dashboard identities are not registered on this deployment yet.")
+E       services.api.identity_admin.PersonActionRefused: Dashboard identities are not registered on this deployment yet. On this deployment Entra ID holds people's accounts: they sign in with their organisation account, and their clearance, unit and handling codes come from Entra. Here you give them roles, add them by object id, and disable them.
+
+services/api/entra_people.py:452: PersonActionRefused
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_a_dashboard_identity_is_registered_listed_and_removed_by_its_application_id
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_on_entra_a_dashboard_is_refused_in_words_without_its_application_id
+2 failed, 2 passed, 51 deselected in 2.52s

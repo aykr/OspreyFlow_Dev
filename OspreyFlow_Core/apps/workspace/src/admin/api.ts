@@ -140,10 +140,11 @@ export const listArrivals = (api: AdminApi) => call<OrganisationArrival[]>(api, 
 export const linkOrganisation = (api: AdminApi, userId: string, subject: string) =>
   call<PersonAccount>(api, person(userId, "organisation-link"), { method: "POST", body: JSON.stringify({ subject }) });
 export const listDashboards = (api: AdminApi) => call<DashboardIdentity[]>(api, "dashboards");
-export const registerDashboard = (api: AdminApi, name: string, clearance: string, orgUnit: string) =>
+export const registerDashboard = (api: AdminApi, name: string, clearance: string, orgUnit: string, applicationId?: string) =>
   call<RegisteredDashboard>(api, "dashboards", {
     method: "POST",
-    body: JSON.stringify({ name, clearance, org_unit: orgUnit }),
+    // ADR-148 Amendment 10: on Entra ID, the dashboard's own app registration's application id.
+    body: JSON.stringify({ name, clearance, org_unit: orgUnit, ...(applicationId ? { application_id: applicationId } : {}) }),
   });
 export const removeDashboard = (api: AdminApi, clientId: string) =>
   call<void>(api, `dashboards/${encodeURIComponent(clientId)}`, { method: "DELETE" });

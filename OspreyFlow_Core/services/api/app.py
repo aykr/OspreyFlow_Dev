@@ -17371,8 +17371,9 @@ async def register_dashboard_route(
             detail={"error": "dashboard_above_your_clearance", "clearance": body.clearance},
         )
     made = await identity_admin.create_dashboard(
-        body.name, clearance=body.clearance, org_unit=body.org_unit
-    )
+        body.name, clearance=body.clearance, org_unit=body.org_unit,
+        application_id=body.application_id,
+    )  # fmt: skip
     await audit.record(principal=principal, action="register_dashboard",
                        resolved_query={"client_id": made.dashboard.client_id,
                                        "clearance": body.clearance, "org_unit": body.org_unit},

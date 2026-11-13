@@ -316,7 +316,9 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
     claim_mapping = ClaimMapping.from_env()
     people_store = await open_people_store(config.postgres.dsn, claim_mapping, audit)
     principal_resolver = PrincipalResolver(
-        config, claim_mapping=claim_mapping, role_source=people_store
+        config, claim_mapping=claim_mapping, role_source=people_store,
+        # ADR-148 Amendment 10: the dashboard identities, in the same store.
+        dashboard_source=people_store,
     )
 
     return RunResources(

@@ -1,0 +1,43 @@
+# red: Admin › Dashboards on Entra in the Glass, before the code, a7ec066, 2026-11-13T20:25:09Z
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/admin-pg/OspreyFlow_Core/apps/workspace
+
+ ❯ src/admin/sections/DashboardsEntra.test.tsx (2 tests | 1 failed) 98ms
+   ❯ Admin › Dashboards on Entra ID sign-in (2)
+     × registers by application id, shows no secret, and names the app role to grant 77ms
+     ✓ on Keycloak asks for no application id and shows the secret once, as before 21ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/admin/sections/DashboardsEntra.test.tsx > Admin › Dashboards on Entra ID sign-in > registers by application id, shows no secret, and names the app role to grant
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/admin/sections/DashboardsEntra.test.tsx:57:54
+     55|     await fill();
+     56|     const register = screen.getByRole("button", { name: "Register" });
+     57|     expect((register as HTMLButtonElement).disabled).toBe(true); // no…
+       |                                                      ^
+     58|     fireEvent.change(screen.getByLabelText("Dashboard application id")…
+     59|     fireEvent.click(register);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  20:25:09
+   Duration  881ms (environment 65%, tests 12%, import 12%, transform 10%)
+
+
+Slowest 2 tests:
+    77 ms  src/admin/sections/DashboardsEntra.test.tsx > Admin › Dashboards on Entra ID sign-in > registers by application id, shows no secret, and names the app role to grant
+    21 ms  src/admin/sections/DashboardsEntra.test.tsx > Admin › Dashboards on Entra ID sign-in > on Keycloak asks for no application id and shows the secret once, as before

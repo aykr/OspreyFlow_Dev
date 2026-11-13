@@ -9,11 +9,11 @@ export type LastPulled = string | null;
 export type LastFailure = string | null;
 export type FailedAt = string | null;
 export type CasesPulled = number;
-export type Secret = string;
+export type Secret = string | null;
 
 export interface RegisteredDashboard {
   dashboard: DashboardIdentity;
-  secret: Secret;
+  secret?: Secret;
   [k: string]: unknown;
 }
 export interface DashboardIdentity {
