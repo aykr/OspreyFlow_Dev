@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 //
 // ADR-145 decision 4 and Amendment 2 (variant B, the owner's choice of 7 November 2026): the case
-// screen's chrome, counted on the real `App`. A keyboard user passes 24 controls before the canvas
-// (25 on the deployed page, whose brand frame adds the skip link first; part 1's harness, drawing
+// screen's chrome, counted on the real `App`. A keyboard user passes 25 controls before the canvas
+// (26 on the deployed page, whose brand frame adds the skip link first; part 1's harness, drawing
 // the mark without its Home button, counted one fewer for every variant), and the right-hand column
 // opens with the Inspector only. Red if a control returns before the canvas, or a panel opens by
 // default. The canvas, the map and the timeline need WebGL, which jsdom has none of: the canvas is a
@@ -159,8 +159,8 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
   });
 });
 
-// ADR-145 Amendment 14 (the owner's screen fixes of 13 November 2026, v0.5.2 step 3e): one place, one
-// marker, and the dataset named once in the context row.
+// ADR-145 Amendment 14 (the owner's screen fixes of 13 November 2026, v0.5.2 step 3e): the dataset named
+// once in the context row (its one place, one marker was replaced by Amendment 15's navigation).
 describe("the dataset named once (ADR-145 Amendment 14 decision 4)", () => {
 
   test("the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it", async () => {

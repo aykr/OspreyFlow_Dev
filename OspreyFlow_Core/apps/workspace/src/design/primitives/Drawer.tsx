@@ -47,7 +47,9 @@ export function Drawer({ open, onClose, title, children, returnFocusTo }: Drawer
     };
     document.addEventListener("keydown", onKeyDown);
     // Closing returns focus to whatever opened it (the owner's navigation decision, ADR-145 Amendment 15): its rail
-    // opener, or *Views in this case*. Not when focus has already gone somewhere else the person chose.
+    // opener, or *Views in this case*. Not when focus has already gone somewhere else the person chose: React DOM
+    // already puts back, after a commit, focus the commit moved off an element still in the page, so `lost` is a
+    // backstop no test can single out (v052_fixes_unit_reds.py says why it has no plant).
     const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     const drawer = ref.current;
     drawer?.focus();

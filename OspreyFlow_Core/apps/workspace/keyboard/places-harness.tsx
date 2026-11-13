@@ -1,7 +1,7 @@
 // The four places' keyboard harness (ADR-145 decisions 1–3 and Amendment 4, ADR-146 decision 2,
 // `CLAUDE.md` rule 13): the real brand
 // frame, the real `TopBar` with the real `PlaceSwitcher` (inside the GOV.UK header under `?brand=govuk`),
-// the real `ContextBanner` with the Glass's sections and its cross-link, and the real Admin place,
+// the real `ContextBanner` with the case line and its cross-link (ADR-145 Amendment 15), and the real Admin place,
 // wired as `App.tsx` wires them — the view to come back to through the same `useLastGlassView`. `?rights=`
 // gives the person's rights. The open case is the real module's (`investigation/investigationId.ts`),
 // and choosing another is the real `openCase`, which reloads the page as the Glass does (here, back

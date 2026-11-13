@@ -1001,7 +1001,7 @@ test("CAP-A2-C10M-e", async ({ page }) => {
   test.skip(!(await boards.isVisible().catch(() => false)), "no dashboard for this case: P4 is a slide");
   await boards.click();
   await page.waitForTimeout(15_000);
-  // Dashboards on, the rail entry is there whether or not a board is registered for this case: the
+  // Reports on, the view switch's entry is there whether or not a board is registered for this case: the
   // place then says so, and that empty page was shot (2 November 2026). Skip it instead.
   test.skip(
     await page.getByText(/^No dashboard you may open/).isVisible().catch(() => false),

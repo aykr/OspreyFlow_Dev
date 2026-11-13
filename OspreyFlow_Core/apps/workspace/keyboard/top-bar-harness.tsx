@@ -111,7 +111,7 @@ if (!container) throw new Error("#root not found");
 
 const rail = (id: string) => () => window.__TOPBAR__!.rail.push(id);
 
-/** The rail as `App.tsx` splits it (ADR-145 Amendment 12), and its Help toggling the real keys panel,
+/** The rail as `App.tsx` splits it (ADR-145 Amendment 15), and its Help toggling the real keys panel,
  * as `App.tsx` does: Help or `?` opens it, again closes it, and Esc or × closes it. */
 function RailWithHelp() {
   // `?help=1`: the keys panel open from the start, for the scans (`a11y/every-harness.spec.ts`).

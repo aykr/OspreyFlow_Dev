@@ -13,7 +13,8 @@ export interface CaseSwitcherProps {
   bearerToken: string;
   currentId: string;
   onOpen: (id: string) => void;
-  /** Show the full list of cases (the picker) over the workspace. Absent: no such button. */
+  /** *All cases*: in the Glass the Cases panel, elsewhere the case picker over the workspace (ADR-145 Amendment 15).
+   * Absent: no such button. */
   onBrowse?: () => void;
   /** Whether the case's scope badge is drawn beside its name (ADR-115 Amendment 1 point 5). False where the
    * row already says what the case reads (the Glass's banner, ADR-145 Amendment 14 decision 4). */

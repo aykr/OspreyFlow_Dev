@@ -25,7 +25,8 @@ describe("the places' table", () => {
       ["rules", "Rules and Monitoring"],
       ["admin", "Admin"],
     ]);
-    // ADR-146 decision 2: Monitoring left the Glass. ADR-145 Amendment 13: the toggle is Graph · Drawing board.
+    // ADR-146 decision 2: Monitoring left the Glass. The Glass's sections are not drawn since ADR-145 Amendment 15
+    // (its views are the top bar's view switch); the list stays for the places that still draw theirs.
     expect(PLACES[0]!.sections).toEqual(["Graph", "Drawing board"]);
     expect(PLACES[1]!.sections).toEqual(["1 Model", "2 Sources", "3 Pipelines", "4 Runs"]);
     // The owner's M1: the place's tabs.

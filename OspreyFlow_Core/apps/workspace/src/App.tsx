@@ -786,7 +786,7 @@ export function App() {
     else setWelcome("asked");
   }, []);
   useHelpKey(toggleWelcome);
-  // ADR-097 Amendment 1: the cases, and the views of each (ADR-144 decision 5), reached from the rail.
+  // ADR-097 Amendment 1: the cases, and the views of each (ADR-144 decision 5), reached from the case line.
   // The Cases panel, and where it opened (Amendment 15): at its views list from *Views in this case*, or whole from
   // the case menu's *All cases*.
   const [casesOpen, setCasesOpen] = useState<false | "views" | "all">(false);
@@ -1674,8 +1674,8 @@ export function App() {
   // The timeline and the status line describe the working set: they belong beside the graph and
   // the map, not over Reports, a Superset board or the Admin area, and not to an account that may
   // not investigate (opened under an embedded board, the timeline overlapped it).
-  // ADR-097 step 1: the places the analyst goes to inside the Glass (ADR-145 Amendment 2 splits them
-  // between the rail and its ⋯ More).
+  // ADR-097 step 1: the rail's panel openers inside the Glass (ADR-145 Amendment 15: the panels alone; the views are
+  // the top bar's view switch).
   // ADR-145 Amendment 12: where the keys panel is, and whether it is shown at all. The graph, the
   // map and the matrix share the canvas area, under whose toolbar it sits, as before; any other view
   // has it in the column the views share.
@@ -1859,7 +1859,6 @@ export function App() {
             showScope={!(app === "glass" && caseContext.datasets !== null)}
           />
         }
-        // ADR-145 Amendment 13: the open mode's one line, read with the region.
         // ADR-145 decision 2: the Glass names what the case reads; the Studio's dataset is its own
         // choice, drawn by the Studio (`ingest/IngestStudio.tsx`), so the banner does not repeat it.
         datasets={app === "glass" ? caseContext.datasets : null}
@@ -1881,7 +1880,7 @@ export function App() {
       )}
       {/* `position: relative` so the keys panel, over whichever view is on screen, is placed in it. */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
-      {/* ADR-145 Amendment 12: the keys panel over any view the rail reaches, not only the graph's
+      {/* ADR-145 Amendment 12: the keys panel over any view the view switch opens, not only the graph's
           (it was drawn beside the graph alone, so Help did nothing visible elsewhere). */}
       {welcomeOpen && !inCanvasArea && welcomePanel}
       {(view === "graph" || view === "map") && (

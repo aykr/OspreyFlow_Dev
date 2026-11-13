@@ -35,9 +35,9 @@ export function splitRail<T extends { id: string }>(entries: readonly T[]): { it
  * and 15). */
 export const PANEL_OPENERS: readonly RailEntry[] = ["explore", "questions", "history"];
 
-/** How the rail marks an entry, one place, one marker (Amendment 14 decision 3): a place is pressed while it is
- * the view open; a panel's opener is never pressed, only expanded while its panel is open. `App.tsx` and the
- * places harness both read it, so the harness cannot agree with a copy. */
+/** How the rail marks an entry (Amendment 15): a panel's opener is never pressed, only expanded while its panel is
+ * open. Since Amendment 15 every entry on the rail is a panel's opener, so the `pressed` branch serves only an entry
+ * outside PANEL_OPENERS, of which there is none today. `App.tsx` and the places harness both read it. */
 export function railMark(
   id: RailEntry,
   state: { view: string; open: ReadonlySet<RailEntry> },
@@ -64,7 +64,7 @@ export const VIEW_LABELS: Record<SwitchView, string> = {
 };
 
 /** The views offered, split between the switch and More views, each in its order. Someone offered none of the
- * switch's (a Reports Viewer offered Figures alone) has theirs in the switch itself. */
+ * switch's (the built-in Administrator, offered Connection strength alone) has theirs in the switch itself. */
 export function splitViews<T extends { id: string }>(offered: readonly T[]): { main: T[]; more: T[] } {
   const inOrder = (order: readonly string[]) => order.flatMap((id) => offered.filter((v) => v.id === id));
   const main = inOrder(VIEW_SWITCH);
