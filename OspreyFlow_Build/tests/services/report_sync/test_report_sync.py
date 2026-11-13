@@ -45,6 +45,9 @@ class _World:
         self.csv = CSV
         self.feeds = 0
         self.tokens = 0
+        #: Entra ID's v2.0 endpoint (ADR-148 Amendment 10): a client-credentials request must name
+        #: the API's `.default` scope, and one that does not is refused (AADSTS90014, a 400).
+        self.scope: str | None = None
 
 
 def _handler(world: _World) -> type[BaseHTTPRequestHandler]:
@@ -62,6 +65,8 @@ def _handler(world: _World) -> type[BaseHTTPRequestHandler]:
 
         def do_POST(self) -> None:  # noqa: N802
             form = parse_qs(self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode())
+            if world.scope is not None and form.get("scope", [""])[0] != world.scope:
+                return self._send(400, json.dumps({"error": "invalid_request"}))
             if form.get("client_secret", [""])[0] != world.secret or world.revoked:
                 return self._send(401, json.dumps({"error": "unauthorized_client"}))
             token = f"t-{new_id()}"
@@ -219,3 +224,53 @@ def test_health_needs_a_recent_pass(tmp_path) -> None:  # type: ignore[no-untype
     now = beat.stat().st_mtime
     assert healthy(beat, 900, now + 1799)
     assert not healthy(beat, 900, now + 1800), "two intervals without a pass is a hung loop"
+
+
+# --- ADR-148 Amendment 10: the report sync on Entra ID ------------------------------------------------
+
+API_SCOPE = "api://aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/.default"
+DASHBOARD_APP = "dddddddd-eeee-4fff-8000-111111111111"
+
+
+async def test_on_entra_the_token_asks_for_the_api_s_scope(world: tuple[str, _World]) -> None:
+    """Entra's v2.0 endpoint refuses a client-credentials request without the API's scope."""
+    base, w = world
+    w.scope = API_SCOPE
+    asked = TokenSource(f"{base}/token", DASHBOARD_APP, "right-secret", scope=API_SCOPE)
+    unasked = TokenSource(f"{base}/token", DASHBOARD_APP, "right-secret")
+    try:
+        assert (await asked.get()).startswith("t-")
+        with pytest.raises(SyncRefused, match="400"):
+            await unasked.get()
+    finally:
+        await asked.aclose()
+        await unasked.aclose()
+
+
+def test_on_entra_the_configuration_names_the_scope_and_an_application_id() -> None:
+    from services.report_sync.__main__ import dashboards_from_env
+
+    env = {"REPORT_SYNC_TOKEN_URL": "https://login.microsoftonline.com/t/oauth2/v2.0/token",
+           "REPORT_SYNC_CONDUIT_URL": "http://api:8000", "REPORT_SYNC_SCOPE": API_SCOPE,
+           "REPORT_SYNC_DASHBOARDS": f'[{{"client_id": "{DASHBOARD_APP}", "secret": "s"}}]'}  # fmt: skip
+    (board,) = dashboards_from_env(env)
+    assert (board.client_id, board.scope) == (DASHBOARD_APP, API_SCOPE)
+    keycloak_named = '[{"client_id": "osprey-dashboard-board", "secret": "s"}]'
+    with pytest.raises(SystemExit, match="application id"):
+        dashboards_from_env({**env, "REPORT_SYNC_DASHBOARDS": keycloak_named})
+    with pytest.raises(SystemExit, match="REPORT_SYNC_SCOPE"):
+        dashboards_from_env({**env, "REPORT_SYNC_SCOPE": "api://aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"})
+    # Without a scope, Keycloak's rule as before: an application id is no dashboard's client there.
+    with pytest.raises(SystemExit, match="osprey-dashboard-"):
+        dashboards_from_env({k: v for k, v in env.items() if k != "REPORT_SYNC_SCOPE"})
+
+
+async def test_a_pass_on_entra_asks_with_the_scope(world: tuple[str, _World], stores: tuple[Mart, Valkey]) -> None:
+    """Through `sync_once`: the dashboard's scope reaches the token request it makes."""
+    base, w = world
+    w.scope = API_SCOPE
+    board = Dashboard(client_id=DASHBOARD_APP, secret="right-secret", token_url=f"{base}/token",
+                      conduit_url=base, weeks=12, scope=API_SCOPE)  # fmt: skip
+    mart, valkey = stores
+    summary = await sync_once([board], mart, valkey, slot=1)
+    assert summary.failed == 0 and w.tokens == 1, summary.failures
