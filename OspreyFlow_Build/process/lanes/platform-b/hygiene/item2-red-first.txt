@@ -1,0 +1,34 @@
+# Item 2: the real-Caddy proxy as a shared fixtures module (CARRIES row 228). Mac, offline, main 2b78820.
+== red: main's two test files with the new guard (the fixtures module not yet there):
+E   AssertionError: assert {'harness/tes...'pytestmark']} == {}
+/Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_access_key_proxy_fixtures_shared.py:32: AssertionError: assert {'harness/tes...'pytestmark']} == {}
+E   AssertionError: test_access_key_proxy.py
+/Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_access_key_proxy_fixtures_shared.py:38: AssertionError: test_access_key_proxy.py
+2 failed, 1 passed in 2.78s
+== green, the move:
+3 passed in 2.48s
+== the moved tests collect and skip in words on this Mac (no caddy); their runs with Caddy are on the server, item2-live.raw.txt:
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:45: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:54: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:63: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [1] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:76: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:97: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:113: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:125: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [1] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:138: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:162: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:172: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:178: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [6] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:202: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [9] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:218: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:232: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [6] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:242: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [5] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:264: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [1] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:281: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [1] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:290: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:307: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [3] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:320: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [1] ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py:347: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [1] ../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py:38: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+SKIPPED [1] ../OspreyFlow_Build/tests/harness/test_refresh_silent_round_through_the_key.py:56: no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary
+69 skipped in 0.28s
