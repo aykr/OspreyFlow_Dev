@@ -16,6 +16,11 @@ from pathlib import Path
 
 MODULE = Path(__file__).with_name("test_phase8_exit_over_the_wire.py")
 VERBS = {"get", "post", "put", "patch", "delete"}
+#: The module's HTTP clients: a call on one whose path cannot be read fails the reading, never skipped.
+CLIENTS = {"analyst", "client", "httpx", "browser"}
+#: Client calls whose path is not the Conduit's, by their source: the demo analyst's Keycloak sign-in
+#: (`_sign_in_as_the_demo_analyst`; on poc spec08_poc.py replaces it).
+NOT_THE_CONDUIT = {"browser.get(authorize)", "browser.post(form_action.group(1)"}
 _PARAM = re.compile(r"\{[^}]*\}")
 
 
@@ -25,11 +30,30 @@ def _path(node: ast.expr) -> str | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
     if isinstance(node, ast.JoinedStr):
-        return "".join(v.value if isinstance(v, ast.Constant) else "{}" for v in node.values)
+        text = "".join(v.value if isinstance(v, ast.Constant) else "{}" for v in node.values)
+        return text.removeprefix("{}") if text.startswith("{}/v1/") else text  # an origin before the path
     if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "_in_case" and node.args:
         inner = _path(node.args[0])
         return None if inner is None else "/v1/investigations/{}" + inner.removeprefix("/v1")
     return None
+
+
+def _client_calls(source: str) -> list[ast.Call]:
+    return [n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+            and n.func.attr in VERBS and ast.unparse(n.func.value) in CLIENTS]
+
+
+def unreadable(source: str) -> set[str]:
+    """Client calls whose path the reading cannot hold to a route (a variable, a keyword `url=`, a path built
+    some other way), less the known calls that are not the Conduit's."""
+    found = set()
+    for node in _client_calls(source):
+        path = _path(node.args[0]) if node.args else None
+        if path is None or ("/v1/" in path and not path.startswith("/v1/")):
+            text = ast.unparse(node)
+            if not any(text.startswith(known) for known in NOT_THE_CONDUIT):
+                found.add(f"line {node.lineno}: {text[:120]}")
+    return found
 
 
 def calls(source: str) -> set[str]:
@@ -85,6 +109,22 @@ def test_matching_takes_a_parameter_for_a_literal_and_never_the_reverse() -> Non
     assert not served_by("POST /v1/hotlists", served)
     assert not served_by("GET /v1/alerts", served)
     assert not served_by("POST /v1/investigations/{}/{}", {"POST /v1/investigations/{}/hotlists"})
+
+
+def test_the_reading_reads_an_origin_before_the_path() -> None:
+    assert calls('def f():\n    httpx.get(f"{ORIGIN}/v1/ontology")\n') == {"GET /v1/ontology"}
+
+
+def test_a_client_call_whose_path_cannot_be_read_is_named() -> None:
+    """The review of c6c6044, note 6: a path in a variable, a `url=` keyword or built by a helper was skipped."""
+    source = ('def f(analyst, browser, d, path):\n    analyst.get(path)\n    analyst.post(url="/v1/x")\n'
+              '    analyst.get(_paths.alerts(case))\n    d.get(path)\n    browser.get(authorize)\n')
+    assert unreadable(source) == {"line 2: analyst.get(path)", "line 3: analyst.post(url='/v1/x')",
+                                  "line 4: analyst.get(_paths.alerts(case))"}
+
+
+def test_every_client_call_in_the_closing_pass_proof_is_read() -> None:
+    assert not unreadable(MODULE.read_text(encoding="utf-8"))
 
 
 def test_every_route_the_closing_pass_proof_calls_is_served() -> None:
