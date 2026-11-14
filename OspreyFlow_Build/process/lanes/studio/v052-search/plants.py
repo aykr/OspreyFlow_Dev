@@ -368,6 +368,13 @@ PLANTS = [
     ),
     # --- the Glass ---------------------------------------------------------------------------------
     Plant(
+        "a refusal of what was typed shown as 'unavailable' (docs' review, 14 Nov)",
+        "apps/workspace/src/search/GlobalSearch.tsx",
+        "const detail = response.status === 422 ? await refusalWords(response) : null;",
+        "const detail = null as string | null;",
+        "vitest:apps/workspace/src/search/GlobalSearch.test.tsx",
+    ),
+    Plant(
         "the bar says 'just now' for every reason",
         "apps/workspace/src/search/GlobalSearch.tsx",
         "const why = body.limited === true ? (body.limited_why ?? \"unknown\") : null;",

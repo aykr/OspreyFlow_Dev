@@ -39506,3 +39506,44 @@ other text stands.*
   `::test_past_the_depth_the_list_holds_the_first_hundred_alone`.
 - *Planted again:* `process/lanes/studio/v052-search/plants.py` (a cut said at exactly the depth, and the old words),
   each red.
+
+### ADR-059, Amendment 2 (14 November 2026) — suggestions say why they are limited, a case-sensitive page fills when matches exist, and a refusal is said in its words
+
+*Three defects a visitor to the GOV.UK demo would meet, from the studio lane's list and docs' review of 14 November.
+This amends Amendment 1; its other text stands.*
+
+1. **A case-sensitive suggestion fills its page when matches exist.** The index's stored prefixes ignore case, so a
+   case-sensitive suggestion (the box's default) asks for four times its page and keeps the matches in the typed
+   case. When the top-scored matches were all in the other case, the page came back empty while the box said
+   "more match".
+   - It now pages on, at most five pages, in the index's total order (score, then node id), until its page is full or
+     the matches run out.
+   - If the page still cannot be filled while the index holds more, the graph's own case-sensitive prefix read
+     answers. That answer is exact, so it is not limited, and the box never shows an empty list with "more match".
+   - `more` holds when any asked prefix (a number's canonical form is asked second) has more matches.
+2. **A limited suggestion says why.** The reply gains `limited_why`:
+   - `no_index`: the deployment has no search index, which is so for good;
+   - `unreachable`: the index cannot be reached;
+   - `catching_up`: the nodes not yet caught up with are not known to be whole (ADR-149 decision 2).
+
+   The box words each, and says "just now" only for the reasons that pass:
+   - no index: "Suggestions match only the exact start of a name or identifier: this deployment has no search index.";
+   - unreachable: "Suggestions are limited just now: only the exact start of a name or identifier matches.";
+   - catching up: "Suggestions are limited just now, while the search index catches up: only the exact start of a
+     name or identifier matches.";
+   - an older Conduit's reply with no reason: "Suggestions are limited: only the exact start of a name or identifier
+     matches."
+3. **A refusal of what was typed is said in the Conduit's words.** A "starts with" suggestion over 50 characters (the
+   stored prefixes' length), or an entity type the ontology does not have, is refused with a 422 in words. The box
+   had shown "Suggestions are unavailable." for every failure, so the limit was never named (rule 2). It now shows a
+   422's words. A failure, or a 422 with no sentence, still says "unavailable".
+
+- *Tests:* `tests/services/api/test_search_service.py::test_a_case_sensitive_suggestion_pages_on_until_its_page_is_full`,
+  `::test_a_case_sensitive_suggestion_never_says_more_with_nothing_shown`,
+  `::test_more_is_said_when_any_asked_prefix_has_more` and `::test_a_limited_suggestion_says_why`, each red first.
+- *Tests:* `apps/workspace/src/search/GlobalSearch.test.tsx`:
+  - "says truly why its suggestions are limited…";
+  - "from a Conduit that gives no reason…";
+  - "says the Conduit's own words when it refuses what was typed";
+  - "still says unavailable for a refusal with no words…".
+- *Planted:* each is planted again in `process/lanes/studio/v052-search/plants.py`, and each plant is red.
