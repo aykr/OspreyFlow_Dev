@@ -47,13 +47,15 @@ A live run should note the host's load, and a first page that draws nothing shou
 
 ## For step 6 on the 25th: the live specs to run
 
+*Updated 14 November 2026, after step 3h: the expected figures below are as the specs stand on main.*
+
 Each runs through the runner on one stack (`LIVE_SEED` and `LIVE_SPECS`), so the case, the index's drained outbox and a warm Vite are set up the same way each time. Each run records the host's load.
 
 | Spec | Seed (`LIVE_SEED`) | Expected on the 25th | What a red means |
 |---|---|---|---|
 | `live/search-results.spec.ts` | `scripts.seed_fixture_corp` (the default) | 4 of 4, as on 14 November | The results page or the search route has changed |
-| `live/scenario-a-a12-a15.spec.ts` | `scripts.seed_hmp_fixture` | A13 and A15 pass. A12 passes once the crash above is fixed, and until then is the crash's own check | A13 or A15 red is drift or a defect; A12 red is still the crash |
-| `live/fixture-corp.spec.ts` | `scripts.seed_fixture_corp` | The NINO and threshold cases pass. The query builder, explain and pathfinder cases are red until they are reworked as above | The two passing cases going red is drift or a defect |
+| `live/scenario-a-a12-a15.spec.ts` | `scripts.seed_hmp_fixture` | 3 of 3. The crash is fixed (the canvas's own Sigma element), and A12 passed live at db36afe (`../search-draw-crash/RECORD.md`) | Any red is drift or a defect; A12 red may be the crash come back |
+| `live/fixture-corp.spec.ts` | `scripts.seed_fixture_corp` | 5 of 5. The query builder and pathfinder were reworked (`../live-redesign/RECORD.md`), and explain passed once step 3h landed (ADR-124 Amendment 19). Live at 122c923 (`../merged-clusters/live-fixture-corp.122c923.log`) | Any red is drift or a defect. Explain red may be a reader's clusters not reaching the canvas |
 
 Not for the 25th until their needs are on the stack: `basemap.spec.ts` (a PMTiles build), `ingest-folder.spec.ts` (a staged folder) and `scenario-b-document.spec.ts` (an extraction model). The capture kits (`ledger-capture`, `pid-capture`) are not checks.
 
