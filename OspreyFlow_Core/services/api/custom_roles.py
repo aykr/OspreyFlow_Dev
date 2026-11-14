@@ -42,7 +42,9 @@ from schemas.rights import (
     SINGLE_RIGHT_PREFIX,
     Right,
     forbidden_pairs_in,
+    right_name,
     rights_for,
+    rights_listed,
 )
 
 BOOTSTRAP_SQL = """
@@ -148,8 +150,8 @@ def role_refusal(
         a, b = pairs[0]
         raise RoleRefused(
             "forbidden_pair",
-            f"a role cannot hold both {a.value} and {b.value}: no role both proposes and approves "
-            "the same kind of decision",
+            f"a role cannot hold both {right_name(a)} and {right_name(b)}: no role both proposes "
+            "and approves the same kind of decision",
             pair=[a.value, b.value],
         )
     held = set(giver_rights)
@@ -157,7 +159,7 @@ def role_refusal(
     if beyond:
         raise RoleRefused(
             "beyond_your_rights",
-            f"you cannot give a right you do not hold: {', '.join(beyond)}",
+            f"you cannot give a right you do not hold: {rights_listed(beyond)}",
             rights=beyond,
         )
     return parsed

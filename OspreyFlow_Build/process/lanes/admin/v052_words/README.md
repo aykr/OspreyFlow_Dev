@@ -25,6 +25,10 @@ The orchestrator's order, 14 November 2026 (v0.5.2, from docs' sweep):
   here. For example: "Here a person's unit comes from Entra ID, and is changed there. Their clearance and
   handling codes are set here, with Access." The admin guide's §9 quotes it.
 
+- **A right named in a refusal** is named as the screens name it (`schemas.rights.right_name`, held to the Glass's
+  `rightName`): "you cannot give a right you do not hold: Administer system", and the forbidden pair's words. This
+  is A2's point 3, folded into Amendment 19 by the orchestrator.
+
 **Records.**
 - `red_before_code.log`: the test file at the head, against main's code. 10 of its 11 cases fail. The 11th, the
   scan's self-test, plants each shape the scan reads (a refusal, an f-string, an implicit concatenation, the ASCII

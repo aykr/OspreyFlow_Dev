@@ -39030,9 +39030,10 @@ audience check, in no words a person could act on, and INSTALL's section 8 left 
 - Not measured: whether Entra serves a v1.0 token's signing key in the v2.0 key set the Conduit reads. In practice
   the keys are the same; a key it does not hold leaves the plain refusal, never the words.
 - The live check is step 6's on R1 with the stand-in's v1.0 mode, once platform applies the diff.
-### ADR-148, Amendment 19 (14 November 2026) — The People section named as the side list names it, and Entra's refusal in words
+### ADR-148, Amendment 19 (14 November 2026) — Sections and rights said as the screen says them: People and roles, Entra's refusal in words, a right by its name
 
-*v0.5.2 (route W, from docs' sweep, the orchestrator's order of 14 November). By admin.*
+*v0.5.2 (route W, from docs' sweep, the orchestrator's order of 14 November; point 4 from route A2, folded in by
+the orchestrator as the same rule). By admin.*
 
 **Context.** Since ADR-145 Amendment 16, the Admin section where people's roles, access and guests are set is
 *People and roles*, the label the side list takes from `apps/workspace/src/admin/sections.json`. The Conduit's
@@ -39059,6 +39060,12 @@ is false for the values set here.
    never that all three come from Entra. For example, with the unit from Entra and the clearance and codes set
    here: "Here a person's unit comes from Entra ID, and is changed there. Their clearance and handling codes are
    set here, with Access."
+4. **A refusal names a right as the screens name it** (`schemas.rights.right_name`, the Glass's `rightName`:
+   the id's words, capitalised, or the screens' own name, such as "Edit domain model"), never its id. This covers
+   a right the giver does not hold ("you cannot give a right you do not hold: Administer system", ADR-145
+   Amendment 5) and a forbidden pair ("a role cannot hold both Promote to dataset and Review promotions: …").
+   The answer's `rights` and `pair` fields keep the ids, for the Glass's code. A right that is not one is said as
+   it was typed.
 
 **Tests** (rule 12; `process/lanes/admin/v052_words/` has each red):
 - `tests/test_people_section_words.py`:
@@ -39067,6 +39074,7 @@ is false for the values set here.
     schema (descriptions included), the generated TypeScript, the Glass's source and the guides, joined across
     lines, with its own red for each shape;
   - the Entra refusal's exact sentence for each set of values;
+  - `right_name` against the Glass's `rightName` for every right, and the two refusals' exact sentences;
 - the refusal tests that quote these sentences (`test_owner_on_entra.py`, `test_entra_people_administrator_access.py`,
   `test_stopped_why.py`) hold the new words.
 

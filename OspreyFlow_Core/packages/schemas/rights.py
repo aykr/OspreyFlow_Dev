@@ -177,6 +177,26 @@ ADMINISTRATION_RIGHTS = frozenset({
     R.MANAGE_ONTOLOGY, R.MANAGE_GEOSPATIAL, R.READ_AUDIT, R.READ_EXPORT_LEDGER, R.MANAGE_MODELS,
 })  # fmt: skip
 
+#: A right whose name on screen is not its id with spaces (the Glass's `help/roles.ts` RIGHT_NAMES).
+RIGHT_NAMES: dict[str, str] = {"edit_target_model": "Edit domain model"}
+
+
+def right_name(right: Right | str) -> str:
+    """A right's name as the screens say it (ADR-148 Amendment 19): `administer_system` reads
+    "Administer system", as the Glass's `rightName` gives it, never the id."""
+    value = right.value if isinstance(right, Right) else right
+    if value in RIGHT_NAMES:
+        return RIGHT_NAMES[value]
+    words = value.replace("_", " ")
+    return words[:1].upper() + words[1:]
+
+
+def rights_listed(rights: Iterable[Right | str]) -> str:
+    """Rights named as the screens say them, in a list: "Administer system and Manage people"."""
+    names = [right_name(r) for r in rights]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
 SINGLE_RIGHT_PREFIX = "right:"
 #: A custom role (ADR-112 Amendment 4) arrives in the token as `role:<id>`; its rights are its
 #: current version's, read from the Conduit's store on each request (the owner's ruling of

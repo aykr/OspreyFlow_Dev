@@ -473,6 +473,7 @@ from schemas.rights import (
     Right,
     RightsResponse,
     rights_for,
+    rights_listed,
 )
 from schemas.rule_editor import RuleDatasetOffer, RuleTestResult
 from schemas.rule_standards import ImportedRule
@@ -17406,7 +17407,7 @@ def _may_give(
     if beyond := sorted(r.value for r in given if not giver_may_give(r, held)):
         raise RoleRefused(
             "beyond_your_rights",
-            f"you cannot give a right you do not hold: {', '.join(beyond)}",
+            f"you cannot give a right you do not hold: {rights_listed(beyond)}",
             rights=beyond,
         )
 

@@ -235,7 +235,7 @@ describe("Admin › Roles (R2)", () => {
   it("copies a built-in role into a new one and shows the Conduit's refusal in its words", async () => {
     const sent = serve((path, init) =>
       path === "roles" && init?.method === "POST"
-        ? json(409, { detail: { error: "forbidden_pair", message: "a role cannot hold both promote_to_dataset and review_promotions" } })
+        ? json(409, { detail: { error: "forbidden_pair", message: "a role cannot hold both Promote to dataset and Review promotions" } })
         : null,
     );
     place(["manage_people"]);
@@ -245,7 +245,7 @@ describe("Admin › Roles (R2)", () => {
     expect((within(form).getByRole("checkbox", { name: "Review promotions" }) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(within(form).getByRole("button", { name: "Save new role" }));
     expect(await within(form).findByRole("alert")).toBeTruthy();
-    expect(within(form).getByText(/cannot hold both promote_to_dataset and review_promotions/)).toBeTruthy();
+    expect(within(form).getByText(/cannot hold both Promote to dataset and Review promotions/)).toBeTruthy();
     expect(sent.find((s) => s.path === "POST roles")?.body).toEqual({
       name: "Data Engineer (copy)",
       rights: ["edit_pipelines", "review_promotions"],

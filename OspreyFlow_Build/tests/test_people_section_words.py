@@ -194,3 +194,38 @@ def test_a_rule_s_author_refused_names_the_section(error, words) -> None:
     with pytest.raises(_Refused) as refused:
         asyncio.run(executor._author(SimpleNamespace(owner_id="x")))  # type: ignore[arg-type]
     assert str(refused.value) == words
+
+
+# --- rights said as the screens say them (ADR-148 Amendment 19, the orchestrator's A2 point 3) ---------------------
+
+
+def _glass_right_names() -> dict[str, str]:
+    """The Glass's exceptions to "the id with spaces, capitalised" (`help/roles.ts`'s RIGHT_NAMES), read there."""
+    source = (CORE / "apps/workspace/src/help/roles.ts").read_text(encoding="utf-8")
+    block = re.search(r"const RIGHT_NAMES[^{]*\{(.*?)\};", source, re.S)
+    assert block, "help/roles.ts no longer has RIGHT_NAMES"
+    return dict(re.findall(r"(\w+):\s*\"([^\"]+)\"", block.group(1)))
+
+
+def test_each_right_is_named_as_the_glass_names_it() -> None:
+    from schemas.rights import Right, right_name
+
+    glass = _glass_right_names()
+    for right in Right:
+        words = right.value.replace("_", " ")
+        assert right_name(right) == glass.get(right.value, words[:1].upper() + words[1:]), right
+    assert right_name("administer_system") == "Administer system"
+    assert right_name("edit_target_model") == "Edit domain model"
+
+
+def test_a_right_the_giver_does_not_hold_is_refused_by_its_name() -> None:
+    from schemas.rights import Right
+    from services.api.custom_roles import RoleRefused, role_refusal
+
+    with pytest.raises(RoleRefused) as refused:
+        role_refusal("Desk", ["administer_system", "manage_models"], giver_rights=[Right.MANAGE_PEOPLE], names_taken=[])
+    assert str(refused.value) == "you cannot give a right you do not hold: Administer system and Manage models"
+    assert refused.value.detail["rights"] == ["administer_system", "manage_models"]  # the ids, for the Glass's code
+    with pytest.raises(RoleRefused) as pair:
+        role_refusal("Desk", ["promote_to_dataset", "review_promotions"], giver_rights=list(Right), names_taken=[])
+    assert str(pair.value).startswith("a role cannot hold both Promote to dataset and Review promotions: ")
