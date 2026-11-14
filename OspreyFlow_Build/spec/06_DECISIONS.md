@@ -38990,9 +38990,10 @@ not to regress. The orchestrator approved three choices:
      list's groups, and People's parts (*Refused organisation sign-ins*, *Guests*, *Add a person by object id*,
      *Invite a person*). Each is drawn smaller than the `h1`. In dark and light they keep the sizes main drew them
      as `h3` and `h4` (`--fs-14`, `--fs-13`); in GOV.UK they take `govuk-heading-s` or the scale.
-   - **Not yet on the other sections.** Their own headings still step from the `h1` to `h3`, `h4` or `h5`:
-     Roles, Dashboard identities, Datasets, Operations and its figures, System and Demo packs (the admin lane's).
-     This is left for a later step that measures each screen as People's was measured.
+   - **The other sections, the same** (the orchestrator's follow-up step, 14 November 2026). Roles, Dashboard
+     identities, Datasets, Operations and its figures, System and Demo packs head their parts with `h2`s beneath
+     the section's `h1`. Datasets' details nest `h3`s beneath their dataset's `h2`. Every `h2` in a section is drawn
+     at `--fs-13` and every `h3` at `--fs-12`, both below the `h1` in each look (`.admin-place__section h2, h3`).
    - **Admin › Models and Admin › Maps head their parts with `h2`s beneath the section's `h1`** (What the
      installer declared, Engines, Each job's default engine, Usage, History; Providers, The local basemap,
      Prefetch areas, History), each `className="value"`, so `.admin-place__section h2.value` draws them below
@@ -39032,6 +39033,8 @@ not to regress. The orchestrator approved three choices:
      | Dark and light | 66.5px → 30.5px | 122px → 141px |
      | GOV.UK | 112.5px → 32.5px | 267px → 153px |
 
+   - Under GOV.UK the row's links carry `govuk-link`, so a focused one takes GOV.UK's focus state (yellow, with
+     its black bar), as the side navigation's and the help link do.
    - *Other grants* is the column's visible name. Assistive technology reads it as "Other grants: custom roles,
      single rights and older roles".
 5. **A coming section is plain words.**
@@ -39061,6 +39064,15 @@ for its reason (`plants.log`).
     Tab reaching a coming item when that item is a button again.
   - The moved actions are activated by keyboard in the cases that held them before: Access, Disable and Enable,
     Reset sign-in, Remove, Super user, Save.
+- `keyboard/admin-sections-look.spec.ts`, for Roles (its form open), Dashboard identities, Datasets (a dataset's
+  details), System, Operations and Demo packs, in dark, light and GOV.UK:
+  - one `h1`, the section's name;
+  - no heading more than one level below the one before it;
+  - each drawn smaller than the `h1`.
+  It also checks that GOV.UK's focus state reaches a person's row link. It was red first on main's sections (19
+  cases), and 5 plants are each red at their own assertion
+  (`process/lanes/admin/section_headings/plants.log`). `every-harness.spec.ts` also scans Dashboard identities and
+  Demo packs (`serve=packs`).
 - `AdminSections.test.tsx`, `adminWords.test.tsx` and `PeopleEntra.test.tsx` (*a person's row in Admin › People*).
 - `a11y/every-harness.spec.ts` scans People with every Admin right, in place of the open placeholder, in dark,
   light and GOV.UK, with `checkUndecidedContrast`.

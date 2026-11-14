@@ -1,0 +1,106 @@
+== Datasets' Authors an h5 again, as main had it (must fail at /expect\(skips\)/): RED at its assertion in 3 test(s)
+  1) keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the dark look: one h1, no level skipped beneath it, each below the h1 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "Authors h5",
+    + ]
+    > 41 |       expect(skips).toEqual([]);
+  2) keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the light look: one h1, no level skipped beneath it, each below the h1 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "Authors h5",
+    + ]
+    > 41 |       expect(skips).toEqual([]);
+  3) keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the govuk look: one h1, no level skipped beneath it, each below the h1 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "Authors h5",
+    + ]
+    > 41 |       expect(skips).toEqual([]);
+  3 failed
+== Roles' form title an h3 again, as main had it (must fail at /expect\(skips\)/): RED at its assertion in 3 test(s)
+  1) keyboard/admin-sections-look.spec.ts:29:5 › Roles in the dark look: one h1, no level skipped beneath it, each below the h1 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "New role h3",
+    + ]
+    > 41 |       expect(skips).toEqual([]);
+  2) keyboard/admin-sections-look.spec.ts:29:5 › Roles in the light look: one h1, no level skipped beneath it, each below the h1 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "New role h3",
+    + ]
+    > 41 |       expect(skips).toEqual([]);
+  3) keyboard/admin-sections-look.spec.ts:29:5 › Roles in the govuk look: one h1, no level skipped beneath it, each below the h1 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "New role h3",
+    + ]
+    > 41 |       expect(skips).toEqual([]);
+  3 failed
+== the sections' h2s at the browser's size (must fail at /h\.size >= h1/): RED at its assertion in 12 test(s)
+  1) keyboard/admin-sections-look.spec.ts:29:5 › Roles in the dark look: one h1, no level skipped beneath it, each below the h1 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "New role 19.5px",
+    + ]
+    > 43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+  2) keyboard/admin-sections-look.spec.ts:29:5 › Dashboard identities in the dark look: one h1, no level skipped beneath it, each below the h1 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "Register a dashboard 19.5px",
+    + ]
+    > 43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+  3) keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the dark look: one h1, no level skipped beneath it, each below the h1 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "Prison records 19.5px",
+    + ]
+    > 43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+  4) keyboard/admin-sections-look.spec.ts:29:5 › System in the dark look: one h1, no level skipped beneath it, each below the h1 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "Dataset owners 19.5px",
+    + ]
+    > 43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+  5) keyboard/admin-sections-look.spec.ts:29:5 › Operations in the dark look: one h1, no level skipped beneath it, each below the h1 
+    - Expected  - 1
+    + Received  + 7
+    - Array []
+    + Array [
+    +   "What ages, and when 19.5px",
+    +   "Promotions waiting for review 19.5px",
+    +   "Runs and what they cost 19.5px",
+== the row links without govuk-link under GOV.UK (must fail at /toContain\(\"govuk-link\"\)/): RED at its assertion in 1 test(s)
+  1) keyboard/admin-sections-look.spec.ts:48:1 › a person's row links take GOV.UK's link focus in the GOV.UK look 
+    Expected value: "govuk-link"
+    Received array: ["admin-row-actions__link"]
+    > 56 |   expect(drawn.classes).toContain("govuk-link");
+  1 failed
+== a local focus rule over GOV.UK's, the class kept (must fail at /rgb\(255, 221, 0\)/): RED at its assertion in 1 test(s)
+  1) keyboard/admin-sections-look.spec.ts:48:1 › a person's row links take GOV.UK's link focus in the GOV.UK look 
+    Expected: "rgb(255, 221, 0)"
+    Received: "rgba(0, 0, 0, 0)"
+    > 57 |   expect(drawn.background).toBe("rgb(255, 221, 0)"); // GOV.UK's focus yellow
+  1 failed
+plants: 5, missed: 0
