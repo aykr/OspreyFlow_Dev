@@ -1,0 +1,25 @@
+lane/docs-v052-ingestpart on lane/platform-v052-ingestpart 887ea65: test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up, offline, closed ports 59991-59994
+== red: the guide at 887ea65 (the standard shape's Ingest root among what no set holds)
+E       AssertionError: assert ['data/recipe...del-settings'] == ['data/recipe...del-settings']
+E         
+E         At index 1 diff: 'map-settings' != 'ingest'
+== red: platform's change undone at its call site (shared_parts returns SHARED_PARTS alone)
+E       AssertionError: assert ['data/recipe...del-settings'] == ['data/recipe...del-settings']
+E         
+E         At index 1 diff: 'ingest' != 'map-settings'
+== red: the standard shape's part struck from the guide
+E       AssertionError: assert ['data/recipe...del-settings'] == ['data/recipe...del-settings']
+E         
+E         At index 1 diff: 'map-settings' != 'ingest'
+== red: the poc shape's claim struck from the guide
+E       AssertionError: assert ('the Ingest root (uploads and the drop folder) beside them: in the poc shape its own claim' in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `helm upgrade`, since its new backups claim cannot be added in place; the runbook gives the commands. ') is ((True and 'ingest' in ['ingest']))
+1 failed, 11 deselected in 0.76s
+== red: the old disagreement sentence put back
+E       AssertionError: assert ('an upload can disagree with the stores it brings back' in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `helm upgrade`, since its new backups claim cannot be added in place; the runbook gives the commands. ') is False
+E        +  where False = any(<generator object test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up.<locals>.<genexpr> at 0x10668aea0>)
+1 failed, 11 deselected in 0.73s
+== green
+14 passed in 2.94s
+== red: the standard shape's sentence kept naming `ingest` but saying it is not in the set (the shape-specific check alone)
+E       assert ("in the standard shape the shared volume's folder of it (`ingest`, a part of its own)" in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `helm upgrade`, since its new backups claim cannot be added in place; the runbook gives the commands. ') is True
+1 failed, 11 deselected in 0.83s
