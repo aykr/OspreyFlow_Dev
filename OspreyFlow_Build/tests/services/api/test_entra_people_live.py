@@ -553,3 +553,24 @@ async def test_the_resolver_refuses_a_guest_until_the_real_store_admits_guests(
     assert (principal.id, principal.clearance, principal.org_unit) == (OID, "OFFICIAL", "unit-1")
     assert (await world.store.one(OID)).guest is True
     await resolver.aclose()
+
+
+async def test_a_guest_who_can_no_longer_sign_in_is_no_people_manager_and_the_way_back_in_still_opens(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    """The lane review's must 1, against the real store: once guests are off, a guest manager is not
+    enabled in any read (`rows`, `one`), so the lock-out does not count them, and a start gives the
+    named first administrators Admin again when only such a guest could manage people."""
+    from dataclasses import replace
+
+    await world.store.set_guests_admitted(True, "adm-1")
+    await world.store.person(TENANT, NEW, replace(SEEN, guest=True))
+    await world.store.update(NEW, "roles", [ADMIN_ROLE])
+    await world.store.seed_first_administrators([OID])
+    await world.store.update(OID, "roles", ["analyst"])  # the member gives up Admin; the guest still can
+    assert (await world.store.one(NEW)).enabled is True
+    assert await world.store.seed_first_administrators([OID]) == []  # someone can still manage people
+    await world.store.set_guests_admitted(False, "adm-1")
+    assert (await world.store.one(NEW)).enabled is False
+    assert {p.id: p.enabled for p in await world.store.rows()}[NEW] is False
+    assert await world.store.seed_first_administrators([OID]) == [OID]  # the way back in opens

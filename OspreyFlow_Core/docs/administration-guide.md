@@ -1560,7 +1560,7 @@ stays `sub`.
 - an app-only token (no delegated `scp`, or `idtyp: app`), which is a program, not a person;
 - a guest from another directory (`acct` of `1`, or an `idp` naming another tenant or a provider
   that is not Entra), **while this deployment does not admit guests**, in these words: "this is a
-  guest account, homed in another organisation's Entra ID, and this deployment does not admit
+  guest account, homed outside this organisation's Entra ID, and this deployment does not admit
   guests: an administrator can admit them in Admin › People". `acct` is an optional claim the app
   registration must ask for, so `idp` is the check that works without configuration.
 
@@ -1572,9 +1572,11 @@ any person does: through the same mapping, so with the clearance, unit and handl
 token gives (a guest's token from another directory often carries none of your extension attributes
 or groups, and is then refused as anyone missing a clearance or unit is), and the roles you give them
 in *People and roles*, which marks them as a guest. Nothing gives a guest more than a member with the
-same token would have. Turning it off refuses every guest at their next request, an open live view
-included, and a run acting as a guest as its owner stops, counted as an owner who can no longer
-sign in (above). Turning it off is refused while every enabled person who has signed in and can
+same token would have. Turning it off refuses every guest at their next request to OspreyFlow, an open
+live view included, and a run acting as a guest as its owner stops, counted as an owner who can no
+longer sign in (above); a guest stops counting as someone who can manage people, and is shown as
+not enabled. A reporting session a guest already holds in Superset is not ended by it: Superset
+reads a person's role only when they sign in to it, as it does for a person disabled here. Turning it off is refused while every enabled person who has signed in and can
 manage people is a guest.
 
 On a deployment using the fixed names (Keycloak), a token carrying `tid` is refused, in these
@@ -2152,7 +2154,8 @@ registration: give its application id (the registration holds its secret)"), and
 deployment's own application, the Glass's or the API's. No administrator can give a missing clearance or unit instead: a person
 whose token carries neither is refused at sign-in (section 6a.7). A person is shown by object id,
 not by name. A guest account, homed in another organisation's Entra ID, signs in only while
-**Admit guest accounts** is on, below the list (section 6a.7), and is marked as a guest in it.
+**Admit guest accounts** is on, below the list (section 6a.7), and is marked as a guest in it;
+while it is off, a guest is listed as not enabled.
 
 ### 9.1 The Admin place
 

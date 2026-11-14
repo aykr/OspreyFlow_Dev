@@ -3,4 +3,4 @@
 E       assert (200 == 409)
 E        +  where 200 = <Response [200 OK]>.status_code
 FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_turning_guests_off_is_refused_when_every_people_manager_is_a_guest
-1 failed, 66 deselected in 5.71s
+1 failed, 68 deselected in 4.72s

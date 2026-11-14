@@ -86,7 +86,11 @@ class _Store:
             raise OSError("down")
 
     async def rows(self) -> list[PersonAccount]:
-        return [p for (t, _), p in self.people.items() if t == self.tenant_id]
+        # As the real store reads them (`PEOPLE_SQL`): a guest is not enabled while guests are not
+        # admitted (ADR-148 Amendment 17).
+        refused = not self.guests[0]
+        return [p.model_copy(update={"enabled": False}) if p.guest and refused else p
+                for (t, _), p in self.people.items() if t == self.tenant_id]  # fmt: skip
 
     async def update(self, oid: str, column: str, value: object) -> PersonAccount:
         found = self.people.get((self.tenant_id, oid))
@@ -860,5 +864,38 @@ def test_on_keycloak_there_are_no_guests_to_admit() -> None:
     try:
         refused = TestClient(app).put("/v1/admin/sign-in/guests", json={"admitted": True})
         assert refused.status_code == 409 and refused.json()["detail"]["error"] == "not_entra"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_a_guest_manager_counts_for_nothing_once_guests_are_off_so_the_last_member_cannot_leave(
+    client: Any,
+) -> None:
+    """The lane review's must 1: guests on, a member and a guest both manage people. Turning guests
+    off is allowed (the member still can); the member then giving up manage_people is refused,
+    since the guest can no longer sign in."""
+    _as(ADMIN)
+    client.store.guests = (True, ADMIN.id, None)
+    client.store.people[(TENANT, NEW)] = _row(NEW, ["osprey-admin"]).model_copy(update={"guest": True})
+    assert client.put("/v1/admin/sign-in/guests", json={"admitted": False}).status_code == 200
+    listed = {p["id"]: p for p in client.get("/v1/admin/people").json()}
+    assert listed[NEW]["enabled"] is False and listed[NEW]["guest"] is True
+    refused = client.put(f"/v1/admin/people/{OID}/roles", json={"roles": ["analyst"]})
+    assert refused.status_code == 409 and refused.json()["detail"]["error"] == "locks_out_administrators"
+    client.store.guests = (True, ADMIN.id, None)  # admitted again: the guest counts
+    assert client.put(f"/v1/admin/people/{OID}/roles", json={"roles": ["analyst"]}).status_code == 200
+
+
+def test_on_keycloak_the_guest_setting_cannot_be_read_either() -> None:
+    from services.api.app import get_custom_roles
+
+    class _Keycloak:
+        pass
+
+    app.dependency_overrides[get_identity_admin] = lambda: _Keycloak()
+    app.dependency_overrides[get_custom_roles] = _NoCustomRoles
+    _as(ADMIN)
+    try:
+        assert TestClient(app).get("/v1/admin/sign-in/guests").status_code == 409
     finally:
         app.dependency_overrides.clear()

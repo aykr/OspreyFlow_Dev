@@ -125,7 +125,7 @@ describe("Admin › People's guests on Entra ID", () => {
     const box = (await screen.findByLabelText("Admit guest accounts")) as HTMLInputElement;
     await waitFor(() => expect(box.checked).toBe(true));
     fireEvent.click(box);
-    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("this would leave nobody able to manage people"));
     expect(box.checked).toBe(true);
   });
 

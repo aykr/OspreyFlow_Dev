@@ -24,6 +24,9 @@ PLANTS = [
     ("route_behind_no_right", APP, "@app.put(\n    \"/v1/admin/sign-in/guests\", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]\n)", "@app.put(\n    \"/v1/admin/sign-in/guests\"\n)", PEOPLE, "refused_without_manage_people"),
     ("change_not_audited", APP, "    await audit.record(principal=principal, action=\"set_guest_sign_in\",", "    if False: await audit.record(principal=principal, action=\"set_guest_sign_in\",", PEOPLE, "audited_with_before"),
     ("lockout_unchecked", APP, "        if not body.admitted:\n            try:", "        if False:\n            try:", PEOPLE, "every_people_manager_is_a_guest"),
+    ("construction_admits_guests_unasked", PA, "        if verified.guest and not guest_admitted:", "        if False:", GUESTS, "construction_path"),
+    ("guest_owner_unread_as_lookup", PA, "        if stored.guest and not await self._guests_admitted(unread=OwnerRecordUnavailable):", "        if stored.guest and not await self._guests_admitted():", GUESTS, "guest_owner_whose_setting"),
+    ("superset_routes_dropped_for_guests", PA, "            routes = sorted(SUPERSET_ROUTES)", "            routes = None", GUESTS, "superset"),
     ("lockout_counts_guests", APP, "                    [p for p in await admin.list_people() if not p.guest], current", "                    await admin.list_people(), current", PEOPLE, "every_people_manager_is_a_guest"),
 ]
 CLOSED = {"ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "POSTGRES_PASSWORD": "throwaway",

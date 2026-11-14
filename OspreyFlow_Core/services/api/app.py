@@ -17361,8 +17361,8 @@ async def set_guest_sign_in_route(
     refused (409 `locks_out_administrators`) when it would leave no enabled member who has signed in
     able to manage people: every one of them a guest."""
     admin = _guest_sign_in_admin(identity_admin)
-    current = await custom_roles.current_rights()
     async with custom_roles.people_lock():
+        current = await custom_roles.current_rights()  # fresh under the lock, as disabling reads it
         if not body.admitted:
             try:
                 leaves_no_people_manager(

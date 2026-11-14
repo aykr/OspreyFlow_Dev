@@ -5,4 +5,4 @@ E
 E         Right contains 2 more items, first extra item: ('set_guest_sign_in', {'before': False, 'after': True})
 E         Use -v to get more diff
 FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_admitting_guests_is_set_by_who_and_audited_with_before_and_after
-1 failed, 66 deselected in 4.34s
+1 failed, 68 deselected in 6.15s

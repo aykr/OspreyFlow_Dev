@@ -156,3 +156,43 @@ def test_a_run_as_a_member_owner_never_asks_the_setting(jwks_url) -> None:
     people.owners[(TENANT, OID)] = _owner(guest=False)
     people.guest_fail = RuntimeError("never asked")
     assert asyncio.run(_resolver(jwks_url, people).resolve_for_owner_detailed(OID)).id == OID
+
+
+def test_an_admitted_guest_through_superset_s_client_is_held_to_superset_s_routes(keypair, jwks_url) -> None:
+    """Never more (the lane review, should 11): admitted, a guest's Superset token is still Superset's two routes."""
+    from principal_auth import SUPERSET_ROUTES, ClaimMapping
+
+    from tests.services.api.test_auth_entra_superset import SUPERSET
+
+    mapping = ClaimMapping.model_validate(BY_EXTENSION.model_dump() | {"superset_client_id": SUPERSET})
+    people = FakePeople()
+    people.admit_guests = True
+    principal = _resolve(_resolver(jwks_url, people, mapping),
+                         sign_token(_key(keypair), entra_claims(**_GOOD, azp=SUPERSET, acct=1)))  # fmt: skip
+    assert set(principal.routes or ()) == SUPERSET_ROUTES
+
+
+def test_a_run_as_a_guest_owner_whose_setting_cannot_be_read_is_the_store_unread_never_admitted(jwks_url) -> None:
+    """The lane review, should 8: the owner path's unread is `OwnerRecordUnavailable`, which every run caller words."""
+    from principal_auth import OwnerRecordUnavailable
+
+    people = FakePeople()
+    people.owners[(TENANT, OID)] = _owner(guest=True)
+    people.admit_guests = True
+    people.guest_fail = ConnectionError("down")
+    with pytest.raises(OwnerRecordUnavailable):
+        asyncio.run(_resolver(jwks_url, people).resolve_for_owner_detailed(OID))
+
+
+def test_the_one_construction_path_refuses_a_guest_s_claims_unless_told_they_were_admitted() -> None:
+    """ADR-148 decision 9 (the lane review, should 5): `principal_from_claims` itself refuses a guest's claims, so a
+    caller that never asked the setting cannot let one in; told they were admitted, the principal is a member's."""
+    from principal_auth import StoredPerson, principal_from_claims
+
+    stored = StoredPerson(roles=("analyst",), disabled=False)
+    with pytest.raises(PrincipalResolutionError) as refused:
+        principal_from_claims(entra_claims(**_GOOD, acct=1), BY_EXTENSION, stored)
+    assert str(refused.value) == GUESTS_NOT_ADMITTED_WORDS
+    guest = principal_from_claims(entra_claims(**_GOOD, acct=1), BY_EXTENSION, stored, guest_admitted=True)
+    member = principal_from_claims(entra_claims(**_GOOD), BY_EXTENSION, stored)
+    assert guest.model_dump() == member.model_dump()

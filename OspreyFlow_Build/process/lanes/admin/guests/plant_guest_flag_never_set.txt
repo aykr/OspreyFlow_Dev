@@ -1,8 +1,8 @@
 # plant: guest_flag_never_set (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k guest
 # RED
-FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_an_admitted_guest_signs_in_as_a_member_with_the_same_claims_does[acct-text]
 FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_an_admitted_guest_signs_in_as_a_member_with_the_same_claims_does[idp-other]
 FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_setting_that_cannot_be_read_is_unavailable_never_admitted
 FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_setting_too_slow_to_answer_is_unavailable_within_the_bound
 FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_guest_already_recorded_is_refused_again_once_guests_are_no_longer_admitted
-9 failed, 4 passed in 8.18s
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_the_one_construction_path_refuses_a_guest_s_claims_unless_told_they_were_admitted
+10 failed, 6 passed in 9.33s

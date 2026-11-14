@@ -522,7 +522,7 @@ class StoredOwner:
 #: ADR-148 Amendment 17: why a guest (B2B) account is refused while the deployment does not admit
 #: guests.
 GUESTS_NOT_ADMITTED_WORDS = (
-    "this is a guest account, homed in another organisation's Entra ID, and this deployment does "
+    "this is a guest account, homed outside this organisation's Entra ID, and this deployment does "
     "not admit guests: an administrator can admit them in Admin › People"
 )
 
@@ -768,6 +768,8 @@ def principal_from_claims(
     claims: Mapping[str, Any],
     mapping: ClaimMapping,
     stored: StoredPerson | StoredDashboard | StoredOwner | None = None,
+    *,
+    guest_admitted: bool = False,
 ) -> Principal:
     """The one claims-construction path (ADR-043; ADR-148 decision 9): every `Principal` this
     package builds, from a session's token or an exchanged one, is built here from verified
@@ -796,6 +798,10 @@ def principal_from_claims(
         routes = sorted(DASHBOARD_ROUTES)
     else:
         verified = _verified_parts(claims, mapping)
+        if verified.guest and not guest_admitted:
+            # ADR-148 Amendment 17: a guest's claims build a principal only once the caller has
+            # asked the deployment's setting (`resolve_principal`); any other caller is refused.
+            raise PrincipalResolutionError(GUESTS_NOT_ADMITTED_WORDS)
         if mapping.is_entra:
             if stored is None:
                 raise PrincipalLookupUnavailable(
@@ -1428,7 +1434,9 @@ class PrincipalResolver:
             ) from exc
         if not isinstance(stored, StoredPerson):
             raise PrincipalLookupUnavailable("the people store answered something not a person")
-        return principal_from_claims(claims, self._claim_mapping, stored)
+        return principal_from_claims(
+            claims, self._claim_mapping, stored, guest_admitted=verified.guest
+        )
 
     async def _dashboard_principal(self, claims: Mapping[str, Any]) -> Principal:
         """ADR-148 Amendment 10: a dashboard identity's app-only token, checked in full before the

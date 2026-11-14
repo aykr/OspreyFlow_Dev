@@ -176,6 +176,16 @@ def _refused(what: str) -> PersonActionRefused:
     return PersonActionRefused("entra_holds_accounts", f"{what} {ENTRA_HOLDS_ACCOUNTS}")
 
 
+#: Every person of a tenant, with whether they are a guest refused while guests are not admitted
+#: (ADR-148 Amendment 17): such a person is not enabled for anything that asks, the lock-out and a
+#: recipient's eligibility among them, as `standing` already answers. `$1` the tenant.
+PEOPLE_SQL = (
+    "SELECT p.*, (p.guest AND NOT COALESCE(s.admit_guests, false)) AS guest_refused "
+    "FROM entra_people p LEFT JOIN entra_sign_in s ON s.tenant_id = p.tenant_id "
+    "WHERE p.tenant_id = $1"
+)
+
+
 def _person(row: Mapping[str, Any]) -> PersonAccount:
     oid = str(row["oid"])
     username = row["username"] or row["email"] or oid
@@ -183,7 +193,7 @@ def _person(row: Mapping[str, Any]) -> PersonAccount:
         id=oid,
         username=username,
         name=row["name"] or username,
-        enabled=not row["disabled"],
+        enabled=not (row["disabled"] or row.get("guest_refused")),
         roles=list(row["roles"]),
         clearance=row["clearance"],
         org_unit=row["org_unit"],
@@ -464,9 +474,7 @@ class EntraPeopleStore:
         given: list[str] = []
         async with self.pool.acquire() as conn, conn.transaction():
             await conn.execute("SELECT pg_advisory_xact_lock($1)", PEOPLE_LOCK)
-            rows = await conn.fetch(
-                "SELECT * FROM entra_people WHERE tenant_id = $1", self.tenant_id
-            )
+            rows = await conn.fetch(PEOPLE_SQL, self.tenant_id)
             custom = await rights_on(conn)
             nobody_administers = not people_managers([_person(r) for r in rows], custom)
             for oid in oids:
@@ -502,16 +510,12 @@ class EntraPeopleStore:
 
     async def rows(self) -> list[PersonAccount]:
         async with self.pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT * FROM entra_people WHERE tenant_id = $1", self.tenant_id
-            )
+            rows = await conn.fetch(PEOPLE_SQL, self.tenant_id)
         return sorted((_person(r) for r in rows), key=lambda p: (p.username, p.id))
 
     async def one(self, oid: str) -> PersonAccount:
         async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT * FROM entra_people WHERE tenant_id = $1 AND oid = $2", self.tenant_id, oid
-            )
+            row = await conn.fetchrow(f"{PEOPLE_SQL} AND p.oid = $2", self.tenant_id, oid)
         if row is None:
             raise IdentityAdminRefused("no such person")
         return _person(row)
@@ -528,7 +532,7 @@ class EntraPeopleStore:
             )
         if row is None:
             raise IdentityAdminRefused("no such person")
-        return _person(row)
+        return await self.one(oid)  # as every read answers it, a guest refused included
 
     async def add(self, oid: str, by: str) -> PersonAccount:
         async with self.pool.acquire() as conn:

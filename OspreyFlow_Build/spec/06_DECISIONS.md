@@ -38572,22 +38572,30 @@ Amendment 6 point 8, which refused every guest (B2B) account outright.
    `GET|PUT /v1/admin/sign-in/guests`, behind `manage_people` as Admin › People is; Admin › People's **Admit guest
    accounts**. Each change is audited as `set_guest_sign_in` with what it was and what it is now. On Keycloak there is
    none (409 `not_entra`). Turning it off is refused (409 `locks_out_administrators`) while every enabled person who
-   has signed in and can manage people is a guest, as Amendment 8's lock-out is.
+   has signed in and can manage people is a guest, as Amendment 8's lock-out is. Once it is off, every read of the
+   people store (`PEOPLE_SQL`: the list, one person, the start's seeding of the first administrators) answers a
+   guest as not enabled, so no lock-out counts them, no recipient is chosen among them, and the way back in opens when
+   only such a guest could manage people (the lane review's must 1).
 2. **The token check marks a guest, never admits one.** `_verified_parts` keeps Amendment 6's test (`acct` 1, or an
    `idp` naming another tenant or no Entra issuer) and no longer refuses on it. `resolve_principal` then asks the
    setting, read fresh, within the role lookup's bound, before the person is read or recorded:
-   - not admitted: `PrincipalResolutionError(GUESTS_NOT_ADMITTED_WORDS)`, "this is a guest account, homed in another
-     organisation's Entra ID, and this deployment does not admit guests: an administrator can admit them in Admin ›
-     People". Nothing is recorded of them;
+   - not admitted: `PrincipalResolutionError(GUESTS_NOT_ADMITTED_WORDS)`, "this is a guest account, homed outside
+     this organisation's Entra ID, and this deployment does not admit guests: an administrator can admit them in
+     Admin › People" (true of an `idp` naming another tenant and of one naming no Entra issuer at all). Nothing is
+     recorded of them;
    - the setting unread: a 503 (`PrincipalLookupUnavailable`), never admitted;
-   - a member never asks it.
+   - a member never asks it;
+   - `principal_from_claims`, the one construction path (decision 9), refuses a guest's claims itself unless its
+     caller says the guest was admitted (`guest_admitted`), so no other caller can let one in unasked.
 3. **Admitted, a guest is any person, never more** (rule 3). The same mapping, so the clearance, unit and handling codes
    their own token gives (a guest's token often carries none of the tenant's extension attributes or groups, and is
    then refused as any person missing them is), and the roles Admin › People gives. The person is recorded as a guest
    (`entra_people.guest`), and People marks them.
 4. **Turned off, a guest already recorded is refused everywhere a person is read.** At their next request (by token,
    decision 2). An open live view (`standing` answers them as disabled). A run acting as them as its owner
-   (Amendment 16's stored owner): `PrincipalRevoked`, counted as an owner who can no longer sign in.
+   (Amendment 16's stored owner): `PrincipalRevoked`, counted as an owner who can no longer sign in. **Not** a reporting
+   session the guest already holds in Superset: Superset reads a person's role at its own sign-in only, as it does
+   for a person disabled here; the session ends with Superset's own.
 
 **What R1 must re-check against the organisation's real tenant** (none of this has met a real guest):
 - that a real guest's access token, issued by the client's tenant, carries `idp` naming the guest's home tenant, and
@@ -38597,7 +38605,9 @@ Amendment 6 point 8, which refused every guest (B2B) account outright.
   are marked as a guest; turned off again, that their next request and their open live view are refused;
 - that the guest's token reaches the API at all: the API's app registration may need guests assigned to it, or its
   "assignment required" left off, which is the client's to set;
-- the audit row of each change, and that someone without `manage_people` cannot switch it.
+- the audit row of each change, and that someone without `manage_people` cannot switch it;
+- that a guest signed in to Superset keeps that session after guests are turned off, as a disabled member does, and
+  how long Superset's session lasts on the deployment.
 
 **Tests.**
 - `tests/services/api/test_entra_guests.py` (offline, the fake store refusing as the real one does):
@@ -38610,7 +38620,12 @@ Amendment 6 point 8, which refused every guest (B2B) account outright.
   change audited with before and after; the lock-out; an unknown field; Keycloak's 409.
 - `test_entra_people_live.py`: the real store's setting off until set, per tenant, each change answering what it was;
   a guest recorded as one and standing disabled once off; the real resolver refusing then admitting a guest.
-- `PeopleEntra.test.tsx`: the box shows the setting and switches it, a refusal is shown with the box left as it was, a
-  guest is marked, no box on Keycloak.
+- `PeopleEntra.test.tsx`: the box shows the setting and switches it, a refusal is shown in its words with the box left
+  as it was, a guest is marked, no box on Keycloak; `keyboard/admin.spec.ts`: the box switched by keyboard
+  (`admit-guest-accounts-by-keyboard`, rule 13).
+- `test_entra_guests.py` also: an admitted guest through Superset's client held to Superset's routes; a guest owner
+  whose setting cannot be read is the store unread; the construction path refusing a guest's claims unasked.
+- `test_entra_people.py` also: a guest manager counts for nothing once guests are off, so the last member cannot give
+  up `manage_people`; `test_entra_people_live.py`: the same against the real store, and the way back in opening.
 - `test_guides_cloud_platform.py`: §6a.7 quotes the refusal and the audit action as the code has them.
 Each rule is planted alone and red (`process/lanes/admin/guests/`).

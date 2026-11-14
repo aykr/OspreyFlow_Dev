@@ -2,4 +2,4 @@
 # RED
 E       Failed: DID NOT RAISE PrincipalLookupUnavailable
 FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_setting_too_slow_to_answer_is_unavailable_within_the_bound
-1 failed, 1 passed, 11 deselected in 3.31s
+1 failed, 2 passed, 13 deselected in 3.89s

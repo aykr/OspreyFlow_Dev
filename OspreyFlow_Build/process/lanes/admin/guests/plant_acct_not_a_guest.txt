@@ -4,4 +4,4 @@ E       Failed: DID NOT RAISE PrincipalResolutionError
 E       Failed: DID NOT RAISE PrincipalResolutionError
 FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_guest_is_refused_in_true_words_while_guests_are_not_admitted_and_nothing_is_recorded[acct]
 FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_guest_is_refused_in_true_words_while_guests_are_not_admitted_and_nothing_is_recorded[acct-text]
-2 failed, 1 passed, 10 deselected in 2.79s
+2 failed, 1 passed, 13 deselected in 2.94s

@@ -1,0 +1,6 @@
+# plant: guest_owner_unread_as_lookup (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k guest_owner_whose_setting
+# RED
+E           ConnectionError: down
+E           principal_auth.PrincipalLookupUnavailable: whether guests are admitted could not be read: ConnectionError
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_run_as_a_guest_owner_whose_setting_cannot_be_read_is_the_store_unread_never_admitted
+1 failed, 15 deselected in 1.81s

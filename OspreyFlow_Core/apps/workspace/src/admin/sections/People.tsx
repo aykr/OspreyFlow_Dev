@@ -722,7 +722,7 @@ export const ENTRA_PEOPLE_WORDS =
   "from Entra. Here you give them roles, add them by object id before they first sign in, and disable them.";
 
 /** ADR-148 Amendment 17: how a guest (B2B) account is marked in the list. */
-export const GUEST_WORDS = "Guest: homed in another organisation's Entra ID";
+export const GUEST_WORDS = "Guest: homed outside this organisation's Entra ID; signs in only while guest accounts are admitted";
 
 /** ADR-148 Amendment 17: whether guest (B2B) accounts may sign in, off until an administrator of people turns it on.
  * Admitted, a guest signs in as anyone does, with the clearance, unit and codes their own token gives; turned off,
@@ -739,7 +739,8 @@ function GuestsForm({ api }: { api: AdminApi }) {
     <form aria-label="Guests" style={{ display: "grid", gap: "var(--sp-8)", maxWidth: "32rem" }} onSubmit={(e) => e.preventDefault()}>
       <h4 className="value" style={{ margin: 0 }}>Guests</h4>
       <p className="label" style={{ margin: 0 }}>
-        A guest account is homed in another organisation's Entra ID and invited into yours. Admitted, a guest signs in
+        A guest account is homed outside your organisation's Entra ID (another organisation's, or another identity
+        provider) and invited into yours. Admitted, a guest signs in
         as anyone does: the same clearance, unit and codes from their token, and the roles you give them here.
       </p>
       <label className="label" style={{ display: "inline-flex", gap: "var(--sp-4)", alignItems: "center" }}>
