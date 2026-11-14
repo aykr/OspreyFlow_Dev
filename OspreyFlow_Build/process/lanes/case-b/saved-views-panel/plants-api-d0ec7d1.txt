@@ -1,0 +1,10 @@
+AS IT MUST BE (red): the first item read past the access step (any reader's first node named)
+    test_a_hidden_first_item_is_never_named_and_the_next_the_reader_may_see_is
+AS IT MUST BE (red): the first item in the store's id order, not the order chosen
+    test_a_views_first_item_is_its_first_chosen_node_by_name
+AS IT MUST BE (red): a view's whole selection read for its first item (no bound)
+    test_a_views_first_item_is_read_within_its_bound
+AS IT MUST BE (red): a filtered view given a first item
+    test_a_filtered_view_has_no_first_item
+unplanted: 44 passed, 1 warning in 3.64s
+every plant red for its reason, unplanted green

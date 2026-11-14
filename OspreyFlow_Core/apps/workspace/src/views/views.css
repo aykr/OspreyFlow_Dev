@@ -46,6 +46,10 @@
   font-size: var(--fs-11); line-height: var(--lh-11); color: var(--text-secondary);
 }
 .view-tag--shared { color: var(--text-primary); border-color: var(--border-strong); }
+/* ADR-145 Amendment 17: the saved view (or the whole case) open now. */
+.view-tag--open { color: var(--text-primary); border-color: var(--text-primary); font-weight: 600; }
+/* Under a view saved with the Glass's default name: its first item and when it was saved. */
+.case-views__apart { display: block; }
 
 .save-view { display: grid; gap: var(--sp-8); }
 .save-view__row { display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: center; }

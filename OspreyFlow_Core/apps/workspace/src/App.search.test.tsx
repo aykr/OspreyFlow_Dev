@@ -267,7 +267,7 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
     await openResults();
     const region = screen.getByRole("region", { name: "You are in the Glass" });
     fireEvent.click(within(region).getByRole("button", { name: "Views in this case" }));
-    const panel = await screen.findByRole("dialog", { name: "Cases" });
+    const panel = await screen.findByRole("dialog", { name: "Saved views" }); // ADR-145 Amendment 17
     fireEvent.click(await within(panel).findByRole("button", { name: /^Open/ }));
     await screen.findByRole("region", { name: "Open view" });
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Search results for 'Kestrel'" })).toBeNull());

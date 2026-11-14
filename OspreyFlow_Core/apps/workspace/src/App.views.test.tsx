@@ -133,7 +133,26 @@ describe("Views ▾ by the graph (ADR-144 Amendment 3)", () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
     fireEvent.click(within(screen.getByRole("region", { name: "You are in the Glass" })).getByRole("button", { name: "Views in this case" }));
-    const list = await screen.findByRole("list", { name: "Views in this case" });
+    const list = await screen.findByRole("list", { name: "Saved views" });
     expect(within(list).getByText("Payments in March")).toBeTruthy();
+  });
+
+  // ADR-145 Amendment 17 (the owner's exception, 14 November 2026): from the case line the drawer is *Saved views*,
+  // the views list alone; its first row, *The whole case*, does what the strip's way back does.
+  test("the Saved views drawer holds the saved views alone, and The whole case closes the open view", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    const caseLine = () => within(screen.getByRole("region", { name: "You are in the Glass" }));
+    fireEvent.click(caseLine().getByRole("button", { name: "Views in this case" }));
+    const drawer = await screen.findByRole("dialog", { name: "Saved views" });
+    await within(drawer).findByRole("list", { name: "Saved views" });
+    expect(within(drawer).queryByRole("button", { name: "Browse all cases" })).toBeNull();
+    fireEvent.click(await within(drawer).findByRole("button", { name: "Open Payments in March" }));
+    await screen.findByRole("region", { name: "Open view" });
+    fireEvent.click(caseLine().getByRole("button", { name: "Views in this case" }));
+    const again = await screen.findByRole("dialog", { name: "Saved views" });
+    fireEvent.click(await within(again).findByRole("button", { name: "Open the whole case" }));
+    await vi.waitFor(() => expect(screen.queryByRole("region", { name: "Open view" })).toBeNull());
+    expect(screen.queryByRole("dialog", { name: "Saved views" })).toBeNull();
   });
 });

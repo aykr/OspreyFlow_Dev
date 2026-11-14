@@ -622,6 +622,7 @@ from .case_views import (
     NotTheViewsCreator,
     PostgresCaseViewStore,
     ViewNotFound,
+    first_item,
     open_view,
 )
 from .change_stream import touched_node_ids
@@ -4598,10 +4599,17 @@ async def get_investigation(
 
 @app.get("/v1/investigations/{investigation_id}/views")
 async def list_case_views(
-    investigation: InvestigationViewerDep, principal: PrincipalDep, views: CaseViewsDep
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    views: CaseViewsDep,
+    graph: GraphDep,
 ) -> list[CaseView]:
-    """The case's views this reader may see: their own, and those shared with the case."""
-    return [v.wire() for v in await views.visible_in(investigation.id, principal.id)]
+    """The case's views this reader may see: their own, and those shared with the case. Each says
+    its first item as this reader may see it (ADR-145 Amendment 17), never a hidden one."""
+    return [
+        v.wire().model_copy(update={"first_item": await first_item(graph, v, principal)})
+        for v in await views.visible_in(investigation.id, principal.id)
+    ]
 
 
 @app.post(

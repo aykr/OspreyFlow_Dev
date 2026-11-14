@@ -45,8 +45,8 @@ describe("ViewsPanel", () => {
   it("shows another member nothing of a private view, and no share or delete on a shared one", async () => {
     conduit("bob");
     panel("bob");
-    const list = await screen.findByRole("list", { name: "Views in this case" });
-    expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+    const list = await screen.findByRole("list", { name: "Saved views" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2); // the whole case, then the one shared view
     expect(screen.queryByText("Alice's own")).toBeNull();
     expect(screen.getByText("Kestrel's contacts")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open Kestrel's contacts" })).toBeTruthy();
@@ -101,7 +101,8 @@ describe("ViewsPanel", () => {
     const list = document.querySelector("dl.govuk-summary-list");
     expect(list).not.toBeNull();
     const tags = Array.from(document.querySelectorAll("strong.govuk-tag")).map((t) => t.textContent);
-    expect(tags).toEqual(["Private", "Shared"]);
+    // The whole case first, open now with no saved view open (ADR-145 Amendment 17), then each view's own tag.
+    expect(tags).toEqual(["Open now", "Private", "Shared"]);
     // ADR-145 Amendment 14 decision 1: a row's actions are GOV.UK links, as a summary list's are; the
     // question before a delete keeps GOV.UK's buttons.
     for (const name of ["Open Alice's own", "Share with the case: Alice's own", "Delete Alice's own"]) {
@@ -134,4 +135,84 @@ describe("ViewsPanel", () => {
     panel("alice");
     expect(await screen.findByText(/No views yet/)).toBeTruthy();
   });
+
 });
+
+// ADR-145 Amendment 17 (the owner's exception, 14 November 2026): the panel the case line's *Saved views* opens.
+// The list starts with the whole case, marked *Open now* while no saved view is open, and choosing it does what the
+// strip's *Back to the whole case* does; the saved view open now is marked so and offers no *Open*; a view saved
+// under the Glass's default name says, under it, its first item (as the Conduit names it for this reader) and when
+// it was saved. In both looks.
+const DEFAULT = { id: "v-default", case_id: "c1", name: "Selection of 3 nodes", created_by: "alice", created_at: "2026-11-14T12:01:00Z", shared: false, chosen: 3, first_item: "Tarbuck, Kyle" };
+const DEFAULT_NONE_SEEN = { ...DEFAULT, id: "v-hidden", name: "Selection of 2 nodes", chosen: 2, first_item: null, created_at: "2026-11-14T11:40:00Z" };
+const NAMED = { ...ALICES_SHARED, first_item: "Whitlow, Shona" };
+
+function serving(listed: object[]) {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(listed), { status: 200 })));
+}
+
+for (const look of ["standard", "govuk"] as const) {
+  describe(`the saved views panel (${look})`, () => {
+    const set = () => {
+      if (look === "govuk") document.documentElement.setAttribute("data-brand", "govuk");
+    };
+    // The list by its name in either look: a summary list under GOV.UK, a list otherwise.
+    const rows = () => screen.findByLabelText("Saved views");
+
+    it("starts with the whole case, open now while no saved view is open, and offers it no Open", async () => {
+      set();
+      serving([DEFAULT, NAMED]);
+      panel("alice", { onOpenWholeCase: vi.fn() });
+      const list = await rows();
+      const first = list.querySelector("[data-view-id]") as HTMLElement;
+      expect(first.getAttribute("data-view-id")).toBe("whole-case");
+      expect(within(first).getByText("The whole case")).toBeTruthy();
+      expect(within(first).getByText("Open now")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Open the whole case" })).toBeNull();
+    });
+
+    it("offers the whole case while a saved view is open, and choosing it goes back to it", async () => {
+      set();
+      serving([DEFAULT, NAMED]);
+      const onOpenWholeCase = vi.fn();
+      panel("alice", { openViewId: "v-default", onOpenWholeCase });
+      fireEvent.click(await screen.findByRole("button", { name: "Open the whole case" }));
+      expect(onOpenWholeCase).toHaveBeenCalledTimes(1);
+    });
+
+    it("marks the saved view open now as Open now, and offers it no Open", async () => {
+      set();
+      serving([DEFAULT, NAMED]);
+      panel("alice", { openViewId: "v-default", onOpenWholeCase: vi.fn() });
+      const row = (await rows()).querySelector('[data-view-id="v-default"]') as HTMLElement;
+      expect(within(row).getByText("Open now")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Open Selection of 3 nodes" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Open Kestrel's contacts" })).toBeTruthy();
+      const whole = (await rows()).querySelector('[data-view-id="whole-case"]') as HTMLElement;
+      expect(within(whole).queryByText("Open now")).toBeNull();
+    });
+
+    it("tells a view saved under the default name apart: its first item and when it was saved, under the name", async () => {
+      set();
+      serving([DEFAULT, DEFAULT_NONE_SEEN, NAMED]);
+      panel("alice");
+      const list = await rows();
+      const seen = list.querySelector('[data-view-id="v-default"]') as HTMLElement;
+      expect(within(seen).getByText("Tarbuck, Kyle · saved 14 Nov 2026, 12:01")).toBeTruthy();
+      const none = list.querySelector('[data-view-id="v-hidden"]') as HTMLElement;
+      expect(within(none).getByText("Saved 14 Nov 2026, 11:40")).toBeTruthy();
+      // A view its creator named keeps its name alone: the second line is for the default name only.
+      const named = list.querySelector(`[data-view-id="${NAMED.id}"]`) as HTMLElement;
+      expect(within(named).queryByText(/Whitlow|saved/i)).toBeNull();
+    });
+
+    it("without the App's way back, the whole case is listed and offers no Open", async () => {
+      set();
+      serving([DEFAULT]);
+      panel("alice", { openViewId: "v-default" });
+      const whole = (await rows()).querySelector('[data-view-id="whole-case"]') as HTMLElement;
+      expect(within(whole).getByText("The whole case")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Open the whole case" })).toBeNull();
+    });
+  });
+}

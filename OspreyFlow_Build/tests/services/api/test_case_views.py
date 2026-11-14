@@ -872,3 +872,92 @@ def test_a_view_route_without_a_token_is_refused(world: _World, method: str, pat
     answered = TestClient(app).request(method, path, json={"name": "x", "node_ids": ["a"]})
     assert answered.status_code in (401, 403)
     assert world.views.views == {}
+
+
+# --- ADR-145 Amendment 17's first item (the owner's exception, 14 November 2026) ------------------------
+# A view saved under the Glass's default name ("Selection of 3 nodes") is told apart in the list by its first
+# item's name, `first_item`: the first of its chosen nodes, in the order chosen, that this reader may see now,
+# read through the adapter's access step (rule 3), and `null` when they may see none of them. Never the first
+# node as stored when it is hidden from them: that would name what they may not read (rules 3 and 7).
+
+
+def _named(element: Node, family: str, given: str) -> Node:
+    return element.model_copy(update={"properties": {"family_name": family, "given_names": given}})
+
+
+def _with_people(world: _World) -> None:
+    """Named people in the case's dataset, chosen in an order the store's id order is not: `zed` (first chosen,
+    OFFICIAL), then `amber` (SECRET), so a list read in id order would put the wrong one first."""
+    people = [
+        _in("src", _named(node("zed"), "Tarbuck", "Kyle")),
+        _in("src", _named(node("amber", "SECRET"), "Vance", "Callum")),
+        _in("src", _named(node("bea"), "Whitlow", "Shona")),
+    ]
+    world.graph_nodes.extend(people)
+    world.graph._graph_nodes.update({n.id: n for n in people})  # the fake keeps its own by id
+
+
+def _listed(who: str) -> list[dict[str, Any]]:
+    answer = _as(who).get(VIEWS)
+    assert answer.status_code == 200, answer.json()
+    return answer.json()
+
+
+def test_a_views_first_item_is_its_first_chosen_node_by_name(world: _World) -> None:
+    _with_people(world)
+    _saved(shared=True, node_ids=["zed", "bea"], name="Selection of 2 nodes")
+    (view,) = _listed("bob")
+    assert view["first_item"] == "Tarbuck, Kyle"  # chosen first, though `bea` comes first by id
+
+
+def test_a_hidden_first_item_is_never_named_and_the_next_the_reader_may_see_is(world: _World) -> None:
+    """Alice (SECRET) chose `amber` first, then `bea`. Bob (OFFICIAL) may not read `amber`: his list names `bea`,
+    and nothing of `amber` (not its name, not its id); Alice's own names `amber`. The answer's shape is the same
+    for both, and the graph is read the same way for each (one read by id, whatever Bob may see)."""
+    _with_people(world)
+    _saved(shared=True, node_ids=["amber", "bea"], name="Selection of 2 nodes")
+    def read_by(who: str) -> tuple[Any, list[list[str]]]:
+        before = len(world.graph.get_nodes_requests)
+        answer = _as(who).get(VIEWS)
+        assert answer.status_code == 200, answer.json()
+        return answer, [ids for ids, _ in world.graph.get_nodes_requests[before:]]
+
+    bob_answer, bob_reads = read_by("bob")
+    alice_answer, alice_reads = read_by("alice")
+    (bobs,), (alices,) = bob_answer.json(), alice_answer.json()
+    assert bobs["first_item"] == "Whitlow, Shona"
+    assert alices["first_item"] == "Vance, Callum"
+    for hidden in ("Vance", "Callum", "amber"):
+        assert hidden not in bob_answer.text
+    assert {k: v for k, v in bobs.items() if k != "first_item"} == {k: v for k, v in alices.items() if k != "first_item"}
+    assert bob_reads == alice_reads == [["amber", "bea"]]  # the same one read, whatever each may see
+
+
+def test_a_view_whose_chosen_nodes_are_all_hidden_has_no_first_item(world: _World) -> None:
+    _with_people(world)
+    _saved(shared=True, node_ids=["amber", "secret", "elsewhere", "never-held"], name="Selection of 4 nodes")
+    (bobs,) = _listed("bob")
+    assert bobs["first_item"] is None and bobs["chosen"] == 4
+    assert "first_item" in bobs  # the field is there, null: the shape does not change
+
+
+def test_a_filtered_view_has_no_first_item(world: _World) -> None:
+    response = _as("alice").post(VIEWS, json={"name": "People", "filter": {"entity_types": ["Person"]}})
+    assert response.status_code == 201, response.json()
+    (view,) = _listed("alice")
+    assert view["first_item"] is None
+
+
+def test_a_views_first_item_is_read_within_its_bound(world: _World) -> None:
+    """One bounded read whatever the view holds: a view of many chosen ids is read for its first item no further
+    than `FIRST_ITEM_READ`, so a long view costs a list what a short one does."""
+    from services.api.case_views import FIRST_ITEM_READ
+
+    _with_people(world)
+    many = ["zed", *(f"absent-{i}" for i in range(FIRST_ITEM_READ + 20))]
+    _saved(shared=True, node_ids=many, name="Selection of many nodes")
+    before = len(world.graph.get_nodes_requests)
+    (view,) = _listed("bob")
+    asked = [ids for ids, _ in world.graph.get_nodes_requests[before:]]
+    assert view["first_item"] == "Tarbuck, Kyle"
+    assert asked and all(len(ids) <= FIRST_ITEM_READ for ids in asked)

@@ -1366,3 +1366,10 @@ export const BATCH_EXPANSION_ACTIONS = defineActionRegistry("BATCH_EXPANSION_ACT
 export const HELP_ACTIONS = defineActionRegistry("HELP_ACTIONS", [
   "open-help-from-every-view-by-keyboard",
 ] as const);
+
+// ADR-145 Amendment 17 (the owner's exception, 14 November 2026): the saved views panel the case line's *Saved views*
+// opens (`keyboard/saved-views-panel.spec.ts`). The case line, the strip and its back link are case's own registries.
+export const SAVED_VIEWS_PANEL_ACTIONS = defineActionRegistry("SAVED_VIEWS_PANEL_ACTIONS", [
+  "open-a-saved-view-from-the-panel-by-keyboard",
+  "open-the-whole-case-from-the-panel-by-keyboard",
+] as const);

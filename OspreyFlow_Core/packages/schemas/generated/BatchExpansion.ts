@@ -10,6 +10,7 @@ export type PrincipalId = string;
 export type CreatedAt = string;
 export type Shared = boolean;
 export type Chosen = number | null;
+export type FirstItem = string | null;
 export type EntityTypes = string[] | null;
 export type ValidFrom = string | null;
 export type ValidTo = string | null;
@@ -56,6 +57,7 @@ export interface CaseView {
   created_at: CreatedAt;
   shared?: Shared;
   chosen?: Chosen;
+  first_item?: FirstItem;
   filter?: ViewFilter | null;
   window?: Interval | null;
   threshold?: Threshold;

@@ -2827,13 +2827,20 @@ export function App() {
           draft={questionDraft}
         />
       </Drawer>
-      {/* ADR-144 decision 5: the open case's *Views in this case*, then every case once with its views. */}
+      {/* ADR-144 decision 5: the open case's saved views, then every case once with its views. ADR-145 Amendment 17
+          (the owner's exception, 14 November 2026): opened from the case line's *Saved views*, it is *Saved views*,
+          the views list alone; from the case menu's *All cases*, *Cases*, as before. */}
       <Drawer
         open={casesOpen !== false}
         onClose={() => setCasesOpen(false)}
-        title="Cases"
-        // Opened from the case menu's *All cases*, whose item went with its menu: focus goes back to the menu's button.
-        returnFocusTo={() => document.querySelector<HTMLElement>("[aria-labelledby='context-banner-title'] .menu-button--case")}
+        title={casesOpen === "views" ? "Saved views" : "Cases"}
+        // Focus goes back to what opened it: the case line's *Saved views*, or (from *All cases*, whose item went
+        // with its menu) the case menu's button.
+        returnFocusTo={() =>
+          casesOpen === "views"
+            ? document.querySelector<HTMLElement>("[data-saved-views-button]")
+            : document.querySelector<HTMLElement>("[aria-labelledby='context-banner-title'] .menu-button--case")
+        }
       >
         <div className="drawer-stack">
           {investigationId && (
@@ -2845,6 +2852,11 @@ export function App() {
               openViewId={lens?.opened.view.id ?? null}
               refreshKey={viewsRead}
               takeFocus={casesOpen === "views"}
+              // The whole case, from the list: what the strip's *Back to the whole case* does.
+              onOpenWholeCase={() => {
+                setCasesOpen(false);
+                closeLens();
+              }}
               onOpen={(chosen) => {
                 setCasesOpen(false);
                 void openLens(chosen.id);
@@ -2856,29 +2868,33 @@ export function App() {
               }}
             />
           )}
-          <CaseList
-            apiBaseUrl={API_BASE_URL}
-            bearerToken={bearerToken}
-            currentId={investigationId}
-            refreshKey={viewsRead}
-            onOpen={(id) => {
-              setCasesOpen(false);
-              openCase(id);
-            }}
-            onOpenView={(caseId, chosen: CaseView) => {
-              setCasesOpen(false);
-              if (caseId === investigationId) void openLens(chosen.id);
-              else openCaseView(caseId, chosen.id);
-            }}
-          />
-          <Button
-            onClick={() => {
-              setCasesOpen(false);
-              setBrowsingCases(true);
-            }}
-          >
-            Browse all cases
-          </Button>
+          {casesOpen !== "views" && (
+            <>
+            <CaseList
+              apiBaseUrl={API_BASE_URL}
+              bearerToken={bearerToken}
+              currentId={investigationId}
+              refreshKey={viewsRead}
+              onOpen={(id) => {
+                setCasesOpen(false);
+                openCase(id);
+              }}
+              onOpenView={(caseId, chosen: CaseView) => {
+                setCasesOpen(false);
+                if (caseId === investigationId) void openLens(chosen.id);
+                else openCaseView(caseId, chosen.id);
+              }}
+            />
+            <Button
+              onClick={() => {
+                setCasesOpen(false);
+                setBrowsingCases(true);
+              }}
+            >
+              Browse all cases
+            </Button>
+            </>
+          )}
           {/* ADR-128 decision 3: the case's brief, read by anyone who may read the case and edited by
               its Author; an attachment opens where the thing lives. */}
           <CaseBrief

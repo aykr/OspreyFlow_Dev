@@ -317,8 +317,9 @@ describe("the owner's navigation (ADR-145 Amendment 15)", () => {
     await ready();
     const region = await screen.findByRole("region", { name: "You are in the Glass" });
     fireEvent.click(within(region).getByRole("button", { name: "Views in this case" }));
-    const panel = await screen.findByRole("dialog", { name: "Cases" });
-    const views = await within(panel).findByRole("region", { name: "Views in this case" });
+    // ADR-145 Amendment 17: opened from the case line it is *Saved views*, its list the case's saved views.
+    const panel = await screen.findByRole("dialog", { name: "Saved views" });
+    const views = await within(panel).findByRole("region", { name: "Saved views in this case" });
     await vi.waitFor(() => expect(document.activeElement).toBe(views));
   });
 
@@ -429,10 +430,10 @@ describe("Part B after review (ADR-145 Amendment 15)", () => {
     expect(views.getAttribute("aria-haspopup")).toBe("dialog");
     expect(views.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(views);
-    await screen.findByRole("dialog", { name: "Cases" });
+    await screen.findByRole("dialog", { name: "Saved views" });
     expect(views.getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(views);
-    await vi.waitFor(() => expect(screen.queryByRole("dialog", { name: "Cases" })).toBeNull());
+    await vi.waitFor(() => expect(screen.queryByRole("dialog", { name: "Saved views" })).toBeNull());
   });
 
   test("a Reports Viewer's switch is Reports, with Figures under More views: no graph, map or drawing board", async () => {

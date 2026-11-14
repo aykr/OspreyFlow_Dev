@@ -1,7 +1,7 @@
 # rules-b route-collapse: the heartbeat's route view collapses the done rows
 
 The owner's ask of 14 November 2026, through the orchestrator: the default route view listed every step one per line
-(47, most done) and was hard to read. `scripts/lanes_heartbeat.sh` is admin's; admin is on V4, so rules-b took it for
+(47, most done) and was hard to read. `OspreyFlow_Build/scripts/lanes_heartbeat.sh` is admin's; admin is on V4, so rules-b took it for
 this change alone.
 
 ## What it does
