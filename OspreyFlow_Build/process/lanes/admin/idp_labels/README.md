@@ -15,5 +15,6 @@ Records (offline; Docker a fake on PATH with Docker's refusals, never a real con
 - `plant_*.txt` (`replant.py`): eight plants, each red.
 - `reap_red.txt` / `reap_green.txt`: the reaper's test before and with the diff.
 
-Still to run, on a server slot: a real run of `test_organisation_sign_in.py` stopped mid-test with
-`stack_lease.sh stop`, then `docker ps -a --filter label=osprey.run=<its tag>` and the network list empty.
+On the server (`server_stop_proof.txt`, 14 Nov 04:52Z, the orchestrator's slot): a real run of `test_organisation_sign_in.py`
+stopped mid-test with `stack_lease.sh stop` (the diff applied in that copy only): three Keycloaks and a network
+with its label before, none after.

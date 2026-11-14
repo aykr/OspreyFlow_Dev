@@ -1,0 +1,13 @@
+# the run /root/osprey-runs/admin.meta/runs/20261114T045212Z-38dd1c27, test_organisation_sign_in.py under stack_lease.sh offline, stack_lease_reap.diff applied in this copy only; 04:52:28Z
+## before stop: what carries its label
+osprey-test-idp-f8d6c77b Up 12 seconds admin
+osprey-test-idp-465fd642 Up 12 seconds admin
+osprey-test-idp-3455aa33 Up 12 seconds admin
+network osprey-test-idp-6b553743
+## stop
+Stopped the run /root/osprey-runs/admin.meta/runs/20261114T045212Z-38dd1c27 (exit 143).
+## after stop: what carries its label
+containers: 0
+networks: 0
+all test-idp: 0
+Running on ospreyflow-test (stack offline, osprey-runs/admin/), logged at osprey-runs/admin.meta/runs/20261114T045212Z-38dd1c27/log: bash -c cd OspreyFlow_Core 
