@@ -38507,3 +38507,49 @@ how ADR-098 Amendment 9's *Whole case* uses this ADR's search. No decision here 
 
 Open: none.
 
+### ADR-149, Amendment 2 (14 November 2026) — search's budgets: what v0.5.2's step 4 measures on B's load, and the figure each is judged by
+
+**Context.** ADR-149 gave search on OpenSearch no figures to be held to: no time for a suggestion, a name search or a
+full-text search, no lag for the feed, no bound for the rebuild or the drift check. Step 4 of v0.5.2 measures them on
+B's load (about 281,000 Persons, the largest loaded type), and a measurement needs a figure decided before the run, or
+any result can be read as a pass. Platform proposed the figures in `process/lanes/platform/v052-measure/PLAN.md`; the
+orchestrator accepted them on 14 November 2026 as step 4's targets, under the owner's standing rule (its decision 8).
+**The owner's tens-of-millions figure is not measured**, by the owner's ruling of 13 November ("measure what is
+loaded"): each result says so beside its figure.
+
+**Decision.** Each measure has a budget and a **failure figure**. A result between the two is recorded as over budget,
+not failed. A result past the failure figure fails step 4. Where a class is timed by `python -m scripts.measure_search`,
+the timer judges it by the figures below, held as `measure_search.BUDGETS` to this table both ways
+(`tests/test_measure_search.py::test_the_timer_s_budgets_are_the_amendment_s_both_ways`), with no file of figures given
+to a run. Times are the p95 of 200 sends after 20 discarded, at the Conduit, through the case's own routes as the Glass
+sends them. An answer from the fallback, an error, or an exact identifier not ranked first is never counted as the
+index's speed: each makes its class fail.
+
+| Measure | What | Timed by `measure_search` | Budget | Failure figure | Basis |
+| --- | --- | --- | --- | --- | --- |
+| M1 | Suggestions (`POST …/suggest`), 2–6 characters, on the largest loaded type | `suggest` | ≤ 300 ms | p95 > 300 ms, or any over 2 s | ADR-059's 300 ms; 2 s is the fallback's timeout |
+| M2 | Suggestions in the Glass: last key to the list shown, the 250 ms pause excluded | no (a `perf/` case in a browser slot) | ≤ 400 ms | > 600 ms | M1 plus one render, spec 02 §5's hover budget as the render's share |
+| M3 | Name search (typos, variants, sounds-like), grouped by type with counts | `names` | ≤ 1 s | p95 > 2 s | Half the fallback's 5 s, so the fallback never fires under normal load |
+| M4 | Full text with the passage highlighted, with a dataset and a date filter | `fulltext` | ≤ 1.5 s | p95 > 3 s | Below the 5 s timeout, with room for highlighting |
+| M5 | Ranking: an exact identifier comes first | `exact` | ≤ 1 s | p95 > 2 s | Every one first, or the class fails; timed as the name search it is (M3's figures) |
+| M6 | Index feed lag: a change made through the Conduit to searchable | no (the live search file) | ≤ 5 s | > 30 s | ADR-150's poll (1 s idle); 30 s is the indexer's lease |
+| M7 | Rebuild from the graph, B's whole load | no (the restore's rebuild) | measured, then the restore's bound set from it with a margin | the rebuild exceeds the bound the restore runbook gives it | Platform's finding F1: today's bound is a guess |
+| M8 | Drift check, B's whole load | no (its Job) | inside its Job's 4 GiB, its peak flat as the load grows, ≤ 1 h | out of memory, a peak growing with the documents, or over 1 h | The streaming check's bound by the page (ADR-124 Amendment 18's lane, 90442ba); finding F2 |
+| M9 | The fallback: OpenSearch stopped mid-session | no (the live search file) | the bar falls back and says so within the 5 s timeout | no message, or a wait over 5 s | ADR-149's fallback that says so |
+| M10 | The leak test at scale (the part-cleared principal) | no (the live search file) | nothing they may not see, count or infer, in results, counts, suggestions or snippets | any | Rule 3 (pass or fail, not a time) |
+| M11 | Sizes: each container's peak working set during M1–M8 | no (the cluster's metrics) | peak ≤ 80% of its limit | at or over its limit, or killed | ADR-148 Amendment 12 decision 4: step 4 measures the manifest's sizes |
+
+**How each becomes a gate.** M1, M3, M4 and M5 are judged by a live file, `tests/perf/test_search_budget_live.py`,
+run by step 6 and at each release under a lease, against the load: each class fails at its failure figure through
+`measure_search`, a named stack whose queries leave a class out fails it, and where no B-sized stack is named each
+case is skipped with that reason. Its red is shown by `tests/test_measure_search.py`, which runs the file as step 6
+does against a stub Conduit, fast and slow. M6, M9 and M10 are live cases still to be written for step 6. M1, M3 and
+M4 are also to become a CI regression gate on a fixed corpus of a million names (CI cannot hold B's load), shown red
+before it is wired (rule 15). M2 is to become a `perf/` case beside glass-perf. M7 and M8 set the restore runbook's
+and the drift check's bounds and memory, held by the render tests. M11 changes the manifest and the profile together.
+Those not yet written are built with step 4's results, not before: this amendment fixes the figures they will hold.
+
+**Consequences.** A result is read against a figure fixed before the run, and the timer cannot be handed a laxer one.
+A figure changed later is an amendment to this table, and the timer's constants follow it in the same change, or the
+test above is red. What B's load cannot answer (M1 at tens of millions) is said beside the figure it limits, never
+read as met.
