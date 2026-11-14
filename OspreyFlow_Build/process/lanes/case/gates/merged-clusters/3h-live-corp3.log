@@ -1,0 +1,189 @@
+Running on ospreyflow-test (stack b, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T115353Z-451a6dce/log: env LIVE_SPECS=live/fixture-corp.spec.ts bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: scripts.seed_fixture_corp into a case the seed makes
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+Case 'Live search check 20261114T115355Z' is 01M7CYGEY1JH7WPCD8P6ZHZHQ8.
+  check: no id stored more than once (whole shared graph)
+Seeded 10 resolution Person nodes and 17 real SAME_AS edges.
+Seeded 21 community-ring nodes and 63 edges across 3 rings.
+Seeded the path-spoke hub 'corp-path-hub' with spokes of length [1, 2, 3, 4, 5, 6, 7, 8], including a SECRET shortcut on the length-3 spoke.
+case: 01M7CYGEY1JH7WPCD8P6ZHZHQ8
+# step: the search index rebuilt from the graph
+search index rebuilt: 68 documents from 68 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t115408708016
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 56.34 26.04 18.12
+[warm-up +2.4 s] loaded
+[warm-up +3.1 s] console warning: [.WebGL-0x351408032200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +3.1 s] console warning: [.WebGL-0x35140802f200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +3.1 s] console warning: [.WebGL-0x351408077e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +3.2 s] search box drawn
+[warm-up +3.2 s] console warning: [.WebGL-0x351408032200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+[warm-up +3.4 s] console error: [ECharts] Component toolbox is used but not imported.
+import { ToolboxComponent } from 'echarts/components';
+echarts.use([ToolboxComponent]);
+# warm-up: the Glass drew its search box after 12 s
+
+Running 5 tests using 1 worker
+
+[1/5] live/fixture-corp.spec.ts:197:1 › the query builder finds Fixture Corp entities and reports how many matched
+[2/5] live/fixture-corp.spec.ts:212:1 › moving the resolution threshold live reports what merged and what split
+[3/5] live/fixture-corp.spec.ts:246:1 › a Fixture Corp entity is reachable from the search box by its nino
+  1) live/fixture-corp.spec.ts:246:1 › a Fixture Corp entity is reachable from the search box by its nino 
+
+    Error: the status bar's counts were not drawn. The page: 
+
+       at live.ts:112
+
+      110 |   const drawn = await bar.waitFor({ state: "visible", timeout: 30_000 }).then(() => true, () => false);
+      111 |   if (!drawn) {
+    > 112 |     throw new Error(`the status bar's counts were not drawn. The page: ${await page.locator("body").ariaSnapshot()}`);
+          |           ^
+      113 |   }
+      114 |   const text = (await bar.textContent()) ?? "";
+      115 |   const read = (words: string) => Number((new RegExp(`([\\d,]+)\\s*${words}`).exec(text)?.[1] ?? "0").replace(/,/g, ""));
+        at workingSetCounts (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/live.ts:112:11)
+        at nodeCount (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:141:11)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:252:10
+
+    Error Context: test-results/fixture-corp-a-Fixture-Cor-ea818--the-search-box-by-its-nino/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/fixture-corp-a-Fixture-Cor-ea818--the-search-box-by-its-nino/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/fixture-corp-a-Fixture-Cor-ea818--the-search-box-by-its-nino/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[4/5] live/fixture-corp.spec.ts:267:1 › explain on a merged cluster names the pair's real resolution score
+  2) live/fixture-corp.spec.ts:267:1 › explain on a merged cluster names the pair's real resolution score 
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.fill: Test timeout of 120000ms exceeded.
+    Call log:
+      - waiting for getByRole('combobox', { name: 'Search entities, identifiers, documents' }).first()
+
+
+      112 | async function showExactly(page: Page, identifier: string, expectedId: string): Promise<void> {
+      113 |   const box = page.getByRole("combobox", { name: "Search entities, identifiers, documents" }).first();
+    > 114 |   await box.fill(identifier);
+          |             ^
+      115 |   await box.press("Enter");
+      116 |   const results = page.locator("section.search-results");
+      117 |   await expect(results, `no results page for ${identifier}`).toBeVisible({ timeout: 30_000 });
+        at showExactly (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:114:13)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:306:9
+
+    Error Context: test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[5/5] live/fixture-corp.spec.ts:378:1 › the pathfinder finds a path between two ring members, and reports its length
+  2 failed
+    live/fixture-corp.spec.ts:246:1 › a Fixture Corp entity is reachable from the search box by its nino 
+    live/fixture-corp.spec.ts:267:1 › explain on a merged cluster names the pair's real resolution score 
+  3 passed (2.9m)
+# playwright exit 1
+== Vite's log
+  VITE v8.3.4  ready in 367 ms
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+== test-results/fixture-corp-a-Fixture-Cor-ea818--the-search-box-by-its-nino/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: fixture-corp.spec.ts >> a Fixture Corp entity is reachable from the search box by its nino
+- Location: live/fixture-corp.spec.ts:246:1
+
+# Error details
+
+```
+Error: the status bar's counts were not drawn. The page: 
+```
+
+== test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: fixture-corp.spec.ts >> explain on a merged cluster names the pair's real resolution score
+- Location: live/fixture-corp.spec.ts:267:1
+
+# Error details
+
+```
+Test timeout of 120000ms exceeded.
+```
+
+```
+Error: locator.fill: Test timeout of 120000ms exceeded.
+Call log:
+  - waiting for getByRole('combobox', { name: 'Search entities, identifiers, documents' }).first()
+
+```
+
+== the last of the Conduit's log
+INFO:     127.0.0.1:36660 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36636 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36668 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36668 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36660 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36636 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36652 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36652 - "OPTIONS /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36660 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40928 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36652 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36668 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40928 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36636 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40928 - "OPTIONS /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40930 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40928 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36678 - "GET /v1/investigations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40930 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40928 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40946 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40930 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40930 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40928 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40930 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40946 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40966 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40966 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40968 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40966 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36650 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40966 - "OPTIONS /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/rarity HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40970 - "OPTIONS /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/paths HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40970 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/paths HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40968 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/rarity HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40966 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/rarity HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40970 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40986 - "GET /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40974 - "POST /v1/investigations/01M7CYQEQNSA095TYE56HBBWEM/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40942 - "GET /v1/investigations HTTP/1.1" 200 OK
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T115353Z-451a6dce).
+Wall time: 247 s, exit 1 (stack b, the lease case took at 2026-11-14T11:37:22Z; set-up before it 15 s)
