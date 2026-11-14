@@ -6,9 +6,12 @@
 // page must say it refused, and that the counts on screen are the route's own (rule 7).
 //
 // Opt in as every live spec does (`live.ts`): OSPREY_TEST_LIVE_GLASS=1 and the three OSPREY_LIVE_*
-// variables, against a stack holding Fixture Corp.
+// variables, against a stack holding Fixture Corp. OSPREY_LIVE_INVESTIGATION_ID must be the case Fixture Corp was
+// seeded into (`seed_fixture_corp --investigation-scope`): the seed is what makes a case read its dataset (ADR-099),
+// and a fresh case reads none, so search there finds nothing (`search_access.py`: "An empty case sees nothing").
+// Only Show on graph changes the case's working set, so it is checked against a count it first asserts is 0.
 import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
-import { apiBaseUrl, freshWorkspaceUrl, liveOnly, required } from "./live";
+import { apiBaseUrl, investigationId, liveOnly, required, workspaceUrl } from "./live";
 
 test.beforeEach(liveOnly);
 
@@ -26,12 +29,6 @@ async function ask(request: APIRequestContext, investigation: string, body: Reco
   });
 }
 
-function investigationOf(url: string): string {
-  const id = new URL(url, "http://localhost").searchParams.get("investigation");
-  if (!id) throw new Error(`no investigation in ${url}`);
-  return id;
-}
-
 async function search(page: Page, words: string): Promise<void> {
   await box(page).fill(words);
   await box(page).press("Enter");
@@ -39,11 +36,10 @@ async function search(page: Page, words: string): Promise<void> {
 }
 
 test("Enter opens the results, and the total on screen is the route's own", async ({ page, request }) => {
-  const url = await freshWorkspaceUrl(request);
-  await page.goto(url);
+  await page.goto(workspaceUrl());
   await search(page, QUERY);
 
-  const answer = await ask(request, investigationOf(url), { query: QUERY, group: null, filters: {}, page: 1, page_size: PAGE_SIZE });
+  const answer = await ask(request, investigationId(), { query: QUERY, group: null, filters: {}, page: 1, page_size: PAGE_SIZE });
   expect(answer.status(), await answer.text()).toBe(200);
   const body = (await answer.json()) as { total: number; counts_exact: boolean; source: string };
   expect(body.total).toBeGreaterThan(0);
@@ -54,9 +50,8 @@ test("Enter opens the results, and the total on screen is the route's own", asyn
   if (body.source === "fallback") await expect(results(page).locator(".search-results__limited")).toBeVisible();
 });
 
-test("every body the page sends is one the route accepts", async ({ page, request }) => {
-  const url = await freshWorkspaceUrl(request);
-  await page.goto(url);
+test("every body the page sends is one the route accepts", async ({ page }) => {
+  await page.goto(workspaceUrl());
   const sent: unknown[] = [];
   page.on("request", (r) => {
     if (r.method() === "POST" && /\/search$/.test(new URL(r.url()).pathname)) sent.push(r.postDataJSON());
@@ -77,23 +72,21 @@ test("every body the page sends is one the route accepts", async ({ page, reques
   expect(refused, `the route refused bodies the page sent: ${JSON.stringify(sent)}`).toEqual([]);
 });
 
-test("Show on graph adds the results' records to the working set", async ({ page, request }) => {
-  await page.goto(await freshWorkspaceUrl(request));
+test("Show on graph adds the results' records to the working set", async ({ page }) => {
+  await page.goto(workspaceUrl());
+  const nodes = async () => Number(/(\d+)\s*nodes/.exec((await page.getByRole("status").first().textContent()) ?? "")?.[1] ?? 0);
+  expect(await nodes(), "the seeded case's working set must start empty, or a pass proves nothing").toBe(0);
   await search(page, QUERY);
   await results(page).getByRole("button", { name: /^Show on graph: / }).first().click();
   await expect(results(page)).toBeHidden();
-  await expect
-    .poll(async () => Number(/(\d+)\s*nodes/.exec((await page.getByRole("status").first().textContent()) ?? "")?.[1] ?? 0), {
-      timeout: 30_000,
-    })
-    .toBeGreaterThan(0);
+  await expect.poll(nodes, { timeout: 30_000 }).toBeGreaterThan(0);
 });
 
-test("a query longer than the route takes is refused on screen with the limit named, never cut (rule 2)", async ({ page, request }) => {
+test("a query longer than the route takes is refused on screen with the limit named, never cut (rule 2)", async ({ page }) => {
   // The route refuses more than 200 characters (`schemas/search.py`'s MAX_QUERY_CHARS) with FastAPI's 422, whose
   // detail is a list; the page names the limit from it. The jsdom and keyboard cases prove the words against the body
   // as measured from the model; this one proves the real route still sends that body.
-  await page.goto(await freshWorkspaceUrl(request));
+  await page.goto(workspaceUrl());
   await search(page, "a".repeat(201));
   await expect(results(page).getByRole("alert")).toContainText(
     "The search could not be done: a search can be at most 200 characters, and this one has 201.",
