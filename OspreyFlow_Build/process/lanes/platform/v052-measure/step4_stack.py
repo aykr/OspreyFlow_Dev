@@ -74,6 +74,58 @@ PASSED_THROUGH = ("ARCADEDB_", "POSTGRES_", "VALKEY_", "CLICKHOUSE_", "OPENSEARC
                   "ANALYTICS_")  # fmt: skip
 
 
+#: The poc's Conduit settings step 4 does not use, each for a reason: Entra's (the realm here is
+#: Keycloak's, whose claims are the fixed names), AWS's (the stack's object store and OpenSearch
+#: answer unsigned on the host), a cluster's (one ArcadeDB, one ClickHouse), and the poc's own
+#: index alias (the stack's index is the one its load built: `STEP4_SEARCH_INDEX_ALIAS`, else the
+#: default a rebuild makes).
+DROPPED = frozenset({
+    "OSPREY_CLAIM_MAPPING", "OSPREY_IDENTITY_PROVIDER", "OSPREY_FIRST_ADMINISTRATORS",
+    "SUPERSET_SIGN_IN", "OSPREY_DASHBOARDS_ORIGIN", "MINIO_CREDENTIALS", "MINIO_REGION",
+    "OPENSEARCH_REGION", "OSPREY_SEARCH_INDEX_ALIAS", "CLICKHOUSE_CLUSTER", "ARCADEDB_HA",
+    "OIDC_ISSUER", "OIDC_JWKS_URL", "OIDC_AUDIENCE",  # the realm's, set by the run
+})  # fmt: skip
+#: Where the poc's own directories are, made writable for the run (a tmpfs, the image's user's).
+DATA_ROOT = "/var/lib/osprey"
+
+
+def poc_environment() -> dict[str, str]:
+    """The poc's own Conduit environment, as the render gives it (never typed here)."""
+    import yaml
+    from harness.render import render
+    from tools.cp_policy_check import FIXTURES, _resolver
+
+    from schemas.deployment import OspreyConfig
+
+    os.environ.setdefault("OSPREY_PLATFORM_FOLDERS", str(FIXTURES / "platforms"))
+    raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
+    values = yaml.safe_load(
+        render(OspreyConfig.model_validate(raw), resolver=_resolver).artefacts["values.yaml"]
+    )
+    return {k: str(v) for k, v in values["environment"].items()}
+
+
+def conduit_environment(poc: dict[str, str], lease: dict[str, str]) -> dict[str, str]:
+    """The poc's own settings, less `DROPPED`, with the leased stack's in their place: its stores
+    on the host's loopback at the lease's ports, unsigned and without TLS; the ceiling B's data
+    needs (SECRET, ADR-148 Am 14's ruling); the origins this host's own."""
+    env = {k: v for k, v in poc.items() if k not in DROPPED}
+    loopback = "127.0.0.1"
+    env |= {
+        "ARCADEDB_HOST": loopback, "CLICKHOUSE_HOST": loopback, "OPENSEARCH_HOST": loopback,
+        "VALKEY_HOST": loopback, "POSTGRES_HOST": loopback,
+        "OPENSEARCH_SIGNING": "none", "POSTGRES_SSLMODE": "disable", "VALKEY_TLS": "false",
+        "MINIO_USE_SSL": "false", "OSPREY_HIGHEST_MARKING": "SECRET",
+        "CORS_ALLOWED_ORIGINS": "http://127.0.0.1", "OSPREY_GLASS_ORIGIN": "http://127.0.0.1",
+    }  # fmt: skip
+    for name in ("CLICKHOUSE_HTTP_PORT", "OPENSEARCH_PORT", "MINIO_ENDPOINT"):
+        if lease.get(name):
+            env[name] = lease[name]
+    if lease.get("STEP4_SEARCH_INDEX_ALIAS"):
+        env["OSPREY_SEARCH_INDEX_ALIAS"] = lease["STEP4_SEARCH_INDEX_ALIAS"]
+    return env
+
+
 def poc_limits(workload: str) -> tuple[str, str]:
     """The poc manifest's own limits for `workload`, as Docker's --cpus and --memory."""
     import yaml
@@ -125,14 +177,19 @@ def keycloak_argv(run: str, name: str, port: int) -> list[str]:
 
 def service_argv(
     run: str, name: str, image: str, workload: str, environment: dict[str, str],
-    command: Sequence[str],
+    command: Sequence[str], settings: Sequence[str] = (),
 ) -> list[str]:  # fmt: skip
+    """`settings`: the Conduit's own (`conduit_environment`'s names), passed by name as the
+    lease's are, their values in Docker's environment alone."""
     cpus, memory = poc_limits(workload)
+    named = sorted({*settings, "OIDC_ISSUER", "OIDC_JWKS_URL", "OIDC_AUDIENCE",
+                    "OSPREY_WORKER_NAME"})  # fmt: skip
+    passed = passed_through({k: v for k, v in environment.items() if k not in named})
     return [
         "run", "-d", "--name", name, *run_labels(run), "--network", "host",
         f"--cpus={cpus}", f"--memory={memory}", f"--memory-swap={memory}",
-        *passed_through(environment), "-e", "OIDC_ISSUER", "-e", "OIDC_JWKS_URL",
-        "-e", "OIDC_AUDIENCE", "-e", "OSPREY_WORKER_NAME",
+        "--tmpfs", f"{DATA_ROOT}:rw,uid=10001,gid=10001,mode=0700",
+        *passed, *(arg for n in named for arg in ("-e", n)),
         "--entrypoint", command[0], image, *command[1:],
     ]  # fmt: skip
 
@@ -371,6 +428,8 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
         stack.images.append(tag)
         images[workload] = tag
     cp = _free_port()
+    conduit = conduit_environment(poc_environment(), dict(os.environ))
+    env |= conduit
     env |= {
         "OIDC_ISSUER": issuer,
         "OIDC_JWKS_URL": f"{issuer}/protocol/openid-connect/certs",
@@ -379,11 +438,13 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
     }
     name = slug(stack.run)
     api = service_argv(
-        stack.run, f"osprey-step4-api-{name}", images["api"], "api", env, conduit_command(cp)
-    )
+        stack.run, f"osprey-step4-api-{name}", images["api"], "api", env, conduit_command(cp),
+        settings=list(conduit),
+    )  # fmt: skip
     worker = service_argv(
-        stack.run, f"osprey-step4-worker-{name}", images["worker"], "worker", env, WORKER_COMMAND
-    )
+        stack.run, f"osprey-step4-worker-{name}", images["worker"], "worker", env,
+        WORKER_COMMAND, settings=list(conduit),
+    )  # fmt: skip
     stack.docker(*api, env=env)
     stack.docker(*worker, env=env)
     base = f"http://127.0.0.1:{cp}"

@@ -191,3 +191,34 @@ def test_a_failed_start_s_log_is_shown_with_every_secret_masked() -> None:
     assert "secret-1" not in shown and "secret-2" not in shown and "token-3" not in shown
     assert "55438" in shown, "a port is no secret here; the runner prints no port itself"
 
+
+def test_the_conduit_has_the_poc_s_own_settings_less_the_named_ones_with_the_stack_s() -> None:
+    """The third proof on stack f: given none of the poc's settings, the Conduit opened DuckDB in a
+    folder it could not write and never started. It takes the poc render's own environment, less
+    `DROPPED` by name, each kept key the poc's unless the stack's replaces it."""
+    poc = step4.poc_environment()
+    lease = {
+        "CLICKHOUSE_HTTP_PORT": "18128",
+        "OPENSEARCH_PORT": "19205",
+        "MINIO_ENDPOINT": "localhost:9010",
+    }
+    env = step4.conduit_environment(poc, lease)
+    assert set(poc) - set(env) == set(step4.DROPPED) & set(poc), "a poc setting lost unnamed"
+    assert env["OSPREY_ANALYTICS_ENGINE"] == "clickhouse" == poc["OSPREY_ANALYTICS_ENGINE"]
+    assert env["OSPREY_PROFILE"] == "cloud-platform" and env["OSPREY_DATA_ROOT"].startswith(
+        step4.DATA_ROOT
+    )
+    assert {env[h] for h in ("ARCADEDB_HOST", "CLICKHOUSE_HOST", "OPENSEARCH_HOST")} == {
+        "127.0.0.1"
+    }
+    assert env["CLICKHOUSE_HTTP_PORT"] == "18128" and env["OPENSEARCH_SIGNING"] == "none"
+    assert env["OSPREY_HIGHEST_MARKING"] == "SECRET"
+    assert not any("microsoftonline" in v for v in env.values()), "nothing of Entra's"
+
+
+def test_the_conduit_s_settings_are_passed_by_name_and_its_directories_writable() -> None:
+    argv = step4.service_argv("r", "n", "img", "api", {"OSPREY_DATA_ROOT": "/var/lib/osprey/data"},
+                              ["x"], settings=["OSPREY_DATA_ROOT"])  # fmt: skip
+    assert argv[argv.index("OSPREY_DATA_ROOT") - 1] == "-e"
+    assert not any("=/var/lib/osprey/data" in a for a in argv)
+    assert any(a.startswith(f"{step4.DATA_ROOT}:rw,uid=10001") for a in argv)
