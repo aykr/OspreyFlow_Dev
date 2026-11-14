@@ -103,6 +103,36 @@ async function seedFromSearch(
   );
 }
 
+/** Puts exactly the record `expectedId` on the canvas: its identifier searched with Enter, and *Show on graph*
+ * on the search results page (ADR-145 Amendment 15 Part A), which seeds the result's own records and expands
+ * nothing. A suggestion chosen from the box is drawn three hops out (`search/drawSearchResult.ts`), so a case
+ * that needs only its own records (a pair to explain, two ends of a path) puts them on this way (14 November
+ * 2026: two suggestions chosen left 6 and 7 nodes, not 2). The seed request is held to the record: it carries
+ * `expectedId`, or, when every record of the result is drawn already, there is none and the counts stay. */
+async function showExactly(page: Page, identifier: string, expectedId: string): Promise<void> {
+  const box = page.getByRole("combobox", { name: "Search entities, identifiers, documents" }).first();
+  await box.fill(identifier);
+  await box.press("Enter");
+  const results = page.locator("section.search-results");
+  await expect(results, `no results page for ${identifier}`).toBeVisible({ timeout: 30_000 });
+  const show = results.getByRole("button", { name: /^Show on graph: / });
+  await expect(show, `${identifier} found other than one result`).toHaveCount(1, { timeout: 30_000 });
+  const before = await workingSetCounts(page);
+  const seeded = page
+    .waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname.endsWith("/seed"), { timeout: 15_000 })
+    .catch(() => null);
+  await show.click();
+  const response = await seeded;
+  if (response) {
+    expect(response.status(), await response.text()).toBeLessThan(300);
+    const sent = (response.request().postDataJSON() as { nodes: { id: string }[] }).nodes.map((n) => n.id);
+    expect(sent, `Show on graph for ${identifier} did not carry ${expectedId}`).toContain(expectedId);
+  } else {
+    expect(await workingSetCounts(page), `Show on graph for ${identifier} sent nothing, and the canvas changed`).toEqual(before);
+  }
+  await expect(results).toBeHidden();
+}
+
 async function edgeCountOf(page: Page): Promise<number> {
   return (await workingSetCounts(page)).edges;
 }
@@ -115,7 +145,7 @@ async function selectBothByKeyboard(
   page: Page,
   second: { nino: string; id: string },
 ): Promise<void> {
-  await seedFromSearch(page, second.nino, second.id);
+  await showExactly(page, second.nino, second.id);
   await expect.poll(() => nodeCount(page), { timeout: 30_000 }).toBe(2);
   await pairByKeyboard(page);
 }
@@ -149,7 +179,13 @@ async function addPersonVariable(page: Page): Promise<void> {
   // The query builder is one of the side panels, folded until shown (`layout/SidePanelStack.tsx`'s
   // DEFAULT_FOLDED: every panel but the Inspector). Its header's button unfolds it.
   await unfoldSidePanel(page, "Query builder");
+  // Within the panel, *Add to the pattern* is a section of its own, folded until opened (only
+  // *Pattern* starts open), and a folded section stays in the page, hidden.
+  const add = page.getByRole("button", { name: /^Add to the pattern/ });
+  if ((await add.getAttribute("aria-expanded")) === "false") await add.click();
+  // Its own group's: other controls on the page are named "Entity type" too.
   await page
+    .getByRole("group", { name: "Add a pattern variable" })
     .getByRole("combobox", { name: "Entity type" })
     .selectOption("Person");
   await page.getByRole("button", { name: "Add variable" }).click();
@@ -249,8 +285,8 @@ test("explain on a merged cluster names the pair's real resolution score", async
   // `weight` (§6.1's load-time strength) against §C5's match `score`. Round 12e measured both:
   // every stored `score` matches §C5 exactly. The fixture was never at fault.
   await page.goto(await freshWorkspaceUrl(request));
-  await seedFromSearch(page, PAIR_A.nino, PAIR_A.id);
-  await seedFromSearch(page, PAIR_B.nino, PAIR_B.id);
+  await showExactly(page, PAIR_A.nino, PAIR_A.id);
+  await showExactly(page, PAIR_B.nino, PAIR_B.id);
   await expect.poll(() => nodeCount(page), { timeout: 30_000 }).toBe(2);
 
   // Expand SAME_AS from the canvas, by keyboard — the step that was unreachable until 12e.
@@ -259,7 +295,11 @@ test("explain on a merged cluster names the pair's real resolution score", async
   await page.keyboard.press("\\");
   const menu = page.locator(".radial-menu__list[role='menu']");
   await expect(menu).toBeVisible();
-  const sameAs = menu.getByRole("menuitem", { name: /^SAME_AS/ });
+  // Under *Expand by link type*, by its name as people read it ("Same as (1)"), not SAME_AS (ADR-098
+  // Amendment 8).
+  const sameAs = menu
+    .getByRole("group", { name: "Expand by link type" })
+    .getByRole("menuitem", { name: /^Same as \(/ });
   await expect(
     sameAs,
     "the radial menu offers no SAME_AS entry — it is declared from:[\"*\"] to:[\"*\"], so a " +
@@ -326,7 +366,7 @@ test("the pathfinder finds a path between two ring members, and reports its leng
   // other, so a direct path exists and its length is knowable in advance — which is what makes
   // the assertion below a real check rather than "something came back".
   await page.goto(await freshWorkspaceUrl(request));
-  await seedFromSearch(page, RING_A.nino, RING_A.id);
+  await showExactly(page, RING_A.nino, RING_A.id);
   await selectBothByKeyboard(page, RING_B);
 
   const menu = page.locator(".radial-menu__list[role='menu']");
