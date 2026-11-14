@@ -30,33 +30,42 @@ plant() { # name, file, perl substitution, the case that must go red
 
 plant "a 403 at the start read as any failure" "$API" \
   's/    if \(response.status === 403\) return \{ ok: false, kind: "forbidden" \};\n//' \
-  "says a reader without the right to edit the case cannot start one, and starts nothing"
+  "says a reader below Editor cannot start one, and asks nothing more"
 plant "a 404 at the start read as any failure" "$API" \
-  's/    if \(response.status === 404\) return \{ ok: false, kind: "not_found" \};\n//' \
+  's/    if \(response.status === 404\) return \{ ok: false, kind: "not_found" \};\n  *return \{ ok: false, kind: "failed", message: `The batch job could not be started/    return { ok: false, kind: "failed", message: `The batch job could not be started/' \
   "says a case the reader cannot open could not be, and starts nothing"
-plant "the batch job's own limit at the start read as any failure" "$API" \
-  's/response.status === 409 && body.error === "limit_exceeded"/false/' \
-  "says an expansion past the batch job's own limit is refused at the start, in the reader's figure"
-plant "a job refused as it runs read as failed" "$API" \
-  's/case "refused": \{/case "refused-not": {/' \
-  "says a job whose result passed its limit stopped, saved nothing and cut nothing"
+plant "a job already running read as a refusal" "$API" \
+  's/response.status === 409 && body.error === "batch_expansion_running"/false/' \
+  "follows the job already running when the reader has one on this case"
+plant "the running job's id not followed (the new request's taken instead)" "$UI" \
+  's/\[started.running.id, started.running.words\]/["j1", started.running.words]/' \
+  "follows the job already running when the reader has one on this case"
+plant "a stage's words replaced by the Glass's own" "$UI" \
+  's/setShown\(\{ phase: "watching", words: job.words \|\| "The batch job is under way.", trouble: null \}\);/setShown({ phase: "watching", words: "The batch job is under way.", trouble: null });/' \
+  "says each stage in the server's own words"
+plant "a refusal's words replaced by the Glass's own" "$UI" \
+  's/  if \(job.words\) return job.words;\n//' \
+  "says a refused job in the server's words, and opens nothing"
+plant "a refused job offered a second try" "$UI" \
+  's/setShown\(\{ phase: "stopped", again: false, words: refusalWords\(job\) \}\);/setShown({ phase: "stopped", again: true, words: refusalWords(job) });/' \
+  "says a refused job in the server's words, and opens nothing"
 plant "a state not known read as waiting" "$API" \
-  's/default:\n        return \{ state: "failed", message: "The server answered with a state the Glass does not know." \};/default:\n        return { state: "queued" };/' \
+  's/!STATES.has\(body.state\)/false/' \
   "never reads a state it does not know as progress"
-plant "a job no longer found read as one still going" "$API" \
-  's/if \(response.status === 404\) return \{ state: "not_found" \};/if (response.status === 404) return { state: "queued" };/' \
-  "says a job no longer found could not be"
+plant "a job not this reader's read as progress not read" "$API" \
+  's/if \(response.status === 404\) return \{ ok: false, kind: "not_found" \};\n    if \(!response.ok\) return \{ ok: false, kind: "unreachable"/if (!response.ok) return { ok: false, kind: "unreachable"/' \
+  "says a job that is not this reader's, or is gone, can no longer be found"
 plant "the result not opened when the job is done" "$UI" \
   's/onViewOpenedRef.current\(result.opened\);//' \
-  "opens the job's result as the view and says so when the job is done"
+  "opens the job's result as the view, and says the server's words and that it is open"
 plant "a result view past the canvas's limit said as any failure" "$UI" \
-  's/\} else if \(result.kind === "limit_exceeded"\) \{\n        setShown\(\{/} else if (false) {\n        setShown({/' \
+  's/\} else if \(result.kind === "limit_exceeded"\) \{/} else if (false) {/' \
   "says a result view past the canvas's limit is kept and was not cut to fit"
 plant "a failed job offered no second try" "$UI" \
-  's/again: true,\n            words: `The batch job failed on the server/again: false,\n            words: `The batch job failed on the server/' \
-  "says a failed job failed, in the server's words, and offers to try it again"
+  's/again: true, words: job.words \|\| "The batch job failed on the server."/again: false, words: job.words || "The batch job failed on the server."/' \
+  "says a failed job in the server's words, and offers to try it again"
 plant "progress not read taken as the end" "$UI" \
-  's/trouble: `\$\{job.message\} Still trying.`,\n          \}\)\);\n          break;/trouble: `\${job.message} Still trying.`,\n          }));\n          return;/' \
+  's/          trouble,\n        \}\)\);\n      \}/          trouble,\n        }));\n        return;\n      }/' \
   "says when the progress could not be read, and goes on asking"
 plant "the asking not stopped once closed" "$UI" \
   's/if \(timer !== undefined\) clearTimeout\(timer\);/live = true;/' \
