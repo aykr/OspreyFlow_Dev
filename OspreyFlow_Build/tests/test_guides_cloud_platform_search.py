@@ -8,7 +8,7 @@ Each case reads the render, so the guide's words turn red when the render change
   nothing; and that `postgres-fulltext` makes none;
 - which pods are given the domain's address (`OPENSEARCH_URL`);
 - the restore's last step: the index rebuilt, then the drift check, by the CronJobs' own names, the index
-  not being in a set;
+  not being in a set, each CronJob running a module the tree holds (rules' v0.5.2 index step brings them);
 - the shared volume's folders in the standard shape (no staging folder on it).
 """
 
@@ -60,6 +60,11 @@ def values(fixture: str, search: str | None = None) -> dict[str, Any]:
     return found
 
 
+def jobs_of(v: dict[str, Any]) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = (v.get("searchIndex") or {}).get("jobs") or []
+    return found
+
+
 def test_section_6a_says_which_shapes_make_the_opensearch_domain_as_rendered() -> None:
     six_a = section("## 6a")
     refused = rendered("poc", "opensearch")
@@ -97,7 +102,7 @@ def test_section_6a_names_the_pods_given_the_domain_s_address() -> None:
 
 def test_section_6a8_ends_the_restore_with_the_index_rebuild_then_the_drift_check() -> None:
     poc = values("poc", "opensearch")
-    jobs = [j["name"] for j in (poc.get("searchIndex") or {}).get("jobs") or []]
+    jobs = [j["name"] for j in jobs_of(poc)]
     in_set = any("OPENSEARCH" in e.get("name", "") for e in poc["backups"].get("env") or [])
     text = section("### 6a.8")
     step = re.search(r"\d\. \*\*The search index rebuilt\*\*(.*?)(?= \d\. \*\*|\*\*It refuses)", text)
@@ -106,6 +111,11 @@ def test_section_6a8_ends_the_restore_with_the_index_rebuild_then_the_drift_chec
         named = re.findall(r"`(ospreyflow-search-[a-z-]+)`", step.group(1))
         assert named == jobs, "the rebuild, then the drift check, by the CronJobs' own names"
         assert ("the index is not in a set" in step.group(1)) is (not in_set)
+        # A CronJob the guide tells the operator to start must run a module the image holds: the
+        # rebuild and the drift check arrive with rules' v0.5.2 index step, and until then this is red.
+        modules = {j["name"]: next(a for a in j["command"] if a.startswith("scripts.")) for j in jobs_of(poc)}
+        missing = [m for m in modules.values() if not (CORE / (m.replace(".", "/") + ".py")).is_file()]
+        assert missing == [], "the CronJobs' modules, which the guide's step 7 runs"
 
 
 def test_section_6a1_names_the_standard_shape_s_shared_folders_as_mounted() -> None:
