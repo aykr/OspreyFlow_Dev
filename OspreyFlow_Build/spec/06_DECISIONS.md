@@ -37754,6 +37754,13 @@ Graph application permission the client would grant: a separate decision for the
      OspreyFlow within the last 24 hours. It runs again once they sign in."
    - The store unread is said as *Admin › People*'s store.
    - Keycloak's unreachable exchange keeps its words.
+   - **Who `<id>` is.** The owner's account id as the schedule records it (`schedule_owner`, the rule's or list's owner,
+     `Principal.id`): on Entra the person's object id, which is how *Admin › People* names a person there and what
+     Operations' owner column already shows; on Keycloak the account's id, as before. It is OspreyFlow's own id for one
+     of its people, not a source system's identifier for a record (rule 7). It appears only where the owner's id is
+     already shown to those who manage schedules: the run's ledger words (Operations' runs, *Run now*'s refusal, a
+     list's *Latest refreshes*), the rule audit and the Conduit's log. The schedule's notice in the owner's own inbox
+     names no one: its sentence is fixed.
 4. **The docs lane's two call sites** (`process/lanes/docs/v052-sweep/README.md`, rows 1 and 2, and D1):
    - the misleading "could not be reached" refusal is replaced as in decision 3;
    - *Run now* in Operations runs as its owner on Entra too, refused in the same words while the owner is out of date.
