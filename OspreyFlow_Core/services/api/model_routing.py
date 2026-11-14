@@ -40,7 +40,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, cast
 
-from adapters.model_litellm.errors import ModelLimitReached
+from adapters.model_litellm.errors import ModelEngineRefused, ModelLimitReached
 from adapters.model_litellm.usage import calling
 from ports.model import ModelPort
 from schemas.admin import EngineStatus, ModelRoleStatus
@@ -325,6 +325,10 @@ class RoutedModel:
         """`choose`, with the datasets' egress read first."""
         return self.choose(role, asked, handling, engine, datasets, await self.held(datasets))
 
+    def _label(self, engine: str) -> str:
+        named = self.routes.engines.get(engine)
+        return named.label if named is not None else LOCAL_LABEL
+
     def _limit_words(self, hit: ModelLimitReached, engine: str) -> ModelLimitReached:
         named = self.routes.engines.get(engine)
         if named is None:
@@ -338,6 +342,8 @@ class RoutedModel:
                 result = await self._inner.extract(req.model_copy(update={"model": choice.model}))
         except ModelLimitReached as hit:
             raise self._limit_words(hit, choice.engine) from None
+        except ModelEngineRefused as refused:
+            raise refused.for_engine(self._label(choice.engine)) from None
         return result.model_copy(update={"engine": choice.engine})
 
     async def transcribe(self, req: TranscribeRequest) -> Transcript:
@@ -357,6 +363,8 @@ class RoutedModel:
                 )
         except ModelLimitReached as hit:
             raise self._limit_words(hit, choice.engine) from None
+        except ModelEngineRefused as refused:
+            raise refused.for_engine(self._label(choice.engine)) from None
 
     async def embed(self, texts: Sequence[str]) -> list[Vector]:
         """Embeddings carry no handling here, so they never leave: always the local model (the

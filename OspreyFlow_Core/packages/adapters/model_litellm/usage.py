@@ -32,7 +32,7 @@ from typing import Any, Literal
 
 import httpx
 
-from .errors import ModelLimitReached, UsageUnavailableError
+from .errors import ModelEngineRefused, ModelLimitReached, UsageUnavailableError
 
 TAG_PREFIX = "osprey:"
 #: The deployment's own engine (`services.api.model_routing.LOCAL`); its calls use the master key.
@@ -131,6 +131,55 @@ def limit_refusal(response: httpx.Response) -> ModelLimitReached | None:
         return ModelLimitReached(
             "tokens" if kind and kind.group(1) == "tokens" else "requests", resets_at=at
         )
+    return None
+
+
+# --- an engine's refusal (ADR-135 Amendment 13) -------------------------------------------------
+
+#: The words the gateway gives every error a provider raised: `litellm.<its class>: …`. Its own
+#: refusals (a key it does not know, a model the key may not use) read "Authentication Error, …"
+#: or name its own type (litellm 1.101.0, `proxy/auth/auth_checks.py`), and are never an engine's.
+_PASSED_ON = "litellm."
+#: The gateway resting an engine after a failure (measured 8 November 2026, `stand_in.py`).
+_COOLDOWN = "No deployments available for selected model"
+_KEY_TYPES = frozenset({"authentication_error", "permission_error", "permission_denied_error"})
+_KEY_CLASSES = ("litellm.AuthenticationError", "litellm.PermissionDeniedError")
+
+
+def provider_refusal(response: httpx.Response) -> ModelEngineRefused | None:
+    """An engine's refusal passed on by the gateway, as `ModelEngineRefused`; None for any other
+    answer, which keeps the path it had. Read from the status, the type and the class the words
+    begin with, never the rest of the words, which can carry part of a key. Each rule is a measured
+    answer of the pinned gateway (`process/lanes/studio/model-words/`, 14 November 2026; the
+    stand-in's of 8 November):
+
+    - 401 `authentication_error` (Gemini's "API key not valid" arrives so, from its own 400), or a
+      provider's `AuthenticationError` at any status (no key at all is a 500), or 403
+      `permission_error` (Gemini's PERMISSION_DENIED) / `permission_denied_error` (Bedrock): `key`;
+    - 429 `litellm.RateLimitError` (Gemini's RESOURCE_EXHAUSTED, Bedrock's throttling): `busy`.
+      The gateway's own key limits are 429 too, and `limit_refusal` is asked first;
+    - 429 "No deployments available" (the gateway's cooldown after a failure), or a 5xx passed on
+      from the provider (Gemini's 503 arrives as 500, after the gateway's own three tries):
+      `unavailable`."""
+    if response.status_code < 400:
+        return None
+    try:
+        error = dict(response.json().get("error") or {})
+    except (ValueError, AttributeError):
+        return None
+    message = str(error.get("message", ""))
+    kind_of = str(error.get("type", ""))
+    status = response.status_code
+    if status == 429 and message.startswith(_COOLDOWN):
+        return ModelEngineRefused("unavailable")
+    if not message.startswith(_PASSED_ON):
+        return None
+    if message.startswith(_KEY_CLASSES) or (status in (401, 403) and kind_of in _KEY_TYPES):
+        return ModelEngineRefused("key")
+    if status == 429 and message.startswith("litellm.RateLimitError"):
+        return ModelEngineRefused("busy")
+    if status >= 500:
+        return ModelEngineRefused("unavailable")
     return None
 
 
