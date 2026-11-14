@@ -138,3 +138,7 @@ platform-b	v052-signin-words	S	building	v0.5.2 fix (G): The Glass shows the Cond
 case-b	v052-suppress-words	S	building	v0.5.2 fix (M): Mark for suppression says what it does today: a mark and a reason, hiding nothing yet (the owner, 14 Nov)
 platform	v052-fallback-words	S	building	v0.5.2 fix (R): The render's and spec 05's 'falls back to PostgreSQL' say what search really does when OpenSearch does not answer
 case-b	v052-group-counts	S	building	v0.5.2 fix (K): the search results page says counts are per group, so All need not equal their sum
+platform-b	v052-attribution	S	building	v0.5.2 fix (A): The map's attribution chip readable: a token background, measured in every look
+platform-b	v052-version	S	building	v0.5.2 fix (V): The Glass shows the code's own version, not an older checkout's .git commit (the demo showed v0.5.0)
+studio	v052-pipeline-words	S	building	v0.5.2 fix (N): The Ingest Studio's messages say Pipeline, as its screens do, not recipe
+case-b	v052-help-everywhere	S	building	v0.5.2 fix (H): Help (?) opens its panel from every view, not only Graph
