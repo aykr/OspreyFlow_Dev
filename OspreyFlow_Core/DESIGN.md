@@ -446,6 +446,14 @@ Transport, square corners (every radius token, status chips included, is 0), and
 Type (the owner's ruling of 31 October 2026): the welcome, start and Admin pages take GOV.UK's
 scale, 19px body; the workspace keeps the 13px base (§9 exception 1).
 
+The Glass page's panels and menus keep the workspace's scale too (the owner's exception, 14 November 2026).
+Inside a drawer, a canvas menu, the top bar's or the case line's menus, the strip over the canvas, or the Save
+as a view form, GOV.UK Frontend's type classes take the page's tokens: body text, headings, links, buttons and
+fields at `--fs-13`; small text, hints, captions and tags at `--fs-12`, never below. Each panel and menu sets
+the body size itself, so it never inherits the row it opens from. The case line is that exception: a GOV.UK
+notification banner at 19px under the brand, by design. `OspreyFlow_Core/apps/workspace/src/design/panelType.css` holds this,
+and `OspreyFlow_Core/apps/workspace/keyboard/glass-panels-look.spec.ts` measures it in every look.
+
 | Token | GOV.UK pages | Use |
 |---|---|---|
 | `--fs-11` | 14 / 20 | small meta |

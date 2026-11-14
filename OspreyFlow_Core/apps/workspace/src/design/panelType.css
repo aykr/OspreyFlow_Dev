@@ -1,0 +1,47 @@
+/* The Glass page's panels and menus on the page's own type scale (the owner's exception, 14 November 2026; spec/design/
+   DESIGN.md §11). The workspace keeps its 13px base in every look, GOV.UK's included (DESIGN.md §9 exception 1;
+   tokens.css remaps GOV.UK's scale for the welcome, home and Admin pages alone). Two things brought other sizes into
+   the Glass page's panels and menus under GOV.UK:
+   - a panel drawn with GOV.UK Frontend's classes took the Design System's own sizes (a saved view's name at 19px
+     bold, its tag at 19px, its links at 16px, beside 13px text);
+   - a menu that sets no size of its own inherited the row it opens from, and the case line is a GOV.UK notification
+     banner at 19px by design (places.css), so the case switcher's menu and its New case form drew at 19px.
+   Here each panel and menu sets the page's body size, and GOV.UK Frontend's type classes inside it take the page's
+   tokens: its drawers, its canvas menus and the top bar's and case line's menus, the strip over the canvas, and the
+   Save as a view form. The case line itself, the GOV.UK-scale pages and GOV.UK's own header, footer and phase banner
+   keep their sizes, since none is one of these. `keyboard/glass-panels-look.spec.ts` measures each panel and menu
+   against the page's scale, in the dark, light and GOV.UK looks. Tokens only. */
+
+/* Each panel's and menu's own size: the page's body, never the row it opens from. `:where` keeps this below any class
+   that sizes the panel on purpose. */
+:where(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner, .save-view) {
+  font-size: var(--fs-13);
+  line-height: var(--lh-13);
+}
+
+/* A panel's heading drawn as a label (`.label`, which sets no size), at the body size in every look, never the
+   browser's own size for an h2 or h3 (19.5px or 15.21px beside 13px text). Only these: a heading another class sizes
+   keeps its size. */
+:where(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner, .save-view) :where(h2, h3, h4, h5, h6):where(.label) {
+  font-size: var(--fs-13);
+  line-height: var(--lh-13);
+}
+
+/* GOV.UK Frontend's type classes, on the page's scale: body text, headings (bold, as GOV.UK draws them), links,
+   buttons and fields at the body size; small text, hints, captions and tags at the small size (DESIGN.md §9: secondary
+   text never below 12px). */
+[data-brand="govuk"] :is(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner, .save-view)
+  :is(.govuk-heading-xl, .govuk-heading-l, .govuk-heading-m, .govuk-heading-s,
+      .govuk-body, .govuk-body-m, .govuk-body-l, .govuk-link, .govuk-back-link, .govuk-button,
+      .govuk-summary-list, .govuk-summary-list__key, .govuk-summary-list__value, .govuk-summary-list__actions,
+      .govuk-label, .govuk-fieldset__legend, .govuk-input, .govuk-select, .govuk-textarea, .govuk-list,
+      .govuk-table, .govuk-table__cell, .govuk-table__header, .govuk-error-message, .govuk-error-summary__title,
+      .govuk-error-summary__body, .govuk-radios__label, .govuk-checkboxes__label) {
+  font-size: var(--fs-13);
+  line-height: var(--lh-13);
+}
+[data-brand="govuk"] :is(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner, .save-view)
+  :is(.govuk-body-s, .govuk-hint, .govuk-caption-m, .govuk-caption-l, .govuk-caption-xl, .govuk-tag) {
+  font-size: var(--fs-12);
+  line-height: var(--lh-12);
+}

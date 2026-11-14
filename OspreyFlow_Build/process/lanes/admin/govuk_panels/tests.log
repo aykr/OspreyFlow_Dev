@@ -1,0 +1,8 @@
+# The GOV.UK panels step's gates, before the rebase onto f7e9606 (the spec again after it: 27 passed), on this Mac (Playwright slot 1)
+keyboard/glass-panels-look.spec.ts: 27 passed (9 panels, three looks)
+the whole keyboard suite: 1010 passed, 5 skipped
+axe (a11y/every-harness.spec.ts) on views, top-bar, places, shell, explore, export-panel and admin harnesses, dark, light and GOV.UK: 246 passed
+the whole axe suite, at 24ada68 (before the review's CSS, whose rules only reach further into the same containers): 1142 passed
+vitest src/design, src/views, src/shell, src/investigation, src/admin: 557 passed
+design-check (DESIGN.md mirrored to OspreyFlow_Core), citation-check, product-tree-link-check, test-file-coverage-check, ui-words-check: clean
+red_before_code.log: 8 of 27 red on main's CSS; plants.log: 9 plants, 0 missed
