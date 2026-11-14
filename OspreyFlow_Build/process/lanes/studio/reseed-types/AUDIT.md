@@ -41,6 +41,29 @@ It is shown red (`RED_RECORD.txt`) by a plant at the real call site: `pid_plan.n
 kind, so a person's `pin:` and `cash:` would share an id. Three cases go red, and the restored tree is green. Its
 own `test_the_check_finds_a_key_hashed_without_its_kind` proves the check can fail without touching the code.
 
-## The live reseed
+## The live reseed (stack f, 14 November 2026, the owner's word to run it then)
 
-Not run. The orchestrator's step 3 was for a generator changed to make ids include the type; none was changed.
+The run was `live_reseed.py`, on stack f under studio's lease (taken 13:15:51Z, released after), beside case's
+make; the host's load average at each run's start and end is in each record. Each of the four persisting packs was
+seeded by main's seed path (`python -m <script> --case-name <the pack's case>`) and then reseeded once at main.
+
+| Pack | Seed | Reseed | Nodes by type after the seed, and after the reseed | Refusals |
+| --- | --- | --- | --- | --- |
+| cyber-intrusion | exit 0 | exit 0 | the same 22 nodes in 7 types | none |
+| prison-intelligence | exit 0 | exit 0 | the same 6,998 nodes in 8 types | none |
+| prison-intelligence-scale | exit 0 | exit 0 | the same 7,176 nodes in 6 types | none |
+| fixture-corp, as its dataset's owning unit (`unit-intel`) | exit 0 | exit 0 | the same 68 nodes (65 Person, 3 Organisation) | none |
+
+**No type refusal, and no other write refused.** A reseed writes nothing new: every count is the same after it.
+
+**The raw records:**
+- `live_reseed.run1.txt`: the runner stopped before seeding, because it counted through a `V` type that ArcadeDB's
+  schema does not have. Fixed.
+- `live_reseed.613e29a.txt`: three packs clean. Fixture-corp was refused at case set-up, before any write:
+  `DatasetRefusedError: not one of this unit's datasets`. On stack f, the fixture-corp dataset was already owned
+  by `unit-intel`, left by an earlier run, while the runner seeded as `unit-1`. That is a property of the stack,
+  not of a type.
+- `live_reseed.aa145c6.fixture-corp.txt`: fixture-corp seeded as its owning unit, as `seed_internal` passes the
+  owning unit. Both runs clean.
+
+PID's one line matching "refus" was the seed's own help text ("If a rehearsal reset ever refuses…"), not a refusal.
