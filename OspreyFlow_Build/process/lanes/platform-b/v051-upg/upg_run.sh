@@ -122,6 +122,18 @@ print('upg-run: rollback point:', _keep_rollback_point(d, 'v0.5.0', '$commit'))
   say "--- the folder around the files step"
   $PY $R/tools/upg_folderhash.py diff $R/logs/folder.0-before-files.json $R/logs/folder.1-after-files.json
   say "folder diff exit $?" ;;
+envsnap)
+  # The secrets before a real update, per-key hashes only (update-emulated takes its own).
+  $PY $R/tools/upg_envdiff.py snap $D/deployment.env $R/logs/env.0-v0.5.0.json; say "env snapshot exit $?" ;;
+update-real)
+  # Run 3: the real `ospreyflow update` to the signed release, by the CHANGELOG's words, through the
+  # command repaired by repair-c: find_release, signatures, its backup, pin_images, pull, start,
+  # verify_running. `$2` is the tag (v0.5.1).
+  cd $R/repo
+  [ -n "${2:-}" ] || { say "REFUSED: update-real needs the release's tag"; exit 2; }
+  say "\$ ospreyflow update --name osprey-upg --to $2 --yes"
+  $OF update --name osprey-upg --to $2 --yes < /dev/null; say "update exit $?"
+  say "checkout: $(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD)" ;;
 sync)
   # The stand-in's own step, not the CHANGELOG's: the build below runs in the checkout's environment.
   cd $R/repo
