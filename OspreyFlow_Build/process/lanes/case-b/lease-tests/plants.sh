@@ -18,7 +18,7 @@ stray() {
 reasons() { grep -E "^FAILED|^E +(FileNotFoundError|AssertionError)" "$1" | sed -E 's|/tmp/pytest-of-[^ ]*/||; s/^(.{0,230}).*/\1/' | sort -u; }
 verdict() { # name, want, log, for red: how many fail, and the words each failure must hold
   if [ "$2" = green ]; then
-    if grep -qE "^FAILED|[0-9]+ failed|error" "$3"; then echo "WRONG (something failed): $1"; reasons "$3"; ok=0; else echo "AS IT MUST BE (green): $1: $(grep -E '[0-9]+ passed' "$3" | tail -1)"; fi
+    if grep -qE "^FAILED|^ERROR|[0-9]+ failed|[0-9]+ errors?( |$)" "$3"; then echo "WRONG (something failed): $1"; reasons "$3"; ok=0; else echo "AS IT MUST BE (green): $1: $(grep -E '[0-9]+ passed' "$3" | tail -1)"; fi
   else
     if grep -qE "^=+ $4 failed|^$4 failed" "$3" && grep -qE "$5" "$3"; then echo "AS IT MUST BE (red): $1"; else echo "WRONG (not red as it must be): $1"; tail -3 "$3"; ok=0; fi
     reasons "$3"
@@ -33,6 +33,8 @@ echo "copy head $(git rev-parse --short HEAD), on $(hostname), processes $(ls -d
 FOUR='start_line or two_runs_named_alike or two_runs_of_one_lane'
 WAITS='FileNotFoundError: .*/exit|still running'
 
+# PLANTS_ONLY=1 skips step 0's load rounds (recorded once, in gates/plants-load.txt), so the shared host is loaded once.
+if [ "${PLANTS_ONLY:-}" != 1 ]; then
 # 0. Main as it is (its test file and its script), the host loaded as a night of lane runs loads it: every core and
 #    2,000 more processes. Three rounds of the four exit-waiting cases; then the branch under the same load.
 cp $D/main_test_stack_lease.py $T
@@ -46,6 +48,8 @@ verdict "branch under the same load: the whole file" green $L
 grep -E "s call" $L | sed 's/tests.test_stack_lease.py:://'
 load_off
 stray "the load rounds"
+else git apply $D/stack_lease_sh.diff || { echo "the script diff does not apply"; exit 1; }
+fi
 
 # 1. The mechanism, planted: each run's table a large host's (8,000 entries, none of the run's) in place of the
 #    empty one. The four wait on the scan of whatever table the run is given, and go red waiting.

@@ -1662,11 +1662,14 @@ def test_the_reaper_reads_the_process_table_it_is_given(tmp_path: Path) -> None:
                                  timeout=60, check=False)
             return ran.stdout.strip() + ran.stderr
 
-        assert reap(table("empty")).startswith("reaped 0")
-        assert tagged.poll() is None, "an empty table ended a process: the scan read /proc"
-        assert reap(table("listing-the-untagged", plain.pid)).startswith("reaped 0")
-        assert plain.poll() is None, "a process without the tag was signalled: the re-read read the table"
-        assert reap(table("listing-the-tagged", tagged.pid)).startswith("reaped 1")
+        said = reap(table("empty"))
+        assert said.startswith("reaped 0") and tagged.poll() is None, f"an empty table ended a process: the scan read /proc ({said})"
+        said = reap(table("listing-the-untagged", plain.pid))
+        assert said.startswith("reaped 0") and plain.poll() is None, (
+            f"a process without the tag was signalled: the re-read read the table ({said})"
+        )
+        said = reap(table("listing-the-tagged", tagged.pid))
+        assert said.startswith("reaped 1"), f"the table lists a tagged process and the reap ended none ({said})"
         assert tagged.wait(timeout=20) is not None, "the tagged process the table lists outlived the reap"
     finally:
         for sleeper in (tagged, plain):
