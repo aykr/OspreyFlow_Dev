@@ -20,7 +20,16 @@ U	An upgrade or fresh install builds the search index (ADR-150 d4: no index made
 5	Feature freeze (the moment the last open feature merges) and the wording sweep at once	docs	2026-11-14	2026-11-15	y	3f,3f′,3g,3h,U	docs:v052-sweep
 3i	edges_among in chunks (ADR-124 Am 20): a batch or view past ~10k nodes answers	rules-b	2026-11-14	2026-11-16	y	-	rules-b:v052-am20
 F	Main's CI green (four fixes)	orchestrator	2026-11-14	2026-11-15	y	-	orchestrator:v052-ci
-C	The candidate: main after the sweep, with CI green on it	orchestrator	2026-11-15	2026-11-15	y	5,3i,F	-
+T	The top bar stays one line: less-used views fold into More views (the owner's design rule; fallback by Sun midday: all but Graph and Map at narrow widths)	case	2026-11-14	2026-11-15	y	-	case:v052-topbar
+Q	The ontology read retried, so the Query builder and link types appear after a failed first read; step 6's live list (5 of 5)	case	2026-11-14	2026-11-15	y	-	case:v052-tidy
+P	The batch job's panel only on the canvas, not over Studio, Reports, Boards; a local-lite batch job proven to done	case-b	2026-11-14	2026-11-15	y	-	case-b:v052-batch-panel
+S	Type-ahead: case-sensitive suggestions fill their page; the limited line says its reason, never 'just now' when no index is configured	studio	2026-11-14	2026-11-15	y	-	studio:v052-suggest
+W	Refusals say 'People and roles', not 'Admin › People'; no raw field names in the Entra refusal	admin	2026-11-14	2026-11-15	y	-	admin:v052-words
+E	A watch stays active until three unreachable evaluations in a row (ADR-044; the owner's ruling, 14 Nov)	admin	2026-11-14	2026-11-15	y	-	admin:v052-escalation
+G	The Glass shows the Conduit's words for an access value not set, a token-version mismatch and a refused guest	platform-b	2026-11-14	2026-11-15	y	-	platform-b:v052-signin-words
+M	Mark for suppression says what it does today: a mark and a reason, hiding nothing yet (the owner, 14 Nov)	case-b	2026-11-14	2026-11-15	y	-	case-b:v052-suppress-words
+R	The render's and spec 05's 'falls back to PostgreSQL' say what search really does when OpenSearch does not answer	platform	2026-11-14	2026-11-15	y	-	platform:v052-fallback-words
+C	The candidate: main after the sweep, with CI green on it	orchestrator	2026-11-15	2026-11-15	y	5,3i,F,T,Q,P,S,W,E,G,M,R	-
 D	osprey-small (the GOV.UK demo) from the candidate, for client sign-ins (the owner, 14 Nov): backup, the gate, four sign-ins, health, a browser pass; restored if any check fails	orchestrator	2026-11-15	2026-11-15	n	C,4	-
 6	The install test on the candidate, from the manifest: v0.5.1 upgraded, and a fresh v0.5.2 install, each with spec 08's poc scenarios	platform-b	2026-11-16	2026-11-16	y	4,C	platform-b:v052-r1
 7	Cut v0.5.2; print the page tables; the demos when the owner says	orchestrator	2026-11-17	2026-11-17	y	6	-

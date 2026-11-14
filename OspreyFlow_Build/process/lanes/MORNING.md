@@ -2064,3 +2064,10 @@ Also asked by the lanes:
 4. **R7 confirmed**: step 2 (suppression taking effect) is not in v0.5.2 and gets its own ADR after the cut; the menu keeps the mark, and the guide says it hides nothing yet.
 5. **ADR-044's three-in-a-row escalation: fix in v0.5.2** (admin), no longer carried.
 6. **Standing word: live-file listings** in ci.yml and the Makefile may be applied without asking (see the afternoon entry).
+
+## 14 November 2026, evening (2): the owner's four follow-ups
+
+1. **The candidate waits on every fix marked "in the candidate"**: route rows T, Q, P, S, W, E, G, M and R added, and step C waits on 5, 3i, F and all of them. Any that won't make Sunday goes to the owner, who decides hold or ship.
+2. **The top bar's fallback**: if the full fold is not ready by Sun 15 midday, the candidate takes the simplest rule (at narrow widths every view but Graph and Map under More views), held by the same narrow-width and wide-font tests in both looks; the polished fold after the cut.
+3. **Mark for suppression on the demo**: its wording says what it does today (a mark and a reason, hiding nothing yet); if that is more than wording, the action is hidden on the demo and the owner told (row M, case-b).
+4. **Search behaviours accepted by the owner as designed (ADR-149)**: a merged entity on two pages, a Document counted in two groups, and no matched field on a typo match.
