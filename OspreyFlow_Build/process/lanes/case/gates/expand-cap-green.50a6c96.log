@@ -1,0 +1,16 @@
+# expand-cap green at 50a6c96 with shared-files-expand-cap.diff applied (the keyboard spec imports CANVAS_CAP_ACTIONS from it; actionRegistry.ts is the orchestrator's and is never committed on the lane)
+tsc exit 0
+ Test Files  386 passed (386)
+      Tests  3441 passed (3441)
+# OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts --workers=1
+  4 failed
+    keyboard/questions.spec.ts:315:1 › Whole case is chosen by arrow keys, its search is asked with the question's words, and an [S-n] selects its records on the real canvas (ADR-098 Amendment 9) 
+    keyboard/questions.spec.ts:343:1 › every registered questions action has its own proving test case above 
+    keyboard/sources-connectors.spec.ts:144:1 › a dataset subscribes to a list by its id, and reads it 
+    keyboard/sources-connectors.spec.ts:402:1 › every registered Sources connector action has its own proving test case above 
+  1 skipped
+  873 passed (9.8m)
+# OSPREY_PORTS_SLOT=2 npx playwright test --config a11y/playwright.config.ts a11y/every-harness.spec.ts -g 'keyboard/harness|contrast finding|scan found'
+  2 passed (1.4s)
+
+# questions.spec.ts and sources-connectors.spec.ts alone, the same tree, twice: run 1: 24 passed, 2 failed (sources-connectors only: 'Tab never reached Schedule OFAC SDN (synthetic)' and its registry check, the file's own moving flake, now seen alone); run 2: 26 passed. questions.spec.ts passed both times: its failure in the full run above did not recur, and the step touches no Ask & Chat file.
