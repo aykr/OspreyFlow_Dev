@@ -1116,6 +1116,11 @@ def out_of_date_next(error: PrincipalAccessOutOfDate, *, by_hand: bool = False) 
     return RUN_AGAIN_WORDS if by_hand else NEXT_SLOT_WORDS
 
 
+#: ADR-148 Amendment 18: how the Conduit's log begins its one line about a token-version mismatch,
+#: which INSTALL step 6's check reads (`harness/cloud_platform/runbooks.py`).
+TOKEN_VERSION_LOG = "token version: "
+
+
 class TokenVersionMismatch(PrincipalResolutionError):
     """ADR-148 Amendment 18: an Entra access token signed by the tenant, but of the other version
     than the deployment expects (`cloud_platform.claims.token_version`), so its issuer and audience
@@ -1623,7 +1628,7 @@ class PrincipalResolver:
         mismatch = token_version_mismatch(claims, mapping.tenant_id, self._config.oidc_issuer)
         if mismatch is not None and not self._version_said:
             self._version_said = True
-            _log.warning("token version: %s", mismatch)
+            _log.warning("%s%s", TOKEN_VERSION_LOG, mismatch)
         return mismatch
 
     def _verified_claims(self, token: str) -> dict[str, Any]:

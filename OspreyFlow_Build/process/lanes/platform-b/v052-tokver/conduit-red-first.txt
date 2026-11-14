@@ -19,3 +19,15 @@ unplanted: exit 0: 9 passed in 6.96s
   planted: exit 1: 1 failed, 8 passed in 6.12s
     test_auth_entra_token_version.py::test_the_mismatch_is_logged_once_for_install_step_6
 restored: exit 0: 9 passed in 6.44s
+
+# INSTALL step 6's token-version check, its plants in runbooks.py, a fresh PYTHONPYCACHEPREFIX per run.
+# Found first by the test itself: the block's first form ended its refusal with `false` inside an `if` and then
+# printed the all-clear, so it exited 0 with both messages; red in test_the_check_stops..., fixed with if/else.
+unplanted: exit 0: 3 passed in 3.68s
+== the block looking for its own copy of the prefix, not the Conduit's
+  planted: exit 1: 1 failed, 2 passed in 4.56s
+    test_cloud_platform_token_version.py::test_the_check_stops_with_the_conduit_s_own_words_after_a_refused_sign_in
+== the block saying the words but not stopping
+  planted: exit 1: 1 failed, 2 passed in 5.73s
+    test_cloud_platform_token_version.py::test_the_check_stops_with_the_conduit_s_own_words_after_a_refused_sign_in
+restored: exit 0: 3 passed in 4.47s
