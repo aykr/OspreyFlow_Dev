@@ -40,6 +40,7 @@ from schemas.admin import Team
 from schemas.dataset_model import HomeCase
 from schemas.domain import Alert, AlertMode, Monitor, Node, PatternQuery, Principal, SavedPattern, Subgraph
 from tests.services.api.test_alert_evidence_withheld import CASE, TriageStore, _node, _world
+from tests.services.api.watch_status_fake import kept
 
 NOW = datetime(2026, 11, 9, 9, tzinfo=UTC)
 TODAY = NOW.date()
@@ -233,8 +234,10 @@ class _Monitors:
     async def record_slot(self, monitor_id: str, slot: datetime) -> None:
         self.slots.append(slot)
 
-    async def set_status(self, monitor_id: str, status: str) -> None:
-        self.status.append(status)
+    async def set_status(self, monitor_id: str, status: str, detail: str | None = None) -> None:
+        # As the real store keeps it (ADR-044 Amendment 1): the status, and a reason with stopped.
+        kept_status, self.reason = kept(status, detail)
+        self.status.append(kept_status)
 
 
 class _Valkey:
@@ -330,6 +333,7 @@ async def test_a_watch_runs_on_its_schedule_as_its_owner_within_its_dataset() ->
     executor, matched = _executor(monitors, _Valkey(), revoked)
     await executor.tick(NOW)
     assert matched == [] and monitors.status == ["stopped"]
+    assert monitors.reason == "revoked"  # ADR-044 Amendment 1: said why
 
 
 async def test_a_slot_the_identity_provider_could_not_answer_is_tried_again() -> None:

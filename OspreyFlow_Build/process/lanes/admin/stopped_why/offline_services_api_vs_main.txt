@@ -1,0 +1,7 @@
+# tests/services/api, all of it, offline (closed ports, no lane, fresh PYTHONPYCACHEPREFIX, -m 'not live'), on this branch and on main 8316729
+branch: 198 failed, 6688 passed, 24 skipped, 105 warnings, 854 errors in 96.91s (0:01:36)
+main:   198 failed, 6658 passed, 24 skipped, 105 warnings, 852 errors in 97.84s (0:01:37)
+# only on the branch (both are new live cases, erroring offline for want of Postgres as every case of their files does):
+ERROR ../OspreyFlow_Build/tests/services/api/test_hotlists.py::test_a_stopped_hotlist_keeps_why_until_it_is_active_again
+ERROR ../OspreyFlow_Build/tests/services/api/test_monitors.py::test_a_stopped_watch_keeps_why_and_a_reason_not_known_here_is_served_as_none
+# only on main: none

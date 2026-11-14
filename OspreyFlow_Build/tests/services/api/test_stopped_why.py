@@ -31,6 +31,7 @@ from principal_auth import (
 )
 from schemas.domain import Hotlist, Monitor, Principal, StoppedReason
 from tests.services.api.test_owner_on_entra import _Claims
+from tests.services.api.watch_status_fake import kept
 
 OWNER = Principal(id="owner-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 NOW = datetime(2026, 11, 14, 9, tzinfo=UTC)
@@ -69,6 +70,7 @@ class _Watches:
         return self.active
 
     async def set_status(self, watch_id: str, status: str, detail: str | None = None) -> None:
+        kept(status, detail)  # refused as the real store's types refuse it
         self.told.append((watch_id, status, detail))
 
     async def last_slot(self, _id: str) -> None:
