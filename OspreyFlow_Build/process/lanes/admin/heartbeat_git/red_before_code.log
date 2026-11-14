@@ -1,0 +1,20 @@
+# the step's tests at 2b09914 against main 0276b39's scripts/lanes_heartbeat.sh: every new case red, every old one green
+E   AssertionError: assert (' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:451: AssertionError: assert (' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index')
+E   AssertionError: assert 'platform: P5b rows' not in 'OUTSIDE THI...rm: P5b rows'
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:484: AssertionError: assert 'platform: P5b rows' not in 'OUTSIDE THI...rm: P5b rows'
+E   AssertionError: assert (' ready, 2 days ahead of its start' in '  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c · Client-size synthetic data loaded once')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:498: AssertionError: assert (' ready, 2 days ahead of its start' in '  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c · Client-size synthetic data loaded once')
+E   AssertionError: assert '5 of 11 steps merged' in 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n'
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:521: AssertionError: assert '5 of 11 steps merged' in 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n'
+E   AssertionError: assert ' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index'
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:533: AssertionError: assert ' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index'
+FAILED tests/test_lanes_heartbeat_route.py::test_a_row_typed_building_whose_branch_is_on_main_by_a_merge_shows_done
+FAILED tests/test_lanes_heartbeat_route.py::test_a_merge_in_the_merger_brief_s_form_names_its_branch
+FAILED tests/test_lanes_heartbeat_route.py::test_a_landed_line_counts_only_when_it_says_the_step_is_done
+FAILED tests/test_lanes_heartbeat_route.py::test_a_step_whose_after_steps_are_all_done_shows_ready_with_the_days
+FAILED tests/test_lanes_heartbeat_route.py::test_every_view_reads_the_steps_git_says_are_done
+FAILED tests/test_lanes_heartbeat_route.py::test_a_branch_is_read_from_any_row_shape_the_table_takes
+FAILED tests/test_lanes_heartbeat_route.py::test_an_after_list_with_spaces_is_read_as_its_ids
+7 failed, 29 passed in 42.00s
+# 4 of the 11 new cases pass on main by design: they guard against a false done (not_on_main_by_a_merge, never_given_one_by_its_name, with_no_repository, ready_needs_every_after_step), and main's script never reads done from git. Each is shown red by its plant (plants.log).

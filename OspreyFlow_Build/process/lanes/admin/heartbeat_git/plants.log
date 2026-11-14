@@ -2,9 +2,7 @@
   'my $branch = @f >= 6 ? $f[5] =~ s/^\s+|\s+$//gr : "";', 'my $branch = @f >= 6 ? $f[5] =~ s/^\s+|\s+$//gr : "lane/$f[0]-$f[1]";',
 /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/process/lanes/admin/heartbeat_git/plants.py:32: SyntaxWarning: invalid escape sequence '\s'
   'my $branch = @f >= 6 ? $f[5] =~ s/^\s+|\s+$//gr : "";', 'my $branch = @f >= 6 ? $f[5] =~ s/^\s+|\s+$//gr : "lane/$f[0]-$f[1]";',
-/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/process/lanes/admin/heartbeat_git/plants.py:38: SyntaxWarning: invalid escape sequence '\s'
-  'my @f = /\t/ ? split(/\t/) : split(/ +/);', 'my @f = split(/\s+/);',
-# heartbeat plants at 6cba1ff
+# heartbeat plants at 2b09914
 == no view reads git: the typed rows stand (must fail at /assert " done" in _row\(out, "3c"\)/): RED at its assertion, 1 failed
    stopped at tests/test_lanes_heartbeat_route.py:451: assert " done" in _row(out, "3c") and "running" not in _row(out, "3c")
 == the route alone reads git (the first version's shape) (must fail at /assert "OVERALL: 5 of 11 steps done"/): RED at its assertion, 1 failed
@@ -17,11 +15,22 @@
    stopped at tests/test_lanes_heartbeat_route.py:476: assert " running" in _row(gitroute(16), "3c")
 == a LANDED line counted without `done` (a part's merge, named by its step) (must fail at /assert " running" in _row\(out, "3c"\) and " not started" in _row\(out, "B"\)/): RED at its assertion, 1 failed
    stopped at tests/test_lanes_heartbeat_route.py:488: assert " running" in _row(out, "3c") and " not started" in _row(out, "B")
-Traceback (most recent call last):
-  File "/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/process/lanes/admin/heartbeat_git/plants.py", line 107, in <module>
-    sys.exit(main())
-             ^^^^^^
-  File "/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/process/lanes/admin/heartbeat_git/plants.py", line 81, in main
-    assert s.count(old) == 1, f"{name}: the site is not there exactly once"
-           ^^^^^^^^^^^^^^^^^
-AssertionError: a LANDED line split on spaces alone (a step with a space never read): the site is not there exactly once
+== a LANDED line split on spaces alone (a step with a space never read) (must fail at /"platform: P5b rows" not in/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:484: assert "platform: P5b rows" not in "\n".join(_section(out, "OUTSIDE THIS ROUTE"))
+== an empty middle field collapsed (the branch read from the wrong column) (must fail at /assert "docs" not in/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:534: assert "docs" not in "\n".join(_section(out, "OUTSIDE THIS ROUTE"))
+== a missing repository ends the view (must fail at /assert out\.returncode == 0/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:438: assert out.returncode == 0, out.stderr[-800:]
+== no step shown ready (must fail at /assert " ready, 2 days ahead/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:498: assert " ready, 2 days ahead of its start" in _row(out, "B") and "after 3c" not in _row(out, "B")
+== ready without the days it could gain (must fail at /assert " ready, 2 days ahead/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:498: assert " ready, 2 days ahead of its start" in _row(out, "B") and "after 3c" not in _row(out, "B")
+== ready when any `after` step is done, not every one (must fail at /assert " not started" in _row\(out, "4"\)/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:499: assert " not started" in _row(out, "4") and "after 3c,3d,B" in _row(out, "4")
+== an `after` naming no route step taken as done (must fail at /assert "ready" not in _row\(gitroute\(14, progress\), "3d"\)/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:509: assert "ready" not in _row(gitroute(14, progress), "3d")
+== a step under way shown ready (must fail at /assert " running" in _row\(gitroute\(14, progress\), "B"\)/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:513: assert " running" in _row(gitroute(14, progress), "B")
+== an `after` list split on commas alone (must fail at /assert " ready" in _row/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:545: assert " ready" in _row(gitroute(14, _branch(PROGRESS, "v052-index", "lane/rules-index")), "B")
+plants: 15, missed: 0
