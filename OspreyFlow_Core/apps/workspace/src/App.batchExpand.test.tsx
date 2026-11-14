@@ -2,10 +2,11 @@
 //
 // The cap's third choice on the real App (ADR-151; spec/00 §4): *Run as a batch job* hands the refused expansion
 // up through `onRunExpansionAsBatch`, and the App opens the batch job's panel, which sends the expansion as it was
-// asked for, follows the job, and opens its result as the read-only lens. What would fail if it were wrong: no
-// prop passed (the canvas then offers no batch job), the panel not opened, the result not shown as the lens, a
-// view already open offering a batch job (an expansion in a view is not the case's), or the panel left following
-// a job of the case the reader has left. The canvas's own half, by keyboard, is `keyboard/canvas-batch-expand.spec.ts`.
+// asked for and follows the job; *Open the view* shows its result as the read-only lens, never unasked. What would
+// fail if it were wrong: no prop passed (the canvas then offers no batch job), the panel not opened, the result
+// opened unasked or not shown as the lens, a view already open offering a batch job (an expansion in a view is not
+// the case's), or a second choice not given its own panel. The panel held to its case and person is
+// `workingset/useBatchExpansion.test.ts`; the canvas's half, by keyboard, is `keyboard/canvas-expand-cap.spec.ts`.
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -138,9 +139,12 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     expect(screen.getByText(/The canvas refused 6,210 nodes against its limit of 5,000\./)).toBeTruthy();
     await waitFor(() => expect(sent.find((s) => s.url.endsWith("/inv-1/batch-expansions"))).toBeTruthy());
     expect(sent.find((s) => s.url.endsWith("/inv-1/batch-expansions"))!.body).toEqual({ request: { node_ids: ["p1"], depth: 1, edge_types: null } });
-    const lens = await screen.findByRole("region", { name: "Open view" }, { timeout: 5000 });
+    const open = await screen.findByRole("button", { name: "Open the view" }, { timeout: 5000 });
+    expect(screen.queryByRole("region", { name: "Open view" })).toBeNull();
+    fireEvent.click(open);
+    const lens = await screen.findByRole("region", { name: "Open view" });
     expect(within(lens).getByText("Kestrel, expanded")).toBeTruthy();
-    expect(screen.getByText("Saved 6,210 nodes and 9,004 links as your private view “Kestrel, expanded”. Its result is open as the view “Kestrel, expanded”.")).toBeTruthy();
+    expect(screen.getByText("Saved 6,210 nodes and 9,004 links as your private view “Kestrel, expanded”. It is open on the canvas.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(panel()).toBeNull());
    }, 15_000);
@@ -150,8 +154,22 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     await screen.findByRole("application", { name: "Network canvas" });
     await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
     act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
-    await screen.findByRole("region", { name: "Open view" }, { timeout: 5000 });
+    fireEvent.click(await screen.findByRole("button", { name: "Open the view" }, { timeout: 5000 }));
+    await screen.findByRole("region", { name: "Open view" });
     await waitFor(() => expect(canvasProps.current?.lens).toBe(true));
     expect(canvasProps.current?.onRunExpansionAsBatch).toBeUndefined();
    }, 15_000);
+
+  test("a second choice while the first runs opens its own panel, which asks the Conduit again", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
+    const posts = () => sent.filter((s) => s.url.endsWith("/inv-1/batch-expansions"));
+    act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    act(() => canvasProps.current!.onRunExpansionAsBatch!({ ...ASKED, depth: 2 }));
+    await waitFor(() => expect(posts()).toHaveLength(2));
+    expect(posts()[1]!.body).toEqual({ request: { node_ids: ["p1"], depth: 2, edge_types: null } });
+    expect(screen.getAllByRole("region", { name: "Batch job: the whole expansion" })).toHaveLength(1);
+  }, 15_000);
 });

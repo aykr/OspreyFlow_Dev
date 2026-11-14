@@ -409,9 +409,10 @@ const judged = new Map<string, number>(
     }),
 );
 
-// ADR-093: the Inspector's selected list, wired to the canvas as App wires it.
-// `?batch=panel`: *Run as a batch job* opens the real batch job's panel, as the App does (`App.tsx`'s
-// onRunExpansionAsBatch), against the address the test routes (`keyboard/canvas-batch-expand.spec.ts`).
+// `?batch=panel` (ADR-151, case-b's): *Run as a batch job* opens the real batch job's panel, as the App does
+// (`App.tsx`'s onRunExpansionAsBatch), against the address the test routes (`keyboard/canvas-expand-cap.spec.ts`).
+// The App's own hold on it, to its case and person and away from an open view, is proved in jsdom
+// (`workingset/useBatchExpansion.test.ts`, `App.batchExpand.test.tsx`).
 const wantsBatch = new URLSearchParams(window.location.search).get("batch");
 let showBatchPanel: (request: BatchExpansionRequest) => void = () => undefined;
 function HarnessBatchPanel() {
@@ -436,6 +437,7 @@ function HarnessBatchPanel() {
   );
 }
 
+// ADR-093: the Inspector's selected list, wired to the canvas as App wires it.
 function HarnessSelectionList() {
   const [ids, setIds] = useState<string[]>([]);
   useEffect(() => {

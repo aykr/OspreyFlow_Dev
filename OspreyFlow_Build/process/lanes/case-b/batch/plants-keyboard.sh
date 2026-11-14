@@ -38,6 +38,9 @@ plant "Close out of the Tab order" "$UI" \
 plant "Try the batch job again out of the Tab order" "$UI" \
   's/<button type="button" className="btn btn--primary" onClick=\{\(\) => setAttempt/<button type="button" className="btn btn--primary" tabIndex={-1} onClick={() => setAttempt/' \
   "tried again by keyboard" "a failed batch job is tried again by keyboard, and runs to its view"
+plant "Open the view out of the Tab order" "$UI" \
+  's/(<button\n            type="button"\n            className="btn btn--primary"\n            onClick=\{\(\) => void openResult)/<button tabIndex={-1}\n            type="button"\n            className="btn btn--primary"\n            onClick={() => void openResult/' \
+  "opened as the view by keyboard" "the panel says each stage in the route's words, and its result is opened as the view by keyboard"
 plant "the stage's words faint against the panel (dark)" "$CSS" \
   's/\.batch-expansion__status \{ margin: 0 0 var\(--sp-8\); font-weight: 600; \}/.batch-expansion__status { margin: 0 0 var(--sp-8); font-weight: 600; color: #30343b; }/' \
   "running, has no automated.*\\(dark\\)" "the batch job's panel, running, has no automated WCAG 2.2 A or AA violation \\(dark\\)"

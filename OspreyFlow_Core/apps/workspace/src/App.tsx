@@ -173,7 +173,7 @@ import { createWorkingSet } from "./workingset/store";
 import { applyRestoredSnapshot, ViewOverCapGate } from "./workingset/ViewOverCapGate";
 import { ViewOverCapDialog } from "./workingset/ViewOverCapDialog";
 import { BatchExpansion } from "./workingset/BatchExpansion";
-import type { BatchExpansionRequest } from "./workingset/batchExpansionApi";
+import { useBatchExpansion } from "./workingset/useBatchExpansion";
 
 // **An empty base URL means same-origin, and that is what a rendered
 // deployment builds with** (05_DEPLOYMENT.md §2.6 item 1, owner's decision
@@ -810,9 +810,8 @@ export function App() {
   // ADR-151: the cap's third choice, the refused expansion run as a batch job and followed in its
   // panel. `asked` gives each choice its own panel: choosing again while one runs opens a new one,
   // which the Conduit's 409 makes follow the job already running.
-  // The panel follows a job in the case it was asked in, and is shown only while that case is open (the job
-  // carries on when the reader leaves it).
-  const [batchExpansion, setBatchExpansion] = useState<{ request: BatchExpansionRequest; caseId: string; asked: number } | null>(null);
+  // The panel follows a job in the case, and for the person, it was asked in and for (`useBatchExpansion`).
+  const batchExpansion = useBatchExpansion(investigationId, session?.sub ?? null);
   const [viewProblem, setViewProblem] = useState<string | null>(null);
   // ADR-144 decision 4: the view *Ask the model about these* saved, whose conversation is open.
   const [questionsView, setQuestionsView] = useState<{ id: string; name: string } | null>(null);
@@ -2221,7 +2220,7 @@ export function App() {
                 onSaveSmallerView={(refused, subject) => setExpansionOverCap({ refused, subject })}
                 onRunExpansionAsBatch={
                   bearerToken && investigationId && lens === null
-                    ? (request) => setBatchExpansion((current) => ({ request, caseId: investigationId, asked: (current?.asked ?? 0) + 1 }))
+                    ? batchExpansion.ask
                     : undefined
                 }
                 onViewMessages={(nodeId) => {
@@ -2684,18 +2683,20 @@ export function App() {
           groupedCount={groupedCount}
         />
       )}
-      {bearerToken && batchExpansion && batchExpansion.caseId === investigationId && (
+      {bearerToken && batchExpansion.asked && (
         <BatchExpansion
-          key={batchExpansion.asked}
-          request={batchExpansion.request}
+          key={batchExpansion.asked.n}
+          request={batchExpansion.asked.request}
           apiBaseUrl={API_BASE_URL}
           bearerToken={bearerToken}
-          investigationId={batchExpansion.caseId}
+          investigationId={batchExpansion.asked.caseId}
+          // *Try the batch job again* only where a batch job may be chosen: not while a view is open.
+          mayStartAgain={lens === null}
           onViewOpened={(opened) => {
             setViewsRead((n) => n + 1);
             showLens(opened);
           }}
-          onClose={() => setBatchExpansion(null)}
+          onClose={batchExpansion.close}
         />
       )}
       {bearerToken && investigationId && expansionOverCap && (

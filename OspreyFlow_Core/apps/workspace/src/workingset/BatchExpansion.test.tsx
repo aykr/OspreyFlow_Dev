@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 // ADR-151 (spec/00 §4's third choice): an expansion the cap refused, run whole on the server as a
-// batch job (rules-b's route, lane/rules-b-v052batch 208c397), its result saved as a private view of
-// the case and opened as the lens. Every state is said in words: the server's own sentence for each
+// batch job (rules-b's route, on main at 354c707), its result saved as a private view of the case,
+// which *Open the view* opens as the lens, never unasked. Every state is said in words: the server's own sentence for each
 // stage, refusal and failure, shown as given, and the Glass's own for what it did with the result.
 // The refusals are the route's (rule 15: the fake refuses what the real one does): a reader below
 // Editor (403), a case not opened (404), a job already running here (409, followed), the job refused
 // with figures or for another reason, a failed job, a job not this reader's (404), and a result view
 // past the canvas's limit. Nothing is cut to fit.
+import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -69,6 +70,11 @@ function conduit(start: Reply, reads: Reply[] = [], opening: Reply = { status: 2
   return calls;
 }
 
+/** The reader chooses *Open the view* once the job is done. */
+async function openTheView(): Promise<void> {
+  fireEvent.click(await screen.findByRole("button", { name: "Open the view" }));
+}
+
 function show(onViewOpened = vi.fn(), onClose = vi.fn()) {
   render(
     <BatchExpansion
@@ -116,14 +122,45 @@ describe("BatchExpansion", () => {
     await screen.findByText("Saving the view.");
   });
 
-  it("opens the job's result as the view, and says the server's words and that it is open", async () => {
+  it("says a done job in the server's words and offers Open the view, opening nothing unasked", async () => {
     const calls = conduit(QUEUED, [DONE]);
     const { onViewOpened } = show();
+    expect(await screen.findByRole("button", { name: "Open the view" })).toBeTruthy();
+    expect(statusText()).toBe("Saved 61,200 nodes and 140,388 links as your private view “Expansion of Ada Lovelace”.");
+    await new Promise((r) => setTimeout(r, 40));
+    expect(onViewOpened).not.toHaveBeenCalled();
+    expect(calls.some((c) => c.url.includes("/views/"))).toBe(false);
+  });
+
+  it("opens the job's result as the view when asked, and says that it is open", async () => {
+    const calls = conduit(QUEUED, [DONE]);
+    const { onViewOpened } = show();
+    await openTheView();
     await waitFor(() => expect(onViewOpened).toHaveBeenCalledWith(OPENED));
     expect(statusText()).toBe(
-      "Saved 61,200 nodes and 140,388 links as your private view “Expansion of Ada Lovelace”. Its result is open as the view “Expansion of Ada Lovelace”.",
+      "Saved 61,200 nodes and 140,388 links as your private view “Expansion of Ada Lovelace”. It is open on the canvas.",
     );
     expect(calls.some((c) => c.url === "http://conduit/v1/investigations/c1/views/v9")).toBe(true);
+    expect(screen.queryByRole("button", { name: "Open the view" })).toBeNull();
+  });
+
+  it("sends one POST under React's StrictMode, which runs the start twice on one mount", async () => {
+    const calls = conduit(QUEUED, [QUEUED, DONE]);
+    render(
+      <StrictMode>
+        <BatchExpansion request={REQUEST} apiBaseUrl="http://conduit" bearerToken="tok" investigationId="c1" onViewOpened={vi.fn()} onClose={vi.fn()} pollMs={5} />
+      </StrictMode>,
+    );
+    await screen.findByRole("button", { name: "Open the view" });
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+    expect(screen.getByText(/The canvas refused 61,200 nodes/)).toBeTruthy();
+  });
+
+  it("offers no second try where a batch job may not be chosen (a view open)", async () => {
+    conduit(QUEUED, [{ status: 200, body: job("failed", "The batch expansion could not finish, and nothing was saved. Try again, or narrow the expansion.") }]);
+    render(<BatchExpansion request={REQUEST} apiBaseUrl="http://conduit" bearerToken="tok" investigationId="c1" onViewOpened={vi.fn()} onClose={vi.fn()} pollMs={5} mayStartAgain={false} />);
+    expect(await alertText()).toBe("The batch expansion could not finish, and nothing was saved. Try again, or narrow the expansion.");
+    expect(screen.queryByRole("button", { name: "Try the batch job again" })).toBeNull();
   });
 
   it("follows the job already running when the reader has one on this case", async () => {
@@ -207,7 +244,7 @@ describe("BatchExpansion", () => {
     conduit(QUEUED, [QUEUED, DONE]);
     show();
     await screen.findByText("Closing this does not stop the job. While it runs, asking for a batch expansion in this case again follows it.");
-    await screen.findByText(/Its result is open as the view/);
+    await screen.findByRole("button", { name: "Open the view" });
     expect(screen.queryByText(/Closing this does not stop the job/)).toBeNull();
   });
 
@@ -221,6 +258,7 @@ describe("BatchExpansion", () => {
 
   it("says a result view past the canvas's limit is kept and was not cut to fit", async () => {
     const { onViewOpened } = (conduit(QUEUED, [DONE], { status: 409, body: { ...REFUSED, would_be: 58_000 } }), show());
+    await openTheView();
     expect(await alertText()).toBe(
       "The batch job saved its result as the view “Expansion of Ada Lovelace”, but it holds more than the canvas can: 58,000 nodes against a limit of 50,000. Nothing was cut to fit; the view is kept in Views in this case.",
     );
@@ -230,6 +268,7 @@ describe("BatchExpansion", () => {
   it("says a result view that could not be opened could not be", async () => {
     conduit(QUEUED, [DONE], { status: 404 });
     show();
+    await openTheView();
     expect(await alertText()).toBe(
       "The batch job saved its result as the view “Expansion of Ada Lovelace”, but it could not be opened. It may have been deleted.",
     );
@@ -245,6 +284,7 @@ describe("BatchExpansion", () => {
     const calls = conduit(QUEUED, [{ status: 503 }, { status: 503 }, DONE]);
     const { onViewOpened } = show();
     await screen.findByText("The job's progress could not be read (503). Still trying.");
+    await openTheView();
     await waitFor(() => expect(onViewOpened).toHaveBeenCalled());
     expect(reads(calls)).toHaveLength(3);
   });
@@ -262,7 +302,7 @@ describe("BatchExpansion", () => {
     const calls = conduit(QUEUED, [{ status: 503 }]);
     show();
     expect(await alertText()).toBe(
-      "The job's progress could not be read (503). The batch expansion carries on on the server; while it runs, asking for a batch expansion in this case again follows it.",
+      "The job's progress could not be read (503). The batch expansion is still running on the server; while it runs, asking for a batch expansion in this case again follows it.",
     );
     expect(reads(calls)).toHaveLength(30);
   });
@@ -274,6 +314,7 @@ describe("BatchExpansion", () => {
     const { rerender } = render(<BatchExpansion {...props} request={REQUEST} bearerToken="tok" />);
     await waitFor(() => expect(reads(calls).length).toBeGreaterThan(0));
     rerender(<BatchExpansion {...props} request={{ ...REQUEST }} bearerToken="renewed" />);
+    await openTheView();
     await waitFor(() => expect(onViewOpened).toHaveBeenCalledTimes(1));
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
     // The readings after the renewal, and the view's opening, carry the renewed token.

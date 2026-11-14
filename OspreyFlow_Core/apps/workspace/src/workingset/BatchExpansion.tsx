@@ -5,6 +5,7 @@ import {
   type BatchExpansionJob,
   type BatchExpansionRequest,
   readBatchExpansion,
+  type Started,
   startBatchExpansion,
 } from "./batchExpansionApi";
 import type { LimitExceeded } from "./models";
@@ -21,18 +22,23 @@ export interface BatchExpansionProps {
   apiBaseUrl: string;
   bearerToken: string;
   investigationId: string;
-  /** The job's result was opened as a view of the case: show it as the read-only lens (ADR-144). */
+  /** The reader chose *Open the view* and the job's result was opened: show it as the read-only lens
+   * (ADR-144). Never called unasked: the reader may be working elsewhere when the job finishes. */
   onViewOpened: (opened: CaseViewOpened) => void;
   onClose: () => void;
   /** How often the job is asked where it is, in milliseconds (ADR-151: every 2 s). */
   pollMs?: number;
+  /** Whether a failed job may be tried again from here: not while a view is open, where the App offers no
+   * batch job (an expansion there is not the case's). */
+  mayStartAgain?: boolean;
 }
 
 type Shown =
   | { phase: "starting" }
   | { phase: "watching"; words: string; trouble: string | null }
+  | { phase: "done"; words: string; view: { id: string; name: string } }
   | { phase: "opening"; words: string }
-  | { phase: "opened"; words: string; name: string }
+  | { phase: "opened"; words: string }
   | { phase: "stopped"; words: string; again: boolean };
 
 function what(kind: "nodes" | "edges" | null | undefined): string {
@@ -52,7 +58,7 @@ function refusalWords(job: BatchExpansionJob): string {
 /**
  * The third of the cap's three choices (spec/00 §4, ADR-151): the refused expansion run whole on the
  * server as a batch job, under the reader's own access, its result saved as a private view of the
- * case and opened as the lens when it finishes. Nothing joins the working set and nothing is cut to
+ * case, which *Open the view* opens as the lens once it finishes (ADR-151). Nothing joins the working set and nothing is cut to
  * fit. Every state is said in words — the server's own sentence for each stage, refusal and failure,
  * and the Glass's own for what it did with the result. Not modal: the reader may go on working on the
  * canvas while the job runs.
@@ -65,6 +71,7 @@ export function BatchExpansion({
   onViewOpened,
   onClose,
   pollMs = 2000,
+  mayStartAgain = true,
 }: BatchExpansionProps) {
   const [shown, setShown] = useState<Shown>({ phase: "starting" });
   const [attempt, setAttempt] = useState(0);
@@ -76,10 +83,45 @@ export function BatchExpansion({
   asked.current = { ...asked.current, apiBaseUrl, bearerToken, investigationId, pollMs };
   const [following, setFollowing] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // The start of each try, kept across React's StrictMode remount (`src/main.tsx`), which runs the effect
+  // twice on one mount and keeps refs: the second run awaits the first's POST and never sends its own.
+  const startedRef = useRef<{ attempt: number; started: Promise<Started> } | null>(null);
+  const mounted = useRef(true);
 
   useEffect(() => {
+    mounted.current = true;
     headingRef.current?.focus();
+    return () => {
+      mounted.current = false;
+    };
   }, []);
+
+  async function openResult(view: { id: string; name: string }, words: string): Promise<void> {
+    setShown({ phase: "opening", words });
+    const { apiBaseUrl, bearerToken, investigationId } = asked.current;
+    const result = await openView(apiBaseUrl, bearerToken, investigationId, view.id);
+    if (!mounted.current) return;
+    const name = view.name;
+    if (result.ok) {
+      setShown({ phase: "opened", words });
+      onViewOpenedRef.current(result.opened);
+    } else if (result.kind === "limit_exceeded") {
+      const wouldBe: LimitExceeded = result.wouldBe;
+      setShown({
+        phase: "stopped",
+        again: false,
+        words: `The batch job saved its result as the view “${name}”, but it holds more than the canvas can: ${COUNT.format(wouldBe.would_be)} ${what(wouldBe.cap_kind)} against a limit of ${COUNT.format(wouldBe.cap)}. Nothing was cut to fit; the view is kept in Views in this case.`,
+      });
+    } else if (result.kind === "not_found") {
+      setShown({
+        phase: "stopped",
+        again: false,
+        words: `The batch job saved its result as the view “${name}”, but it could not be opened. It may have been deleted.`,
+      });
+    } else {
+      setShown({ phase: "stopped", again: false, words: `The batch job saved its result as the view “${name}”, but it could not be opened: ${result.message}` });
+    }
+  }
 
   useEffect(() => {
     let live = true;
@@ -87,36 +129,13 @@ export function BatchExpansion({
     let troubles = 0;
     const { request: startWith } = asked.current;
 
-    async function finish(job: BatchExpansionJob): Promise<void> {
+    function finish(job: BatchExpansionJob): void {
       if (!job.view) {
         // Done, its view deleted since (ADR-151): the server's sentence says so; there is nothing to open.
         setShown({ phase: "stopped", again: false, words: job.words || "The batch expansion finished, but the view it saved has since been deleted." });
         return;
       }
-      setShown({ phase: "opening", words: job.words });
-      const { apiBaseUrl, bearerToken, investigationId } = asked.current;
-      const result = await openView(apiBaseUrl, bearerToken, investigationId, job.view.id);
-      if (!live) return;
-      const name = job.view.name;
-      if (result.ok) {
-        setShown({ phase: "opened", words: job.words, name: result.opened.view.name });
-        onViewOpenedRef.current(result.opened);
-      } else if (result.kind === "limit_exceeded") {
-        const wouldBe: LimitExceeded = result.wouldBe;
-        setShown({
-          phase: "stopped",
-          again: false,
-          words: `The batch job saved its result as the view “${name}”, but it holds more than the canvas can: ${COUNT.format(wouldBe.would_be)} ${what(wouldBe.cap_kind)} against a limit of ${COUNT.format(wouldBe.cap)}. Nothing was cut to fit; the view is kept in Views in this case.`,
-        });
-      } else if (result.kind === "not_found") {
-        setShown({
-          phase: "stopped",
-          again: false,
-          words: `The batch job saved its result as the view “${name}”, but it could not be opened. It may have been deleted.`,
-        });
-      } else {
-        setShown({ phase: "stopped", again: false, words: `The batch job saved its result as the view “${name}”, but it could not be opened: ${result.message}` });
-      }
+      setShown({ phase: "done", words: job.words, view: { id: job.view.id, name: job.view.name } });
     }
 
     async function watch(jobId: string): Promise<void> {
@@ -153,7 +172,7 @@ export function BatchExpansion({
         setShown({
           phase: "stopped",
           again: false,
-          words: `${read.message} The batch expansion carries on on the server; while it runs, asking for a batch expansion in this case again follows it.`,
+          words: `${read.message} The batch expansion is still running on the server; while it runs, asking for a batch expansion in this case again follows it.`,
         });
         return;
       } else {
@@ -170,7 +189,10 @@ export function BatchExpansion({
     async function start(): Promise<void> {
       setShown({ phase: "starting" });
       const { apiBaseUrl, bearerToken, investigationId, pollMs } = asked.current;
-      const started = await startBatchExpansion(apiBaseUrl, bearerToken, investigationId, startWith);
+      if (startedRef.current?.attempt !== attempt) {
+        startedRef.current = { attempt, started: startBatchExpansion(apiBaseUrl, bearerToken, investigationId, startWith) };
+      }
+      const started = await startedRef.current.started;
       if (!live) return;
       if (started.ok) {
         const [id, words] = "job" in started ? [started.job.id, started.job.words] : [started.running.id, started.running.words];
@@ -226,8 +248,9 @@ export function BatchExpansion({
       <div role="status" aria-live="polite" className="batch-expansion__status">
         {shown.phase === "starting" && "Starting the batch job."}
         {shown.phase === "watching" && shown.words}
+        {shown.phase === "done" && shown.words}
         {shown.phase === "opening" && `${shown.words} Opening the view.`.trim()}
-        {shown.phase === "opened" && `${shown.words} Its result is open as the view “${shown.name}”.`.trim()}
+        {shown.phase === "opened" && `${shown.words} It is open on the canvas.`.trim()}
       </div>
       {shown.phase === "watching" && shown.trouble !== null && (
         <p className="batch-expansion__trouble">{shown.trouble}</p>
@@ -243,7 +266,16 @@ export function BatchExpansion({
         </p>
       )}
       <div className="batch-expansion__actions">
-        {shown.phase === "stopped" && shown.again && (
+        {shown.phase === "done" && (
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => void openResult(shown.view, shown.words)}
+          >
+            Open the view
+          </button>
+        )}
+        {shown.phase === "stopped" && shown.again && mayStartAgain && (
           <button type="button" className="btn btn--primary" onClick={() => setAttempt((n) => n + 1)}>
             Try the batch job again
           </button>

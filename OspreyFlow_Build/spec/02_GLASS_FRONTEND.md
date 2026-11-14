@@ -1217,13 +1217,15 @@ Opening another case from the drawer reloads the page, as every case switch does
 expansion, the refusal on the canvas offers *Run as a batch job* beside expanding by one relationship
 and saving a smaller view. Choosing it sends exactly the refused expansion to the Conduit
 (`POST …/batch-expansions`), and a panel at the canvas's foot, `workingset/BatchExpansion.tsx`, follows
-the job. The panel starts one job, whatever it is given later, until *Try again*. It is not modal, so
+the job. The panel starts one job, whatever it is given later, until *Try again*, and sends one POST
+under React's StrictMode, which runs its start twice on one mount. It is not modal, so
 the analyst can go on working while the job runs. It asks where the job is every two seconds, with
 the newest token the page holds. It shows the server's sentence for each stage, refusal and failure as
 given ("Expanding from 12 nodes", "Saving the view"), and its own words only where the server sent
-none. Nothing joins the working set: when the job is done, its result, a private view of the case,
-opens as the read-only lens (§3.1h). The panel then says so, or says why the view could not be
-opened. A view past the canvas's limit is kept and named, and nothing is cut to fit.
+none. Nothing joins the working set: when the job is done, the panel says so in the server's words and
+offers *Open the view* (ADR-151), which opens its result, a private view of the case, as the read-only
+lens (§3.1h). It never opens unasked: the job may finish minutes later, with the analyst in another view
+or place. The panel then says the view is open, or says why it could not be opened. A view past the canvas's limit is kept and named, and nothing is cut to fit.
 
 The refusals are said in words:
 - a case level below Editor, in the Conduit's own sentence;
@@ -1232,7 +1234,7 @@ The refusals are said in words:
 - a batch expansion of the reader's already running in the case, which the panel follows instead of
   starting another, without this request's figures, since it may be another expansion;
 - a job refused for its size or for another reason, with figures and how to narrow;
-- a failed job, which offers *Try the batch job again*;
+- a failed job, which offers *Try the batch job again*, except while a view is open;
 - a job not the reader's or no longer shared;
 - a done job whose view has since been deleted;
 - a reading refused (the sign-in ended) or failing for a minute, after which the panel stops asking
@@ -1243,13 +1245,17 @@ expansion in the case again follows it while it runs (the Conduit's 409 names th
 state the Glass does not know is said as a failure, never read as progress.
 
 The jsdom cases are in `workingset/BatchExpansion.test.tsx`, and their red-first record is
-`process/lanes/case-b/batch/plants.sh`. The panel's two actions are proved by keyboard in
+`process/lanes/case-b/batch/plants.sh`. The panel's three actions (*Open the view*, *Try the batch job
+again*, *Close*) are proved by keyboard in
 `keyboard/batch-expansion.spec.ts` (registry `BATCH_EXPANSION_ACTIONS`), and so is each of its states
 under axe in the three looks. Starting the job from the cap refusal is proved by keyboard where that
 refusal's own cases are (`keyboard/canvas-expand-cap.spec.ts`, registry `CANVAS_CAP_ACTIONS`), from
-*Run as a batch job* through the panel to its result opened as the view. The App holds the request with
-the case it was asked in and shows the panel only in that case, and offers no batch job while a view is
-open (`App.batchExpand.test.tsx`; red-first record `process/lanes/case-b/batch/plants-app.sh`).
+*Run as a batch job* through the panel to its result opened as the view, its POST the canvas's own
+refused `/expand` body, and again under StrictMode. The App holds each choice with the case and the person
+it was made in and for, and drops it when either changes, so a panel never follows one case's job in
+another nor shows one person's figure to the next (`workingset/useBatchExpansion.ts` and its test). A
+second choice gets its own panel, and no batch job is offered while a view is open
+(`App.batchExpand.test.tsx`; red-first record `process/lanes/case-b/batch/plants-app.sh`).
 
 ### 3.2 Social network analysis
 

@@ -1,9 +1,9 @@
 // Batch expansion harness (ADR-151): `workingset/BatchExpansion.tsx` alone, following one job to its
 // end against a stand-in of rules-b's route kept here. `a11y/every-harness.spec.ts` scans it with no
 // query (one state: the job starting); `batch-expansion.spec.ts` scans each `?job=` state in the three
-// looks. `?job=` picks the job's end: `done` (the default; the view opens), `refused`, `failed` (then
+// looks. `?job=` picks the job's end: `done` (the default; *Open the view* opens it), `refused`, `failed` (then
 // done on a second try), `deleted` (done, its view since deleted), `forbidden` (a reader below
-// Editor, the Conduit's sentence), `noright` (an account without the right), `overlimit` (done, its
+// Editor, the Conduit's sentence), `noright` (an account without the right), `overlimit` (done, opened, its
 // view past the canvas's limit), `trouble` (its progress unread, still trying), `running` (it never
 // ends), `following` (a job of the reader's already running here, the 409). Each stage's
 // words are the route's own sentences. `?step=1`: the job moves on only when the spec sets

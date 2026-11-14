@@ -79,7 +79,7 @@ plant "a job not this reader's read as progress not read" "$API" \
   "says a job that is not this reader's, or is gone, can no longer be found"
 plant "the result not opened when the job is done" "$UI" \
   's/onViewOpenedRef.current\(result.opened\);//' \
-  "opens the job's result as the view, and says the server's words and that it is open"
+  "opens the job's result as the view when asked, and says that it is open"
 plant "a done job's deleted-view words replaced by the Glass's own" "$UI" \
   's/words: job.words \|\| "The batch expansion finished, but the view it saved has since been deleted." \}\);/words: "The batch job finished." });/' \
   "says a done job whose view has since been deleted in the server's words, and opens nothing"

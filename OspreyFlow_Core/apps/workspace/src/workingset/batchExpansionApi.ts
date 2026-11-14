@@ -3,7 +3,7 @@
 // result as a private view of the case (ADR-144), which the Glass then opens as the lens. Nothing
 // joins the case's working set and no delta arrives: the result is the view only.
 //
-// The routes are rules-b's (ADR-151's draft, lane/rules-b-v052batch 208c397):
+// The routes are rules-b's (ADR-151; `services/api/app.py`'s batch expansions, on main at 354c707):
 //   POST /v1/investigations/{case}/batch-expansions   {request: ExpandRequest}
 //        202 BatchExpansion (queued)   403 below Editor, or without the right   404 the case not opened
 //        409 {error: "batch_expansion_running", detail, id}: the reader already has one here; follow it
@@ -83,6 +83,12 @@ function unreachable(err: unknown): string {
   return `The server could not be reached: ${err instanceof Error ? err.message : String(err)}`;
 }
 
+/** A saved view as far as the panel reads it: its id to open and its name to say. */
+function isView(view: unknown): view is CaseView {
+  const v = view as { id?: unknown; name?: unknown } | null | undefined;
+  return typeof v === "object" && v !== null && typeof v.id === "string" && v.id !== "" && typeof v.name === "string";
+}
+
 /** A job as the Conduit sent it, or null when it is not one: a state the Glass does not know, or
  * no id, is never read as progress. */
 function asJob(body: Record<string, unknown>): BatchExpansionJob | null {
@@ -91,7 +97,7 @@ function asJob(body: Record<string, unknown>): BatchExpansionJob | null {
     id: body.id,
     state: body.state as BatchExpansionJob["state"],
     words: typeof body.words === "string" ? body.words : "",
-    view: (body.view as CaseView | null | undefined) ?? null,
+    view: isView(body.view) ? body.view : null,
     nodes: typeof body.nodes === "number" ? body.nodes : null,
     links: typeof body.links === "number" ? body.links : null,
     refusal: (body.refusal as BatchExpansionJob["refusal"] | undefined) ?? null,
@@ -105,17 +111,21 @@ export async function startBatchExpansion(
   caseId: string,
   request: BatchExpansionRequest,
 ): Promise<Started> {
+  // The canvas's own `/expand` body (`canvas/GlassCanvas.tsx`), the schema's fields by name: the generated
+  // `ExpandRequest` takes any key, and the Conduit drops one it does not know, so a misspelt field would run the
+  // expansion over every type. Picked, the literal below is checked key by key.
+  const sent: { request: Required<Pick<BatchExpansionInput["request"], "node_ids" | "depth" | "edge_types">> } = {
+    request: {
+      node_ids: [request.nodeId],
+      depth: request.depth,
+      edge_types: request.edgeType ? [request.edgeType] : null,
+    },
+  };
   try {
     const response = await fetch(batchUrl(apiBaseUrl, caseId), {
       method: "POST",
       headers: headers(bearerToken),
-      body: JSON.stringify({
-        request: {
-          node_ids: [request.nodeId],
-          depth: request.depth,
-          edge_types: request.edgeType ? [request.edgeType] : null,
-        },
-      } satisfies BatchExpansionInput),
+      body: JSON.stringify(sent satisfies BatchExpansionInput),
     });
     const body = await bodyOf(response);
     if (response.ok) {
