@@ -1,0 +1,61 @@
+# Saved views (ADR-145 Am 17, ADR-144 Am 6): red-first run, 14 November 2026
+Tree: lane/docs-v052-saved-views d8050c2, merged with lane/case-saved-views eb2ce49 and case-b's views/ViewsPanel.tsx at faa7c28, in a scratch worktree.
+Command: python3 saved-views-plants.py <tree> <venv python>; a fresh PYTHONPYCACHEPREFIX each run; the offline ports 59991-59994.
+The first run had one MISS: the strip's note reworded still passed, as the order check sorted a missing part last; fixed (strip_order drops it), and this run is after the fix.
+
+unplanted: 26 passed in 1.25s
+RED  the strip's note in its old words
+     OspreyFlow_Core/apps/workspace/src/views/ViewLensBanner.tsx: 'Nothing in a saved view changes the case.' -> 'Nothing in a view changes the case.'
+     failed: test_the_strip_starts_with_the_way_back_and_says_what_the_guide_says_in_its_order, test_view_means_a_saved_view_in_every_guide_and_in_the_glass
+RED  the strip's note in its old words (old names)
+     OspreyFlow_Core/apps/workspace/src/views/ViewLensBanner.tsx: 'Nothing in a saved view changes the case.' -> 'Nothing in a view changes the case.'
+     failed: test_the_strip_starts_with_the_way_back_and_says_what_the_guide_says_in_its_order, test_view_means_a_saved_view_in_every_guide_and_in_the_glass
+RED  the strip's focus not taken
+     OspreyFlow_Core/apps/workspace/src/views/ViewLensBanner.tsx: 'useEffect(() => strip.current?.focus(), []);' -> 'useEffect(() => undefined, []);'
+     failed: test_the_strip_starts_with_the_way_back_and_says_what_the_guide_says_in_its_order
+RED  the second line's separator
+     OspreyFlow_Core/apps/workspace/src/views/ViewsPanel.tsx: '`${view.first_item} · saved ${when}`' -> '`${view.first_item}, saved ${when}`'
+     failed: test_the_list_starts_with_the_whole_case_and_tells_default_named_views_apart
+RED  no Open the whole case
+     OspreyFlow_Core/apps/workspace/src/views/ViewsPanel.tsx: 'aria-label="Open the whole case"' -> 'aria-label="Back to the case"'
+     failed: test_the_list_starts_with_the_whole_case_and_tells_default_named_views_apart
+RED  the canvas notice reworded
+     OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx: 'Go back to the whole case to change it.' -> 'Go back to the case to change it.'
+     failed: test_the_canvas_notice_and_the_one_way_to_saved_views
+RED  the case line's button while unread
+     OspreyFlow_Core/apps/workspace/src/shell/ContextBanner.tsx: ': "Saved views";' -> ': "Views in this case";'
+     failed: test_the_canvas_notice_and_the_one_way_to_saved_views, test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it, test_view_means_a_saved_view_in_every_guide_and_in_the_glass
+RED  the open saved view not on the case line
+     OspreyFlow_Core/apps/workspace/src/shell/ContextBanner.tsx: '› Saved view: {openView}' -> '{openView}'
+     failed: test_the_canvas_notice_and_the_one_way_to_saved_views, test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it
+RED  More back to More views
+     OspreyFlow_Core/apps/workspace/src/shell/railLayout.ts: 'export const MORE_LABEL = "More";' -> 'export const MORE_LABEL = "More views";'
+     failed: test_the_rail_check_flags_a_view_said_to_be_on_the_rail, test_section_5_names_the_view_switch_and_more_views_in_order, test_view_means_a_saved_view_in_every_guide_and_in_the_glass, test_the_views_the_guides_name_are_where_the_layout_puts_them
+RED  More back to More views (the admin guide)
+     OspreyFlow_Core/apps/workspace/src/shell/railLayout.ts: 'export const MORE_LABEL = "More";' -> 'export const MORE_LABEL = "More views";'
+     failed: test_the_rail_check_flags_a_view_said_to_be_on_the_rail, test_section_5_names_the_view_switch_and_more_views_in_order, test_view_means_a_saved_view_in_every_guide_and_in_the_glass, test_the_views_the_guides_name_are_where_the_layout_puts_them
+RED  the over-cap dialog's old words
+     OspreyFlow_Core/apps/workspace/src/workingset/ViewOverCapDialog.tsx: 'delete it from Saved views.' -> 'delete it from Views in this case.'
+     failed: test_view_means_a_saved_view_in_every_guide_and_in_the_glass
+RED  the toolbar's Views menu drawn again
+     OspreyFlow_Core/apps/workspace/src/canvas/ViewActions.tsx: 'Clear the graph' -> 'Clear the graph<ViewsMenu />'
+     failed: test_view_means_a_saved_view_in_every_guide_and_in_the_glass
+RED  Clear view on screen
+     OspreyFlow_Core/apps/workspace/src/canvas/ViewActions.tsx: 'Clear the graph' -> 'Clear view'
+     failed: test_view_means_a_saved_view_in_every_guide_and_in_the_glass
+RED  the guide: the way back last
+     OspreyFlow_Core/docs/user-guide.md: 'The strip above the graph starts with **Back to the whole case**' -> 'The strip above the graph ends with **Back to the whole case**'
+     failed: test_the_strip_starts_with_the_way_back_and_says_what_the_guide_says_in_its_order
+RED  the guide: the old case line
+     OspreyFlow_Core/docs/user-guide.md: 'Case ‹name› ▾ · Saved views (n) · reads' -> 'Case ‹name› ▾ · Views in this case · reads'
+     failed: test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it, test_view_means_a_saved_view_in_every_guide_and_in_the_glass
+RED  the guide: the old case line (old names)
+     OspreyFlow_Core/docs/user-guide.md: 'Case ‹name› ▾ · Saved views (n) · reads' -> 'Case ‹name› ▾ · Views in this case · reads'
+     failed: test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it, test_view_means_a_saved_view_in_every_guide_and_in_the_glass
+RED  the guide: no Open the whole case
+     OspreyFlow_Core/docs/user-guide.md: 'offering **Open the whole case** while one is' -> 'offering nothing while one is'
+     failed: test_the_list_starts_with_the_whole_case_and_tells_default_named_views_apart
+RED  the admin guide: More views
+     OspreyFlow_Core/docs/administration-guide.md: 'view switch, under **More**, or in' -> 'view switch, under **More views**, or in'
+     failed: test_view_means_a_saved_view_in_every_guide_and_in_the_glass, test_the_views_the_guides_name_are_where_the_layout_puts_them
+restored: 26 passed in 1.14s
