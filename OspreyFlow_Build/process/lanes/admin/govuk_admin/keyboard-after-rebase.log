@@ -32,10 +32,10 @@ Running 52 tests using 2 workers
 [29/52] keyboard/admin.spec.ts:531:1 › a schedule is changed by keyboard, keeping its owner
 [30/52] keyboard/admin.spec.ts:548:1 › a connection is named by keyboard
 [31/52] keyboard/admin.spec.ts:563:1 › a SQL and a JSON connection are named with their fields by keyboard
-[WebServer] 11:25:15 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 11:30:44 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
 
 [32/52] keyboard/admin.spec.ts:601:1 › an S3 and an Athena connection are named with their fields by keyboard
-[WebServer] 11:25:16 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 11:30:44 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
 
 [33/52] keyboard/admin.spec.ts:645:1 › the grading scheme is read and its change command copied by keyboard
 [34/52] keyboard/admin.spec.ts:660:1 › an API connection is named with its fields, and a connection tested, by keyboard
@@ -57,4 +57,4 @@ Running 52 tests using 2 workers
 [50/52] keyboard/admin.spec.ts:948:1 › when promotions are overdue is set in Operations by keyboard
 [51/52] keyboard/admin.spec.ts:966:1 › a role's, a team lead's and a dataset's Authors' tips are read with their controls by keyboard
 [52/52] keyboard/admin.spec.ts:989:1 › every registered Admin action has its own proving test case above
-  52 passed (12.0s)
+  52 passed (13.2s)
