@@ -31,9 +31,13 @@ def guide() -> str:
 
 
 def rendered_defaults() -> dict[str, int]:
-    render = fold(read("harness/render.py"))
-    found = dict(re.findall(r'api_environment\["(OSPREY_(?:HOSTED_)?MODEL_TIMEOUT_SECONDS)"\] = \(? ?"\$\{\1:-(\d+)\}"', render))
+    """`harness/render.py`'s `MODEL_TIMEOUTS`, the one place the two defaults are written, and compose's use of it."""
+    render = read("harness/render.py")
+    block = re.search(r"^MODEL_TIMEOUTS: dict\[str, str\] = \{(.*?)^\}", render, re.MULTILINE | re.DOTALL)
+    assert block, "render.py's MODEL_TIMEOUTS"
+    found = dict(re.findall(r'"(OSPREY_(?:HOSTED_)?MODEL_TIMEOUT_SECONDS)": "(\d+)"', block.group(1)))
     assert set(found) == {"OSPREY_MODEL_TIMEOUT_SECONDS", "OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS"}, found
+    assert 'for name, seconds in MODEL_TIMEOUTS.items(): api_environment[name] = "${" + name + ":-" + seconds + "}"' in fold(render)
     return {k: int(v) for k, v in found.items()}
 
 
@@ -76,10 +80,20 @@ def test_section_10_says_a_timeout_and_a_refusal_as_the_conduit_words_them() -> 
             "then either.") in text  # fmt: skip
 
 
-def test_section_6a9_says_the_platform_s_defaults_hold() -> None:
-    platform = [p.name for p in (CORE / "harness" / "cloud_platform").rglob("*.py")
-                if re.search(r"MODEL_TIMEOUT_SECONDS", p.read_text(encoding="utf-8"))]  # fmt: skip
-    assert platform == [], "the cloud-platform render passes a timeout now: the guide must say so"
+def test_a_cluster_and_the_platform_render_both_at_their_defaults_with_no_setting() -> None:
+    """442d28f: `harness/cluster.py`'s environment holds each at its default, and the shared platform's values carry
+    it; `osprey.yaml` has no setting for either (no schema field names them)."""
     defaults = rendered_defaults()
-    assert (f"at its defaults ({defaults['OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS']} seconds for a hosted engine): this "
-            "profile's render does not pass either setting.") in guide()  # fmt: skip
+    cluster = fold(read("harness/cluster.py"))
+    assert "for name, seconds in MODEL_TIMEOUTS.items(): environment.setdefault(name, seconds)" in cluster
+    from tests.harness.test_cloud_platform_render import _config, _values
+
+    environment = _values(_config())["environment"]
+    assert {k: int(environment[k]) for k in defaults} == defaults, "the shared platform's values carry both at their defaults"
+    schema = read("packages/schemas/deployment.py")
+    assert "MODEL_TIMEOUT" not in schema and "timeout_seconds" not in schema, "osprey.yaml has a setting now: the guide must say so"
+    text = guide()
+    assert ("On Enterprise and on a shared platform both are rendered into the chart's values (`environment`), at these "
+            "defaults, and reach the Conduit from its ConfigMap; `osprey.yaml` has no setting for them.") in text  # fmt: skip
+    assert (f"the render puts both settings in the values at their defaults ({defaults['OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS']} "
+            "seconds for a hosted engine), and `osprey.yaml` has no setting to change them.") in text  # fmt: skip
