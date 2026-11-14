@@ -32,8 +32,11 @@ lane-reviewer briefed without the lane's own conclusions.
 - **Round 2's could 9** is carried: the stale-access words (`STALE_ACCESS_WORDS`) advise "sign in
   again", where the fix for a person with a value unset is an administrator setting it. The words are
   shared by three refusals and their tests.
-- **Round 2's could 12:** plant (d) of step A is described in prose in `stepA-red-first.txt`, with no
-  diff shown.
+- **Round 2's could 12** is done (9709011). Plant (d) was re-run with its diffs recorded.
+  - The readers changed alone stay green, because the fill overwrites them.
+  - The whole shape (the readers and the fill) is red for the escalation test.
+  - So the two are guards that each cover the other.
+- **Round 2's could 13** is done: `process/friction/2026-11-14-platform-b-v052-4c.md` (5de6b9d).
 
 ## Waiver: the schema commit's place (Prompt L), the orchestrator's ruling of 14 November 2026
 
