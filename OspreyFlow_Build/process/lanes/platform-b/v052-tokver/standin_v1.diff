@@ -1,0 +1,45 @@
+--- a/OspreyFlow_Build/process/lanes/platform/gates/r1_kind_servers.py	2026-11-14 11:15:06
++++ b/OspreyFlow_Build/process/lanes/platform/gates/r1_kind_servers.py	2026-11-14 11:15:21
+@@ -83,6 +83,22 @@
+ 
+     tenant = config["tenant_id"]
+     issuer = f"https://login.microsoftonline.com/{tenant}/v2.0"
++    # ADR-148 Amendment 18: an access token's version is the API registration's (its manifest's
++    # requestedAccessTokenVersion), never the endpoint's. `api.access_token_version: "1.0"` makes this
++    # tenant issue the API's access tokens as v1.0, as Entra does for a registration left at null or 1:
++    # issuer sts.windows.net, `ver` 1.0, audience the application id URI, `appid` for `azp`.
++    v1_issuer = f"https://sts.windows.net/{tenant}/"
++
++    def api_token(claims: dict[str, Any]) -> dict[str, Any]:
++        """An access token for the API, in the version its registration issues."""
++        if str(config["api"].get("access_token_version", "2.0")) != "1.0":
++            return claims
++        v1 = {k: v for k, v in claims.items() if k not in ("azp", "azpacr", "preferred_username")}
++        v1.update({"iss": v1_issuer, "ver": "1.0", "aud": config["api"]["identifier"], "appid": claims["azp"],
++                   "appidacr": claims.get("azpacr", "0")})
++        if "preferred_username" in claims:
++            v1["upn"] = v1["unique_name"] = claims["preferred_username"]
++        return v1
+     key, own = _throwaway_key()
+     keys = {"keys": [own, *config.get("jwks", [])]}
+     discovery = {
+@@ -288,6 +304,7 @@
+             }  # fmt: skip
+             if client.get("roles"):
+                 claims["roles"] = list(client["roles"])
++            claims = api_token(claims)
+             self._granted("client_credentials", client_id, claims["aud"])
+             self._send(200, {"token_type": "Bearer", "expires_in": TOKEN_SECONDS,
+                              "ext_expires_in": TOKEN_SECONDS, "access_token": sign(claims)})  # fmt: skip
+@@ -320,9 +337,9 @@
+                     "preferred_username": person["preferred_username"], "uti": secrets.token_urlsafe(16)}  # fmt: skip
+             if asked:
+                 audience = config["api"]["app_id"]
+-                access = {**base, "aud": audience, "sub": pairwise(audience, person["oid"]),
++                access = api_token({**base, "aud": audience, "sub": pairwise(audience, person["oid"]),
+                           "azp": client_id, "azpacr": "1" if config["clients"][client_id].get("secret") else "0",
+-                          "scp": " ".join(asked), **person.get("claims", {})}  # fmt: skip
++                          "scp": " ".join(asked), **person.get("claims", {})})  # fmt: skip
+             else:  # only sign-in scopes: a token for Microsoft Graph, as Entra gives
+                 access = {**base, "aud": GRAPH, "sub": pairwise(GRAPH, person["oid"]), "azp": client_id,
+                           "scp": " ".join(s for s in oidc if s != "openid") or "User.Read"}  # fmt: skip

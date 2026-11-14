@@ -31,3 +31,10 @@ unplanted: exit 0: 3 passed in 3.68s
   planted: exit 1: 1 failed, 2 passed in 5.73s
     test_cloud_platform_token_version.py::test_the_check_stops_with_the_conduit_s_own_words_after_a_refused_sign_in
 restored: exit 0: 3 passed in 4.47s
+
+# Against R1's Entra stand-in issuing v1.0 (standin_v1.diff applied to a copy of platform's r1_kind_servers.py): a real Glass
+# sign-in's access token given to the Conduit's resolver as the poc render configures it, a fresh PYTHONPYCACHEPREFIX per run
+== the Conduit's version refusal removed
+FAILED test_standin_v1.py::test_the_stand_in_at_v1_is_refused_in_the_version_s_own_words
+1 failed, 1 passed in 2.75s
+restored: 2 passed in 2.80s
