@@ -20,6 +20,10 @@ AS IT MUST BE (red): a job not this reader's read as progress not read
     TestingLibraryElementError: Unable to find role="alert"
 AS IT MUST BE (red): the result not opened when the job is done
     AssertionError: expected "vi.fn()" to be called with arguments: [ { view: { id: 'v9', …(6) }, …(4) } ]
+AS IT MUST BE (red): a done job with no view opened anyway
+    TestingLibraryElementError: Unable to find role="alert"
+AS IT MUST BE (red): the carry-on note left up once the job ends
+    AssertionError: expected <p class="batch-expansion__figure"></p> to be null
 AS IT MUST BE (red): a result view past the canvas's limit said as any failure
     AssertionError: expected 'The batch job saved its result as the…' to be 'The batch job saved its result as the…' // Object.is equality
 AS IT MUST BE (red): a failed job offered no second try
@@ -28,5 +32,5 @@ AS IT MUST BE (red): progress not read taken as the end
     AssertionError: expected "vi.fn()" to be called at least once
 AS IT MUST BE (red): the asking not stopped once closed
     AssertionError: expected 22 to be 2 // Object.is equality
-unplanted: Tests 16 passed (16)
+unplanted: Tests 18 passed (18)
 every plant red for its reason, unplanted green
