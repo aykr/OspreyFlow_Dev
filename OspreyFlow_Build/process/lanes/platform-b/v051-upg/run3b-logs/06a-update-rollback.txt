@@ -1,0 +1,8 @@
+upg-run: fault: refusing pulls of ghcr.io/aykr/ner other than v0.5.0's own sha256:e65e631e9feecc08a33ed8e7a44c161dbf681bd6b9efd0840cab302b4f81b586
+upg-run: $ DOCKER_HOST=unix://<fault socket> ospreyflow update --name osprey-upg --to v0.5.1 --yes
+ospreyflow: the update to v0.5.1 failed at 'pull the release's images': Error response from daemon: manifest unknown: the rehearsal's planted fault
+ospreyflow: rolled back to v0.5.0, with its data restored from /root/osprey-runs/platform-b-upg/home/OspreyFlow/backups/osprey-upg/20261114T065030Z-osprey-upg-2be985a966a742adb31bbac6c0e14b59962e76ac.
+pull_fault: listening on /root/osprey-runs/platform-b-upg/pull-fault.sock, refusing pulls matching '^ghcr\\.io/aykr/ner@sha256:(?!e65e631e9feecc08a33ed8e7a44c161dbf681bd6b9efd0840cab302b4f81b586)'
+pull_fault: refused the pull of ghcr.io/aykr/ner@sha256:9c8a2ef20993410660be1eaca3816bab1506efa6bf49fec372d501d9ac78b1a7
+upg-run: update (planted to fail) status 1; expected non-zero
+upg-run: checkout after the rollback: v0.5.0

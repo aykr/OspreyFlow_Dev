@@ -1,0 +1,33 @@
+api running healthy
+arcadedb running healthy
+keycloak running healthy
+litellm running healthy
+ner running healthy
+objectstore running healthy
+ollama-models running 
+ollama running 
+opensearch running 
+postgres running healthy
+proxy running healthy
+report-sync running healthy
+superset running healthy
+valkey running healthy
+whisper running 
+workspace running healthy
+upg-run: running: 16; healthy: 12
+upg-run: version: v0.5.0
+litellm: running, healthy
+litellm-db: finished
+ner: running, healthy
+objectstore: running, healthy
+ollama: running
+ollama-models: running
+opensearch: running
+postgres: running, healthy
+proxy: running, healthy
+report-sync: running, healthy
+superset: running, healthy
+valkey: running, healthy
+whisper: running
+whisper-models: finished
+workspace: running, healthy

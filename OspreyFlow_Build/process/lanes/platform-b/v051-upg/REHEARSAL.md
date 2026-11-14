@@ -123,3 +123,51 @@ beside it keeps the driver and the logs for the signed-update run.
 
 The v0.5.0 install race is recorded in `process/lanes/CARRIES.md` (the orchestrator's ruling 4). The
 orchestrator took both CHANGELOG wording notes at 477a500 on `release/v0.5.1`.
+
+## Run 3, the real signed update and its rollback (14 November 2026, 06:35–06:58 UTC)
+
+v0.5.1 was released on the user repository (tag v0.5.1, release workflow 43565800393). Nothing here is a stand-in:
+v0.5.0 is installed from its signed release, and `ospreyflow update` moves it to the signed v0.5.1 itself.
+
+### The update (`run3-logs/`, `run3.sh`)
+
+| Phase | What ran | Result |
+| --- | --- | --- |
+| 01–02 | v0.5.0, `install.sh`, the install | installed: 136 lines of counts, 2 cases, 71 Person vertices; max_connections 100 |
+| 04 | the CHANGELOG's repair: `uv tool install --force --editable --with httpx ./cli` | `--help` exit 0 |
+| 05 | "Back up first": `ospreyflow backup` | exit 0 |
+| 06a | the faulted update, **first attempt**: see below | **not a rollback test**, though it passed |
+| 06e | **`ospreyflow update --name osprey-upg --to v0.5.1 --yes`** | **"Updated to v0.5.1."**: find_release, the cosign signatures, pin_images, the GHCR pull, the start and verify_running, all real |
+| 07a–e | the end state | 16 running, 12 healthy, v0.5.1; max_connections **660** (server and compose); all 135 counts the same, plus the empty `screening_list_markings`; the 80 secrets held at v0.5.0 byte for byte the same, only `OSPREY_RELEASE_VERSION` changed; the gateway accepts the Conduit's key (200) |
+| 08 | "After the update": `uv tool install --force --editable ./cli` | no httpx extra; `--help` and `status` exit 0 |
+| 09 | teardown | exit 0, nothing left |
+
+**The first rollback attempt proved nothing, and passed.** The update failed at its own backup ("the backup did not
+finish … Nothing was changed"), before any checkout or pull. The phase's checks (a non-zero status, the checkout at
+v0.5.0, the deployment saying v0.5.0) are just as true of an update that did nothing.
+
+The cause was my fault proxy. The Docker command line half-closes an exec's hijacked stream when it has no more
+input, and `pull_fault.py` closed the daemon's connection there, so every exec's output was lost.
+
+Two fixes followed:
+- **The proxy** (9bbbc42) passes the half-close through. Its test, `test_pull_fault.py`, runs against a daemon that
+  writes only after the client's half-close; it was red before the fix.
+- **The phase** now requires all three of: the fault's log of a refused pull, "failed at 'pull the release's
+  images'", and "rolled back to v0.5.0". Run against the first attempt's output, all three fail.
+
+### The rollback (`run3b-logs/`, `run3b.sh`): a fresh v0.5.0, the repair, the backup, then the faulted update
+
+- `pull_fault: refused the pull of ghcr.io/aykr/ner@sha256:9c8a2ef2…`: v0.5.1's own `ner`, while v0.5.0's is never
+  refused.
+- `ospreyflow: the update to v0.5.1 failed at 'pull the release's images': Error response from daemon: manifest
+  unknown: the rehearsal's planted fault`
+- `ospreyflow: rolled back to v0.5.0, with its data restored from …/20261114T065030Z-osprey-upg-2be985a…`
+- Afterwards:
+  - the checkout is at v0.5.0;
+  - 16 running, 12 healthy, on v0.5.0;
+  - max_connections is 100, v0.5.0's own (no 660 in its compose);
+  - **every count is identical** to the pre-update snapshot (`diff` exit 0).
+- Teardown: exit 0, nothing left. The run's folder was removed, and the logs were scanned for secrets: none.
+
+So v0.5.1's update path has now run for real, both ways. Forward: the signed release, its signatures and its pull.
+Back: a failed pull, rolled back to v0.5.0 with its data restored from the update's own backup.
