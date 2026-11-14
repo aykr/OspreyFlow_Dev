@@ -1,15 +1,15 @@
-# v052-sweep-early's red first at 5a8ac0f, on main 7ba248e, after the lane review and its re-check: main's four guides and the sites' build.py against this branch's tests, then 67 plants, one at a time, each at its call site in the code or in the guide's or site's own sentence; the script requires the tests that hold each plant to be red and lists every test it turned red, with the run's own summary; then restored and green. Each run with a fresh PYTHONPYCACHEPREFIX. Each plant is shown by the lines it removes (-) and adds (+). The script is beside this record (v052-sweep-early-plants.py), run from the repository root on a clean tree. Taken again after the re-check found the earlier record printing '{summary}' for each plant, a string the script failed to format. Found while building the runs and fixed before: the route check passed while any one of three searches gave the filter; the Conduit's limited field was matched as a substring of a renamed one; §14's helm line was read from all of INSTALL.md, not its deployment step; the match's own link was not held, only the retyped copy's.
+# v052-sweep-early's red first at 4095ee6, rebased on main 0245427, after the lane review and its re-check: main's four guides and the sites' build.py against this branch's tests, then 67 plants, one at a time, each at its call site in the code or in the guide's or site's own sentence; the script requires the tests that hold each plant to be red and lists every test it turned red, with the run's own summary; then restored and green. Each run with a fresh PYTHONPYCACHEPREFIX. Each plant is shown by the lines it removes (-) and adds (+). The script is beside this record (v052-sweep-early-plants.py), run from the repository root on a clean tree. Taken again after the re-check found the earlier record printing '{summary}' for each plant, a string the script failed to format. Found while building the runs and fixed before: the route check passed while any one of three searches gave the filter; the Conduit's limited field was matched as a substring of a renamed one; §14's helm line was read from all of INSTALL.md, not its deployment step; the match's own link was not held, only the retyped copy's.
 
 command: cd OspreyFlow_Build && python -m pytest -q -p no:cacheprovider tests/test_guide_navigation_words.py tests/test_guides_ports_and_search.py tests/test_guides_drawn_merge.py tests/test_guides_v051_gaps.py tests/test_user_guide_search_results.py tests/test_guides_cloud_platform.py
 each run: closed ports 59991-59994, no OSPREY_LANE, a fresh PYTHONPYCACHEPREFIX
 
-== main's four guides and the sites' build.py, before this branch: 24 failed, 40 passed in 6.60s
+== main's four guides and the sites' build.py, before this branch: 24 failed, 40 passed in 6.52s
    red: test_no_guide_or_site_puts_a_view_on_the_rail, test_the_questions_panel_is_called_by_its_label, test_each_admin_section_is_named_as_admin_labels_it, test_the_views_the_guides_name_are_where_the_layout_puts_them, test_both_guides_name_every_narrow_port, test_the_index_feed_is_said_to_be_unreachable_from_a_route, test_the_guides_and_the_sites_give_search_as_built, test_the_opensearch_signing_setting_is_given_as_the_settings_file_holds_it, test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it, test_no_guide_calls_the_merge_coming, test_section_7_8_names_the_four_steps_as_the_screen_heads_them, test_section_7_8_says_who_may_merge_as_the_routes_and_service_do, test_the_guides_say_a_match_is_proposed_never_merged_in_storage, test_section_7_8_says_what_follows_the_merge_as_the_service_does, test_section_7_5_names_every_writer_that_reads_in_full, test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were, test_user_guide_3_says_the_govuk_top_is_slim_and_the_banner_one_row, test_the_shared_platform_profile_is_named_where_the_modes_are, test_section_14_says_how_a_shared_platform_namespace_moves_to_a_new_release, test_section_5_5_names_the_box_s_filters_as_the_box_labels_them, test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line, test_section_5_5_gives_the_box_s_limits_as_the_code_holds_them, test_section_9_quotes_each_entra_people_refusal, test_section_9_says_a_missing_value_is_given_only_by_the_administrator_fallback
 
 == the Reports view relabelled [railLayout.ts]
    - 'dashboards: "Reports",'
    + 'dashboards: "Dashboards",'
-   1 failed, 63 passed in 5.99s
+   1 failed, 63 passed in 6.27s
    red: test_the_views_the_guides_name_are_where_the_layout_puts_them
 
 == Connection strength moved into the view switch [railLayout.ts]
@@ -17,80 +17,80 @@ each run: closed ports 59991-59994, no OSPREY_LANE, a fresh PYTHONPYCACHEPREFIX
    - 'export const MORE_VIEWS = ["matrix", "reports", "ownership", "strength"] as const;'
    + 'export const VIEW_SWITCH = ["graph", "map", "boards", "dashboards", "strength"] as const;'
    + 'export const MORE_VIEWS = ["matrix", "reports", "ownership"] as const;'
-   1 failed, 63 passed in 6.20s
+   1 failed, 63 passed in 6.38s
    red: test_the_views_the_guides_name_are_where_the_layout_puts_them
 
 == Admin's Operations relabelled [sections.json]
    - '"label": "Operations",'
    + '"label": "Runs",'
-   4 failed, 60 passed in 5.76s
+   4 failed, 60 passed in 5.97s
    red: test_the_layout_is_read, test_each_admin_section_is_named_as_admin_labels_it, test_an_admin_section_under_an_old_name_is_flagged, test_the_document_control_table_is_not_read
 
 == guide: a view put on the rail [administration-guide.md]
    - "the **Reports** view (the top bar's view switch) draws"
    + "the rail's **Reports** draws"
-   2 failed, 62 passed in 5.65s
+   2 failed, 62 passed in 8.22s
    red: test_no_guide_or_site_puts_a_view_on_the_rail, test_the_views_the_guides_name_are_where_the_layout_puts_them
 
 == guide: Ask the case again [administration-guide.md]
    - 'question in Ask & Chat, among the engines offered'
    + 'question in Ask the case, among the engines offered'
-   1 failed, 63 passed in 5.67s
+   1 failed, 63 passed in 12.75s
    red: test_the_questions_panel_is_called_by_its_label
 
 == guide: Schedules and runs again [administration-guide.md]
    - 'Admin → Operations lists every one.'
    + 'Admin → Schedules and runs lists every one.'
-   1 failed, 63 passed in 6.35s
+   1 failed, 63 passed in 13.89s
    red: test_each_admin_section_is_named_as_admin_labels_it
 
 == guide: Admin › People again [administration-guide.md]
    - 'assigned in *Admin › People and roles*, which keeps'
    + 'assigned in *Admin › People*, which keeps'
-   1 failed, 63 passed in 7.17s
+   1 failed, 63 passed in 7.18s
    red: test_each_admin_section_is_named_as_admin_labels_it
 
 == site: Questions again [build.py]
    - "'<strong>Ask &amp; Chat.</strong> Ask a model about the case;"
    + "'<strong>Questions.</strong> Ask a model about the case;"
-   1 failed, 63 passed in 6.90s
+   1 failed, 63 passed in 6.44s
    red: test_the_questions_panel_is_called_by_its_label
 
 == a fourth narrow port [media.py]
    - 'class MediaStore(Protocol):'
    + 'class ExtraPort(Protocol):'
    + 'pass'
-   3 failed, 61 passed in 7.18s
+   3 failed, 61 passed in 6.45s
    red: test_each_narrow_port_is_a_protocol_the_guides_know, test_both_guides_name_every_narrow_port, test_a_narrow_port_left_out_is_flagged
 
 == guide: the index feed left out [developer-guide.md]
    - 'Three narrower ports sit beside them:'
    + 'Two narrower ports sit beside them:'
-   1 failed, 63 passed in 6.89s
+   1 failed, 63 passed in 7.24s
    red: test_both_guides_name_every_narrow_port
 
 == the index feed's reason reworded [index_feed.py]
    - 'can reach the unfiltered read'
    + 'can call it'
-   1 failed, 63 passed in 7.03s
+   1 failed, 63 passed in 7.24s
    red: test_the_index_feed_is_said_to_be_unreachable_from_a_route
 
 == a PostgreSQL full-text query written [search.py]
    - 'async def search(graph: GraphPort'
    + '_FULL_TEXT = "SELECT id FROM nodes WHERE to_tsvector(name) @@ to_tsquery(%s)"'
-   1 failed, 63 passed in 6.80s
+   1 failed, 63 passed in 5.97s
    red: test_the_guides_and_the_sites_give_search_as_built
 
 == the no-index line reworded [search_service.py]
    - '"no_index": "Search is limited to exact identifiers: this deployment has no search index.",'
    + '"no_index": "Search is limited: there is no search index.",'
-   2 failed, 62 passed in 6.44s
+   2 failed, 62 passed in 6.35s
    red: test_the_guides_and_the_sites_give_search_as_built, test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
 
 == signing's default none [settings.py]
    - 'opensearch_signing: Literal["sigv4", "none"] = "sigv4"'
    + 'opensearch_signing: Literal["sigv4", "none"] = "none"'
-   2 failed, 62 passed in 6.72s
+   2 failed, 62 passed in 11.74s
    red: test_the_opensearch_signing_setting_is_given_as_the_settings_file_holds_it, test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it
 
 == the access filter no longer given to the results page's search [app.py]
@@ -98,321 +98,321 @@ each run: closed ports 59991-59994, no OSPREY_LANE, a fresh PYTHONPYCACHEPREFIX
    - 'if index is not None'
    - 'else None,'
    + 'access_filter=None,'
-   1 failed, 63 passed in 6.68s
+   1 failed, 63 passed in 13.67s
    red: test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it
 
 == guide: question 13 without what replaces FGAC [administration-guide.md]
    - "In its place, OspreyFlow applies each reader's access in its own query to the index:"
    + 'OspreyFlow does nothing in its place:'
-   1 failed, 63 passed in 6.42s
+   1 failed, 63 passed in 12.13s
    red: test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it
 
 == a match mode relabelled [SearchFilters.tsx]
    - '{ value: "contains", label: "Contains" },'
    + '{ value: "contains", label: "Includes" },'
-   1 failed, 63 passed in 6.73s
+   1 failed, 63 passed in 14.28s
    red: test_section_5_5_names_the_box_s_filters_as_the_box_labels_them
 
 == the box's limited line reworded [GlobalSearch.tsx]
    - '"Suggestions are limited just now: only the exact start of a name or identifier matches.";'
    + '"Suggestions are limited.";'
-   1 failed, 63 passed in 7.02s
+   1 failed, 63 passed in 12.13s
    red: test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line
 
 == the box's two characters made three [GlobalSearch.tsx]
    - 'export const SUGGEST_MIN_CHARS = 2;'
    + 'export const SUGGEST_MIN_CHARS = 3;'
-   1 failed, 63 passed in 7.30s
+   1 failed, 63 passed in 5.51s
    red: test_section_5_5_gives_the_box_s_two_characters
 
 == the merge's second step renamed [drawnMerge.tsx]
    - '"label"}>2. Match</h5>'
    + '"label"}>2. Pair</h5>'
-   1 failed, 63 passed in 7.02s
+   1 failed, 63 passed in 5.55s
    red: test_section_7_8_names_the_four_steps_as_the_screen_heads_them
 
 == the merge's matches asserted, not inferred [drawn_merge.py]
    - 'state=ProvenanceState.INFERRED,'
    + 'state=ProvenanceState.ASSERTED,'
-   1 failed, 63 passed in 6.81s
+   1 failed, 63 passed in 5.56s
    red: test_the_guides_say_a_match_is_proposed_never_merged_in_storage
 
 == a writer no longer reading in full [grading.py]
    - 'with sources_in_full():'
    + 'with contextlib.nullcontext():'
-   2 failed, 62 passed in 6.17s
+   2 failed, 62 passed in 5.56s
    red: test_section_7_5_names_every_writer_that_reads_in_full, test_the_writers_check_flags_one_left_out
 
 == guide: the merge called coming again [architecture-guide.md]
    - 'A drawn dataset is **merged into another** the same way,'
    + '**Coming:** merging a drawn dataset into another. A drawn dataset is **merged into another** the same way,'
-   1 failed, 63 passed in 6.73s
+   1 failed, 63 passed in 5.73s
    red: test_no_guide_calls_the_merge_coming
 
 == the refresh no longer silent [App.tsx]
    - 'silent: () => renewSilently({ silentRequestTimeoutInSeconds: SILENT_AT_LOAD_TIMEOUT_SECONDS }),'
    + 'silent: async () => null,'
-   1 failed, 63 passed in 6.93s
+   1 failed, 63 passed in 6.00s
    red: test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were
 
 == sign-out keeping the place [userManager.ts]
    - 'forgetPlace(sessionStorage);'
    + '(removed)'
-   1 failed, 63 passed in 6.67s
+   1 failed, 63 passed in 5.89s
    red: test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were
 
 == the GOV.UK top never compact [BrandFrame.tsx]
    - 'className={claims === 0 ? "brand-chrome brand-chrome--compact" : "brand-chrome"}'
    + 'className="brand-chrome"'
-   1 failed, 63 passed in 7.01s
+   1 failed, 63 passed in 5.84s
    red: test_user_guide_3_says_the_govuk_top_is_slim_and_the_banner_one_row
 
 == another screen claiming the full frame [Schedules.tsx]
    - "// The Admin area's Operations (formerly Schedules and runs; ADR-141 decision 1)"
    + 'import { useFullFooter } from "../brand/BrandFrame";'
    + 'export function Claims() { useFullFooter(); return null; }'
-   1 failed, 63 passed in 6.98s
+   1 failed, 63 passed in 6.02s
    red: test_user_guide_3_says_the_govuk_top_is_slim_and_the_banner_one_row
 
 == the cloud-platform profile gone [deployments.py]
    - 'PROFILE_NAMES = ("local-lite", "small", "cluster", "cloud-platform")'
    + 'PROFILE_NAMES = ("local-lite", "small", "cluster")'
-   1 failed, 63 passed in 6.66s
+   1 failed, 63 passed in 5.97s
    red: test_the_shared_platform_profile_is_named_where_the_modes_are
 
 == guide: §14's row struck [administration-guide.md]
    - '| A namespace on a shared platform (`cloud-platform`), the poc shape |'
    + '| A namespace elsewhere |'
-   1 failed, 63 passed in 6.62s
+   1 failed, 63 passed in 5.93s
    red: test_section_14_says_how_a_shared_platform_namespace_moves_to_a_new_release
 
 == a refusal the code no longer raises [entra_people.py]
    - 'raise _refused("There is no organisation account to join.")'
    + 'raise _refused("Joining is not offered.")'
-   4 failed, 60 passed in 6.30s
+   4 failed, 60 passed in 5.92s
    red: test_section_9_quotes_each_entra_people_refusal, test_section_9_quotes_no_entra_refusal_the_code_does_not_raise, test_the_people_check_flags_a_refusal_the_code_no_longer_raises, test_the_people_check_flags_a_refusal_left_out
 
 == guide: a stale refusal kept [administration-guide.md]
    - 'and joining ("There is no organisation account to join.")'
    + 'dashboards ("Dashboard identities are not registered on this deployment yet."), and joining ("There is no organisation account to join.")'
-   2 failed, 62 passed in 6.24s
+   2 failed, 62 passed in 5.94s
    red: test_section_9_quotes_no_entra_refusal_the_code_does_not_raise, test_the_people_check_flags_a_refusal_the_code_no_longer_raises
 
 == the runbook granting fine-grained access control [runbooks.py]
    - '"policy admits that role alone, with no fine-grained access control, so there is no user or "'
    + '"policy admits that role alone, with fine-grained access control and a master user "'
-   2 failed, 62 passed in 5.46s
+   2 failed, 62 passed in 5.31s
    red: test_the_opensearch_signing_setting_is_given_as_the_settings_file_holds_it, test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it
 
 == the runbook's one subnet [runbooks.py]
    - 'needs two private subnets, in two availability zones,'
    + 'needs one private subnet,'
-   1 failed, 63 passed in 5.97s
+   1 failed, 63 passed in 5.40s
    red: test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it
 
 == the filter's text clause gone [search_access.py]
    - '"text_unit",'
    + '"text_any",'
-   1 failed, 63 passed in 5.72s
+   1 failed, 63 passed in 5.31s
    red: test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it
 
 == Whole case's search without the filter [app.py]
    - 'access_filter=index_access_filter(index.scheme, principal)'
    + 'access_filter=None'
-   1 failed, 63 passed in 6.43s
+   1 failed, 63 passed in 5.44s
    red: test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it
 
 == the reduced variant renamed [deployment.py]
    - 'POSTGRES_FULLTEXT = "postgres-fulltext"'
    + 'POSTGRES_FULLTEXT = "graph-only"'
-   1 failed, 63 passed in 6.12s
+   1 failed, 63 passed in 5.41s
    red: test_the_guides_and_the_sites_give_search_as_built
 
 == the overview's chip back to OpenSearch or PostgreSQL [overview.py]
    - "'OpenSearch, PostgreSQL',"
    + "'OpenSearch or PostgreSQL',"
-   1 failed, 63 passed in 6.16s
+   1 failed, 63 passed in 5.58s
    red: test_the_guides_and_the_sites_give_search_as_built
 
 == Dashboard identities relabelled [sections.json]
    - '"label": "Dashboard identities"'
    + '"label": "Dashboards"'
-   2 failed, 62 passed in 6.59s
+   2 failed, 62 passed in 5.54s
    red: test_each_admin_section_is_named_as_admin_labels_it, test_a_short_name_for_a_section_is_flagged_and_a_quotation_is_not
 
 == the more line reworded [GlobalSearch.tsx]
    - '`Showing the first ${results.length}; more match. Keep typing to narrow.`'
    + '`Showing ${results.length}; more match.`'
-   1 failed, 63 passed in 6.34s
+   1 failed, 63 passed in 5.55s
    red: test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line
 
 == the limited line never shown [GlobalSearch.tsx]
    - 'body.limited === true'
    + 'false'
-   1 failed, 63 passed in 5.78s
+   1 failed, 63 passed in 5.53s
    red: test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line
 
 == the Conduit's limited field renamed [search.py]
    - 'limited: bool = False'
    + 'is_limited: bool = False'
-   1 failed, 63 passed in 6.26s
+   1 failed, 63 passed in 5.46s
    red: test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line
 
 == the prefix limit at 60 [mapping.py]
    - 'PREFIX_MAX_CHARS = 50'
    + 'PREFIX_MAX_CHARS = 60'
-   1 failed, 63 passed in 6.76s
+   1 failed, 63 passed in 5.33s
    red: test_section_5_5_gives_the_box_s_limits_as_the_code_holds_them
 
 == a refused suggestion shown as none found [GlobalSearch.tsx]
    - 'settle("unavailable", [], false);'
    + 'settle("none", [], false);'
-   1 failed, 63 passed in 6.40s
+   1 failed, 63 passed in 5.56s
    red: test_section_5_5_gives_the_box_s_limits_as_the_code_holds_them
 
 == the limited line for every mode [search_service.py]
    - 'update={"source": "graph", "limited": request.mode == "starts_with"}'
    + 'update={"source": "graph", "limited": True}'
-   1 failed, 63 passed in 6.47s
+   1 failed, 63 passed in 5.72s
    red: test_section_5_5_gives_the_box_s_limits_as_the_code_holds_them
 
 == on screen asked of the Conduit [GlobalSearch.tsx]
    - 'if (using.onScreenOnly) {'
    + 'if (false) {'
-   1 failed, 63 passed in 5.86s
+   1 failed, 63 passed in 5.60s
    red: test_section_5_5_gives_the_box_s_limits_as_the_code_holds_them
 
 == the GOV.UK banner not folded [ContextBanner.tsx]
    - 'className="govuk-notification-banner context-banner--govuk context-banner--folded"'
    + 'className="govuk-notification-banner context-banner--govuk"'
-   1 failed, 63 passed in 5.98s
+   1 failed, 63 passed in 5.79s
    red: test_user_guide_3_says_the_govuk_top_is_slim_and_the_banner_one_row
 
 == a refresh forgetting Rules and Monitoring [refreshPlace.ts]
    - 'const PLACES: readonly Place[] = ["home", "case", "admin", "studio", "rules"];'
    + 'const PLACES: readonly Place[] = ["home", "case", "admin", "studio"];'
-   1 failed, 63 passed in 5.81s
+   1 failed, 63 passed in 6.05s
    red: test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were
 
 == a refresh putting back the drawing board [refreshPlace.ts]
    - 'const RESTORED_GLASS_VIEWS: readonly string[] = ["graph", "map", "matrix", "reports"];'
    + 'const RESTORED_GLASS_VIEWS: readonly string[] = ["graph", "map", "matrix", "reports", "boards"];'
-   1 failed, 63 passed in 5.79s
+   1 failed, 63 passed in 6.51s
    red: test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were
 
 == a place the rights do not open kept [refreshPlace.ts]
    - 'if (chosen && (chosen === "admin" || !caseOpen) && !offered.includes(chosen)) return "home";'
    + 'if (false) return "home";'
-   1 failed, 63 passed in 5.74s
+   1 failed, 63 passed in 7.74s
    red: test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were
 
 == the Conduit with Java on the profile [profile.yaml]
    - 'build_args: {CONDUIT_JAVA: omitted}'
    + 'build_args: {}'
-   1 failed, 63 passed in 7.93s
+   1 failed, 63 passed in 14.47s
    red: test_the_shared_platform_profile_is_named_where_the_modes_are
 
 == INSTALL.md without helm upgrade --install [runbooks.py]
    - 'helm upgrade --install "$RELEASE"'
    + 'helm install "$RELEASE"'
-   1 failed, 63 passed in 6.40s
+   1 failed, 63 passed in 18.35s
    red: test_section_14_says_how_a_shared_platform_namespace_moves_to_a_new_release
 
 == a merge route without the right [app.py]
    - '@app.post("/v1/datasets/{dataset_id}/merges/dry-run", dependencies=_MERGES)'
    + '@app.post("/v1/datasets/{dataset_id}/merges/dry-run")'
-   1 failed, 63 passed in 5.75s
+   1 failed, 63 passed in 6.64s
    red: test_section_7_8_says_who_may_merge_as_the_routes_and_service_do
 
 == a target of another unit accepted [drawn_merge.py]
    - 'or target.owning_unit != drawing.owning_unit'
    + '(removed)'
-   1 failed, 63 passed in 5.94s
+   1 failed, 63 passed in 6.02s
    red: test_section_7_8_says_who_may_merge_as_the_routes_and_service_do
 
 == the boards kept as boards [drawn_merge.py]
    - 'await self.views.merge_boards(record.case_id, record.load_id, drawn)'
    + '(removed)'
-   1 failed, 63 passed in 6.29s
+   1 failed, 63 passed in 5.66s
    red: test_section_7_8_says_what_follows_the_merge_as_the_service_does
 
 == the f-string refusal reworded [entra_people.py]
    - 'come from Entra ID, and are changed there.")'
    + 'are Entra\'s.")'
-   4 failed, 60 passed in 6.29s
+   4 failed, 60 passed in 5.91s
    red: test_section_9_quotes_each_entra_people_refusal, test_section_9_quotes_no_entra_refusal_the_code_does_not_raise, test_the_people_check_flags_a_refusal_the_code_no_longer_raises, test_the_people_check_flags_a_refusal_left_out
 
 == splitViews keeping More views in More views [railLayout.ts]
    - 'return main.length > 0 ? { main, more } : { main: more, more: [] };'
    + 'return { main, more };'
-   1 failed, 63 passed in 6.06s
+   1 failed, 63 passed in 6.15s
    red: test_the_views_the_guides_name_are_where_the_layout_puts_them
 
 == the figure's caption back to Questions [build.py]
    - "'questions': ('cap-a2-c8-v6.jpg', 'Ask & Chat: an answer"
    + "'questions': ('cap-a2-c8-v6.jpg', 'Questions: an answer"
-   1 failed, 63 passed in 6.31s
+   1 failed, 63 passed in 5.97s
    red: test_the_questions_panel_is_called_by_its_label
 
 == the basemap script no longer reading in full [build_local_basemap.py]
    - 'with sources_in_full():'
    + 'with contextlib.nullcontext():'
-   2 failed, 62 passed in 5.83s
+   2 failed, 62 passed in 6.40s
    red: test_section_7_5_names_every_writer_that_reads_in_full, test_the_writers_check_flags_one_left_out
 
 == guide: §5.5's 50 characters made 40 [user-guide.md]
    - 'A *Starts with* search is at most 50 characters'
    + 'A *Starts with* search is at most 40 characters'
-   1 failed, 63 passed in 6.73s
+   1 failed, 63 passed in 6.62s
    red: test_section_5_5_gives_the_box_s_limits_as_the_code_holds_them
 
 == guide: §2's refresh on every view [user-guide.md]
    - "(on the view it had, where that is the graph, the map, the Matrix or Figures; on any other view, the Glass's first)"
    + 'on the view it had'
-   1 failed, 63 passed in 7.09s
+   1 failed, 63 passed in 6.49s
    red: test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were
 
 == guide: question 13's fourth part struck [administration-guide.md]
    - "and a document's text only for the unit that holds it,"
    + '(removed)'
-   1 failed, 63 passed in 6.65s
+   1 failed, 63 passed in 6.46s
    red: test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it
 
 == guide: who may merge cut short [developer-guide.md]
    - "It is merged only into a dataset of the drawing's unit."
    + '(removed)'
-   1 failed, 63 passed in 6.16s
+   1 failed, 63 passed in 6.71s
    red: test_section_7_8_says_who_may_merge_as_the_routes_and_service_do
 
 == the match's own link not made by _inferred [drawn_merge.py]
    - 'provenance=self._inferred(record, f"{r.drawn}:{r.loaded}", r.score, now),'
    + 'provenance=self._asserted(record, f"{r.drawn}:{r.loaded}", r.score, now),'
-   1 failed, 63 passed in 7.12s
+   1 failed, 63 passed in 6.34s
    red: test_the_guides_say_a_match_is_proposed_never_merged_in_storage
 
 == a site saying PostgreSQL full-text for search [build.py]
    - 'OpenSearch for search, PostgreSQL for cases'
    + 'PostgreSQL full-text for search, PostgreSQL for cases'
-   1 failed, 63 passed in 6.63s
+   1 failed, 63 passed in 6.16s
    red: test_the_guides_and_the_sites_give_search_as_built
 
 == the administrator fallback gone from a claim's source [__init__.py]
    - 'administrator: bool = False'
    + '(removed)'
-   6 failed, 58 passed in 2.50s
+   6 failed, 58 passed in 1.99s
    red: test_section_6a7_quotes_the_24_hour_refusal_as_the_code_words_it, test_section_6a7_gives_the_hours_the_code_trusts_a_sign_in_for, test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days, test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up, test_section_6a7_quotes_the_guest_refusal_and_the_audit_action_as_the_code_has_them, test_section_9_says_a_missing_value_is_given_only_by_the_administrator_fallback
 
 == the fallback allowed on every shape [__init__.py]
    - 'if by_administrator and _cp(config).shape != "poc":'
    + 'if False:'
-   1 failed, 63 passed in 6.54s
+   1 failed, 63 passed in 6.03s
    red: test_section_9_says_a_missing_value_is_given_only_by_the_administrator_fallback
 
 == guide: §9's unqualified sentence back [administration-guide.md]
    - "Unless the mapping names `{administrator: true}` for a value (the poc shape's fallback, section 6a.7), no administrator can give"
    + 'No administrator can give'
-   1 failed, 63 passed in 6.40s
+   1 failed, 63 passed in 6.06s
    red: test_section_9_says_a_missing_value_is_given_only_by_the_administrator_fallback
 
-== restored: 64 passed in 7.01s
+== restored: 64 passed in 5.99s
 each plant red in the tests that hold it: True
