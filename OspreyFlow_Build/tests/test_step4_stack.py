@@ -162,3 +162,11 @@ def test_the_realm_is_the_deployment_s_own_with_step_4_s_subjects_alone() -> Non
     assert any(m["protocolMapper"] == "oidc-audience-mapper" for m in conduit["protocolMappers"])
     assert [u["username"] for u in realm["users"]] == [u["username"] for u in step4.realm_users()]
     assert "secret" not in conduit, "the client's secret is set after import, never in the document"
+
+
+def test_each_subject_s_principal_id_is_its_name_as_the_grants_name_it() -> None:
+    """The Conduit's principal id is the token's `sub`, Keycloak's user id: B's cases are granted
+    to the subjects' names, so each user's id is its name, never one Keycloak makes."""
+    for user in step4.realm_users():
+        assert user["id"] == user["username"]
+

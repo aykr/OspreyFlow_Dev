@@ -30,6 +30,8 @@ PLANTS = [
      '        "OSPREY_MEASURE_PART_TOKEN": tokens[by_use["measure"][0]],', "each_use"),
     ("a control without R", RUNNER,
      '         "codes": ["P", "C", "R"], "use": "control"}', '         "codes": ["P", "C"], "use": "control"}', "rules_granted"),
+    ("each user's id left to Keycloak", RUNNER,
+     '            "id": s["username"],\n', "", "principal_id_is_its_name"),
     ("the realm's users left as the deployment's", RUNNER,
      '    realm["users"] = realm_users()\n    return realm', "    return realm", "subjects_alone"),
 ]

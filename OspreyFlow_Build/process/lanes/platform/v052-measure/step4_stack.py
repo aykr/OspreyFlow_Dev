@@ -138,8 +138,12 @@ WORKER_COMMAND = ["python", "-m", "services.api.worker_main"]
 
 
 def realm_users() -> list[dict[str, Any]]:
+    """Each subject a user whose id is its name: the Conduit's principal id is the token's `sub`
+    (`principal_auth`), which Keycloak sets from the user's id, and B's cases are granted to the
+    names (rules, 14 November). A generated id would match no grant."""
     return [
         {
+            "id": s["username"],
             "username": s["username"],
             "enabled": True,
             "email": f"{s['username']}@ospreyflow.invalid",
