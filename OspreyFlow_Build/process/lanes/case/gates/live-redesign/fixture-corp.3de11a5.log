@@ -1,0 +1,323 @@
+Running on ospreyflow-test (stack g, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T104621Z-7fdbe0e1/log: env LIVE_SPECS=live/fixture-corp.spec.ts bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: scripts.seed_fixture_corp into a case the seed makes
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+Case 'Live search check 20261114T104622Z' is 01M7CTMR1FMGH02PC53WGR4WTH.
+  check: no id stored more than once (whole shared graph)
+Seeded 10 resolution Person nodes and 17 real SAME_AS edges.
+Seeded 21 community-ring nodes and 63 edges across 3 rings.
+Seeded the path-spoke hub 'corp-path-hub' with spokes of length [1, 2, 3, 4, 5, 6, 7, 8], including a SECRET shortcut on the length-3 spoke.
+case: 01M7CTMR1FMGH02PC53WGR4WTH
+# step: the search index rebuilt from the graph
+search index rebuilt: 68 documents from 68 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t104631484104
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 2.36 1.91 3.35
+[warm-up +0.8 s] loaded
+[warm-up +1.2 s] console warning: [.WebGL-0xa44080bd800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.2 s] console warning: [.WebGL-0xa440805e200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.2 s] console warning: [.WebGL-0xa44080c0200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.2 s] search box drawn
+[warm-up +1.2 s] console error: [ECharts] Component toolbox is used but not imported.
+import { ToolboxComponent } from 'echarts/components';
+echarts.use([ToolboxComponent]);
+[warm-up +1.3 s] console warning: [.WebGL-0xa44080bd800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+# warm-up: the Glass drew its search box after 8 s
+
+Running 5 tests using 1 worker
+
+[1/5] live/fixture-corp.spec.ts:197:1 › the query builder finds Fixture Corp entities and reports how many matched
+[2/5] live/fixture-corp.spec.ts:212:1 › moving the resolution threshold live reports what merged and what split
+[3/5] live/fixture-corp.spec.ts:246:1 › a Fixture Corp entity is reachable from the search box by its nino
+[4/5] live/fixture-corp.spec.ts:267:1 › explain on a merged cluster names the pair's real resolution score
+  1) live/fixture-corp.spec.ts:267:1 › explain on a merged cluster names the pair's real resolution score 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem', { name: /Explain cluster/ })
+    Expected: visible
+    Timeout: 30000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem', { name: /Explain cluster/ }) with timeout 30000ms
+      - waiting for locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem', { name: /Explain cluster/ })
+
+
+      331 |   await page.keyboard.press("\\");
+      332 |   const explain = menu.getByRole("menuitem", { name: /Explain cluster/ });
+    > 333 |   await expect(explain).toBeVisible();
+          |                         ^
+      334 |   await explain.click();
+      335 |
+      336 |   // The canvas's popover, picked by its own heading: it has no name, and the keys panel the Glass
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:333:25
+
+    Error Context: test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[5/5] live/fixture-corp.spec.ts:360:1 › the pathfinder finds a path between two ring members, and reports its length
+  1 failed
+    live/fixture-corp.spec.ts:267:1 › explain on a merged cluster names the pair's real resolution score 
+  4 passed (46.8s)
+# playwright exit 1
+== Vite's log
+  VITE v8.3.4  ready in 139 ms
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+== test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: fixture-corp.spec.ts >> explain on a merged cluster names the pair's real resolution score
+- Location: live/fixture-corp.spec.ts:267:1
+
+# Error details
+
+```
+Error: expect(locator).toBeVisible() failed
+
+Locator: locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem', { name: /Explain cluster/ })
+Expected: visible
+Timeout: 30000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem', { name: /Explain cluster/ }) with timeout 30000ms
+  - waiting for locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem', { name: /Explain cluster/ })
+
+```
+
+```yaml
+- link "Skip to main content":
+  - /url: "#main-content"
+- note "Protective marking": OFFICIAL
+- banner:
+  - button "Osprey, go to Home": Osprey
+  - navigation "Places":
+    - list:
+      - listitem:
+        - button "The Glass"
+      - listitem:
+        - button "Rules and Monitoring"
+  - combobox "Search entities, identifiers, documents": QQ843781D
+  - button "Add many from a list"
+  - button "Filters"
+  - group "View":
+    - button "Graph" [pressed]
+    - button "Map"
+    - button "Drawing board"
+    - button "Reports"
+  - button "More views"
+  - button "Export"
+  - button "Switch to the light theme"
+- region "You are in the Glass":
+  - heading "You are in the Glass" [level=2]
+  - 'button "Case: Untitled case"'
+  - button "Views in this case"
+  - text: reads Fixture Corp
+- navigation "Workspace":
+  - button "Explore"
+  - button "Ask & Chat"
+  - button "History"
+  - button "Help"
+  - button "Show names"
+- toolbar "Graph view":
+  - text: Match strictness Strict
+  - slider "Match strictness": "0"
+- dialog "Welcome back":
+  - heading "Welcome back" [level=2]
+  - button "Close the welcome panel": ×
+  - paragraph: The canvas shows the 6 entities you were working on last.
+  - heading "Pick up where you left off" [level=3]
+  - list "Pick up where you left off":
+    - listitem:
+      - button "Seeded 10:46"
+    - listitem:
+      - button "Seeded 10:46"
+  - paragraph:
+    - link "Read the user guide (PDF)":
+      - /url: http://127.0.0.1:56187/v1/guides/user
+  - heading "Keys worth knowing" [level=3]
+  - list "Keys worth knowing":
+    - listitem: / Search entities, identifiers, documents
+    - listitem: ←→ Move between nodes on the canvas
+    - listitem: Enter Expand the focused node by one hop
+    - listitem: F Fit the graph to the window
+    - listitem: Esc Clear the selection
+    - listitem: "? Open or close this panel"
+- application "Network canvas":
+  - toolbar "Canvas tools":
+    - group "Select":
+      - button "⬚"
+    - group "Layout":
+      - combobox "Layout":
+        - option "Organic" [selected]
+        - option "Radial around selected node"
+        - option "Hierarchical"
+        - option "Circular"
+        - option "Group by type"
+        - option "Force-directed tree"
+        - option "Clustered bubbles"
+      - button "Arrange"
+    - group "Show":
+      - button "Communities"
+      - button "Grid" [pressed]
+      - button "Labels"
+      - button "Icons"
+    - group "View":
+      - button "Views"
+      - button "Show links among all"
+      - button "Clear view"
+      - button "Add files"
+      - text: "Last change: Expanded, 10:46"
+      - button "Details" [pressed]
+  - status: Volkov, Mikhail, Person, 5 links
+  - text: Selection of 1. Arrow keys move between nodes, Escape clears.
+  - toolbar "Selection":
+    - status: 1 selected
+    - button "Expand"
+    - button "Ask the model about these…"
+    - button "Save as a view"
+    - button "Remove from view"
+    - button "Clear"
+  - button "Legend" [expanded]
+  - button "Move legend": ⠿
+  - list "Types in view":
+    - listitem: Person 6
+  - list "Links in view":
+    - listitem:
+      - checkbox "Same as" [checked]
+      - text: Same as 15
+  - paragraph: Connection strength
+  - paragraph: "Composition: standard (shipped with OspreyFlow): strength is the stored weight with the influencers; rarity by share of pair links (the client's)."
+  - list "Strength influencers":
+    - listitem:
+      - strong: Direct link
+      - text: "Communicated with, Transacted, Visited and Shared a cell with: adds 0.13 to the score before the curve, always (these are direct links) (shipped with OspreyFlow; to be confirmed with the client)"
+    - listitem:
+      - strong: Evidenced by an assault, disorder or find
+      - text: "Role in, In conflict with, Associate of and Shared a cell with: adds 0.13 to the score before the curve, when an Incident's category is assault, disorder or find (shipped with OspreyFlow; to be confirmed with the client)"
+  - paragraph: "Direct links: Communicated with, Shared a cell with, Transacted and Visited."
+  - paragraph: "Shared-attribute rarity is worked out over what you may see: two analysts with different access can see different rarity for the same pair."
+  - group "Zoom":
+    - button "Zoom out": −
+    - text: 100%
+    - button "Zoom in": +
+    - button "Fit to view"
+  - dialog:
+    - status: "Nothing new: everything linked by ‘Same as’ is already in view."
+    - button "Close message": ×
+- region "Inspector":
+  - separator "Resize the side panel"
+  - button "Open the inspector to the full width": Full width
+  - button "Hide the inspector" [expanded]: Hide
+  - toolbar "Inspector position":
+    - button "Inspector" [expanded]
+    - button "Arrange the inspector": ⋯
+  - heading "Person Volkov, Mikhail Marking" [level=3]: Person Volkov, Mikhail OFFICIAL
+  - heading "Properties" [level=3]:
+    - button "Properties" [expanded]
+  - term: Type
+  - definition: Person
+  - term: Nino
+  - definition: QQ118439C
+  - term: Family name
+  - definition: Volkov
+  - term: Given names
+  - definition: Mikhail
+  - term: Date of birth
+  - definition: 1975-03-12
+  - heading "Picture" [level=3]:
+    - button "Picture"
+  - heading "Relationships" [level=3]:
+    - button "Relationships"
+  - heading "Shares contacts" [level=3]:
+    - button "Shares contacts"
+  - heading "Neighbourhood risk" [level=3]:
+    - button "Neighbourhood risk"
+  - heading "Provenance" [level=3]:
+    - button "Provenance"
+  - heading "Source" [level=3]:
+    - button "Source"
+  - heading "Judgements" [level=3]:
+    - button "Judgements"
+  - separator "Resize the inspector"
+  - toolbar "Metrics position":
+    - button "Metrics"
+    - button "Arrange the metrics": ⋯
+  - toolbar "Query builder position":
+    - button "Query builder"
+    - button "Arrange the query builder": ⋯
+  - toolbar "Find connections position":
+    - button "Find connections"
+    - button "Arrange the find connections": ⋯
+- region "Timeline":
+  - button "Show the timeline"
+  - text: Timeline
+- status: 6 nodes 15 edges 0 dimmed by filter
+- region "Tip":
+  - text: Tip Press / to search entities, identifiers and documents.
+  - button "Next tip"
+- status: "Match strictness: Strict — 0 merged, 1 split, 5 affected"
+```
+
+== the last of the Conduit's log
+INFO:     127.0.0.1:58656 - "GET /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58692 - "GET /v1/investigations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "GET /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58692 - "GET /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58650 - "GET /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58650 - "OPTIONS /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58692 - "OPTIONS /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58650 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "OPTIONS /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58650 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58650 - "OPTIONS /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58692 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58656 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58650 - "GET /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58656 - "GET /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58656 - "OPTIONS /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58656 - "GET /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58656 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58692 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58694 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58656 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58694 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58650 - "GET /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58650 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58694 - "GET /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "GET /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58694 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58694 - "OPTIONS /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/rarity HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58650 - "OPTIONS /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/paths HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58656 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/paths HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/rarity HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58694 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/rarity HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58656 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58694 - "GET /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58656 - "POST /v1/investigations/01M7CTPS20N51YQFJRTW4Z1KG9/pictures HTTP/1.1" 200 OK
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T104621Z-7fdbe0e1).
+Wall time: 78 s, exit 1 (stack g, the lease case took at 2026-11-14T10:45:39Z; set-up before it 35 s)
