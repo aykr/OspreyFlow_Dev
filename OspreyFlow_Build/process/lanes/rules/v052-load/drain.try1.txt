@@ -1,0 +1,22 @@
+Running on ospreyflow-test (stack d, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261114T062747Z-b93d2803/log: bash -c ( while :; do A=$(free -g | awk "/^Mem:/{print \$7}"); echo "[mem $(date -u +%H:%M:%SZ)] available ${A} GB$( [ "$A" -lt 10 ] && echo " LOW MEMORY")"; sleep 300; done ) & M=$!; bash ../OspreyFlow_Build/process/lanes/rules/v052-load/drain_index.sh; b=$?; echo "drain exit=$b"; kill $M; exit $b
+[mem 06:27:48Z] available 43 GB
+== before (2026-11-14T06:27:48Z): graph 759044 text 72000
+2026-11-14T06:28:19Z +31s: graph 759044 text 72000
+2026-11-14T06:28:50Z +62s: graph 759044 text 72000
+2026-11-14T06:29:21Z +93s: graph 759044 text 72000
+== the worker stopped on its own: its log follows
+INFO:httpx:HTTP Request: POST http://localhost:2494/api/v1/server "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST http://localhost:2494/api/v1/command/ospreyflow "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST http://localhost:2494/api/v1/command/ospreyflow "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST http://localhost:2494/api/v1/command/ospreyflow "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST http://localhost:2494/api/v1/command/ospreyflow "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST http://localhost:2494/api/v1/command/ospreyflow "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST http://localhost:2494/api/v1/command/ospreyflow "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST http://localhost:2494/api/v1/command/ospreyflow "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST http://localhost:2494/api/v1/command/ospreyflow "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST http://localhost:2494/api/v1/command/ospreyflow "HTTP/1.1 200 OK"
+INFO:__main__:worker worker-gpu-1: started for ['resolve_entity_type', 'supersede_node']
+INFO:__main__:worker worker-gpu-1: stopped
+drain exit=1
+Reaped 1 process(es) the run left behind (/root/osprey-runs/rules.meta/runs/20261114T062747Z-b93d2803).
+Wall time: 95 s, exit 1 (stack d, the lease rules took at 2026-11-14T03:27:42Z; set-up before it 16 s)

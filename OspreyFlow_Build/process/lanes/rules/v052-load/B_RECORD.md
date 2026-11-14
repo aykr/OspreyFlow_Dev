@@ -21,12 +21,24 @@ resumed, skipping the files already loaded.
 
 Memory: available never under 28 GB in run 2 (lowest 06:15:58Z, during the drift check).
 
-## The drain did not run
+## The drain (the product's worker, until both outboxes were empty)
 
-The outboxes held graph 759,044 and text 72,000 rows after the load. `drain_index.sh` started the
-product's worker (`python -m services.api.worker_main`), and the worker stopped within 30 s:
-`ApiConfig.from_env()` raises `OIDC_JWKS_URL is not set — Principal resolution has no key source`.
-A lane stack has no IdP (stack d runs arcadedb, opensearch, clickhouse, objectstore, valkey, pg), and the
-worker takes the API's whole config, which needs a JWKS URL, though the indexer never resolves a
-principal. As the orchestrator asked, this was not worked round. The drain's time, its rows a second,
-and the final drift check are still owed.
+The first attempt (in `load-b.run2.txt`) stopped at once: `ApiConfig.from_env()` raises when
+`OIDC_JWKS_URL` is unset, and a lane stack has no identity provider. By the orchestrator's ruling the
+drain gives the worker a placeholder on a closed port, `http://127.0.0.1:9/jwks` (test-environment
+configuration; the indexer never resolves a principal; the product change is a CARRIES row). Try 1
+(`drain.try1.txt`) then started the worker without its indexer: the lease gives only `OPENSEARCH_PORT`,
+and the worker feeds the index only where `OPENSEARCH_URL` or `OPENSEARCH_HOST` is given, as a rendered
+deployment gives it. That worker was stopped by hand, and the drain sets `OPENSEARCH_HOST=localhost`.
+Try 2 (`drain.try2.txt`, server run 20261114T062953Z-83fb5d52), uncontended:
+
+| Measure | Value |
+| --- | --- |
+| Outboxes before | graph 759,044, text 72,000 |
+| Drained in | 432 s (06:29:54Z to 06:37:07Z, polled every 30 s) |
+| Overall | 831,044 rows in 432 s, 1,924 rows/s |
+| Text outbox | 72,000 in at most 93 s (both outboxes fed together), at least 770 rows/s |
+| Graph outbox | 759,044 in 432 s, 1,757 rows/s; 1,926 rows/s once the text outbox was empty (653,044 rows in 339 s); fastest 30 s window 2,450 rows/s |
+| Final drift check | none, nothing pending: 570,460 nodes in the graph, 642,460 documents in the index; 711 s, 169 MB max |
+
+Memory in the drain: available never under 29 GB (06:44:54Z, during the drift check).
