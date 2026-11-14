@@ -1,0 +1,13 @@
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+index 3f69e5c..43629dd 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+@@ -86,6 +86,8 @@ const EXTRA_STATES: Record<string, string[]> = {
+   "alert-figures-harness.html": ["from=alert", "board=1", "board=1&rule=hotlists&from=alert", "home=1", "help=1"],
+   // ADR-145 Amendment 11: Home's *Your access and tasks* where Home draws it, below the two columns.
+   "answers-harness.html": ["home=1"],
++  // ADR-098 Amendment 9: Whole case chosen, its search's fallback said, an answer with its sources.
++  "questions-harness.html": ["case=1"],
+   // ADR-146 decisions 2 and 6: Rules and Monitoring at an alert's address, and at one the reader may
+   // not see.
+   "rules-place-harness.html": ["address=a1", "address=not-yours", "evidence=1"],

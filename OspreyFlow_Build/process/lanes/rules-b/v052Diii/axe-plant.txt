@@ -1,0 +1,428 @@
+# plant: a low-contrast span in the Whole case read line, drawn only by an answer read from the whole case
+
+Running 8 tests using 1 worker
+
+[1/8] a11y/every-harness.spec.ts:391:7 › questions-harness.html (dark) has no automated WCAG 2.2 A or AA violations
+[2/8] a11y/every-harness.spec.ts:391:7 › questions-harness.html (light) has no automated WCAG 2.2 A or AA violations
+[3/8] a11y/every-harness.spec.ts:391:7 › questions-harness.html (govuk) has no automated WCAG 2.2 A or AA violations
+[4/8] a11y/every-harness.spec.ts:427:5 › questions-harness.html: every labelled field's name contains its visible label (2.5.3)
+[5/8] a11y/every-harness.spec.ts:391:7 › questions-harness.html case=1 (dark) has no automated WCAG 2.2 A or AA violations
+  1) a11y/every-harness.spec.ts:391:7 › questions-harness.html case=1 (dark) has no automated WCAG 2.2 A or AA violations 
+
+    Error: [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ],
+        "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/color-contrast?application=playwright",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#f4f4f4",
+                  "bgColor": "#ffffff",
+                  "contrastRatio": 1.09,
+                  "fontSize": "9.0pt (12px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+                    "target": [
+                      "p:nth-child(6) > span"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+            "target": [
+              "p:nth-child(6) > span"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          }
+        ]
+      }
+    ]
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 58
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+    +     "help": "Elements must meet minimum color contrast ratio thresholds",
+    +     "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/color-contrast?application=playwright",
+    +     "id": "color-contrast",
+    +     "impact": "serious",
+    +     "nodes": Array [
+    +       Object {
+    +         "all": Array [],
+    +         "any": Array [
+    +           Object {
+    +             "data": Object {
+    +               "bgColor": "#ffffff",
+    +               "contrastRatio": 1.09,
+    +               "expectedContrastRatio": "4.5:1",
+    +               "fgColor": "#f4f4f4",
+    +               "fontSize": "9.0pt (12px)",
+    +               "fontWeight": "normal",
+    +               "messageKey": null,
+    +             },
+    +             "id": "color-contrast",
+    +             "impact": "serious",
+    +             "message": "Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +             "relatedNodes": Array [
+    +               Object {
+    +                 "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+    +                 "target": Array [
+    +                   "p:nth-child(6) > span",
+    +                 ],
+    +               },
+    +             ],
+    +           },
+    +         ],
+    +         "failureSummary": "Fix any of the following:
+    +   Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +         "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+    +         "impact": "serious",
+    +         "none": Array [],
+    +         "target": Array [
+    +           "p:nth-child(6) > span",
+    +         ],
+    +       },
+    +     ],
+    +     "tags": Array [
+    +       "cat.color",
+    +       "wcag2aa",
+    +       "wcag143",
+    +       "TTv5",
+    +       "TT13.c",
+    +       "EN-301-549",
+    +       "EN-9.1.4.3",
+    +       "ACT",
+    +       "RGAAv4",
+    +       "RGAA-3.2.1",
+    +     ],
+    +   },
+    + ]
+
+      415 |           .filter((v) => v.nodes.length > 0); // prettier-ignore
+      416 |         expect(overlaid.filter((c) => !dropped.has(c)), "listed under an open overlay but no longer reported: update UNDER_AN_OPEN_OVERLAY").toEqual([]);
+    > 417 |         expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+          |                                                                 ^
+      418 |         // axe's undecided colour contrast, measured here (1.4.3): a shortfall or an unmeasurable
+      419 |         // node fails, unless it is a listed finding carried by its owner, and a listed one that is
+      420 |         // gone fails too, so the list never outlives what it excuses.
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:417:65
+
+    Error Context: test-results/every-harness-questions-ha-206b8-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+[6/8] a11y/every-harness.spec.ts:391:7 › questions-harness.html case=1 (light) has no automated WCAG 2.2 A or AA violations
+  2) a11y/every-harness.spec.ts:391:7 › questions-harness.html case=1 (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ],
+        "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/color-contrast?application=playwright",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#f4f4f4",
+                  "bgColor": "#ffffff",
+                  "contrastRatio": 1.09,
+                  "fontSize": "9.0pt (12px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+                    "target": [
+                      "p:nth-child(6) > span"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+            "target": [
+              "p:nth-child(6) > span"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          }
+        ]
+      }
+    ]
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 58
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+    +     "help": "Elements must meet minimum color contrast ratio thresholds",
+    +     "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/color-contrast?application=playwright",
+    +     "id": "color-contrast",
+    +     "impact": "serious",
+    +     "nodes": Array [
+    +       Object {
+    +         "all": Array [],
+    +         "any": Array [
+    +           Object {
+    +             "data": Object {
+    +               "bgColor": "#ffffff",
+    +               "contrastRatio": 1.09,
+    +               "expectedContrastRatio": "4.5:1",
+    +               "fgColor": "#f4f4f4",
+    +               "fontSize": "9.0pt (12px)",
+    +               "fontWeight": "normal",
+    +               "messageKey": null,
+    +             },
+    +             "id": "color-contrast",
+    +             "impact": "serious",
+    +             "message": "Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +             "relatedNodes": Array [
+    +               Object {
+    +                 "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+    +                 "target": Array [
+    +                   "p:nth-child(6) > span",
+    +                 ],
+    +               },
+    +             ],
+    +           },
+    +         ],
+    +         "failureSummary": "Fix any of the following:
+    +   Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +         "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+    +         "impact": "serious",
+    +         "none": Array [],
+    +         "target": Array [
+    +           "p:nth-child(6) > span",
+    +         ],
+    +       },
+    +     ],
+    +     "tags": Array [
+    +       "cat.color",
+    +       "wcag2aa",
+    +       "wcag143",
+    +       "TTv5",
+    +       "TT13.c",
+    +       "EN-301-549",
+    +       "EN-9.1.4.3",
+    +       "ACT",
+    +       "RGAAv4",
+    +       "RGAA-3.2.1",
+    +     ],
+    +   },
+    + ]
+
+      415 |           .filter((v) => v.nodes.length > 0); // prettier-ignore
+      416 |         expect(overlaid.filter((c) => !dropped.has(c)), "listed under an open overlay but no longer reported: update UNDER_AN_OPEN_OVERLAY").toEqual([]);
+    > 417 |         expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+          |                                                                 ^
+      418 |         // axe's undecided colour contrast, measured here (1.4.3): a shortfall or an unmeasurable
+      419 |         // node fails, unless it is a listed finding carried by its owner, and a listed one that is
+      420 |         // gone fails too, so the list never outlives what it excuses.
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:417:65
+
+    Error Context: test-results/every-harness-questions-ha-76093-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+[7/8] a11y/every-harness.spec.ts:391:7 › questions-harness.html case=1 (govuk) has no automated WCAG 2.2 A or AA violations
+  3) a11y/every-harness.spec.ts:391:7 › questions-harness.html case=1 (govuk) has no automated WCAG 2.2 A or AA violations 
+
+    Error: [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ],
+        "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/color-contrast?application=playwright",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#f4f4f4",
+                  "bgColor": "#ffffff",
+                  "contrastRatio": 1.09,
+                  "fontSize": "9.0pt (12px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+                    "target": [
+                      "p:nth-child(6) > span"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+            "target": [
+              "p:nth-child(6) > span"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          }
+        ]
+      }
+    ]
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 58
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+    +     "help": "Elements must meet minimum color contrast ratio thresholds",
+    +     "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/color-contrast?application=playwright",
+    +     "id": "color-contrast",
+    +     "impact": "serious",
+    +     "nodes": Array [
+    +       Object {
+    +         "all": Array [],
+    +         "any": Array [
+    +           Object {
+    +             "data": Object {
+    +               "bgColor": "#ffffff",
+    +               "contrastRatio": 1.09,
+    +               "expectedContrastRatio": "4.5:1",
+    +               "fgColor": "#f4f4f4",
+    +               "fontSize": "9.0pt (12px)",
+    +               "fontWeight": "normal",
+    +               "messageKey": null,
+    +             },
+    +             "id": "color-contrast",
+    +             "impact": "serious",
+    +             "message": "Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +             "relatedNodes": Array [
+    +               Object {
+    +                 "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+    +                 "target": Array [
+    +                   "p:nth-child(6) > span",
+    +                 ],
+    +               },
+    +             ],
+    +           },
+    +         ],
+    +         "failureSummary": "Fix any of the following:
+    +   Element has insufficient color contrast of 1.09 (foreground color: #f4f4f4, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +         "html": "<span style=\"color: rgb(244, 244, 244); background: rgb(255, 255, 255);\">PLANT</span>",
+    +         "impact": "serious",
+    +         "none": Array [],
+    +         "target": Array [
+    +           "p:nth-child(6) > span",
+    +         ],
+    +       },
+    +     ],
+    +     "tags": Array [
+    +       "cat.color",
+    +       "wcag2aa",
+    +       "wcag143",
+    +       "TTv5",
+    +       "TT13.c",
+    +       "EN-301-549",
+    +       "EN-9.1.4.3",
+    +       "ACT",
+    +       "RGAAv4",
+    +       "RGAA-3.2.1",
+    +     ],
+    +   },
+    + ]
+
+      415 |           .filter((v) => v.nodes.length > 0); // prettier-ignore
+      416 |         expect(overlaid.filter((c) => !dropped.has(c)), "listed under an open overlay but no longer reported: update UNDER_AN_OPEN_OVERLAY").toEqual([]);
+    > 417 |         expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+          |                                                                 ^
+      418 |         // axe's undecided colour contrast, measured here (1.4.3): a shortfall or an unmeasurable
+      419 |         // node fails, unless it is a listed finding carried by its owner, and a listed one that is
+      420 |         // gone fails too, so the list never outlives what it excuses.
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:417:65
+
+    Error Context: test-results/every-harness-questions-ha-61548-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+[8/8] a11y/every-harness.spec.ts:427:5 › questions-harness.html case=1: every labelled field's name contains its visible label (2.5.3)
+  3 failed
+    a11y/every-harness.spec.ts:391:7 › questions-harness.html case=1 (dark) has no automated WCAG 2.2 A or AA violations 
+    a11y/every-harness.spec.ts:391:7 › questions-harness.html case=1 (light) has no automated WCAG 2.2 A or AA violations 
+    a11y/every-harness.spec.ts:391:7 › questions-harness.html case=1 (govuk) has no automated WCAG 2.2 A or AA violations 
+  5 passed (10.0s)
