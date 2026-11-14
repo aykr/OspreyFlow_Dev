@@ -182,3 +182,12 @@ def test_a_run_tag_that_is_a_folder_gives_names_docker_takes_and_keeps_its_label
     assert step4.slug(run) == "20261114t091020z-0f15af13"
     assert f"osprey.run={run}" in step4.keycloak_argv(run, name, 1)
 
+
+def test_a_failed_start_s_log_is_shown_with_every_secret_masked() -> None:
+    env = {"POSTGRES_PASSWORD": "pg-secret-1", "KC_BOOTSTRAP_ADMIN_PASSWORD": "kc-secret-2",
+           "OSPREY_MEASURE_TOKEN": "eyJ-token-3", "POSTGRES_PORT": "55438"}  # fmt: skip
+    text = "auth failed for pg-secret-1; admin kc-secret-2; bearer eyJ-token-3 on 55438"
+    shown = step4.mask(text, step4.secret_values(env))
+    assert "secret-1" not in shown and "secret-2" not in shown and "token-3" not in shown
+    assert "55438" in shown, "a port is no secret here; the runner prints no port itself"
+

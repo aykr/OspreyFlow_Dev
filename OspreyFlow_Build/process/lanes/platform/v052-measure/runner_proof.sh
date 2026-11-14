@@ -19,6 +19,13 @@ A="http://127.0.0.1:${ARCADEDB_HTTP_PORT}/api/v1/server"
 curl -s -o /dev/null -u "root:${ARCADEDB_ROOT_PASSWORD:-playwithdata123}" -X POST "$A" \
   -d '{"command":"create database ospreyflow"}' || true
 
+# The images built once for both runs, and removed at the end.
+TAG="step4-proof-$(echo "$STAMP" | tr 'A-Z' 'a-z')"
+docker build -q -f services/api/Dockerfile -t "ospreyflow/api:$TAG" . >/dev/null || { echo "FAILED: the api image"; exit 1; }
+docker build -q -f services/worker/Dockerfile -t "ospreyflow/worker:$TAG" . >/dev/null || { echo "FAILED: the worker image"; exit 1; }
+export STEP4_API_IMAGE="ospreyflow/api:$TAG" STEP4_WORKER_IMAGE="ospreyflow/worker:$TAG"
+trap 'docker rmi -f "ospreyflow/api:$TAG" "ospreyflow/worker:$TAG" >/dev/null 2>&1' EXIT
+
 seed() {  # seed <principal> <unit> <name>: prints the case id
   "$PY" -m scripts.seed_fixture_corp --case-name "$3" --principal-id "$1" --org-unit "$2" >"/tmp/seed.$$" 2>&1 \
     || { tail -8 "/tmp/seed.$$"; echo "FAILED: seed for $1"; exit 1; }

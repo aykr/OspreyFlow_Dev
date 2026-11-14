@@ -209,6 +209,19 @@ def preflight(base: str, case: str, measure_token: str, probe_token: str) -> str
     return ""
 
 
+def mask(text: str, values: Sequence[str]) -> str:
+    """`text` with each secret value (a password, a token) replaced, longest first."""
+    for value in sorted((v for v in values if len(v) >= 6), key=len, reverse=True):
+        text = text.replace(value, "<masked>")
+    return text
+
+
+def secret_values(environment: dict[str, str]) -> list[str]:
+    """The environment's values that are secrets, by their names."""
+    marks = ("PASSWORD", "SECRET", "TOKEN", "KEY")
+    return [v for n, v in environment.items() if any(m in n for m in marks) and v]
+
+
 def _free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -268,6 +281,13 @@ class Stack:
         if done.returncode != 0:
             raise SystemExit(f"step4: docker {argv[0]} failed: {done.stderr.strip()[-500:]}")
         return done.stdout.strip()
+
+    def logs(self, name: str, secrets_: Sequence[str]) -> str:
+        """The last of a container's log, every secret value in it masked."""
+        done = subprocess.run(
+            ["docker", "logs", "--tail", "80", name], capture_output=True, text=True, check=False
+        )
+        return mask(done.stdout + done.stderr, secrets_)
 
     def remove(self) -> None:
         found = subprocess.run(
@@ -367,7 +387,13 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
     stack.docker(*api, env=env)
     stack.docker(*worker, env=env)
     base = f"http://127.0.0.1:{cp}"
-    _wait(f"{base}/healthz", 240, "the Conduit")
+    try:
+        _wait(f"{base}/healthz", 240, "the Conduit")
+    except SystemExit:
+        for part in ("api", "worker"):
+            print(f"== the last of the {part}'s log", flush=True)
+            print(stack.logs(f"osprey-step4-{part}-{name}", secret_values(env)), flush=True)
+        raise
     print(f"step4: the Conduit and the worker are up at the poc's limits {poc_limits('api')}",
           flush=True)  # fmt: skip
 
