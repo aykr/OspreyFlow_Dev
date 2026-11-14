@@ -42,3 +42,8 @@ plant 4: the Entra count typed as two (main's)
 Green: tests/harness/test_cloud_platform*.py, cp_policy_check (less its two docker files), the guides, the R1 kind suites, update,
 install, the secrets case, tests/services/search_index (less its live files), tests/cli, the ADR checks and the coverage check:
 1080 passed, 43 skipped. doc-citations-check: every cited path exists. make test and make -k ci on the server: waiting for the slot.
+
+# Server gates at 8125e9d (on main 292ec5f), through stack_lease.sh offline platform (no stack, no lease). Before them, on the
+# server: no other lane's make test or make -k ci (pgrep), and free -g showed 38G available (the orchestrator's check).
+- make -k test, run 20261114T112636Z-2684c4d9: exit 0. pytest 14154 passed, 45 skipped; vitest 388 files passed.
+- make -k ci, run 20261114T113742Z-41a6c409: exit 0.
