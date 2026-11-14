@@ -23,7 +23,7 @@ plant() { # name, file, perl substitution, grep for the cases, a case that must 
   if grep -qE "^\s+[0-9]+\) .*› $case" <<<"$out"; then
     echo "AS IT MUST BE (red): $name"
     grep -m1 -E "Error:|expect\(" <<<"$out" | sed 's/^ */    /'
-    grep -m1 -E '"id": "' <<<"$out" | sed 's/^ */    axe: /'
+    grep -m1 -E '"id": "|unlisted|:1 <' <<<"$out" | sed 's/^ */    /'
   else
     echo "NOT RED FOR ITS REASON: $name (wanted: $case)"; grep -E "passed|failed|›" <<<"$out" | tail -8; fails=1
   fi
@@ -44,6 +44,9 @@ plant "the stage's words faint against the panel (dark)" "$CSS" \
 plant "the refusal's words faint against the panel (GOV.UK)" "$CSS" \
   's/\.batch-expansion__message \{ margin: 0 0 var\(--sp-12\); font-weight: 600; \}/.batch-expansion__message { margin: 0 0 var(--sp-12); font-weight: 600; color: #c8c8c8; }/' \
   "refused, has no automated.*\\(govuk\\)" "the batch job's panel, refused, has no automated WCAG 2.2 A or AA violation \\(govuk\\)"
+plant "the stage's words in the panel's own colour, 1:1, which axe leaves undecided (dark)" "$CSS" \
+  's/\.batch-expansion__status \{ margin: 0 0 var\(--sp-8\); font-weight: 600; \}/.batch-expansion__status { margin: 0 0 var(--sp-8); font-weight: 600; color: var(--surface-raised); opacity: 0.6; }/' \
+  "running, has no automated.*\\(dark\\)" "the batch job's panel, running, has no automated WCAG 2.2 A or AA violation \\(dark\\)"
 plant "the view's name faint against the panel (light)" "$CSS" \
   's/\.batch-expansion__status \{ margin: 0 0 var\(--sp-8\); font-weight: 600; \}/.batch-expansion__status { margin: 0 0 var(--sp-8); font-weight: 600; color: #d0d0d0; }/' \
   "done, has no automated.*\\(light\\)" "the batch job's panel, done, has no automated WCAG 2.2 A or AA violation \\(light\\)"
