@@ -187,3 +187,4 @@ d08a3c4 4e9922b studio v052-pipeline-words
 58b6bdc 93d1e53 docs v052-sweep
 d58a0b7 cb8fe5c case v052-suppress-reload
 38d0817 3129961 studio demo-signins
+55a44d5 bff2ca9 rules v052-measure-m10
