@@ -2429,8 +2429,7 @@ engineer attaches rules to pipelines (Checks on load) but does not write them.
 **So a dataset that asks for a second person needs at least two Authors of the case who hold
 `deploy_rules` and open Rules and Monitoring (Analysts)**; with one, a rule there can be tested but never made live.
 
-**Approving influencers.** In the Glass's **Connection strength** view (the top bar's view switch, under **More**, or in
-the switch itself for someone offered no other view, as the built-in Administrator is), a version waiting for a second
+**Approving influencers.** In the Glass's **Connection strength** (the top bar's view switch, under **More**, or in the switch itself for someone offered nothing else there, as the built-in Administrator is), a version waiting for a second
 person shows what it would put in force, who proposed it and why. Another holder of the right chooses
 **Approve version N**, or **Send it back** with words; its proposer sees the approval withheld and may
 withdraw it. Until a version is approved, the influencers shipped in the weights file are in force.
@@ -2825,7 +2824,7 @@ A typology rule is named by its typology, never by its own name, which an analys
 feed does not carry. Every figure is counted as the dashboard's account may see it; a hotlist kept
 "only me" is counted for its owner alone, so never on a dashboard.
 
-**In the Glass**, the **Reports** view (the top bar's view switch) draws an **Alert monitoring** board itself, first among the
+**In the Glass**, **Reports** (the top bar's view switch) draws an **Alert monitoring** board itself, first among the
 boards, from the same figures counted as the person reading it: raised each week and by rule, closed
 by outcome, time to close, hotlist matches and the team view. A Reports Viewer's *Open the dashboard*
 opens it filtered to an alert's rule and period. It needs
