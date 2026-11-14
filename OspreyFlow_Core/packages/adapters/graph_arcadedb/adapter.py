@@ -910,14 +910,16 @@ class GraphArcadeDBAdapter:
         of a type the link does not allow is still found, and refused for its type, not reported
         missing; a type that joins anything (`*`) asks every type at once."""
         ids = [i for write in edges for i in (write.source, write.target)]
-        types: set[str] | None = set()
+        joined: set[str] = set()
+        anything = False
         for write in edges:
             edge_type = schema.edge_type(write.type)
             allowed = [] if edge_type is None else edge_type.from_types + edge_type.to_types
             if edge_type is None or "*" in allowed:
-                types = None
+                anything = True
                 break
-            types.update(physical_type_name(t) for t in allowed)
+            joined.update(physical_type_name(t) for t in allowed)
+        types: set[str] | None = None if anything else joined
         ends = await self._vertex_records(
             ids, tx=tx, types=None if types is None else sorted(types)
         )
