@@ -1,0 +1,68 @@
+# test_guide_6a_upgrade.py, red first
+Branch lane/docs-6a-upgrade at 1a81297 (on lane/docs-spec10, from main 78564d2); offline, closed ports, on the Mac, no stack.
+Command: cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 POSTGRES_PASSWORD=throwaway VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 PYTHONPATH=.:packages:../OspreyFlow_Build <the docs worktree venv>/python -m pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/test_guide_6a_upgrade.py
+Each plant in the working tree only, restored after its run, shown as < before and > after; the render's plants in runbooks.py and the runbook's in deploy/RUNBOOK.md.
+
+## 1. main's guide (no upgrade paragraph)
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:58: 
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:37: AssertionError
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:68: 
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:37: AssertionError
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:78: 
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:37: AssertionError
+
+## 2. platform-b's paragraph as given (28fc2bb)
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:69: AssertionError
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:79: AssertionError
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:88: AssertionError
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:99: AssertionError
+4 failed, 1 passed in 0.40s
+
+## 3. Render: an upgrade runbook of its own, beside INSTALL.md (the render's call site)
+>         artefacts["UPGRADE.md"] = "# Upgrade\n"
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:59: AssertionError
+1 failed, 4 passed in 0.59s
+
+## 3b. Render: INSTALL.md without helm upgrade --install (both its lines)
+< helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m
+> helm install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m
+< helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m
+> helm install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:60: AssertionError
+1 failed, 4 passed in 0.59s
+
+## 4. Runbook: Before an upgrade stopping a pod the guide does not name
+< kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=0
+> kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync deployment/superset --replicas=0
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:70: AssertionError
+1 failed, 4 passed in 0.57s
+
+## 5. Render: INSTALL.md's section 6 no longer checking Entra's settings
+< kubectl -n "$NS" exec deploy/api -- printenv OSPREY_IDENTITY_PROVIDER OIDC_ISSUER
+> kubectl -n "$NS" exec deploy/api -- printenv OSPREY_IDENTITY_PROVIDER
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:79: AssertionError
+1 failed, 4 passed in 0.57s
+
+## 6. The install test's log recorded (an UPGRADE.log under process/), the guide unchanged
+> OspreyFlow_Build/process/lanes/docs/gates/UPGRADE.log (empty, planted)
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:88: AssertionError
+1 failed, 4 passed in 0.57s
+
+## 7. Guide: §6a.8's old 'not rendered on this profile' back
+< commands also scale `deployment/report-sync`, which is rendered only with reporting on
+< (`reporting.sync`), so without it its "not found" is expected, and they scale the Conduit and the workers back to 1: start them again at the
+> commands also scale `deployment/report-sync`, which is not rendered on this profile, so its "not
+> found" is expected, and they scale the Conduit and the workers back to 1: start them again at the
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:99: AssertionError
+1 failed, 4 passed in 0.40s
+
+## 8. Guide: 'has not been rehearsed' struck
+< restoring step 1's backup) **has not been rehearsed**: until it has, treat step 1's backup as the way
+> restoring step 1's backup) **is supported**: until it has, treat step 1's backup as the way
+../OspreyFlow_Build/tests/test_guide_6a_upgrade.py:90: AssertionError
+1 failed, 4 passed in 0.57s
+
+## 9. Green
+5 passed in 0.55s
+
+Not shown red on their own: line 81 (section 7's /healthz: the render's text has several, so no single plant removes it), line 89 ('is to install', red in run 2 beside line 88) and line 100's reporting-on half (red in run 2 by the struck words). Each is a second assertion on a sentence another run already shows red.
