@@ -67,7 +67,7 @@ def test_the_backup_first_stops_the_pods_the_runbook_s_before_an_upgrade_stops()
     stopped = [d.removeprefix("deployment/") for d in m.group(1).split()]
     step = re.search(r"1\. \*\*Back up first\.\*\*(.*?) 2\. \*\*", upgrade_paragraph())
     assert step and "*Before an upgrade*" in step.group(1)
-    assert [p for p in stopped if WORDS[p] not in step.group(1)] == []
+    assert [p for p in stopped if WORDS.get(p, f"`{p}`") not in step.group(1)] == []
 
 
 def test_the_install_s_own_checks_are_the_ones_the_guide_names() -> None:
