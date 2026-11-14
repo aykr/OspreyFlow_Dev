@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+import uuid
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -266,11 +267,21 @@ def test_on_entra_the_configuration_names_the_scope_and_an_application_id() -> N
 
 
 async def test_a_pass_on_entra_asks_with_the_scope(world: tuple[str, _World], stores: tuple[Mart, Valkey]) -> None:
-    """Through `sync_once`: the dashboard's scope reaches the token request it makes."""
+    """Through `sync_once`: the dashboard's scope reaches the token request it makes, and one token
+    serves the whole pass (the case list and the feed it really pulls).
+
+    - The world's tokens last an hour here, as Entra's do. Its default of 2 seconds (for the renewal
+      test) is inside `TokenSource`'s 30-second margin, so every request would ask again and two
+      tokens would be right (CI run 43597467719).
+    - The application id is fresh per run, as `_dashboard`'s are: a claim in Valkey outlives the test,
+      so a fixed id on a reused Valkey skipped the feed and passed with one token, having pulled
+      nothing. `pulled == 1` holds it to a pass that pulls."""
     base, w = world
     w.scope = API_SCOPE
-    board = Dashboard(client_id=DASHBOARD_APP, secret="right-secret", token_url=f"{base}/token",
+    w.lifetime = 3600
+    application = str(uuid.uuid4())  # an Entra application id, fresh per run
+    board = Dashboard(client_id=application, secret="right-secret", token_url=f"{base}/token",
                       conduit_url=base, weeks=12, scope=API_SCOPE)  # fmt: skip
     mart, valkey = stores
     summary = await sync_once([board], mart, valkey, slot=1)
-    assert summary.failed == 0 and w.tokens == 1, summary.failures
+    assert summary.failed == 0 and summary.pulled == 1 and w.tokens == 1, (summary, w.tokens)
