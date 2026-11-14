@@ -55,26 +55,26 @@ def rendered(fixture: str, search: str | None) -> dict[str, str] | str:
 
 def values(fixture: str, search: str | None = None) -> dict[str, Any]:
     artefacts = rendered(fixture, search)
-    assert isinstance(artefacts, dict), artefacts
+    assert isinstance(artefacts, dict), f"the render refused: {artefacts}"
     found: dict[str, Any] = yaml.safe_load(artefacts["values.yaml"])
     return found
 
 
 def test_section_6a_says_which_shapes_make_the_opensearch_domain_as_rendered() -> None:
-    made = {f: isinstance(rendered(f, "opensearch"), dict) and "terraform/opensearch.tf" in rendered(f, "opensearch")
-            for f in SHAPES}  # fmt: skip
     six_a = section("## 6a")
-    row = next((line for line in ADMIN.splitlines() if line.startswith("| `opensearch.tf` |")), "")
-    assert row, "§6a.3's row for opensearch.tf"
-    every = all(made.values())
-    assert row.startswith("| `opensearch.tf` | Every shape, when `components.search` is `opensearch`") is every
-    assert ("The standard shape alone" in row) is (made == {f: s == "standard" for f, s in SHAPES.items()})
     refused = rendered("poc", "opensearch")
     if isinstance(refused, str):
         assert refused.split(" (")[0] in six_a, "the poc shape's refusal, in its own words"
     else:
         assert "the poc shape makes no OpenSearch" not in six_a
         assert "makes the platform's OpenSearch domain" in section("### 6a.1")
+    made = {f: isinstance(rendered(f, "opensearch"), dict) and "terraform/opensearch.tf" in rendered(f, "opensearch")
+            for f in SHAPES}  # fmt: skip
+    row = next((line for line in ADMIN.splitlines() if line.startswith("| `opensearch.tf` |")), "")
+    assert row, "§6a.3's row for opensearch.tf"
+    every = all(made.values())
+    assert row.startswith("| `opensearch.tf` | Every shape, when `components.search` is `opensearch`") is every
+    assert ("The standard shape alone" in row) is (made == {f: s == "standard" for f, s in SHAPES.items()})
 
 
 def test_section_6a_says_postgres_fulltext_makes_no_domain() -> None:
