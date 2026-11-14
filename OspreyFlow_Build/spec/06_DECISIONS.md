@@ -38726,3 +38726,45 @@ Amendment 6 point 8, which refused every guest (B2B) account outright.
   up `manage_people`; `test_entra_people_live.py`: the same against the real store, and the way back in opening.
 - `test_guides_cloud_platform.py`: §6a.7 quotes the refusal and the audit action as the code has them.
 Each rule is planted alone and red (`process/lanes/admin/guests/`).
+
+### ADR-044, Amendment 1 (14 November 2026) — A stopped hotlist or watch says why
+
+Status: the orchestrator's assignment (14 November 2026), from the CARRIES row ADR-148 Amendment 16 left ("a stopped
+hotlist or watch says why"), before v0.5.2's freeze. Built by the admin lane. Builds the reason field ADR-044 decided and
+left unbuilt; its escalation (three consecutive unreachable evaluations) is not built here and stays as ADR-044 left it.
+
+**Decisions.**
+
+1. **The reason beside the status, as ADR-044 chose.** `Hotlist.status_detail` and `Monitor.status_detail`
+   (`StoppedReason`), kept in a nullable `status_detail` column of each table. `set_status(id, status, detail)` writes
+   it only with `stopped`; `active` clears it in the same statement, so the two never disagree. A stored reason this
+   release does not know (a later release's) is served as none, never guessed.
+2. **Every ADR-044 stop says one.** At a load, each refusal `resolve_for_owner_detailed` raises is its reason
+   (`watch_status.reason_of`):
+   - `revoked`: disabled, or a guest no longer admitted;
+   - `out_of_date`: on Entra ID, not signed in within 24 hours;
+   - `refused`: the identity provider refused, or People does not hold them;
+   - `unreachable`: their sign-in could not be checked;
+   - `unresolved`: a resolver that told nothing.
+   `recipe_run` gives a load's hotlists and watches the detailed resolver (`_watch_owner_resolver`), so a reason is
+   specific; rule evaluation keeps its collapsed one. A watch whose saved pattern is no longer its owner's is
+   `pattern_gone`; a watch's schedule finding its owner revoked is `revoked`.
+   Which evaluations stop is unchanged: this records why each stops, and stops nothing it did not stop before.
+3. **In true words, never an id** (rule 7). `stopped_why`, served with the row from `watch_status.STOPPED_WHY`, names no
+   owner, account or source-system identifier; Entra's out-of-date owner uses `principal_auth.ACCESS_OUT_OF_DATE_WORDS`
+   (Amendment 16's). None says "could not be reached". The Glass's `StatusBadge` shows it beside *Stopped*, and nothing
+   beside *Active*.
+
+**Tests.**
+- `tests/services/api/test_stopped_why.py` (offline):
+  - every reason has its words, none names an id, and the out-of-date one uses Amendment 16's words;
+  - each refusal is its reason;
+  - a load stopping a hotlist and a watch, for each refusal, records its reason;
+  - a gone pattern and a revoked schedule do too;
+  - the load is given the detailed resolver;
+  - the user guide quotes each reason.
+- `test_hotlists.py` and `test_monitors.py` (live): the real column kept and cleared, served with its words, an unknown
+  reason served as none.
+- `StatusBadge.test.tsx` and `HotlistPanel.test.tsx`: the reason beside *Stopped*, none beside *Active*.
+
+Each rule is planted alone and red (`process/lanes/admin/stopped_why/`).
