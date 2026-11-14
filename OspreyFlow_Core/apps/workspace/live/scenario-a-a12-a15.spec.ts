@@ -11,7 +11,7 @@
 // DECISION_NEEDED.md.)
 import { expect, type Page, test } from "@playwright/test";
 
-import { freshWorkspaceUrl, liveOnly, workingSetCounts } from "./live";
+import { freshWorkspaceUrl, liveOnly, pageErrors, workingSetCounts } from "./live";
 
 test.beforeEach(liveOnly);
 
@@ -70,6 +70,7 @@ async function edgeCount(page: Page): Promise<number> {
 async function expandFromTheSelectedNode(
   page: Page,
   edgeType: string,
+  errors: readonly string[] = [],
 ): Promise<void> {
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
@@ -81,7 +82,8 @@ async function expandFromTheSelectedNode(
   if (!opened) {
     throw new Error(
       `\\ on the canvas opened no menu. Focused: ${await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 200))}\n` +
-        `The page: ${await page.locator("body").ariaSnapshot()}`,
+        `The page: ${await page.locator("body").ariaSnapshot()}\n` +
+        `The page's errors:\n${errors.join("\n") || "(none)"}`,
     );
   }
   const expandItem = menu
@@ -116,6 +118,7 @@ test("A12 — the Clique Metric ranks nodes in the metrics panel", async ({
   // `08_ACCEPTANCE_SCENARIOS.md` A12, and `DEMO_GUIDE.md` §4's own "the Clique Metric that ranks
   // the insular subgroup". Built in Phase 7 as `POST /v1/investigations/{id}/compute/
   // clique_metric` with its own `MetricsPanel` option; never before driven from the browser.
+  const errors = pageErrors(page);
   await page.goto(await freshWorkspaceUrl(request));
   // **The working set really is empty before this test does anything.** Not ceremony: the
   // working set is server-side and the Glass loads it on open, so a shared investigation hands
@@ -144,7 +147,7 @@ test("A12 — the Clique Metric ranks nodes in the metrics panel", async ({
   // node's neighbours interconnect, so on a single unconnected node it correctly computes
   // nothing. Expanding first is part of the step, not setup around it: A12 follows A1's "seed a
   // working set [...] and expand into their associations".
-  await expandFromTheSelectedNode(page, "ASSOCIATE_OF");
+  await expandFromTheSelectedNode(page, "ASSOCIATE_OF", errors);
   await expect
     .poll(() => edgeCount(page), {
       message:

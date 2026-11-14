@@ -115,3 +115,15 @@ export async function workingSetCounts(page: Page): Promise<{ nodes: number; edg
   const read = (words: string) => Number((new RegExp(`([\\d,]+)\\s*${words}`).exec(text)?.[1] ?? "0").replace(/,/g, ""));
   return { nodes: read("nodes"), edges: read("edges") };
 }
+
+/** The page's own errors (uncaught ones and console errors), kept from the moment this is called, so
+ * a failure can say why the Glass stopped drawing: a blank `#root` is React's tree thrown away by
+ * an error nothing caught (14 November 2026, A12). */
+export function pageErrors(page: Page): string[] {
+  const seen: string[] = [];
+  page.on("pageerror", (e) => seen.push(`page error: ${e.stack ?? String(e)}`.slice(0, 1500)));
+  page.on("console", (m) => {
+    if (m.type() === "error") seen.push(`console error: ${m.text()}`.slice(0, 1500));
+  });
+  return seen;
+}
