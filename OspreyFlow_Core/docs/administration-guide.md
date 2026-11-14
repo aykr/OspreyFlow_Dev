@@ -18,6 +18,7 @@ is made from the deployment's own schema, and is checked against it on every cha
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.00 | 2026-11-14 | §6a on search, as ADR-148 Amendment 13 and the render have it: §6a.1, the poc shape makes the platform's OpenSearch domain as the standard shape does (the refusal struck), `postgres-fulltext` makes none, and the Conduit and the workers are given its address; the shared folders in the standard shape, the Ingest root and no staging; §6a.3, `opensearch.tf` in every shape; §6a.8, the restore's step 7, the index rebuilt and the drift check, the index not in a set. Held by `tests/test_guides_cloud_platform_search.py`, which reads the render. PDF made by the orchestrator at merge. |
 | 1.99 | 2026-11-14 | §6a.1: *Moving to a new release (poc shape)*, platform-b's paragraph checked against the rendered runbooks: `INSTALL.md` run again from the new release's copy, the backup first as the runbook's *Before an upgrade* does it (the report sync stopped too), the Terraform's pull request applied after the new release's render that makes it (step 3, not step 2), the install's own checks named, v0.5.2's install test planned for 25 November and not yet run, going back not rehearsed. §6a.8: the report sync is rendered only with reporting on. Held by `tests/test_guide_6a_upgrade.py`. PDF made by the orchestrator at merge. |
 | 1.98 | 2026-11-14 | Scheduled runs on Entra ID as built (ADR-148 Amendment 16, the audit's ruling 1, option A). §6a.7: a run acts as its owner as *Admin › People* holds them, roles and disabled read at each run, clearance, unit and codes as at their last sign-in; refused, in its own words, for a disabled owner, one not held, one not signed in within 24 hours (never counted toward pausing) and a store that cannot be read, never as "could not be reached", each followed by what happens next for its caller; the 24 hours run from the last recorded access (worked from a Friday to a Tuesday); a leaver to be disabled in *Admin › People* too; a stopped watch shows no reason yet. §8, §9.5, §9.11 and §6a.10 to match. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 1.97 | 2026-11-14 | §6a, v0.5.2's reporting on the cloud-platform profile (ADR-148 Amendments 9 to 11): Superset and the report sync rendered when switched on, one copy each in development; Superset signing in with Entra ID as its own registration, its role from the person's rights (a holder of `manage_dashboards` its builder, Alpha); the dashboard identities' app-only tokens (Viewer on a case at most; their grants removed with them); their egress, copies and secrets; the `superset` database beside `ospreyflow` and `litellm`; the line saying reporting is not available on Entra ID removed; Power BI reading the mart as an option. Appendix A: `cloud_platform.claims.superset_client_id`. PDF reprinted alone. |
@@ -1064,10 +1065,9 @@ shape, which a development namespace alone may take ("cloud_platform.shape: poc 
 namespace's (one copy of each store); a production namespace takes the standard shape"). The poc
 shape runs one copy of each store, ClickHouse with its own Keeper inside it rather than ClickHouse
 Keeper beside it, no disruption budgets, a CPU limit on every container (section 6a.2), and the
-Ingest root (uploads and the drop folder) on a claim of its own, `ospreyflow-ingest`. It makes no
-OpenSearch domain, and refuses a render that would use one ("the poc shape makes no OpenSearch
-domain (ADR-148 Amendment 5), so its Conduit would reach for one that is not there: set
-components.search: postgres-fulltext"): name `components.search: postgres-fulltext` with it.
+Ingest root (uploads and the drop folder) on a claim of its own, `ospreyflow-ingest`. Like the
+standard shape, it makes the platform's OpenSearch domain when `components.search` is `opensearch`
+(the default; ADR-148 Amendment 13), and `components.search: postgres-fulltext` makes none.
 
 Then, in `OspreyFlow_Core`:
 
@@ -1154,9 +1154,10 @@ own file is `client.yaml`.
 in the standard shape) run in the namespace as StatefulSets on the platform's `gp2-expand` class;
 in the standard shape each has a disruption budget allowing one copy down at a time, and two minutes
 for ArcadeDB to close its databases. Postgres is RDS PostgreSQL 16 and Valkey is ElastiCache
-(Redis 7), each reached over TLS; SeaweedFS is S3. In the standard shape the platform's OpenSearch
-2.x domain is made by default (`components.search` defaults to `opensearch`), but no pod is given its
-address yet, so it is unused. Caddy is not rendered: the platform's NGINX ingress is the front door,
+(Redis 7), each reached over TLS; SeaweedFS is S3. In every shape the platform's OpenSearch 2.x
+domain is made by default (`components.search` defaults to `opensearch`), and the pods that read the
+stores, the Conduit (`api`) and the workers (`worker`), are given its address (`OPENSEARCH_URL`).
+Caddy is not rendered: the platform's NGINX ingress is the front door,
 with ModSecurity on and the IP allow-list from `allow_from`. Local models and Whisper are not
 rendered, since the platform has no GPU. The model gateway (LiteLLM) is rendered always, with or
 without an engine (section 6a.3 says which identity it runs as; section 6a.9 is the model
@@ -1193,8 +1194,8 @@ group 0.
 
 **The shared folders** are one ReadWriteOnce volume, `ospreyflow-shared`, on the platform's class,
 and every pod that mounts it is placed on the same node. In the poc shape the Ingest root is on its
-own claim instead. Moving tiles, the settings files and, in the standard shape, uploads and staging
-off it, and the recipes repository off the shared disk, is *coming*.
+own claim instead. Moving tiles, the settings files and, in the standard shape, the Ingest root
+(`ingest`: uploads and the drop folder) off it, and the recipes repository off the shared disk, is *coming*.
 
 ### 6a.2 What the namespace asks for
 
@@ -1251,7 +1252,7 @@ leaves it unchanged and `tofu validate` accepts it.
 | `variables.tf` | What the platform gives the namespace: `namespace`, `vpc_id`, `subnet_ids`, `eks_oidc_provider_arn` and `eks_oidc_issuer`. The providers, the backend and the tags are the namespace folder's own |
 | `rds.tf` | RDS PostgreSQL 16, encrypted, reached over TLS, and the secret `rds-postgresql-instance-output` |
 | `elasticache.tf` | ElastiCache (Redis 7), TLS and a token, and the secret `elasticache-redis` |
-| `opensearch.tf` | The standard shape alone, when `components.search` is `opensearch`: the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
+| `opensearch.tf` | Every shape, when `components.search` is `opensearch` (the default): the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
 | `s3.tf` | The buckets, private and encrypted, named from a prefix, and the secret `s3-bucket-output` |
 | `irsa.tf` | The service account `ospreyflow` and its IAM role, given the buckets, so no S3 key exists anywhere |
 | `connector_sources.tf` | Only when S3 buckets or Athena workgroups are declared (section 6a.5): the reads on them, attached to `irsa.tf`'s role |
@@ -1747,6 +1748,10 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
 6. **Everything started again**, ArcadeDB first, at the copy counts noted, each waited on until it
    is ready (the door answers), and the CronJobs resumed. A healthy restore's logs end in plain
    words, with no stack trace: the runbook's *A healthy restore* quotes each step's last line.
+7. **The search index rebuilt**, where the deployment searches with OpenSearch: the index is not in a
+   set (it is rebuilt from the graph, ADR-150), so the restore ends with its rebuild, then the drift
+   check between the graph and the index, each a Job started from its CronJob, held suspended
+   (`ospreyflow-search-rebuild`, then `ospreyflow-search-drift`), and each waited on.
 
 **It refuses, touching nothing**, while anything that writes still runs, while it cannot see what
 runs, or while any part of the set is missing, changed or another set's. Each store is replaced only
