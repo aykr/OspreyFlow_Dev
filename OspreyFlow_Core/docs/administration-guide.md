@@ -14,7 +14,7 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.99** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.00** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
