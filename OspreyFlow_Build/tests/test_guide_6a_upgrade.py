@@ -99,3 +99,17 @@ def test_section_6a8_says_when_the_report_sync_is_rendered() -> None:
     assert "is not rendered on this profile" not in text
     assert ("`deployment/report-sync`, which is rendered only with reporting on" in text) is (
         has_sync(True) and not has_sync(False))
+
+
+def test_the_terraform_s_pull_request_follows_the_render_that_makes_it() -> None:
+    """The new release's Terraform is its own render's `terraform/` folder, so its pull request can be
+    raised only after the step that renders from the new copy, and is applied before the install."""
+    steps = dict(re.findall(r" (\d)\. \*\*(.*?)(?= \d\. \*\*|\*\*What will check it\.\*\*)", upgrade_paragraph()))
+    made = any(name.startswith("terraform/") for name in artefacts(False))
+    render = next((n for n, t in steps.items() if t.startswith("Render, push and render pinned")), None)
+    install = next((n for n, t in steps.items() if t.startswith("Run `INSTALL.md` again")), None)
+    applied = [n for n, t in steps.items() if "its pull request is applied" in t]
+    assert render and install, "the steps that render and install from the new copy"
+    assert ("the Terraform is this render's `terraform/` folder" in steps[render]) is made
+    assert applied == ([render] if made else []), "the pull request in the render's step, not before it"
+    assert int(render) < int(install)

@@ -941,10 +941,11 @@ the deployment onto the new release's images and values. In order:
    with the Conduit, the workers and the report sync stopped and each one's copy count noted, and check
    that the set finished (its `manifest.json` is written).
 2. **Get the new release's copy**: its tag, checked out in its own folder, with the deployment's own
-   `osprey.yaml` copied in. Read the release's notes first. A release that needs a change in the
-   Terraform says so, and its pull request is applied before the install, as at the first install.
+   `osprey.yaml` copied in. Read the release's notes first.
 3. **Render, push and render pinned from that copy**, exactly as section 6a.4 says. The values to
-   install are the new release's pinned render, never the old one's.
+   install are the new release's pinned render, never the old one's. A release that needs a change in
+   the Terraform says so in its notes, and the Terraform is this render's `terraform/` folder: its pull
+   request is applied now, before the install, as at the first install.
 4. **Run `INSTALL.md` again from that copy**, block by block. Its `helm upgrade --install` replaces
    each pod on the new release, and its own checks follow, as at the first install: section 6's check
    that the Conduit reads Entra's settings, and section 7's `/healthz` through the Glass. Then start the Conduit and the workers again at the copy counts noted in
