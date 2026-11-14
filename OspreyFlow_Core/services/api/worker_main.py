@@ -70,6 +70,11 @@ def registered_job_types() -> dict[str, str]:
     return {
         "supersede_node": "services.api.supersede:run_supersede_node_job",
         "resolve_entity_type": "services.resolve.trigger:run_resolve_entity_type_job",
+        # Enqueued by the compute and pattern routes for a large working set (the orchestrator's
+        # fix, 14 November 2026): once registered on the Conduit's own worker alone, whose loop
+        # never ran, and not here, so enqueued on every profile and run on none.
+        "compute_metric": "services.api.compute_routes:run_compute_metric_job",
+        "pattern_match": "services.api.patterns:run_pattern_match_job",
     }
 
 
@@ -82,6 +87,7 @@ def register_all(
     analyst_layers: Callable[[], Awaitable[Collection[str]]],
     alerts: AlertStore | None,
     judgement_store: JudgementStore | None,
+    compute: Any = None,
 ) -> None:
     """Every handler in `registered_job_types` on `worker`, with what each needs bound, as the
     Conduit's own lifespan binds them (`app.py`): the resolution job its ontology, handling scheme,
@@ -92,7 +98,9 @@ def register_all(
     none, so a registration that forgot it (the deployed worker's did, the L2.8d review's item 6)
     is refused by the type check rather than flagging nothing. `main` calls this, and so does the
     Conduit's lifespan (`app.py`), so the two registrations are one (the L2.8c review's item 13);
-    `test_worker_registration.py` proves both."""
+    `test_worker_registration.py` proves both. `compute`, the compute job's port: the Conduit passes
+    its own; the worker's process, which has none, gets the same in-process one the Conduit builds
+    (`ComputeRustworkxAdapter`, `run_resources`)."""
     from importlib import import_module
 
     bound: dict[str, dict[str, Any]] = {
@@ -104,12 +112,19 @@ def register_all(
             "analyst_layers": analyst_layers,
             "alerts": alerts,
         },
+        "compute_metric": {"compute": compute if compute is not None else _compute_port()},
     }
     for job_type, dotted in registered_job_types().items():
         module_name, _, attribute = dotted.partition(":")
         handler = getattr(import_module(module_name), attribute)
         kwargs = bound.get(job_type)
         worker.register(job_type, functools.partial(handler, **kwargs) if kwargs else handler)
+
+
+def _compute_port() -> Any:
+    from adapters.compute_rustworkx.adapter import ComputeRustworkxAdapter
+
+    return ComputeRustworkxAdapter()
 
 
 async def run_forever(worker: JobWorker, job_types: list[str], *, stop: asyncio.Event) -> None:

@@ -24,11 +24,11 @@ from __future__ import annotations
 
 import asyncio
 import csv
-import functools
 import io
 import json
 import logging
 import os
+import socket
 import time
 from collections import Counter
 from collections.abc import (
@@ -619,11 +619,9 @@ from .case_views import (
 )
 from .change_stream import touched_node_ids
 from .compute_routes import (
-    JOB_TYPE_COMPUTE_METRIC,
     ComputeMetricAccepted,
     ComputeMetricName,
     ComputeMetricRequest,
-    run_compute_metric_job,
 )
 from .config import ApiConfig, DeploymentModels, GradingSettings, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
@@ -884,14 +882,12 @@ from .pattern_ask import (
 )
 from .pattern_store import PatternNotFoundError, PatternStore
 from .patterns import (
-    JOB_TYPE_PATTERN_MATCH,
     PatternPreview,
     PatternRunAccepted,
     SavedPatternList,
     SavePatternRequest,
     preview_pattern,
     run_pattern,
-    run_pattern_match_job,
 )
 from .person_ownership import PostgresOwnershipStore
 from .pipeline_run import (
@@ -1156,7 +1152,7 @@ from .watch_routes import (
     with_what_fired_it,
 )
 from .worker import JobWorker
-from .worker_main import register_all
+from .worker_main import register_all, registered_job_types, run_forever
 from .working_set.models import (
     MAX_NODES,
     CardinalityPreview,
@@ -1520,12 +1516,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # `06_DECISIONS.md` ADR-025: this system's first job-queue worker,
     # generalised by `job_type` rather than resolution-specific — closes
     # `services/api/supersede.py`'s own long-disclosed "no worker attached
-    # yet" gap in the same stroke. Constructed and its handlers registered
-    # here so a standalone worker process (`services/api/worker_main.py`)
-    # has something real to import and drive in a loop; this app process
-    # itself does not spin up that loop — running the worker is deployment
-    # wiring (its own process/container), not additional Conduit logic.
-    job_worker = JobWorker(valkey, jobs, graph)
+    # yet" gap in the same stroke. Its loop runs in its own worker workload
+    # where the profile renders one (cluster, cloud-platform), and here, in the
+    # Conduit's lifespan, where it does not (`job_loop_in_conduit`): one place
+    # per deployment, under a consumer name of the Conduit's own.
+    job_worker = JobWorker(valkey, jobs, graph, consumer_name=_conduit_consumer_name())
     # The supersede and resolution jobs, bound as the standalone worker binds them, by the one
     # function (`worker_main.register_all`): the alerts' repoint journal on both (ADR-109
     # Amendment 11), a layer's split its own case's (ADR-143 Amendment 1), the review flag here.
@@ -1537,11 +1532,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         analyst_layers=datasets_store.layer_ids,
         alerts=alerts_store,
         judgement_store=judgements_store,
+        compute=compute,
     )
-    job_worker.register(
-        JOB_TYPE_COMPUTE_METRIC, functools.partial(run_compute_metric_job, compute=compute)
-    )
-    job_worker.register(JOB_TYPE_PATTERN_MATCH, run_pattern_match_job)
     app.state.job_worker = job_worker
     app.state.principal_resolver = resources.principal_resolver
     # ADR-106: display names for principal ids, resolved when a read is served.
@@ -1624,6 +1616,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         promotion_ageing, promotion_ageing, lambda: app.state.waiting_promotions,
         lambda p: _promotion_recipients(app, p),
     )  # fmt: skip
+    # Where no worker workload is rendered (local-lite, small), the Conduit drains every job
+    # stream itself (the orchestrator's fix, 14 November 2026), as `worker_main` does, stopped at
+    # shutdown; elsewhere the worker does, and this never starts (`job_loop_in_conduit`).
+    job_loop_stop = asyncio.Event()
+    job_loop_task = (
+        asyncio.create_task(
+            run_forever(job_worker, sorted(registered_job_types()), stop=job_loop_stop)
+        )
+        if job_loop_in_conduit()
+        else None
+    )
     promotion_task = asyncio.create_task(
         promotion_ageing_module.run_every(
             app.state.promotion_sweep,
@@ -1639,6 +1642,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         schedule_task.cancel()
         monitoring_task.cancel()
         promotion_task.cancel()
+        if job_loop_task is not None:
+            # A job in hand finishes and is acknowledged; the loop then sees the stop and ends.
+            job_loop_stop.set()
+            try:
+                await asyncio.wait_for(job_loop_task, timeout=JOB_LOOP_STOP_SECONDS)
+            except TimeoutError:
+                job_loop_task.cancel()
         await investigations.close()
         await custom_roles.close()
         await admin_people.close()
@@ -2228,6 +2238,25 @@ async def with_custom_roles(app_: Any, principal: Principal) -> Principal:
     if store is None or not custom_role_ids(principal.roles):
         return principal
     return cast("Principal", await store.expand(principal))
+
+
+#: How long shutdown waits for the Conduit's job loop to finish the job in hand: one `run_once`
+#: blocks for `worker_main.BLOCK_MS` waiting for an entry, then the stop is seen.
+JOB_LOOP_STOP_SECONDS = 10.0
+
+
+def job_loop_in_conduit(environ: Mapping[str, str] | None = None) -> bool:
+    """Whether this Conduit runs the job loop: only where the render says so
+    (`OSPREY_JOB_WORKER=conduit`, `harness.render.job_worker_place`, a profile with no worker
+    workload). Unset, as a test app or a deployment rendered before this is, it does not, so a
+    worker that exists is never joined by a Conduit consuming beside it."""
+    return (os.environ if environ is None else environ).get("OSPREY_JOB_WORKER") == "conduit"
+
+
+def _conduit_consumer_name() -> str:
+    """This Conduit's name in the `workers` consumer group, distinct from every worker's and every
+    other Conduit replica's (`worker_main.consumer_name`'s rule)."""
+    return f"conduit-{socket.gethostname()}"
 
 
 def _owner_with_custom_roles(app_: Any, resolve: Callable[[str], Awaitable[Principal]]) -> Any:
