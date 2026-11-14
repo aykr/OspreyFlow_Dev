@@ -1,0 +1,14 @@
+# on main 566dfc8 (platform's seed wiring landed beside studio's and rules' lines): rules-b's ci-yml-v052Diii.patch and makefile-v052Diii.patch, regenerated on main's files
+## both applied:
+test-file-coverage-check: 1091 test file(s), 0 allowlisted, no new drift.
+exit=0
+## red: makefile-v052Diii.patch left out (ci patch kept):
+test-file-coverage-check: `ci.yml`'s `test` job ignores these but `Makefile`'s `test` target does not: tests/services/search_index/test_ask_whole_case_leak_live.py
+exit=1
+## red: ci-yml-v052Diii.patch left out (makefile patch kept):
+test-file-coverage-check: `Makefile`'s `test` target ignores these but `ci.yml`'s `test` job does not: tests/services/search_index/test_ask_whole_case_leak_live.py
+exit=1
+## neither applied (main as it stands): no drift either, since the live file is then simply collected by `test` in both,
+## where with no OpenSearch it cannot pass. Each patch alone is the drift the check catches (above); both together are the wiring.
+test-file-coverage-check: 1091 test file(s), 0 allowlisted, no new drift.
+exit=0

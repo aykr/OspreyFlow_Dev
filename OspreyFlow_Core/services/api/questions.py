@@ -2,16 +2,17 @@
 
 An analyst asks the model about what they choose to read from (ADR-098 Amendment 7): *Selected
 items* (the selection, its links and their Documents), *Everything on the graph* (every item, link
-and Document they can see), or *Whole case* (refused in words until the case's search service is
-called, part D(iii)). A selection is the default when there is one. The model reads every Document
-in that scope that the analyst can see, whole, and answers from them and the graph facts, saying
-which it draws on. With no Document to read it answers from the links and events, and the answer's
-`read` summary says so; there is no refusal for want of documents. The same summary, counted as the
-analyst, is given before asking by *will read* (`QuestionsService.will_read`), with the engine the
-routing will use and the engines it cannot, each with its reason. Anything it proposes (an entity,
-with the words that name it) is a pending finding in the same review queue as an extraction's,
-inferred until a person accepts it (rule 5), and placed in the Document where its words are, or
-left out and counted when they are not there. The
+and Document they can see), or *Whole case* (ADR-098 Amendment 9: the case's search service, called
+as the analyst with the question's own words; what it finds are numbered sources `[S-n]`, and a
+Document the reader opens is read whole). A selection is the default when there is one. The model
+reads every Document in that scope that the analyst can see, whole, and answers from them and the
+graph facts, saying which it draws on. With no Document to read it answers from the links and
+events, and the answer's `read` summary says so; there is no refusal for want of documents. The same
+summary, counted as the analyst, is given before asking by *will read*
+(`QuestionsService.will_read`), with the engine the routing will use and the engines it cannot, each
+with its reason. Anything it proposes (an entity, with the words that name it) is a pending finding
+in the same review queue as an extraction's, inferred until a person accepts it (rule 5), and placed
+in the Document where its words are, or left out and counted when they are not there. The
 conversation is kept with the case, or with the view it was asked in, read then only by those who
 may see the view (the owner's ruling of 8 November 2026).
 
@@ -35,7 +36,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Sequence
+import re
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
@@ -63,6 +65,7 @@ from schemas.domain import (
 )
 from schemas.model import ExtractionRequest
 from schemas.questions import ReadSummary, UnusableEngine, WillRead
+from schemas.search import MAX_QUERY_CHARS, SearchPageRequest, SearchPageResponse
 
 from .dataset_scope import refuse_writing_in_an_unconverted_case
 from .datasets import DatasetStore
@@ -128,6 +131,30 @@ _NO_DOCUMENTS_INSTRUCTIONS = (
     "Describe patterns (who is linked to whom, when, how often) in the answer."
 )
 
+#: *Whole case* (ADR-098 Amendment 9): one page of the case's search, at the most it gives Ask
+#: (`SEARCH_RESPONSE_SHAPE.md` note 5). A second page is never read; `more` says there was one.
+WHOLE_CASE_PAGE = 50
+#: The one line the panel and the answer's read line show under *Whole case*.
+WHOLE_CASE_LINE = "Whole case finds things by their names and words, not by what they mean."
+
+#: In place of `_NO_DOCUMENTS_INSTRUCTIONS` under *Whole case* when no Document is read whole.
+_NO_DOCUMENTS_CASE_INSTRUCTIONS = (
+    "You answer an analyst's question. There are no documents to read whole: answer using only "
+    "the sources below, and say so if they do not answer it. Leave `cited` and `entities` empty."
+)
+
+#: Added to the instructions under *Whole case*, when the search found something.
+_SEARCH_INSTRUCTIONS = (
+    "Below are sources found in the case by searching for the words of the question, numbered "
+    "[S-n], each with why it was found and, for a document found by its words, the passage that "
+    "matched. Use them as well. Say which sources your answer draws on by their numbers, in the "
+    "answer as [S-n] and in `search_cited`. Cite only numbers that are listed; do not invent one. "
+    "They were found by names and words, not by meaning, so a source may not be about the "
+    "question."
+)
+_SEARCH_CITATION = re.compile(r"\[S-(\d+)\]")
+_SEARCH_MARKER = re.compile(r"( ?)\[S-(\d+)\]")
+
 #: Added to the instructions only when there are graph facts to read.
 _GRAPH_INSTRUCTIONS = (
     "Below the documents are graph facts about the case: the entities in scope, the links among "
@@ -145,6 +172,7 @@ def _schema() -> dict[str, Any]:
             "answer": {"type": "string"},
             "cited": {"type": "array", "items": {"type": "integer"}},
             "graph_cited": {"type": "array", "items": {"type": "integer"}},
+            "search_cited": {"type": "array", "items": {"type": "integer"}},
             "entities": {
                 "type": "array",
                 "items": {
@@ -181,8 +209,23 @@ class GraphCitation(BaseModel):
     link_ids: list[str]
 
 
-#: What a question reads from (ADR-098 Amendment 7). `case` is *Whole case*, refused until the
-#: case's search service is called (part D(iii)).
+class SearchCitation(BaseModel):
+    """An `[S-n]` the answer cites (ADR-129 Amendment 5): a record the case's search found for the
+    question's words, and the ids it stands for (a merged entity's visible members), so the Glass
+    can select them or bring them onto the canvas. The model is never given these ids (rule 7)."""
+
+    number: int
+    label: str
+    #: The record's name as the canvas writes it (`canvas_label`), and its type.
+    name: str
+    type: str
+    #: The search's own words for why it was found ("Sounds like 'Kestrel'").
+    why: str
+    node_ids: list[str]
+
+
+#: What a question reads from (ADR-098 Amendments 7 and 9). `case` is *Whole case*, through the
+#: case's search service.
 ReadFrom = Literal["selection", "graph", "case"]
 
 
@@ -227,6 +270,10 @@ class QuestionEntry(BaseModel):
     view_id: str | None = None
     #: What the question read (ADR-098 Amendment 7); `None` for an entry kept before it was.
     read: ReadSummary | None = None
+    #: *Whole case*: every record its sources stand for, held like `read_ids` (rule 3), and checked
+    #: by the graph's own access step, since a record found by search need not be on the canvas.
+    search_node_ids: list[str] = Field(default_factory=list)
+    search_citations: list[SearchCitation] = Field(default_factory=list)
 
 
 class QuestionAnswer(BaseModel):
@@ -252,6 +299,8 @@ class QuestionAnswer(BaseModel):
     model: str | None = None
     #: ADR-098 Amendment 7: what was read; `None` for an answer kept before it was recorded.
     read: ReadSummary | None = None
+    #: ADR-129 Amendment 5: the `[S-n]` it cites, under *Whole case*.
+    search_citations: list[SearchCitation] = Field(default_factory=list)
 
 
 class QuestionAccepted(BaseModel):
@@ -289,6 +338,13 @@ class ScopeRequest(BaseModel):
         ):
             raise ValueError("the window ends before it starts")
         return self
+
+
+class WillReadRequest(ScopeRequest):
+    """*Will read*'s body: the scope, and under *Whole case* the question as typed so far, since its
+    words are what the search is asked (ADR-098 Amendment 9)."""
+
+    question: str | None = Field(default=None, max_length=MAX_QUESTION_CHARS)
 
 
 class AskRequest(ScopeRequest):
@@ -342,16 +398,29 @@ class NothingToReadError(Exception):
 
 
 class ReadFromUnavailableError(Exception):
-    """*Whole case* asked for before the case's search service is called (part D(iii))."""
+    """*Whole case* asked of a service built with no case search (a test's, or a deployment wired
+    without one): refused in words, never answered from something else."""
 
-    #: The one wording, shown by the panel too (`QuestionsPanel.tsx`'s `WHOLE_CASE_UNAVAILABLE`,
-    #: held to this by `test_questions_read_from.py`).
     words = (
-        "Whole case is not available yet: it will read the case's datasets through the case's "
-        "search. Choose Selected items or Everything on the graph."
+        "Whole case is not available on this deployment. Choose Selected items or Everything on "
+        "the graph."
     )
 
     def __init__(self) -> None:
+        super().__init__(self.words)
+
+
+class QuestionTooLongToSearchError(Exception):
+    """*Whole case* with a question longer than the search takes (ADR-098 Amendment 9): refused in
+    words that say what to do, never cut to fit and never reduced to keywords (rule 2)."""
+
+    def __init__(self, length: int) -> None:
+        self.length = length
+        self.words = (
+            f"Whole case searches the case with your question's own words, which can be at most "
+            f"{MAX_QUERY_CHARS} characters; yours has {length}. Shorten the question, or choose "
+            "Selected items or Everything on the graph to ask it as it is."
+        )
         super().__init__(self.words)
 
 
@@ -363,6 +432,40 @@ _SELECTION_NOT_HELD = (
     "graph."
 )
 _EMPTY_GRAPH = "The graph holds nothing to read. Add items to the canvas first."
+_NO_QUESTION_YET = "Whole case searches with your question's words: type the question first."
+_NO_MATCHES = (
+    "Nothing in the case matches your question's words. Try the names or words the records hold, "
+    "or choose Everything on the graph."
+)
+
+#: The search, as the asker, for *Whole case*: `(investigation_id, principal, request)`. Built in
+#: `app.py` from `search_service.search_page` with the dependencies `POST …/search` uses, so the
+#: asker's own access filter goes into the index's query (rule 3).
+CaseSearch = Callable[[str, Principal, SearchPageRequest], Awaitable[SearchPageResponse]]
+
+
+@dataclass(frozen=True)
+class _Source:
+    """One `[S-n]`: a record the case's search found, as the model reads it and the Glass cites
+    it."""
+
+    number: int
+    name: str
+    type: str
+    why: str
+    node_ids: tuple[str, ...]
+    #: A Document's matched passage, when the reader does not open it; "" otherwise.
+    passage: str
+    handlings: tuple[Handling, ...]
+
+    def line(self) -> str:
+        said = f"[S-{self.number}] {self.type}: {self.name}. Found because: {self.why}."
+        return f'{said}\n  Passage: "{self.passage}"' if self.passage else said
+
+
+def _empty_case_fields() -> dict[str, Any]:
+    """The *Whole case* fields of a summary read from another choice."""
+    return {"found": 0, "passages": 0, "limited_reason": None, "counts_exact": True, "more": False}
 
 
 @dataclass(frozen=True)
@@ -374,10 +477,20 @@ class _Material:
     event_handlings: list[Handling]
     event_scopes: list[str]
     read: ReadSummary
+    #: *Whole case*'s sources, in their numbered order; empty otherwise.
+    sources: tuple[_Source, ...] = ()
 
     @property
     def handling(self) -> Handling | None:
-        return shared_handling([h for _, _, _, h in self.documents] + list(self.brief.handlings))
+        return shared_handling(
+            [h for _, _, _, h in self.documents]
+            + list(self.brief.handlings)
+            + [h for s in self.sources for h in s.handlings]
+        )
+
+    @property
+    def sources_text(self) -> str:
+        return "\n".join(s.line() for s in self.sources)
 
 
 #: The third option: ask in a case view of fewer Documents (ADR-144 decision 4).
@@ -496,7 +609,18 @@ ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS engine TEXT;
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS view_id TEXT;
 -- ADR-098 Amendment 7: what the question read; NULL for an answer kept before it was recorded.
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS read JSONB;
+-- ADR-098 Amendment 9 and ADR-129 Amendment 5: Whole case's sources.
+ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS search_node_ids JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS search_citations JSONB NOT NULL DEFAULT '[]';
 """
+
+
+def _read_of(raw: str | None) -> ReadSummary | None:
+    """A kept summary; one kept before *Whole case* existed has none of its fields, and read none
+    of what they count."""
+    if raw is None:
+        return None
+    return ReadSummary.model_validate({**_empty_case_fields(), **json.loads(raw)})
 
 
 class PostgresQuestionStore:
@@ -522,9 +646,9 @@ class PostgresQuestionStore:
                 "INSERT INTO case_questions (id, investigation_id, author, question, answer, "
                 "document_ids, read_ids, candidate_ids, unplaced, model, created_at, "
                 "graph_node_ids, graph_link_ids, graph_citations, event_handlings, event_scopes, "
-                "engine, view_id, read) "
+                "engine, view_id, read, search_node_ids, search_citations) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, "
-                "$17, $18, $19)",
+                "$17, $18, $19, $20, $21)",
                 entry.id,
                 entry.investigation_id,
                 entry.author,
@@ -544,6 +668,8 @@ class PostgresQuestionStore:
                 entry.engine,
                 entry.view_id,
                 None if entry.read is None else entry.read.model_dump_json(),
+                json.dumps(entry.search_node_ids),
+                json.dumps([c.model_dump() for c in entry.search_citations]),
             )
 
     async def list_for_case(
@@ -571,7 +697,9 @@ class PostgresQuestionStore:
                     "event_scopes": (
                         None if row["event_scopes"] is None else json.loads(row["event_scopes"])
                     ),
-                    "read": None if row["read"] is None else json.loads(row["read"]),
+                    "read": _read_of(row["read"]),
+                    "search_node_ids": json.loads(row["search_node_ids"]),
+                    "search_citations": json.loads(row["search_citations"]),
                 }
             )
             for row in rows
@@ -601,7 +729,9 @@ class QuestionsService:
         analytics: AnalyticsPort,
         datasets: DatasetStore,
         investigations: CaseRecords | None,
+        case_search: CaseSearch | None = None,
     ) -> None:
+        self._case_search = case_search
         self._working_set = working_set
         self._reader = reader
         self._graph = graph
@@ -716,13 +846,21 @@ class QuestionsService:
         window: Interval | None,
         view_node_ids: Sequence[str] | None,
         read_from: ReadFrom | None,
+        question: str | None = None,
+        case_search: CaseSearch | None = None,
     ) -> _Material:
         """What a question reads (ADR-098 Amendment 7), from the asker's own view (or the part of
         it a case view holds): the scope, its Documents, the brief within the budget (rule 2), and
-        the summary of it all. Refused before anything is read when there is nothing to read, and
-        for *Whole case* until it is built."""
+        the summary of it all. Refused before anything is read when there is nothing to read.
+        *Whole case* is `_gather_case`'s."""
         if read_from == "case":
-            raise ReadFromUnavailableError()
+            return await self._gather_case(
+                investigation_id,
+                principal,
+                question,
+                view_node_ids,
+                case_search if case_search is not None else self._case_search,
+            )
         asked = bool(selected_node_ids) or bool(selected_link_ids)
         chosen = read_from or ("selection" if asked else "graph")
         if chosen == "selection" and not asked:
@@ -769,8 +907,104 @@ class QuestionsService:
             events=events,
             selected=len(held_nodes) + len(held_links),
             first_selected=canvas_label(held_nodes[0]) if held_nodes else None,
+            **_empty_case_fields(),
         )
         return _Material(documents, brief, event_handlings, event_scopes, read)
+
+    async def _gather_case(
+        self,
+        investigation_id: str,
+        principal: Principal,
+        question: str | None,
+        view_node_ids: Sequence[str] | None,
+        case_search: CaseSearch | None,
+    ) -> _Material:
+        """*Whole case* (ADR-098 Amendment 9): one page of the case's search for the question's own
+        words, as the asker, so a record they may not see is never found, counted, read or cited
+        (rule 3). A Document the reader opens is read whole, through the reader, which checks
+        access again; one it does not open (not on the canvas) is a source read as the passage the
+        search matched, never whole. Every other record is a source by its name and why it was
+        found. In a case view, only what the view holds is read."""
+        if case_search is None:
+            raise ReadFromUnavailableError()
+        words = (question or "").strip()
+        if not words:
+            raise NothingToReadError(_NO_QUESTION_YET)
+        if len(words) > MAX_QUERY_CHARS:
+            raise QuestionTooLongToSearchError(len(words))
+        found = await case_search(
+            investigation_id,
+            principal,
+            SearchPageRequest(query=words, page=1, page_size=WHOLE_CASE_PAGE),
+        )
+        results = list(found.results)
+        if view_node_ids is not None:
+            in_view = set(view_node_ids)
+            results = [r for r in results if r.node_ids and set(r.node_ids) <= in_view]
+        nodes = {n.id: n for n in found.nodes}
+        documents: list[tuple[str, str | None, str, Handling]] = []
+        without_text = 0
+        passages = 0
+        sources: list[_Source] = []
+        read = 0
+        for result in results:
+            members = [nodes[i] for i in result.node_ids if i in nodes]
+            if not members:
+                continue
+            first = members[0]
+            passage = ""
+            if result.is_document:
+                try:
+                    view = await self._reader.read(investigation_id, first.id, principal)
+                except DocumentNotFoundError:
+                    view = None
+                if view is not None:
+                    read += 1
+                    if view.text.strip():
+                        documents.append((first.id, view.title, view.text, first.handling))
+                    else:
+                        without_text += 1
+                    continue
+                passages += 1
+                passage = "".join(part.text for part in result.passage).strip()
+            read += 1
+            sources.append(
+                _Source(
+                    number=len(sources) + 1,
+                    name=canvas_label(first),
+                    type=result.type,
+                    why=result.match.why,
+                    node_ids=tuple(n.id for n in members),
+                    passage=passage,
+                    handlings=tuple(n.handling for n in members),
+                )
+            )
+        if not read:
+            raise NothingToReadError(_NO_MATCHES)
+        material = _Material(
+            documents,
+            EvidenceBrief(text=""),
+            [],
+            [],
+            ReadSummary(
+                read_from="case",
+                documents=len(documents),
+                documents_without_text=without_text,
+                items=len(sources) - passages,
+                links=0,
+                events=0,
+                selected=0,
+                first_selected=None,
+                found=read,
+                passages=passages,
+                limited_reason=found.limited_reason,
+                counts_exact=found.counts_exact,
+                more=found.more,
+            ),
+            tuple(sources),
+        )
+        _fits(sum(len(t) for _, _, t, _ in documents), len(material.sources_text))
+        return material
 
     async def will_read(
         self,
@@ -783,6 +1017,8 @@ class QuestionsService:
         engine: str | None = None,
         view_node_ids: Sequence[str] | None = None,
         read_from: ReadFrom | None = None,
+        question: str | None = None,
+        case_search: CaseSearch | None = None,
     ) -> WillRead:
         """What `ask` would read with the same scope, and the engine that would answer, decided as
         the routing will decide it on the same material (ADR-135 Amendment 12). Nothing is sent.
@@ -796,6 +1032,8 @@ class QuestionsService:
             window=window,
             view_node_ids=view_node_ids,
             read_from=read_from,
+            question=question,
+            case_search=case_search,
         )
         routed = self._model if isinstance(self._model, RoutedModel) else None
         if routed is None:
@@ -897,6 +1135,7 @@ class QuestionsService:
         view_id: str | None = None,
         view_node_ids: Sequence[str] | None = None,
         read_from: ReadFrom | None = None,
+        case_search: CaseSearch | None = None,
     ) -> QuestionAnswer:
         """`view_id` and `view_node_ids`: asked in a case view the route has let the asker see
         (ADR-144 decision 4). The model reads only what the view holds of the case as the asker
@@ -909,6 +1148,8 @@ class QuestionsService:
             window=window,
             view_node_ids=view_node_ids,
             read_from=read_from,
+            question=question,
+            case_search=case_search,
         )
         documents, brief = material.documents, material.brief
         event_handlings, event_scopes = material.event_handlings, material.event_scopes
@@ -918,9 +1159,13 @@ class QuestionsService:
                 for i, (_, title, text, _) in enumerate(documents, start=1)
             )
             reading = f"{_INSTRUCTIONS}\n\n{numbered}\n\n"
+        elif material.sources:
+            reading = f"{_NO_DOCUMENTS_CASE_INSTRUCTIONS}\n\n"
         else:
             reading = f"{_NO_DOCUMENTS_INSTRUCTIONS}\n\n"
         graph_section = f"{_GRAPH_INSTRUCTIONS}\n\n{brief.text}\n\n" if brief.text else ""
+        if material.sources:
+            graph_section += f"{_SEARCH_INSTRUCTIONS}\n\n{material.sources_text}\n\n"
         try:
             result = await self._model.extract(
                 ExtractionRequest(
@@ -960,8 +1205,37 @@ class QuestionsService:
         ]
         answer = strip_unheld(answer, set(held))
 
+        # The same for an `[S-n]` the sources do not hold (ADR-129 Amendment 5).
+        listed_s = data.get("search_cited")
+        asked_s = list(
+            dict.fromkeys(
+                [int(m.group(1)) for m in _SEARCH_CITATION.finditer(answer)]
+                + [
+                    n
+                    for n in (listed_s if isinstance(listed_s, list) else [])
+                    if isinstance(n, int) and not isinstance(n, bool)
+                ]
+            )
+        )
+        sources = {s.number: s for s in material.sources}
+        search_citations = [
+            SearchCitation(
+                number=n,
+                label=f"[S-{n}]",
+                name=sources[n].name,
+                type=sources[n].type,
+                why=sources[n].why,
+                node_ids=list(sources[n].node_ids),
+            )
+            for n in sorted(asked_s)
+            if n in sources
+        ]
+        answer = _SEARCH_MARKER.sub(
+            lambda m: m.group(0) if int(m.group(2)) in sources else "", answer
+        )
+
         proposals: list[ExtractionCandidate] = []
-        unplaced = len(asked_for) - len(graph_citations)
+        unplaced = len(asked_for) - len(graph_citations) + len(asked_s) - len(search_citations)
         for item in data.get("entities") or []:
             if not isinstance(item, dict) or item.get("type") not in PROPOSABLE_TYPES:
                 unplaced += 1
@@ -1029,6 +1303,8 @@ class QuestionsService:
             event_scopes=event_scopes,
             view_id=view_id,
             read=material.read,
+            search_node_ids=list(dict.fromkeys(i for s in material.sources for i in s.node_ids)),
+            search_citations=search_citations,
         )
         await self._store.add(entry)
         titles = {d: t for d, t, _, _ in documents}
@@ -1045,6 +1321,7 @@ class QuestionsService:
             engine=entry.engine,
             model=entry.model,
             read=entry.read,
+            search_citations=search_citations,
         )
 
     async def _handling_of(
@@ -1074,6 +1351,12 @@ class QuestionsService:
             seen_links = {e.id for e in visible_links}
         for entry in entries:
             if not await self._sees_all(investigation_id, entry.read_ids, principal):
+                continue
+            # A *Whole case* source need not be on the canvas: checked by the graph's own access
+            # step, as the search found it (rule 3).
+            if entry.search_node_ids and len(
+                await self._graph.get_nodes(entry.search_node_ids, principal)
+            ) < len(set(entry.search_node_ids)):
                 continue
             if not (
                 seen_nodes.issuperset(entry.graph_node_ids)
@@ -1127,6 +1410,7 @@ class QuestionsService:
                     engine=entry.engine,
                     model=entry.model,
                     read=entry.read,
+                    search_citations=entry.search_citations,
                 )
             )
         return out
@@ -1222,9 +1506,15 @@ __all__: Sequence[str] = (
     "QuestionsLimitExceeded",
     "QuestionsService",
     "QuestionsTooLargeError",
+    "QuestionTooLongToSearchError",
     "ReadFromUnavailableError",
     "ReadSummary",
     "ScopeRequest",
+    "SearchCitation",
     "UnusableEngine",
+    "WHOLE_CASE_LINE",
+    "WHOLE_CASE_PAGE",
     "WillRead",
+    "WillReadRequest",
+    "CaseSearch",
 )

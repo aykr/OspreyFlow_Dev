@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.54** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.55** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.55 | 2026-11-14 | §6, Ask & Chat: **Whole case** as v0.5.2's Part D(iii) built it (ADR-098 Amendment 9, ADR-129 Amendment 5, rules-b's wording): the case searched with the question's own words, as you, by names and words, not meaning; a question past 200 characters refused with what to do; a document on the canvas read whole, one elsewhere by its passage; each other record a source, `[S-n]`, selecting its records. Held by `tests/test_user_guide_ask_chat.py`. PDF made by the orchestrator at merge. |
 | 1.54 | 2026-11-14 | The Glass's navigation as the owner decided it on 13 November (ADR-145 Amendment 15) and the selection's actions as Part C built them (ADR-078 Amendment 1). §3: the banner is the case line, "Case ‹name› ▾ · Views in this case · reads ‹dataset›", *All cases* opening the Cases panel, the cross-link *Open this case's data in the Ingest Studio ↗*; no mode lines. §4: the case switcher and the Cases panel in place of the rail's Cases drawer; *Roles, teams and Authors* from Admin and the Studio. §5's table: the rail Explore, Ask & Chat and History; the view switch Graph, Map, Drawing board and Reports, with Matrix, Figures, Ownership and Connection strength under More views; *Build a report*. §5.2: the selection bar's words and order, the menu's *Expand by link type*, the fold of types with no links, the selection's actions first, the menu key and Shift+F10. §5.12, §5.13, §5.14, §7.1, §8, §9 and §12 follow. Five screenshots marked for a new capture. Held by `tests/test_user_guide_navigation.py`. PDF made by the orchestrator at merge. |
 | 1.53 | 2026-11-14 | §7.5 and §7.11: where people sign in with Entra ID, your watches, hotlists and rules run as you, and a scheduled rule's run acts as you, while you have signed in within the last 24 hours (administration guide §6a.7; ADR-148 Amendment 16). PDF made by the orchestrator at merge. |
 | 1.52 | 2026-11-14 | §6, Ask & Chat, as v0.5.2's Part D built it (ADR-098 Amendment 7, rules-b's wording): **Read from** (*Selected items*, *Everything on the graph*, *Whole case* not available yet), the *About* and *Will read* lines and the engine before anything is sent, an answer from links and events when there is no document; *Ask the model about these…* on any selection saves a private view and asks there; asking needs Editor, no longer a document. Held by `tests/test_user_guide_ask_chat.py`. PDF made by the orchestrator at merge. |
@@ -804,11 +805,15 @@ the case's analyst layer.
 **Ask & Chat** (on the rail; it was named *Questions*) asks the deployment's model about what you choose
 under **Read from**: **Selected items** (what you have selected, everything one link from it, and the
 documents among them; the choice when something is selected), **Everything on the graph** (every item,
-link and document you can see), or **Whole case** (not available yet, and it says why). Above the
-question it says what that is about ("About: Tarbuck, Kyle and 1 other"), what will be read ("Will read:
-1 document, 3 items and 2 links") and which engine will answer, before anything is sent. It answers
-from the documents and **graph facts** only, citing each — **Draws on** opens a document. With no
-document to read it answers from the links and events, and says so under the answer. What it
+link and document you can see), or **Whole case** (the case searched with your question's own words, as
+you, so it finds things by their names and words, not by what they mean; a question of more than 200
+characters is refused, with what to do instead). Above the question it says what that is about ("About:
+Tarbuck, Kyle and 1 other"), what will be read ("Will read: 1 document, 3 items and 2 links") and which
+engine will answer, before anything is sent. It answers from the documents and **graph facts** only,
+citing each — **Draws on** opens a document. Under *Whole case*, a document on the canvas is read whole
+and one elsewhere in the case by the passage the search found; each other record found is a source,
+cited as `[S-n]`, which selects its records on the canvas. With no document to read it answers from the
+links and events, and says so under the answer. What it
 proposes, you **Accept** or **Reject**; an accepted proposal enters the graph as *inferred*.
 **Ask the model about these…** on any selection saves it as a private view and asks there. Asking
 needs Editor.

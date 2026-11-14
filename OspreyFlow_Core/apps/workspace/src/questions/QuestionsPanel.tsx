@@ -1,14 +1,15 @@
 // The case's questions to the model (ADR-098 decision 4): the analyst chooses what to read from
-// (ADR-098 Amendment 7: *Selected items*, *Everything on the graph*, *Whole case*), is told by the
-// Conduit what that will read and which engine will answer (never counted here), asks, and the
-// model answers from those Documents and graph facts, citing them; what it proposes is listed with
+// (ADR-098 Amendment 7: *Selected items*, *Everything on the graph*, *Whole case*, which Amendment 9
+// reads through the case's search with the question's own words), is told by the Conduit what that
+// will read and which engine will answer (never counted here), asks, and the model answers from
+// those Documents, graph facts and sources, citing them; what it proposes is listed with
 // Accept and Reject — inferred until accepted, and accepted onto this case's canvas. The
 // conversation is the case's, and shown to each reader as far as they may see it.
 import { useEffect, useId, useRef, useState } from "react";
 
 import { AnsweredBy, EnginePicker, useEngineChoice } from "../models/engines";
 import { candidateLabel, candidateSource, type EmailCandidate } from "../inspector/linkEventsApi";
-import { splitAnswer, type GraphCitation } from "./graphFacts";
+import { sourceAsFact, splitAnswer, type GraphCitation, type SearchCitation } from "./graphFacts";
 import {
   acceptProposal,
   askQuestion,
@@ -41,13 +42,15 @@ export interface QuestionsPanelProps {
   view?: { id: string; name: string } | null;
   /** Leave the view's conversation for the case's own. */
   onLeaveView?: () => void;
+  /** What to read from when the panel opens, before the analyst chooses; absent, the selection
+   * when there is one, else the graph. */
+  initialReadFrom?: ReadFrom;
 }
 
-/** *Whole case* until the case's search is called (part D(iii)): offered, disabled, with why. */
-/** The server's own words (`ReadFromUnavailableError.words`, held to these by
- * `test_questions_read_from.py`), shown before anything is asked. */
-export const WHOLE_CASE_UNAVAILABLE =
-  "Whole case is not available yet: it will read the case's datasets through the case's search. Choose Selected items or Everything on the graph.";
+/** What *Whole case* does, in one line (ADR-098 Amendment 9), shown under the choice before anything
+ * is asked. The server's own words (`WHOLE_CASE_LINE`, held to these by
+ * `test_questions_read_from.py`). */
+export const WHOLE_CASE_LINE = "Whole case finds things by their names and words, not by what they mean.";
 
 const READ_FROM_CHOICES: { value: ReadFrom; label: string }[] = [
   { value: "selection", label: "Selected items" },
@@ -63,6 +66,7 @@ function counted(n: number, one: string, many: string): string {
  * summary (the first selected item's name is the Conduit's, as the asker may see it). */
 export function aboutWords(read: ReadSummary): string {
   if (read.read_from === "graph") return "About: everything on the graph";
+  if (read.read_from === "case") return "About: the whole case, searched with your question's words";
   if (read.first_selected === null) return `About: ${counted(read.selected, "selected item", "selected items")}`;
   const others = read.selected - 1;
   return others > 0
@@ -73,6 +77,7 @@ export function aboutWords(read: ReadSummary): string {
 /** What was or will be read, in words: the documents (and those with no text, which are not), the
  * other items, the links and the events counted on them. */
 export function readWords(read: ReadSummary): string {
+  if (read.read_from === "case") return caseWords(read);
   const parts = [
     counted(read.documents, "document", "documents"),
     counted(read.items, "item", "items"),
@@ -85,6 +90,34 @@ export function readWords(read: ReadSummary): string {
       ? ` (${counted(read.documents_without_text, "document has", "documents have")} no text to read)`
       : "";
   return `${listed}${unread}`;
+}
+
+function listed(parts: string[]): string {
+  return parts.length === 1 ? parts[0]! : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/** *Whole case*: what the search found that the question reads, by how each is read. */
+function caseWords(read: ReadSummary): string {
+  const parts: string[] = [];
+  if (read.documents > 0) parts.push(`${counted(read.documents, "document", "documents")} whole`);
+  if (read.passages > 0) parts.push(`${counted(read.passages, "document", "documents")} by the passage found`);
+  if (read.items > 0) parts.push(counted(read.items, "other record", "other records"));
+  const unread =
+    read.documents_without_text > 0
+      ? ` (${counted(read.documents_without_text, "document has", "documents have")} no text to read)`
+      : "";
+  return `${counted(read.found, "match", "matches")} found in the case: ${listed(parts.length ? parts : ["nothing to read"])}${unread}`;
+}
+
+/** What limits a *Whole case* reading, each said once: the search's own fallback words, counts it
+ * could not complete, and a second page never read (rule 2). */
+export function caseLimits(read: ReadSummary): string[] {
+  if (read.read_from !== "case") return [];
+  const said: string[] = [];
+  if (read.limited_reason) said.push(read.limited_reason);
+  if (!read.counts_exact) said.push("The search's counts may be incomplete.");
+  if (read.more) said.push(`Only the first ${read.found} matches are read; there are more.`);
+  return said;
 }
 
 /** How long the scope must stay still before *will read* is asked (each answer reads the scope's
@@ -110,6 +143,7 @@ export function QuestionsPanel({
   onSelectFacts,
   view = null,
   onLeaveView,
+  initialReadFrom,
 }: QuestionsPanelProps) {
   const viewId = view?.id ?? null;
   const [entries, setEntries] = useState<QuestionAnswer[] | null>(null);
@@ -124,9 +158,13 @@ export function QuestionsPanel({
   const nodeIds = selection?.nodeIds ?? [];
   const linkIds = selection?.linkIds ?? [];
   const hasSelection = nodeIds.length + linkIds.length > 0;
-  const [picked, setPicked] = useState<ReadFrom | null>(null);
+  const [picked, setPicked] = useState<ReadFrom | null>(initialReadFrom ?? null);
   const readFrom: ReadFrom =
-    picked === "graph" || (picked === "selection" && hasSelection) ? picked : hasSelection ? "selection" : "graph";
+    picked === "graph" || picked === "case" || (picked === "selection" && hasSelection)
+      ? picked
+      : hasSelection
+        ? "selection"
+        : "graph";
   // What will be read and who will answer, from the Conduit (`will-read`), for the scope as it is now.
   const [will, setWill] = useState<WillRead | null>(null);
   const [willProblem, setWillProblem] = useState<string | null>(null);
@@ -138,7 +176,9 @@ export function QuestionsPanel({
   const sentLinkIds = readFrom === "selection" ? linkIds : [];
   const timelineWindow = getTimelineWindow?.() ?? null;
   const askedWindow = useRef<string>("");
-  const scopeKey = JSON.stringify([readFrom, sentNodeIds, sentLinkIds, timelineWindow, engineChoice.chosen, viewId, investigationId]);
+  // Under Whole case the question's words are what is searched, so they are part of the scope.
+  const searched = readFrom === "case" ? question.trim() : null;
+  const scopeKey = JSON.stringify([readFrom, sentNodeIds, sentLinkIds, timelineWindow, engineChoice.chosen, viewId, investigationId, searched]);
   const radioName = useId();
 
   useEffect(() => {
@@ -172,6 +212,7 @@ export function QuestionsPanel({
         engine: engineChoice.chosen,
         viewId,
         readFrom,
+        question: searched,
       })
         .then((found) => !cancelled && setWill(found))
         .catch((err: unknown) => {
@@ -331,8 +372,8 @@ export function QuestionsPanel({
               {entry.unplaced > 0 && (
                 <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
                   {entry.unplaced === 1
-                    ? "1 item was left out: it is not in the documents or graph facts the model was given."
-                    : `${entry.unplaced} items were left out: they are not in the documents or graph facts the model was given.`}
+                    ? "1 item was left out: it is not in the documents, graph facts or sources the model was given."
+                    : `${entry.unplaced} items were left out: they are not in the documents, graph facts or sources the model was given.`}
                 </p>
               )}
             </li>
@@ -350,7 +391,7 @@ export function QuestionsPanel({
         <fieldset style={{ border: 0, margin: 0, padding: 0, display: "grid", gap: "var(--sp-8)" }}>
           <legend style={{ fontSize: "var(--fs-12)", padding: 0, marginBottom: "var(--sp-4)" }}>Read from</legend>
           {READ_FROM_CHOICES.map((choice) => {
-            const unavailable = choice.value === "case" || (choice.value === "selection" && !hasSelection);
+            const unavailable = choice.value === "selection" && !hasSelection;
             const id = `${radioName}-${choice.value}`;
             return (
               <span key={choice.value} style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
@@ -374,7 +415,7 @@ export function QuestionsPanel({
             );
           })}
           <p id={`${radioName}-case-why`} style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
-            {WHOLE_CASE_UNAVAILABLE}
+            {WHOLE_CASE_LINE}
           </p>
         </fieldset>
         <div aria-live="polite" data-testid="will-read" style={{ display: "grid", gap: "var(--sp-2)" }}>
@@ -386,9 +427,16 @@ export function QuestionsPanel({
             <>
               <p style={{ margin: 0 }}>{aboutWords(will.read)}</p>
               <p style={{ margin: 0 }}>Will read: {readWords(will.read)}</p>
+              {caseLimits(will.read).map((line) => (
+                <p key={line} style={{ margin: 0, color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>
+                  {line}
+                </p>
+              ))}
               {will.read.documents === 0 && (
                 <p style={{ margin: 0, color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
-                  No documents will be read: the answer will come from the links and events.
+                  {will.read.read_from === "case"
+                    ? "No document will be read whole: the answer will come from what the search found."
+                    : "No documents will be read: the answer will come from the links and events."}
                 </p>
               )}
               {will.engine_label !== null ? (
@@ -464,6 +512,14 @@ export function QuestionsPanel({
 /** What an answer read, from its kept summary: with no document, the answer says it came from the
  * links and events (ADR-098 Amendment 7). */
 function ReadLine({ read }: { read: ReadSummary }) {
+  if (read.read_from === "case") {
+    return (
+      <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
+        {`Read from the whole case: ${readWords(read)}. ${WHOLE_CASE_LINE}`}
+        {caseLimits(read).map((line) => ` ${line}`)}
+      </p>
+    );
+  }
   return (
     <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
       {read.documents === 0
@@ -488,7 +544,26 @@ function AnswerText({
   /** Leave the view's conversation for the case's own. */
   onLeaveView?: () => void;
 }) {
-  const { parts, unmarked } = splitAnswer(entry.answer, entry.graph_citations ?? []);
+  const { parts, unmarked, unmarkedSources } = splitAnswer(
+    entry.answer,
+    entry.graph_citations ?? [],
+    entry.search_citations ?? [],
+  );
+  // An `[S-n]` selects its records as a fact does (`bringFactIntoView`); one not on the canvas
+  // leaves the selection as it was.
+  const sourceButton = (source: SearchCitation, key: string) => (
+    <button
+      key={key}
+      type="button"
+      className="btn btn--quiet"
+      disabled={!onSelectFacts}
+      aria-label={`Select ${source.label}, ${source.name}, on the canvas`}
+      title={`${source.type}: ${source.why}`}
+      onClick={() => onSelectFacts?.(sourceAsFact(source))}
+    >
+      {source.label}
+    </button>
+  );
   const factButton = (citation: GraphCitation, key: string) => (
     <button
       key={key}
@@ -506,7 +581,13 @@ function AnswerText({
       <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
         {entry.answer === "" && "The model gave no answer."}
         {parts.map((part, i) =>
-          part.kind === "text" ? <span key={`t${i}`}>{part.text}</span> : factButton(part.citation, `f${i}`),
+          part.kind === "text" ? (
+            <span key={`t${i}`}>{part.text}</span>
+          ) : part.kind === "fact" ? (
+            factButton(part.citation, `f${i}`)
+          ) : (
+            sourceButton(part.citation, `s${i}`)
+          ),
         )}
       </p>
       {unmarked.length > 0 && (
@@ -514,6 +595,19 @@ function AnswerText({
           <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>Graph facts</span>
           {unmarked.map((citation) => factButton(citation, `u${citation.number}`))}
         </div>
+      )}
+      {(entry.search_citations ?? []).length > 0 && (
+        <ul role="list" aria-label="Sources found in the case" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
+          {(entry.search_citations ?? []).map((source) => (
+            <li key={source.number} style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "center" }}>
+              {unmarkedSources.includes(source) ? sourceButton(source, `us${source.number}`) : <span>{source.label}</span>}
+              <span className="value">{source.name}</span>
+              <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
+                {source.type} · {source.why}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </>
   );

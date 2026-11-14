@@ -13,6 +13,7 @@ from services.api.questions import (
     PostgresQuestionStore,
     QuestionEntry,
     ReadSummary,
+    SearchCitation,
 )
 
 from conduit_common.identity import new_id
@@ -67,7 +68,20 @@ def _entry(case: str, at: datetime, question: str) -> QuestionEntry:
             events=5,
             selected=2,
             first_selected="Tarbuck, Kyle",
+            found=0,
+            passages=0,
+            limited_reason=None,
+            counts_exact=True,
+            more=False,
         ),
+        # ADR-098 Amendment 9, ADR-129 Amendment 5: Whole case's sources are kept with it.
+        search_node_ids=["node-kestrel-1", "node-kestrel-2"],
+        search_citations=[
+            SearchCitation(
+                number=1, label="[S-1]", name="KESTREL, Ann", type="Person",
+                why="Sounds like 'Kestrel'", node_ids=["node-kestrel-1", "node-kestrel-2"],
+            )
+        ],  # fmt: skip
     )
 
 
@@ -102,6 +116,26 @@ async def test_a_question_stored_before_graph_facts_reads_back_with_none(store) 
     assert (listed.graph_node_ids, listed.graph_link_ids, listed.graph_citations) == ([], [], [])
     assert listed.engine is None  # ADR-135: not recorded before engines were
     assert listed.read is None  # ADR-098 Amendment 7: not recorded before it was
+    assert (listed.search_node_ids, listed.search_citations) == ([], [])
+
+
+async def test_a_summary_kept_before_whole_case_reads_back_with_nothing_found(store) -> None:
+    """ADR-098 Amendment 9: a summary kept before Whole case existed has none of its fields. It
+    reads back whole, as having found nothing by search, never refused for the fields missing."""
+    case = new_id()
+    entry = _entry(case, datetime.now(UTC), "before Whole case")
+    await store.add(entry)
+    async with store._pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE case_questions SET read = $2 WHERE id = $1",
+            entry.id,
+            '{"read_from": "graph", "documents": 1, "documents_without_text": 0, "items": 2, '
+            '"links": 1, "events": 0, "selected": 0, "first_selected": null}',
+        )
+    (listed,) = await store.list_for_case(case)
+    assert listed.read is not None and listed.read.read_from == "graph"
+    assert (listed.read.found, listed.read.passages, listed.read.more) == (0, 0, False)
+    assert listed.read.counts_exact and listed.read.limited_reason is None
 
 
 async def test_a_row_stored_before_events_were_recorded_reads_back_as_not_recorded(store) -> None:

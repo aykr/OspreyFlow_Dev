@@ -822,6 +822,7 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_live.py
           ../OspreyFlow_Build/tests/services/search_index/test_feed_live.py
           ../OspreyFlow_Build/tests/services/search_index/test_search_leak_live.py
+          ../OspreyFlow_Build/tests/services/search_index/test_ask_whole_case_leak_live.py
           ../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py
           ../OspreyFlow_Build/tests/services/api/test_list_rows_parquet_live.py
           ../OspreyFlow_Build/tests/test_migrate_branches_to_views_store.py
@@ -1220,6 +1221,7 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/test_seed_clickhouse_live.py
           --ignore=../OspreyFlow_Build/tests/services/search_index/test_feed_live.py
           --ignore=../OspreyFlow_Build/tests/services/search_index/test_search_leak_live.py
+          --ignore=../OspreyFlow_Build/tests/services/search_index/test_ask_whole_case_leak_live.py
           --ignore=../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_grading_registry.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_grading_change_live.py

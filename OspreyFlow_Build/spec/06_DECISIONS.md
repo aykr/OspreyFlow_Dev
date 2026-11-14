@@ -38386,3 +38386,124 @@ to the first administrator, and B18's trail through the Glass's own sightings re
 The ClickHouse cases (B18's and HMP's) and the live people store need the live stores: they run under a lease,
 and their record is in `process/lanes/platform/v052-seed/` (or the step is not done). Red first:
 `process/lanes/platform/v052-seed/red-first.txt`.
+
+### ADR-098, Amendment 9 (14 November 2026) — *Whole case* reads the case through its search
+
+Status: written 14 November 2026 by the rules-b lane (step v052D, part D(iii)) under the orchestrator's
+reservation of the same day, built on studio's search service (ADR-149; `process/lanes/studio/SEARCH_RESPONSE_SHAPE.md`,
+frozen at ee7a16d, note 5). Amendment 7 point 2 ("Whole case is not built yet") is superseded; nothing else in
+Amendment 7 changes. Each point names its test (rule 12); the plants are recorded with their output in
+`process/lanes/rules-b/v052Diii/` (`server-plants.txt`, `keyboard-plant.txt`, `axe-plant.txt`).
+
+1. **The case's search, as the asker, with the question's own words.** `read_from: case` calls
+   `search_service.search_page` in-process (`app.case_search_with`, the questions routes' call site), with the
+   asker's own access filter built there, the case's threshold and the exclusion of what the index has not caught
+   up with, exactly as `POST …/search` does. No second route is added. The query is the question whole, one page
+   of 50 (`WHOLE_CASE_PAGE`), no filters; a second page is never read. *Everything on the graph*'s timeline window
+   does not apply.
+   - Test: `test_questions_whole_case.py`, *the question's own words are the query*. Red with the page left at the
+     search's default.
+   - Test: `tests/services/search_index/test_ask_whole_case_leak_live.py`, *whole case reads the same with hidden
+     records present or absent*, for each of studio's readers. Red with the access filter `case_search_with` builds
+     replaced by match-all (*the ask leak check finds the access filter dropped*).
+2. **A question the search cannot take is refused, never cut.** The search takes 1 to 200 characters, a question
+   up to 2,000. Past 200, *Whole case* is refused 422 `question_too_long_to_search`, by the question and by *will
+   read* alike, in words that say what to do: "Whole case searches the case with your question's own words, which
+   can be at most 200 characters; yours has N. Shorten the question, or choose Selected items or Everything on the
+   graph to ask it as it is." The Conduit never cuts the question or picks keywords from it (rule 2): that would be
+   a guess at meaning, which the search does not make.
+   - Test: *a question longer than the search takes is refused, never cut*. Red with the question cut to fit.
+3. **What is read of each result.** A Document the document reader opens (one in the working set; the reader
+   checks access again) is read whole, as under the other choices. A Document it does not open (found beyond the
+   canvas) is a source read as the passage the search matched, never whole. Every other result is a source by its
+   name (`canvas_label`), its type and the search's own words for why it was found. A merged entity is one source,
+   standing for its visible members only.
+   - Test: *a document on the canvas is read whole*. Red with every Document read by its passage.
+   - Test: *a document off the canvas is read as its passage, never whole*. Red with the passage left out.
+   - Test: *a record the asker may not see is not found, counted, read or cited* (rule 4).
+4. **Nothing to search, nothing found.** *Will read* before a question is typed says to type it first; a search
+   that finds nothing the asker may see is 422 `nothing_to_read`: "Nothing in the case matches your question's
+   words. Try the names or words the records hold, or choose Everything on the graph."
+   - Test: *will read with no question yet says to type it*; *nothing found is refused in words*. Each red with its
+     refusal removed.
+5. **What the search's answer was is said.** The read summary (`ReadSummary`) gains `found` (the results read),
+   `passages` (Documents read by their passage), `limited_reason` (the search's fallback words, as given),
+   `counts_exact` and `more`, all required; a summary kept before them reads back as having found nothing by
+   search. The panel says them: "4 matches found in the case: 1 document whole, 1 document by the passage found
+   and 2 other records", the fallback's words, "The search's counts may be incomplete." and "Only the first 50
+   matches are read; there are more."
+   - Test: *the search's fallback and limits reach the read summary*. Red with the fallback words dropped.
+   - Test: `test_questions_store.py`, *a summary kept before Whole case reads back with nothing found* (live).
+   - Test: `QuestionsPanel.test.tsx`, *says the search's fallback, counts that may be incomplete and a second page
+     never read*.
+6. **The one line.** Under the choice, and on the read line of an answer read that way: "Whole case finds things
+   by their names and words, not by what they mean." (`WHOLE_CASE_LINE`, the panel's held to the server's).
+   - Test: `test_questions_read_from.py`, *the panel says whole case's line in the server's own words*.
+7. **In a case view**, only results whose records the view holds are read.
+   - Test: *in a view only what the view holds is read*. Red with the view not applied.
+8. **By keyboard** (rule 13): *Whole case* is chosen by arrow keys and the question's words go with *will read*.
+   - Test: `keyboard/questions.spec.ts`, *Whole case is chosen by arrow keys, its search is asked with the question's
+     words, and an [S-n] selects its records on the real canvas*; axe in dark, light and GOV.UK on
+     `questions-harness.html?case=1`, red with a low-contrast span drawn only in that state.
+
+Lane decisions on the owner's morning page, to overrule: the 200-character refusal (point 2); off-canvas
+Documents read by their passage, not whole (point 3: the reader opens only what is in the working set, and is the
+case lane's); one page of 50; no timeline window.
+
+### ADR-129, Amendment 5 (14 November 2026) — the brief's search sources, `[S-n]`
+
+Status: written 14 November 2026 by the rules-b lane (step v052D, part D(iii)) with ADR-098 Amendment 9.
+
+1. **Numbered sources.** Under *Whole case*, after the Documents, the model is given the sources the search found,
+   numbered `[S-n]`, each with its type, name and why it was found, and a Document's matched passage. It is told
+   they were found by names and words, not by meaning, so a source may not be about the question; and to cite them
+   as `[S-n]` in its words and in `search_cited`. The model never sees an id (rule 7). The sources and the
+   Documents share the one budget (decision 1): past it, the typed `limit_exceeded`, never trimmed.
+   - Test: `test_questions_whole_case.py`, *a document off the canvas is read as its passage, never whole* (the
+     line the model reads, and no id in it).
+2. **A citation stands for its records.** Each cited `[S-n]` the sources hold comes back as a `SearchCitation`
+   (`number`, `label`, `name`, `type`, `why`, `node_ids`); one they do not hold is dropped from the words and the
+   list and counted unplaced, as an unheld `[G-n]` is.
+   - Test: *a cited source stands for its records and an invented one is dropped*. Red with the invented marker
+     kept, and again with it not counted.
+3. **A later reader.** The records the sources stand for are kept with the answer (`search_node_ids`) and checked
+   by the graph's own access step (`get_nodes`), not the canvas, since a source need not be on it: a reader the
+   graph hides one from is not shown the answer (rule 3).
+   - Test: *an answer is shown only to a reader who may see every source*. Red with the records not kept, and
+     again with the check removed.
+4. **In the Glass**, each `[S-n]` is a button that selects its records on the canvas and brings them into view, as
+   a `[G-n]` does; every source is listed under the answer with its type and why it was found. A record not on the
+   canvas is not brought onto it (a lane decision on the owner's morning page: that needs `App.tsx`'s seeding).
+   - Test: `QuestionsPanel.test.tsx`, *shows each [S-n] as a button that selects its records*; the keyboard case
+     above, red with the button selecting nothing (`keyboard-plant.txt`).
+
+### ADR-149, Amendment 1 (14 November 2026) — Ask's *Whole case* calls the search, and the leak test covers what it reads
+
+Status: written 14 November 2026 by the rules-b lane (step v052D, part D(iii)), after ADR-149 landed. It records
+how ADR-098 Amendment 9's *Whole case* uses this ADR's search. No decision here is narrowed.
+
+1. **Whole case calls `search_page` in-process, not over HTTP, with what `POST …/search` gives it.** The call site
+   is `app.case_search_with`. It builds the asker's own access filter (`index_access_filter`, decision 1), leaves
+   out the nodes the index has not caught up with (decision 2), and passes the case's threshold and the asker's
+   datasets. Ranking and fallback are the search's own (decisions 4 and 10). Nothing is read until the search is
+   called, so a question that does not read the whole case costs nothing more.
+   - Test: `tests/services/api/test_questions_whole_case.py`, *the question's own words are the query* (its fake
+     search re-validates the request and finds only through the graph's access step); `test_questions.py`'s route
+     case, with no index, graph or request.
+2. **The fallback and the counts reach the read summary.** A search that fell back (decision 10) says so in the
+   summary's `limited_reason`. Counts that may be short (decision 7) are `counts_exact: false`, and a page not read
+   is `more`. The panel shows each one.
+   - Test: *the search's fallback and limits reach the read summary*; `QuestionsPanel.test.tsx`'s *Whole case*
+     cases.
+3. **Decision 3's leak test covers Ask.** `tests/services/search_index/test_ask_whole_case_leak_live.py` reuses
+   `test_search_leak_live.py`'s worlds and readers, and asks each of its queries as a question through
+   `case_search_with` into `QuestionsService._gather_case`. What would be sent to the model must be identical
+   from the index holding every record and from the index holding only what the reader may see now. That covers
+   the sources' text, the Documents read and their passages, the read summary, and the records each `[S-n]`
+   stands for.
+   - Shown red at the real call site: `::test_the_ask_leak_check_finds_the_access_filter_dropped`, with the filter
+     `case_search_with` builds replaced by match-all.
+   - Live on a leased stack (`process/lanes/rules-b/v052Diii/live.txt`).
+
+Open: none.
+

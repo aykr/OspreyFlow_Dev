@@ -771,6 +771,8 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   "close-the-questions-drawer-by-keyboard",
   // ADR-129 decision 1: a cited graph fact selects what it stands for and brings it into view.
   "select-a-graph-fact-from-an-answer-by-keyboard",
+  // ADR-129 Amendment 5: a source Whole case's search found ([S-n]) selects its records.
+  "select-a-search-source-from-an-answer-by-keyboard",
   // ADR-135 decision 5: the model engine is reached and changed by keyboard, and the engine chosen
   // is the one the question names.
   "choose-the-model-engine-by-keyboard",

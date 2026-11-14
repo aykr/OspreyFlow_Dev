@@ -1,0 +1,39 @@
+# plant: the [S-n] button's onClick a no-op (QuestionsPanel.tsx sourceButton)
+
+Running 1 test using 1 worker
+
+[1/1] keyboard/questions.spec.ts:315:1 › Whole case is chosen by arrow keys, its search is asked with the question's words, and an [S-n] selects its records on the real canvas (ADR-098 Amendment 9)
+  1) keyboard/questions.spec.ts:315:1 › Whole case is chosen by arrow keys, its search is asked with the question's words, and an [S-n] selects its records on the real canvas (ADR-098 Amendment 9) 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 1
+
+      Object {
+        "edge": null,
+        "nodes": Array [
+    -     "n2",
+    -     "n3",
+    +     "n0",
+        ],
+      }
+
+    Call Log:
+    - Timeout 5000ms exceeded while waiting on the predicate
+
+      337 |   await tabToLabel(page, "Select [S-1], N2, on the canvas");
+      338 |   await page.keyboard.press("Enter");
+    > 339 |   await expect.poll(state).toEqual({ nodes: ["n2", "n3"], edge: null });
+          |                            ^
+      340 |   registerCovered(REGISTRY, "select-a-search-source-from-an-answer-by-keyboard");
+      341 | });
+      342 |
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/questions.spec.ts:339:28
+
+    Error Context: test-results/questions-Whole-case-is-ch-0db18-canvas-ADR-098-Amendment-9-/error-context.md
+
+
+  1 failed
+    keyboard/questions.spec.ts:315:1 › Whole case is chosen by arrow keys, its search is asked with the question's words, and an [S-n] selects its records on the real canvas (ADR-098 Amendment 9) 
+exit=0

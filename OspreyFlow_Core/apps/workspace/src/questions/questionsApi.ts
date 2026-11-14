@@ -4,12 +4,12 @@
 // widens either.
 import type { EmailCandidate } from "../inspector/linkEventsApi";
 import type { ReadSummary, UnusableEngine, WillRead } from "../../../../packages/schemas/generated";
-import type { GraphCitation } from "./graphFacts";
+import type { GraphCitation, SearchCitation } from "./graphFacts";
 
-export type { GraphCitation };
+export type { GraphCitation, SearchCitation };
 
-/** What a question reads from (ADR-098 Amendment 7): *Selected items*, *Everything on the graph*,
- * or *Whole case* (refused by the Conduit in words until the case's search is called). */
+/** What a question reads from (ADR-098 Amendments 7 and 9): *Selected items*, *Everything on the
+ * graph*, or *Whole case* (the case's search, with the question's own words). */
 export type ReadFrom = "selection" | "graph" | "case";
 
 export type { ReadSummary, UnusableEngine, WillRead };
@@ -42,6 +42,8 @@ export interface QuestionAnswer {
   model?: string | null;
   /** ADR-098 Amendment 7: what the question read; absent on an answer kept before it was. */
   read?: ReadSummary | null;
+  /** ADR-129 Amendment 5: the `[S-n]` it cites, under *Whole case*. */
+  search_citations?: SearchCitation[];
 }
 
 function questionsUrl(apiBaseUrl: string, investigationId: string): string {
@@ -101,6 +103,12 @@ export interface AskScope {
   readFrom?: ReadFrom | null;
 }
 
+/** *Will read*'s scope: under *Whole case* the question as typed so far goes with it, since its
+ * words are what the case's search is asked (ADR-098 Amendment 9). */
+export interface WillReadScope extends AskScope {
+  question?: string | null;
+}
+
 function scopeBody(scope: AskScope): Record<string, unknown> {
   return {
     selected_node_ids: scope.nodeIds,
@@ -126,16 +134,17 @@ function limitWords(body: Record<string, unknown>): string {
 }
 
 /** What will be read and who will answer, from the Conduit, before anything is sent. A refusal is
- * said in the Conduit's words (nothing to read, Whole case not yet available, too long). */
+ * said in the Conduit's words (nothing to read, nothing found, a question too long to search, too
+ * long to read). */
 export async function willRead(
   apiBaseUrl: string,
   bearerToken: string,
   investigationId: string,
-  scope: AskScope,
+  scope: WillReadScope,
 ): Promise<WillRead> {
   const response = await send(`${questionsUrl(apiBaseUrl, investigationId)}/will-read`, bearerToken, {
     method: "POST",
-    body: JSON.stringify(scopeBody(scope)),
+    body: JSON.stringify({ ...scopeBody(scope), ...(scope.question ? { question: scope.question } : {}) }),
   });
   if (response.ok) return (await response.json()) as WillRead;
   const body = await detailOf(response);

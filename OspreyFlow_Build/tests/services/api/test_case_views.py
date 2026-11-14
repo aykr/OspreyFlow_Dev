@@ -647,7 +647,8 @@ def test_the_will_read_view_check_fails_with_the_view_check_removed(
         reached.append(kw.get("view_node_ids"))
         read = ReadSummary(
             read_from="graph", documents=0, documents_without_text=0, items=1, links=0,
-            events=0, selected=0, first_selected=None,
+            events=0, selected=0, first_selected=None, found=0, passages=0,
+            limited_reason=None, counts_exact=True, more=False,
         )  # fmt: skip
         return WillRead(read=read, engine="local", engine_label="local", model="m",
                         unusable=[], refused=None)  # fmt: skip

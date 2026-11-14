@@ -34,10 +34,22 @@ def test_section_6_names_each_read_from_choice_as_the_panel_labels_it() -> None:
     assert re.findall(r"\*\*(Selected items|Everything on the graph|Whole case|[A-Z][a-z ]+)\*\* \(", text) == labels
 
 
-def test_section_6_says_whole_case_is_not_available_while_the_panel_says_so() -> None:
-    disabled = re.search(r'"Whole case is not available yet:[^"]*"', PANEL)
+def test_section_6_says_what_whole_case_reads_as_the_panel_and_the_conduit_do() -> None:
+    """ADR-098 Amendment 9: the panel's one line, the Conduit's 200-character refusal, and what is
+    read of each result (ADR-129 Amendment 5's `[S-n]`), each read from the code that says it."""
     text = ask_paragraph()
-    assert ("**Whole case** (not available yet, and it says why)" in text) is bool(disabled)
+    line = re.search(r'export const WHOLE_CASE_LINE = "([^"]+)";', PANEL)
+    assert line and "finds things by their names and words, not by what they mean" in line.group(1)
+    assert "it finds things by their names and words, not by what they mean" in text
+    from services.api.questions import MAX_QUERY_CHARS, QuestionTooLongToSearchError
+
+    refused = QuestionTooLongToSearchError(MAX_QUERY_CHARS + 1).words
+    assert f"at most {MAX_QUERY_CHARS} characters" in refused and "Shorten the question" in refused
+    assert f"a question of more than {MAX_QUERY_CHARS} characters is refused, with what to do" in text
+    assert "Whole case is not available" not in text and "not available yet" not in text
+    assert 'aria-label="Sources found in the case"' in PANEL
+    assert "cited as `[S-n]`, which selects its records on the canvas" in text
+    assert "a document on the canvas is read whole and one elsewhere in the case by the passage" in text
 
 
 def test_section_6_quotes_about_and_will_read_in_the_panel_s_shape() -> None:

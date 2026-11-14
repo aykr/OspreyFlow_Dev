@@ -50,7 +50,7 @@
     "version": "1.35"
   },
   "user-guide.md": {
-    "body": "43ed4e5aadaf3d367cd59e98f3d4a752f1bf132ca29854e68818332cd76bbc84",
+    "body": "f0decbbf30fe2e2fc8192624e635d32f56f619220856c9b0f724d7d6f8868a95",
     "images": {
       "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
       "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
@@ -79,8 +79,8 @@
       "images/user/25-scheduled-rule.png": "85fd57e01b357aaa6923a965531bc1a29970cf4cd1b0f503f519988bfe8381e1",
       "images/user/26-second-person.png": "c27f6a95d9a76921c21821823ec56de4334b4670ce2455fe30f964aac38802e8"
     },
-    "pdf": "764585d83654b45b9e6c030d4369f5e585f4819a3f32b643d93e5d68f50a4c4f",
-    "source": "a31c5aab8bdd4f2f25d09098abe801fe5afb2615c9f115efc297b08083e95e1c",
-    "version": "1.54"
+    "pdf": "480046ab78bcd30e91842a2df967845bf6ba27de47bd80c426413acd1564ece4",
+    "source": "4289793f8c8aef00f41caea54505e834b9a49663d0192d97029b3864b0b6c3e7",
+    "version": "1.55"
   }
 }
