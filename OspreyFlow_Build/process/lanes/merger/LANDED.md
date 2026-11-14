@@ -106,3 +106,4 @@ c42c1e4 9f22c21 platform-b v051-upg (the rehearsal, the real update and its roll
 175776c a86a9c1 docs v052-admin-fixes (2.01), PDF reprinted
 bb06bf5 3b144d5 docs v052-nav (user guide 1.54), PDF reprinted
 9db0277 22b24b7 platform v052-seed (the POC seed path), with live_wiring.diff (the owner's word); and 8fdf6ef, CVE-2026-128089 on main (the owner's ruling)
+51fd7e2 b056fdc rules-b v052Diii (Whole case), with five patches; user guide 1.55, PDF reprinted
