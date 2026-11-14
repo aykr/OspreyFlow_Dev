@@ -44,6 +44,7 @@ MARKETING = Path(__file__).resolve().parents[1] / "marketing_site"
 SITES = MARKETING / "sites"
 sys.path.insert(0, str(MARKETING))
 import client_hashes  # noqa: E402
+import identifier_check  # noqa: E402
 
 DOMAINS = {"org": "ospreyflow.org", "net": "ospreyflow.net"}
 PAGES = {
@@ -58,7 +59,8 @@ COMPETITORS = re.compile(
 )
 #: The owner's decision 4 (12 November 2026): neither site names Laurium.
 LAURIUM = re.compile(r"laurium", re.IGNORECASE)
-LOCAL_PATH = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\?Users|file://", re.IGNORECASE)
+#: The local-path rule, from the publish check itself: one rule, for the pages and for what is published.
+LOCAL_PATH = identifier_check.LOCAL_PATH
 CREDENTIAL = re.compile(
     r"AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|\bgh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
     r"|\bsk-[A-Za-z0-9_-]{20,}|\bxox[abpr]-[A-Za-z0-9-]{10,}|\b(?:password|passwd|secret|api[_-]?key|token)\s*[:=]\s*\S",
@@ -120,10 +122,9 @@ def names(root: Path, pattern: re.Pattern[str]) -> list[str]:
 
 
 def _readable(page: Path) -> str:
-    """What the page shows, and every attribute's value too (an address, a file name, an email address)."""
-    source = page.read_text(encoding="utf-8")
-    values = re.findall(r'\b[a-z-]+="([^"]*)"', source, flags=re.IGNORECASE)
-    return page_text(page) + " . " + " . ".join(html.unescape(v) for v in values)
+    """What the page shows, and what it carries unseen (comments, every attribute's value however quoted), as the
+    publish check reads it: one implementation (`identifier_check.readable`)."""
+    return identifier_check.readable(page.read_text(encoding="utf-8"))
 
 
 def clients(root: Path, hashes: Path) -> list[str] | str:
@@ -132,6 +133,8 @@ def clients(root: Path, hashes: Path) -> list[str] | str:
     held = client_hashes.known(hashes)
     if held is None:
         return client_hashes.ABSENT
+    if not held:
+        return identifier_check.EMPTY
     return [f"{_id(p)}: {h[:12]}…" for p in pages(root) for h in sorted(client_hashes.named(_readable(p), held))]
 
 
