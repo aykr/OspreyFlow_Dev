@@ -39520,8 +39520,24 @@ measured.*
      - links across three chunks' boundaries, both ways, each once;
      - a SECRET far end, in a chunk other than its partners', gives the same answer and the same round trips as an
        id the store does not hold, and a SECRET-cleared reader sees both of its links;
-   - the conformance suite's existing `edges_among` cases (`test_suite.py`), unchanged;
-   - plants (`process/lanes/rules-b/am20/plants.py`), each red.
+   - the conformance suite's existing `edges_among` cases (`test_suite.py`), unchanged, and every live file that calls
+     it: the whole graph-port conformance suite with them, 459 passed on stack e under the lease rules-b took at
+     2026-11-14T15:23:37Z (`process/lanes/rules-b/am20/live-1.txt`; its one failure was the chunk-boundary case's own
+     fixture, whose reversed pairs of an undirected link type merged, fixed and green in `live-3.txt`);
+   - live red-first: the new cases against main's `edges_among` and renderer, word for word, red past the wall
+     (`live-1.txt`); the SECRET case passes there too, as it should, since the old query already hid the far end;
+   - plants (`process/lanes/rules-b/am20/plants.py`), each red on its assertion: offline, the far end untested, an
+     empty chunk not sent, one query for every id, the link types dropped, the start found by a scan, a one-node set
+     queried (`plants.txt`); live, the far end's access step dropped (the SECRET case) and the far end untested (the
+     chunk-boundary case, once it had links into the chunk left out; `live-2.txt` shows it green before that,
+     `live-3.txt` red after).
+
+   **Measured after** (the same 50k shape, `process/lanes/rules-b/am20/measure50k_after.py`, on stack e in the same
+   lease, `live-1.txt`): the batch expansion of 50,000 nodes ran end to end in 26.0 s, of which counting its
+   links took about 8.7 s (between the job's own progress words), and saved its view (50,000 nodes, 49,990 links; none of the 500 SECRET leaves). The view row's `lens` column
+   is 231,466 bytes; `get_nodes` over the 50,000 took 7.9 s. `edges_among` alone: 3.5 s at 5,000 ids, 4.2 s at 10,000,
+   5.8 s at 25,000, 8.1 s at 50,000, each answer exactly the fixture's links, none twice. One chunk's query at 1,000
+   record ids took 1.5 s with `.profile()`.
 
 ### ADR-150, Amendment 1 (14 November 2026) — The drift check streams
 
