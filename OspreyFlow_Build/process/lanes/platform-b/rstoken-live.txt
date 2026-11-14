@@ -1,0 +1,28 @@
+# The report sync's token test on stack b under platform-b's lease ('report-sync token test', taken 2026-11-14T14:25:17Z by the
+# owner with '!' in this worktree's window; up, remote, down and release by this session under the owner's allow rules),
+# beside step 4 as the orchestrator allowed, the queue read and make absent first. Each pytest via stack_lease.sh remote,
+# a fresh PYTHONPYCACHEPREFIX.
+
+== (a) the test file as on origin/main: PASSED on this stack, where CI fails it on every run
+12 passed in 7.61s
+   Why: the test used a fixed DASHBOARD_APP and slot 1, and its claim in Valkey (24 h) from an earlier run on this reused
+   stack was still held, so the feed was skipped and one token was asked for, with nothing pulled. On CI's fresh Valkey it
+   pulls and asks twice. Two defects, both the test's: tokens of 2 s inside TokenSource's 30 s margin, and a fixed id
+   against the file's own rule ("a fresh id per test: a claim in Valkey outlives the test that made it").
+
+== (a') the fix without the hour-long token (a fresh id, pulled == 1): CI's failure reproduced
+          so a fixed id on a reused Valkey skipped the feed and passed with one token, having pulled
+E       AssertionError: (Summary(pulled=1, failed=0, skipped=0, changed=2, failures=[]), 2)
+
+== (b) the fix (a fresh id, an hour-long token, pulled == 1)
+1 passed, 11 deselected in 1.93s
+
+== (c) the fix with TokenSource never reusing its token (sync.py planted, restored after)
+          so a fixed id on a reused Valkey skipped the feed and passed with one token, having pulled
+E       AssertionError: (Summary(pulled=1, failed=0, skipped=0, changed=2, failures=[]), 2)
+
+== the whole file with the fix
+12 passed in 7.54s
+Wall time: 9 s, exit 0 (stack b, the lease platform-b took at 2026-11-14T14:25:17Z; set-up before it 11 s)
+
+== then: stack b down, the lease released (stack b free)
