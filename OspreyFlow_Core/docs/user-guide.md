@@ -355,12 +355,12 @@ way."; one that would take longer than ten minutes is stopped and saves nothing.
 case at a time, and its panel says so: "Closing this does not stop the job. While it
 runs, asking for a batch expansion in this case again follows it."
 
-**Mark for suppression (hides nothing yet)** proposes a record for suppression, in the open: the node is marked,
-and the Explore panel lists it, with who marked it, when, and "Marked from the canvas". A mark hides nothing and
-changes no record: the node is still shown, cited and exported as before, to everyone who may see it. In the
-session that made the mark, the menu offers **Remove suppression mark** in its place; after a reload, or for anyone
-else, it offers **Mark for suppression (hides nothing yet)** again, and choosing it marks the node afresh. A
-suppression that takes effect, once its evidence is loaded through the Ingest Studio, is not built yet.
+**Mark for suppression (hides nothing yet)** proposes a record for suppression, in the open. It asks first
+"Why should it be suppressed?", which is required and kept with the mark; then the node is marked, and the Explore
+panel lists it, with who marked it, when, and why. A mark hides nothing and changes no record: the node is still
+shown, cited and exported as before, to everyone who may see it. The marks are read back from the case, so on a
+marked node the menu offers **Remove suppression mark** in its place, which asks nothing. A suppression that takes
+effect, once its evidence is loaded through the Ingest Studio, is not built yet.
 
 **Reading a link.** A link's stroke says where it came from: **solid** from a record, **dashed**
 inferred by a model, **dotted** unresolved. Hovering names its type and how many such links join the
