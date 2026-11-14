@@ -51,7 +51,19 @@ case "$SITE" in
     case "$EXPECTED" in
       https://github.com/*/*) ;;
       *) echo "STOP: sites/REPOSITORIES gives no repository for $SITE yet; the owner creates it and writes it there." >&2; exit 1 ;;
-    esac ;;
+    esac
+    # A site's repository is its own: never the product's, never the withdrawn one, never the other site's. GitHub
+    # reads an address in any case, so these are compared in lower case, without `.git`.
+    canonical() { printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's/\.git$//'; }
+    case "$(canonical "$EXPECTED")" in
+      https://github.com/aykr/ospreyflow|https://github.com/solirius/ospreyflow)
+        echo "STOP: sites/REPOSITORIES gives $EXPECTED for $SITE, which is the product's repository, not a site's own." >&2; exit 1 ;;
+    esac
+    if [ "$SITE" = org ]; then OTHER=net; else OTHER=org; fi
+    OTHER_ADDRESS="$(awk -v s="$OTHER" '$1 == s { print $2 }' "$HERE/sites/REPOSITORIES")"
+    if [ -n "$OTHER_ADDRESS" ] && [ "$(canonical "$OTHER_ADDRESS")" = "$(canonical "$EXPECTED")" ]; then
+      echo "STOP: sites/REPOSITORIES gives one repository, $EXPECTED, for both org and net; each site has its own." >&2; exit 1
+    fi ;;
   *) echo "STOP: --site takes org or net." >&2; exit 1 ;;
 esac
 
@@ -62,6 +74,12 @@ SSH="git@github.com:${EXPECTED#https://github.com/}.git"
 case "$ORIGIN" in
   "$EXPECTED"|"$EXPECTED.git"|"$SSH") ;;
   *) echo "STOP: $PRODUCT's origin is '$ORIGIN', not $EXPECTED.git." >&2; exit 1 ;;
+esac
+# The push goes where origin's push address says, which can differ from the address it fetches from.
+PUSH_URL="$(git -C "$PRODUCT" remote get-url --push origin 2>/dev/null || true)"
+case "$PUSH_URL" in
+  "$EXPECTED"|"$EXPECTED.git"|"$SSH") ;;
+  *) echo "STOP: $PRODUCT's origin pushes to '$PUSH_URL', not $EXPECTED.git." >&2; exit 1 ;;
 esac
 if [ -z "$SITE" ]; then
   FILES="index.html intro-video.html public-sector.html monitoring.html .nojekyll"
@@ -117,7 +135,7 @@ fi
 
 if [ -n "$PUSH" ]; then
   git push -q origin "$BRANCH"
-  echo "Pushed $BRANCH to $(git -C "$PRODUCT" remote get-url origin)."
+  echo "Pushed $BRANCH to $(git -C "$PRODUCT" remote get-url --push origin)."
 else
   echo "Push with:  git -C \"$PRODUCT\" push origin $BRANCH"
 fi
