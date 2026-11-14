@@ -1,0 +1,7 @@
+# plant: case_gate_opened_to_all (OspreyFlow_Core/services/api/app.py), at a2c5670, the plant uncommitted
+# replaced:     if admin_safety_net and ADMIN_ROLE in principal.roles:
+# with:     if True:
+# run: cd OspreyFlow_Core && PYTHONPYCACHEPREFIX=$(mktemp -d) .venv/bin/python -m pytest -q -p no:cacheprovider -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py -k 'dashboard_reads'
+../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py:855: AssertionError
+FAILED ../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py::test_a_dashboard_reads_the_case_it_was_granted_and_no_other
+1 failed, 43 deselected in 11.99s

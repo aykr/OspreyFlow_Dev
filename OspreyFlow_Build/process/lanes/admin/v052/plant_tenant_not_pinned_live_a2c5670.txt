@@ -1,0 +1,15 @@
+# plant: tenant_not_pinned (OspreyFlow_Core/services/api/entra_people.py), at a2c5670, the plant uncommitted
+# replaced:         if tenant_id != self.tenant_id:
+            return None
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT application_id, name,
+# with:         async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT application_id, name,
+# run: cd OspreyFlow_Core && PYTHONPYCACHEPREFIX=$(mktemp -d) .venv/bin/python -m pytest -q -p no:cacheprovider -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py -k 'dashboard'
+        from services.api.identity_admin import DashboardExistsError
+E       AssertionError: assert StoredDashboard(application_id='dddddddd-eeee-4fff-8000-111111111111', clearance='OFFICIAL-SENSITIVE', org_unit='unit-2', receivable_handling_codes=('P',), name='compliance-board') is None
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:408: AssertionError
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_dashboard_identity_is_registered_read_listed_and_removed
+1 failed, 1 passed, 19 deselected in 2.82s
