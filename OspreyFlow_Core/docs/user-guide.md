@@ -348,6 +348,11 @@ refused with its figures and saves nothing: narrow it by link type, depth or dat
 yours runs in a case at a time, and its panel says so: "Closing this does not stop the job. While it
 runs, asking for a batch expansion in this case again follows it."
 
+**Marking for suppression** proposes a record for suppression, in the open. The node is marked, with your reason,
+and the Explore panel lists it, with who marked it and when; **Remove suppression mark** takes the mark off. A mark
+hides nothing and changes no record: the node is still shown, cited and exported as before, to everyone who may see
+it. A suppression that takes effect, once its evidence is loaded through the Ingest Studio, is not built yet.
+
 **Reading a link.** A link's stroke says where it came from: **solid** from a record, **dashed**
 inferred by a model, **dotted** unresolved. Hovering names its type and how many such links join the
 two. Right-click a link (or `L`, then `\`) for its menu: its emails, events or messages; **Change

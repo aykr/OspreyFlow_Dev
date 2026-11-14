@@ -99,3 +99,23 @@ def test_user_guide_says_records_arrive_as_one_for_this_reader_alone() -> None:
             "match at the case's strictness") in text  # fmt: skip
     assert "What is shown as one is worked out for you alone, from the records you may see: a record hidden from you joins nothing." in text
     assert "your graph follows the next time you expand it or the case is loaded again, not at once." in text
+
+
+# ---------------------------------------------------------------- R7: a mark for suppression, built as the first step
+
+
+def test_user_guide_says_a_suppression_mark_hides_nothing_and_the_suppression_is_not_built() -> None:
+    canvas = fold(read("apps/workspace/src/canvas/GlassCanvas.tsx"))
+    assert 'label: suppressionMarks[nodeId] ? "Remove suppression mark" : "Mark for suppression",' in canvas
+    panel = read("apps/workspace/src/explore/ExplorePanel.tsx")
+    assert "· marked for suppression by ${m.marked_by} · ${when(m.marked_at)} · “${m.reason}”" in panel
+    store = fold(read("services/api/suppression.py"))
+    assert "reason TEXT NOT NULL" in store and "marks live here, in their own table" in store
+    # The second step is unbuilt: nothing in ingest supersedes or suppresses a record.
+    ingest = [p for p in (CORE / "services" / "ingest").rglob("*.py") if re.search(r"suppress", p.read_text(encoding="utf-8"), re.IGNORECASE)]
+    assert ingest == [], "a suppression from ingest exists now: the guide must say what it does"
+    text = guide("user")
+    assert ("The node is marked, with your reason, and the Explore panel lists it, with who marked it and when; "
+            "**Remove suppression mark** takes the mark off.") in text  # fmt: skip
+    assert "A mark hides nothing and changes no record" in text
+    assert "A suppression that takes effect, once its evidence is loaded through the Ingest Studio, is not built yet." in text
