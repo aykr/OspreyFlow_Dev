@@ -1,74 +1,84 @@
-# plants.py at b8915b6 (clean tree, on main with 3b03b31), a fresh PYTHONPYCACHEPREFIX per pytest run, 2026-11-14T00:58:35Z, rc=0
-GREEN unplanted: 216 passed, 1 skipped in 5.53s
-RED   an unknown key inside an entry is not a stop: 1 failed, 2 passed in 0.59s
-RED   an unknown section is not a stop: 1 failed, 1 passed in 0.67s
-RED   a pending entry is not a stop: 1 failed, 62 passed in 1.14s
-RED   a CronJob listed suspended that runs by itself passes: 1 failed, 124 passed in 1.66s
-RED   a job never succeeded passes: 1 failed, 122 passed in 1.61s
-RED   a failed restore step passes: 1 failed, 121 passed in 1.53s
-RED   kubectl's absent readyReplicas read as all ready: 1 failed, 165 passed in 1.80s
-RED   a database reached by a stranger passes: 1 failed, 163 passed in 1.73s
-RED   a check that raises passes: 1 failed, 161 passed in 1.78s
-RED   r1's SystemExit ends the whole run: 1 failed, 161 passed in 1.79s
-RED   a rollout the controller has not observed passes: 1 failed, 127 passed in 1.57s
-RED   another shape passes: 1 failed, 65 passed in 1.06s
-RED   a probe with no answer reads as blocked: 1 failed, 175 passed in 1.77s
-RED   the runbook's listing Job or a v0.5.1 run counts as a backup: 1 failed, 179 passed in 1.69s
-RED   the claims restore's run counts as the graph's: 1 failed, 180 passed in 1.85s
-RED   a finished pod's address names a reader: 1 failed, 181 passed in 2.11s
-RED   restore-graph unchecked when steps does not name it: 1 failed, 160 passed in 1.84s
-RED   a key inside an egress entry is not a stop: 1 failed, 49 passed in 1.03s
-RED   a collected case with no disposition runs: 1 failed, 214 passed, 1 skipped in 4.39s
-RED   a narrowed selection stops the run: 1 failed, 213 passed, 1 skipped in 4.26s
-RED   a spec 08 case with no disposition runs unremarked: 1 failed, 208 passed, 1 skipped in 4.21s
-RED   a disposition for a case that no longer exists is not noticed: 1 failed, 209 passed, 1 skipped in 4.00s
-RED   a case that cannot run on poc is run anyway: 1 failed, 212 passed, 1 skipped in 4.63s
-RED   the module still signs in at Keycloak: 1 failed, 212 passed, 1 skipped in 4.11s
-RED   open egress passes: 1 failed, 112 passed in 1.72s
-RED   a workload or job on another reference passes the version check: 1 failed, 64 passed in 1.22s
-RED   a deployment of another release passes: 1 failed, 132 passed in 1.80s
-RED   dev-unknown or another commit passes as the candidate: 1 failed, 138 passed in 2.10s
-RED   one of ours tagged with another commit (or unknown) passes: 1 failed, 145 passed in 2.08s
-RED   a short or tag-shaped candidate is taken: 1 failed, 150 passed in 2.18s
-RED   the probe's failure read as an answer: 1 failed, 192 passed in 2.26s
-RED   any 403 taken for the domain's refusal: 1 failed, 191 passed in 2.17s
-RED   the probe's failure left on stderr: 1 failed, 195 passed in 2.23s
-RED   a kept render of other files (v0.5.1's) named the candidate: 1 failed, 201 passed in 3.31s
-RED   a kept render of two commits, or of unknown, named the candidate: 1 failed, 203 passed in 3.87s
-RED   a commit not in the copy named the candidate: 1 failed, 202 passed in 3.17s
-RED   the wrapper's kubeconfig not R1's: 1 failed, 199 passed in 3.39s
-RED   the wrapper's platform folder not R1's: 1 failed, 199 passed in 2.41s
-RED   the wrapper runs with no candidate: 1 failed, 199 passed in 2.89s
-RED   the unsigned probe off the signed client's own transport: 1 failed, 206 passed in 4.02s
-RED   the release read from another ConfigMap: 1 failed, 152 passed in 2.30s
-RED   an init or second container on the old reference passes: 1 failed, 156 passed in 2.23s
-RED   a template the render never pinned reads as the candidate: 1 failed, 156 passed in 1.98s
-RED   kubectl's name order picks the run read: 1 failed, 182 passed in 1.93s
-RED   a search reader answered unsigned passes (not the domain): 1 failed, 183 passed in 1.95s
-RED   an empty search alias passes: 1 failed, 188 passed in 1.95s
-RED   a refused signed search count passes: 1 failed, 186 passed in 2.25s
-RED   a search reader that does not sign passes: 1 failed, 185 passed in 2.27s
-RED   a search reader's refusal is not said: 1 failed, 183 passed in 2.35s
-RED   an egress placeholder is probed: 1 failed, 197 passed in 2.21s
-RED   a rollout still holding the old pod passes: 1 failed, 126 passed in 2.08s
-RED   an unavailable replica passes: 1 failed, 126 passed in 2.10s
-RED   updated, ready and available unchecked: 1 failed, 114 passed in 1.85s
-RED   a StatefulSet mid-update passes: 1 failed, 129 passed in 1.78s
-RED   kubectl's unavailableReplicas ignored: 1 failed, 126 passed in 1.58s
-RED   an offline node reads as egress blocked: 1 failed, 159 passed in 2.03s
-RED   the shape is not read from the deployed configuration: 1 failed, 158 passed in 2.04s
-RED   a CronJob's template on the old release reads as current: 1 failed, 198 passed in 1.93s
-RED   a restore run at the candidate's image reads as old: 1 failed, 172 passed in 1.83s
-RED   init containers' references left out of the candidate's: 1 failed, 154 passed in 1.82s
-RED   a StatefulSet is never found: 1 failed, 171 passed in 1.83s
-RED   a workload not ready passes: 1 failed, 114 passed in 1.70s
-GREEN routes unplanted: 8 passed in 6.39s
-RED   unreadable calls skipped: 1 failed, 7 passed in 4.99s
-RED   a path led by a field, or off /v1, skipped: 1 failed, 7 passed in 4.94s
-RED   the sign-in exceptions removed (the real module has unreadable calls): 2 failed, 6 passed in 5.28s
-RED   an origin-prefixed path not read: 2 failed, 6 passed in 5.30s
-RED   the stream the module opens not read: 1 failed, 7 passed in 5.13s
-RED   a stream URL of another shape skipped: 1 failed, 7 passed in 5.26s
-RED   a stream opened at a URL not read skipped: 1 failed, 7 passed in 5.16s
-RED   a client's request or stream skipped: 1 failed, 7 passed in 5.42s
+plants.py at a357cc1 (1 changes in the tree), this Mac, offline
+GREEN unplanted: 220 passed, 1 skipped in 3.55s
+RED   an unknown key inside an entry is not a stop: 1 failed, 2 passed in 0.58s (test_an_unplaced_key_anywhere_in_the_manifest_stops_the_run[workloads])
+RED   an unknown section is not a stop: 1 failed, 1 passed in 0.57s (test_an_unplaced_key_anywhere_in_the_manifest_stops_the_run[(top)])
+RED   a pending entry is not a stop: 1 failed, 62 passed in 1.01s (test_an_entry_still_pending_stops_the_run_unless_a_dry_run_allows_it)
+RED   a CronJob listed suspended that runs by itself passes: 1 failed, 124 passed in 1.40s (test_a_cronjob_listed_suspended_that_runs_on_a_schedule_fails)
+RED   a job never succeeded passes: 1 failed, 122 passed in 1.39s (test_a_cronjob_present_whose_runs_never_succeeded_fails)
+RED   a failed restore step passes: 1 failed, 121 passed in 1.40s (test_a_failed_restore_step_fails_its_job)
+RED   kubectl's absent readyReplicas read as all ready: 1 failed, 165 passed in 1.62s (test_a_deployment_kubectl_reports_with_no_ready_replicas_is_not_ready)
+RED   a database reached by a stranger passes: 1 failed, 163 passed in 1.57s (test_a_database_reached_only_by_a_stranger_fails)
+RED   a check that raises passes: 1 failed, 161 passed in 1.56s (test_a_check_that_exits_as_r1s_shell_does_is_a_failure_not_a_stop)
+RED   r1's SystemExit ends the whole run: 1 failed, 161 passed in 1.57s (test_a_check_that_exits_as_r1s_shell_does_is_a_failure_not_a_stop)
+RED   a rollout the controller has not observed passes: 1 failed, 127 passed in 1.43s (test_each_unfinished_rollout_reading_alone_fails[change0-not yet rolled out])
+RED   another shape passes: 1 failed, 65 passed in 1.02s (test_a_deployment_missing_any_one_listed_item_fails_on_it[shape])
+RED   a probe with no answer reads as blocked: 1 failed, 175 passed in 1.64s (test_an_egress_probe_answers_open_blocked_or_raises[-None])
+RED   the runbook's listing Job or a v0.5.1 run counts as a backup: 1 failed, 179 passed in 1.59s (test_a_cronjobs_runs_count_only_its_own_command_at_the_candidates_image)
+RED   the claims restore's run counts as the graph's: 1 failed, 180 passed in 1.61s (test_a_restore_template_never_takes_the_claims_restores_runs)
+RED   a finished pod's address names a reader: 1 failed, 181 passed in 1.60s (test_only_running_pods_name_a_reader)
+RED   restore-graph unchecked when steps does not name it: 1 failed, 160 passed in 1.62s (test_restore_graph_is_checked_even_when_steps_does_not_name_it)
+RED   a key inside an egress entry is not a stop: 1 failed, 49 passed in 0.91s (test_an_unplaced_key_anywhere_in_the_manifest_stops_the_run[egress])
+RED   a collected case with no disposition runs: 1 failed, 218 passed, 1 skipped in 3.64s (test_the_plugin_refuses_a_module_that_gained_a_case)
+RED   a narrowed selection stops the run: 1 failed, 217 passed, 1 skipped in 3.59s (test_a_narrowed_selection_runs_without_stopping)
+RED   a spec 08 case with no disposition runs unremarked: 1 failed, 209 passed, 1 skipped in 4.03s (test_a_new_case_in_the_module_stops_the_run)
+RED   a disposition for a case that no longer exists is not noticed: 1 failed, 210 passed, 1 skipped in 3.52s (test_a_disposition_for_a_case_that_is_gone_stops_the_run)
+RED   a case that cannot run on poc is run anyway: 1 failed, 216 passed, 1 skipped in 3.57s (test_the_plugin_skips_exactly_the_cases_that_cannot_run_and_swaps_the_sign_in)
+RED   the module still signs in at Keycloak: 1 failed, 216 passed, 1 skipped in 3.63s (test_the_plugin_skips_exactly_the_cases_that_cannot_run_and_swaps_the_sign_in)
+RED   open egress passes: 1 failed, 112 passed in 1.32s (test_an_unlisted_host_reached_fails)
+RED   a workload or job on another reference passes the version check: 1 failed, 64 passed in 1.01s (test_a_deployment_missing_any_one_listed_item_fails_on_it[version])
+RED   a deployment of another release passes: 1 failed, 132 passed in 1.49s (test_a_deployment_whose_release_is_another_fails_the_version_check)
+RED   dev-unknown or another commit passes as the candidate: 1 failed, 138 passed in 1.48s (test_the_release_is_the_manifests_version_or_the_candidates_dev_commit[dev-unknown-False])
+RED   one of ours tagged with another commit (or unknown) passes: 1 failed, 145 passed in 1.50s (test_one_of_ours_tagged_with_another_commit_fails_the_version_check[unknown])
+RED   a short or tag-shaped candidate is taken: 1 failed, 150 passed in 1.57s (test_no_full_candidate_commit_named_fails_the_version_check[0c1d2e3])
+RED   the probe's failure read as an answer: 1 failed, 192 passed in 1.66s (test_a_search_reader_signs_finds_documents_and_is_refused_unsigned[change8-failed in the reader's pod: ModuleNotFoundError])
+RED   any 403 taken for the domain's refusal: 1 failed, 191 passed in 1.63s (test_a_search_reader_signs_finds_documents_and_is_refused_unsigned[change7-not refused 403])
+RED   the probe's failure left on stderr: 1 failed, 195 passed in 1.66s (test_the_search_probe_prints_one_json_line_whatever_fails)
+RED   a kept render of other files (v0.5.1's) named the candidate: 1 failed, 202 passed in 2.93s (test_a_kept_render_not_of_this_copys_files_names_no_candidate[old-other files])
+RED   a kept render of two commits, or of unknown, named the candidate: 1 failed, 204 passed in 3.23s (test_a_kept_render_not_of_this_copys_files_names_no_candidate[two-not one commit])
+RED   a commit not in the copy named the candidate: 1 failed, 203 passed in 3.11s (test_a_kept_render_not_of_this_copys_files_names_no_candidate[absent-not in this copy's history])
+RED   the wrapper's kubeconfig not R1's: 1 failed, 199 passed in 1.98s (test_the_live_wrapper_gives_install_verify_r1s_own_environment)
+RED   the wrapper's platform folder not R1's: 1 failed, 199 passed in 2.05s (test_the_live_wrapper_gives_install_verify_r1s_own_environment)
+RED   the wrapper runs with no candidate: 1 failed, 199 passed in 2.03s (test_the_live_wrapper_gives_install_verify_r1s_own_environment)
+RED   the unsigned probe off the signed client's own transport: 1 failed, 207 passed in 3.49s (test_the_unsigned_probe_takes_the_signed_clients_own_transport)
+RED   the release read from another ConfigMap: 1 failed, 152 passed in 1.56s (test_the_live_reading_takes_the_release_from_ospreyflow_env)
+RED   an init or second container on the old reference passes: 1 failed, 156 passed in 1.56s (test_an_init_container_on_the_old_reference_is_not_the_candidate)
+RED   a template the render never pinned reads as the candidate: 1 failed, 156 passed in 1.57s (test_an_init_container_on_the_old_reference_is_not_the_candidate)
+RED   kubectl's name order picks the run read: 1 failed, 182 passed in 1.62s (test_the_newest_successful_run_is_read_whatever_kubectls_order)
+RED   a search reader answered unsigned passes (not the domain): 1 failed, 183 passed in 1.61s (test_the_opensearch_reader_check_reads_each_readers_probe)
+RED   an empty search alias passes: 1 failed, 188 passed in 1.60s (test_a_search_reader_signs_finds_documents_and_is_refused_unsigned[change4-holds no documents])
+RED   a refused signed search count passes: 1 failed, 186 passed in 1.63s (test_a_search_reader_signs_finds_documents_and_is_refused_unsigned[change2-was refused: 403])
+RED   a search reader that does not sign passes: 1 failed, 185 passed in 1.61s (test_a_search_reader_signs_finds_documents_and_is_refused_unsigned[change1-not sigv4])
+RED   a search reader's refusal is not said: 1 failed, 183 passed in 1.59s (test_the_opensearch_reader_check_reads_each_readers_probe)
+RED   an egress placeholder is probed: 1 failed, 197 passed in 1.67s (test_an_egress_placeholder_fails_without_probing)
+RED   a rollout still holding the old pod passes: 1 failed, 126 passed in 1.46s (test_a_crash_looping_candidate_beside_the_ready_old_pod_fails)
+RED   an unavailable replica passes: 1 failed, 126 passed in 1.45s (test_a_crash_looping_candidate_beside_the_ready_old_pod_fails)
+RED   updated, ready and available unchecked: 1 failed, 114 passed in 1.35s (test_a_workload_unlike_its_entry_fails[ready-0])
+RED   a StatefulSet mid-update passes: 1 failed, 129 passed in 1.48s (test_each_unfinished_rollout_reading_alone_fails[change2-revisions differ])
+RED   kubectl's unavailableReplicas ignored: 1 failed, 126 passed in 1.47s (test_a_crash_looping_candidate_beside_the_ready_old_pod_fails)
+RED   an offline node reads as egress blocked: 1 failed, 159 passed in 1.60s (test_an_offline_node_is_no_evidence_that_egress_is_blocked)
+RED   the shape is not read from the deployed configuration: 1 failed, 158 passed in 1.55s (test_the_shape_is_read_from_the_deployed_configuration)
+RED   a CronJob's template on the old release reads as current: 1 failed, 198 passed in 1.65s (test_a_cronjob_whose_template_is_still_the_old_release_reads_as_not_current)
+RED   a restore run at the candidate's image reads as old: 1 failed, 172 passed in 1.63s (test_the_restore_reading_takes_its_own_job_and_its_pods)
+RED   init containers' references left out of the candidate's: 1 failed, 154 passed in 1.58s (test_the_candidates_reference_is_the_values_pinned_form_not_the_images_list_tag)
+RED   a StatefulSet is never found: 1 failed, 171 passed in 1.71s (test_a_statefulset_is_found_when_no_deployment_has_the_name)
+RED   a workload not ready passes: 1 failed, 114 passed in 1.38s (test_a_workload_unlike_its_entry_fails[ready-0])
+RED   spec08's wrapper without r1's kubeconfig: 1 failed, 200 passed in 2.46s (test_spec08s_live_wrapper_gives_spec08_poc_r1s_own_environment)
+RED   spec08's wrapper without the Core on the path (run() imports scripts.): 1 failed, 200 passed in 2.50s (test_spec08s_live_wrapper_gives_spec08_poc_r1s_own_environment)
+RED   spec08's wrapper without r1's tools on the PATH: 1 failed, 200 passed in 2.54s (test_spec08s_live_wrapper_gives_spec08_poc_r1s_own_environment)
+RED   spec08's wrapper naming another platform folder: 1 failed, 200 passed in 2.47s (test_spec08s_live_wrapper_gives_spec08_poc_r1s_own_environment)
+RED   spec08's wrapper drops its pytest arguments: 1 failed, 200 passed in 2.49s (test_spec08s_live_wrapper_gives_spec08_poc_r1s_own_environment)
+RED   spec08's docstring names r1_kind.sh py again: 1 failed, 200 passed in 2.50s (test_spec08s_live_wrapper_gives_spec08_poc_r1s_own_environment)
+RED   A7's refusal left waiting on the seed: 1 failed, 212 passed, 1 skipped in 3.55s (test_the_counts_reported_are_the_tables)
+RED   the stream's seed-free half left waiting on the seed: 1 failed, 212 passed, 1 skipped in 3.47s (test_the_counts_reported_are_the_tables)
+GREEN routes unplanted: 8 passed in 4.53s
+RED   unreadable calls skipped: 1 failed, 7 passed in 4.04s (test_a_client_call_whose_path_cannot_be_read_is_named)
+RED   a path led by a field, or off /v1, skipped: 1 failed, 7 passed in 4.04s (test_a_client_call_whose_path_cannot_be_read_is_named)
+RED   the sign-in exceptions removed (the real module has unreadable calls): 2 failed, 6 passed in 4.07s (test_a_client_call_whose_path_cannot_be_read_is_named, test_every_client_call_in_the_closing_pass_proof_is_read)
+RED   an origin-prefixed path not read: 2 failed, 6 passed in 3.98s (test_the_reading_reads_an_origin_before_the_path, test_every_client_call_in_the_closing_pass_proof_is_read)
+RED   the stream the module opens not read: 1 failed, 7 passed in 4.10s (test_the_stream_the_module_opens_is_read_and_served)
+RED   a stream URL of another shape skipped: 1 failed, 7 passed in 4.04s (test_a_client_call_whose_path_cannot_be_read_is_named)
+RED   a stream opened at a URL not read skipped: 1 failed, 7 passed in 4.18s (test_a_client_call_whose_path_cannot_be_read_is_named)
+RED   a client's request or stream skipped: 1 failed, 7 passed in 4.04s (test_a_client_call_whose_path_cannot_be_read_is_named)
+RED   the stream's seed-free half finds a seeded subject: 1 failed, 214 passed, 30 skipped in 4.28s (test_a_seed_free_half_runs_on_poc_and_reaches_no_seed[test_the_stream_opens_through_the_proxy_with_a_ticket-test_the_delta_stream_is_reachable_through_the_proxy])
+RED   A7's refusal half searches for a seeded subject through a new helper: 1 failed, 215 passed, 30 skipped in 4.29s (test_a_seed_free_half_runs_on_poc_and_reaches_no_seed[test_a7_an_unknown_field_name_is_refused_rather_than_ignored-test_a7_the_events_table_survives_a_refused_field_name])
 every plant red, unplanted green

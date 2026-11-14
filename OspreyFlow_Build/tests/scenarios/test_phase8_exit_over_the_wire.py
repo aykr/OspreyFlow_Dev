@@ -2367,7 +2367,18 @@ def test_a7_an_unknown_field_name_is_refused_rather_than_ignored(
     """A field name that is not a safe identifier must be refused at the boundary, not
     interpolated. The values are parameterised; the *column* is not, which is why the adapter
     validates it — and why this is asserted over the wire rather than only in the conformance
-    suite."""
+    suite. Needs no seeded events: the same request without the field name is answered first, so the
+    refusal is the field name's and not the case's, a missing right's or the ingress's; it runs on a
+    deployment with no seed path (v0.5.2's poc). The table's survival is the next case."""
+    body = {
+        "filter": {"investigation_scope": seeded_scope},
+        "dimensions": [{"name": "category", "field": "item_type", "bucketing": "categorical"}],
+    }
+    control = analyst.post("/v1/analytics/cross-filter", json=body)
+    assert control.status_code == 200, (
+        f"the same request with a safe field name was not answered, so a refusal would prove nothing: "
+        f"{control.status_code} {control.text[:200]}"
+    )
     hostile = analyst.post(
         "/v1/analytics/cross-filter",
         json={
@@ -2386,6 +2397,24 @@ def test_a7_an_unknown_field_name_is_refused_rather_than_ignored(
     )
     assert hostile.json() == {"error": "field_name_refused", "detail": FIELD_NAME_RULE}
     assert "DROP" not in hostile.text
+
+
+def test_a7_the_events_table_survives_a_refused_field_name(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """The assertion that matters if the guard ever failed: after the hostile field name, the
+    seeded case's events are still counted. Split from the refusal so that half runs where there
+    is no seed (v0.5.2's poc); this half needs the seeded events to count."""
+    analyst.post(
+        "/v1/analytics/cross-filter",
+        json={
+            "filter": {
+                "investigation_scope": seeded_scope,
+                "value_filters": {"item_type'); DROP TABLE events; --": ["x"]},
+            },
+            "dimensions": [{"name": "category", "field": "item_type", "bucketing": "categorical"}],
+        },
+    )
 
     # The table is still there — the assertion that matters if the guard ever failed.
     after = analyst.post(
@@ -2729,14 +2758,47 @@ def test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place(
     )
 
 
-def test_the_delta_stream_is_reachable_through_the_proxy(analyst: httpx.Client) -> None:
+def test_the_stream_opens_through_the_proxy_with_a_ticket(analyst: httpx.Client) -> None:
     """The cross-cutting half that is reachable over the wire: the change stream, through the
     workspace's nginx, authenticated by the ticket exchange rather than a bearer header —
     browsers cannot set one on a WebSocket, which is the whole reason `/v1/ws-ticket` exists.
+    The ticket, the upgrade and the fresh client's empty snapshot need nothing seeded, so this half
+    runs on a deployment with no seed path (v0.5.2's poc); a delta is the next case.
 
     Named per rule 12: nginx's `map $http_upgrade $connection_upgrade` block and its `/v1/`
     location are what make this work, and nothing else in the suite would notice if either were
     removed — the in-process tier has no proxy in front of it.
+    """
+    websockets = pytest.importorskip("websockets.sync.client")
+
+    investigation = _new_investigation(analyst)
+    ticket = analyst.post("/v1/ws-ticket", json={"investigation_id": investigation})
+    assert ticket.status_code == 200, ticket.text
+    assert ticket.json()["expires_in"] <= 60, "a stream ticket should be short-lived"
+
+    origin = urllib.parse.urlparse(WORKSPACE_ORIGIN)
+    scheme = "wss" if origin.scheme == "https" else "ws"
+    url = (
+        f"{scheme}://{origin.netloc}/v1/investigations/{investigation}/stream"
+        f"?ticket={ticket.json()['ticket']}"
+    )
+    with websockets.connect(url, open_timeout=30) as stream:
+        # The route waits for an init frame before it subscribes to anything — `{"last_
+        # acknowledged_seq": null}` is a fresh client with nothing to catch up on, and it is what
+        # the Glass's own `useDeltaStream` sends on open. Without it the socket stays connected
+        # and silent, which is exactly how this step first failed.
+        stream.send(json.dumps({"last_acknowledged_seq": None}))
+        # A fresh client is answered with its own empty snapshot first (`sync`'s own contract:
+        # the missed deltas, or a snapshot when the gap cannot be proven closed — never a silent
+        # patch). The live delta is what comes after it.
+        opening = json.loads(stream.recv(timeout=30))
+        assert opening["op"] == "snapshot" and opening["nodes"] == [], opening
+
+
+def test_the_delta_stream_is_reachable_through_the_proxy(analyst: httpx.Client) -> None:
+    """A delta through the proxy: after the opening snapshot, a seeded node arrives on the stream as
+    an `add`. Needs the seeded graph to find the node, so it waits where there is no seed path; the
+    ticket, the upgrade and the snapshot are the case before.
     """
     websockets = pytest.importorskip("websockets.sync.client")
 
