@@ -62,6 +62,12 @@ plant "a job not this reader's read as progress not read" "$API" \
 plant "the result not opened when the job is done" "$UI" \
   's/onViewOpenedRef.current\(result.opened\);//' \
   "opens the job's result as the view, and says the server's words and that it is open"
+plant "a done job with no view opened anyway" "$UI" \
+  's/if \(!job.view\) \{/if (!job.view \&\& false) {/' \
+  "says a done job whose view has since been deleted in the server's words, and opens nothing"
+plant "the carry-on note left up once the job ends" "$UI" \
+  's/\{\(shown.phase === "starting" \|\| shown.phase === "watching"\) \&\& \(/{true \&\& (/' \
+  "says the job carries on when closed, only while it runs"
 plant "a result view past the canvas's limit said as any failure" "$UI" \
   's/\} else if \(result.kind === "limit_exceeded"\) \{/} else if (false) {/' \
   "says a result view past the canvas's limit is kept and was not cut to fit"

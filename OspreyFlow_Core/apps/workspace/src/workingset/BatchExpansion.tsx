@@ -79,7 +79,8 @@ export function BatchExpansion({
 
     async function finish(job: BatchExpansionJob): Promise<void> {
       if (!job.view) {
-        setShown({ phase: "stopped", again: false, words: `${job.words} The server did not say which view holds the result.`.trim() });
+        // Done, its view deleted since (ADR-151): the server's sentence says so; there is nothing to open.
+        setShown({ phase: "stopped", again: false, words: job.words || "The batch job finished, but the view it saved has since been deleted." });
         return;
       }
       setShown({ phase: "opening", words: job.words });
@@ -205,6 +206,11 @@ export function BatchExpansion({
       {shown.phase === "stopped" && (
         <p className="batch-expansion__message" role="alert">
           {shown.words}
+        </p>
+      )}
+      {(shown.phase === "starting" || shown.phase === "watching") && (
+        <p className="batch-expansion__figure">
+          Closing this does not stop the job; run the same expansion again as a batch job to follow it.
         </p>
       )}
       <div className="batch-expansion__actions">

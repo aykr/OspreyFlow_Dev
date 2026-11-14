@@ -1233,7 +1233,10 @@ The refusals are said in words:
 - a failed job, which offers *Try the batch job again*;
 - a job no longer found.
 
-A state the Glass does not know is said as a failure, never read as progress. The jsdom cases are in
+While the job runs the panel says that closing it does not stop the job, and that running the same
+expansion again as a batch job follows it (the Conduit's 409 names the running job). A done job whose view
+has since been deleted says so in the server's words, with nothing to open. A state the Glass does
+not know is said as a failure, never read as progress. The jsdom cases are in
 `workingset/BatchExpansion.test.tsx`, and their red-first record is
 `process/lanes/case-b/batch/plants.sh`. The keyboard case is `run-an-expansion-as-a-batch-job-by-keyboard`.
 

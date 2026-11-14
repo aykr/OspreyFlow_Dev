@@ -34,10 +34,10 @@ const OPENED = { view: VIEW, nodes: [{ id: "n1", type: "Person" }], edges: [], l
 function job(state: string, words: string, more: Record<string, unknown> = {}) {
   return { id: "j1", state, words, view: null, nodes: null, links: null, refusal: null, ...more };
 }
-const QUEUED = { status: 202, body: job("queued", "Waiting for the worker to start the batch job.") };
+const QUEUED = { status: 202, body: job("queued", "Waiting for the batch expansion to start.") };
 const DONE = {
   status: 200,
-  body: job("done", "Saved 61,200 nodes and 140,388 links as the view “Expansion of Ada Lovelace”.", { view: VIEW, nodes: 61_200, links: 140_388 }),
+  body: job("done", "Saved 61,200 nodes and 140,388 links as your private view “Expansion of Ada Lovelace”.", { view: VIEW, nodes: 61_200, links: 140_388 }),
 };
 
 type Reply = { status: number; body?: unknown };
@@ -110,7 +110,7 @@ describe("BatchExpansion", () => {
       { status: 200, body: job("running", "Saving the view.") },
     ]);
     show();
-    await screen.findByText("Waiting for the worker to start the batch job.");
+    await screen.findByText("Waiting for the batch expansion to start.");
     await screen.findByText("Expanding from 12 nodes.");
     await screen.findByText("Counting the links among 41,203 nodes.");
     await screen.findByText("Saving the view.");
@@ -121,14 +121,14 @@ describe("BatchExpansion", () => {
     const { onViewOpened } = show();
     await waitFor(() => expect(onViewOpened).toHaveBeenCalledWith(OPENED));
     expect(statusText()).toBe(
-      "Saved 61,200 nodes and 140,388 links as the view “Expansion of Ada Lovelace”. Its result is open as the view “Expansion of Ada Lovelace”.",
+      "Saved 61,200 nodes and 140,388 links as your private view “Expansion of Ada Lovelace”. Its result is open as the view “Expansion of Ada Lovelace”.",
     );
     expect(calls.some((c) => c.url === "http://conduit/v1/investigations/c1/views/v9")).toBe(true);
   });
 
   it("follows the job already running when the reader has one on this case", async () => {
     const calls = conduit(
-      { status: 409, body: { error: "batch_expansion_running", detail: "You already have a batch job running in this case; following it.", id: "j7" } },
+      { status: 409, body: { error: "batch_expansion_running", detail: "A batch expansion of yours is already running in this case, so another was not started. Follow that one, or wait for it to finish.", id: "j7" } },
       [{ status: 200, body: { ...job("running", "Expanding from 3 nodes."), id: "j7" } }],
     );
     show();
@@ -177,11 +177,28 @@ describe("BatchExpansion", () => {
   });
 
   it("says a failed job in the server's words, and offers to try it again", async () => {
-    const calls = conduit(QUEUED, [{ status: 200, body: job("failed", "The batch job failed: the graph store stopped answering.") }]);
+    const calls = conduit(QUEUED, [{ status: 200, body: job("failed", "The batch expansion could not finish, and nothing was saved. Try again, or narrow the expansion.") }]);
     show();
-    expect(await alertText()).toBe("The batch job failed: the graph store stopped answering.");
+    expect(await alertText()).toBe("The batch expansion could not finish, and nothing was saved. Try again, or narrow the expansion.");
     fireEvent.click(screen.getByRole("button", { name: "Try the batch job again" }));
     await waitFor(() => expect(calls.filter((c) => c.method === "POST")).toHaveLength(2));
+  });
+
+  it("says a done job whose view has since been deleted in the server's words, and opens nothing", async () => {
+    const words = "The batch expansion finished, but the view it saved has since been deleted.";
+    const calls = conduit(QUEUED, [{ status: 200, body: job("done", words, { view: null }) }]);
+    const { onViewOpened } = show();
+    expect(await alertText()).toBe(words);
+    expect(onViewOpened).not.toHaveBeenCalled();
+    expect(calls.some((c) => c.url.includes("/views/"))).toBe(false);
+  });
+
+  it("says the job carries on when closed, only while it runs", async () => {
+    conduit(QUEUED, [QUEUED, DONE]);
+    show();
+    await screen.findByText("Closing this does not stop the job; run the same expansion again as a batch job to follow it.");
+    await screen.findByText(/Its result is open as the view/);
+    expect(screen.queryByText(/Closing this does not stop the job/)).toBeNull();
   });
 
   it("says a job that is not this reader's, or is gone, can no longer be found", async () => {
@@ -226,7 +243,7 @@ describe("BatchExpansion", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const calls = conduit(QUEUED, [QUEUED]);
     const { onClose } = show();
-    await screen.findByText("Waiting for the worker to start the batch job.");
+    await screen.findByText("Waiting for the batch expansion to start.");
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalled();
     cleanup();
