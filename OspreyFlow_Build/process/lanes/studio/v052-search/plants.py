@@ -184,8 +184,8 @@ PLANTS = [
     Plant(
         "every failure hidden behind the fallback",
         S,
-        '        except IndexUnavailable:\n            why = "unreachable"',
-        '        except Exception:\n            why = "unreachable"',
+        "                schema,\n            )\n        except IndexUnavailable:\n",
+        "                schema,\n            )\n        except Exception:\n",
         f"{T_S}::test_an_index_that_answers_badly_is_raised",
     ),
     Plant(
@@ -275,8 +275,10 @@ PLANTS = [
     Plant(
         "a pending set not known to be whole relied on",
         S,
-        "    if searcher is not None and access_filter is not None and not pending_complete:",
-        "    if False:",
+        "    if searcher is not None and access_filter is not None and not pending_complete:\n"
+        '        why = "catching_up"\n    elif searcher is not None and access_filter is not None:\n',
+        "    if False:\n"
+        '        why = "catching_up"\n    elif searcher is not None and access_filter is not None:\n',
         f"{T_S}::test_a_pending_set_not_known_to_be_whole_and_the_graph_answers",
     ),
     Plant(
@@ -296,8 +298,8 @@ PLANTS = [
     Plant(
         "a graph-answered suggestion not saying it is limited",
         S,
-        'update={"source": "graph", "limited": request.mode == "starts_with"}',
-        'update={"source": "graph", "limited": False}',
+        '    limited = request.mode == "starts_with"\n',
+        "    limited = False\n",
         f"{T_S}::test_a_suggestion_the_graph_answers_says_it_is_limited",
     ),
     Plant(
@@ -306,6 +308,34 @@ PLANTS = [
         '    if type_name == "Person":\n        return "People"',
         '    if type_name == "Person":\n        return "Person"',
         f"{T_S}::test_group_labels_and_the_matched_fields_display_name",
+    ),
+    Plant(
+        "a case-sensitive suggestion asks the index once (the orchestrator's list, defect 1)",
+        S,
+        "    pages = 1 if request.ignore_case else _PAGES\n",
+        "    pages = 1\n",
+        f"{T_S}::test_a_case_sensitive_suggestion_pages_on_until_its_page_is_full",
+    ),
+    Plant(
+        "an unfillable case-sensitive page shown empty with more, not asked of the graph",
+        S,
+        "    if len(kept) <= request.limit and unfinished and not request.ignore_case:\n        return None\n",
+        "",
+        f"{T_S}::test_a_case_sensitive_suggestion_never_says_more_with_nothing_shown",
+    ),
+    Plant(
+        "more forgotten for an earlier prefix (the canonical form asked second)",
+        S,
+        "        unfinished = unfinished or had_more\n",
+        "        unfinished = had_more\n",
+        f"{T_S}::test_more_is_said_when_any_asked_prefix_has_more",
+    ),
+    Plant(
+        "a limited suggestion without its reason (the orchestrator's list, defect 2)",
+        S,
+        '"limited_why": why if limited else None',
+        '"limited_why": None',
+        f"{T_S}::test_a_limited_suggestion_says_why",
     ),
     # --- the routes --------------------------------------------------------------------------------
     Plant(
@@ -337,6 +367,13 @@ PLANTS = [
         f"{T_R}::test_the_cases_threshold_merges_through_the_working_set",
     ),
     # --- the Glass ---------------------------------------------------------------------------------
+    Plant(
+        "the bar says 'just now' for every reason",
+        "apps/workspace/src/search/GlobalSearch.tsx",
+        "const why = body.limited === true ? (body.limited_why ?? \"unknown\") : null;",
+        "const why = body.limited === true ? \"unreachable\" : null;",
+        "vitest:apps/workspace/src/search/GlobalSearch.test.tsx",
+    ),
     Plant(
         "the bar ignores the reply's `limited`",
         "apps/workspace/src/search/GlobalSearch.tsx",

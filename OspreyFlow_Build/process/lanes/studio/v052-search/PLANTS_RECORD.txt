@@ -3,40 +3,40 @@ P1 red: the access filter moved to post_filter (limits hits, not counts)
   >           assert body["query"]["bool"]["filter"][0] == ACCESS
   E           IndexError: list index out of range
   FAILED tests/services/api/test_search_index_query.py::test_the_access_filter_limits_hits_and_counts_alike
-  1 failed in 0.94s
+  1 failed in 1.10s
 P2 red: dis_max sums the bands
   tests/services/api/test_search_index_query.py::test_every_dis_max_takes_the_best_band_alone
   >       assert all(d.get("tie_breaker", 0) == 0 for d in dis_maxes)
   E       assert False
-  E        +  where False = all(<generator object test_every_dis_max_takes_the_best_band_alone.<locals>.<genexpr> at 0x108399380>)
+  E        +  where False = all(<generator object test_every_dis_max_takes_the_best_band_alone.<locals>.<genexpr> at 0x1108ee0a0>)
   FAILED tests/services/api/test_search_index_query.py::test_every_dis_max_takes_the_best_band_alone
-  1 failed in 0.96s
+  1 failed in 1.01s
 P3 red: the typo band asked as a fuzzy query
   tests/services/api/test_search_index_query.py::test_no_clause_expands_against_the_word_list
   >           assert _expanding_clauses(_body(text)) == []
   E           AssertionError: assert ['fuzziness'] == []
   E
   E             Left contains one more item: 'fuzziness'
-  1 failed in 0.93s
+  1 failed in 1.05s
 P4 red: a long query cut, not refused
   tests/services/api/test_search_index_query.py::test_a_query_over_the_limit_is_refused_not_cut
   >       with pytest.raises(ValueError, match=str(q.MAX_QUERY_CHARS)):
   E       Failed: DID NOT RAISE ValueError
   FAILED tests/services/api/test_search_index_query.py::test_a_query_over_the_limit_is_refused_not_cut
-  1 failed in 0.91s
+  1 failed in 1.13s
 P5 red: a body built with no access filter
   tests/services/api/test_search_index_query.py::test_a_body_cannot_be_built_without_an_access_filter
   >           with pytest.raises(ValueError, match="access filter"):
   E           Failed: DID NOT RAISE ValueError
   FAILED tests/services/api/test_search_index_query.py::test_a_body_cannot_be_built_without_an_access_filter
-  1 failed in 0.96s
+  1 failed in 0.99s
 P6 red: the canonical form of a number not asked
   tests/services/api/test_search_index_query.py::test_the_identifier_band_asks_the_canonical_form_too
   >       assert terms == ["07700 900123", "+447700900123"]
   E       AssertionError: assert ['07700 900123'] == ['07700 90012...447700900123']
   E
   E         Right contains one more item: '+447700900123'
-  1 failed in 0.94s
+  1 failed in 1.06s
 P7 red: by-type counts over text documents too
   tests/services/api/test_search_index_query.py::test_the_by_type_counts_ask_every_type_the_ontology_has
   >       assert aggs["by_type"]["filter"] == {"term": {"kind": "node"}}
@@ -49,142 +49,142 @@ P8 red: the group in the query, so other groups' counts shrink
   >       assert _body(group="Person")["post_filter"] == {
   E       KeyError: 'post_filter'
   FAILED tests/services/api/test_search_index_query.py::test_a_group_narrows_the_list_and_leaves_every_groups_count_whole
-  1 failed in 0.92s
+  1 failed in 1.07s
 P9 red: a suggestion longer than the stored prefixes asked
   tests/services/api/test_search_index_query.py::test_a_suggestion_longer_than_the_stored_prefixes_is_refused_not_cut
   >       with pytest.raises(ValueError, match=str(PREFIX_MAX_CHARS)):
   E       Failed: DID NOT RAISE ValueError
   FAILED tests/services/api/test_search_index_query.py::test_a_suggestion_longer_than_the_stored_prefixes_is_refused_not_cut
-  1 failed in 0.93s
+  1 failed in 0.96s
 P10 red: highlight marks as control characters, which OpenSearch's trim cuts
   tests/services/api/test_search_index_query.py::test_the_marks_survive_opensearch_trimming_a_fragments_edges
   >           assert ord(mark) > 0x20
   E           AssertionError: assert 2 > 32
   E            +  where 2 = ord('\x02')
   FAILED tests/services/api/test_search_index_query.py::test_the_marks_survive_opensearch_trimming_a_fragments_edges
-  1 failed in 0.95s
+  1 failed in 1.02s
 P11 red: the dataset counts asked of every dataset
   tests/services/api/test_search_index_query.py::test_the_dataset_and_date_filters_are_offered_from_the_same_query
   >       assert aggs["datasets"] == {
   E       AssertionError: assert {'terms': {'f...rd_size': 30}} == {'terms': {'f...rd_size': 30}}
   E
   E         Differing items:
-  1 failed in 0.97s
+  1 failed in 0.98s
 P12 red: the pending nodes not left out
   tests/services/api/test_search_index_query.py::test_pending_nodes_are_left_out_of_a_search_and_a_suggestion
   >           assert body["query"]["bool"]["must_not"] == [{"terms": {"node_id": ["p1", "p2"]}}]
   E           KeyError: 'must_not'
   FAILED tests/services/api/test_search_index_query.py::test_pending_nodes_are_left_out_of_a_search_and_a_suggestion
-  1 failed in 1.01s
+  1 failed in 0.97s
 P13 red: a suggestion's types not filtered
   tests/services/api/test_search_index_query.py::test_a_suggestion_can_be_limited_to_types
   >       assert {"terms": {"type": ["Person"]}} in body["query"]["bool"]["filter"]
   E       AssertionError: assert {'terms': {'type': ['Person']}} in [{'bool': {'filter': [{'terms': {'handling_classification': [...]}}]}}, {'term': {'kind': 'node'}}]
   FAILED tests/services/api/test_search_index_query.py::test_a_suggestion_can_be_limited_to_types
-  1 failed in 0.98s
+  1 failed in 1.02s
 P14 red: a score outside the bands made the caller's mistake (422)
   tests/services/api/test_search_index_query.py::test_a_score_between_bands_is_a_defect_not_a_guess
   >       assert not issubclass(q.ScoreOutsideBands, ValueError)
   E       AssertionError: assert not True
   E        +  where True = issubclass(<class 'services.api.search_index_query.ScoreOutsideBands'>, ValueError)
   E        +    where <class 'services.api.search_index_query.ScoreOutsideBands'> = q.ScoreOutsideBands
-  1 failed in 0.97s
+  1 failed in 1.04s
 P15 red: every classification allowed
   tests/services/api/test_search_access.py::test_the_filter_agrees_with_the_conduits_rule_everywhere
   >       assert _disagreements(sa.index_access_filter) == []
   E       AssertionError: assert [({'kind': 'n...s=None)), ...] == []
   E
   E         Left contains 3600 more items, first extra item: ({'kind': 'node', 'handling_classification': 'OFFICIAL', 'handling_code': 'P', 'owning_unit': 'unit-1', ...}, Principa...eader', clearance='PUBLIC', org_unit='unit-1', receivable_handling_codes=[], roles=[], datasets=['ds-1'], routes=None))
-  1 failed in 0.80s
+  1 failed in 0.84s
 P16 red: a restricted code's unit scope dropped
   tests/services/api/test_search_access.py::test_the_filter_agrees_with_the_conduits_rule_everywhere
   >       assert _disagreements(sa.index_access_filter) == []
   >       raise AssertionError(f"the interpreter does not know {kind}")
   E       AssertionError: the interpreter does not know exists
   FAILED tests/services/api/test_search_access.py::test_the_filter_agrees_with_the_conduits_rule_everywhere
-  1 failed in 0.66s
+  1 failed in 0.63s
 P17 red: the background principal searched
   tests/services/api/test_search_access.py::test_a_principal_with_no_case_limit_is_refused
   >           sa.index_access_filter(SCHEME, Principal(id="bg", clearance="SECRET", org_unit="unit-1"))
   >                       "datasets", filter=[{"terms": {"datasets": sorted(set(principal.datasets))}}]
   E       TypeError: 'NoneType' object is not iterable
   FAILED tests/services/api/test_search_access.py::test_a_principal_with_no_case_limit_is_refused
-  1 failed in 0.96s
+  1 failed in 0.63s
 P18 red: the index asked with no access filter
   tests/services/api/test_search_service.py::test_with_no_access_filter_the_index_is_never_asked
   >       out = _ask(SearchPageRequest(query="x"), _Graph(exact=[_typed("p1")]), index, access=None)
   >           raise ValueError("a search body is never built without an access filter")
   E           ValueError: a search body is never built without an access filter
   FAILED tests/services/api/test_search_service.py::test_with_no_access_filter_the_index_is_never_asked
-  1 failed in 13.42s
+  1 failed in 5.12s
 P19 red: every failure hidden behind the fallback
   tests/services/api/test_search_service.py::test_an_index_that_answers_badly_is_raised
   >       with pytest.raises(RuntimeError, match="parsing_exception"):
   E       Failed: DID NOT RAISE RuntimeError
   FAILED tests/services/api/test_search_service.py::test_an_index_that_answers_badly_is_raised
-  1 failed in 12.80s
+  1 failed in 5.10s
 P20 red: counts shown as exact though the graph withheld a hit
   tests/services/api/test_search_service.py::test_a_hit_the_graph_does_not_return_is_dropped_and_counts_are_not_exact
   >       assert out.counts_exact is False
   E       AssertionError: assert True is False
   E        +  where True = SearchPageResponse(nodes=[Node(id='p1', type='Person', properties={}, provenance=Provenance(state=<ProvenanceState.ASS...(band='identifier', why='Exact identifier', field=None), passage=[], date=None, datasets=['ds-1'], is_document=False)]).counts_exact
   FAILED tests/services/api/test_search_service.py::test_a_hit_the_graph_does_not_return_is_dropped_and_counts_are_not_exact
-  1 failed in 11.97s
+  1 failed in 5.04s
 P21 red: a dataset outside the case offered
   tests/services/api/test_search_service.py::test_a_dataset_outside_the_case_is_never_offered
   >       assert [d.id for d in out.filters.datasets] == ["ds-1"]
   E       AssertionError: assert ['ds-1', 'ds-elsewhere'] == ['ds-1']
   E
   E         Left contains one more item: 'ds-elsewhere'
-  1 failed in 4.92s
+  1 failed in 4.94s
 P22 red: a filter on a dataset outside the case passed on
   tests/services/api/test_search_service.py::test_a_filter_on_a_dataset_outside_the_case_is_refused
   >       with pytest.raises(ValueError, match="ds-elsewhere"):
   E       Failed: DID NOT RAISE ValueError
   FAILED tests/services/api/test_search_service.py::test_a_filter_on_a_dataset_outside_the_case_is_refused
-  1 failed in 4.89s
+  1 failed in 4.94s
 P23 red: the fallback not saying it is limited
   tests/services/api/test_search_service.py::test_with_no_index_the_fallback_says_there_is_none
   >       assert (out.source, out.limited) == ("fallback", True)
   E       AssertionError: assert ('fallback', False) == ('fallback', True)
   E
   E         At index 1 diff: False != True
-  1 failed in 4.84s
+  1 failed in 5.07s
 P24 red: Next offered on empty pages past the fallback's depth (docs' reviewer, 14 Nov)
   tests/services/api/test_search_service.py::test_the_fallback_offers_a_next_page_only_when_it_holds_records
   >       assert len(last.results) == 20 and last.more is False
   E       AssertionError: assert (20 == 20 and True is False)
   E        +  where 20 = len([SearchResult(node_ids=['p80'], type='Person', match=SearchMatch(band='identifier', why='Exact identifier', field=None...d='identifier', why='Exact identifier', field=None), passage=[], date=None, datasets=['ds-1'], is_document=False), ...])
   E        +    where [SearchResult(node_ids=['p80'], type='Person', match=SearchMatch(band='identifier', why='Exact identifier', field=None...d='identifier', why='Exact identifier', field=None), passage=[], date=None, datasets=['ds-1'], is_document=False), ...] = SearchPageResponse(nodes=[Node(id='p80', type='Person', properties={}, provenance=Provenance(state=<ProvenanceState.AS...(band='identifier', why='Exact identifier', field=None), passage=[], date=None, datasets=['ds-1'], is_document=False)]).results
-  1 failed in 5.02s
+  1 failed in 4.89s
 P25 red: exactly the depth matched, said as cut (docs' review, 14 Nov)
   tests/services/api/test_search_service.py::test_exactly_the_depth_matched_and_nothing_was_cut
   >       assert last.limited_reason == s.LIMITED_REASONS["no_index"]
   E       AssertionError: assert 'Search is li... those alone.' == 'Search is li...search index.'
   E
   E         Skipping 65 identical leading characters in diff, use -v to show
-  1 failed in 4.97s
+  1 failed in 4.59s
 P26 red: the depth's words sending the reader to the filters
   tests/services/api/test_search_service.py::test_the_depths_words_never_send_the_reader_to_the_filters
   >       assert "narrow" not in stopped
   E       AssertionError: assert 'narrow' not in ' Only the f... see others.'
   E
   E         'narrow' is contained here:
-  1 failed in 4.87s
+  1 failed in 5.13s
 P27 red: the list stopped by the fallback's depth without saying so
   tests/services/api/test_search_service.py::test_the_fallback_says_in_words_where_its_depth_stops_the_list
   >           assert out.limited_reason == s.LIMITED_REASONS["no_index"] + stopped, page
   E           AssertionError: 5
   E           assert 'Search is li...search index.' == 'Search is li... those alone.'
   E
-  1 failed in 4.90s
+  1 failed in 4.94s
 P28 red: the fallback's group applied after paging
   tests/services/api/test_search_service.py::test_the_fallback_narrows_by_group_and_dataset_before_it_pages
   >       assert [r.node_ids for r in out.results] == [["p1"]] and out.more is True
   E       AssertionError: assert ([] == [['p1']]
   E
   E         Right contains one more item: ['p1']
-  1 failed in 4.86s
+  1 failed in 4.96s
 P29 red: a value list compared as a whole (the TypeError the review found)
   tests/services/api/test_search_service.py::test_a_list_valued_property_never_breaks_a_search
   >       by_name = _ask(
@@ -198,80 +198,115 @@ P30 red: no merge at all
   E       AssertionError: assert [(['a'], 'ide...'name_words')] == [(['a', 'b'],...'name_exact')]
   E
   E         At index 0 diff: (['a'], 'identifier') != (['a', 'b'], 'identifier')
-  1 failed in 5.42s
+  1 failed in 5.07s
 P31 red: a TLS failure hidden behind the fallback
   tests/services/api/test_search_service.py::test_any_other_failure_is_raised_not_hidden
   >           raise self.error
   E           opensearchpy.exceptions.SSLError: ConnectionError(certificate verify failed) caused by: OSError(tls)
   >           asyncio.run(_run(s.opensearch_searcher(_Client(error), "a"), {}))
   >           raise IndexUnavailable("the search index cannot be reached") from exc
-  1 failed, 6 passed in 4.88s
+  1 failed, 6 passed in 5.23s
 P32 red: a pending set not known to be whole relied on
   tests/services/api/test_search_service.py::test_a_pending_set_not_known_to_be_whole_and_the_graph_answers
   >       assert index.bodies == []
   E       AssertionError: assert [{'query': {'...de_id'}, ...}] == []
   E
   E         Left contains one more item: {'query': {'bool': {'filter': [{'bool': {'filter': [...]}}], 'must': [{'dis_max': {'queries': [...], 'tie_breaker': 0}...sc', 'missing': '_last'}}, {'node_id': {'order': 'asc'}}], 'track_scores': True, 'collapse': {'field': 'node_id'}, ...}
-  1 failed in 4.86s
+  1 failed in 5.13s
 P33 red: counts shown as exact while nodes are pending
   tests/services/api/test_search_service.py::test_nodes_the_index_has_not_caught_up_with_are_left_out_and_counts_not_exact
   >       assert out.counts_exact is False
   E       AssertionError: assert True is False
   E        +  where True = SearchPageResponse(nodes=[], query='x', source='index', limited=False, limited_reason=None, total=3, counts_exact=True..., count=3)], dates=DateSpan(earliest='2025-03-02', latest='2026-10-30')), page=1, page_size=20, more=False, results=[]).counts_exact
   FAILED tests/services/api/test_search_service.py::test_nodes_the_index_has_not_caught_up_with_are_left_out_and_counts_not_exact
-  1 failed in 4.86s
+  1 failed in 5.96s
 P34 red: a case-sensitive suggestion narrowed on every property
   tests/services/api/test_search_service.py::test_a_case_sensitive_suggestion_looks_only_at_identifiers_and_names
   >       assert [n.id for n in out.nodes] == ["b"]
   E       AssertionError: assert ['a', 'b'] == ['b']
   E
   E         At index 0 diff: 'a' != 'b'
-  1 failed in 4.91s
+  1 failed in 5.04s
 P35 red: a graph-answered suggestion not saying it is limited
   tests/services/api/test_search_service.py::test_a_suggestion_the_graph_answers_says_it_is_limited
   >           assert (out.source, out.limited) == ("graph", True)
   E           AssertionError: assert ('graph', False) == ('graph', True)
   E
   E             At index 1 diff: False != True
-  1 failed in 5.00s
+  1 failed in 4.97s
 P36 red: a group labelled with its type's name
   tests/services/api/test_search_service.py::test_group_labels_and_the_matched_fields_display_name
   >       assert [s.group_label(t) for t in ("Person", "Document", "Address", "Company", "Day")] == [
   E       AssertionError: assert ['Person', 'D...nies', 'Days'] == ['People', 'D...nies', 'Days']
   E
   E         At index 0 diff: 'Person' != 'People'
-  1 failed in 4.96s
-P37 red: a refused suggestion left as a 500
+  1 failed in 5.00s
+P37 red: a case-sensitive suggestion asks the index once (the orchestrator's list, defect 1)
+  tests/services/api/test_search_service.py::test_a_case_sensitive_suggestion_pages_on_until_its_page_is_full
+  >       assert [n.id for n in out.nodes] == ["w1", "w2"]
+  E       AssertionError: assert [] == ['w1', 'w2']
+  E
+  E         Right contains 2 more items, first extra item: 'w1'
+  1 failed in 4.93s
+P38 red: an unfillable case-sensitive page shown empty with more, not asked of the graph
+  tests/services/api/test_search_service.py::test_a_case_sensitive_suggestion_never_says_more_with_nothing_shown
+  >       assert graph.suggested == ["Smy"]
+  E       AssertionError: assert [] == ['Smy']
+  E
+  E         Right contains one more item: 'Smy'
+  1 failed in 4.67s
+P39 red: more forgotten for an earlier prefix (the canonical form asked second)
+  tests/services/api/test_search_service.py::test_more_is_said_when_any_asked_prefix_has_more
+  >       assert len(out.nodes) == 10 and out.more is True
+  E       AssertionError: assert (10 == 10 and False is True)
+  E        +  where 10 = len([Node(id='a0', type='Person', properties={'value_normalised': '077000'}, provenance=Provenance(state=<ProvenanceState....e, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=['ds-1']), ...])
+  E        +    where [Node(id='a0', type='Person', properties={'value_normalised': '077000'}, provenance=Provenance(state=<ProvenanceState....e, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=['ds-1']), ...] = SuggestResponse(nodes=[Node(id='a0', type='Person', properties={'value_normalised': '077000'}, provenance=Provenance(s...erted=False, withdrawn_by_load=None), datasets=['ds-1'])], more=False, source='index', limited=False, limited_why=None).nodes
+  1 failed in 4.84s
+P40 red: a limited suggestion without its reason (the orchestrator's list, defect 2)
+  tests/services/api/test_search_service.py::test_a_limited_suggestion_says_why
+  >           assert out.limited_why == why
+  E           AssertionError: assert None == 'no_index'
+  E            +  where None = SuggestResponse(nodes=[], more=False, source='graph', limited=True, limited_why=None).limited_why
+  FAILED tests/services/api/test_search_service.py::test_a_limited_suggestion_says_why
+  1 failed in 4.88s
+P41 red: a refused suggestion left as a 500
   tests/services/api/test_search_route_index.py::test_a_suggestion_the_index_cannot_ask_is_refused_with_422
   >       assert response.status_code == 422, response.text
   E       AssertionError: Internal Server Error
   E       assert 500 == 422
   E        +  where 500 = <Response [500 Internal Server Error]>.status_code
-  2 failed in 4.94s
-P38 red: the pending nodes not passed to the search
+  2 failed in 4.85s
+P42 red: the pending nodes not passed to the search
   tests/services/api/test_search_route_index.py::test_the_pending_ids_reach_only_the_querys_must_not
   >           assert body["query"]["bool"]["must_not"] == [{"terms": {"node_id": ["pending-node-7"]}}]
   E           KeyError: 'must_not'
   FAILED tests/services/api/test_search_route_index.py::test_the_pending_ids_reach_only_the_querys_must_not
-  1 failed in 4.78s
-P39 red: the case's threshold not read
+  1 failed in 4.93s
+P43 red: the case's threshold not read
   tests/services/api/test_search_route_index.py::test_the_cases_threshold_merges_through_the_working_set
   >       assert [r["node_ids"] for r in response.json()["results"]] == [["a", "b"]]
   E       AssertionError: assert [['a'], ['b']] == [['a', 'b']]
   E
   E         At index 0 diff: ['a'] != ['a', 'b']
-  1 failed in 5.07s
-P40 red: the audit counting merged results, not the records sent
+  1 failed in 4.69s
+P44 red: the audit counting merged results, not the records sent
   tests/services/api/test_search_route_index.py::test_the_cases_threshold_merges_through_the_working_set
   >       assert client.audit.records[-1]["result_cardinality"] == 2  # type: ignore[attr-defined]
   E       assert 1 == 2
   FAILED tests/services/api/test_search_route_index.py::test_the_cases_threshold_merges_through_the_working_set
-  1 failed in 8.44s
-P41 red: the bar ignores the reply's `limited`
+  1 failed in 4.80s
+P45 red: the bar says 'just now' for every reason
   vitest:apps/workspace/src/search/GlobalSearch.test.tsx
-  × says suggestions are limited when the Conduit answered without the search index 27ms
-  × keeps the limited line in view, and beside the 'more match' hint when both apply 23ms
-  FAIL  apps/workspace/src/search/GlobalSearch.test.tsx > GlobalSearch as the analyst types > says suggestions are limited when the Conduit answered without the search index
-  FAIL  apps/workspace/src/search/GlobalSearch.test.tsx > GlobalSearch as the analyst types > keeps the limited line in view, and beside the 'more match' hint when both apply
+  × says truly why its suggestions are limited, and 'just now' only when it will pass 7ms
+  × from a Conduit that gives no reason, says it is limited without saying for how long 4ms
+  FAIL  apps/workspace/src/search/GlobalSearch.test.tsx > GlobalSearch as the analyst types > says truly why its suggestions are limited, and 'just now' only when it will pass
+  AssertionError: expected 'Suggestions are limited just now: onl…' to be 'Suggestions match only the exact star…' // Object.is equality
   ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
-restored: ['114 passed in 18.16s']
+P46 red: the bar ignores the reply's `limited`
+  vitest:apps/workspace/src/search/GlobalSearch.test.tsx
+  × says suggestions are limited when the Conduit answered without the search index 13ms
+  × keeps the limited line in view, and beside the 'more match' hint when both apply 7ms
+  × says truly why its suggestions are limited, and 'just now' only when it will pass 8ms
+  × from a Conduit that gives no reason, says it is limited without saying for how long 7ms
+  ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+restored: ['118 passed in 5.96s']
