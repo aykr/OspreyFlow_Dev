@@ -2634,7 +2634,9 @@ export function App() {
           backLabel={searching.left}
           onBack={results.back}
           // Help's keys panel over the results, not beneath them where nothing can reach it.
-          beside={welcomeOpen ? welcomePanel : null}
+          // Only when asked for (Help or `?`): the panel shown by itself on a first visit belongs to the graph and lay over
+          // the first result's actions (the live check, 14 November 2026); it is there again on Back.
+          beside={welcomeOpen && welcome === "asked" ? welcomePanel : null}
           onShow={(nodes) => {
             void seedToCanvas(nodes, []);
             setSelectedNode(nodes[0] ?? null);

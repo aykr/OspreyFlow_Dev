@@ -36962,7 +36962,10 @@ saying "records".
    from it: "The search could not be done: a search can be at most 200 characters, and this one has ‹n›. Shorten it
    and press Enter again." Any other list refusal says only "The search could not be done (‹status›)." and never
    the framework's own words. Found reading studio's route while preparing the live check; the orchestrator ruled on
-   14 November 2026 that it is fixed before the merge and that the box sets no `maxLength`.
+   14 November 2026 that it is fixed before the merge and that the box sets no `maxLength`. Help's keys panel opens
+   over the results only when asked for (Help or `?`). The panel shown by itself on a first visit belongs to the graph:
+   over the results it lay on the first result's *Show on graph*, found by the live check, so it is not drawn there and
+   is shown again on Back.
 4. **The actions.** *Show on graph* (named "Show on graph: ‹name›", the visible words first, WCAG 2.5.3) seeds every
    record the result stands for through `/seed` and returns to the graph, focus on it. *Open*, for a document, reads it
    over the view; the results are kept, hidden, and shown again when the reader closes, focus on their heading (never
@@ -36974,7 +36977,7 @@ saying "records".
 6. **Decided by the lane under the never-stop rule** (the owner free to overrule): *Show on graph* leaves the results for
    the graph, as choosing a suggestion does; *Open* keeps them; the page size is 20.
 
-Tests, each red first: `search/SearchResults.test.tsx` (25), `App.search.test.tsx` (16, on the real App),
+Tests, each red first: `search/SearchResults.test.tsx` (25), `App.search.test.tsx` (17, on the real App),
 `design/primitives/Combobox.test.tsx` (4); `keyboard/search-results.spec.ts` on `search-results-harness.html` in dark,
 light and GOV.UK (registry `SEARCH_RESULTS_ACTIONS`, eleven actions, Previous page, Clear filters and the dates among
 them, a read document hiding the results where the stylesheet applies, and a pasted over-long query kept whole and

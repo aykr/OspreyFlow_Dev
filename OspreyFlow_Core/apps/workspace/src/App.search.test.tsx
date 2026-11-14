@@ -202,6 +202,21 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("application", { name: "Network canvas" })));
   });
 
+  test("the keys panel shown by itself on a first visit stays with the graph: not over the results, covering their actions", async () => {
+    // Found by the live check (14 November 2026): an account that had never closed it searched, and the panel shown by
+    // itself lay over the first result's Show on graph.
+    localStorage.removeItem("ospreyflow.welcome-closed.analyst-1");
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    expect(await screen.findByRole("dialog", { name: "Welcome back" })).toBeTruthy();
+    fireEvent.change(box(), { target: { value: "Kestrel" } });
+    fireEvent.keyDown(box(), { key: "Enter" });
+    await screen.findByRole("heading", { name: "Search results for 'Kestrel'" });
+    expect(screen.queryByRole("dialog", { name: "Welcome back" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Back to Graph" }));
+    expect(await screen.findByRole("dialog", { name: "Welcome back" })).toBeTruthy();
+  });
+
   test("Help's keys panel opens over the results, in reach", async () => {
     await openResults();
     fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Help" }));

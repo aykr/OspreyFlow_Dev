@@ -657,7 +657,8 @@ suggestions alone: the results start at *All* with no filter. They read `POST /v
   said in the Conduit's words. A query longer than the search takes (200 characters, counted as the Conduit counts
   them) is refused, never cut: the box takes it whole, typed or pasted, and the refusal names the limit and the query's
   length. Any other refusal that comes as the framework's list says only that the search could not be done. Help's
-  keys panel opens over the results.
+  keys panel opens over the results when asked for (Help or `?`); the panel shown by itself on a first visit stays
+  with the graph, never over the results' actions, and is there again on Back.
 - Every count is the Conduit's: the Glass counts nothing it was sent (rule 7).
 
 Proved by `search/SearchResults.test.tsx`, `App.search.test.tsx`, `design/primitives/Combobox.test.tsx`,
