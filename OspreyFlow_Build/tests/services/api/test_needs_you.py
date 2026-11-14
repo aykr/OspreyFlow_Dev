@@ -360,7 +360,8 @@ def test_a_promotion_no_longer_waiting_is_not_shown(
     _clock_at(monkeypatch, T0 + timedelta(days=age, hours=1))
     asyncio.run(_raise(world, ["rev-1"]))
     [notice] = _read(world, "rev-1")["promotions_overdue"]
-    assert notice["words"] == f"Promotion load-7 into Prison records has waited {age} days for review."
+    said = f"Promotion load-7 into Prison records has waited {age} days for review."
+    assert notice["words"] == said
     world.waiting.waiting = []
     assert _read(world, "rev-1")["promotions_overdue"] == []
 
