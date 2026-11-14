@@ -1,0 +1,177 @@
+Running on ospreyflow-test (stack g, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T090824Z-7198a6fd/log: env LIVE_SEED=scripts.seed_hmp_fixture LIVE_SPECS=live/scenario-a-a12-a15.spec.ts bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: scripts.seed_hmp_fixture into a case the seed makes
+Case 'Live search check 20261114T090825Z' is 01M7CN1CEENQXBEE62B65N4NC9.
+Seeded 400 Person nodes, 10 yards, 262 current-window and 4 prior-period incident events.
+Put the prison, its yards, the towns and the accounts on the map.
+  check: no id stored more than once (whole shared graph)
+Loaded 809 network events (calls, visits, payments, custody, incidents); 1075 events in all under investigation_scope='01M7CN1CEENQXBEE62B65N4NC9'.
+case: 01M7CN1CEENQXBEE62B65N4NC9
+# step: the search index rebuilt from the graph
+search index rebuilt: 1203 documents from 1203 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t090914067349
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 1.79 2.90 6.73
+[warm-up +0.8 s] loaded
+[warm-up +1.1 s] console warning: [.WebGL-0x3a54060d6400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] console warning: [.WebGL-0x3a5401b2f400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] console warning: [.WebGL-0x3a54060d8e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] search box drawn
+[warm-up +1.2 s] console error: [ECharts] Component toolbox is used but not imported.
+import { ToolboxComponent } from 'echarts/components';
+echarts.use([ToolboxComponent]);
+[warm-up +1.3 s] console warning: [.WebGL-0x3a54060d6400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+# warm-up: the Glass drew its search box after 7 s
+
+Running 3 tests using 1 worker
+
+[1/3] live/scenario-a-a12-a15.spec.ts:114:1 › A12 — the Clique Metric ranks nodes in the metrics panel
+  1) live/scenario-a-a12-a15.spec.ts:114:1 › A12 — the Clique Metric ranks nodes in the metrics panel 
+
+    Error: \ on the canvas opened no menu. Focused: <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.tsx"></script>
+      
+
+    </body>
+    The page: 
+    The page's errors:
+    console error: [ECharts] Component toolbox is used but not imported.
+    import { ToolboxComponent } from 'echarts/components';
+    echarts.use([ToolboxComponent]);
+    page error: NotFoundError: Failed to execute 'insertBefore' on 'Node': The node before which the new node is to be inserted is not a child of this node.
+
+      81 |   const opened = await menu.waitFor({ state: "visible", timeout: 30_000 }).then(() => true, () => false);
+      82 |   if (!opened) {
+    > 83 |     throw new Error(
+         |           ^
+      84 |       `\\ on the canvas opened no menu. Focused: ${await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 200))}\n` +
+      85 |         `The page: ${await page.locator("body").ariaSnapshot()}\n` +
+      86 |         `The page's errors:\n${errors.join("\n") || "(none)"}`,
+        at insertOrAppendPlacementNode (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7120:70)
+        at commitPlacement (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7151:6)
+        at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:944:66)
+        at commitReconciliationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:8051:6)
+        at commitMutationEffectsOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7927:6)
+        at recursivelyTraverseMutationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7839:103)
+        at commitMutationEffectsOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7852:6)
+        at recursivelyTraverseMutationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7839:103)
+        at commitMutationEffectsOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7925:6)
+        at recursivelyTraverseMutationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7839:103)
+        at insertOrAppendPlacementNode (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7120:70)
+        at commitPlacement (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7151:6)
+        at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:944:66)
+        at commitReconciliationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:8051:6)
+        at commitMutationEffectsOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7927:6)
+        at recursivelyTraverseMutationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7839:103)
+        at commitMutationEffectsOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7852:6)
+        at recursivelyTraverseMutationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7839:103)
+        at commitMutationEffectsOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7925:6)
+        at recursivelyTraverseMutationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7839:103)
+        at expandFromTheSelectedNode (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/scenario-a-a12-a15.spec.ts:83:11)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/scenario-a-a12-a15.spec.ts:150:3
+
+    Error Context: test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[2/3] live/scenario-a-a12-a15.spec.ts:185:1 › A13–A15 — a judgement is recorded against the investigation
+[3/3] live/scenario-a-a12-a15.spec.ts:214:1 › A15 — export names what it blocked, and takes a justification
+  1 failed
+    live/scenario-a-a12-a15.spec.ts:114:1 › A12 — the Clique Metric ranks nodes in the metrics panel 
+  2 passed (39.5s)
+# playwright exit 1
+== Vite's log
+  VITE v8.3.4  ready in 137 ms
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+== test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: scenario-a-a12-a15.spec.ts >> A12 — the Clique Metric ranks nodes in the metrics panel
+- Location: live/scenario-a-a12-a15.spec.ts:114:1
+
+# Error details
+
+```
+Error: \ on the canvas opened no menu. Focused: <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  
+
+</body>
+The page: 
+The page's errors:
+console error: [ECharts] Component toolbox is used but not imported.
+import { ToolboxComponent } from 'echarts/components';
+echarts.use([ToolboxComponent]);
+page error: NotFoundError: Failed to execute 'insertBefore' on 'Node': The node before which the new node is to be inserted is not a child of this node.
+    at insertOrAppendPlacementNode (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7120:70)
+    at commitPlacement (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7151:6)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:944:66)
+    at commitReconciliationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:8051:6)
+    at commitMutationEffectsOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7927:6)
+    at recursivelyTraverseMutationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7839:103)
+    at commitMutationEffectsOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7852:6)
+    at recursivelyTraverseMutationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7839:103)
+    at commitMutationEffectsOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7925:6)
+    at recursivelyTraverseMutationEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2b99736d:7839:103)
+```
+
+== the last of the Conduit's log
+INFO:     127.0.0.1:60756 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/starter-questions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60786 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60786 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/starter-questions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60786 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/starter-questions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60786 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60786 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60786 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60744 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/busiest-links?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60786 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60772 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60786 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/busiest-links?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60728 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/most-connected?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60756 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60786 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/most-connected?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60728 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60770 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60728 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60744 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60744 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60728 - "POST /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60728 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60728 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60770 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60744 - "POST /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60744 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60744 - "GET /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60770 - "POST /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60770 - "OPTIONS /v1/investigations/01M7CN4ETR4X94S44X93XSZB00/expand/preview HTTP/1.1" 200 OK
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T090824Z-7198a6fd).
+Wall time: 108 s, exit 1 (stack g, the lease case took at 2026-11-14T08:47:53Z; set-up before it 27 s)
