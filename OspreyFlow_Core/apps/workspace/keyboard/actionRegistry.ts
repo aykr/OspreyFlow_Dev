@@ -1346,3 +1346,11 @@ export const CANVAS_CAP_ACTIONS = defineActionRegistry("CANVAS_CAP_ACTIONS", [
   "narrow-an-over-cap-expansion-by-link-type-by-keyboard",
   "save-a-smaller-view-from-an-over-cap-expansion-by-keyboard",
 ] as const);
+
+// ADR-151 (v0.5.2): an expansion the cap refused, run as a batch job, followed in its own panel.
+// Started from the canvas's cap refusal (case's `canvas/CapRefusalPrompt.tsx`), proved end to end
+// beside case's `canvas-expand-cap.spec.ts`; the panel's own two actions in `batch-expansion.spec.ts`.
+export const BATCH_EXPANSION_ACTIONS = defineActionRegistry("BATCH_EXPANSION_ACTIONS", [
+  "try-a-failed-batch-job-again-by-keyboard",
+  "close-the-batch-job-panel-by-keyboard",
+] as const);
