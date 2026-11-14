@@ -81,7 +81,10 @@ Three tiers; everything that passes between them crosses one of four typed ports
 | ComputePort | Centrality, communities, ownership chains |
 | ModelPort | Extraction, transcription, image description, embedding |
 
-Two narrower ports sit beside them: the media store, for content files, and the recognition port.
+Three narrower ports sit beside them: the media store, for content files; the recognition port; and the search
+index feed's source (`IndexFeedSource`), through which the indexer alone reads each node as stored, to build its
+search document (ADR-150). It is a port of its own so that no route, which is given a GraphPort, can reach that
+unfiltered read; who may see a search result is decided when the index is queried.
 
 **Access control lives in the stores' queries.** Every read is made as a person: their clearance,
 handling codes and the case's datasets are part of the query itself, never applied afterwards. The

@@ -310,3 +310,44 @@ def test_section_5_5_says_the_fallback_pages_only_while_records_remain_and_where
     text = results_text()
     assert "**Next page** is offered only while a further page holds records" in text
     assert f"where the search found more than {depth}, the last page's line adds \"{line.format(depth=depth).strip()}\", even when a dataset or a group has narrowed the list." in text
+
+
+# ---------------------------------------------------------------- the suggestions box (step 5's sweep, part 4)
+
+FILTERS = _read(SRC / "search" / "SearchFilters.tsx")
+
+
+def suggestions_text(guide: str = GUIDE) -> str:
+    """§5.5's first paragraph, the box's suggestions, whitespace folded."""
+    start = guide.index("Press `/` anywhere (outside a text box) to search.")
+    assert guide.index("### 5.5 Search") < start < guide.index("**The results page.**")
+    return fold(guide[start : guide.index("\n\n", start)])
+
+
+def test_section_5_5_names_the_box_s_filters_as_the_box_labels_them() -> None:
+    modes = re.findall(r'\{ value: "[a-z_]+", label: "([^"]+)" \}', FILTERS)
+    assert modes == ["Starts with", "Contains", "Exact"], "SearchFilters.tsx's MODES"
+    for label in ('{" "} Ignore case </label>', "<legend>Match</legend>", "<legend>Entity types</legend>",
+                  "<small>None ticked searches every type.</small>", '{" "} Only nodes on screen </label>', "> Reset filters </button>"):  # fmt: skip
+        assert label in FILTERS, label
+    text = suggestions_text()
+    assert "**Filters** narrow them: **Ignore case**; **Match**, " + ", ".join(f"*{m}*" for m in modes[:-1]) + f" or *{modes[-1]}*;" in text
+    assert "**Entity types** (none ticked searches every type); and **Only nodes on screen**. **Reset filters** puts them back." in text
+
+
+def test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line() -> None:
+    more = re.search(r"\? `(Showing the first \$\{results\.length\}; more match\. Keep typing to narrow\.)`", BOX)
+    assert more and f'the box says "{_template(more.group(1))}"' in suggestions_text()
+    limited = re.search(r'export const LIMITED_SUGGESTIONS = "([^"]+)";', BOX)
+    assert limited, "GlobalSearch.tsx's LIMITED_SUGGESTIONS"
+    # Shown only when the Conduit says the suggestions are limited: answered by the graph for want of the index.
+    assert '{limited && <span className="global-search__limited">{LIMITED_SUGGESTIONS}</span>}' in BOX
+    assert "body.limited === true" in BOX
+    assert "limited: bool = False" in (API / "search.py").read_text(encoding="utf-8")
+    assert f'Where the search index cannot answer, the box says so: "{limited.group(1)}"' in suggestions_text()
+
+
+def test_section_5_5_gives_the_box_s_two_characters() -> None:
+    m = re.search(r"export const SUGGEST_MIN_CHARS = (\d+);", BOX)
+    words = {1: "one", 2: "two", 3: "three"}
+    assert m and f"Suggestions start at {words[int(m.group(1))]} characters" in suggestions_text()

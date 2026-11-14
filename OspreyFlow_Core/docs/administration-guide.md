@@ -1171,6 +1171,12 @@ for ArcadeDB to close its databases. Postgres is RDS PostgreSQL 16 and Valkey is
 domain is made by default (`components.search` defaults to `opensearch`), and the pods that read the
 stores, the Conduit (`api`), the workers (`worker`) and the index's rebuild and drift check
 (`ospreyflow-search-rebuild`, `ospreyflow-search-drift`), are given its address (`OPENSEARCH_URL`).
+How they reach it is the platform settings file's `opensearch_signing`. With `sigv4`, the default,
+every request is signed with SigV4 as the namespace's IAM role (IRSA): the domain's access policy admits
+that role alone, with no fine-grained access control, so there is no user or master password to keep.
+With `none`, for a platform whose own module fronts the domain with a proxy that signs for us, the pods
+send their requests unsigned to the address the proxy's secret names (its `proxy_url`). The render's
+`INSTALL.md` says which.
 Caddy is not rendered: the platform's NGINX ingress is the front door,
 with ModSecurity on and the IP allow-list from `allow_from`. Local models and Whisper are not
 rendered, since the platform has no GPU. The model gateway (LiteLLM) is rendered always, with or

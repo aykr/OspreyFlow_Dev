@@ -444,11 +444,14 @@ it.
 ![Search: suggestions after two characters](images/user/16-search.png)
 
 Press `/` anywhere (outside a text box) to search. Suggestions start at two characters, across names,
-identifiers and titles; choosing one puts it in the case and draws it with what is near it (three
-links out), counting first and asking if it is a lot. Cancelling a large draw leaves the chosen node in
-the case on its own. **Filters** narrow by entity type, how the text matches, and whether to look only at what
-is already drawn. A phone number or account reference is read the same way however you type it, so
-`07700 900640` finds the number held as `+447700900640`.
+identifiers and titles; choosing one puts it in the case and draws it with what is near it (three links
+out), counting first and asking if it is a lot. Cancelling a large draw leaves the chosen node in the case
+on its own. **Filters** narrow them: **Ignore case**; **Match**, *Starts with*, *Contains* or *Exact*;
+**Entity types** (none ticked searches every type); and **Only nodes on screen**. **Reset filters** puts
+them back. When more match than are shown, the box says "Showing the first …; more match. Keep typing to
+narrow." Where the search index cannot answer, the box says so: "Suggestions are limited just now: only the
+exact start of a name or identifier matches." A phone number or account reference is read the same way
+however you type it, so `07700 900640` finds the number held as `+447700900640`.
 
 **The results page.** Press Enter on the words you typed, with no suggestion moved to, and the results
 fill the main area over the view you were on, which waits beneath them as it was and cannot be reached

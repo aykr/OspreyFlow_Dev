@@ -59,7 +59,8 @@ organisation's sign-in, and the cloud's managed services.
 | --- | --- |
 | **The Glass** | The browser workspace: one web application holding the four places (section 4) |
 | **The Conduit** | The API (FastAPI), stateless and horizontally scaled. Every request is checked against the person making it, and access control is applied inside each query to the stores, never after |
-| **The Vault** | The stores: the graph store (ArcadeDB), the analytics database (DuckDB inside the Conduit, or ClickHouse shared by several Conduits), search (OpenSearch, or PostgreSQL full-text), PostgreSQL, the object store, and the models |
+| **The Vault** | The stores: the graph store (ArcadeDB), the analytics database (DuckDB inside the Conduit, or ClickHouse shared by several Conduits), search (OpenSearch; where a deployment has none, `postgres-fulltext`, the graph store's exact search alone, and
+the screen says search is limited to exact identifiers), PostgreSQL, the object store, and the models |
 
 Everything that passes between the Conduit and the Vault crosses one of four typed **ports**. A port
 is a narrow interface (a Python `Protocol`) that everything above it may call and nothing else may.
@@ -74,8 +75,12 @@ ClickHouse, means writing one adapter and changing one line of configuration.
 | **ComputePort** | Graph algorithms: centrality, communities, ownership chains, over what the reader can see |
 | **ModelPort** | Extraction, vision, transcription and embedding, through the LiteLLM gateway |
 
-Two narrower ports sit beside them: the **media store**, for content files (an S3-protocol store, or
-Azure Blob), and the **recognition port**, for the fast named-entity pass (Stanza by default).
+Three narrower ports sit beside them: the **media store**, for content files (an S3-protocol store, or
+Azure Blob); the **recognition port**, for the fast named-entity pass (Stanza by default); and the **search
+index feed's source** (`IndexFeedSource`), through which the indexer alone reads each node as stored, unfiltered,
+to build its search document (ADR-150). It is kept apart from GraphPort so that no route can reach that read:
+every route is given a GraphPort and nothing else, and who may see a search result is decided in the query to
+the index, with the same clearance, handling codes and case datasets (ADR-149).
 
 **Gremlin never leaves the Vault.** The Conduit builds the graph store's queries; the Glass never
 sees one and never sends one. That keeps a move to another graph query language an adapter change,
