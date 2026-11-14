@@ -1,0 +1,52 @@
+# test_user_guide_ask_chat.py, red first
+Branch lane/docs-v052D-user at e03e9f7 (from main 3a03b8a); offline, closed ports, on the Mac, no stack.
+Command: cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 POSTGRES_PASSWORD=throwaway VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/test_user_guide_ask_chat.py
+Each plant is in the working tree only, restored after its run; shown as < before and > after. Code plants are in the files the screen and the route are built from.
+
+## 1. main's user guide (before rules-b's patch)
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:33: AssertionError
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:40: AssertionError
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:47: AssertionError
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:59: AssertionError
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:74: AssertionError
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:83: AssertionError
+6 failed in 2.50s
+
+## 2. Panel: a Read from choice relabelled
+<   { value: "graph", label: "Everything on the graph" },
+>   { value: "graph", label: "All of the graph" },
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:34: AssertionError
+1 failed, 5 passed in 0.29s
+
+## 3. Panel: Whole case no longer disabled with its reason
+<   "Whole case is not available yet: it will read the case's datasets through the case's search. Choose Selected items or Everything on the graph.";
+>   "Whole case reads the case's datasets through the case's search. Choose Selected items or Everything on the graph.";
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:40: AssertionError
+1 failed, 5 passed in 0.25s
+
+## 4. Panel: About's words changed
+<     ? `About: ${read.first_selected} and ${counted(others, "other", "others")}`
+>     ? `About: ${read.first_selected} with ${counted(others, "other", "others")}`
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:49: AssertionError
+1 failed, 5 passed in 0.37s
+
+## 5. Panel: the no-document line gone
+<                   No documents will be read: the answer will come from the links and events.
+>                   No documents will be read.
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:59: AssertionError
+1 failed, 5 passed in 0.51s
+
+## 6. Schema: a saved view shared by default
+<     shared: bool = False
+>     shared: bool = True
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:74: AssertionError
+1 failed, 5 passed in 0.47s
+
+## 7. Route: asking at the case's Viewer level
+<     investigation: InvestigationEditorDep,
+>     investigation: InvestigationViewerDep,
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:83: AssertionError
+1 failed, 5 passed in 0.58s
+
+## 8. Green
+6 passed in 0.51s
