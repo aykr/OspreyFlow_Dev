@@ -2,7 +2,7 @@
 the code has, and names the test that must go red for it (rule 15). The script is restored from the text saved
 before the first plant, never from git, and checked byte for byte at the end.
 
-Run from OspreyFlow_Core: ../OspreyFlow_Build/.venv-free; uses .venv/bin/pytest with the offline ports pinned.
+Run from OspreyFlow_Core with its .venv; the offline ports are pinned and OSPREY_LANE is unset.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def run(k: str) -> str:
     env.update(ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway",
                VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994", PYTHONPYCACHEPREFIX=tempfile.mkdtemp())
     out = subprocess.run([".venv/bin/pytest", "-p", "no:cacheprovider", "-c", "../OspreyFlow_Build/pytest.ini",
-                          "-q", "-rA", TESTS, "-k", k], capture_output=True, text=True, env=env)
+                          "-q", "-rA", TESTS, "-k", k], check=False, capture_output=True, text=True, env=env)
     return out.stdout
 
 

@@ -1,0 +1,32 @@
+E       AssertionError: assert False
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:598: AssertionError
+E       AssertionError: ['  1     platform     14–15 Nov [██████] done · v0.5.1 cut', '  3a    platform     14–15 Nov [██████] done · OpenSear...█] done · The search results layout', '  T   ★ case         14–15 Nov [██████] done · The top bar stays one line', ...]
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:664: AssertionError
+E       AssertionError: assert '  1     plat... · v0.5.1 cut' == '  steps ✓ 2 done: 1 B'
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:670: AssertionError
+E       AssertionError: ['  1     platform     14–15 Nov [██████] done · v0.5.1 cut', '  3a    platform     14–15 Nov [██████] done · OpenSear...█] done · The search results layout', '  T   ★ case         14–15 Nov [██████] done · The top bar stays one line', ...]
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:686: AssertionError
+E       AssertionError: assert ('  steps ✓ 1 done: 1' in ['  1     platform     14–15 Nov [██████] done · v0.5.1 cut', '  3a    platform     14–15 Nov [██████] done · OpenSear...█] done · The search results layout', '  T   ★ case         14–15 Nov [██████] done · The top bar stays one line', ...])
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:697: AssertionError
+E       AssertionError: assert ('  3–3e′ ✓ 3 done' in ['  1     platform     14–15 Nov [██████] done · v0.5.1 cut', '  3     platform     14–15 Nov [██████] done · OpenSear...█] done · The search results layout', '  T   ★ case         14–15 Nov [██████] done · The top bar stays one line', ...])
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:703: AssertionError
+E       AssertionError: usage: lanes_heartbeat.sh [--full] | --lanes [--full] | beat <lane> <state> "<note>" | stages <lane> "<step>" "<n>|<state>|<name>[|<note>]" ... | stages <lane> --clear "<step>" | stages <lane> --clear --all | nudge <lane> "<message>" | show | summary | watch [seconds] [--full] | watch --full [seconds]
+../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:90: AssertionError
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_each_step_s_state_is_its_lane_s_own_and_done_only_when_merged
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_row_s_bar_is_its_lane_s_stages_when_they_name_its_step
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_row_typed_building_whose_branch_is_on_main_by_a_merge_shows_done
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_merge_in_the_merger_brief_s_form_names_its_branch
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_merger_s_name_is_read_with_its_hyphens_aside_and_outside_ascii
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_subject_past_the_environment_s_size_is_read
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_landed_line_counts_only_when_it_says_the_step_is_done
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_branch_is_read_from_any_row_shape_the_table_takes
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_number_s_sub_steps_all_done_are_one_line
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_done_fixes_and_the_done_whole_steps_are_one_line_each_with_their_ids
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_one_sub_step_not_done_stays_expanded_and_the_rest_collapse
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_without_a_steps_line_a_letter_is_a_fix
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_whole_number_with_sub_steps_is_in_their_line
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_long_list_of_done_ids_wraps_and_drops_none
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_steps_keeps_one_line_a_step
+15 failed, 106 passed in 188.31s (0:03:08)
+
+[exited with code 0]

@@ -1,0 +1,13 @@
+--- a/OspreyFlow_Build/process/lanes/route.tsv
++++ b/OspreyFlow_Build/process/lanes/route.tsv
+@@ -1,7 +1,10 @@
+ # target	v0.5.2	2026-11-17
++# steps	B,U,C,D
+ # The route to v0.5.2 (the owner, 13 Nov 2026). Kept by the orchestrator; the heartbeat's default view reads it.
+ # Tab-separated: id, title, lane, start (YYYY-MM-DD), end (YYYY-MM-DD), critical (y/n), after (ids, comma, or -), progress
+ # (lane:step in progress.tsv whose status gives this step's state; "-" for the orchestrator's own or the owner's).
++# The "# steps" line names the letter ids that are steps, not fixes: the default view collapses the done ones with the
++# whole-number steps, and every other letter id's with the fixes (lanes_heartbeat.sh --steps shows one line a step).
+ 1	v0.5.1 cut: as R1 tested it, the upgrade rehearsal and the CHANGELOG	orchestrator	2026-11-14	2026-11-17	n	-	orchestrator:v051-cut
+ 2	The poc manifest and its render test	platform	2026-11-14	2026-11-15	n	-	platform:v052-manifest
+ 3a	OpenSearch on poc: render, Terraform, sign-in, what the client provides	platform	2026-11-16	2026-11-17	n	2	platform:v052-opensearch
