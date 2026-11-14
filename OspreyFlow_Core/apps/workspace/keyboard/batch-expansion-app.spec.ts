@@ -94,14 +94,16 @@ async function openThePanelInTheApp(page: Page, ending: Ending, look: "dark" | "
   for (let i = 0; i < 20 && !(await run.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
   await expect(run).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "Batch job: the whole expansion" })).toBeFocused();
 }
 
+// Found by its class, not its role and name, until axe has scanned it: a panel the App's markup hid from
+// assistive technology, or left unnamed, is then axe's finding, not a lookup that times out first.
+const drawn = (page: Page) => page.locator(".batch-expansion");
 const panel = (page: Page) => page.getByRole("region", { name: "Batch job: the whole expansion" });
 const DRAWN: Record<Ending, (page: Page) => Promise<void>> = {
-  running: (page) => expect(panel(page).getByRole("status")).toHaveText("Expanding from 1 node."),
-  failed: (page) => expect(panel(page).getByRole("button", { name: "Try the batch job again" })).toBeVisible(),
-  done: (page) => expect(panel(page).getByRole("button", { name: "Open the view" })).toBeVisible(),
+  running: (page) => expect(drawn(page).locator(".batch-expansion__status")).toHaveText("Expanding from 1 node."),
+  failed: (page) => expect(drawn(page).locator("button", { hasText: "Try the batch job again" })).toBeVisible(),
+  done: (page) => expect(drawn(page).locator("button", { hasText: "Open the view" })).toBeVisible(),
 };
 
 for (const look of ["dark", "light", "govuk"] as const) {
@@ -115,8 +117,8 @@ for (const look of ["dark", "light", "govuk"] as const) {
       // ("elmPartiallyObscuring", the fixed panel over the canvas, in every state and look), so a scan reading only
       // `violations` would pass them unmeasured; `checkUndecidedContrast` below measures each, and this holds that
       // the panel, not the page under it, is what is read.
-      const lines = panel(page).locator(".batch-expansion__title, .batch-expansion__figure, .batch-expansion__status, .batch-expansion__message");
-      for (const target of [...(await lines.all()), ...(await panel(page).getByRole("button").all())]) {
+      const lines = drawn(page).locator(".batch-expansion__title, .batch-expansion__figure, .batch-expansion__status, .batch-expansion__message, button");
+      for (const target of await lines.all()) {
         const onTop = await target.evaluate((el) => {
           const box = el.getBoundingClientRect();
           const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
@@ -131,6 +133,8 @@ for (const look of ["dark", "light", "govuk"] as const) {
       expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
       const contrast = await checkUndecidedContrast(page, results);
       expect(contrast.unlisted, "colour contrast axe left undecided").toEqual([]);
+      // And as a reader reaches it: the named region, its heading holding focus from the refusal's choice.
+      await expect(panel(page).getByRole("heading", { name: "Batch job: the whole expansion" })).toBeFocused();
     });
   }
 }
