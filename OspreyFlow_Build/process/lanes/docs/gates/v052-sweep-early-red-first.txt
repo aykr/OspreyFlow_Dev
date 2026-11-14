@@ -1,0 +1,196 @@
+# v052-sweep-early's red first at 993a0be, on main 7ba248e: main's four guides and the sites' build.py against this branch's tests (21 red), then 31 plants, one at a time, each at its call site in the code (railLayout.ts, sections.json, the ports, search.py, search_service.py, settings.py, the search route, SearchFilters.tsx, GlobalSearch.tsx, drawnMerge.tsx, drawn_merge.py, grading.py, App.tsx, userManager.ts, BrandFrame.tsx, a screen claiming the full frame, deployments.py, entra_people.py) or in the guide's or site's own sentence; the script requires the tests that hold each plant to be red, and lists every test it turned red; then restored and green. Each run with a fresh PYTHONPYCACHEPREFIX. Found while building it and fixed before: the route check passed while any one of three routes still gave the filter, so it reads the search and suggest routes' own bodies.
+
+command: cd OspreyFlow_Build && python -m pytest -q -p no:cacheprovider tests/test_guide_navigation_words.py tests/test_guides_ports_and_search.py tests/test_guides_drawn_merge.py tests/test_guides_v051_gaps.py tests/test_user_guide_search_results.py tests/test_guides_cloud_platform.py
+each run: closed ports 59991-59994, no OSPREY_LANE, a fresh PYTHONPYCACHEPREFIX
+
+== main's four guides and the sites' build.py, before this branch: 21 failed, 41 passed in 6.34s
+   red: test_no_guide_or_site_puts_a_view_on_the_rail, test_the_questions_panel_is_called_by_its_label, test_each_admin_section_is_named_as_admin_labels_it, test_the_views_the_guides_name_are_where_the_layout_puts_them, test_both_guides_name_every_narrow_port, test_the_index_feed_is_said_to_be_unreachable_from_a_route, test_the_architecture_guide_gives_search_as_built, test_the_opensearch_signing_setting_is_given_as_the_settings_file_holds_it, test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it, test_no_guide_calls_the_merge_coming, test_section_7_8_names_the_four_steps_as_the_screen_heads_them, test_section_7_8_says_who_may_merge_as_the_routes_and_service_do, test_the_guides_say_a_match_is_proposed_never_merged_in_storage, test_section_7_8_says_what_follows_the_merge_as_the_service_does, test_section_7_5_names_every_writer_that_reads_in_full, test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were, test_user_guide_3_says_the_govuk_top_is_slim_and_the_banner_one_row, test_the_shared_platform_profile_is_named_where_the_modes_are, test_section_14_says_how_a_shared_platform_namespace_moves_to_a_new_release, test_section_5_5_names_the_box_s_filters_as_the_box_labels_them, test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line
+
+== the Reports view relabelled [railLayout.ts]
+   'dashboards: "Reports",'
+   -> 'dashboards: "Dashboards",'
+   1 failed, 61 passed in 5.95s
+   red: test_the_views_the_guides_name_are_where_the_layout_puts_them
+
+== Connection strength moved into the view switch [railLayout.ts]
+   'export const VIEW_SWITCH = ["graph", "map", "boards", "dashboards"] as const;\nexport const MORE_VIEWS = ["matrix", "reports", "ownership", "strength"] as const;'
+   -> 'export const VIEW_SWITCH = ["graph", "map", "boards", "dashboards", "strength"] as const;\nexport const MORE_VIEWS = ["matrix", "reports", "ownership"] as const;'
+   1 failed, 61 passed in 5.79s
+   red: test_the_views_the_guides_name_are_where_the_layout_puts_them
+
+== Admin's Operations relabelled [sections.json]
+   '"label": "Operations",'
+   -> '"label": "Runs",'
+   4 failed, 58 passed in 5.75s
+   red: test_the_layout_is_read, test_each_admin_section_is_named_as_admin_labels_it, test_an_admin_section_under_an_old_name_is_flagged, test_the_document_control_table_is_not_read
+
+== guide: a view put on the rail [administration-guide.md]
+   "the **Reports** view (the top bar's view switch) draws"
+   -> "the rail's **Reports** draws"
+   2 failed, 60 passed in 5.78s
+   red: test_no_guide_or_site_puts_a_view_on_the_rail, test_the_views_the_guides_name_are_where_the_layout_puts_them
+
+== guide: Ask the case again [administration-guide.md]
+   'question in Ask & Chat, among the engines offered'
+   -> 'question in Ask the case, among the engines offered'
+   1 failed, 61 passed in 5.82s
+   red: test_the_questions_panel_is_called_by_its_label
+
+== guide: Schedules and runs again [administration-guide.md]
+   'Admin → Operations lists every one.'
+   -> 'Admin → Schedules and runs lists every one.'
+   1 failed, 61 passed in 6.06s
+   red: test_each_admin_section_is_named_as_admin_labels_it
+
+== guide: Admin › People again [administration-guide.md]
+   'assigned in *Admin › People and roles*, which keeps'
+   -> 'assigned in *Admin › People*, which keeps'
+   1 failed, 61 passed in 5.74s
+   red: test_each_admin_section_is_named_as_admin_labels_it
+
+== site: Questions again [build.py]
+   "'<strong>Ask &amp; Chat.</strong> Ask a model about the case;"
+   -> "'<strong>Questions.</strong> Ask a model about the case;"
+   1 failed, 61 passed in 5.74s
+   red: test_the_questions_panel_is_called_by_its_label
+
+== a fourth narrow port [media.py]
+   'class MediaStore(Protocol):'
+   -> 'class ExtraPort(Protocol):\n    pass\n\n\nclass MediaStore(Protocol):'
+   3 failed, 59 passed in 5.78s
+   red: test_each_narrow_port_is_a_protocol_the_guides_know, test_both_guides_name_every_narrow_port, test_a_narrow_port_left_out_is_flagged
+
+== guide: the index feed left out [developer-guide.md]
+   'Three narrower ports sit beside them:'
+   -> 'Two narrower ports sit beside them:'
+   1 failed, 61 passed in 5.71s
+   red: test_both_guides_name_every_narrow_port
+
+== the index feed's reason reworded [index_feed.py]
+   'can reach the unfiltered read'
+   -> 'can call it'
+   1 failed, 61 passed in 5.94s
+   red: test_the_index_feed_is_said_to_be_unreachable_from_a_route
+
+== a PostgreSQL full-text query written [search.py]
+   'async def search(graph: GraphPort'
+   -> '_FULL_TEXT = "SELECT id FROM nodes WHERE to_tsvector(name) @@ to_tsquery(%s)"\n\n\nasync def search(graph: GraphPort'
+   1 failed, 61 passed in 5.78s
+   red: test_the_architecture_guide_gives_search_as_built
+
+== the no-index line reworded [search_service.py]
+   '"no_index": "Search is limited to exact identifiers: this deployment has no search index.",'
+   -> '"no_index": "Search is limited: there is no search index.",'
+   2 failed, 60 passed in 5.94s
+   red: test_the_architecture_guide_gives_search_as_built, test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== signing's default none [settings.py]
+   'opensearch_signing: Literal["sigv4", "none"] = "sigv4"'
+   -> 'opensearch_signing: Literal["sigv4", "none"] = "none"'
+   2 failed, 60 passed in 5.59s
+   red: test_the_opensearch_signing_setting_is_given_as_the_settings_file_holds_it, test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it
+
+== the access filter no longer given to the results page's search [app.py]
+   'result = await search_service.search_page(\n            body,\n            principal,\n            graph,\n            searcher=index.searcher if index is not None '
+   -> 'result = await search_service.search_page(\n            body,\n            principal,\n            graph,\n            searcher=index.searcher if index is not None '
+   1 failed, 61 passed in 5.47s
+   red: test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it
+
+== guide: question 13 without what replaces FGAC [administration-guide.md]
+   "In its place, OspreyFlow applies each reader's access in its own query to the index:"
+   -> 'OspreyFlow does nothing in its place:'
+   1 failed, 61 passed in 5.47s
+   red: test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it
+
+== a match mode relabelled [SearchFilters.tsx]
+   '{ value: "contains", label: "Contains" },'
+   -> '{ value: "contains", label: "Includes" },'
+   1 failed, 61 passed in 5.49s
+   red: test_section_5_5_names_the_box_s_filters_as_the_box_labels_them
+
+== the box's limited line reworded [GlobalSearch.tsx]
+   '"Suggestions are limited just now: only the exact start of a name or identifier matches.";'
+   -> '"Suggestions are limited.";'
+   1 failed, 61 passed in 5.63s
+   red: test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line
+
+== the box's two characters made three [GlobalSearch.tsx]
+   'export const SUGGEST_MIN_CHARS = 2;'
+   -> 'export const SUGGEST_MIN_CHARS = 3;'
+   1 failed, 61 passed in 5.69s
+   red: test_section_5_5_gives_the_box_s_two_characters
+
+== the merge's second step renamed [drawnMerge.tsx]
+   '"label"}>2. Match</h5>'
+   -> '"label"}>2. Pair</h5>'
+   1 failed, 61 passed in 5.68s
+   red: test_section_7_8_names_the_four_steps_as_the_screen_heads_them
+
+== the merge collapsing in storage [drawn_merge.py]
+   'nothing is\n   collapsed in storage (rule 6)'
+   -> 'pairs are\n   merged in storage'
+   1 failed, 61 passed in 5.45s
+   red: test_the_guides_say_a_match_is_proposed_never_merged_in_storage
+
+== a writer no longer reading in full [grading.py]
+   'with sources_in_full():'
+   -> 'with contextlib.nullcontext():'
+   2 failed, 60 passed in 5.47s
+   red: test_section_7_5_names_every_writer_that_reads_in_full, test_the_writers_check_flags_one_left_out
+
+== guide: the merge called coming again [architecture-guide.md]
+   'A drawn dataset is **merged into another** the same way,'
+   -> '**Coming:** merging a drawn dataset into another. A drawn dataset is **merged into another** the same way,'
+   1 failed, 61 passed in 5.60s
+   red: test_no_guide_calls_the_merge_coming
+
+== the refresh no longer silent [App.tsx]
+   'silent: () => renewSilently({ silentRequestTimeoutInSeconds: SILENT_AT_LOAD_TIMEOUT_SECONDS }),'
+   -> 'silent: async () => null,'
+   1 failed, 61 passed in 5.49s
+   red: test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were
+
+== sign-out keeping the place [userManager.ts]
+   'forgetPlace(sessionStorage);\n  return getUserManager().signoutRedirect();'
+   -> 'return getUserManager().signoutRedirect();'
+   1 failed, 61 passed in 5.41s
+   red: test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were
+
+== the GOV.UK top never compact [BrandFrame.tsx]
+   'className={claims === 0 ? "brand-chrome brand-chrome--compact" : "brand-chrome"}'
+   -> 'className="brand-chrome"'
+   1 failed, 61 passed in 5.38s
+   red: test_user_guide_3_says_the_govuk_top_is_slim_and_the_banner_one_row
+
+== another screen claiming the full frame [Schedules.tsx]
+   "// The Admin area's Operations (formerly Schedules and runs; ADR-141 decision 1)"
+   -> 'import { useFullFooter } from "../brand/BrandFrame";\nexport function Claims() { useFullFooter(); return null; }\n// The Admin area\'s Operations (formerly Schedul'
+   1 failed, 61 passed in 5.42s
+   red: test_user_guide_3_says_the_govuk_top_is_slim_and_the_banner_one_row
+
+== the cloud-platform profile gone [deployments.py]
+   'PROFILE_NAMES = ("local-lite", "small", "cluster", "cloud-platform")'
+   -> 'PROFILE_NAMES = ("local-lite", "small", "cluster")'
+   1 failed, 61 passed in 5.47s
+   red: test_the_shared_platform_profile_is_named_where_the_modes_are
+
+== guide: §14's row struck [administration-guide.md]
+   '| A namespace on a shared platform (`cloud-platform`), the poc shape |'
+   -> '| A namespace elsewhere |'
+   1 failed, 61 passed in 5.45s
+   red: test_section_14_says_how_a_shared_platform_namespace_moves_to_a_new_release
+
+== a refusal the code no longer raises [entra_people.py]
+   'raise _refused("There is no organisation account to join.")'
+   -> 'raise _refused("Joining is not offered.")'
+   3 failed, 59 passed in 5.62s
+   red: test_section_9_quotes_each_entra_people_refusal, test_section_9_quotes_no_entra_refusal_the_code_does_not_raise, test_the_people_check_flags_a_refusal_the_code_no_longer_raises
+
+== guide: a stale refusal kept [administration-guide.md]
+   'and joining ("There is no organisation account to join.")'
+   -> 'dashboards ("Dashboard identities are not registered on this deployment yet."), and joining ("There is no organisation account to join.")'
+   2 failed, 60 passed in 5.86s
+   red: test_section_9_quotes_no_entra_refusal_the_code_does_not_raise, test_the_people_check_flags_a_refusal_the_code_no_longer_raises
+
+== restored: 62 passed in 5.78s
+each plant red in the tests that hold it: True
