@@ -58,16 +58,25 @@ TOKEN_LIFE_S = 4 * 3600
 TOKEN_LIFE_NEEDED_S = 3600
 LANE = os.environ.get("OSPREY_LANE", "platform")
 
+#: The units whose cases a control may search: a case is opened only to its own unit
+#: (`investigations.py`'s owning-unit check; a grant is not enough), so each control is of the unit
+#: of the case it searches. Rules' list (lane/rules-m10-subjects, 14 November 2026): the leak
+#: cases use unit-intel's, a never-join case its partner case's; an unused one is a realm user.
+CONTROL_UNITS = (
+    "unit-border", "unit-comms", "unit-covert", "unit-custody", "unit-economic", "unit-fiu",
+    "unit-intel", "unit-intel-covert", "unit-investigations", "unit-records",
+)  # fmt: skip
 #: Step 4's subjects as rules granted them on stack d (14 November 2026): one cleared control per
-#: unit owning an R source (a restricted code is read only in its own unit), the part-cleared
-#: principal M10 asks as, and the principal M1 to M6 measure as (an editor, for M6's draws).
+#: case unit (SECRET, P, C and R in its own unit: a restricted code is read only there), the
+#: part-cleared principal M10 asks as, in the measured case's own unit, and the principal M1 to M6
+#: measure as (an editor, for M6's draws).
 SUBJECTS: tuple[dict[str, Any], ...] = (
     *(
         {"username": f"m10-cleared-{unit}", "clearance": "SECRET", "org_unit": unit,
          "codes": ["P", "C", "R"], "use": "control"}
-        for unit in ("unit-fiu", "unit-intel-covert", "unit-covert", "unit-border")
+        for unit in CONTROL_UNITS
     ),
-    {"username": "m10-part", "clearance": "OFFICIAL-SENSITIVE", "org_unit": "unit-records",
+    {"username": "m10-part", "clearance": "OFFICIAL-SENSITIVE", "org_unit": "unit-intel",
      "codes": ["P", "C"], "use": "part"},
     {"username": "m10-measure", "clearance": "OFFICIAL-SENSITIVE", "org_unit": "unit-intel",
      "codes": ["P", "C"], "use": "measure"},
@@ -280,8 +289,12 @@ def measure_environment(tokens: dict[str, str], base: str, case: str) -> dict[st
     }
 
 
-def preflight(base: str, case: str, measure_token: str, probe_token: str) -> str:
-    """'' when `m10-measure` reads the case and the probe's token is refused it; else why not."""
+def preflight(
+    base: str, case: str, measure_token: str, probe_token: str, *, part_token: str
+) -> str:
+    """'' when `m10-measure` and `m10-part` each open the case and the probe's token is refused
+    it; else why not. M10 asks as `m10-part` in this case: one that cannot open it reaches nothing,
+    and every leak case would prove nothing (M10's first measured run on d, 14 November 2026)."""
 
     def status(token: str) -> int:
         request = urllib.request.Request(
@@ -298,6 +311,12 @@ def preflight(base: str, case: str, measure_token: str, probe_token: str) -> str
     measured, probed = status(measure_token), status(probe_token)
     if measured != 200:
         return f"m10-measure is not granted the case (HTTP {measured}): nothing to measure as"
+    parted = status(part_token)
+    if parted != 200:
+        return (
+            f"m10-part cannot open the case (HTTP {parted}): the case is opened only to its own "
+            "unit and its grant, so M10 would reach nothing"
+        )
     if probed == 200:
         return "a subject granted nothing read the case: the grants are not what is measured"
     if probed not in (403, 404):
@@ -552,11 +571,14 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
     if short:
         print(f"step4: preflight refused: {short}; the command was not run", flush=True)
         return 2
-    refused = preflight(base, case, tokens["m10-measure"], tokens[PROBE["username"]])
+    refused = preflight(
+        base, case, tokens["m10-measure"], tokens[PROBE["username"]], part_token=tokens["m10-part"]
+    )
     if refused:
         print(f"step4: preflight refused: {refused}; the command was not run", flush=True)
         return 2
-    print("step4: preflight: m10-measure reads the case; a subject granted nothing is refused",
+    print("step4: preflight: m10-measure and m10-part open the case; a subject granted nothing "
+          "is refused",
           flush=True)  # fmt: skip
     child = {**os.environ, **measure_environment(tokens, base, case)}
     return subprocess.run(command, env=child, check=False).returncode

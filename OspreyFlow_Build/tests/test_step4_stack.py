@@ -30,21 +30,27 @@ _MANIFEST = (
 
 
 def test_the_subjects_are_the_ones_rules_granted() -> None:
-    """Rules' grants on stack d (14 November 2026): a control per R-owning unit, SECRET with P, C
-    and R in its own unit; m10-part OFFICIAL-SENSITIVE without R in unit-records; m10-measure
+    """Rules' grants on stack d (14 November 2026, lane/rules-m10-subjects): a case is opened only
+    to its own unit (`investigations.py`), so a control per case unit, SECRET with P, C and R in its
+    own unit (the leak cases use unit-intel's; a never-join case its partner case's unit), ten in
+    all; m10-part OFFICIAL-SENSITIVE without R in unit-intel, the measured case's unit; m10-measure
     OFFICIAL-SENSITIVE in unit-intel; and a probe granted nothing."""
     by_name = {s["username"]: s for s in step4.SUBJECTS}
     controls = sorted(n for n, s in by_name.items() if s["use"] == "control")
     assert controls == [
-        "m10-cleared-unit-border", "m10-cleared-unit-covert",
-        "m10-cleared-unit-fiu", "m10-cleared-unit-intel-covert",
+        f"m10-cleared-{unit}"
+        for unit in (
+            "unit-border", "unit-comms", "unit-covert", "unit-custody", "unit-economic",
+            "unit-fiu", "unit-intel", "unit-intel-covert", "unit-investigations", "unit-records",
+        )
     ]  # fmt: skip
     for name in controls:
         s = by_name[name]
         assert (s["clearance"], s["codes"]) == ("SECRET", ["P", "C", "R"])
         assert s["org_unit"] == name.removeprefix("m10-cleared-")
     assert (by_name["m10-part"]["clearance"], by_name["m10-part"]["org_unit"]) == (
-        "OFFICIAL-SENSITIVE", "unit-records")  # fmt: skip
+        "OFFICIAL-SENSITIVE", "unit-intel")  # fmt: skip
+    assert by_name["m10-part"]["codes"] == ["P", "C"]
     assert "R" not in by_name["m10-part"]["codes"]
     assert by_name["m10-measure"]["org_unit"] == "unit-intel"
     assert step4.PROBE["username"] not in by_name
@@ -132,24 +138,27 @@ def conduit() -> Iterator[str]:
         server.shutdown()
 
 
-def test_the_preflight_passes_a_granted_measure_and_a_refused_probe(conduit: str) -> None:
-    _Case.allowed = {"measure": 200}
-    assert step4.preflight(conduit, "c", "measure", "probe") == ""
+def test_the_preflight_passes_a_granted_measure_and_part_and_a_refused_probe(conduit: str) -> None:
+    _Case.allowed = {"measure": 200, "part": 200}
+    assert step4.preflight(conduit, "c", "measure", "probe", part_token="part") == ""
 
 
 @pytest.mark.parametrize(
     ("allowed", "said"),
     [
         ({}, "m10-measure is not granted the case"),  # the red: no grant on the stack yet
-        ({"measure": 200, "probe": 200}, "a subject granted nothing read the case"),
-        ({"measure": 200, "probe": 500}, "not a refusal"),
+        ({"measure": 200, "part": 200, "probe": 200}, "a subject granted nothing read the case"),
+        ({"measure": 200, "part": 200, "probe": 500}, "not a refusal"),
+        # M10's first measured run on d (14 November): m10-part outside the case's unit got 404,
+        # and every leak case proved nothing. The run stops before it measures instead.
+        ({"measure": 200}, "m10-part cannot open the case (HTTP 404)"),
     ],
 )
 def test_the_preflight_stops_a_run_whose_grants_are_not_what_is_measured(
     conduit: str, allowed: dict[str, int], said: str
 ) -> None:
     _Case.allowed = allowed
-    assert said in step4.preflight(conduit, "c", "measure", "probe")
+    assert said in step4.preflight(conduit, "c", "measure", "probe", part_token="part")
 
 
 def test_the_realm_is_the_deployment_s_own_with_step_4_s_subjects_alone() -> None:
@@ -297,4 +306,3 @@ def test_a_token_minted_shorter_than_the_run_stops_the_run_before_it_measures() 
     assert said is not None and "m10-part" in said and "300" in said, said
     assert "m10-measure" not in said
     assert step4.short_lived({"m10-measure": _jwt(4 * 3600)}) is None
-
