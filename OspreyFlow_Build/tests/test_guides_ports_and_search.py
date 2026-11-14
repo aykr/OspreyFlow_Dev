@@ -136,8 +136,10 @@ def test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says
     for part in ("1. **classification:** no higher than the principal's clearance", "2. **handling code:**",
                  "3. **datasets:** one of the case's"):  # fmt: skip
         assert part in access, part
-    route = (CORE / "services" / "api" / "app.py").read_text(encoding="utf-8")
-    assert "access_filter=index_access_filter(index.scheme, principal)" in route
+    app = (CORE / "services" / "api" / "app.py").read_text(encoding="utf-8")
+    for name in ("search_route", "suggest_route"):  # the results page's and the box's own routes
+        route = next(n for n in ast.walk(ast.parse(app)) if isinstance(n, ast.AsyncFunctionDef) and n.name == name)
+        assert "access_filter=index_access_filter(index.scheme, principal)" in (ast.get_source_segment(app, route) or ""), name
     text = guide("administration")
     q13 = text[text.index("13. **OpenSearch without fine-grained access control.**") :]
     q13 = q13[: q13.index("## ")]
