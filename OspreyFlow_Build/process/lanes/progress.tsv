@@ -150,3 +150,4 @@ admin	v052-admin-grant	S	building	v0.5.2 fix (A2): Only an administrator can giv
 case	v052-suppress-reload	S	building	v0.5.2 fix (S7): Mark for suppression survives a reload: the marks are read back, and a marked node offers Remove
 case	v052-suppress-reason	S	building	v0.5.2 fix (S8): Mark for suppression asks the analyst for a reason (ADR-046 step 1), not a fixed one
 platform	v052-startbuild-index	S	building	v0.5.2 fix (S9): ospreyflow start --build rebuilds the search index, as install and update do
+rules	v052-search-from-rids	S	building	v0.5.2 fix (M9): The fallback name search under its 5 s budget at client size: search_nodes from record ids found by index, not a scan of the store (ADR-124 Am 21)
