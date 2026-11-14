@@ -10,7 +10,7 @@ WT = str(Path(__file__).resolve().parents[5])
 PY = f"{WT}/OspreyFlow_Core/.venv/bin/python"
 CACHES = tempfile.mkdtemp(prefix="v052-am20-pycache-")
 os.makedirs(CACHES, exist_ok=True)
-TESTS = ["tests/test_user_guide_am20.py"]
+TESTS = ["tests/test_user_guide_am20.py", "tests/test_admin_guide_model_timeouts.py"]
 env = dict(os.environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994")
 for k in ("OSPREY_LANE", "PYTHONDONTWRITEBYTECODE"): env.pop(k, None)
 C, W = "OspreyFlow_Core/", "OspreyFlow_Core/apps/workspace/src/"
@@ -24,6 +24,17 @@ PLANTS = [
     ("the batch job's links read another way", C + "services/api/batch_expansion.py", "    links = await graph.edges_among(node_ids, scoped) if len(node_ids) > 1 else []", "    links = []", ["what_a_user_sees_reads_edges_among"]),
     ("a view's links read another way", C + "services/api/case_views.py", "    edges = await graph.edges_among([n.id for n in nodes], principal) if len(nodes) > 1 else []", "    edges = []", ["what_a_user_sees_reads_edges_among"]),
     ("guide: the line struck", UG, "The links among the records are found a thousand records at a time,", "The links among the records are found,", ["what_a_user_sees_reads_edges_among"]),
+    # D2: how long a model is waited for
+    ("the render's hosted default 60", C + "harness/render.py", '"${OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS:-120}"', '"${OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS:-60}"', ["render_and_the_client_agree", "section_10_gives_both_bounds"]),
+    ("the render's own-model setting gone", C + "harness/render.py", '            api_environment["OSPREY_MODEL_TIMEOUT_SECONDS"] = "${OSPREY_MODEL_TIMEOUT_SECONDS:-900}"\n', "", ["render_and_the_client_agree"]),
+    ("the client's hosted default 60", C + "packages/adapters/model_litellm/client.py", 'os.environ.get("OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS", "120")', 'os.environ.get("OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS", "60")', ["render_and_the_client_agree"]),
+    ("the deployment's own model counted as hosted", C + "packages/adapters/model_litellm/client.py", "hosted = call is not None and call.engine != LOCAL", "hosted = call is not None", ["render_and_the_client_agree"]),
+    ("the timeout's words reworded", C + "packages/adapters/model_litellm/errors.py", 'f"{engine} did not answer within the time this deployment allows{bound}, so the "', 'f"{engine} timed out{bound}, so the "', ["timeout_and_a_refusal"]),
+    ("nothing recorded struck", C + "packages/adapters/model_litellm/errors.py", '        return f"{said} Nothing was recorded."', '        return said', ["timeout_and_a_refusal"]),
+    ("a timeout raised as a failure", C + "packages/adapters/model_litellm/client.py", 'raise ModelEngineRefused("timed_out", timeout_seconds=self._bound()) from None', "raise", ["timeout_and_a_refusal"]),
+    ("the platform passing a timeout", C + "harness/cloud_platform/__init__.py", '"OPENSEARCH_SIGNING": platform.opensearch_signing,', '"OPENSEARCH_SIGNING": platform.opensearch_signing,\n        "OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS": "300",', ["platform_s_defaults_hold"]),
+    ("guide: the hosted bound 60", AG, "is waited for 120 seconds, `OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS`", "is waited for 60 seconds, `OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS`", ["section_10_gives_both_bounds"]),
+    ("guide: nothing recorded struck", AG, "with the bound; nothing is recorded.", "with the bound.", ["timeout_and_a_refusal"]),
 ]
 def run():
     e = dict(env, PYTHONPYCACHEPREFIX=tempfile.mkdtemp(dir=CACHES))
