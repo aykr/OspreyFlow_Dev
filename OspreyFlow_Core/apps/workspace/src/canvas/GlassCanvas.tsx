@@ -169,7 +169,7 @@ import { PathfinderOverlay } from "./PathfinderOverlay";
 import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
 import { ActionErrorOverlay } from "./ActionErrorOverlay";
 import { describeEmptyExpansion } from "./expansionOutcome";
-import type { ClusterExplanation, LimitExceeded, ResolutionOutcome, WorkingSetDelta } from "../workingset/models";
+import { outcomeDeltas, type ClusterExplanation, type ExpansionOutcome, type LimitExceeded, type ResolutionOutcome, type WorkingSetDelta } from "../workingset/models";
 
 const NODE_PROGRAM = createNodeCompoundProgram<
   WorkingSetNodeAttributes,
@@ -1013,6 +1013,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     useEffect(() => {
       if (seenReprojectRef.current === lastReproject) return;
       seenReprojectRef.current = lastReproject;
+      // A reader's own clusters arriving with nodes (ADR-124 Amendment 19) are not a change of the
+      // resolution: what was folded stays folded.
+      if (lastReproject?.reason === "resolution_on_entry") return;
       if (manualGroups.length === 0) return;
       setManualGroups([]);
       const rect = containerRef.current?.getBoundingClientRect();
@@ -2500,7 +2503,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         edgeType,
         edgeTypes: edgeTypesRef.current,
       });
-      store.getState().applyDelta(outcome.delta);
+      // The add, then the reader's own clusters at the case's τ (ADR-124 Amendment 19).
+      for (const delta of outcomeDeltas(outcome as ExpansionOutcome)) store.getState().applyDelta(delta);
       if (emptyNotice !== null) setActionError({ x, y, message: emptyNotice, tone: "notice" });
       // ADR-098: an expansion small enough brings the links among its nodes and the view; when
       // they would have passed the cap, none of them is added and the analyst is told.
@@ -2749,8 +2753,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             },
           );
           if (seedResponse.ok) {
-            const outcome = await seedResponse.json();
-            store.getState().applyDelta(outcome.delta);
+            // The add, then the reader's own clusters (ADR-124 Amendment 19).
+            for (const delta of outcomeDeltas((await seedResponse.json()) as ExpansionOutcome)) store.getState().applyDelta(delta);
           }
         }
       }

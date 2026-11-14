@@ -351,10 +351,12 @@ async def test_a_reproject_is_sent_with_one_of_two_fixed_reason_codes(
     assert isinstance(sent, DeltaReproject) and sent.reason == sent_reason
 
 
-async def test_a_reprojects_cluster_keys_are_cut_to_nodes_the_reader_may_read() -> None:
-    """Violation caught (rule 3): `affected_cluster_ids` passed through, so a node a reader may not
-    read was named as a key. Only keys they may read are sent; a key the store does not hold cannot
-    be judged and is not sent."""
+async def test_a_stored_reproject_reaches_every_reader_as_a_marker_with_no_cluster_id() -> None:
+    """Violation caught (rule 3; ADR-124 Amendment 19): a stored reproject's `affected_cluster_ids` sent on,
+    keys cut to what the reader may read but values not. A value is a node id (a cluster's root) and can be
+    one the reader may not see, and a cluster formed through a member they may not see tells them it is
+    there. So no reader is sent any, a cleared one included: each reader's own clusters come with their own
+    reads. Before the amendment, the keys were cut (`pub` alone for the official reader)."""
     store = FakeWorkingSetStore()
     await store.add_nodes(CASE, [node("pub"), node("sec", "SECRET")])
     service = _service(store)
@@ -367,11 +369,8 @@ async def test_a_reprojects_cluster_keys_are_cut_to_nodes_the_reader_may_read() 
     official = await service.project_live(CASE, delta, OFFICIAL_READER)
     cleared = await service.project_live(CASE, delta, SECRET_READER)
 
-    assert isinstance(official, DeltaReproject) and official.affected_cluster_ids == {
-        "pub": "c-pub"
-    }
-    assert isinstance(cleared, DeltaReproject)
-    assert cleared.affected_cluster_ids == {"pub": "c-pub", "sec": "c-sec"}
+    assert isinstance(official, DeltaReproject) and official.affected_cluster_ids == {}
+    assert isinstance(cleared, DeltaReproject) and cleared.affected_cluster_ids == {}
 
 
 # --- DeltaReplaceEdge: one row each ----------------------------------------------------------
@@ -669,7 +668,8 @@ async def test_an_end_in_another_dataset_stops_a_replacement_reaching_a_reader_o
     assert type(sent) is DeltaRemoveSent and sent.edge_ids == [] and sent.node_ids == []
 
 
-async def test_a_reprojects_keys_in_another_dataset_are_not_sent_to_a_reader_of_the_case() -> None:
+async def test_a_reprojects_ids_are_not_sent_to_a_reader_of_the_case_whatever_their_dataset() -> None:
+    """ADR-124 Amendment 19: a marker, as for every reader; before it, the key in the case's dataset was sent."""
     store = FakeWorkingSetStore()
     await store.add_nodes(
         CASE,
@@ -681,7 +681,7 @@ async def test_a_reprojects_keys_in_another_dataset_are_not_sent_to_a_reader_of_
 
     sent = await _service(store).project_live(CASE, delta, IN_FIXTURE)
 
-    assert isinstance(sent, DeltaReproject) and sent.affected_cluster_ids == {"mine": "c1"}
+    assert isinstance(sent, DeltaReproject) and sent.affected_cluster_ids == {}
 
 
 # --- a picture's replacement, for a reader scoped to the case --------------------------------

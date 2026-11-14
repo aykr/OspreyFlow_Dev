@@ -124,6 +124,13 @@ def _paired_with(sim_endpoint: str, device: str) -> Edge:
     )
 
 
+async def _clusters(service: WorkingSetService) -> dict[str, str]:
+    """The reader's own clusters, as their snapshot carries them (ADR-124 Amendment 19: per reader, never
+    stored on the case's nodes). A node in no cluster of more than one stands for itself."""
+    (snapshot,) = await service.sync(INVESTIGATION, PRINCIPAL, last_acknowledged_seq=None)
+    return {n.id: n.resolution.cluster_id or n.id for n in snapshot.nodes}
+
+
 async def test_get_resolution_threshold_defaults_to_balanced_when_never_set() -> None:
     store = FakeWorkingSetStore()
     service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), store, SCHEME)
@@ -175,9 +182,12 @@ async def test_raising_the_threshold_splits_and_reports_the_delta() -> None:
     assert outcome.merged == 0
     assert outcome.split == 1
     assert outcome.affected == 2
+    # ADR-124 Amendment 19: nothing written to the case's shared nodes; the shared stream holds a marker.
+    stored = await store.source_fidelity_nodes(INVESTIGATION)
+    assert all(n.resolution.cluster_id is None for n in stored.values())
 
-    nodes = await store.source_fidelity_nodes(INVESTIGATION)
-    assert nodes["n1"].resolution.cluster_id != nodes["n2"].resolution.cluster_id
+    clusters = await _clusters(service)
+    assert clusters["n1"] != clusters["n2"]
 
 
 async def test_a_manual_split_survives_even_at_a_broad_threshold() -> None:
@@ -192,8 +202,8 @@ async def test_a_manual_split_survives_even_at_a_broad_threshold() -> None:
 
     await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_BROAD, PRINCIPAL)
 
-    nodes = await store.source_fidelity_nodes(INVESTIGATION)
-    assert nodes["n1"].resolution.cluster_id != nodes["n2"].resolution.cluster_id
+    clusters = await _clusters(service)
+    assert clusters["n1"] != clusters["n2"]
 
 
 async def test_no_change_reports_a_zero_delta() -> None:
@@ -242,6 +252,6 @@ async def test_msisdn_and_imsi_endpoints_cluster_together_the_device_does_not() 
 
     await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_BALANCED, PRINCIPAL)
 
-    nodes = await store.source_fidelity_nodes(INVESTIGATION)
-    assert nodes["sim-msisdn"].resolution.cluster_id == nodes["sim-imsi"].resolution.cluster_id
-    assert nodes["device-1"].resolution.cluster_id != nodes["sim-imsi"].resolution.cluster_id
+    clusters = await _clusters(service)
+    assert clusters["sim-msisdn"] == clusters["sim-imsi"]
+    assert clusters["device-1"] != clusters["sim-imsi"]

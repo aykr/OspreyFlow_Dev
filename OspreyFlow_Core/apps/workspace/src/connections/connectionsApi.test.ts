@@ -56,12 +56,21 @@ describe("a route on the canvas", () => {
     const has = new Set(["a", "a-b"]);
     const graph = { hasNode: (id: string) => has.has(id), hasEdge: (id: string) => has.has(id) };
     const delta = await seedRoute(CONTEXT, route("a", "b", "c"), graph);
-    expect(delta).toEqual({ op: "add" });
+    expect(delta).toEqual([{ op: "add" }]);
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("http://api/v1/investigations/inv%201/seed");
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.nodes.map((n: Node) => n.id)).toEqual(["b", "c"]);
     expect(body.edges.map((e: Edge) => e.id)).toEqual(["b-c"]);
+  });
+
+  it("hands back the reader's own clusters after the add, in that order (ADR-124 Amendment 19)", async () => {
+    // Step 3h: the seed's response carries the cluster each of the reader's nodes is in at the case's τ, for
+    // them alone. Dropped, a pair already merged never reads as one and Explain cluster is never offered.
+    const clusters = { seq: 4, op: "reproject", reason: "resolution_on_entry", affected_cluster_ids: { b: "b", c: "b" } };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ delta: { op: "add" }, clusters }))));
+    const graph = { hasNode: () => false, hasEdge: () => false };
+    expect(await seedRoute(CONTEXT, route("b", "c"), graph)).toEqual([{ op: "add" }, clusters]);
   });
 
   it("asks nothing when the route is already on the canvas", async () => {

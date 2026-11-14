@@ -1226,7 +1226,11 @@ The design:
    neither case's records are joined to the other's (ADR-099 Amendment 2 decision 3).
 3. At query time the Conduit applies a **resolution threshold** τ from the analyst's session and
    collapses `SAME_AS` components with score ≥ τ into a single displayed entity. Changing τ
-   re-projects the view; it does not touch storage.
+   re-projects the view; it does not touch storage. The collapse is each reader's own (ADR-124
+   Amendment 19). It is computed over the members and links that reader may see, and sent with
+   their own reads: the nodes a seed or an expansion brings, their snapshot, and their own threshold
+   move. Nothing shared carries a cluster id, so a member hidden from them neither joins a cluster
+   nor gives one its id (rule 3).
 4. Analyst decisions are edges too: a manual link is a `SAME_AS` with score 1.0 and
    `provenance.state = asserted`; a manual split is a `NOT_SAME_AS` edge that the projection
    always honours. Both are written in the case's analyst layer (ADR-143 Amendment 1, §2.2a), so

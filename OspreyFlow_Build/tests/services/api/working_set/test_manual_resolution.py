@@ -86,6 +86,13 @@ def _same_as(node_a: str, node_b: str, score: float) -> Edge:
     )
 
 
+async def _clusters(service: WorkingSetService) -> dict[str, str]:
+    """The reader's own clusters, as their snapshot carries them (ADR-124 Amendment 19: per reader, never
+    stored on the case's nodes). A node in no cluster of more than one stands for itself."""
+    (snapshot,) = await service.sync(INVESTIGATION, PRINCIPAL, last_acknowledged_seq=None)
+    return {n.id: n.resolution.cluster_id or n.id for n in snapshot.nodes}
+
+
 async def test_manual_link_merges_two_nodes_and_writes_the_edge() -> None:
     store = FakeWorkingSetStore()
     graph = FakeGraphPort(Subgraph(nodes=[_person("n1"), _person("n2")], edges=[]))
@@ -123,8 +130,22 @@ async def test_manual_split_separates_two_nodes_even_at_a_broad_threshold() -> N
     outcome, _entry = await service.manual_split(INVESTIGATION, "n1", "n2", PRINCIPAL)
 
     assert outcome.split == 1  # 0.999 >= Strict's 0.99: merged pre-split, split by the new edge
-    nodes = await store.source_fidelity_nodes(INVESTIGATION)
-    assert nodes["n1"].resolution.cluster_id != nodes["n2"].resolution.cluster_id
+    # The split's NOT_SAME_AS was committed through the fake's transaction only: mirror what a real
+    # adapter's next `expand` would return, as the explain case below does.
+    written = graph.committed_edges[0]
+    split_edge = Edge(
+        id=written.id,
+        type=written.type,
+        source=written.source,
+        target=written.target,
+        properties=written.properties,
+        provenance=written.provenance,
+        handling=written.handling,
+        audit=_audit(),
+    )
+    graph.expand_result = Subgraph(nodes=[_person("n1"), _person("n2")], edges=[same_as, split_edge])
+    clusters = await _clusters(service)
+    assert clusters["n1"] != clusters["n2"]
 
     written = graph.committed_edges[0]
     assert written.type == "NOT_SAME_AS"
@@ -167,9 +188,9 @@ async def test_explain_cluster_returns_the_direct_edges_between_current_members(
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2"), _person("n3")])
     await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_BALANCED, PRINCIPAL)
-    nodes = await store.source_fidelity_nodes(INVESTIGATION)
-    cluster_id = nodes["n1"].resolution.cluster_id
-    assert cluster_id is not None
+    clusters = await _clusters(service)
+    assert clusters["n1"] == clusters["n2"]
+    cluster_id = clusters["n1"]
 
     explanation = await service.explain_cluster(INVESTIGATION, cluster_id, PRINCIPAL)
 
@@ -188,9 +209,6 @@ async def test_explain_cluster_flags_a_manually_linked_pair() -> None:
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
     await service.manual_link(INVESTIGATION, "n1", "n2", PRINCIPAL)
-    nodes = await store.source_fidelity_nodes(INVESTIGATION)
-    cluster_id = nodes["n1"].resolution.cluster_id
-    assert cluster_id is not None
     # `manual_link` only committed the edge through the fake's transaction, not into the fake's
     # `expand` result — mirror what a real adapter's next `expand` would now return, as an `Edge`
     # (`Edge` and `EdgeWrite` are separate types; `committed_edges` holds the latter).
@@ -206,6 +224,9 @@ async def test_explain_cluster_flags_a_manually_linked_pair() -> None:
         audit=_audit(),
     )
     graph.expand_result = Subgraph(nodes=[_person("n1"), _person("n2")], edges=[manual_edge])
+    clusters = await _clusters(service)
+    cluster_id = clusters["n1"]
+    assert clusters["n2"] == cluster_id
 
     explanation = await service.explain_cluster(INVESTIGATION, cluster_id, PRINCIPAL)
 

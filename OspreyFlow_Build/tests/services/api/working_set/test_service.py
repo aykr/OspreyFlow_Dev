@@ -117,7 +117,10 @@ async def test_expand_adds_what_the_graph_returned_and_asks_for_no_count_of_the_
 
     assert {n.id for n in outcome.delta.nodes} == {"hub", "visible"}
     assert "filtered_count" not in outcome.model_dump()
-    assert graph.expand_requests == [req]
+    # The expansion itself, once; after it, only the reader's own clusters are read (ADR-124 Amendment 19),
+    # by resolution links alone, never a count of anything.
+    assert graph.expand_requests[0] == req
+    assert all(r.edge_types == ["SAME_AS", "NOT_SAME_AS"] for r in graph.expand_requests[1:])
 
 
 async def test_expand_never_double_counts_a_node_already_in_the_working_set() -> None:
