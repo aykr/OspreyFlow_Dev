@@ -1,0 +1,21 @@
+# ADR-148 Amendment 18, the token-version refusal: each plant at its own site in principal_auth, a fresh PYTHONPYCACHEPREFIX per run
+unplanted: exit 0: 9 passed in 6.96s
+== the version refusal not raised (the bare refusal, as before)
+  planted: exit 1: 3 failed, 6 passed in 6.46s
+    test_auth_entra_token_version.py::test_a_v1_token_where_v2_is_expected_is_refused_in_words
+    test_auth_entra_token_version.py::test_a_v2_token_where_v1_is_expected_is_refused_in_words
+    test_auth_entra_token_version.py::test_the_mismatch_is_logged_once_for_install_step_6
+== the signature not checked again before the words
+  planted: exit 1: 2 failed, 7 passed in 6.41s
+    test_auth_entra_token_version.py::test_a_token_the_tenant_did_not_sign_as_that_version_never_reaches_the_words[another-key]
+    test_auth_entra_token_version.py::test_a_token_the_tenant_did_not_sign_as_that_version_never_reaches_the_words[expired]
+== any tenant's issuer counted
+  planted: exit 1: 1 failed, 8 passed in 6.10s
+    test_auth_entra_token_version.py::test_a_token_the_tenant_did_not_sign_as_that_version_never_reaches_the_words[another-tenant]
+== ver not held to the issuer's form
+  planted: exit 1: 1 failed, 8 passed in 6.22s
+    test_auth_entra_token_version.py::test_a_token_the_tenant_did_not_sign_as_that_version_never_reaches_the_words[ver-disagrees-with-issuer]
+== the words logged at every refusal
+  planted: exit 1: 1 failed, 8 passed in 6.12s
+    test_auth_entra_token_version.py::test_the_mismatch_is_logged_once_for_install_step_6
+restored: exit 0: 9 passed in 6.44s
