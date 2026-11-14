@@ -21,6 +21,18 @@ yours. Your options:
 - **(c)** Leave Superset out of v0.5.1's release images. Superset only reaches deployments in v0.5.2.
 Main's own CI will meet the same finding at its next image scan.
 
+**Answered or decided, 14 Nov morning.** You answered items 1 (the four CI/Makefile diffs: yes), 2 (the seed ceiling:
+(a), the POC declares `deployment.highest_marking: SECRET`), 4 (you approve platform-b's lease in its window) and
+v0.5.1's CVE ((a): accepted, tag moved to da62b36). Under your standing rule (my recommendation, reported after):
+- 3: CI gets a concurrency group (`cancel-in-progress` for pushes to main);
+- 5: backup sets expire at 34 days, so every kept set has RDS's point-in-time restore behind it;
+- 6: (a), the standard shape's ingest folder joins the backup set;
+- 7: keep what's built;
+- 8: the proposed search budgets, accepted;
+- 9: Graph for scheduled runs stays after v0.5.2.
+
+The items below are kept as they were written.
+
 ## Waiting on you
 
 1. **ci.yml for the index feed's live file (rules, step 3c).** The diff is on rules' branch:
