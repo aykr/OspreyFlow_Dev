@@ -167,3 +167,4 @@ bb8bf66 0d8c586 platform-b v052-signin-words
 579af5d 9e827ab rules v052-measure-m10
 d01fb5e 0730d56 case v052-tidy
 e4f322c 4703c3e platform-b v052-attribution
+41428c0 415ec6b case-b v052-batch-panel v052-help-everywhere
