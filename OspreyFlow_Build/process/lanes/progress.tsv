@@ -115,7 +115,7 @@ rules	v052-load	M	done	v0.5.2 B: client-size synthetic data, loaded once	lane/ru
 studio	v052-search	L	done	v0.5.2 step 3d: the search service
 case	v052-fixes	S	done	v0.5.2 step 3e: the Glass's screen fixes
 case	v052-results	M	done	v0.5.2 step 3e′: the search results layout
-platform	v052-measure	S	building	v0.5.2 step 4: the measurement session
+platform	v052-measure	S	done	v0.5.2 step 4: the measurement session	lane/platform-v052-step4record
 docs	v052-sweep	S	done	v0.5.2 step 5: the wording sweep	lane/docs-v052-am20
 admin	v052-heartbeat	M	done	The heartbeat's route view (the owner, 13 Nov) (merged ee440c1)
 case-b	v052-r1-driver	M	done	v0.5.2 step 6's driver: the manifest verifier and spec 08 runner, built ahead

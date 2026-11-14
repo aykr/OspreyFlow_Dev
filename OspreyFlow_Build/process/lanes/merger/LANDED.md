@@ -190,3 +190,4 @@ d58a0b7 cb8fe5c case v052-suppress-reload
 55a44d5 bff2ca9 rules v052-measure-m10
 760c2c8 310c697 rules v052-measure-m10
 4693457 21fb2dd rules v052-search-from-rids
+c583b41 a67f3d0 platform v052-measure
