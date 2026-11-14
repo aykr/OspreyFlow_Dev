@@ -525,6 +525,21 @@ def _owner_resolver(
     return resolve
 
 
+def _watch_owner_resolver(
+    principal: Principal, principal_resolver: PrincipalResolver
+) -> Callable[[str], Awaitable[Principal | None]]:
+    """For hotlists and watches at a load (ADR-044 Amendment 1): as `_owner_resolver`, the
+    requester's own at once and any other afresh, but raising each refusal, so the evaluator stops
+    a watch with its reason (`evaluation._owner_or_why`) rather than an unexplained `None`."""
+
+    async def resolve(owner_id: str) -> Principal | None:
+        if owner_id == principal.id:
+            return principal
+        return await principal_resolver.resolve_for_owner_detailed(owner_id)
+
+    return resolve
+
+
 async def _rule_gate(
     investigation_id: str,
     *,
@@ -727,13 +742,14 @@ async def _evaluate_watches_best_effort(
 
     **`principal_for_owner`, `06_DECISIONS.md` ADR-043 (Phase 8 Stage 1).** The requester's own id
     resolves instantly, with no network call — no exchange is needed to learn what this route
-    already knows. Any other owner goes through `principal_resolver.resolve_for_owner` (OAuth2
-    Token Exchange) — a real, live, per-call resolution, never cached (ADR-036's own "resolved
-    fresh" requirement, ADR-043's own freshness argument): a revoked or otherwise-unreachable
-    owner resolves to `None` on this call and the next, with nothing here holding onto whatever a
-    prior call once returned."""
+    already knows. Any other owner goes through `principal_resolver.resolve_for_owner_detailed`
+    (`_watch_owner_resolver`) — a real, live, per-call resolution, never cached (ADR-036's own
+    "resolved fresh" requirement, ADR-043's own freshness argument): an owner who cannot be acted as
+    raises its refusal on this call and the next, and the evaluator stops the watch with why
+    (ADR-044 Amendment 1), with nothing here holding onto whatever a prior call once returned."""
 
-    _principal_for_owner = _owner_resolver(principal, principal_resolver)
+    # ADR-044 Amendment 1: the detailed resolver, so a watch it cannot act for is stopped with why.
+    _principal_for_owner = _watch_owner_resolver(principal, principal_resolver)
 
     try:
         await evaluate_hotlists_for_entry(

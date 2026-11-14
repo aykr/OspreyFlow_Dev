@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.55** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.56** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.56 | 2026-11-14 | §7.5: a *Stopped* hotlist or watch says why beside the word, each reason in the Conduit's words (ADR-044 Amendment 1). PDF made by the orchestrator at merge. |
 | 1.55 | 2026-11-14 | §6, Ask & Chat: **Whole case** as v0.5.2's Part D(iii) built it (ADR-098 Amendment 9, ADR-129 Amendment 5, rules-b's wording): the case searched with the question's own words, as you, by names and words, not meaning; a question past 200 characters refused with what to do; a document on the canvas read whole, one elsewhere by its passage; each other record a source, `[S-n]`, selecting its records. Held by `tests/test_user_guide_ask_chat.py`. PDF made by the orchestrator at merge. |
 | 1.54 | 2026-11-14 | The Glass's navigation as the owner decided it on 13 November (ADR-145 Amendment 15) and the selection's actions as Part C built them (ADR-078 Amendment 1). §3: the banner is the case line, "Case ‹name› ▾ · Views in this case · reads ‹dataset›", *All cases* opening the Cases panel, the cross-link *Open this case's data in the Ingest Studio ↗*; no mode lines. §4: the case switcher and the Cases panel in place of the rail's Cases drawer; *Roles, teams and Authors* from Admin and the Studio. §5's table: the rail Explore, Ask & Chat and History; the view switch Graph, Map, Drawing board and Reports, with Matrix, Figures, Ownership and Connection strength under More views; *Build a report*. §5.2: the selection bar's words and order, the menu's *Expand by link type*, the fold of types with no links, the selection's actions first, the menu key and Shift+F10. §5.12, §5.13, §5.14, §7.1, §8, §9 and §12 follow. Five screenshots marked for a new capture. Held by `tests/test_user_guide_navigation.py`. PDF made by the orchestrator at merge. |
 | 1.53 | 2026-11-14 | §7.5 and §7.11: where people sign in with Entra ID, your watches, hotlists and rules run as you, and a scheduled rule's run acts as you, while you have signed in within the last 24 hours (administration guide §6a.7; ADR-148 Amendment 16). PDF made by the orchestrator at merge. |
@@ -1063,6 +1064,26 @@ queue on **Alerts**. There is no Watches tab and no separate inbox.
   monitor**. Each runs as data loads, and on its own as you choose: "Daily at 06:00, and as data
   loads", "Weekly, and as data loads" or "Only as data loads".
 
+**A watch that is *Stopped* says why**, beside the word, in these words (ADR-044 Amendment 1):
+
+- its owner was disabled, or, as a guest, is no longer admitted: "Its owner can no longer sign in to
+  OspreyFlow."
+- on a deployment signing in with Entra ID, its owner's access is out of date: "Its owner has not
+  signed in to OspreyFlow within the last 24 hours, so their clearance and unit are out of date. It
+  is active again at the first load after they sign in."
+- on Entra ID, its owner is not in *People and roles*: "Its owner is not a person Admin › People
+  holds."
+- the identity provider refused: "The identity provider refused to act as its owner."
+- its owner's sign-in could not be checked: "Its owner's sign-in could not be checked at the last
+  load. It is tried again at the next."
+- its owner could not be acted as, for no reason given: "Its owner could not be acted as at the last
+  load."
+- a watched pattern whose saved pattern is no longer its owner's: "Its saved pattern is no longer
+  its owner's."
+
+A hotlist or watch stopped because its owner could not be acted as is active again at the first load
+that can act as them. One whose saved pattern is no longer its owner's stays stopped until it is.
+
 **From the Glass.** In the Query builder, **Save as a watch** on a saved pattern makes a watched
 pattern of the case's dataset: "Saved as a watch: it runs as data loads and daily, and is kept in
 Rules and Monitoring › What raises alerts." In the Inspector, **Watch for this** on an entity that
@@ -1108,8 +1129,8 @@ is as much a source as a row.
 **Where people sign in with Entra ID** (a deployment on a shared platform), your rules, hotlists and
 watches are judged at another person's load, and your watch's own runs happen, only while you have
 used OspreyFlow within the last 24 hours. Otherwise, at a load your hotlists and watches are marked
-*Stopped*, without a reason shown, until the first load after you sign in again: the administration
-guide, §6a.7, says why.
+*Stopped*, with that reason beside it, until the first load after you sign in again: the
+administration guide, §6a.7, says why.
 
 ### 7.6 The rule editor: a rule written as a sentence
 

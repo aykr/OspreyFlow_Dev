@@ -1,0 +1,3 @@
+# plant: hotlists' set_status keeps the reason when set active (the CASE dropped), at af569e1 uncommitted; stack e, the lease admin took at 2026-11-14T08:34Z; fresh PYTHONPYCACHEPREFIX
+1 passed, 10 deselected in 1.54s
+# GREEN: the read already hides an active row's reason (_detail), so the column's clear was held by nothing alone; the test now reads the column and a later stop with no reason (next live run shows it red).

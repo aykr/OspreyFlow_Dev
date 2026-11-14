@@ -39,6 +39,7 @@ from services.api.evaluation import (
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import Hotlist, Monitor, PatternNode, PatternQuery, Principal, Subgraph
 from schemas.ingest import LoadReport
+from tests.services.api.watch_status_fake import kept
 
 SCHEME = load_uk_le_scheme()
 OWNER = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
@@ -83,8 +84,10 @@ class _Hotlists:
     async def list_all_active(self) -> list[Hotlist]:
         return list(self.hotlists)
 
-    async def set_status(self, hotlist_id: str, status: str) -> None:
-        self.statuses.append(status)
+    async def set_status(self, hotlist_id: str, status: str, detail: str | None = None) -> None:
+        # As the real store keeps it (ADR-044 Amendment 1): the status, and a reason with stopped.
+        kept_status, self.reason = kept(status, detail)
+        self.statuses.append(kept_status)
 
 
 class _Lock:
@@ -256,6 +259,7 @@ async def test_a_hotlist_whose_owner_cannot_be_resolved_is_stopped_and_reads_not
         principal_for_owner=nobody, policy="strict",
     )  # fmt: skip
     assert alerts == [] and recorded == [] and store.statuses == ["stopped"]
+    assert store.reason == "unresolved"  # ADR-044 Amendment 1: a resolver that said nothing
 
 
 async def test_every_node_of_an_entry_is_read_whatever_its_size(
@@ -321,8 +325,8 @@ async def test_a_monitor_is_evaluated_for_a_run_that_only_referenced_nodes(
                 )  # fmt: skip
             ]
 
-        async def set_status(self, monitor_id: str, status: str) -> None:
-            return None
+        async def set_status(self, monitor_id: str, status: str, detail: str | None = None) -> None:
+            kept(status, detail)
 
     class _Patterns:
         async def get_authorized(self, pattern_id: str, principal: Principal) -> Any:

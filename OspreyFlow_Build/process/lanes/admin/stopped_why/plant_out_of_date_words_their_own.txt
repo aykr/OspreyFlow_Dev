@@ -1,0 +1,5 @@
+# plant: out_of_date_words_their_own (services/api/watch_status.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k every_reason_has_its_words
+# RED
+E       AssertionError: assert 'has not signed in to OspreyFlow within the last 24 hours, so their clearance and unit are out of date' in 'Its owner is out of date. It is active again at the first load after they sign in.'
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_every_reason_has_its_words_and_none_names_an_id
+1 failed, 29 deselected in 2.98s

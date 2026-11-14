@@ -1,0 +1,5 @@
+# plant: watch_active_keeps_the_reason (OspreyFlow_Core/services/api/monitors.py), at 9f13e78 uncommitted; stack e, the lease admin took at 2026-11-14T08:52Z; fresh PYTHONPYCACHEPREFIX
+# run: ../OspreyFlow_Build/tests/services/api/test_monitors.py -k keeps_why
+E               AssertionError: assert 'revoked' is None
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitors.py::test_a_stopped_watch_keeps_why_and_a_reason_not_known_here_is_served_as_none
+1 failed, 7 deselected in 2.56s

@@ -120,7 +120,7 @@ export function MonitorPanel({ apiBaseUrl, bearerToken, investigationId }: Monit
                   <option value="weekly">Weekly, and as data loads</option>
                   <option value="never">Only as data loads</option>
                 </Select>
-                <StatusBadge status={monitor.status ?? "active"} />
+                <StatusBadge status={monitor.status ?? "active"} why={monitor.stopped_why} />
               </span>
             </li>
           ))}

@@ -974,6 +974,16 @@ DomainPack = Literal["fibo", "niem", "stix"]
 #: or another owner can see it, not left as a silent skip with no visible state change. Written by
 #: the evaluator (`services/api/evaluation.py`), read by the Stage 6c list panels.
 WatchStatus = Literal["active", "stopped"]
+#: ADR-044 Amendment 1: why a hotlist or watch is `stopped`, kept beside the binary status
+#: (ADR-044's decision): its owner can no longer sign in (`revoked`); on Entra ID their access is
+#: out of date (`out_of_date`, ADR-148 Amendment 16); Admin › People does not hold them
+#: (`not_held`); the identity provider refused to act as them (`refused`); their sign-in could not
+#: be checked (`unreachable`);
+#: they could not be acted as, for no reason the caller was told (`unresolved`); a watch's saved
+#: pattern is no longer theirs (`pattern_gone`). `None` while active.
+StoppedReason = Literal[
+    "revoked", "out_of_date", "not_held", "refused", "unreachable", "unresolved", "pattern_gone"
+]
 
 
 class Hotlist(BaseModel):
@@ -1005,6 +1015,10 @@ class Hotlist(BaseModel):
     owner_id: str
     review_date: date
     status: WatchStatus = "active"
+    #: ADR-044 Amendment 1: why it is stopped, and that in words for the owner (never an id,
+    #: rule 7); both `None` while active.
+    status_detail: StoppedReason | None = None
+    stopped_why: str | None = None
     created_at: datetime
     #: ADR-099 Amendment 3: the dataset of the case it was made in; read only in a case reading
     #: it. `None` for one made before, until `stamp_datasets` places it.
@@ -1043,6 +1057,10 @@ class Monitor(BaseModel):
     pattern_id: str
     owner_id: str
     status: WatchStatus = "active"
+    #: ADR-044 Amendment 1: why it is stopped, and that in words for the owner (never an id,
+    #: rule 7); both `None` while active.
+    status_detail: StoppedReason | None = None
+    stopped_why: str | None = None
     created_at: datetime
     #: ADR-099 Amendment 3: the dataset of the case it was made in; read only in a case reading
     #: it. `None` for one made before, until `stamp_datasets` places it.

@@ -202,6 +202,15 @@ class _Owners:
     async def resolve_for_owner(self, owner_id: str) -> Principal | None:
         return PEOPLE.get(owner_id)
 
+    async def resolve_for_owner_detailed(self, owner_id: str) -> Principal:
+        """As the real resolver: the owner, or the refusal `resolve_for_owner` collapses to None."""
+        found = await self.resolve_for_owner(owner_id)
+        if found is None:
+            from principal_auth import PrincipalExchangeRefused
+
+            raise PrincipalExchangeRefused(f"owner {owner_id!r} is not known")
+        return found
+
 
 LOADER = Principal(id="loader-1", clearance="SECRET", org_unit="unit-1")
 

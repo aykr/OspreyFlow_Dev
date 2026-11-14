@@ -1476,7 +1476,7 @@ and what happens next, depends on what was asked:
 - **at a load**: the owner's hotlists and watches are marked stopped, as for any owner who cannot be
   acted as, and are made active again at the first load after they sign in; a stopped watch's own
   runs wait for that load. Their rules are not judged at that load. The watch list shows *Stopped*
-  and does not yet say why.
+  with why beside it, in the Conduit's words for its owner (ADR-044 Amendment 1).
 
 **Other refusals.** An owner disabled in *Admin › People* is refused, and three such refusals in a
 row pause a schedule, as on Keycloak; so is an owner *Admin › People* does not hold ("is not a
@@ -2903,7 +2903,7 @@ Admin → Schedules and runs lists every one.
 | A service is not healthy | `ospreyflow status`, then `ospreyflow logs <service>` |
 | The page does not open | `ospreyflow status`; that port 80 (Lite) or the DNS records (Small) are right |
 | Nobody can sign in | `ospreyflow logs keycloak`; that the address in `osprey.yaml` is the one in the browser; then `ospreyflow repair-sign-in` |
-| Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped**, or a list refresh re-screens 0 customers — typically after the stores were wiped; Admin → System's **Acting for people** says "The Conduit cannot act for people" | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again. The System line turns green within half a minute |
+| Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped** with "Its owner's sign-in could not be checked at the last load. It is tried again at the next." beside it, or a list refresh re-screens 0 customers — typically after the stores were wiped; Admin → System's **Acting for people** says "The Conduit cannot act for people" | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again. The System line turns green within half a minute |
 | Someone signing in through the organisation is told "This email address already belongs to an OspreyFlow account" | An account you made holds their email, and OspreyFlow does not join the two by itself (section 5a.1). Join them in Admin → People and roles' *Refused organisation sign-ins*, or remove that account and they arrive again, or they sign in with that account (section 9.7) |
 | *Refused organisation sign-ins* does not list someone who was refused | It lists the last seven days, from a deployment updated to the release after v0.4.10 and repaired since (`ospreyflow repair-sign-in`, which also makes the identity provider record the refusals). Someone refused before that, or more than seven days ago, is not listed: ask them to sign in through the organisation once more, then look again. Someone already joined to an account is not listed either |
 | Admin → People and roles says "the identity provider refused the Conduit — its account needs manage-users, manage-clients and view-events" | Run `ospreyflow repair-sign-in`, which grants the Conduit's account what it needs |
