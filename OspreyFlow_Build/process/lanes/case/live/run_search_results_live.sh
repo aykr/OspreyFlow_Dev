@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# v052-results' live check (ADR-145 Amendment 15 Part A against ADR-149's route): live/search-results.spec.ts on a
-# leased stack's own host, with the Conduit and Vite there too, so nothing crosses the network from the Mac (the
+# v052-results' live check (ADR-145 Amendment 15 Part A against ADR-149's route), and any other live spec on the same
+# set-up (LIVE_SEED, LIVE_SPECS below): live/search-results.spec.ts by default, on a leased stack's own host, with the Conduit and Vite there too, so nothing crosses the network from the Mac (the
 # orchestrator, 14 November 2026). Run from the worktree root:
 #   OspreyFlow_Build/scripts/stack_lease.sh remote case -- bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
 # The order is DEMO_GUIDE.md §3's, less its first Conduit: a token and its JWKS; Fixture Corp seeded into a case the
@@ -64,12 +64,16 @@ conduit_up() {
 # The seed makes the case (`--case-name`) as analyst-1 of unit-1, the token's own account, so it is the case's first
 # Author and the case reads Fixture Corp's dataset (scripts/case_seed.py's scope_for). The Conduit's POST
 # /v1/investigations takes no empty body now (ADR-099 Amendment 12: a case names its one dataset).
-echo "# step: Fixture Corp seeded into a case the seed makes"
+# LIVE_SEED (default scripts.seed_fixture_corp) and LIVE_SPECS (default live/search-results.spec.ts) let the same
+# set-up hold other live specs: scripts.seed_hmp_fixture for the scenario specs, which take the HMP fixture.
+SEED=${LIVE_SEED:-scripts.seed_fixture_corp}
+SPECS=${LIVE_SPECS:-live/search-results.spec.ts}
+echo "# step: $SEED into a case the seed makes"
 # A case of its own each run: the seed reuses a case of the same name, and the stack's Postgres keeps cases and their
 # working sets between runs, so a second run's Show on graph found its records already there and sent nothing (the run
 # at eb8a4ed). The graph is dropped above; the case's working set is not.
 NAME="Live search check $(date -u +%Y%m%dT%H%M%SZ)"
-"$PY" -m scripts.seed_fixture_corp --case-name "$NAME" --principal-id analyst-1 --org-unit unit-1 >"$W/seed.txt" 2>&1
+"$PY" -m "$SEED" --case-name "$NAME" --principal-id analyst-1 --org-unit unit-1 >"$W/seed.txt" 2>&1
 seeded=$?
 mask <"$W/seed.txt" | tail -8
 [ "$seeded" -eq 0 ] || fail "seed"
@@ -150,7 +154,7 @@ const { chromium } = require("@playwright/test");
 echo "# warm-up: the Glass drew its search box after $(( $(date +%s) - started )) s"
 OSPREY_REUSE_SERVER=1 OSPREY_TEST_LIVE_GLASS=1 OSPREY_LIVE_API_BASE_URL="http://127.0.0.1:$CP" OSPREY_LIVE_BEARER_TOKEN="$TOKEN" \
   OSPREY_LIVE_INVESTIGATION_ID="$CASE" \
-  npx playwright test --config live/playwright.config.ts live/search-results.spec.ts --reporter=line 2>&1 | mask
+  npx playwright test --config live/playwright.config.ts $SPECS --reporter=line 2>&1 | mask
 code=${PIPESTATUS[0]}
 echo "# playwright exit $code"
 if [ "$code" -ne 0 ]; then
