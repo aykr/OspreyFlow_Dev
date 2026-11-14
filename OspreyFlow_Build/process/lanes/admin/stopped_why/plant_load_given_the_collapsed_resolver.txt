@@ -1,0 +1,5 @@
+# plant: load_given_the_collapsed_resolver (services/api/recipe_run.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k given_the_resolver
+# RED
+E       AssertionError: the collapsed form tells the evaluator nothing
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_a_load_s_watches_are_given_the_resolver_that_says_why
+1 failed, 24 deselected in 3.12s

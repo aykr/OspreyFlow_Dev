@@ -1,0 +1,8 @@
+# plant: out_of_date_read_as_unreachable (services/api/watch_status.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k out-of-date or out_of_date
+# RED
+E         At index 0 diff: ('m-1', 'stopped', 'unreachable') != ('m-1', 'stopped', 'out_of_date')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_each_refusal_is_its_reason[out-of-date]
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_a_load_that_cannot_act_as_a_hotlist_s_owner_stops_it_with_the_reason[out-of-date]
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_a_load_that_cannot_act_as_a_watch_s_owner_stops_it_with_the_reason[out-of-date]
+3 failed, 22 deselected in 3.02s
