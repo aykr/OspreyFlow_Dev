@@ -164,7 +164,7 @@ records do not time.
 | 15:15 | 13b, 14 | the CI run on the candidate's exact commit recorded by id; `UPGRADE.log` committed with docs' guide sentence (row 14) | 15 min | E |
 | ~15:30 | — | the report to the orchestrator: every row's record, the leases each ran under | 15 min | — |
 
-**About 7.5 h with no fix**, ending mid-afternoon. A failure in copy B's command costs one more pass of rows 4 to 10,
+**Start at 08:00 sharp, and if a fix is needed after about 13:00, tell the orchestrator before rerunning** (the orchestrator, 14 November: a FAIL costs 1.5 to 2 h, and the 15:30 finish has little slack). **About 7.5 h with no fix**, ending mid-afternoon. A failure in copy B's command costs one more pass of rows 4 to 10,
 about 1.5 to 2 h, and the day still ends within it. Row 13 does not touch the cluster, but it is kept until after row
 12 because both load one server (a 32 GiB node and the suite's workers). The two cold builds (rows 1 and 4) are the
 largest unknowns: their real times go in the record and replace these estimates for the next release's run.
