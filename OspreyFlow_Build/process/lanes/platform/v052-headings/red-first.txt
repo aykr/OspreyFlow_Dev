@@ -9,3 +9,19 @@ Red first (vitest, the sections' own tests, before the change):
 Green after: src/admin/sections, src/models, AdminPlace and AdminSections: 10 files, 112 tests passed. tsc and eslint clean.
 The look spec (keyboard/admin-look.spec.ts: one h1, levels [1, 2], every h2 below the h1, in dark, light and GOV.UK) and
 the axe scans (a11y/every-harness.spec.ts, the two new states in the three looks): waiting for a local browser slot.
+
+# The browser half (2026-11-14T12:12:41Z; the orchestrator's yes to a local Playwright run, slot 6, the admin harness alone, no stack).
+# The look spec's Models and Maps cases, red against main's three component files (put back after):
+   6     - Expected  - 0
+   6     +   3,
+   6     + Received  + 1
+   6     Error: expect(received).toEqual(expected) // deep equality
+   1   6 failed
+  (the levels found [1, 2, 3] against [1, 2], in each of the six cases)
+# Two first reds were the test's own, fixed before the one above: it waited for an h2, so main's h3s timed it out
+# instead of failing on the levels (rule 15); and it asked for administer_system where Models needs manage_models and
+# Maps manage_geospatial (sections.json), so the side list never offered them.
+Green: keyboard/admin-look.spec.ts whole, People's cases with the new ones:
+  12 passed (2.7s)
+axe (a11y/every-harness.spec.ts, the two new states in dark, light and GOV.UK, and their label-name checks):
+  8 passed (7.9s)

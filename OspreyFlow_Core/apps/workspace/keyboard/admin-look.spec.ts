@@ -129,13 +129,14 @@ for (const look of ["dark", "light"] as const) {
 
 // Admin's Models and Maps (ADR-145 Amendment 16, the GOV.UK pass's headings, platform's sections): the section's
 // one h1 with its parts as h2s beneath it, each drawn smaller than the h1, in every look, as People's are.
-for (const [section, title] of [["models", "Models"], ["maps", "Maps"]] as const) {
+for (const [section, title, right] of [["models", "Models", "manage_models"], ["maps", "Maps", "manage_geospatial"]] as const) {
   for (const [look, brand] of LOOKS) {
     test(`Admin's ${title} in the ${look} look: one h1, its parts h2s drawn below it`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 900 });
-      await page.goto(`/keyboard/admin-harness.html?rights=administer_system&serve=${section}&open=${title}${brand}`);
+      await page.goto(`/keyboard/admin-harness.html?rights=${right}&serve=${section}&open=${title}${brand}`);
       if (look === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
-      await page.locator(".admin-place__section h2").first().waitFor();
+      // The section's first part, at whatever level it is drawn, so a wrong level fails on the levels below.
+      await page.locator(".admin-place__section :is(h2, h3, h4, h5, h6)").first().waitFor();
       await page.evaluate(() => document.fonts.ready.then(() => undefined));
       const m = await page.evaluate(() => {
         const px = (el: Element | null) => (el ? parseFloat(getComputedStyle(el).fontSize) : NaN);
@@ -144,7 +145,7 @@ for (const [section, title] of [["models", "Models"], ["maps", "Maps"]] as const
         return {
           h1s: [...place.querySelectorAll("h1")].map((h) => (h.textContent ?? "").trim()),
           levels: [...new Set([...place.querySelectorAll("h1, h2, h3, h4, h5, h6")].map((h) => Number(h.tagName[1])))].sort(),
-          parts: place.querySelectorAll(".admin-place__section h2").length,
+          parts: place.querySelectorAll(".admin-place__section :is(h2, h3, h4, h5, h6)").length,
           notSmaller: [...place.querySelectorAll("h2")].filter((h) => px(h) >= px(h1)).map((h) => `${(h.textContent ?? "").trim()} ${px(h)}px`),
         };
       });

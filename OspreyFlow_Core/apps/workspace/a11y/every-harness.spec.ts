@@ -277,8 +277,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   "admin-harness.html": [
     "open=connections&rights=administer_system",
     // ADR-145 Amendment 16: Models and Maps, their parts h2s beneath the section's h1.
-    "rights=administer_system&serve=models&open=Models",
-    "rights=administer_system&serve=maps&open=Maps",
+    "rights=manage_models&serve=models&open=Models",
+    "rights=manage_geospatial&serve=maps&open=Maps",
     // Every section in the side list, the coming ones named with their tag and what they will hold (the
     // GOV.UK pass, 14 Nov: no longer opened as placeholders); People's rows with their actions beneath.
     "rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&serve=people",
