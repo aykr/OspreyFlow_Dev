@@ -72,3 +72,5 @@ f5a6f3d fcdfec4 rules deps-opensearch (v0.5.2)
 daa2733 58d2ea0 case v052-fixes (v0.5.2 step 3e and Part B), with its shared-files diff
 f7891fb e5fab5a platform-b caddy-mark (main's NEEDS_CADDY red)
 b9957c7 f896864 platform v052-backupsfix (main's seven Helm reds)
+ad4cc89 3de0896 platform v052-runbookclaims
+5178332 82504af platform v052-bedrockkeys
