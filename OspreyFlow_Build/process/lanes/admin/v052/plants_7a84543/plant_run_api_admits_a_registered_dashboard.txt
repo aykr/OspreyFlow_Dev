@@ -1,0 +1,6 @@
+# plant: run_api_admits_a_registered_dashboard (OspreyFlow_Core/services/api/app.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '        if registered is not None:\n            raise HTTPException(status_code=403, detail=DASHBOARD_IS_NO_SERVICE_IDENTITY)'
+# with: '        pass'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py -k 'registered_as_a_dashboard'
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity[registered-dashboard]
+1 failed, 1 passed, 31 deselected in 5.94s

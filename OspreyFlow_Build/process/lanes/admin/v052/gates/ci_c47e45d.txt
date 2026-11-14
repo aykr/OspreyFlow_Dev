@@ -1,0 +1,30 @@
+# make -k ci, offline on the server, at c47e45d (on main 39a96ab).
+# This lane's own failure: route-coverage-check (GET /v1/admin/dashboards/sign-in undocumented), fixed in the next commit.
+# The rest are main's at 39a96ab: test_feed_live.py named in the Makefile but absent (live-collect, worker_isolation, write_store_marks),
+# test_guides_cloud_platform 6a8 (fixed on main by acbb8cc/d702f01), test_stack_lease against case's real run on the server.
+All checks passed!
+  3 failed
+  31 passed (2.4m)
+npm error Lifecycle script `test:a11y` failed with error:
+npm error command failed
+make[2]: *** [Makefile:175: harness-a11y] Error 1
+make[1]: *** [Makefile:69: core-check] Error 2
+licence-check: 94 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+============================== 8 passed in 1.95s ===============================
+Success! 9 passed, 0 failed.
+Success! 11 passed, 0 failed.
+Success! 12 passed, 0 failed.
+Success! 11 passed, 0 failed.
+1 chart(s) linted, 0 chart(s) failed
+============================= 54 passed in 49.15s ==============================
+============ 391 passed, 6 skipped, 1 warning in 1022.38s (0:17:02) ============
+route-coverage-check: route(s) registered in services/api/app.py not documented in any Apache-scoped doc and not in the allowlist: GET /v1/admin/dashboards/sign-in
+make[1]: *** [Makefile:115: route-coverage-check] Error 1
+================ 17 passed, 2 skipped, 748 deselected in 1.58s =================
+======================== 203 passed in 83.14s (0:01:23) ========================
+============================= 10 passed in 19.39s ==============================
+============================== 12 passed in 1.44s ==============================
+============================== 28 passed in 1.49s ==============================
+make: *** [Makefile:19: ci] Error 2
+Wall time: 2194 s, exit 2 (no stack, no lease; set-up before it 18 s)
+ci exit 2

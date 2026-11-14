@@ -1,0 +1,9 @@
+# plant: the register route stops passing application_id on (app.py create_dashboard call)
+E         
+E         At index 0 diff: None != 'dddddddd-eeee-4fff-8000-111111111111'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_admin_routes.py:704: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_routes.py::test_the_register_route_passes_the_application_id_on
+1 failed, 166 deselected in 1.79s

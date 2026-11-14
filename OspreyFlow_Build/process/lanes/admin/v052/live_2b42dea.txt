@@ -1,0 +1,90 @@
+# v052-identities live run 1, at 2b42dea (stack b, lease 2026-11-13T22:17:02Z). The short summary and the
+# tracebacks of the two failures that were this lane's own (both test defects, fixed in the next commit):
+# test_an_account_removed_everywhere_... asked a unit-2 account's level in a unit-1 case (a grant never
+# widens past the unit); test_a_dashboard_reads_... stood the figures in as object() (the JSON feed calls
+# model_dump). The other 37 are in files this lane does not touch: Valkey asked on 6379 not the pinned
+# port (test_worker, test_ws_ticket), model/recognise services absent (httpx ConnectError), harness apply,
+# AZURE_STORAGE_ACCOUNT unset (test_media_blob), report_sync, golden, scenario flows.
+head 2b42dea
+________ test_an_account_removed_everywhere_holds_no_level_in_any_case _________
+
+store = <services.api.investigations.InvestigationStore object at 0x730acc8589e0>
+
+    async def test_an_account_removed_everywhere_holds_no_level_in_any_case(
+        store: InvestigationStore,
+    ) -> None:
+        """A dashboard identity removed from Admin › Dashboards (ADR-148 Amendment 10): every grant its
+        account holds goes, each recorded as a revoke; another account's grant in the same case
+        stays."""
+        first = await store.create(AUTHOR, name="First")
+        second = await store.create(AUTHOR, name="Second")
+        await store.set_grant(first.id, "bob", AccessLevel.VIEWER, by=AUTHOR)
+        await store.set_grant(second.id, "bob", AccessLevel.VIEWER, by=AUTHOR)
+        await store.set_grant(second.id, "carol", AccessLevel.VIEWER, by=AUTHOR)
+    
+        assert sorted(await store.revoke_everywhere("bob", by=AUTHOR)) == sorted([first.id, second.id])
+        for case in (first, second):
+            with pytest.raises(InvestigationNotFoundError):
+                await store.get_authorized(case.id, COLLEAGUE, need=AccessLevel.VIEWER)
+>       assert await store.effective_level(second.id, OUTSIDER) is AccessLevel.VIEWER
+E       AssertionError: assert None is <AccessLevel.VIEWER: 'viewer'>
+E        +  where <AccessLevel.VIEWER: 'viewer'> = AccessLevel.VIEWER
+
+../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py:155: AssertionError
+_________ test_a_dashboard_reads_the_case_it_was_granted_and_no_other __________
+
+store = <services.api.investigations.InvestigationStore object at 0x730a2d3fcbc0>
+        if feed_format == "json":
+            # A board pulls the feed as its dashboard identity: the team view's *mine*, the reader's own
+            # claims, stays in the Glass, here as in `feed_rows` (the orchestrator's review of L2.12).
+            return JSONResponse(
+>               figures.model_dump(mode="json", exclude={"monitoring": {"team": {"__all__": {"mine"}}}})
+                ^^^^^^^^^^^^^^^^^^
+            )
+E           AttributeError: 'object' object has no attribute 'model_dump'
+
+services/api/app.py:14147: AttributeError
+______ test_run_once_dispatches_a_submitted_job_to_its_registered_handler ______
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_extract_returns_data_conforming_to_the_requested_schema[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_embed_returns_one_equal_length_vector_per_text_in_order[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_transcribe_returns_correctly_shaped_segments_and_words[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite_vision.py::test_describe_image_returns_data_conforming_to_the_requested_schema[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_a_person_an_organisation_and_a_place_are_found_with_their_spans[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_spans_count_characters_not_bytes[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_an_empty_text_has_no_entities_and_the_recogniser_names_itself[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_a_text_past_the_limit_is_refused_not_read_in_part[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/golden/test_golden_set.py::test_golden_set_recall_has_not_regressed
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_ARCADEDB_PASSWORD-ARCADEDB_ROOT_PASSWORD]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_POSTGRES_USER-POSTGRES_USER]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_POSTGRES_DB-POSTGRES_DB]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_MINIO_USER-MINIO_ACCESS_KEY]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_MINIO_PASSWORD-MINIO_SECRET_KEY]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_a_generated_secret_is_not_empty_and_is_not_a_placeholder
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_demo_analyst_password_is_absent_without_the_flag
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the_flag
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_the_deployment_this_file_starts_is_a_real_one_and_the_teardown_removes_it
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_the_demo_analyst_holds_the_studio_roles_the_ingest_flow_needs
+FAILED ../OspreyFlow_Build/tests/resolve/test_trigger.py::test_overlap_guard_skips_a_second_run_while_the_first_holds_the_lock
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py::test_phase6_exit_criterion_end_to_end
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+FAILED ../OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py::test_extract_returns_nonempty_persons_from_the_witness_statement
+FAILED ../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py::test_an_account_removed_everywhere_holds_no_level_in_any_case
+FAILED ../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py::test_a_dashboard_reads_the_case_it_was_granted_and_no_other
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_run_once_dispatches_a_submitted_job_to_its_registered_handler
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_run_once_with_nothing_pending_returns_zero
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_a_failing_handler_rolls_back_and_marks_the_job_failed
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_a_minted_ticket_redeems_to_the_same_principal
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_a_reused_ticket_is_refused
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_an_unknown_ticket_is_refused
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_two_mints_for_the_same_principal_produce_different_tickets
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_a_ticket_carries_no_more_than_the_principals_own_resolved_claims
+FAILED ../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py::test_a_pass_on_entra_asks_with_the_scope
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_the_blob_adapter_is_in_the_media_store_suite_wherever_this_file_runs
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_a_wrong_key_is_refused_by_the_service_not_read_as_missing
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_a_blob_held_under_a_name_the_store_does_not_make_is_refused[other/a.png]
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_a_blob_held_under_a_name_the_store_does_not_make_is_refused[media/ABC.png]
+39 failed, 3470 passed, 161 skipped, 18 warnings in 9389.23s (2:36:29)
+Wall time: 9404 s, exit 1 (stack b, the lease admin took at 2026-11-13T22:17:02Z; set-up before it 39 s)
+live exit 1

@@ -1,0 +1,20 @@
+
+    async def test_on_entra_a_dashboard_is_named_as_keycloak_names_one_and_once_a_tenant() -> None:
+        """The name Superset's embedding matches a board on (platform-b's agreement): required, the
+        slug Keycloak's `osprey-dashboard-<slug>` carries, one dashboard of a name in a tenant."""
+        from services.api.identity_admin import DashboardExistsError, UnknownRoleError
+    
+        store = _Store()
+        admin = EntraPeopleAdmin(store)  # type: ignore[arg-type]
+        made = await admin.create_dashboard(
+            "Compliance board", clearance="OFFICIAL", org_unit="u", application_id=DASHBOARD
+        )
+>       assert made.dashboard.name == "compliance-board"
+E       AssertionError: assert None == 'compliance-board'
+E        +  where None = DashboardIdentity(client_id='dddddddd-eeee-4fff-8000-111111111111', account_id='dddddddd-eeee-4fff-8000-111111111111',...L', org_unit='u', receivable_handling_codes=['P'], last_pulled=None, last_failure=None, failed_at=None, cases_pulled=0).name
+E        +    where DashboardIdentity(client_id='dddddddd-eeee-4fff-8000-111111111111', account_id='dddddddd-eeee-4fff-8000-111111111111',...L', org_unit='u', receivable_handling_codes=['P'], last_pulled=None, last_failure=None, failed_at=None, cases_pulled=0) = RegisteredDashboard(dashboard=DashboardIdentity(client_id='dddddddd-eeee-4fff-8000-111111111111', account_id='dddddddd...u', receivable_handling_codes=['P'], last_pulled=None, last_failure=None, failed_at=None, cases_pulled=0), secret=None).dashboard
+
+../OspreyFlow_Build/tests/services/api/test_entra_people.py:709: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_on_entra_a_dashboard_is_named_as_keycloak_names_one_and_once_a_tenant
+1 failed, 55 deselected in 4.59s

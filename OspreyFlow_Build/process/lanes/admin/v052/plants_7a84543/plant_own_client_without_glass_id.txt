@@ -1,0 +1,6 @@
+# plant: own_client_without_glass_id (OspreyFlow_Core/packages/principal_auth/__init__.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '    own = {mapping.client_id, mapping.api_client_id, *(a for a in audiences if isinstance(a, str))}'
+# with: '    own = {mapping.api_client_id, *(a for a in audiences if isinstance(a, str))}'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py -k 'no_registered_dashboard or api_s_own'
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[the-glass]
+1 failed, 8 passed, 10 deselected in 6.08s

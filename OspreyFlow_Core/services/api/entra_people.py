@@ -23,8 +23,12 @@ is the way back in (the orchestrator's ruling, amended 12 November 2026; the run
 **What Admin › People cannot do here, said in words** (`PersonActionRefused`): invite or reset a
 sign-in (Entra holds the accounts), change a person's clearance, unit or handling codes (Entra's
 claims carry them, through the deployment's claim mapping), remove a person (they would reappear,
-with no roles, at their next sign-in: disable them here instead, or in Entra), join an organisation
-account, or register a dashboard identity (a Keycloak client; Superset on Entra is a later step).
+with no roles, at their next sign-in: disable them here instead, or in Entra), or join an
+organisation account.
+
+**Dashboard identities** (ADR-148 Amendment 10) are registered here by their Entra app
+registration's application id and a slug-shaped name, one a tenant, with what they read with; Entra
+holds each one's secret. The deployment's own applications (the Glass's, the API's) are refused.
 
 **Every query names the tenant.** A row of another tenant's same object id grants nothing
 (`test_entra_people_live.py`, rule 3).
@@ -40,7 +44,7 @@ from typing import Any
 
 import asyncpg
 
-from principal_auth import ClaimMapping, SeenPerson, StoredPerson, is_object_id
+from principal_auth import ClaimMapping, SeenPerson, StoredDashboard, StoredPerson, is_object_id
 from schemas.admin import (
     AccessInput,
     DashboardIdentity,
@@ -57,11 +61,13 @@ from .audit import AuditWriter
 from .custom_roles import PEOPLE_LOCK, people_managers, rights_on
 from .identity_admin import (
     CredentialCheck,
+    DashboardExistsError,
     IdentityAdminRefused,
     PersonActionRefused,
     PersonExistsError,
     UnknownRoleError,
     allowed_role,
+    dashboard_slug,
 )
 
 #: The role the first administrators are given (`schemas.rights.ROLE_RIGHTS`).
@@ -112,7 +118,22 @@ CREATE TABLE IF NOT EXISTS entra_people (
     added_by text,
     PRIMARY KEY (tenant_id, oid)
 );
+CREATE TABLE IF NOT EXISTS entra_dashboards (
+    tenant_id text NOT NULL,
+    application_id text NOT NULL,
+    name text NOT NULL,
+    clearance text NOT NULL,
+    org_unit text NOT NULL,
+    receivable_handling_codes text[] NOT NULL DEFAULT '{}',
+    registered_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id, application_id),
+    UNIQUE (tenant_id, name)
+);
 """
+
+#: A dashboard identity's handling codes, as Keycloak's registration gives them
+#: (`identity_admin.IdentityAdmin.create_dashboard`).
+DASHBOARD_CODES = ("P",)
 
 #: Said for every Admin › People action Entra holds.
 ENTRA_HOLDS_ACCOUNTS = (
@@ -160,6 +181,16 @@ def _person(row: Mapping[str, Any]) -> PersonAccount:
     )
 
 
+def _dashboard(row: Mapping[str, Any]) -> StoredDashboard:
+    return StoredDashboard(
+        application_id=str(row["application_id"]),
+        clearance=str(row["clearance"]),
+        org_unit=str(row["org_unit"]),
+        receivable_handling_codes=tuple(row["receivable_handling_codes"]),
+        name=str(row["name"]),
+    )
+
+
 @dataclass
 class EntraPeopleStore:
     """The `entra_people` table, every statement bound to one tenant."""
@@ -186,6 +217,60 @@ class EntraPeopleStore:
     async def ping(self) -> None:
         async with self.pool.acquire() as conn:
             await conn.execute("SELECT 1")
+
+    # --- dashboard identities (ADR-148 Amendment 10; `principal_auth.DashboardSource`) ---------
+
+    async def dashboard(self, tenant_id: str, application_id: str) -> StoredDashboard | None:
+        """A registered dashboard identity of this store's tenant; None for any other tenant."""
+        if tenant_id != self.tenant_id:
+            return None
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT application_id, name, clearance, org_unit, receivable_handling_codes "
+                "FROM entra_dashboards WHERE tenant_id = $1 AND application_id = $2",
+                self.tenant_id, application_id,
+            )  # fmt: skip
+        return _dashboard(row) if row is not None else None
+
+    async def dashboards(self) -> list[StoredDashboard]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT application_id, name, clearance, org_unit, receivable_handling_codes "
+                "FROM entra_dashboards WHERE tenant_id = $1 ORDER BY registered_at, application_id",
+                self.tenant_id,
+            )
+        return [_dashboard(row) for row in rows]
+
+    async def register_dashboard(
+        self, application_id: str, name: str, *, clearance: str, org_unit: str
+    ) -> StoredDashboard:
+        if not is_object_id(application_id):
+            raise ValueError("a dashboard identity is named by its application id")
+        if not name or dashboard_slug(name) != name:
+            raise ValueError(f"a dashboard's name is a slug, as Keycloak's: {name!r} is not one")
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "INSERT INTO entra_dashboards (tenant_id, application_id, name, clearance, "
+                    "org_unit, receivable_handling_codes) VALUES ($1, $2, $3, $4, $5, $6) "
+                    "ON CONFLICT (tenant_id, application_id) DO NOTHING RETURNING "
+                    "application_id, name, clearance, org_unit, receivable_handling_codes",
+                    self.tenant_id, application_id, name, clearance, org_unit,
+                    list(DASHBOARD_CODES),
+                )  # fmt: skip
+        except asyncpg.UniqueViolationError as clash:  # UNIQUE (tenant_id, name)
+            raise DashboardExistsError(name) from clash
+        if row is None:
+            raise DashboardExistsError(application_id)
+        return _dashboard(row)
+
+    async def remove_dashboard(self, application_id: str) -> bool:
+        async with self.pool.acquire() as conn:
+            done = await conn.execute(
+                "DELETE FROM entra_dashboards WHERE tenant_id = $1 AND application_id = $2",
+                self.tenant_id, application_id,
+            )  # fmt: skip
+        return str(done).endswith(" 1")
 
     # --- the resolver's read (`principal_auth.RoleSource`) ------------------------------------
 
@@ -371,8 +456,11 @@ class EntraPeopleAdmin:
     Keycloak (the routes call either): roles and *Disable* written to the deployment's own store,
     everything Entra holds refused in words."""
 
-    def __init__(self, store: EntraPeopleStore) -> None:
+    def __init__(self, store: EntraPeopleStore, *, own_clients: Iterable[str | None] = ()) -> None:
         self.store = store
+        #: The Glass's and this API's own application ids, never a dashboard identity's: the
+        #: resolver refuses a token of either as a dashboard's (ADR-148 Amendment 10).
+        self.own_clients = frozenset(c.lower() for c in own_clients if c)
 
     async def aclose(self) -> None:
         """The store is the run resources' (`run_resources.py` closes it), not this admin's."""
@@ -443,16 +531,47 @@ class EntraPeopleAdmin:
     ) -> tuple[PersonAccount, OrganisationArrival]:
         raise _refused("There is no organisation account to join.")
 
+    # ADR-148 Amendment 10: a dashboard identity is its own Entra app registration, which holds its
+    # secret; Admin › Dashboards registers it by application id with what it reads with.
     async def list_dashboards(self) -> list[DashboardIdentity]:
-        return []
+        return [_identity(d) for d in await self.store.dashboards()]
 
     async def create_dashboard(
-        self, name: str, *, clearance: str, org_unit: str
+        self, name: str, *, clearance: str, org_unit: str, application_id: str | None = None
     ) -> RegisteredDashboard:
-        raise _refused("Dashboard identities are not registered on this deployment yet.")
+        if application_id is None:
+            raise UnknownRoleError(
+                "on Entra ID a dashboard identity is its own app registration: give its "
+                "application id (the registration holds its secret)"
+            )
+        if application_id.lower() in self.own_clients:
+            raise UnknownRoleError(
+                f"{application_id} is this deployment's own application (the Glass's or the "
+                "API's), never a dashboard identity: give the dashboard's own app registration"
+            )
+        stored = await self.store.register_dashboard(
+            application_id, dashboard_slug(name), clearance=clearance, org_unit=org_unit
+        )
+        return RegisteredDashboard(dashboard=_identity(stored), secret=None)
 
     async def delete_dashboard(self, client_id: str) -> None:
-        raise _refused("Dashboard identities are not registered on this deployment yet.")
+        if not await self.store.remove_dashboard(client_id):
+            raise PersonActionRefused(
+                "no_such_dashboard", f"{client_id} is not a registered dashboard identity."
+            )
+
+
+def _identity(stored: StoredDashboard) -> DashboardIdentity:
+    """Its account, which a case Author grants Viewer to, is its application id: what its token's
+    principal is (`principal_auth.principal_from_claims`)."""
+    return DashboardIdentity(
+        client_id=stored.application_id,
+        account_id=stored.application_id,
+        name=stored.name or None,
+        clearance=stored.clearance,
+        org_unit=stored.org_unit,
+        receivable_handling_codes=list(stored.receivable_handling_codes),
+    )
 
 
 #: Who an audit row of the start's own grant names: no person did it.

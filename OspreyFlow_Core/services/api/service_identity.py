@@ -20,6 +20,7 @@ from __future__ import annotations
 import jwt
 
 from principal_auth import (
+    DASHBOARD_APP_ROLE,
     DEFAULT_CLAIM_MAPPING,
     ENTRA_ALGORITHMS,
     LEEWAY_SECONDS,
@@ -60,6 +61,13 @@ class ServiceIdentityRefused(Exception):
 NOT_A_SERVICE_IDENTITY = (
     "the sign-in is not a service identity's: sign in with the client-credentials "
     "grant of the client the pipeline is owned externally by"
+)
+
+
+#: ADR-148 Amendment 10: a dashboard identity reads the report feed and never submits runs.
+DASHBOARD_IS_NO_SERVICE_IDENTITY = (
+    "the sign-in is a dashboard identity's: a dashboard reads the report feed and never "
+    "submits runs"
 )
 
 
@@ -148,10 +156,11 @@ class ServiceIdentityVerifier:
         if "scp" in claims or claims.get("idtyp", "app") != "app":
             # A delegated token is a person's, whichever application asked for it.
             raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
-        clients = {claims[c] for c in ("azp", "appid") if c in claims}
-        if len(clients) != 1:
+        # A claim of any other shape than a string is no client: refused, never an error.
+        named = [claims[c] for c in ("azp", "appid") if c in claims]
+        if not named or not all(isinstance(c, str) for c in named) or len(set(named)) != 1:
             raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
-        client = clients.pop()
+        client = named[0]
         if not isinstance(client, str) or not is_object_id(client):
             raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
         if client in (
@@ -161,4 +170,9 @@ class ServiceIdentityVerifier:
         ):
             # The Glass's own registration, or this API's: the deployment's, never an orchestrator.
             raise ServiceIdentityRefused(DEPLOYMENT_CLIENT_WORDS, status=403)
+        roles = claims.get("roles")
+        if isinstance(roles, list) and DASHBOARD_APP_ROLE in roles:
+            # Amendment 10: a client granted the dashboards' role is a dashboard's, registered or
+            # not.
+            raise ServiceIdentityRefused(DASHBOARD_IS_NO_SERVICE_IDENTITY, status=403)
         return client

@@ -6,6 +6,9 @@ Configuration, all from the environment (the deployment's env file — secrets n
 - `REPORT_SYNC_DASHBOARDS` — a JSON list of `{"client_id", "secret", "weeks"?}`, each a dashboard
   identity registered in the Admin area (its secret is shown there once);
 - `REPORT_SYNC_TOKEN_URL` — the identity provider's token endpoint;
+- `REPORT_SYNC_SCOPE` — on Entra ID only, the API's `api://<application id>/.default`, asked for
+  in each token request; each dashboard's `client_id` is then its app registration's application id
+  (ADR-148 Amendment 10);
 - `REPORT_SYNC_CONDUIT_URL` — where the Conduit answers (inside the deployment's network);
 - `REPORT_SYNC_INTERVAL_SECONDS` — how often each case is pulled (900 by default);
 - `REPORT_MART_READER` / `REPORT_MART_READER_PASSWORD` — the login a BI tool reads the mart as;
@@ -24,6 +27,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import time
 from collections.abc import Mapping
@@ -51,6 +55,10 @@ def healthy(heartbeat: Path, interval: int, now: float) -> bool:
         return False
 
 
+_API_SCOPE = re.compile(r"^api://[^/\s]+/\.default$")
+_APPLICATION_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
 def dashboards_from_env(env: Mapping[str, str]) -> list[Dashboard]:
     """The configured dashboards, refused in words when the configuration is not usable."""
     token_url = env.get("REPORT_SYNC_TOKEN_URL", "")
@@ -61,16 +69,28 @@ def dashboards_from_env(env: Mapping[str, str]) -> list[Dashboard]:
         listed = json.loads(env.get("REPORT_SYNC_DASHBOARDS", "[]"))
     except json.JSONDecodeError as e:
         raise SystemExit(f"REPORT_SYNC_DASHBOARDS is not JSON: {e}") from e
+    # ADR-148 Amendment 10: on Entra ID, the API's scope, asked for in each client-credentials
+    # request; each dashboard is its own app registration, named by its application id.
+    scope = env.get("REPORT_SYNC_SCOPE") or None
+    if scope is not None and not _API_SCOPE.match(scope):
+        raise SystemExit(
+            f"REPORT_SYNC_SCOPE must be the API's api://<application id>/.default: {scope!r}"
+        )
     boards = []
     for entry in listed:
         client_id, secret = str(entry.get("client_id", "")), str(entry.get("secret", ""))
-        if not client_id.startswith("osprey-dashboard-") or not secret:
+        if scope is not None and (not _APPLICATION_ID.match(client_id) or not secret):
+            raise SystemExit(
+                "on Entra ID a dashboard's client_id is its app registration's application id, "
+                f"with its secret: {client_id!r}"
+            )
+        if scope is None and (not client_id.startswith("osprey-dashboard-") or not secret):
             raise SystemExit(
                 f"a dashboard needs an osprey-dashboard-* client_id and a secret: {client_id!r}"
             )
         boards.append(
             Dashboard(client_id=client_id, secret=secret, token_url=token_url,
-                      conduit_url=conduit_url, weeks=int(entry.get("weeks", 12)))
+                      conduit_url=conduit_url, weeks=int(entry.get("weeks", 12)), scope=scope)
         )  # fmt: skip
     return boards
 

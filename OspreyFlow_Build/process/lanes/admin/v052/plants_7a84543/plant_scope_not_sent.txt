@@ -1,0 +1,6 @@
+# plant: scope_not_sent (OspreyFlow_Core/services/report_sync/sync.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '                      **({"scope": self._scope} if self._scope else {})},'
+# with: '                      },'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py -k 'api_s_scope'
+FAILED ../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py::test_on_entra_the_token_asks_for_the_api_s_scope
+1 failed, 11 deselected in 1.55s

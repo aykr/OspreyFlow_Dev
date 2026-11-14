@@ -1,0 +1,6 @@
+# plant: app_wiring_without_own_clients (OspreyFlow_Core/services/api/app.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '            resources.people_store, own_clients=(mapping.client_id, mapping.api_client_id)\n'
+# with: '            resources.people_store\n'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_entra_people.py -k 'own_applications'
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_the_app_tells_the_entra_admin_its_own_applications
+1 failed, 3 passed, 56 deselected in 4.36s

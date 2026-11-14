@@ -122,6 +122,8 @@ export const invitePerson = (api: AdminApi, invite: InviteInput) =>
   call<SignInDelivery>(api, "people", { method: "POST", body: JSON.stringify(invite) });
 // ADR-148 Amendment 8: on Entra ID sign-in, Entra holds the accounts; a person is added by object id.
 export const signInKind = (api: AdminApi) => call<SignInKind>(api, "sign-in");
+// ADR-148 Amendment 10: Admin › Dashboards' own copy, behind manage_dashboards.
+export const dashboardsSignInKind = (api: AdminApi) => call<SignInKind>(api, "dashboards/sign-in");
 export const addPersonByObjectId = (api: AdminApi, objectId: string) =>
   call<PersonAccount>(api, "people/by-object-id", { method: "POST", body: JSON.stringify({ object_id: objectId }) });
 export const setAccess = (api: AdminApi, userId: string, access: AccessInput) =>
@@ -140,10 +142,11 @@ export const listArrivals = (api: AdminApi) => call<OrganisationArrival[]>(api, 
 export const linkOrganisation = (api: AdminApi, userId: string, subject: string) =>
   call<PersonAccount>(api, person(userId, "organisation-link"), { method: "POST", body: JSON.stringify({ subject }) });
 export const listDashboards = (api: AdminApi) => call<DashboardIdentity[]>(api, "dashboards");
-export const registerDashboard = (api: AdminApi, name: string, clearance: string, orgUnit: string) =>
+export const registerDashboard = (api: AdminApi, name: string, clearance: string, orgUnit: string, applicationId?: string) =>
   call<RegisteredDashboard>(api, "dashboards", {
     method: "POST",
-    body: JSON.stringify({ name, clearance, org_unit: orgUnit }),
+    // ADR-148 Amendment 10: on Entra ID, the dashboard's own app registration's application id.
+    body: JSON.stringify({ name, clearance, org_unit: orgUnit, ...(applicationId ? { application_id: applicationId } : {}) }),
   });
 export const removeDashboard = (api: AdminApi, clientId: string) =>
   call<void>(api, `dashboards/${encodeURIComponent(clientId)}`, { method: "DELETE" });

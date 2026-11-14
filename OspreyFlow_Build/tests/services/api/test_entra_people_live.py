@@ -85,7 +85,8 @@ def _token(keypair, **overrides: object) -> str:  # type: ignore[no-untyped-def]
         "name": "Synthetic Analyst", "preferred_username": "analyst@example.test",
     }  # fmt: skip
     claims.update(overrides)
-    return sign_token(keypair[0], claims)
+    # A claim given as None is one the token does not carry (an app-only token has no `scp`).
+    return sign_token(keypair[0], {k: v for k, v in claims.items() if v is not None})
 
 
 def _resolver(jwks_url: str, store: EntraPeopleStore) -> PrincipalResolver:
@@ -384,3 +385,67 @@ async def test_a_conduit_starting_waits_for_the_bootstrap_lock(world) -> None:
         await store.close()
     finally:
         await holder.close()
+
+
+# --- ADR-148 Amendment 10: dashboard identities, in the same store ------------------------------
+
+DASHBOARD = "dddddddd-eeee-4fff-8000-111111111111"
+
+
+async def test_a_dashboard_identity_is_registered_read_listed_and_removed(world) -> None:
+    from services.api.identity_admin import DashboardExistsError
+
+    from principal_auth import StoredDashboard
+
+    await world.store.register_dashboard(
+        DASHBOARD, "compliance-board", clearance="OFFICIAL-SENSITIVE", org_unit="unit-2"
+    )
+    wanted = StoredDashboard(DASHBOARD, "OFFICIAL-SENSITIVE", "unit-2", ("P",), "compliance-board")
+    assert await world.store.dashboard(TENANT, DASHBOARD) == wanted
+    assert await world.store.dashboards() == [wanted]
+    # Bound to its tenant: the other tenant's store sees none, and this one answers for no other.
+    assert await world.other.dashboard(OTHER_TENANT, DASHBOARD) is None
+    assert await world.store.dashboard(OTHER_TENANT, DASHBOARD) is None
+    with pytest.raises(DashboardExistsError):
+        await world.store.register_dashboard(DASHBOARD, "again", clearance="OFFICIAL", org_unit="u")
+    # UNIQUE (tenant_id, name): another application id of the same name is refused, the same 409;
+    # the other tenant may use the name.
+    with pytest.raises(DashboardExistsError):
+        await world.store.register_dashboard(
+            "ffffffff-0000-4111-8222-333333333333", "compliance-board",
+            clearance="OFFICIAL", org_unit="u",
+        )  # fmt: skip
+    await world.other.register_dashboard(
+        "ffffffff-0000-4111-8222-333333333333", "compliance-board", clearance="OFFICIAL",
+        org_unit="u",
+    )  # fmt: skip
+    assert [d.application_id for d in await world.store.dashboards()] == [DASHBOARD]
+    # A name not slug-shaped never reaches the table (the admin slugs it first).
+    with pytest.raises(ValueError, match="name"):
+        await world.store.register_dashboard(
+            "aaaaaaaa-0000-4111-8222-333333333333", "Compliance board", clearance="OFFICIAL",
+            org_unit="u",
+        )  # fmt: skip
+    assert await world.store.remove_dashboard(DASHBOARD) is True
+    assert await world.store.dashboard(TENANT, DASHBOARD) is None
+    assert await world.store.remove_dashboard(DASHBOARD) is False
+
+
+async def test_the_resolver_reads_a_registered_dashboard_with_a_real_token(
+    world, keypair, jwks_url
+) -> None:
+    from principal_auth import DASHBOARD_APP_ROLE, DASHBOARD_ROUTES
+
+    await world.store.register_dashboard(
+        DASHBOARD, "compliance-board", clearance="OFFICIAL", org_unit="unit-2"
+    )
+    resolver = PrincipalResolver(
+        _config(jwks_url, oidc_issuer=ISSUER, oidc_audience=API),
+        claim_mapping=MAPPING, role_source=world.store, dashboard_source=world.store,
+    )  # fmt: skip
+    token = _token(keypair, azp=DASHBOARD, oid="60000000-0000-4000-8000-000000000001",
+                   idtyp="app", scp=None, roles=[DASHBOARD_APP_ROLE])  # fmt: skip
+    principal = await resolver.resolve_principal(token)
+    assert (principal.id, principal.clearance) == (DASHBOARD, "OFFICIAL")
+    assert principal.org_unit == "unit-2"
+    assert principal.roles == ["reports_viewer"] and set(principal.routes or ()) == DASHBOARD_ROUTES

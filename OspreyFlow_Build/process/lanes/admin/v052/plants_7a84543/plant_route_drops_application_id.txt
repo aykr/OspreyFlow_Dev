@@ -1,0 +1,6 @@
+# plant: route_drops_application_id (OspreyFlow_Core/services/api/app.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '        body.name, clearance=body.clearance, org_unit=body.org_unit,\n        application_id=body.application_id,'
+# with: '        body.name, clearance=body.clearance, org_unit=body.org_unit,'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_admin_routes.py -k 'passes_the_application'
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_routes.py::test_the_register_route_passes_the_application_id_on
+1 failed, 167 deselected in 4.21s

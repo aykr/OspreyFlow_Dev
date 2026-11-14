@@ -454,6 +454,28 @@ def _text_claim(claims: Mapping[str, Any], name: str) -> str | None:
     return value[:200] if isinstance(value, str) and value else None
 
 
+@dataclass(frozen=True)
+class StoredDashboard:
+    """A dashboard identity as the deployment registered it (ADR-148 Amendment 10): Admin ›
+    Dashboards' clearance, unit and handling codes for one Entra app registration."""
+
+    application_id: str
+    clearance: str
+    org_unit: str
+    receivable_handling_codes: tuple[str, ...]
+    #: Its name, the slug Keycloak's `osprey-dashboard-<slug>` carries; Superset's embedding
+    #: matches a board on it. The resolver never reads it.
+    name: str = ""
+
+
+class DashboardSource(Protocol):
+    """Where a dashboard identity is read (ADR-148 Amendment 10): the deployment's own store, keyed
+    by tenant and the registration's application id; `None` when it is not registered. It raises on
+    any failure, which the resolver turns into `PrincipalLookupUnavailable`, never a principal."""
+
+    async def dashboard(self, tenant_id: str, application_id: str) -> StoredDashboard | None: ...
+
+
 class RoleSource(Protocol):
     """Where an Entra principal's roles are read (ADR-148 Amendment 8, the orchestrator's ruling of
     11 November 2026): the deployment's own store, keyed by tenant and object id. `person` records
@@ -681,37 +703,101 @@ def _stored_roles(stored: StoredPerson) -> list[str]:
 
 
 def principal_from_claims(
-    claims: Mapping[str, Any], mapping: ClaimMapping, stored: StoredPerson | None = None
+    claims: Mapping[str, Any],
+    mapping: ClaimMapping,
+    stored: StoredPerson | StoredDashboard | None = None,
 ) -> Principal:
     """The one claims-construction path (ADR-043; ADR-148 decision 9): every `Principal` this
     package builds, from a session's token or an exchanged one, is built here from verified
     claims. An Entra principal's roles are the stored person's (`stored`, read by the resolver
-    from its `RoleSource`), never the token's; one disabled here is refused (401)."""
-    verified = _verified_parts(claims, mapping)
-    if mapping.is_entra:
-        if stored is None:
-            raise PrincipalLookupUnavailable(
-                "an Entra principal's roles are read from the deployment's store, and none was read"
-            )
-        if stored.disabled:
-            raise PrincipalResolutionError(
-                "this account is disabled in this deployment: ask an administrator"
-            )
-        roles = _stored_roles(stored)
+    from its `RoleSource`), never the token's; one disabled here is refused (401). A dashboard
+    identity's (ADR-148 Amendment 10, `stored` its registration) is its registration's clearance,
+    unit and codes, the role `reports_viewer` alone, admitted to `DASHBOARD_ROUTES` alone."""
+    routes: list[str] | None = None
+    if isinstance(stored, StoredDashboard):
+        principal_id = _verified_dashboard(claims, mapping)
+        if principal_id != stored.application_id:
+            raise PrincipalLookupUnavailable("the store answered another dashboard identity")
+        clearance, org_unit = stored.clearance, stored.org_unit
+        codes, roles = list(stored.receivable_handling_codes), ["reports_viewer"]
+        routes = sorted(DASHBOARD_ROUTES)
     else:
-        if stored is not None:
-            raise PrincipalLookupUnavailable("a stored person is read only for an Entra mapping")
-        roles = verified.token_roles
+        verified = _verified_parts(claims, mapping)
+        if mapping.is_entra:
+            if stored is None:
+                raise PrincipalLookupUnavailable(
+                    "an Entra principal's roles are read from the deployment's store, and none "
+                    "was read"
+                )
+            if stored.disabled:
+                raise PrincipalResolutionError(
+                    "this account is disabled in this deployment: ask an administrator"
+                )
+            roles = _stored_roles(stored)
+        else:
+            if stored is not None:
+                raise PrincipalLookupUnavailable(
+                    "a stored person is read only for an Entra mapping"
+                )
+            roles = verified.token_roles
+        principal_id, clearance, org_unit = verified.id, verified.clearance, verified.org_unit
+        codes = verified.codes
     return Principal(
         # Entra: the object id, one per person in the (pinned) tenant, which Graph also gives, so
         # Admin › People can assign roles before a first sign-in; Entra's `sub` is pairwise per
         # application. Keycloak: `sub`, required and refused unless a string by PyJWT's decode.
-        id=verified.id,
-        clearance=verified.clearance,
-        org_unit=verified.org_unit,
-        receivable_handling_codes=verified.codes,
+        # A dashboard identity: its registration's application id.
+        id=principal_id,
+        clearance=clearance,
+        org_unit=org_unit,
+        receivable_handling_codes=codes,
         roles=roles,
+        routes=routes,
     )
+
+
+#: ADR-148 Amendment 10: the app role a dashboard identity's registration holds on the API's own
+#: (an application permission the client's Entra administrator grants), without which its app-only
+#: token is no dashboard; and the routes alone such a principal is admitted to.
+DASHBOARD_APP_ROLE = "Dashboard.Read"
+DASHBOARD_ROUTES = frozenset(
+    {"GET /v1/investigations", "GET /v1/investigations/{investigation_id}/reports/feed"}
+)
+
+
+def _verified_dashboard(claims: Mapping[str, Any], mapping: ClaimMapping) -> str:
+    """A dashboard identity's app-only token (ADR-148 Amendment 10), checked before its
+    registration is read: the pinned tenant, one client that is an application id and neither the
+    Glass's nor this API's, and the app role. Answers that client's application id."""
+    if not mapping.is_entra or mapping.tenant_id is None:
+        raise PrincipalResolutionError("a dashboard identity is read only for an Entra mapping")
+    if claims.get("tid") != mapping.tenant_id:
+        raise PrincipalResolutionError("token's tid is missing or names another tenant")
+    # v2.0 names the client in `azp`, v1.0 in `appid`: one client, whichever are present.
+    # A claim of any other shape than a string is no client: refused, never an error.
+    named = [claims[c] for c in ("azp", "appid") if c in claims]
+    texts = all(isinstance(c, str) for c in named)
+    client = named[0] if named and texts and len(set(named)) == 1 else None
+    # The audience a verified token names (one, or a list holding the configured one) is the API's.
+    aud = claims.get("aud")
+    audiences = [aud] if isinstance(aud, str) else aud if isinstance(aud, list) else []
+    own = {mapping.client_id, mapping.api_client_id, *(a for a in audiences if isinstance(a, str))}
+    if not isinstance(client, str) or not _GUID.match(client) or client in own:
+        raise PrincipalResolutionError(
+            "token is app-only and its client is no dashboard identity's application"
+        )
+    roles = claims.get("roles")
+    if not isinstance(roles, list) or DASHBOARD_APP_ROLE not in roles:
+        raise PrincipalResolutionError(
+            f"token is app-only without the app role {DASHBOARD_APP_ROLE}: no dashboard identity"
+        )
+    return client
+
+
+def _is_app_only(claims: Mapping[str, Any]) -> bool:
+    """An Entra token with no person behind it: `idtyp: app`, or no delegated `scp`."""
+    scope = claims.get("scp")
+    return claims.get("idtyp") == "app" or not isinstance(scope, str) or not scope
 
 
 def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verified:
@@ -844,6 +930,7 @@ class PrincipalResolver:
         *,
         claim_mapping: ClaimMapping | None = None,
         role_source: RoleSource | None = None,
+        dashboard_source: DashboardSource | None = None,
         role_lookup_timeout_seconds: float = ROLE_LOOKUP_TIMEOUT_SECONDS,
     ) -> None:
         # Validated again from plain data: a copy or a `model_construct` skips the validators,
@@ -868,9 +955,12 @@ class PrincipalResolver:
                 raise ValueError("an Entra ID claim mapping needs the deployment's people store")
         elif role_source is not None:
             raise ValueError("a people store is read only for an Entra ID claim mapping")
+        elif dashboard_source is not None:
+            raise ValueError("a dashboard store is read only for an Entra ID claim mapping")
         if role_lookup_timeout_seconds <= 0:
             raise ValueError("the role lookup's timeout must be positive")
         self._role_source = role_source
+        self._dashboard_source = dashboard_source
         self._role_lookup_timeout = role_lookup_timeout_seconds
         self._config = config
         self._claim_mapping = mapping
@@ -1126,6 +1216,8 @@ class PrincipalResolver:
         claims = await in_keys_thread(self._verified_claims, token)
         if not self._claim_mapping.is_entra:
             return principal_from_claims(claims, self._claim_mapping)
+        if self._dashboard_source is not None and _is_app_only(claims):
+            return await self._dashboard_principal(claims)
         verified = _verified_parts(claims, self._claim_mapping)
         assert self._role_source is not None and self._claim_mapping.tenant_id is not None
         seen = SeenPerson(
@@ -1148,6 +1240,31 @@ class PrincipalResolver:
         if not isinstance(stored, StoredPerson):
             raise PrincipalLookupUnavailable("the people store answered something not a person")
         return principal_from_claims(claims, self._claim_mapping, stored)
+
+    async def _dashboard_principal(self, claims: Mapping[str, Any]) -> Principal:
+        """ADR-148 Amendment 10: a dashboard identity's app-only token, checked in full before the
+        store is read (`_verified_dashboard`); its principal built as every other is."""
+        mapping = self._claim_mapping
+        assert mapping.tenant_id is not None and self._dashboard_source is not None
+        # The API's own audience is refused there: a verified token's `aud` is, or holds, the
+        # configured one.
+        application_id = _verified_dashboard(claims, mapping)
+        try:
+            stored = await asyncio.wait_for(
+                self._dashboard_source.dashboard(mapping.tenant_id, application_id),
+                timeout=self._role_lookup_timeout,
+            )
+        except Exception as exc:  # noqa: BLE001 - every failure of the read is the one 503
+            raise PrincipalLookupUnavailable(
+                f"the dashboard identity could not be read: {type(exc).__name__}"
+            ) from exc
+        if stored is None:
+            raise PrincipalResolutionError(
+                "token is app-only and its client is not a registered dashboard identity"
+            )
+        if not isinstance(stored, StoredDashboard):
+            raise PrincipalLookupUnavailable("the store answered something not a dashboard")
+        return principal_from_claims(claims, mapping, stored)
 
     def _verified_claims(self, token: str) -> dict[str, Any]:
         try:

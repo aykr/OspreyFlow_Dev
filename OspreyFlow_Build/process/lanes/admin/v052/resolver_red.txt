@@ -1,0 +1,375 @@
+# red: the resolver's dashboard tests, StoredDashboard and dashboard_source in place and unread, 84c1b27, 2026-11-13T20:15:06Z
+FFFF.FFFF.F.                                                             [100%]
+=================================== FAILURES ===================================
+_________ test_a_registered_dashboard_s_token_is_its_narrow_principal __________
+
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x107ae96b0>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x107ae9710>)
+jwks_url = 'http://127.0.0.1:51731/jwks.json'
+
+    def test_a_registered_dashboard_s_token_is_its_narrow_principal(keypair, jwks_url) -> None:
+>       principal = _resolve(_resolver(jwks_url, FakeDashboards()), app_only_claims(), keypair)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:89: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:85: in _resolve
+    return asyncio.run(resolver.resolve_principal(sign_token(_key(keypair), claims)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/principal_auth/__init__.py:1158: in resolve_principal
+    verified = _verified_parts(claims, self._claim_mapping)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+claims = {'aud': 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'iss': 'https://login.microsoftonline.com/00000000-1111-4222-8333-444444444444/v2.0', 'iat': 1794600907, 'nbf': 1794600907, ...}
+mapping = ClaimMapping(clearance=ValueSource(claim='extension_0123456789abcdef0123456789abcdef_clearance', groups=None), org_uni...-4222-8333-444444444444', client_id='bbbbbbbb-cccc-4ddd-8eee-ffffffffffff', api_client_id=None, scope='access_as_user')
+
+    def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verified:
+        """Every refusal a token's claims can earn, before anything is read about the person: a
+        refused token never records a person in the store."""
+        if mapping.is_entra:
+            if claims.get("tid") != mapping.tenant_id:
+                raise PrincipalResolutionError("token's tid is missing or names another tenant")
+            if not isinstance(claims.get("oid"), str) or not _GUID.match(claims["oid"]):
+                raise PrincipalResolutionError("token's oid is not an Entra object id")
+            scope = claims.get("scp")
+            if claims.get("idtyp") == "app" or not isinstance(scope, str) or not scope:
+>               raise PrincipalResolutionError(
+                    "token is app-only (no delegated scp): a service principal is no person"
+                )
+E               principal_auth.PrincipalResolutionError: token is app-only (no delegated scp): a service principal is no person
+
+packages/principal_auth/__init__.py:754: PrincipalResolutionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:15:07] "GET /jwks.json HTTP/1.1" 200 -
+__ test_an_app_only_token_that_is_no_registered_dashboard_is_refused[no-role] __
+
+claims = {'aud': 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'iss': 'https://login.microsoftonline.com/00000000-1111-4222-8333-444444444444/v2.0', 'iat': 1794600907, 'nbf': 1794600907, ...}
+why = 'Dashboard.Read'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x1081bd350>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x1081bdf70>)
+jwks_url = 'http://127.0.0.1:51733/jwks.json'
+
+    @pytest.mark.parametrize(
+        ("claims", "why"),
+        [
+            (app_only_claims(roles=None), "Dashboard.Read"),
+            (app_only_claims(roles=["Something.Else"]), "Dashboard.Read"),
+            (app_only_claims(UNREGISTERED), "registered"),
+            (app_only_claims(tid=OTHER_TENANT), "tenant"),
+            (app_only_claims(GLASS), "client"),
+            (app_only_claims(CLIENT_ID), "client"),
+            (app_only_claims("not-a-guid"), "client"),
+            (app_only_claims(appid=UNREGISTERED), "client"),
+        ],
+        ids=["no-role", "another-role", "unregistered", "another-tenant", "the-glass",
+             "this-api-itself", "not-an-application-id", "two-clients"],
+    )  # fmt: skip
+    def test_an_app_only_token_that_is_no_registered_dashboard_is_refused(
+        claims: dict[str, object], why: str, keypair, jwks_url
+    ) -> None:
+        dashboards = FakeDashboards()
+        dashboards.rows[(TENANT, GLASS)] = dashboards.rows[(TENANT, DASHBOARD)]  # even if registered
+        dashboards.rows[(TENANT, CLIENT_ID)] = dashboards.rows[(TENANT, DASHBOARD)]
+>       with pytest.raises(PrincipalResolutionError, match=why):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'Dashboard.Read'
+E         Actual message: 'token is app-only (no delegated scp): a service principal is no person'
+
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:118: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:15:07] "GET /jwks.json HTTP/1.1" 200 -
+_ test_an_app_only_token_that_is_no_registered_dashboard_is_refused[another-role] _
+
+claims = {'aud': 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'iss': 'https://login.microsoftonline.com/00000000-1111-4222-8333-444444444444/v2.0', 'iat': 1794600907, 'nbf': 1794600907, ...}
+why = 'Dashboard.Read'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x1081be410>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x1081bfd90>)
+jwks_url = 'http://127.0.0.1:51735/jwks.json'
+
+    @pytest.mark.parametrize(
+        ("claims", "why"),
+        [
+            (app_only_claims(roles=None), "Dashboard.Read"),
+            (app_only_claims(roles=["Something.Else"]), "Dashboard.Read"),
+            (app_only_claims(UNREGISTERED), "registered"),
+            (app_only_claims(tid=OTHER_TENANT), "tenant"),
+            (app_only_claims(GLASS), "client"),
+            (app_only_claims(CLIENT_ID), "client"),
+            (app_only_claims("not-a-guid"), "client"),
+            (app_only_claims(appid=UNREGISTERED), "client"),
+        ],
+        ids=["no-role", "another-role", "unregistered", "another-tenant", "the-glass",
+             "this-api-itself", "not-an-application-id", "two-clients"],
+    )  # fmt: skip
+    def test_an_app_only_token_that_is_no_registered_dashboard_is_refused(
+        claims: dict[str, object], why: str, keypair, jwks_url
+    ) -> None:
+        dashboards = FakeDashboards()
+        dashboards.rows[(TENANT, GLASS)] = dashboards.rows[(TENANT, DASHBOARD)]  # even if registered
+        dashboards.rows[(TENANT, CLIENT_ID)] = dashboards.rows[(TENANT, DASHBOARD)]
+>       with pytest.raises(PrincipalResolutionError, match=why):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'Dashboard.Read'
+E         Actual message: 'token is app-only (no delegated scp): a service principal is no person'
+
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:118: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:15:08] "GET /jwks.json HTTP/1.1" 200 -
+_ test_an_app_only_token_that_is_no_registered_dashboard_is_refused[unregistered] _
+
+claims = {'aud': 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'iss': 'https://login.microsoftonline.com/00000000-1111-4222-8333-444444444444/v2.0', 'iat': 1794600907, 'nbf': 1794600907, ...}
+why = 'registered'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x1081be5f0>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x1081be370>)
+jwks_url = 'http://127.0.0.1:51737/jwks.json'
+
+    @pytest.mark.parametrize(
+        ("claims", "why"),
+        [
+            (app_only_claims(roles=None), "Dashboard.Read"),
+            (app_only_claims(roles=["Something.Else"]), "Dashboard.Read"),
+            (app_only_claims(UNREGISTERED), "registered"),
+            (app_only_claims(tid=OTHER_TENANT), "tenant"),
+            (app_only_claims(GLASS), "client"),
+            (app_only_claims(CLIENT_ID), "client"),
+            (app_only_claims("not-a-guid"), "client"),
+            (app_only_claims(appid=UNREGISTERED), "client"),
+        ],
+        ids=["no-role", "another-role", "unregistered", "another-tenant", "the-glass",
+             "this-api-itself", "not-an-application-id", "two-clients"],
+    )  # fmt: skip
+    def test_an_app_only_token_that_is_no_registered_dashboard_is_refused(
+        claims: dict[str, object], why: str, keypair, jwks_url
+    ) -> None:
+        dashboards = FakeDashboards()
+        dashboards.rows[(TENANT, GLASS)] = dashboards.rows[(TENANT, DASHBOARD)]  # even if registered
+        dashboards.rows[(TENANT, CLIENT_ID)] = dashboards.rows[(TENANT, DASHBOARD)]
+>       with pytest.raises(PrincipalResolutionError, match=why):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'registered'
+E         Actual message: 'token is app-only (no delegated scp): a service principal is no person'
+
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:118: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:15:08] "GET /jwks.json HTTP/1.1" 200 -
+_ test_an_app_only_token_that_is_no_registered_dashboard_is_refused[the-glass] _
+
+claims = {'aud': 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'iss': 'https://login.microsoftonline.com/00000000-1111-4222-8333-444444444444/v2.0', 'iat': 1794600907, 'nbf': 1794600907, ...}
+why = 'client'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x1081bebf0>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x1081bee10>)
+jwks_url = 'http://127.0.0.1:51742/jwks.json'
+
+    @pytest.mark.parametrize(
+        ("claims", "why"),
+        [
+            (app_only_claims(roles=None), "Dashboard.Read"),
+            (app_only_claims(roles=["Something.Else"]), "Dashboard.Read"),
+            (app_only_claims(UNREGISTERED), "registered"),
+            (app_only_claims(tid=OTHER_TENANT), "tenant"),
+            (app_only_claims(GLASS), "client"),
+            (app_only_claims(CLIENT_ID), "client"),
+            (app_only_claims("not-a-guid"), "client"),
+            (app_only_claims(appid=UNREGISTERED), "client"),
+        ],
+        ids=["no-role", "another-role", "unregistered", "another-tenant", "the-glass",
+             "this-api-itself", "not-an-application-id", "two-clients"],
+    )  # fmt: skip
+    def test_an_app_only_token_that_is_no_registered_dashboard_is_refused(
+        claims: dict[str, object], why: str, keypair, jwks_url
+    ) -> None:
+        dashboards = FakeDashboards()
+        dashboards.rows[(TENANT, GLASS)] = dashboards.rows[(TENANT, DASHBOARD)]  # even if registered
+        dashboards.rows[(TENANT, CLIENT_ID)] = dashboards.rows[(TENANT, DASHBOARD)]
+>       with pytest.raises(PrincipalResolutionError, match=why):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'client'
+E         Actual message: 'token is app-only (no delegated scp): a service principal is no person'
+
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:118: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:15:10] "GET /jwks.json HTTP/1.1" 200 -
+_ test_an_app_only_token_that_is_no_registered_dashboard_is_refused[this-api-itself] _
+
+claims = {'aud': 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'iss': 'https://login.microsoftonline.com/00000000-1111-4222-8333-444444444444/v2.0', 'iat': 1794600907, 'nbf': 1794600907, ...}
+why = 'client'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x1081bf1f0>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x1081bed50>)
+jwks_url = 'http://127.0.0.1:51744/jwks.json'
+
+    @pytest.mark.parametrize(
+        ("claims", "why"),
+        [
+            (app_only_claims(roles=None), "Dashboard.Read"),
+            (app_only_claims(roles=["Something.Else"]), "Dashboard.Read"),
+            (app_only_claims(UNREGISTERED), "registered"),
+            (app_only_claims(tid=OTHER_TENANT), "tenant"),
+            (app_only_claims(GLASS), "client"),
+            (app_only_claims(CLIENT_ID), "client"),
+            (app_only_claims("not-a-guid"), "client"),
+            (app_only_claims(appid=UNREGISTERED), "client"),
+        ],
+        ids=["no-role", "another-role", "unregistered", "another-tenant", "the-glass",
+             "this-api-itself", "not-an-application-id", "two-clients"],
+    )  # fmt: skip
+    def test_an_app_only_token_that_is_no_registered_dashboard_is_refused(
+        claims: dict[str, object], why: str, keypair, jwks_url
+    ) -> None:
+        dashboards = FakeDashboards()
+        dashboards.rows[(TENANT, GLASS)] = dashboards.rows[(TENANT, DASHBOARD)]  # even if registered
+        dashboards.rows[(TENANT, CLIENT_ID)] = dashboards.rows[(TENANT, DASHBOARD)]
+>       with pytest.raises(PrincipalResolutionError, match=why):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'client'
+E         Actual message: 'token is app-only (no delegated scp): a service principal is no person'
+
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:118: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:15:10] "GET /jwks.json HTTP/1.1" 200 -
+_ test_an_app_only_token_that_is_no_registered_dashboard_is_refused[not-an-application-id] _
+
+claims = {'aud': 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'iss': 'https://login.microsoftonline.com/00000000-1111-4222-8333-444444444444/v2.0', 'iat': 1794600907, 'nbf': 1794600907, ...}
+why = 'client'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x1081be810>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x1081bf190>)
+jwks_url = 'http://127.0.0.1:51747/jwks.json'
+
+    @pytest.mark.parametrize(
+        ("claims", "why"),
+        [
+            (app_only_claims(roles=None), "Dashboard.Read"),
+            (app_only_claims(roles=["Something.Else"]), "Dashboard.Read"),
+            (app_only_claims(UNREGISTERED), "registered"),
+            (app_only_claims(tid=OTHER_TENANT), "tenant"),
+            (app_only_claims(GLASS), "client"),
+            (app_only_claims(CLIENT_ID), "client"),
+            (app_only_claims("not-a-guid"), "client"),
+            (app_only_claims(appid=UNREGISTERED), "client"),
+        ],
+        ids=["no-role", "another-role", "unregistered", "another-tenant", "the-glass",
+             "this-api-itself", "not-an-application-id", "two-clients"],
+    )  # fmt: skip
+    def test_an_app_only_token_that_is_no_registered_dashboard_is_refused(
+        claims: dict[str, object], why: str, keypair, jwks_url
+    ) -> None:
+        dashboards = FakeDashboards()
+        dashboards.rows[(TENANT, GLASS)] = dashboards.rows[(TENANT, DASHBOARD)]  # even if registered
+        dashboards.rows[(TENANT, CLIENT_ID)] = dashboards.rows[(TENANT, DASHBOARD)]
+>       with pytest.raises(PrincipalResolutionError, match=why):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'client'
+E         Actual message: 'token is app-only (no delegated scp): a service principal is no person'
+
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:118: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:15:11] "GET /jwks.json HTTP/1.1" 200 -
+_ test_an_app_only_token_that_is_no_registered_dashboard_is_refused[two-clients] _
+
+claims = {'aud': 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'iss': 'https://login.microsoftonline.com/00000000-1111-4222-8333-444444444444/v2.0', 'iat': 1794600907, 'nbf': 1794600907, ...}
+why = 'client'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x1081bd890>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x1081bd4b0>)
+jwks_url = 'http://127.0.0.1:51749/jwks.json'
+
+    @pytest.mark.parametrize(
+        ("claims", "why"),
+        [
+            (app_only_claims(roles=None), "Dashboard.Read"),
+            (app_only_claims(roles=["Something.Else"]), "Dashboard.Read"),
+            (app_only_claims(UNREGISTERED), "registered"),
+            (app_only_claims(tid=OTHER_TENANT), "tenant"),
+            (app_only_claims(GLASS), "client"),
+            (app_only_claims(CLIENT_ID), "client"),
+            (app_only_claims("not-a-guid"), "client"),
+            (app_only_claims(appid=UNREGISTERED), "client"),
+        ],
+        ids=["no-role", "another-role", "unregistered", "another-tenant", "the-glass",
+             "this-api-itself", "not-an-application-id", "two-clients"],
+    )  # fmt: skip
+    def test_an_app_only_token_that_is_no_registered_dashboard_is_refused(
+        claims: dict[str, object], why: str, keypair, jwks_url
+    ) -> None:
+        dashboards = FakeDashboards()
+        dashboards.rows[(TENANT, GLASS)] = dashboards.rows[(TENANT, DASHBOARD)]  # even if registered
+        dashboards.rows[(TENANT, CLIENT_ID)] = dashboards.rows[(TENANT, DASHBOARD)]
+>       with pytest.raises(PrincipalResolutionError, match=why):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'client'
+E         Actual message: 'token is app-only (no delegated scp): a service principal is no person'
+
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:118: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:15:11] "GET /jwks.json HTTP/1.1" 200 -
+___ test_a_store_that_cannot_answer_is_a_503_never_a_refusal_or_a_principal ____
+
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x1081bd810>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x1081bd450>)
+jwks_url = 'http://127.0.0.1:51754/jwks.json'
+
+    def test_a_store_that_cannot_answer_is_a_503_never_a_refusal_or_a_principal(
+        keypair, jwks_url
+    ) -> None:
+        dashboards = FakeDashboards()
+        dashboards.fail = OSError("the store is down")
+        with pytest.raises(PrincipalLookupUnavailable):
+>           _resolve(_resolver(jwks_url, dashboards), app_only_claims(), keypair)
+
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:135: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py:85: in _resolve
+    return asyncio.run(resolver.resolve_principal(sign_token(_key(keypair), claims)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/principal_auth/__init__.py:1158: in resolve_principal
+    verified = _verified_parts(claims, self._claim_mapping)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+claims = {'aud': 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'iss': 'https://login.microsoftonline.com/00000000-1111-4222-8333-444444444444/v2.0', 'iat': 1794600912, 'nbf': 1794600912, ...}
+mapping = ClaimMapping(clearance=ValueSource(claim='extension_0123456789abcdef0123456789abcdef_clearance', groups=None), org_uni...-4222-8333-444444444444', client_id='bbbbbbbb-cccc-4ddd-8eee-ffffffffffff', api_client_id=None, scope='access_as_user')
+
+    def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verified:
+        """Every refusal a token's claims can earn, before anything is read about the person: a
+        refused token never records a person in the store."""
+        if mapping.is_entra:
+            if claims.get("tid") != mapping.tenant_id:
+                raise PrincipalResolutionError("token's tid is missing or names another tenant")
+            if not isinstance(claims.get("oid"), str) or not _GUID.match(claims["oid"]):
+                raise PrincipalResolutionError("token's oid is not an Entra object id")
+            scope = claims.get("scp")
+            if claims.get("idtyp") == "app" or not isinstance(scope, str) or not scope:
+>               raise PrincipalResolutionError(
+                    "token is app-only (no delegated scp): a service principal is no person"
+                )
+E               principal_auth.PrincipalResolutionError: token is app-only (no delegated scp): a service principal is no person
+
+packages/principal_auth/__init__.py:754: PrincipalResolutionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:15:12] "GET /jwks.json HTTP/1.1" 200 -
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_a_registered_dashboard_s_token_is_its_narrow_principal
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[no-role]
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[another-role]
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[unregistered]
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[the-glass]
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[this-api-itself]
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[not-an-application-id]
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[two-clients]
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_a_store_that_cannot_answer_is_a_503_never_a_refusal_or_a_principal
+9 failed, 3 passed in 7.08s

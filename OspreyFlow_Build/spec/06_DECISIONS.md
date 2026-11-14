@@ -37446,3 +37446,81 @@ and the right-click menu's heading in `var(--ui)`. Identifiers and values stay i
 Consequences. Tests: `design/headingFace.test.ts` (every heading level classed `.value` computes to the page's face
 in the OspreyFlow and GOV.UK looks, a value that is not a heading stays mono; red first, all fourteen), and
 `RadialMenu.test.tsx` (the menu's heading not in mono).
+
+### ADR-148, Amendment 10 (13 November 2026) — Dashboard identities and the report sync on Entra ID
+
+Status: decided by the owner (13 November 2026, v0.5.2: Superset and report sync on the client's cloud-platform poc),
+the interface agreed with platform-b (Amendments 9 and 11) and platform (R1's stand-in) the same day; built by the
+admin lane. Amends Amendment 8 point 3, which refused dashboard identities on Entra ID.
+
+**The finding.** On Keycloak a dashboard identity is a confidential client OspreyFlow creates (ADR-111 decision 7), whose
+service account's attributes give its token the principal claims. On Entra ID the Conduit refused every app-only token
+(Amendment 6), so no dashboard could read the report feed, and Admin › Dashboards refused to register one.
+
+1. **One Entra app registration per dashboard identity**, made in Entra by the client's administrator, and registered in
+   Admin › Dashboards by its **application id** with the clearance and unit it reads with (no higher than the registering
+   administrator's own, as on Keycloak) and the handling code `P`. The registration holds its secret; OspreyFlow keeps
+   none and shows none. The deployment's store holds what it reads with (`entra_dashboards`, beside `entra_people`,
+   bound to the pinned tenant). Its account, which a case Author grants Viewer to, is its application id. Keycloak
+   refuses an application id in words; Entra refuses a registration without one.
+2. **The app role `Dashboard.Read`**: an application permission the API's registration defines, which the client's
+   administrator grants each dashboard identity's registration (with admin consent). Required from the start: a
+   dashboard is a new door, so it opens with the check (the orchestrator's ruling (b)).
+3. **Its token's principal.** An app-only token (`idtyp` `app`, or no `scp`) of the pinned tenant, its issuer and
+   audience checked as a person's, whose one client (`azp`, or `appid` in v1.0; the same if both) is an application id
+   neither the Glass's nor this API's, carrying `Dashboard.Read`, and registered: its registration's clearance, unit and
+   codes, the role `reports_viewer` alone, built where every principal is (`principal_from_claims`). Any other app-only
+   token is refused as before; the store unreadable is a 503, never a principal or a refusal.
+4. **Admitted to two routes alone**: `GET /v1/investigations` and `GET /v1/investigations/{investigation_id}/reports/feed`.
+   A principal may name the routes alone it is admitted to (`Principal.routes`); `get_principal` refuses any other with
+   403 `route_not_admitted` before anything is read for it. One mechanism: Superset's delegated sign-in (Amendment 9) is
+   its second kind.
+5. **A dashboard never submits runs**: the run API refuses a token whose client holds `Dashboard.Read`, and a client
+   Admin › Dashboards registered, whatever its token holds. **The run API's own app-role check stays carried**
+   (CARRIES row 202): dashboards check their role; the run API is the remaining door, until it is measured on the
+   client's tenant.
+6. **The report sync on Entra**: `REPORT_SYNC_SCOPE` (the API's `api://<application id>/.default`, rendered from
+   `cloud_platform.claims` by platform-b) is asked for in each client-credentials request at Entra's v2.0 token endpoint,
+   which refuses one without it; each dashboard's `client_id` is then its registration's application id, refused in words
+   otherwise. Without the scope, Keycloak's `osprey-dashboard-*` rule is unchanged.
+
+**Not measured, and carried:** that a real tenant's client-credentials token carries `Dashboard.Read` in `roles` once
+granted (shaped from Microsoft's documentation and R1's stand-in, as Amendment 6's other claims); the client's
+development tenant is Amendment 6's list.
+
+**Tests**, each red first (`process/lanes/admin/v052/`):
+- `tests/services/api/test_route_gate.py`: every route of the app taking a principal asked through the real
+  `get_principal`, one row a kind of principal admitted to named routes.
+- `tests/services/api/test_auth_entra_dashboards.py`: a registered dashboard's token is its narrow principal; no role,
+  another role, unregistered, another tenant, the Glass's or this API's client, not an application id, two clients:
+  each refused for its own reason; without the store every app-only token refused as before; the store unreadable a
+  503; a person's token never read as a dashboard. `test_auth_entra_claims.py`'s one-construction case holds.
+- `tests/services/api/test_entra_people.py` (Admin › Dashboards on Entra and Keycloak), `test_entra_people_live.py`
+  (the store, and the resolver with a real token, against PostgreSQL), `test_service_identity_entra.py` (the run API's
+  two refusals, through the real `get_service_identity`), `tests/services/report_sync/test_report_sync.py` (the scope,
+  the configuration, a pass), and the Glass's `DashboardsEntra.test.tsx`.
+
+**After the lane review of the build (13 November 2026)**, each red first (`process/lanes/admin/v052/review/`):
+- **Viewer and nothing more, on Entra too.** Who may hold a level in a case reads the registrations whenever the
+  grantee is no person the directory holds. Entra's names directory holds no people, so before this a registered
+  dashboard could be made a case's Owner. `test_admin_roles_routes.py`.
+- **Its name** (agreed with platform-b, whose Superset embedding matches a board on it): required, and the slug
+  Keycloak's `osprey-dashboard-<slug>` carries. One dashboard of a name in a tenant (`UNIQUE (tenant_id, name)`, refused
+  as 409 `dashboard_exists`). `DashboardIdentity.name` on both identity providers.
+- **Removing one revokes every case grant its account holds** (`InvestigationStore.revoke_everywhere`, each a recorded
+  revoke), so one registered again finds no level waiting. The grants go first, while the registration still names
+  the account: a failure leaves it registered, and removing it again revokes. The audit row counts the grants and
+  names no case.
+- **No case stream.** The delta socket asks no `get_principal`, so it refuses a principal admitted to named routes
+  before its case is read.
+- **The deployment's own applications** (the Glass's, the API's, from the claim mapping) are refused as registrations.
+- The run API's read of the registrations is bounded as a person's stored roles are; past it, a 503. A client claim not
+  a string (`azp`, `appid`) is a refusal, never a 500, in the resolver and the run API alike; an `aud` list is read as
+  its members. A dashboard store beside a Keycloak mapping is refused at the start.
+- **Admin › Dashboards asks its own route** which identity provider signs people in
+  (`GET /v1/admin/dashboards/sign-in`, behind `manage_dashboards`), so an administrator of dashboards alone is not
+  refused People's.
+- The resolver's own-client defences are each held alone: the Glass's id, the API's id (a case whose audience is its
+  `api://` URI) and the audience. The duplicate audience check is removed, so no defence stands only behind another.
+- **Access through the real `get_principal`** against the real case store (`test_investigation_access_store.py`):
+  granted Viewer on case A, a dashboard lists A alone and pulls A's feed, and B is refused as a case that does not exist.

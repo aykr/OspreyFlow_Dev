@@ -1,0 +1,6 @@
+# plant: dashboards_asked_before_the_person (OspreyFlow_Core/services/api/app.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '    people = await names.people([grantee])\n    if people is not None and grantee in people:\n        return\n'
+# with: '    people = await names.people([grantee])\n'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py -k 'granted_without_asking'
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py::test_a_person_is_granted_without_asking_for_dashboards
+1 failed, 98 deselected in 4.53s

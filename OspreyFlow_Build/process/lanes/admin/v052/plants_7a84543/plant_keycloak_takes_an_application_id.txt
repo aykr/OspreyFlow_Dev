@@ -1,0 +1,6 @@
+# plant: keycloak_takes_an_application_id (OspreyFlow_Core/services/api/identity_admin.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '        if application_id is not None:\n            raise UnknownRoleError(\n                "an application id names'
+# with: '        if False:\n            raise UnknownRoleError(\n                "an application id names'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_entra_people.py -k 'keycloak_an_application_id'
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_on_keycloak_an_application_id_is_refused_in_words
+1 failed, 59 deselected in 4.48s
