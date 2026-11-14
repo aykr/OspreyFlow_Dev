@@ -26,6 +26,8 @@ import {
   listArrivals,
   listPeople,
   signInKind,
+  guestSignIn,
+  setGuestSignIn,
   listRoles,
   nameAnAuthor,
   peopleRows,
@@ -444,6 +446,12 @@ function PersonRow({
               <span className="label">{joined}</span>
             </>
           )}
+          {person.guest && (
+            <>
+              <br />
+              <span className="label">{GUEST_WORDS}</span>
+            </>
+          )}
           {!person.system_account && (
             <>
               <br />
@@ -712,6 +720,50 @@ function Arrivals({
 export const ENTRA_PEOPLE_WORDS =
   "People sign in with their organisation's Entra ID account; their clearance, unit and handling codes come " +
   "from Entra. Here you give them roles, add them by object id before they first sign in, and disable them.";
+
+/** ADR-148 Amendment 17: how a guest (B2B) account is marked in the list. */
+export const GUEST_WORDS = "Guest: homed in another organisation's Entra ID";
+
+/** ADR-148 Amendment 17: whether guest (B2B) accounts may sign in, off until an administrator of people turns it on.
+ * Admitted, a guest signs in as anyone does, with the clearance, unit and codes their own token gives; turned off,
+ * a guest already here is refused at their next request. */
+function GuestsForm({ api }: { api: AdminApi }) {
+  const [admitted, setAdmitted] = useState<boolean | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    void guestSignIn(api)
+      .then((g) => setAdmitted(g.admitted))
+      .catch((e: Error) => setProblem(e.message));
+  }, [api]);
+  return (
+    <form aria-label="Guests" style={{ display: "grid", gap: "var(--sp-8)", maxWidth: "32rem" }} onSubmit={(e) => e.preventDefault()}>
+      <h4 className="value" style={{ margin: 0 }}>Guests</h4>
+      <p className="label" style={{ margin: 0 }}>
+        A guest account is homed in another organisation's Entra ID and invited into yours. Admitted, a guest signs in
+        as anyone does: the same clearance, unit and codes from their token, and the roles you give them here.
+      </p>
+      <label className="label" style={{ display: "inline-flex", gap: "var(--sp-4)", alignItems: "center" }}>
+        <input
+          type="checkbox"
+          aria-label="Admit guest accounts"
+          checked={admitted === true}
+          disabled={admitted === null}
+          onChange={(e) => {
+            const next = e.target.checked;
+            void setGuestSignIn(api, next)
+              .then((g) => {
+                setProblem(null);
+                setAdmitted(g.admitted);
+              })
+              .catch((err: Error) => setProblem(err.message));
+          }}
+        />
+        Admit guest accounts
+      </label>
+      {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
+    </form>
+  );
+}
 
 /** A person added by their Entra object id (the Entra admin centre shows it) ahead of their first sign-in, with no roles.
  * The Conduit checks the id and refuses one already here. */
@@ -1046,13 +1098,16 @@ export function People({ api }: { api: AdminApi }) {
         </tbody>
       </table>
       {entra ? (
-        <AddByObjectIdForm
-          api={api}
-          onAdded={(person) => {
-            setAdded(person);
-            setPeople((current) => [...(current ?? []), person]);
-          }}
-        />
+        <>
+          <AddByObjectIdForm
+            api={api}
+            onAdded={(person) => {
+              setAdded(person);
+              setPeople((current) => [...(current ?? []), person]);
+            }}
+          />
+          <GuestsForm api={api} />
+        </>
       ) : (
         <InviteForm
           api={api}

@@ -501,3 +501,55 @@ async def test_the_store_refuses_an_owner_read_for_another_tenant(world) -> None
         await world.store.owner(OTHER_TENANT, OID)
     held = await world.store.owner(TENANT, OID)
     assert held is not None and (held.clearance, held.org_unit) == ("OFFICIAL", "unit-1")
+
+
+# --- ADR-148 Amendment 17: guests, against the real store -----------------------------------------
+
+
+async def test_guests_are_off_until_set_and_each_change_answers_what_it_was(world) -> None:  # type: ignore[no-untyped-def]
+    assert await world.store.guests_admitted(TENANT) is False
+    assert await world.store.guest_sign_in() == (False, None, None)
+    assert await world.store.set_guests_admitted(True, "adm-1") is False
+    assert await world.store.guests_admitted(TENANT) is True
+    admitted, by, at = await world.store.guest_sign_in()
+    assert (admitted, by) == (True, "adm-1") and at is not None
+    assert await world.store.set_guests_admitted(False, "adm-2") is True
+    # Another tenant's store has its own setting, and this store refuses to be asked for another.
+    assert await world.other.guests_admitted(OTHER_TENANT) is False
+    with pytest.raises(IdentityAdminRefused):
+        await world.store.guests_admitted(OTHER_TENANT)
+
+
+async def test_a_guest_is_recorded_as_one_and_stands_disabled_once_guests_are_no_longer_admitted(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    from dataclasses import replace
+
+    await world.store.set_guests_admitted(True, "adm-1")
+    await world.store.person(TENANT, OID, replace(SEEN, guest=True))
+    await world.store.person(TENANT, NEW, SEEN)
+    assert (await world.store.one(OID)).guest is True and (await world.store.one(NEW)).guest is False
+    assert (await world.store.standing(OID)).disabled is False  # type: ignore[union-attr]
+    held = await world.store.owner(TENANT, OID)
+    assert held is not None and held.guest is True
+    await world.store.set_guests_admitted(False, "adm-1")
+    assert (await world.store.standing(OID)).disabled is True  # type: ignore[union-attr]
+    assert (await world.store.standing(NEW)).disabled is False  # type: ignore[union-attr]
+    # A sign-in as a member (the same object id, a token without guest claims) records them as one.
+    await world.store.person(TENANT, OID, SEEN)
+    assert (await world.store.one(OID)).guest is False
+
+
+async def test_the_resolver_refuses_a_guest_until_the_real_store_admits_guests(
+    world, keypair, jwks_url
+) -> None:  # type: ignore[no-untyped-def]
+    resolver = _resolver(jwks_url, world.store)
+    guest = _token(keypair, acct=1)
+    with pytest.raises(PrincipalResolutionError, match="guest"):
+        await resolver.resolve_principal(guest)
+    assert await world.store.rows() == []  # nothing recorded of a refused guest
+    await world.store.set_guests_admitted(True, "adm-1")
+    principal = await resolver.resolve_principal(guest)
+    assert (principal.id, principal.clearance, principal.org_unit) == (OID, "OFFICIAL", "unit-1")
+    assert (await world.store.one(OID)).guest is True
+    await resolver.aclose()

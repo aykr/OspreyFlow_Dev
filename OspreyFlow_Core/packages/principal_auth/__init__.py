@@ -463,6 +463,9 @@ class SeenPerson:
     clearance: str
     org_unit: str
     receivable_handling_codes: tuple[str, ...]
+    #: A guest (B2B) account, homed in another tenant (ADR-148 Amendment 17), recorded so a guest is
+    #: refused again, without a token, once the deployment no longer admits guests.
+    guest: bool = False
 
 
 def _text_claim(claims: Mapping[str, Any], name: str) -> str | None:
@@ -512,6 +515,16 @@ class StoredOwner:
     org_unit: str | None
     receivable_handling_codes: tuple[str, ...]
     access_read_at: datetime | None
+    #: A guest (B2B) account, as their last sign-in's token said (ADR-148 Amendment 17).
+    guest: bool = False
+
+
+#: ADR-148 Amendment 17: why a guest (B2B) account is refused while the deployment does not admit
+#: guests.
+GUESTS_NOT_ADMITTED_WORDS = (
+    "this is a guest account, homed in another organisation's Entra ID, and this deployment does "
+    "not admit guests: an administrator can admit them in Admin › People"
+)
 
 
 class RoleSource(Protocol):
@@ -525,6 +538,8 @@ class RoleSource(Protocol):
     async def person(self, tenant_id: str, oid: str, seen: SeenPerson) -> StoredPerson: ...
 
     async def owner(self, tenant_id: str, oid: str) -> StoredOwner | None: ...
+
+    async def guests_admitted(self, tenant_id: str) -> bool: ...
 
 
 class PrincipalLookupUnavailable(Exception):
@@ -737,6 +752,9 @@ class _Verified:
     token_roles: list[str]
     #: None for the Glass's token (every route its rights allow); Superset's, `SUPERSET_ROUTES`.
     routes: list[str] | None = None
+    #: A guest (B2B) account's token (ADR-148 Amendment 17): admitted only by `resolve_principal`,
+    #: which asks the deployment's setting before anything is recorded of them.
+    guest: bool = False
 
 
 def _stored_roles(stored: StoredPerson) -> list[str]:
@@ -864,6 +882,7 @@ def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verifi
     """Every refusal a token's claims can earn, before anything is read about the person: a
     refused token never records a person in the store."""
     routes: list[str] | None = None
+    guest = False
     if mapping.is_entra:
         if claims.get("tid") != mapping.tenant_id:
             raise PrincipalResolutionError("token's tid is missing or names another tenant")
@@ -889,10 +908,10 @@ def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verifi
         else:
             raise PrincipalResolutionError("token was not issued to the Glass's client")
         # A guest (B2B) account is homed in another tenant: `acct` 1, or an `idp` other than the
-        # issuer. Refused until the deployment decides to admit guests (ADR-148 Amendment 6).
+        # issuer. Admitted only while the deployment admits guests (ADR-148 Amendment 17), which
+        # `resolve_principal` asks before anything is read or recorded of the person.
         guest_idp = "idp" in claims and _tenant_of_entra_issuer(claims["idp"]) != mapping.tenant_id
-        if claims.get("acct") in (1, "1") or guest_idp:
-            raise PrincipalResolutionError("token is a guest account's: guests are not admitted")
+        guest = claims.get("acct") in (1, "1") or guest_idp
     elif "tid" in claims:
         # Keycloak never emits `tid`; an Entra token here would skip every check above and have its
         # app roles read as OspreyFlow roles.
@@ -914,6 +933,7 @@ def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verifi
         # app roles an Entra administrator assigns, never read (Amendment 6 point 4).
         token_roles=[] if mapping.is_entra else _string_list(claims, CLAIM_ROLES, "roles"),
         routes=routes,
+        guest=bool(mapping.is_entra and guest),
     )
 
 
@@ -1298,6 +1318,23 @@ class PrincipalResolver:
                 f"exchanged token for owner {owner_id!r} failed verification: {exc}"
             ) from exc
 
+    async def _guests_admitted(
+        self, *, unread: type[Exception] = PrincipalLookupUnavailable
+    ) -> bool:
+        """Whether this deployment admits guests (ADR-148 Amendment 17), read fresh, within the role
+        lookup's bound; a store that cannot answer is `unread`, never "admitted"."""
+        assert self._role_source is not None and self._claim_mapping.tenant_id is not None
+        try:
+            admitted = await asyncio.wait_for(
+                self._role_source.guests_admitted(self._claim_mapping.tenant_id),
+                timeout=self._role_lookup_timeout,
+            )
+        except Exception as exc:  # noqa: BLE001 - every failure of the read is the one refusal
+            raise unread(
+                f"whether guests are admitted could not be read: {type(exc).__name__}"
+            ) from exc
+        return admitted is True
+
     async def _stored_owner(self, owner_id: str, now: datetime | None = None) -> Principal:
         """ADR-148 Amendment 16 (the owner's ruling 1, option A): Entra has no impersonation
         exchange, so a run acts as its owner's stored identity. Roles and the disabled flag are
@@ -1322,6 +1359,11 @@ class PrincipalResolver:
             raise OwnerRecordUnavailable("the people store answered something not a person")
         if stored.disabled:
             raise PrincipalRevoked(f"owner {owner_id!r} is disabled in this deployment")
+        if stored.guest and not await self._guests_admitted(unread=OwnerRecordUnavailable):
+            # ADR-148 Amendment 17: a guest can no longer sign in here, so nothing acts as them.
+            raise PrincipalRevoked(
+                f"owner {owner_id!r} is a guest, and guests are no longer admitted"
+            )
         read_at = stored.access_read_at
         if (
             read_at is None
@@ -1371,7 +1413,10 @@ class PrincipalResolver:
             clearance=verified.clearance,
             org_unit=verified.org_unit,
             receivable_handling_codes=tuple(verified.codes),
+            guest=verified.guest,
         )
+        if verified.guest and not await self._guests_admitted():
+            raise PrincipalResolutionError(GUESTS_NOT_ADMITTED_WORDS)
         try:
             stored = await asyncio.wait_for(
                 self._role_source.person(self._claim_mapping.tenant_id, verified.id, seen),

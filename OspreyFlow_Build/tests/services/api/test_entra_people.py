@@ -133,6 +133,19 @@ class _Store:
         rows = self.dashboard_rows
         return rows.pop((self.tenant_id, application_id), None) is not None
 
+    # ADR-148 Amendment 17: whether guests are admitted, off when never set, as the real table is.
+    guests: tuple[bool, str | None, Any] = (False, None, None)
+
+    async def guest_sign_in(self) -> tuple[bool, str | None, Any]:
+        return self.guests
+
+    async def set_guests_admitted(self, admitted: bool, by: str) -> bool:
+        from datetime import UTC, datetime
+
+        before = self.guests[0]
+        self.guests = (admitted, by, datetime.now(UTC))
+        return before
+
 
 class _Audit:
     def __init__(self) -> None:
@@ -782,3 +795,70 @@ def test_the_app_tells_the_entra_admin_its_own_applications() -> None:
     admin = people_directory(resources, config=None)  # type: ignore[arg-type]
     assert isinstance(admin, EntraPeopleAdmin)
     assert admin.own_clients == {GLASS_APP, API_APP}
+
+
+# --- ADR-148 Amendment 17: admitting guests, switched by an administrator of people alone ----------
+
+
+def test_guests_are_not_admitted_until_an_administrator_admits_them(client: Any) -> None:
+    _as(ADMIN)
+    assert client.get("/v1/admin/sign-in/guests").json() == {
+        "admitted": False, "changed_by": None, "changed_at": None}  # fmt: skip
+
+
+@pytest.mark.parametrize("method", ["get", "put"])
+def test_the_guest_setting_is_refused_without_manage_people_and_left_as_it_was(
+    client: Any, method: str
+) -> None:
+    _as(ANALYST)
+    kwargs = {"json": {"admitted": True}} if method == "put" else {}
+    assert getattr(client, method)("/v1/admin/sign-in/guests", **kwargs).status_code == 403
+    assert client.store.guests[0] is False and client.audit.records == []
+
+
+def test_admitting_guests_is_set_by_who_and_audited_with_before_and_after(client: Any) -> None:
+    _as(ADMIN)
+    on = client.put("/v1/admin/sign-in/guests", json={"admitted": True})
+    assert on.status_code == 200, on.text
+    assert on.json()["admitted"] is True and on.json()["changed_by"] == ADMIN.id
+    off = client.put("/v1/admin/sign-in/guests", json={"admitted": False})
+    assert off.json()["admitted"] is False
+    assert [(r["action"], r["resolved_query"]) for r in client.audit.records] == [
+        ("set_guest_sign_in", {"before": False, "after": True}),
+        ("set_guest_sign_in", {"before": True, "after": False}),
+    ]
+
+
+def test_turning_guests_off_is_refused_when_every_people_manager_is_a_guest(client: Any) -> None:
+    _as(ADMIN)
+    client.store.guests = (True, ADMIN.id, None)
+    member = client.store.people[(TENANT, OID)]
+    client.store.people[(TENANT, OID)] = member.model_copy(update={"guest": True})
+    refused = client.put("/v1/admin/sign-in/guests", json={"admitted": False})
+    assert refused.status_code == 409 and refused.json()["detail"]["error"] == "locks_out_administrators"
+    assert client.store.guests[0] is True and client.audit.records == []
+    client.store.people[(TENANT, OID)] = member  # a member who can manage people: allowed
+    assert client.put("/v1/admin/sign-in/guests", json={"admitted": False}).status_code == 200
+
+
+def test_an_unknown_field_is_refused(client: Any) -> None:
+    _as(ADMIN)
+    assert client.put("/v1/admin/sign-in/guests", json={"admitted": True, "x": 1}).status_code == 422
+
+
+def test_on_keycloak_there_are_no_guests_to_admit() -> None:
+    from services.api.app import get_custom_roles
+
+    class _Keycloak:
+        async def list_people(self) -> list[Any]:
+            return []
+
+    app.dependency_overrides[get_identity_admin] = lambda: _Keycloak()
+    app.dependency_overrides[get_audit] = lambda: _Audit()
+    app.dependency_overrides[get_custom_roles] = _NoCustomRoles
+    _as(ADMIN)
+    try:
+        refused = TestClient(app).put("/v1/admin/sign-in/guests", json={"admitted": True})
+        assert refused.status_code == 409 and refused.json()["detail"]["error"] == "not_entra"
+    finally:
+        app.dependency_overrides.clear()

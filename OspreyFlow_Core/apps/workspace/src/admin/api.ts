@@ -32,6 +32,7 @@ import type {
   ScheduleRunView,
   SignInDelivery,
   SignInKind,
+  GuestSignIn,
   SystemStatus,
 } from "../../../../packages/schemas/generated";
 
@@ -122,6 +123,10 @@ export const invitePerson = (api: AdminApi, invite: InviteInput) =>
   call<SignInDelivery>(api, "people", { method: "POST", body: JSON.stringify(invite) });
 // ADR-148 Amendment 8: on Entra ID sign-in, Entra holds the accounts; a person is added by object id.
 export const signInKind = (api: AdminApi) => call<SignInKind>(api, "sign-in");
+// ADR-148 Amendment 17: whether guest (B2B) accounts are admitted, and switching it (manage_people).
+export const guestSignIn = (api: AdminApi) => call<GuestSignIn>(api, "sign-in/guests");
+export const setGuestSignIn = (api: AdminApi, admitted: boolean) =>
+  call<GuestSignIn>(api, "sign-in/guests", { method: "PUT", body: JSON.stringify({ admitted }) });
 // ADR-148 Amendment 10: Admin › Dashboards' own copy, behind manage_dashboards.
 export const dashboardsSignInKind = (api: AdminApi) => call<SignInKind>(api, "dashboards/sign-in");
 export const addPersonByObjectId = (api: AdminApi, objectId: string) =>

@@ -136,6 +136,12 @@ CREATE TABLE IF NOT EXISTS entra_dashboards (
     PRIMARY KEY (tenant_id, application_id),
     UNIQUE (tenant_id, name)
 );
+CREATE TABLE IF NOT EXISTS entra_sign_in (
+    tenant_id text PRIMARY KEY,
+    admit_guests boolean NOT NULL DEFAULT false,
+    changed_by text,
+    changed_at timestamptz
+);
 """
 
 #: A dashboard identity's handling codes, as Keycloak's registration gives them
@@ -185,6 +191,7 @@ def _person(row: Mapping[str, Any]) -> PersonAccount:
         receivable_handling_codes=list(row["receivable_handling_codes"]),
         signed_in=row["first_seen"] is not None,
         access_read_at=row["access_read_at"] or _NEVER,
+        guest=bool(row.get("guest")),
     )
 
 
@@ -215,6 +222,10 @@ class EntraPeopleStore:
             await conn.execute(BOOTSTRAP_SQL)
             await conn.execute(
                 "ALTER TABLE entra_people ADD COLUMN IF NOT EXISTS access_read_at timestamptz"
+            )
+            await conn.execute(
+                "ALTER TABLE entra_people ADD COLUMN IF NOT EXISTS guest boolean NOT NULL "
+                "DEFAULT false"
             )
         return cls(pool, tenant_id)
 
@@ -294,11 +305,12 @@ class EntraPeopleStore:
             seen.clearance,
             seen.org_unit,
             list(seen.receivable_handling_codes),
+            bool(seen.guest),
         )
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT roles, disabled, name, username, email, clearance, org_unit, "
-                "receivable_handling_codes, access_read_at, now() AS at "
+                "receivable_handling_codes, guest, access_read_at, now() AS at "
                 "FROM entra_people WHERE tenant_id = $1 AND oid = $2",
                 tenant_id,
                 oid,
@@ -306,13 +318,14 @@ class EntraPeopleStore:
             if row is None:
                 row = await conn.fetchrow(
                     "INSERT INTO entra_people (tenant_id, oid, name, username, email, clearance, "
-                    "org_unit, receivable_handling_codes, first_seen, access_read_at) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now()) "
+                    "org_unit, receivable_handling_codes, guest, first_seen, access_read_at) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now()) "
                     "ON CONFLICT (tenant_id, oid) DO UPDATE SET first_seen = "
                     "COALESCE(entra_people.first_seen, now()), access_read_at = now(), "
                     "name = EXCLUDED.name, username = EXCLUDED.username, email = EXCLUDED.email, "
                     "clearance = EXCLUDED.clearance, org_unit = EXCLUDED.org_unit, "
-                    "receivable_handling_codes = EXCLUDED.receivable_handling_codes "
+                    "receivable_handling_codes = EXCLUDED.receivable_handling_codes, "
+                    "guest = EXCLUDED.guest "
                     "RETURNING roles, disabled",
                     tenant_id,
                     oid,
@@ -325,12 +338,13 @@ class EntraPeopleStore:
                 row["clearance"],
                 row["org_unit"],
                 list(row["receivable_handling_codes"]),
+                bool(row["guest"]),
             ) != values or (
                 row["access_read_at"] is None or row["at"] - row["access_read_at"] > ACCESS_REFRESH
             ):
                 await conn.execute(
                     "UPDATE entra_people SET name = $3, username = $4, email = $5, "
-                    "clearance = $6, org_unit = $7, receivable_handling_codes = $8, "
+                    "clearance = $6, org_unit = $7, receivable_handling_codes = $8, guest = $9, "
                     "first_seen = COALESCE(first_seen, now()), access_read_at = now() "
                     "WHERE tenant_id = $1 AND oid = $2",
                     tenant_id,
@@ -344,14 +358,60 @@ class EntraPeopleStore:
         """The stored person as they are now, read without recording anyone: an open delta socket
         asks it before each message (ADR-148 Amendment 8). None for a person not recorded."""
         async with self.pool.acquire() as conn:
+            # A guest, once guests are no longer admitted, stands as disabled (ADR-148 Am 17).
             row = await conn.fetchrow(
-                "SELECT roles, disabled FROM entra_people WHERE tenant_id = $1 AND oid = $2",
+                "SELECT p.roles, p.disabled OR (p.guest AND NOT COALESCE(s.admit_guests, false)) "
+                "AS disabled FROM entra_people p LEFT JOIN entra_sign_in s "
+                "ON s.tenant_id = p.tenant_id WHERE p.tenant_id = $1 AND p.oid = $2",
                 self.tenant_id,
                 oid,
             )
         if row is None:
             return None
         return StoredPerson(roles=tuple(row["roles"]), disabled=bool(row["disabled"]))
+
+    # --- guests (ADR-148 Amendment 17; `principal_auth.RoleSource.guests_admitted`) --------------
+
+    async def guests_admitted(self, tenant_id: str) -> bool:
+        """Whether this deployment admits guest (B2B) accounts: off until an administrator turns it
+        on. Asked for another tenant, it raises, as `person` does."""
+        if tenant_id != self.tenant_id:
+            raise IdentityAdminRefused("the people store is another tenant's")
+        async with self.pool.acquire() as conn:
+            admitted = await conn.fetchval(
+                "SELECT admit_guests FROM entra_sign_in WHERE tenant_id = $1", self.tenant_id
+            )
+        return admitted is True
+
+    async def guest_sign_in(self) -> tuple[bool, str | None, datetime | None]:
+        """The setting, who last changed it and when (none, never)."""
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT admit_guests, changed_by, changed_at FROM entra_sign_in "
+                "WHERE tenant_id = $1",
+                self.tenant_id,
+            )
+        if row is None:
+            return False, None, None
+        return bool(row["admit_guests"]), row["changed_by"], row["changed_at"]
+
+    async def set_guests_admitted(self, admitted: bool, by: str) -> bool:
+        """Sets the setting and answers what it was before, in one statement."""
+        async with self.pool.acquire() as conn, conn.transaction():
+            before = await conn.fetchval(
+                "SELECT admit_guests FROM entra_sign_in WHERE tenant_id = $1 FOR UPDATE",
+                self.tenant_id,
+            )
+            await conn.execute(
+                "INSERT INTO entra_sign_in (tenant_id, admit_guests, changed_by, changed_at) "
+                "VALUES ($1, $2, $3, now()) ON CONFLICT (tenant_id) DO UPDATE SET "
+                "admit_guests = EXCLUDED.admit_guests, changed_by = EXCLUDED.changed_by, "
+                "changed_at = EXCLUDED.changed_at",
+                self.tenant_id,
+                admitted,
+                by,
+            )
+        return before is True
 
     async def owner(self, tenant_id: str, oid: str) -> StoredOwner | None:
         """A person as held, for a run acting as them (ADR-148 Amendment 16): read without
@@ -363,7 +423,7 @@ class EntraPeopleStore:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT roles, disabled, clearance, org_unit, receivable_handling_codes, "
-                "access_read_at FROM entra_people WHERE tenant_id = $1 AND oid = $2",
+                "access_read_at, guest FROM entra_people WHERE tenant_id = $1 AND oid = $2",
                 self.tenant_id,
                 oid,
             )
@@ -376,6 +436,7 @@ class EntraPeopleStore:
             org_unit=row["org_unit"],
             receivable_handling_codes=tuple(row["receivable_handling_codes"]),
             access_read_at=row["access_read_at"],
+            guest=bool(row["guest"]),
         )
 
     # --- the install's first administrators ---------------------------------------------------
@@ -513,6 +574,15 @@ class EntraPeopleAdmin:
 
     async def list_people(self) -> list[PersonAccount]:
         return await self.store.rows()
+
+    async def guest_sign_in(self) -> tuple[bool, str | None, datetime | None]:
+        """ADR-148 Amendment 17: whether guests are admitted, who last changed it and when."""
+        return await self.store.guest_sign_in()
+
+    async def set_guests_admitted(self, admitted: bool, by: str) -> bool:
+        """Admit guest (B2B) accounts, or no longer; answers what it was before. A guest already
+        recorded is refused at their next request once it is off (`standing`, the resolver)."""
+        return await self.store.set_guests_admitted(admitted, by)
 
     async def set_roles(self, user_id: str, roles: list[str]) -> PersonAccount:
         if refused := [r for r in roles if not allowed_role(r)]:
