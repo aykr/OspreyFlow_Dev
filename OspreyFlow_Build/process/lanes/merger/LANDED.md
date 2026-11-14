@@ -100,3 +100,4 @@ fd96c11 d8971cd platform-b v052-sheet
 c1373da 7ba5f37 studio v052-search (step 3d), with its two diffs (the owner's word)
 822a2fb 859ca7d case-b install-pending (spec 08 halves; CI's over-the-wire job proves the seeded halves)
 fa383e5 3ad0803 docs 6a-upgrade (1.99), PDF reprinted
+d8888d8 2730b69 docs 6a-search (2.00), PDF reprinted
