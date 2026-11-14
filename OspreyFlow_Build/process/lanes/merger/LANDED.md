@@ -118,3 +118,4 @@ a95a94d f1bd574 platform v052-expiry (decision 5: sets at 34 days)
 f9a1802 0a2ee97 platform v052-m10ctl
 7132b83 e2b6305 admin stopped-why (ADR-044 Am 1); guides 2.04 and 1.56, PDFs reprinted
 d196271 defb2e9 case live-drift
+4283b91 3bd66ec+bcca270 platform v052-ingestpart (decision 6) with docs' wording (2.05), PDF reprinted
