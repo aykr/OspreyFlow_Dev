@@ -37227,6 +37227,45 @@ at or above each shape's least, the runbook's `db_parameter` line and headroom).
 Superset's term or the upgrade's term dropped from `connections.py`: `process/lanes/platform/poc-rds/red-1000.txt`. Not run against a real RDS: R1's PostgreSQL was a
 stand-in on kind.
 
+### ADR-114, Amendment 47 (14 November 2026) — The version a deployment shows is the code's own
+
+*v0.5.2 (the orchestrator's assignment V, 14 November; design approved the same day). By platform-b. CARRIES 218.*
+
+**Context.** The demo rebuild of 12 November copied main's code into `/opt/ospreyflow`, whose `.git` still sat on
+v0.5.0's tag (2be985a). Every version the deployment shows came from that `.git`, not from the code: glass.json's
+`version` (the welcome page's footer, `harness.site.deployment_version`, `git_sha()[:7]`), and
+`OSPREY_RELEASE_VERSION` (Admin › System, the OpenAPI document and the update check, `harness.release.checkout_version`,
+the tag HEAD sits on). So a copy of newer code named itself v0.5.0. The source tree carried no version of its own
+(`pyproject.toml` and `package.json` say 0.0.0).
+
+**Decisions.**
+1. **The code carries its version**: `OspreyFlow_Core/VERSION`, one line, the release this code is (`v0.5.2`) or
+   the release it is heading to (`v0.5.2-dev`). Main lands at `v0.5.2-dev`.
+2. **The shown version is read from it before `.git`** (`checkout_version`, which glass.json's `version` and
+   `OSPREY_RELEASE_VERSION` now both use, from the same code folder, `components.source_path` when declared): a
+   release in VERSION is that release; a `-dev` VERSION with `.git`'s tree the code's (no tracked file under the
+   code changed since HEAD; untracked files, a deployment's own, do not count) is the tag HEAD sits on, else
+   `dev-<short commit>`, as before; otherwise VERSION's own text (`v0.5.2-dev`), never the older `.git`'s commit.
+   A tree with no VERSION file (an older release's checkout) is read from `.git` alone, as before. A malformed
+   VERSION is never shown; it is read as absent.
+3. **Image tags and `versions.lock` are unchanged**: they keep `git_sha()`, the commit CI built the images from,
+   which a pull-mode render must match. Backup set names keep it too (point 6).
+4. **The cut sets VERSION to the tag in the candidate commit**, and main moves to the next `-dev` afterwards.
+   `release.yml` refuses a tag that differs from VERSION; that file is the owner's, so the change is a diff
+   (`process/lanes/platform-b/v052-codeversion/release_yml.diff`), its check shown red and green in bash.
+5. **`make version-file-check`, in `make ci`**: the committed VERSION is one line, a release or a `-dev`.
+6. **Not changed: backup set names** (`<stamp>-<deployment>-<commit>`). `harness.backup.SET_NAME` and
+   `ospreyflow doctor`'s copy read the last dash-separated part as the commit, so a version with a dot or a dash
+   there would misread the deployment's name, and existing sets must keep parsing. Carried on CARRIES 218.
+
+**Tests** (rule 12; `process/lanes/platform-b/v052-codeversion/red-first.txt` has every plant red):
+`tests/harness/test_code_version.py`, each a real git checkout: a v0.5.0 `.git` under newer code (a release and a
+`-dev`) shows the code's version in `checkout_version`, glass.json's `deployment_version` and the render's
+`release_version`, never the tag or the commit; a release checkout is its release; a clean `-dev` checkout is
+`dev-<commit>`; changed code is VERSION's `-dev`; on a `-dev` checkout untracked files leave the commit believed;
+no `.git` is VERSION; no VERSION is `.git`'s answer; a malformed VERSION is flagged and never shown; the
+repository's own VERSION is well formed.
+
 ### ADR-148, Amendment 10 (13 November 2026) — Dashboard identities and the report sync on Entra ID
 
 Status: decided by the owner (13 November 2026, v0.5.2: Superset and report sync on the client's cloud-platform poc),
