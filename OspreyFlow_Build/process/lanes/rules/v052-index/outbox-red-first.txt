@@ -1,0 +1,267 @@
+Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261113T205602Z-20ba854d/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py -q -p no:randomly
+FFFFFFFFFFF                                                              [100%]
+=================================== FAILURES ===================================
+__________________ test_the_adapter_is_the_index_feed_source ___________________
+
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb96580b0b0>
+
+    async def test_the_adapter_is_the_index_feed_source(graph: GraphArcadeDBAdapter) -> None:
+>       assert isinstance(graph, IndexFeedSource)
+E       assert False
+E        +  where False = isinstance(<adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb96580b0b0>, IndexFeedSource)
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:87: AssertionError
+____________________ test_a_load_records_each_node_it_wrote ____________________
+
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb9656e8650>
+
+    async def test_a_load_records_each_node_it_wrote(graph: GraphArcadeDBAdapter) -> None:
+        ids = await _written(graph, _person("Quillfeather"), _person("Ashdown"))
+>       assert await _drain(graph) == set(ids)
+               ^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+feed = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb9656e8650>
+
+    async def _drain(feed: IndexFeedSource) -> set[str]:
+        """The outbox's node ids, then emptied, so the next step's write is read alone."""
+>       rows = await feed.pending_index(10_000)
+                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'GraphArcadeDBAdapter' object has no attribute 'pending_index'
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:74: AttributeError
+___________________ test_a_rolled_back_write_records_nothing ___________________
+
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965819250>
+
+    async def test_a_rolled_back_write_records_nothing(graph: GraphArcadeDBAdapter) -> None:
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes([_person("Rolledback")], tx)
+        await graph.rollback_transaction(tx)
+>       assert await _drain(graph) == set()
+               ^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:99: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+feed = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965819250>
+
+    async def _drain(feed: IndexFeedSource) -> set[str]:
+        """The outbox's node ids, then emptied, so the next step's write is read alone."""
+>       rows = await feed.pending_index(10_000)
+                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'GraphArcadeDBAdapter' object has no attribute 'pending_index'
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:74: AttributeError
+___ test_a_merge_records_both_ends_of_a_same_as_and_nothing_for_another_link ___
+
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965734650>
+
+    async def test_a_merge_records_both_ends_of_a_same_as_and_nothing_for_another_link(
+        graph: GraphArcadeDBAdapter,
+    ) -> None:
+        a, b, c = await _written(graph, _person("Smith"), _person("Smyth"), _person("Other"))
+>       await _drain(graph)
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:106: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+feed = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965734650>
+
+    async def _drain(feed: IndexFeedSource) -> set[str]:
+        """The outbox's node ids, then emptied, so the next step's write is read alone."""
+>       rows = await feed.pending_index(10_000)
+                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'GraphArcadeDBAdapter' object has no attribute 'pending_index'
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:74: AttributeError
+___________ test_a_new_version_records_the_old_revision_and_the_new ____________
+
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb96571c290>
+
+    async def test_a_new_version_records_the_old_revision_and_the_new(graph: GraphArcadeDBAdapter) -> None:
+        (old,) = await _written(graph, _person("Mohamad"))
+>       await _drain(graph)
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:119: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+feed = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb96571c290>
+
+    async def _drain(feed: IndexFeedSource) -> set[str]:
+        """The outbox's node ids, then emptied, so the next step's write is read alone."""
+>       rows = await feed.pending_index(10_000)
+                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'GraphArcadeDBAdapter' object has no attribute 'pending_index'
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:74: AttributeError
+_______________ test_a_promotion_and_its_revert_record_each_node _______________
+
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965bfa750>
+
+    async def test_a_promotion_and_its_revert_record_each_node(graph: GraphArcadeDBAdapter) -> None:
+        (drawn,) = await _written(graph, _person("Drawn", datasets=("layer-1",)))
+>       await _drain(graph)
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:128: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+feed = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965bfa750>
+
+    async def _drain(feed: IndexFeedSource) -> set[str]:
+        """The outbox's node ids, then emptied, so the next step's write is read alone."""
+>       rows = await feed.pending_index(10_000)
+                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'GraphArcadeDBAdapter' object has no attribute 'pending_index'
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:74: AttributeError
+_________________ test_a_revert_records_each_node_it_took_back _________________
+
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965c556a0>
+
+    async def test_a_revert_records_each_node_it_took_back(graph: GraphArcadeDBAdapter) -> None:
+        a, b = await _written(graph, _person("Reverted"), _person("Kept"))
+>       await _drain(graph)
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:141: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+feed = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965c556a0>
+
+    async def _drain(feed: IndexFeedSource) -> set[str]:
+        """The outbox's node ids, then emptied, so the next step's write is read alone."""
+>       rows = await feed.pending_index(10_000)
+                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'GraphArcadeDBAdapter' object has no attribute 'pending_index'
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:74: AttributeError
+______________ test_a_withdrawal_and_its_restore_record_each_node ______________
+
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965819310>
+
+    async def test_a_withdrawal_and_its_restore_record_each_node(graph: GraphArcadeDBAdapter) -> None:
+        (a,) = await _written(graph, _person("Withdrawn"))
+>       await _drain(graph)
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:150: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+feed = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965819310>
+
+    async def _drain(feed: IndexFeedSource) -> set[str]:
+        """The outbox's node ids, then emptied, so the next step's write is read alone."""
+>       rows = await feed.pending_index(10_000)
+                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'GraphArcadeDBAdapter' object has no attribute 'pending_index'
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:74: AttributeError
+___________ test_a_deleted_case_layer_records_each_node_it_withdrew ____________
+
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb96580aff0>
+
+    async def test_a_deleted_case_layer_records_each_node_it_withdrew(graph: GraphArcadeDBAdapter) -> None:
+        (a,) = await _written(graph, _person("Layered", datasets=("layer-2",)))
+>       await _drain(graph)
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+feed = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb96580aff0>
+
+    async def _drain(feed: IndexFeedSource) -> set[str]:
+        """The outbox's node ids, then emptied, so the next step's write is read alone."""
+>       rows = await feed.pending_index(10_000)
+                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'GraphArcadeDBAdapter' object has no attribute 'pending_index'
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:74: AttributeError
+___ test_the_indexers_read_gives_a_live_node_whole_and_none_for_one_not_live ___
+
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965853b30>
+
+    async def test_the_indexers_read_gives_a_live_node_whole_and_none_for_one_not_live(
+        graph: GraphArcadeDBAdapter,
+    ) -> None:
+        live, gone, old = await _written(graph, _person("Live"), _person("Gone"), _person("Old"))
+        tx = await graph.begin_transaction()
+        await graph.revert_elements([gone], [], tx)
+        new = str(await graph.supersede_node(old, _person("New"), tx))
+        await graph.commit_transaction(tx)
+>       read = await graph.nodes_for_index([live, gone, old, new, "absent-node"])
+                     ^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'GraphArcadeDBAdapter' object has no attribute 'nodes_for_index'
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:178: AttributeError
+___________________ test_the_live_ids_are_paged_in_id_order ____________________
+
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7fb965c2ec30>
+
+    async def test_the_live_ids_are_paged_in_id_order(graph: GraphArcadeDBAdapter) -> None:
+        ids = sorted(await _written(graph, *[_person(f"P{i}") for i in range(5)]))
+        tx = await graph.begin_transaction()
+        await graph.revert_elements([ids[2]], [], tx)
+        await graph.commit_transaction(tx)
+>       first = await graph.live_node_ids(after=None, limit=2)
+                      ^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'GraphArcadeDBAdapter' object has no attribute 'live_node_ids'
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py:190: AttributeError
+--------------------- 11 unmarked test(s) reached a store ----------------------
+tests/conformance/graph_port/test_index_outbox.py::test_a_deleted_case_layer_records_each_node_it_withdrew: ArcadeDB on port 2493
+tests/conformance/graph_port/test_index_outbox.py::test_a_load_records_each_node_it_wrote: ArcadeDB on port 2493
+tests/conformance/graph_port/test_index_outbox.py::test_a_merge_records_both_ends_of_a_same_as_and_nothing_for_another_link: ArcadeDB on port 2493
+tests/conformance/graph_port/test_index_outbox.py::test_a_new_version_records_the_old_revision_and_the_new: ArcadeDB on port 2493
+tests/conformance/graph_port/test_index_outbox.py::test_a_promotion_and_its_revert_record_each_node: ArcadeDB on port 2493
+tests/conformance/graph_port/test_index_outbox.py::test_a_revert_records_each_node_it_took_back: ArcadeDB on port 2493
+tests/conformance/graph_port/test_index_outbox.py::test_a_rolled_back_write_records_nothing: ArcadeDB on port 2493
+tests/conformance/graph_port/test_index_outbox.py::test_a_withdrawal_and_its_restore_record_each_node: ArcadeDB on port 2493
+tests/conformance/graph_port/test_index_outbox.py::test_the_adapter_is_the_index_feed_source: ArcadeDB on port 2493
+tests/conformance/graph_port/test_index_outbox.py::test_the_indexers_read_gives_a_live_node_whole_and_none_for_one_not_live: ArcadeDB on port 2493
+tests/conformance/graph_port/test_index_outbox.py::test_the_live_ids_are_paged_in_id_order: ArcadeDB on port 2493
+============================= slowest 30 durations =============================
+1.13s call     tests/conformance/graph_port/test_index_outbox.py::test_a_load_records_each_node_it_wrote
+1.07s setup    tests/conformance/graph_port/test_index_outbox.py::test_the_adapter_is_the_index_feed_source
+0.54s setup    tests/conformance/graph_port/test_index_outbox.py::test_a_revert_records_each_node_it_took_back
+0.48s setup    tests/conformance/graph_port/test_index_outbox.py::test_a_withdrawal_and_its_restore_record_each_node
+0.41s setup    tests/conformance/graph_port/test_index_outbox.py::test_a_load_records_each_node_it_wrote
+0.39s setup    tests/conformance/graph_port/test_index_outbox.py::test_a_new_version_records_the_old_revision_and_the_new
+0.38s setup    tests/conformance/graph_port/test_index_outbox.py::test_a_merge_records_both_ends_of_a_same_as_and_nothing_for_another_link
+0.35s setup    tests/conformance/graph_port/test_index_outbox.py::test_a_rolled_back_write_records_nothing
+0.35s setup    tests/conformance/graph_port/test_index_outbox.py::test_a_promotion_and_its_revert_record_each_node
+0.35s setup    tests/conformance/graph_port/test_index_outbox.py::test_a_deleted_case_layer_records_each_node_it_withdrew
+0.33s setup    tests/conformance/graph_port/test_index_outbox.py::test_the_indexers_read_gives_a_live_node_whole_and_none_for_one_not_live
+0.28s setup    tests/conformance/graph_port/test_index_outbox.py::test_the_live_ids_are_paged_in_id_order
+0.20s call     tests/conformance/graph_port/test_index_outbox.py::test_the_indexers_read_gives_a_live_node_whole_and_none_for_one_not_live
+0.14s teardown tests/conformance/graph_port/test_index_outbox.py::test_a_load_records_each_node_it_wrote
+0.13s call     tests/conformance/graph_port/test_index_outbox.py::test_the_live_ids_are_paged_in_id_order
+0.09s call     tests/conformance/graph_port/test_index_outbox.py::test_a_revert_records_each_node_it_took_back
+0.08s call     tests/conformance/graph_port/test_index_outbox.py::test_a_merge_records_both_ends_of_a_same_as_and_nothing_for_another_link
+0.08s call     tests/conformance/graph_port/test_index_outbox.py::test_a_rolled_back_write_records_nothing
+0.07s teardown tests/conformance/graph_port/test_index_outbox.py::test_a_revert_records_each_node_it_took_back
+0.06s teardown tests/conformance/graph_port/test_index_outbox.py::test_the_adapter_is_the_index_feed_source
+0.06s teardown tests/conformance/graph_port/test_index_outbox.py::test_a_rolled_back_write_records_nothing
+0.06s teardown tests/conformance/graph_port/test_index_outbox.py::test_a_new_version_records_the_old_revision_and_the_new
+0.06s teardown tests/conformance/graph_port/test_index_outbox.py::test_the_live_ids_are_paged_in_id_order
+0.06s teardown tests/conformance/graph_port/test_index_outbox.py::test_a_deleted_case_layer_records_each_node_it_withdrew
+0.06s teardown tests/conformance/graph_port/test_index_outbox.py::test_the_indexers_read_gives_a_live_node_whole_and_none_for_one_not_live
+0.06s teardown tests/conformance/graph_port/test_index_outbox.py::test_a_withdrawal_and_its_restore_record_each_node
+0.05s teardown tests/conformance/graph_port/test_index_outbox.py::test_a_promotion_and_its_revert_record_each_node
+0.05s teardown tests/conformance/graph_port/test_index_outbox.py::test_a_merge_records_both_ends_of_a_same_as_and_nothing_for_another_link
+0.05s call     tests/conformance/graph_port/test_index_outbox.py::test_a_new_version_records_the_old_revision_and_the_new
+0.05s call     tests/conformance/graph_port/test_index_outbox.py::test_a_promotion_and_its_revert_record_each_node
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py::test_the_adapter_is_the_index_feed_source
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py::test_a_load_records_each_node_it_wrote
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py::test_a_rolled_back_write_records_nothing
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py::test_a_merge_records_both_ends_of_a_same_as_and_nothing_for_another_link
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py::test_a_new_version_records_the_old_revision_and_the_new
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py::test_a_promotion_and_its_revert_record_each_node
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py::test_a_revert_records_each_node_it_took_back
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py::test_a_withdrawal_and_its_restore_record_each_node
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py::test_a_deleted_case_layer_records_each_node_it_withdrew
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py::test_the_indexers_read_gives_a_live_node_whole_and_none_for_one_not_live
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_index_outbox.py::test_the_live_ids_are_paged_in_id_order
+11 failed in 7.90s
+Wall time: 9 s, exit 1 (stack c, the lease rules took at 2026-11-13T20:55:15Z; set-up before it 30 s)

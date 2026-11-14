@@ -55,6 +55,7 @@ class TypedStore:
         self.vertices: dict[str, dict[str, dict[str, Any]]] = {"Person": {}, "Document": {}}
         self.edges: dict[str, dict[str, dict[str, Any]]] = {"ASSOCIATE_OF": {}, "FAMILY_OF": {}}
         self.sql_sent: list[str] = []
+        self.index_pending: list[str] = []
         self.gremlin_sent: list[str] = []
         self.update_sizes: list[tuple[str, int]] = []
         self._rids: dict[str, str] = {}
@@ -128,6 +129,10 @@ class TypedStore:
                 for i in params["ids"]
                 if i in table
             ]
+        if command == "INSERT INTO IndexPending CONTENT :rows":
+            # The search index feed's outbox (ADR-150 decision 1): a revert records its nodes.
+            self.index_pending.extend(r["node_id"] for r in params["rows"])
+            return []
         if (m := _GEOMETRY.fullmatch(command)) is not None:
             table = self._table(m.group(1))
             return [

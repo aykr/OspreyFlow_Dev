@@ -42,7 +42,7 @@ _PARSE_STATUS = 400
 _SCHEMA = "com.arcadedb.exception.SchemaException"
 
 _FORMS = (
-    re.compile(r"CREATE (VERTEX|EDGE) TYPE (\w+) IF NOT EXISTS"),
+    re.compile(r"CREATE (VERTEX|EDGE|DOCUMENT) TYPE (\w+) IF NOT EXISTS"),
     re.compile(r"CREATE PROPERTY (\w+)\.(\w+) IF NOT EXISTS [A-Z ]+"),
     re.compile(r"CREATE INDEX IF NOT EXISTS ON (\w+) \((\w+)( BY ITEM)?\) (UNIQUE|NOTUNIQUE)"),
     re.compile(r"UPDATE .+"),
@@ -99,6 +99,9 @@ GOLDEN = [
     "CREATE INDEX IF NOT EXISTS ON mx_KNOWS (datasets BY ITEM) NOTUNIQUE",
     "CREATE PROPERTY mx_KNOWS.valid_from IF NOT EXISTS DATETIME",
     "CREATE INDEX IF NOT EXISTS ON mx_KNOWS (valid_from) NOTUNIQUE",
+    # The search index feed's outbox (ADR-150 decision 1), after the ontology's types.
+    "CREATE DOCUMENT TYPE IndexPending IF NOT EXISTS",
+    "CREATE PROPERTY IndexPending.node_id IF NOT EXISTS STRING",
 ]
 
 

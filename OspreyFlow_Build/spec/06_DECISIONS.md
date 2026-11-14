@@ -37814,3 +37814,212 @@ part of this amendment.
 - `test_entra_people_live.py`: the real store's `owner`, its tenant guard planted.
 - `test_guides_cloud_platform.py`: §6a.7 quotes the words and the 24 hours as the code holds them; no guide says an
   owner run stops on Entra.
+## ADR-150 — The search index feed: every graph change reaches OpenSearch through an outbox in the graph's own transaction; one document per node; a rebuild from the graph and a drift check — ACCEPTED (design)
+
+*13 November 2026. **Accepted (design): the owner's route to v0.5.2** (`process/lanes/ROUTE_052.md`, step 3c: "every load,
+merge (SAME_AS), new version, promotion and deletion reaches the index. Add one rebuild command from the graph, and one
+drift check that reports the difference between graph and index. Red first, each event type"), the design approved by
+the orchestrator on 13 November (strict: the outbox in the same transaction, no cluster field). The query side
+(analysers' use, ranking, access in the query, suggestions, the leak test, the fallback, the audit) is ADR-149's.*
+
+### Context
+
+Nothing in the product writes an index today: `services/api/search.py` is "v1, graph-only", and ADR-114 Amendment 35
+point 2 leaves "the first feature to write an index" to make it rebuildable from the graph store and have `restore`
+trigger that rebuild. The graph (ArcadeDB, `GraphPort`) stays the source of truth (ROUTE_052 requirement b).
+
+Read on 13 November 2026, there is no single place a graph change passes after it commits:
+`DatasetStampingGraph.after_write` (`services/api/dataset_scope.py`) fires inside the caller's transaction, and the
+worker (`worker_main.py`), resolution (`resolve/trigger.py`), `scripts/revert_load.py`, `scripts/revert_promotion.py`
+and others use the raw adapter, so a hook on the wrapper misses them. The Valkey stream `changes:corpus`
+(`change_stream.py`) is capped (`MAXLEN ~900`) and covers ingest, resolution and manual assertion only.
+
+### Decisions
+
+1. **An outbox in the graph's own transaction.** Every write method of `GraphArcadeDBAdapter` records the ids of the
+   nodes it touched in a document type `IndexPending` (`node_id`, `at`), in the same transaction as the write, so a
+   write and its index entry commit or roll back together. By event type:
+   - **load:** `upsert_nodes` (each node written);
+   - **merge:** `upsert_edges`, `bulk_load_edges` and `supersede_edge` for a `SAME_AS` edge (both endpoints);
+   - **new version:** `supersede_node` (the old revision and the new one);
+   - **promotion:** `promote_elements`, `revert_promotion` (each node); a confirm (`extract/writer.py`) is a supersede;
+   - **deletion:** `revert_elements`, `withdraw_elements`, `withdraw_layer`, `restore_withdrawn` (each node
+     they change).
+   A write that changes no node's document records nothing: an edge other than `SAME_AS`,
+   `restore_link_state` (a link's state) and `regrade_drawn` (a drawn item's grading, in its provenance, which
+   no document holds). `bulk_load_edges` commits in chunks of its own, so its `SAME_AS` ends are recorded after
+   them. Writes that bypass the adapter: a seed's scoped clean-up
+   (`seed_support.clear_seeded_graph`) names each node to the outbox before it deletes it; a reset of the whole
+   graph (`reset_graph_database`) loses its outbox with it, so it runs the rebuild; anything else
+   (`scripts/stamp_datasets.py`, a hand-run statement) the drift check (decision 5) finds and the rebuild
+   (decision 4) mends.
+2. **The indexer drains the outbox.** In batches, it reads each id's node as stored through a narrow port,
+   `IndexFeedSource.nodes_for_index(ids)` — a separate `Protocol` from `GraphPort`, implemented by the adapter,
+   unfiltered by design and called by the indexer alone (no route reaches it: a test holds that, rule 4). A node
+   that is reverted, superseded, withdrawn or absent is **deleted** from the index, not flagged; any other is
+   upserted. The outbox rows are removed only after OpenSearch has acknowledged the batch, so delivery is at least
+   once and every write is idempotent (a document is the node's current state, keyed by its id). It runs in the
+   worker process on every shape that has an OpenSearch (ROUTE_052 requirement f), and does nothing where none is
+   configured.
+   - **Each `_bulk` request is at most 10 MiB** (`indexer.MAX_BULK_BYTES`, the smallest `http.max_content_length`
+     of an Amazon OpenSearch instance), counted in the bytes the client sends (its own serialiser, encoded with
+     `surrogatepass` as its transport does); the indexer and the rebuild both send through `write_actions`, which
+     cuts a larger batch into several requests and never parts an action from its document. A 413 for a request, a
+     429 or a 5xx for an item, is raised, never swallowed: the batch stays in its outbox and is sent again, and a
+     rebuild fails (decision 4). Held by `tests/services/search_index/test_bulk_cap.py`, against `FakeOpenSearch`,
+     which refuses an oversized body with OpenSearch's 413.
+   - **A document OpenSearch can never take is set aside, never left to hold the outbox, and it fails closed.** It
+     is set aside when it is one action over the cap on its own, or a write refused for the document's own content:
+     an error of type `mapper_parsing_exception`, `strict_dynamic_mapping_exception` or `document_parsing_exception`,
+     or caused by `max_bytes_length_exceeded_exception` (a term over Lucene's 32,766 bytes). It is decided by the
+     error's type, never its status. Every other refusal is the cluster's state, not the document's, and is raised
+     with the batch kept: a write block's 403, `read_only_allow_delete` at the flood-stage watermark, a closed index,
+     an alias over two indexes, a 429, a 5xx. A delete is never set aside, and is done only when the document is
+     not there (`not_found`, no error): a delete whose index is not there (an alias moved by a rebuild's swap
+     between reading it and writing) is raised and sent again. A write refused by a lasting block (a
+     `cluster_block_exception` or a `security_exception`, which no retry soon ends) first has its older version
+     deleted where the cluster still takes deletes (the flood-stage block does), so a change that narrows access is
+     never left unapplied while the block lasts: the document is missing from search until the block is lifted,
+     never exposed (a 429's rejection is retried, its lag bounded by the retry). A document set aside is recorded in the
+     deployment's refused index (`<alias>-refused`, outside the alias, so no search reads it) and an error naming it
+     is logged; whatever the index already held for it is deleted in the same pass, so an older version never stays
+     searchable with older access fields; the rest of the batch is written and the outbox cleared. Its reason is the
+     error's type and the field it names, and that field only when it is one of the mapping's own fields; never
+     OpenSearch's words, which quote the value. A later write or delete of
+     the same document removes its record, so a record names only what is still set aside. A name or an identifier
+     indexes at most `KEYWORD_MAX_CHARS` (8,191) characters as a keyword (`ignore_above`), so a long name is never
+     refused for its length; an access field (datasets, handling, units) has no `ignore_above`, so an over-long
+     value there is refused and set aside rather than left unindexed for a filter to miss. A write to the alias says
+     `require_alias`, so a missing alias is a refusal, never a new unmapped index of its name. Held by
+     `test_refused.py`, against `FakeOpenSearch`, which refuses each of these as OpenSearch does.
+   - **The query side's exclusion read** (the orchestrator's ruling of 13 November, for ADR-149's counts and
+     groups): `services/search_index/pending.pending_node_ids(source, texts, limit=…)` gives the ids of every node in
+     the graph's outbox and every Document in the text outbox, ids alone and read with no principal, since they are
+     only ever excluded (`must_not` on `node_id`), never shown. It reads at most `limit + 1` rows of each outbox, and
+     says `complete` false when either holds more than `limit`: a node may appear more than once, so a set built
+     from the first rows could miss one, and the query side then falls back to the graph. It is the only module
+     beside the indexer and the rebuild that names the feed's reads (`test_index_feed_reach.py`);
+     `test_pending.py` holds it.
+   - **The plants** for each sentence of decisions 1 to 7 are code in `process/lanes/rules/v052-index/plants.py`,
+     each run with a fresh bytecode cache, and each is red in its `PLANTS_RECORD.txt`, taken at the branch's head on
+     the lane's leased stack.
+3. **One document per node, keyed by the node's id.** Never one per file (a Document's `object_ref` is
+   content-addressed, so two Document nodes with different handling can share one) and never one per merged entity.
+   **No cluster or `SAME_AS` field:** a cluster id would tell a reader that hidden members exist. Merged entities are
+   collapsed at query time, over the visible hits only (rule 6; ADR-149). So a merge changes no document; the outbox
+   still records both endpoints, so the documents are re-read after every merge and a later field derived from
+   resolution reaches the index without a new event type. The document (ADR-149's mapping, held here once; studio's
+   corrections of 13 November folded in):
+   - `kind: node`; keyword: `id`, `node_id` (equal to `id`, so the query side collapses a node's hits on one
+     field), `type`, `datasets[]`, `handling_classification`, `handling_code`, `owning_unit`,
+     `originator`, copied verbatim from the node's stored record;
+   - `identifiers[]` (keyword): the node's declared identifier values as a reader of its own dataset receives them,
+     plus each one's canonical form (`identifier_reading.search_alternative`) where it has one, with a subfield
+     `prefix` (edge n-grams 2 to `PREFIX_MAX_CHARS`, 50, lowercase, at index time) for the type-ahead (ADR-059), so no prefix query
+     expands against the term list;
+   - `names[]`: the type's string properties the ontology marks `indexed` and not `sensitivity: high` — the set the
+     type-ahead already searches (ADR-074; `tests/ontology/test_searchable_names.py` guards that no sensitive
+     property is marked) — as keyword with a lowercase and asciifolding normaliser, and subfields `prefix` (edge
+     n-grams 2 to 50 at index time), `tri` (3-grams) and `words` (standard tokenizer), each lowercase and asciifolding;
+   - `names_phonetic[]` (keyword): the Double Metaphone codes (`phonetics.dmetaphone`, MIT), primary and alternate,
+     of each name token, an empty code dropped; the function is exported so the query side applies the same
+     normalisation;
+   - `date`: the type's declared event or sent time where the ontology declares one, the record's creation otherwise.
+   **A Document's text is a document of its own** (`kind: text`, id `text:<node id>`): `node_id`, the node's access
+   fields, `text_owning_unit` and `text`. Today a text is read only by its owning unit (`review.py`
+   `get_document_text`, `WHERE owning_unit = principal.org_unit`), narrower than the Document node's handling, and a
+   highlight cannot be withheld per hit, so the text never sits on the node's document: the query side adds
+   `text_owning_unit = principal.org_unit` for `kind: text`, and a Document whose text a reader cannot read is still
+   found by its title. `text` is the standard analyser with lowercase and asciifolding, offsets and positions kept
+   for highlighting and phrases. A text is written in Postgres (`store_document_text`), outside the graph's
+   transaction, so it has an outbox of its own in Postgres (`search_text_pending`), written in the text's own
+   transaction and drained by the same indexer: a text never committed is never queued, and one committed always is.
+   Every field, keyword ones included, uses `similarity: boolean`, so no score depends on documents a reader cannot
+   see. **Strict ranking (the owner's ruling, 13 November):** no score depends on how rare a word is, and there is
+   no fuzzy expansion; a name is matched by trigrams, edge n-grams and the Conduit's own Double Metaphone key (a
+   keyword computed before indexing), with no phonetic, fuzzy, synonym or stemming analysis inside OpenSearch. The
+   trigrams come from an `ngram` tokenizer, each at its own position, so a query's `minimum_should_match` counts
+   them; an `ngram` token filter would put them all at one position, where a `match` reads them as synonyms and one
+   shared trigram makes a close name (found live by the studio lane on 13 November: "invoice" matched "Public
+   notice"; plant V59). A Document's text document carries its Document's `date`, so a date filter and the
+   newest-first order reach a mention (plant V60). An index made before either change has another mapping's
+   fingerprint, so the indexer stops until it is rebuilt (decision 4).
+   `tests/services/search_index/test_mapping_strict_ranking.py` holds it, by an allow-list of the analysers,
+   tokenizers and filters the mapping may name. That a text never committed is never queued, and one committed always
+   is: `test_findings_inferred.py`'s `test_a_documents_text_and_its_outbox_row_are_one_transaction`, through the real
+   `store_document_text`. Groups counting records is the query side's (ADR-149). Only what the Glass already receives in a `Node` response is searchable: the document is built through the
+   same serialisation, with `withhold_sources` applied as for a reader of the node's own dataset, so no source-system
+   identifier is indexed (rule 7), and a `gazetteer-*` node carries its `name` only (ADR-147 Amendments 1 and 3).
+   **The index is named per deployment:** its alias comes from settings (`search.index_alias`, default
+   `ospreyflow-<deployment name>`), so two installs sharing one managed domain never read each other's index; the
+   query side takes the index name as a parameter, so a test points it at a throwaway index.
+4. **A rebuild from the graph:** `python -m scripts.rebuild_search_index`. It pages every node (`list_nodes`' keyset
+   cursor, through `nodes_for_index`) into a new index named with its build time, then moves the alias the indexer
+   and the search service use onto it and deletes the old one, so a reader never sees a half-built index. While it
+   fills, the new index holds a second alias (`<alias>-building`) and the indexer writes each change to both, so a
+   node changed after the rebuild read it does not stay at its older state; the outboxes are left alone and their
+   rows re-applied after the move, idempotently. `ospreyflow restore` runs it as its last step after a restore
+   (ADR-114 Amendment 35 point 2) on a compose shape whose compose file runs an `opensearch` service; a compose shape
+   without one has no index, and cloud-platform rebuilds through its own `ospreyflow-search-rebuild` Job (platform's
+   runbook), not through this step. Held: `test_the_restore_rebuilds_after_every_store_is_back` (the call is the
+   restore's last step, plant V27) and `test_a_restore_rebuilds_the_index_only_where_there_is_one`; that the rebuild
+   finds every node of a graph again, `test_feed_live.py`'s
+   `test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them`. A restore run end to end and then
+   searched is not run by this step: CARRIES' row, for platform-b's restore exit test.
+   - **One rebuild at a time:** a rebuild holds a lock index (`<alias>-rebuild-lock`, made atomically: a second
+     create is refused) and is refused in words while another holds it (`test_one_rebuild_at_a_time`). A rebuild
+     killed outright (SIGKILL, out of memory) leaves the lock, and every later rebuild, the restore's included, is
+     refused until an operator deletes that index, as the refusal says.
+   - **An index is written only by the code its mapping was made for.** Each index's `_meta` holds
+     `MAPPING_FINGERPRINT`, a digest of the settings and mapping it was made with; the indexer checks it on every
+     target before each write and at start (`check_mapping`). An index made for another mapping (an upgrade that
+     changed it, not yet rebuilt, or an older replica in a rolling upgrade) is never written: the indexer raises
+     `MappingOutOfDate`, keeps the outbox and says a rebuild is needed, rather than setting every document aside.
+     A delete does not depend on the mapping, so first every document of the batch is deleted from that index: a
+     node withdrawn, reverted or narrowed in place is missing from search until the rebuild, never left at its
+     older facts (it fails closed).
+     So an upgrade that changes the mapping runs the rebuild (CARRIES' row, for the upgrade's owner);
+     `test_an_index_made_for_another_mapping_is_never_written`.
+   - **A failed rebuild leaves nothing behind:** its index is deleted, and the building alias with it, and the alias
+     stays where it was. A rebuild first deletes any index a crashed one left under `<alias>-building` (otherwise
+     every change goes to that stray index too, and a second index under the alias refuses every write). Held by
+     `test_refused.py`'s `test_a_rebuild_that_fails_leaves_nothing_and_keeps_the_refusal_record` and
+     `test_a_rebuild_removes_the_index_a_crashed_rebuild_left`, and `test_bulk_cap.py`'s
+     `test_a_413_in_the_rebuild_is_raised_and_leaves_nothing_behind`.
+5. **A drift check:** `python -m scripts.search_index_drift`. It compares the graph's live nodes with the index and
+   reports, by id: missing from the index, in the index but not live in the graph, and stale (a per-node fingerprint
+   of the indexed fields differs), and refused (set aside, decision 2, with its reason; reported instead of missing).
+   It exits non-zero on any difference, and prints counts and the first ids of each. When either outbox still holds
+   rows it says so: a change on its way shows as drift until the indexer has sent it
+   (`test_the_drift_check_says_the_outboxes_still_hold_changes`). It holds every indexed id and fingerprint and
+   every expected id in memory, some 150 bytes a document (about 4.5 GB at thirty million): a streaming check is
+   CARRIES' row, before it is run on step B's load.
+6. **Red first, each event type:** for each of load, merge, new version, promotion and deletion, a live case writes
+   through the adapter's real method and finds the index changed (and a plant that removes that method's outbox
+   write turns it red); the rebuild and the drift check each have a case that plants a difference and finds it.
+
+7. **One client, built by one factory, for the indexer, the rebuild, the drift check and the query side.** Its address
+   is `OPENSEARCH_URL` when set (cloud-platform: the namespace's OpenSearch Secret, `https://…`), else
+   `http://OPENSEARCH_HOST:OPENSEARCH_PORT` (Lite and Small). `OPENSEARCH_SIGNING=sigv4` signs every request as
+   service `es` in `OPENSEARCH_REGION` with the pod's default AWS credentials (IRSA's web identity through
+   botocore's default chain; botocore is already a dependency), the owner's ruling for step 3a of 13 November;
+   `none` or unset sends unsigned, as Lite and Small do, and as a platform's signing proxy would need. A test shows
+   the `sigv4` path red against a stand-in domain that refuses an unsigned or wrongly signed request.
+   - **Retries:** `search_client(max_retries=…)`, opensearch-py's three by default for the indexer and the rebuild;
+     the query side passes 0, so an unreachable index costs one timeout a keystroke, not four
+     (`test_the_query_side_can_ask_for_no_retries`).
+   - **The CA it trusts** is the bundle a deployment names in `SSL_CERT_FILE`, `AWS_CA_BUNDLE` or
+     `REQUESTS_CA_BUNDLE`, the first set winning (OpenSSL's, then the AWS SDK's, then `requests`'s), trusted beside
+     the system's own roots (opensearch-py's TLS context loads both), so an OpenSearch behind a private CA or a
+     TLS-inspecting proxy is reached as the rest of the pod reaches AWS; opensearch-py on its own reads only
+     `SSL_CERT_FILE`. A variable naming a file that is not there is refused in words, never quietly dropped.
+     `tests/services/search_index/test_client_ca.py` holds each sentence against a TLS server on 127.0.0.1 signed by
+     a throwaway CA, which refuses the client that names no bundle; red first for `AWS_CA_BUNDLE`,
+     `REQUESTS_CA_BUNDLE`, the order and the absent file (`process/lanes/rules/v052-index/client-ca-red-first.txt`).
+
+### Consequences
+
+- Every graph write costs one more document write in its own transaction.
+- The index can lag the graph by the indexer's poll; it is never ahead of it, and never holds a write that rolled back.
+- A write that bypasses the adapter is invisible until the drift check or a rebuild; that is why the seed resets
+  rebuild.

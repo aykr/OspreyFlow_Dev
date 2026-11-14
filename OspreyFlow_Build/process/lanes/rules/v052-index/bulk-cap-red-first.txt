@@ -1,0 +1,105 @@
+FFFFFFFFF                                                                [100%]
+=================================== FAILURES ===================================
+___________________________ test_the_cap_is_ten_mib ____________________________
+
+    def test_the_cap_is_ten_mib() -> None:
+>       assert indexer_module.MAX_BULK_BYTES == 10 * 1024 * 1024
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'services.search_index.indexer' has no attribute 'MAX_BULK_BYTES'
+
+../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py:129: AttributeError
+______ test_a_batch_over_the_cap_goes_as_several_requests_each_within_it _______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x122060830>
+
+    async def test_a_batch_over_the_cap_goes_as_several_requests_each_within_it(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+>       monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
+E       AttributeError: <module 'services.search_index.indexer' from '/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/../OspreyFlow_Core/services/search_index/indexer.py'> has no attribute 'MAX_BULK_BYTES'
+
+../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py:135: AttributeError
+__________________ test_a_batch_within_the_cap_is_one_request __________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x122061040>
+
+    async def test_a_batch_within_the_cap_is_one_request(monkeypatch: pytest.MonkeyPatch) -> None:
+>       monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
+E       AttributeError: <module 'services.search_index.indexer' from '/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/../OspreyFlow_Core/services/search_index/indexer.py'> has no attribute 'MAX_BULK_BYTES'
+
+../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py:151: AttributeError
+___________________ test_the_cap_counts_bytes_not_characters ___________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x122061b50>
+
+    async def test_the_cap_counts_bytes_not_characters(monkeypatch: pytest.MonkeyPatch) -> None:
+        """A name in a script of three bytes a character: measured as characters, it fits; sent, it
+        does not."""
+>       monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
+E       AttributeError: <module 'services.search_index.indexer' from '/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/../OspreyFlow_Core/services/search_index/indexer.py'> has no attribute 'MAX_BULK_BYTES'
+
+../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py:161: AttributeError
+________ test_one_action_alone_over_the_cap_is_raised_and_nothing_sent _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1220626c0>
+
+    async def test_one_action_alone_over_the_cap_is_raised_and_nothing_sent(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+>       monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
+E       AttributeError: <module 'services.search_index.indexer' from '/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/../OspreyFlow_Core/services/search_index/indexer.py'> has no attribute 'MAX_BULK_BYTES'
+
+../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py:174: AttributeError
+_____________ test_a_413_is_raised_and_the_outbox_keeps_the_batch ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1220632c0>
+
+    async def test_a_413_is_raised_and_the_outbox_keeps_the_batch(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """OpenSearch's limit below the cap (a smaller domain than assumed): the 413 reaches the
+        caller and the outbox rows stay to be sent again."""
+>       monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
+E       AttributeError: <module 'services.search_index.indexer' from '/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/../OspreyFlow_Core/services/search_index/indexer.py'> has no attribute 'MAX_BULK_BYTES'
+
+../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py:187: AttributeError
+_________________ test_the_indexer_drains_a_batch_over_the_cap _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1220bae40>
+
+    async def test_the_indexer_drains_a_batch_over_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+>       monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
+E       AttributeError: <module 'services.search_index.indexer' from '/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/../OspreyFlow_Core/services/search_index/indexer.py'> has no attribute 'MAX_BULK_BYTES'
+
+../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py:200: AttributeError
+____________________ test_the_rebuild_sends_within_the_cap _____________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1220b8a10>
+
+    async def test_the_rebuild_sends_within_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+>       monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
+E       AttributeError: <module 'services.search_index.indexer' from '/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/../OspreyFlow_Core/services/search_index/indexer.py'> has no attribute 'MAX_BULK_BYTES'
+
+../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py:212: AttributeError
+_________ test_a_413_in_the_rebuild_is_raised_and_the_alias_not_moved __________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1220b94c0>
+
+    async def test_a_413_in_the_rebuild_is_raised_and_the_alias_not_moved(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+>       monkeypatch.setattr(indexer_module, "MAX_BULK_BYTES", CAP)
+E       AttributeError: <module 'services.search_index.indexer' from '/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/../OspreyFlow_Core/services/search_index/indexer.py'> has no attribute 'MAX_BULK_BYTES'
+
+../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py:224: AttributeError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_the_cap_is_ten_mib
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_a_batch_over_the_cap_goes_as_several_requests_each_within_it
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_a_batch_within_the_cap_is_one_request
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_the_cap_counts_bytes_not_characters
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_one_action_alone_over_the_cap_is_raised_and_nothing_sent
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_a_413_is_raised_and_the_outbox_keeps_the_batch
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_the_indexer_drains_a_batch_over_the_cap
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_the_rebuild_sends_within_the_cap
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_bulk_cap.py::test_a_413_in_the_rebuild_is_raised_and_the_alias_not_moved
+9 failed in 0.51s

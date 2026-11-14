@@ -173,6 +173,10 @@ def schema_statements(schema: OntologySchema) -> _Plan:
             plan.ddl.append(_index(name, "valid_from", unique=False))
             plan.indexes.append(f"{name}.valid_from")
         plan.edge_types.append(edge.name)
+    # The search index feed's outbox (ADR-150 decision 1): a document type, never a vertex, so no
+    # graph read can return it.
+    plan.ddl.append("CREATE DOCUMENT TYPE IndexPending IF NOT EXISTS")
+    plan.ddl.append(_property("IndexPending", "node_id", "STRING"))
     return plan
 
 

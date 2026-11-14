@@ -513,6 +513,22 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+      # ADR-150's live feed file (tests/services/search_index/test_feed_live.py): the dev stack's
+      # OpenSearch as deploy/compose/dev.yaml runs it (single node, security off, 512m heap).
+      opensearch:
+        image: opensearchproject/opensearch:2.17.1
+        ports:
+          - 9200:9200
+        env:
+          discovery.type: single-node
+          DISABLE_SECURITY_PLUGIN: "true"
+          DISABLE_INSTALL_DEMO_CONFIG: "true"
+          OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+        options: >-
+          --health-cmd "curl -sf http://localhost:9200/_cluster/health"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
     env:
       ARCADEDB_HOST: localhost
       ARCADEDB_HTTP_PORT: "2480"
@@ -795,6 +811,7 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_grading_change_live.py
           ../OspreyFlow_Build/tests/services/api/test_list_connector_store.py
           ../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_live.py
+          ../OspreyFlow_Build/tests/services/search_index/test_feed_live.py
           ../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py
           ../OspreyFlow_Build/tests/services/api/test_list_rows_parquet_live.py
           ../OspreyFlow_Build/tests/test_migrate_branches_to_views_store.py

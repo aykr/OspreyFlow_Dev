@@ -51,6 +51,7 @@ from ports.graph import (
     SubgraphTooLarge,
     SuggestOptions,
 )
+from ports.index_feed import PendingIndex
 from schemas.compute import LinkStructure, StructureEdge, StructureNode
 from schemas.domain import (
     AuditStub,
@@ -209,6 +210,15 @@ def _count(row: Any) -> int:
     if isinstance(row, dict):
         return int(row.get("result") or 0)
     return int(row or 0)
+
+
+def _same_as_ends(edges: Sequence[EdgeWrite]) -> list[NodeId]:
+    """Both ends of every `SAME_AS` among `edges`: a merge re-reads its nodes (ADR-150)."""
+    return [end for e in edges if e.type == "SAME_AS" for end in (e.source, e.target)]
+
+
+#: The search index feed's outbox (ADR-150 decision 1), a document type of its own.
+INDEX_PENDING = "IndexPending"
 
 
 def _id_chunks(ids: Sequence[str]) -> list[list[str]]:
@@ -399,6 +409,7 @@ class GraphArcadeDBAdapter:
                     f"INSERT INTO {type_name} SET {set_clause}", params=props, session_id=tx
                 )
             ids.append(node_id)
+        await self._index_pending(ids, tx)  # ADR-150 decision 1: a load
         return ids
 
     async def _node_type(self, node_id: NodeId, *, session_id: TxId) -> str | None:
@@ -709,6 +720,7 @@ class GraphArcadeDBAdapter:
                     session_id=tx,
                 )
             ids.append(edge_id)
+        await self._index_pending(_same_as_ends(edges), tx)  # ADR-150 decision 1: a merge
         return ids
 
     async def bulk_load_edges(
@@ -720,9 +732,14 @@ class GraphArcadeDBAdapter:
     ) -> BulkEdgeResult:
         """`ports.graph.BulkGraphLoader` (ADR-058): the contract is stated there, the logic is
         `bulk.BulkEdgeLoader`'s. No `TxId`: it commits in chunks of its own."""
-        return await self._bulk.load(
+        result = await self._bulk.load(
             self._require_schema(), edges, chunk_size=chunk_size, progress=progress
         )
+        # ADR-150 decision 1, a merge loaded in bulk: the chunks commit on their own, so the
+        # outbox is written after them; a merge changes no document, and the drift check finds a
+        # crash between the two.
+        await self._index_pending(_same_as_ends(edges), None)
+        return result
 
     async def _weigh_edge(
         self,
@@ -1734,6 +1751,74 @@ class GraphArcadeDBAdapter:
         self._schema = target
         return report
 
+    # --- the search index feed (ADR-150) --------------------------------------
+
+    async def _index_pending(self, node_ids: Sequence[NodeId], tx: TxId | None) -> None:
+        """Records `node_ids` in the outbox, in the write's own transaction (`tx`), so the write and
+        its record commit or roll back together. A node recorded twice is read twice; the indexer's
+        writes are idempotent."""
+        for chunk in _id_chunks([str(i) for i in node_ids]):
+            await self._client.sql(
+                f"INSERT INTO {INDEX_PENDING} CONTENT :rows",
+                params={"rows": [{"node_id": node_id} for node_id in chunk]},
+                session_id=tx,
+            )
+
+    async def pending_index(self, limit: int) -> list[PendingIndex]:
+        rows = await self._client.sql(
+            f"SELECT @rid AS ref, node_id FROM {INDEX_PENDING} ORDER BY @rid LIMIT :limit",
+            params={"limit": int(limit)},
+        )
+        return [PendingIndex(ref=str(r["ref"]), node_id=str(r["node_id"])) for r in rows]
+
+    async def clear_pending_index(self, refs: Sequence[str]) -> None:
+        for chunk in _id_chunks(list(refs)):
+            for ref in chunk:
+                if not _RECORD_ID.match(ref):
+                    raise ValueError(f"not an ArcadeDB record id: {ref!r}")
+            refs_literal = ", ".join(chunk)
+            await self._client.sql(f"DELETE FROM {INDEX_PENDING} WHERE @rid IN [{refs_literal}]")
+
+    async def nodes_for_index(self, node_ids: Sequence[NodeId]) -> dict[NodeId, Node | None]:
+        """`IndexFeedSource.nodes_for_index`: unfiltered by design, for the indexer alone (ADR-150
+        decision 2). No access step and no reader: the document carries the node's own marking and
+        the query side filters by it. A node not live (reverted, withdrawn, superseded) or absent is
+        None."""
+        found: dict[NodeId, Node | None] = {str(i): None for i in node_ids}
+        chunks = _id_chunks(list(found))
+        types = await self._types_with_unique_id("vertex") if chunks else []
+        for chunk in chunks:
+            rids = await self._record_ids(types, chunk)
+            if not rids:
+                continue
+            for record in await self._client.gremlin(
+                f"g.V({groovy_string_list_literal(rids)}).elementMap()"
+            ):
+                if record.get("reverted") is True or record.get("superseded_by"):
+                    continue
+                node = node_from_element_map(record)
+                found[node.id] = node
+        return found
+
+    async def live_node_ids(self, *, after: NodeId | None, limit: int) -> list[NodeId]:
+        """`IndexFeedSource.live_node_ids`: every live node's id after `after`, in id order, over
+        every vertex type, each through its own `id` index."""
+        types = await self._types_with_unique_id("vertex")
+        where = "(reverted IS NULL OR reverted = false) AND superseded_by IS NULL"
+        if after is not None:
+            where += " AND id > :cursor"
+        pages = await asyncio.gather(
+            *(
+                self._client.sql(
+                    f"SELECT id FROM `{groovy_identifier(t)}` WHERE {where} "
+                    "ORDER BY id LIMIT :limit",
+                    params={"cursor": after, "limit": int(limit)},
+                )
+                for t in types
+            )
+        )
+        return sorted(str(r["id"]) for rows in pages for r in rows)[:limit]
+
     # --- revert ------------------------------------------------------------
 
     async def revert_elements(
@@ -1760,6 +1845,9 @@ class GraphArcadeDBAdapter:
                 params={"ids": ids},
                 session_id=tx,
             )
+        await self._index_pending(  # ADR-150 decision 1: a deletion
+            [i for kind, _, ids in plan if kind == "node" for i in ids], tx
+        )
 
     async def withdraw_elements(
         self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], load_id: str, tx: TxId
@@ -1777,6 +1865,7 @@ class GraphArcadeDBAdapter:
                 params={"ids": ids, "load": load_id},
                 session_id=tx,
             )
+        await self._index_pending(list(node_ids), tx)  # ADR-150 decision 1: a deletion
 
     async def promote_elements(
         self,
@@ -1823,6 +1912,7 @@ class GraphArcadeDBAdapter:
                 },
                 session_id=tx,
             )
+        await self._index_pending(list(node_ids), tx)  # ADR-150 decision 1: a promotion
 
     @staticmethod
     def _refuse_unless_all_live(wanted: int, live: int) -> None:
@@ -1848,12 +1938,12 @@ class GraphArcadeDBAdapter:
                         params={"id": row["id"], "datasets": kept},
                         session_id=tx,
                     )
+                if kind == "vertex":  # ADR-150 decision 1: a promotion taken back
+                    await self._index_pending([str(r["id"]) for r in found], tx)
                 counts[kind] += len(found)
         return PromotionReverted(nodes=counts["vertex"], edges=counts["edge"])
 
-    async def withdraw_layer(
-        self, dataset_id: str, withdrawal: str, tx: TxId
-    ) -> PromotionReverted:
+    async def withdraw_layer(self, dataset_id: str, withdrawal: str, tx: TxId) -> PromotionReverted:
         # By the `datasets BY ITEM` index, then only an element wholly the layer's: one promoted
         # from it holds the source too and is left (Amendment 2 decision 1).
         counts = {"vertex": 0, "edge": 0}
@@ -1874,6 +1964,8 @@ class GraphArcadeDBAdapter:
                         params={"ids": chunk, "w": withdrawal},
                         session_id=tx,
                     )
+                if kind == "vertex":  # ADR-150 decision 1: a deleted case layer
+                    await self._index_pending(ids, tx)
                 counts[kind] += len(ids)
         return PromotionReverted(nodes=counts["vertex"], edges=counts["edge"])
 
@@ -1895,6 +1987,7 @@ class GraphArcadeDBAdapter:
                     session_id=tx,
                 )
             nodes.extend(ids)
+        await self._index_pending(nodes, tx)  # ADR-150 decision 1: a deletion taken back
         edges: list[EdgeId] = []
         for type_name in await self._types_with_unique_id("edge"):
             name = groovy_identifier(type_name)
@@ -2324,6 +2417,7 @@ class GraphArcadeDBAdapter:
             tx=tx,
             on_link_cloned=on_link_cloned,
         )
+        await self._index_pending([node_id, new_node_id], tx)  # ADR-150 decision 1: a new version
         return new_node_id
 
     async def _repoint_incident_edges(
@@ -2582,7 +2676,8 @@ class GraphArcadeDBAdapter:
             params={"src": replacement.source, "tgt": replacement.target, **bound_params},
             session_id=tx,
         )
-
+        if "SAME_AS" in (replacement.type, old_type):  # ADR-150 decision 1: a merge changed
+            await self._index_pending([replacement.source, replacement.target], tx)
         return replacement_edge_id
 
 

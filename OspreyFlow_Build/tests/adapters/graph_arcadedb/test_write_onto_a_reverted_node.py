@@ -45,6 +45,7 @@ class NodeStore:
     def __init__(self) -> None:
         self.rows: dict[str, dict[str, Any]] = {}
         self.sql_sent: list[str] = []
+        self.index_pending: list[str] = []
 
     async def begin_transaction(self) -> str:
         return "tx"
@@ -84,6 +85,10 @@ class NodeStore:
                     # What the statement sets, both of it: the flag and the withdrawal cleared.
                     self.rows[i]["reverted"] = True
                     self.rows[i]["withdrawn_by_load"] = None
+            return []
+        if command == "INSERT INTO IndexPending CONTENT :rows":
+            # The search index feed's outbox (ADR-150 decision 1), written with every node write.
+            self.index_pending.extend(r["node_id"] for r in params["rows"])
             return []
         if command.startswith("INSERT INTO "):
             if params["id"] in self.rows:

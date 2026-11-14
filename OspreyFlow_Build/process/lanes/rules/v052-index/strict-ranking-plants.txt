@@ -1,0 +1,12 @@
+=== plant R1-words-bm25 (7748899, working tree)
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_mapping_strict_ranking.py::test_every_scored_field_is_boolean_so_no_word_rarity_ranks
+1 failed, 2 passed in 0.30s
+=== plant R2-text-bm25 (7748899, working tree)
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_mapping_strict_ranking.py::test_every_scored_field_is_boolean_so_no_word_rarity_ranks
+1 failed, 2 passed in 0.29s
+=== plant R3-phonetic-filter (7748899, working tree)
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_mapping_strict_ranking.py::test_no_phonetic_or_fuzzy_analysis_inside_opensearch
+1 failed, 2 passed in 0.31s
+=== plant R4-no-trigrams (7748899, working tree)
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_mapping_strict_ranking.py::test_names_match_by_trigrams_edge_ngrams_and_the_conduits_phonetic_key
+1 failed, 2 passed in 0.27s
