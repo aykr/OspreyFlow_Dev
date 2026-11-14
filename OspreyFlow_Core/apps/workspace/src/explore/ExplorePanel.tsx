@@ -495,7 +495,7 @@ function WhatIsNew({ apiBaseUrl, bearerToken, investigationId, onPick }: Omit<Ex
           {marked.map((m) => (
             <li key={m.node.id}>
               <ActionRow
-                label={`${nodeLabel(m.node)} · ${m.node.type} · marked for suppression by ${m.marked_by} · ${when(m.marked_at)} · “${m.reason}”`}
+                label={`${nodeLabel(m.node)} · ${m.node.type} · marked for suppression by ${m.marked_by} · ${when(m.marked_at)} · “${m.reason}” · hides nothing yet`}
                 act="Add"
                 onAct={() => onPick(m.node)}
               />

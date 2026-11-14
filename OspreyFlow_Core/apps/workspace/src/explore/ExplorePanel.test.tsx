@@ -291,7 +291,7 @@ describe("ExplorePanel", () => {
     expect(onPick.mock.calls[0]?.[0].id).toBe("alice");
     fireEvent.click(
       within(news).getByRole("button", {
-        name: "Add: bob@enron.com · Endpoint · marked for suppression by analyst-3 · 8 Oct 2026, 11:00 UTC · “a duplicate”",
+        name: "Add: bob@enron.com · Endpoint · marked for suppression by analyst-3 · 8 Oct 2026, 11:00 UTC · “a duplicate” · hides nothing yet",
       }),
     );
     expect(onPick.mock.calls[1]?.[0].id).toBe("bob");

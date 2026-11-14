@@ -860,7 +860,9 @@ test("the radial list reaches Mark for suppression, and the mark toggles", async
 
   // Offered on every node, so it is always the last item — reached with `End` rather than by
   // counting Tabs, which would otherwise need changing whenever the fixture gains an edge type.
-  const item = page.getByRole("menuitem", { name: "Mark for suppression" });
+  // Its words say what it does today (the owner, 14 November 2026): it records a mark and a reason, and hides
+  // nothing yet (R7's second step comes after v0.5.2).
+  const item = page.getByRole("menuitem", { name: "Mark for suppression (hides nothing yet)", exact: true });
   await expect(item).toBeVisible();
   await item.focus();
   await page.keyboard.press("Enter");

@@ -1,0 +1,6 @@
+AS IT MUST BE (red, for its reason): the panel drawn over every place in the case, as on main before
+    AssertionError: expected <section …(3)>…(5)</section> to be null
+AS IT MUST BE (red, for its reason): the panel taken away off the Graph, so the way back starts another job
+    AssertionError: expected [ { …(2) }, { …(2) } ] to have a length of 1 but got 2
+unplanted: Tests 8 passed (8)
+every plant red for its reason, unplanted green

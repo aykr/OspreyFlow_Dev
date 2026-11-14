@@ -1,0 +1,14 @@
+diff --git a/OspreyFlow_Core/docs/user-guide.md b/OspreyFlow_Core/docs/user-guide.md
+index f0a92e4..75cbb84 100644
+--- a/OspreyFlow_Core/docs/user-guide.md
++++ b/OspreyFlow_Core/docs/user-guide.md
+@@ -325,7 +325,8 @@ it first. The selection's own actions come first, in the bar's words. **Expand b
+ each kind of relationship with how many links it has, so you can draw just one; the kinds with none
+ fold into one line ("7 types with no links") that opens in place. **Actions** holds what the item
+ offers, as its type allows: Explain cluster, View messages, Expand group, Read full screen, Add files
+-held by this…, Set picture… and Mark for suppression; with two selected, only the pair's own: Link
++held by this…, Set picture… and Mark for suppression (hides nothing yet), which records a mark and a reason
++and hides nothing yet; with two selected, only the pair's own: Link
+ to…, Split from… and Find paths to…. In a view, the menu offers only what changes nothing in the
+ case. An expansion that would add more than
+ **500** nodes asks first, offering one relationship at a time, all of them, or nothing. An expansion

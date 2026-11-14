@@ -265,4 +265,34 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     expect(panel()).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Try the batch job again" })).toBeNull();
   }, 15_000);
+
+  test("the panel is drawn at the canvas's foot alone: not over Reports or the Studio while its job runs, and back on the Graph", async () => {
+    answerFirst = (url) =>
+      url.endsWith("/inv-1/batch-expansions/j1")
+        ? new Response(JSON.stringify({ id: "j1", state: "running", words: "Expanding from 1 node.", view: null, nodes: null, links: null, refusal: null }))
+        : null;
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
+    act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
+    await screen.findByText("Expanding from 1 node.", undefined, { timeout: 5000 });
+    const shown = () => document.querySelector<HTMLElement>(".batch-expansion");
+    const views = () => screen.getByRole("group", { name: "View" });
+    const places = () => screen.getByRole("navigation", { name: "Places" });
+    // Over Reports (the view switch), the panel is not drawn, nor read by assistive technology.
+    fireEvent.click(within(views()).getByRole("button", { name: "Reports" }));
+    await waitFor(() => expect(panel()).toBeNull());
+    expect(shown() === null || shown()!.closest("[hidden]") !== null).toBe(true);
+    // Nor over the Ingest Studio (a place of its own).
+    fireEvent.click(within(places()).getByRole("button", { name: "Ingest Studio" }));
+    await waitFor(() => expect(within(places()).getByRole("button", { name: "Ingest Studio" }).getAttribute("aria-current")).toBe("page"));
+    expect(panel()).toBeNull();
+    expect(shown() === null || shown()!.closest("[hidden]") !== null).toBe(true);
+    // Back on the Graph, the same panel, still following the same job: no second start.
+    fireEvent.click(within(places()).getByRole("button", { name: "The Glass" }));
+    fireEvent.click(within(await screen.findByRole("group", { name: "View" })).getByRole("button", { name: "Graph" }));
+    expect(await screen.findByRole("region", { name: "Batch job: the whole expansion" })).toBeTruthy();
+    expect(sent.filter((s) => s.url.endsWith("/inv-1/batch-expansions"))).toHaveLength(1);
+    expect(screen.getByText("Expanding from 1 node.")).toBeTruthy();
+  }, 15_000);
 });

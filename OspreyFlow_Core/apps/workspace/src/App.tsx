@@ -2684,24 +2684,29 @@ export function App() {
           groupedCount={groupedCount}
         />
       )}
+      {/* ADR-151, spec 02 §3.1h: the batch job's panel is at the canvas's foot, on the Graph alone. Elsewhere in the case
+          (Reports, the Studio, the Map) it is hidden, not taken away, so it goes on following its job, and is there
+          again, as it was, on the way back to the canvas; the job itself runs on the server either way. */}
       {bearerToken && batchExpansion.asked && (
-        <BatchExpansion
-          key={batchExpansion.asked.n}
-          request={batchExpansion.asked.request}
-          apiBaseUrl={API_BASE_URL}
-          bearerToken={bearerToken}
-          investigationId={batchExpansion.asked.caseId}
-          // *Try the batch job again* only where a batch job may be chosen: not while a view is open.
-          mayStartAgain={lens === null}
-          // Opened as any view is (`openLens`: the latest view asked for wins); a problem is the panel's to say.
-          onOpenView={async (viewId) => {
-            setViewsRead((n) => n + 1);
-            const problem = await openLens(viewId);
-            if (problem !== null) setViewProblem(null);
-            return problem;
-          }}
-          onClose={batchExpansion.close}
-        />
+        <div hidden={view !== "graph"}>
+          <BatchExpansion
+            key={batchExpansion.asked.n}
+            request={batchExpansion.asked.request}
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={bearerToken}
+            investigationId={batchExpansion.asked.caseId}
+            // *Try the batch job again* only where a batch job may be chosen: not while a view is open.
+            mayStartAgain={lens === null}
+            // Opened as any view is (`openLens`: the latest view asked for wins); a problem is the panel's to say.
+            onOpenView={async (viewId) => {
+              setViewsRead((n) => n + 1);
+              const problem = await openLens(viewId);
+              if (problem !== null) setViewProblem(null);
+              return problem;
+            }}
+            onClose={batchExpansion.close}
+          />
+        </div>
       )}
       {bearerToken && investigationId && expansionOverCap && (
         <ViewOverCapDialog

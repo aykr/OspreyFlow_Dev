@@ -1,0 +1,8 @@
+AS IT MUST BE (red, for its reason): the line left out
+    TestingLibraryElementError: Unable to find an element with the text: Each group counts its own records, and a record can be in more than one, so All need not be the groups added up.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+AS IT MUST BE (red, for its reason): the line said with one group, where it is noise
+    AssertionError: expected <p class="search-results__per-group"></p> to be null
+AS IT MUST BE (red, for its reason): the line in the OspreyFlow look's class under GOV.UK
+    AssertionError: expected 'search-results__per-group' to contain 'govuk-body-s'
+unplanted: Tests 28 passed (28)
+every plant red for its reason, unplanted green
