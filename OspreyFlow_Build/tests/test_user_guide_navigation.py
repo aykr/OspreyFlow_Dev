@@ -108,6 +108,8 @@ def test_section_5_names_the_view_switch_and_more_views_in_order() -> None:
     row = _row("Top bar")
     more_name = more_label()
     assert more_name == "More" and 'export const MORE_NAME = "More ways to show the case";' in RAIL
+    assert ("for a screen reader **More** is *More ways to show the case*, and while one of its own is open it shows "
+            "that one's name") in row  # fmt: skip
     m = re.search(rf"the view switch \((.*?) under \*\*{re.escape(more_name)}\*\*", row)
     assert m, "the top bar's view switch"
     named = _bold_in_order(m.group(1))
@@ -129,7 +131,11 @@ def test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it() -> None:
     assert cross and f"**{cross.group(1)}**" in three
     assert "mode toggle" not in three and "Graph: the case's data" not in three
     assert ("**All cases**, opens the **Cases** panel" in three) is ("All cases" in (SRC / "App.tsx").read_text(encoding="utf-8"))
-    assert "the case switcher, **Saved views (n)**, the open saved view when there is one, and the dataset the case reads" in _row("Context banner")
+    # The banner's own order: the case, the open saved view, then its button.
+    assert banner.index("› Saved view: {openView}") < banner.index("{savedViewsLabel(savedViews)}")
+    assert 'return typeof count === "number" ? `Saved views (${count.toLocaleString("en-GB")})` : "Saved views";' in banner
+    assert "(**Saved views** alone while they are still being read)" in three
+    assert "the case switcher, the open saved view when there is one, **Saved views (n)**, and the dataset the case reads" in _row("Context banner")
 
 
 def test_section_5_2_gives_the_selection_bar_in_its_words_and_order() -> None:

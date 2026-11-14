@@ -27,6 +27,7 @@ USER_GUIDE = DOCS / "user-guide.md"
 SITES_BUILD = Path(__file__).resolve().parents[1] / "marketing_site" / "sites" / "build.py"
 #: Every place held here, by name.
 GUIDES = {name: DOCS / f"{name}-guide.md" for name in ("administration", "developer", "architecture")}
+GUIDES["demo"] = CORE / "DEMO_GUIDE.md"
 #: The names the questions panel had before Amendment 12 renamed it (ADR-145 Amendment 12: "Questions renamed").
 OLD_QUESTIONS_NAMES = ("Ask the case", "Questions panel", "Questions and Ask", "<strong>Questions.</strong>",
                        "Questions: an answer")  # the last, the questions figure's caption and alternative text
@@ -120,8 +121,9 @@ def old_view_words_on_screen(sources: dict[str, str]) -> list[str]:
 
 
 def glass_sources() -> dict[str, str]:
-    return {p.relative_to(SRC).as_posix(): p.read_text(encoding="utf-8") for p in sorted(SRC.rglob("*.ts*"))
-            if ".test." not in p.name and "/test" not in p.as_posix()}  # fmt: skip
+    found = {p.relative_to(SRC).as_posix(): p.read_text(encoding="utf-8") for p in sorted(SRC.rglob("*.ts*"))}
+    return {name: text for name, text in found.items()
+            if ".test." not in name and not name.startswith("test") and "/test" not in name}  # fmt: skip
 
 
 def admin_sections_misnamed(texts: dict[str, str]) -> list[str]:
@@ -164,7 +166,9 @@ def test_the_questions_panel_is_called_by_its_label() -> None:
 def test_view_means_a_saved_view_in_every_guide_and_in_the_glass() -> None:
     texts = {**read_all(), "user": USER_GUIDE.read_text(encoding="utf-8")}
     assert old_view_names(texts) == []
-    assert old_view_words_on_screen(glass_sources()) == []
+    sources = glass_sources()
+    assert len(sources) > 100 and "shell/TopBar.tsx" in sources, "the Glass's sources are read"
+    assert old_view_words_on_screen(sources) == []
     # The toolbar's Views menu is withdrawn: nothing draws it.
     drawn = [n for n, s in glass_sources().items() if n != "views/ViewsMenu.tsx" and re.search(r"<ViewsMenu\b", s)]
     assert drawn == [], drawn
@@ -177,10 +181,10 @@ def test_each_admin_section_is_named_as_admin_labels_it() -> None:
 def test_the_views_the_guides_name_are_where_the_layout_puts_them() -> None:
     """The two places the administration guide names a view say where it is, in the layout's words."""
     text = prose(read_all()["administration"])
-    assert ("dashboards" in VIEW_SWITCH) and f"the **{VIEW_LABELS['dashboards']}** view (the top bar's view switch)" in text
+    assert ("dashboards" in VIEW_SWITCH) and f"**{VIEW_LABELS['dashboards']}** (the top bar's view switch)" in text
     assert ("strength" in MORE_VIEWS) and (
-        f"**{VIEW_LABELS['strength']}** view (the top bar's view switch, under **{MORE}**, or in the switch itself "
-        "for someone offered no other view, as the built-in Administrator is)" in text
+        f"**{VIEW_LABELS['strength']}** (the top bar's view switch, under **{MORE}**, or in the switch itself "
+        "for someone offered nothing else there, as the built-in Administrator is)" in text
     )
     # splitViews: someone offered none of the switch's views has More's in the switch itself.
     assert "return main.length > 0 ? { main, more } : { main: more, more: [] };" in LAYOUT

@@ -53,36 +53,73 @@ def test_the_strip_starts_with_the_way_back_and_says_what_the_guide_says_in_its_
 
 
 def test_a_strip_drawn_in_another_order_is_flagged() -> None:
-    """Main's strip before Amendment 17: the name first, the way back last."""
-    planted = ('View: <span>{name}</span> {shared ? "Shared" : "Private"} {note && <span/>} '
-               "<span>Nothing in a saved view changes the case.</span> <button>Back to the whole case</button>")
-    assert strip_order(planted)[0] != "Back to the whole case"
-    reworded = planted.replace("View: <span", "Saved view: <span").replace("in a saved view", "in a view")
+    """The real strip with its way back moved after the note, as main's strip had it, and with its note reworded."""
+    strip = screen("views/ViewLensBanner.tsx")
+    back = strip.index("Back to the whole case")
+    moved = strip[:back] + strip[back + len("Back to the whole case") :]
+    moved = moved.replace("Nothing in a saved view changes the case.", "Nothing in a saved view changes the case. Back to the whole case")
+    assert strip_order(moved)[0] != "Back to the whole case"
+    reworded = strip.replace("Nothing in a saved view changes the case.", "Nothing in a view changes the case.")
     assert "Nothing in a saved view changes the case." not in strip_order(reworded)
+
+
+def test_the_app_draws_the_strip_the_panel_and_the_way_back_as_the_guide_says() -> None:
+    app = screen("App.tsx")
+    assert 'title={casesOpen === "views" ? "Saved views" : "Cases"}' in app, "the drawer's title from the case line"
+    assert "onOpenWholeCase={() => {" in app, "the whole case's Open, wired"
+    assert '{view === "graph" && !lens && investigationId && <WholeCaseStrip />}' in app
+    back = app[app.index("const backToTheWholeCase = (): void => {") :]
+    assert "requestAnimationFrame(() => focusSavedViewsButton());" in back[: back.index("};")]
+    assert 'label: "Opened from an alert",' in app and 'backLabel: "← Back to the alert",' in app
+    # The Cases panel lists each case's saved views too: its list opens one.
+    cases = app[app.index("<CaseList") :]
+    assert "onOpenView={(caseId, chosen: CaseView) => {" in cases[:2000]
+    strip = screen("views/ViewLensBanner.tsx")
+    assert "{from && <span className=\"view-lens-banner__from\">{from.label}</span>}" in strip
+    assert strip.index("Back to the whole case") < strip.index("{from.label}") < strip.index("Saved view: <span")
+    assert strip.index("Nothing in a saved view changes the case.") < strip.index("{from.backLabel}")
+    text = saved_views()
+    assert ("the **Cases** panel, from **All cases**, lists each case's saved views too.") in text
+    assert ('A saved view opened from an alert says "Opened from an alert" straight after the way back, and offers '
+            "**← Back to the alert** after the note.") in text  # fmt: skip
 
 
 def test_the_list_starts_with_the_whole_case_and_tells_default_named_views_apart() -> None:
     panel = screen("views/ViewsPanel.tsx")
-    assert "The whole case</dt>" in panel and "The whole case</span>" in panel, "both looks"
-    assert panel.count("Open now") >= 4, "the whole case's and the open view's, in both looks"
-    assert 'aria-label="Open the whole case"' in panel
+    # The whole case's row, in both looks, marked Open now while no saved view is; the open view's, likewise.
+    assert '<dt className="govuk-summary-list__key">The whole case</dt>' in panel
+    assert '<span className="case-views__name">The whole case</span>' in panel
+    assert panel.count("{openViewId === null && <") == 2 and panel.count("{view.id === openViewId && <") == 2
+    assert 'aria-label="Open the whole case" onClick={onOpen}> Open </button>' in panel
+    # The open view offers no Open.
+    assert "{!isOpen && ( <button type=\"button\" className={action} aria-label={`Open ${view.name}`} onClick={onOpen}> Open </button>" in panel
     assert "const DEFAULT_NAME = /^Selection of [\\d,]+ nodes?$/;" in panel
+    canvas = screen("canvas/GlassCanvas.tsx")
+    assert 'return `Selection of ${n} node${n === 1 ? "" : "s"}`;' in canvas, "the Glass's default name, as the panel matches it"
     assert 'day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"' in panel
     assert "return view.first_item ? `${view.first_item} · saved ${when}` : `Saved ${when}`;" in panel
     assert "Delete this view? Nothing on the case is deleted with it." in panel
+    assert "aria-label={`Share with the case: ${view.name}`}" in panel
+    assert "No views yet. Select nodes on the canvas and choose <em>Save as a view</em>." in panel
+    form = screen("views/SaveViewForm.tsx")
+    assert "View name" in form and "Save view" in form
     text = saved_views()
-    assert ("Its list starts with **The whole case**, marked *Open now* when no saved view is open, and offering **Open "
-            "the whole case** while one is") in text  # fmt: skip
+    assert ("The list starts with **The whole case**, marked *Open now* when no saved view is open, and offering "
+            "**Open** (*Open the whole case*, to a screen reader) while one is") in text  # fmt: skip
+    assert 'One saved under the name the Glass gives a selection ("Selection of 3 nodes") is told apart' in text
     assert ('("‹first item› · saved 14 Nov 2026, 12:01"), or when it was saved alone ("Saved 14 Nov 2026, 12:01")') in text
     assert "The one open now is marked *Open now* and offers no **Open**" in text
+    assert "**Share with the case** and **Delete**" in text and "under **View name** and **Save view**" in text
 
 
-def test_the_canvas_notice_and_the_one_way_to_saved_views() -> None:
+def test_the_canvas_notice_and_the_toolbar() -> None:
     canvas = screen("canvas/GlassCanvas.tsx")
     m = re.search(r'const LENS_NOTICE = "([^"]+)";', canvas)
     assert m and f'"{m.group(1)}"' in saved_views()
-    assert not (SRC / "views/ViewsMenu.tsx").exists() or not re.search(r"<ViewsMenu\b", canvas)
-    banner = screen("shell/ContextBanner.tsx")
-    assert 'return typeof count === "number" ? `Saved views (${count.toLocaleString("en-GB")})` : "Saved views";' in banner
-    assert "› Saved view: {openView}" in banner
-    assert "**Saved views (n)**, on the case line, opens the **Saved views** panel; it is the one way to them." in saved_views()
+    # ADR-144 Amendment 6: the toolbar's Views menu, its file and its slot, removed.
+    assert not (SRC / "views/ViewsMenu.tsx").exists() and "viewsMenu" not in canvas
+    actions = screen("canvas/ViewActions.tsx")
+    assert "Clear the graph" in actions and 'aria-label="Clear the graph"' in actions
+    two = fold(section(USER, "### 5.2"))
+    assert "**Remove from view** and **Clear the graph** take nodes off" in two
+    assert "In a saved view, the menu offers only what changes nothing in the case." in two
