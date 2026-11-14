@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.63** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.64** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.64 | 2026-11-14 | §5.2: a batch result, and a view, up to the view's limit saved and opened with its links, and *Show links among all* on a large canvas, since the links among a set are found a thousand records at a time (ADR-124 Amendment 20). Held by `tests/test_user_guide_am20.py`. PDF made by the orchestrator at merge. |
 | 1.63 | 2026-11-14 | A watch whose owner is not held in *People and roles* quotes the stopped reason's new words ("Its owner is not held in Admin › People and roles.", ADR-148 Amendment 19). Version set at merge. PDF made by the orchestrator at merge. |
 | 1.62 | 2026-11-14 | §7.5: a watch stays active through two unreachable evaluations in a row, with a note saying so, and stops at the third (ADR-044 Amendment 2). |
 | 1.61 | 2026-11-14 | Step 5's wording sweep. §5.2: records arrive shown as one where they match, worked out for you alone (ADR-124 Amendment 19); *Mark for suppression (hides nothing yet)* as built, a mark that hides nothing, kept for the session that made it, the suppression itself not built; the batch job's limits (the Editor level, the expand right, ten minutes). §5.5: the limited line's reason, a 50-character search refused in the Conduit's words, and each group counting its own records. Then the early part. §2: a refresh keeps you signed in and where you were, for the tab alone, forgotten at sign-out (ADR-050 Amendment 3). §3: under GOV.UK, the slim header and phase banner and the one-row context banner on every screen but Home and sign-in (ADR-132 Amendment 8). §5.5: the box's filters as it labels them (Ignore case, Match, Entity types, Only nodes on screen, Reset filters), its more line, its limited line (a *Starts with* search alone), one character with *Only nodes on screen*, and a *Starts with* search of at most 50 characters where there is an index. §6: Ask & Chat for Ask the case. Held by `tests/test_guides_v051_gaps.py`, `test_user_guide_search_results.py` and `test_guide_navigation_words.py`. PDF made by the orchestrator at merge. |
@@ -346,7 +347,9 @@ batch job**. A batch job runs the same expansion on the server as you, reading o
 and saves what it finds as a private view of the case; nothing is added to the case's own graph. When
 it is done, its result opens as your private view; if it cannot be opened, it stays in *Views in this
 case*. A result too large for a view to show, more than **50,000** nodes or **250,000** links, is
-refused with its figures and saves nothing: narrow it by link type, depth or dates. A batch job needs the Editor level on the case, since its result is saved as a view of it, and the right to
+refused with its figures and saves nothing: narrow it by link type, depth or dates. The links among
+the records are found a thousand records at a time, so a result up to that limit is saved with its links and its
+view opens with them, and **Show links among all** on a large canvas keeps working as it grows. A batch job needs the Editor level on the case, since its result is saved as a view of it, and the right to
 expand; without either the panel says why and starts nothing. While it runs the panel says "The batch job is under
 way."; one that would take longer than ten minutes is stopped and saves nothing. One batch job of yours runs in a
 case at a time, and its panel says so: "Closing this does not stop the job. While it
