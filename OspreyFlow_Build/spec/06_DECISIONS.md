@@ -38840,6 +38840,49 @@ Amendment 6 point 8, which refused every guest (B2B) account outright.
 - `test_guides_cloud_platform.py`: §6a.7 quotes the refusal and the audit action as the code has them.
 Each rule is planted alone and red (`process/lanes/admin/guests/`).
 
+
+### ADR-148, Amendment 18 (14 November 2026) — The token version, said in words
+
+*v0.5.2 (the owner's ask of 14 November). By platform-b.*
+
+**Context.** `cloud_platform.claims.token_version` ("2.0", the default, or "1.0") decides the issuer and audience
+the Conduit checks (`EntraSignInConfig.issuer`, `audience`). If the API's app registration issues the other version
+(with 2.0, its manifest's `requestedAccessTokenVersion` must be 2), every sign-in failed at PyJWT's issuer or
+audience check, in no words a person could act on, and INSTALL's section 8 left it to a person at a browser.
+
+**Decisions.**
+1. **The Conduit says the mismatch in words** (`principal_auth.TokenVersionMismatch`, a `PrincipalResolutionError`, 401):
+   "the API's app registration issues v1.0 access tokens (issuer …), and this deployment expects v2.0
+   (cloud_platform.claims.token_version: "2.0"): set requestedAccessTokenVersion to 2 in the API registration's
+   manifest, or set token_version to "1.0" in osprey.yaml and render again", and the reverse.
+2. **Only a token the tenant signed reaches the words, and none is let in by them.** When an Entra token is
+   refused, its signature is checked again with the tenant's key, issuer and audience aside, and the words are given
+   only for this tenant's own issuer in the other version's form (`https://sts.windows.net/<tid>/` for v1.0,
+   `https://login.microsoftonline.com/<tid>/v2.0` for v2.0), with a `ver` that agrees with it when present. Otherwise
+   the refusal is the plain one: another key's signature, another tenant's issuer, a token not Entra's, a `ver` at
+   odds with its issuer, or an expired token.
+3. **Logged once per process** (`TOKEN_VERSION_LOG`, "token version: …"), for INSTALL step 6 to read.
+4. **INSTALL step 6 checks it** after the first administrator's first sign-in: it reads the Conduit's log for that
+   line and stops with its words, or says no sign-in has been refused for it so far (it cannot say more before
+   anyone signs in). Section 8's item 1 points to it.
+5. **R1's Entra stand-in can issue v1.0 access tokens** (`api.access_token_version: "1.0"`, as Entra does for a
+   registration at null or 1: issuer sts.windows.net, `ver` 1.0, the application id URI as audience, `appid`).
+   This is platform's file, sent as a diff (`process/lanes/platform-b/v052-tokver/standin_v1.diff`).
+
+**Tests** (rule 12; `process/lanes/platform-b/v052-tokver/conduit-red-first.txt` has every plant red):
+- `tests/services/api/test_auth_entra_token_version.py`: both directions refused in words; each version's own
+  token resolving; another key, another tenant, not Entra's, a disagreeing `ver` and an expired token each refused
+  plainly, never with the words; logged once.
+- `tests/harness/test_cloud_platform_token_version.py`: the rendered step 6 block, run in bash against the real
+  resolver's own logged line, stops with its words, and passes with a clean log. Its first form exited 0 after the
+  refusal; this test found it.
+- `process/lanes/platform-b/v052-tokver/test_standin_v1.py`: the stand-in, patched, issuing v1.0, with a real
+  Glass sign-in's token refused in the words and the same sign-in at v2.0 resolving.
+
+**Consequences.**
+- Not measured: whether Entra serves a v1.0 token's signing key in the v2.0 key set the Conduit reads. In practice
+  the keys are the same; a key it does not hold leaves the plain refusal, never the words.
+- The live check is step 6's on R1 with the stand-in's v1.0 mode, once platform applies the diff.
 ### ADR-044, Amendment 1 (14 November 2026) — A stopped hotlist or watch says why
 
 Status: the orchestrator's assignment (14 November 2026), from the CARRIES row ADR-148 Amendment 16 left ("a stopped
