@@ -87,3 +87,4 @@ beff3b6 b68a513 admin v052 (step 3b's identities)
 5be78c3 ffda1d9 platform-b v052-gate (step 3b, Superset and report sync), admin guide PDF reprinted (1.97)
 1e88cfce 87d1689 platform v052-r1reporting
 8acbc29 c626a5b docs spec10 (the guide's two copies held as one)
+f193666 e00a09c platform v052-r1upgrade
