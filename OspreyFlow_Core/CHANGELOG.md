@@ -24,7 +24,7 @@ in the GOV.UK look, and a refresh that keeps you signed in and where you were.
 - **Back up first,** as for every update: `ospreyflow update` takes its own backup and rolls back if
   anything fails.
 - **Small and Lite deployments: the deployment's PostgreSQL restarts once** with a higher
-  `max_connections` (660 on Small), rendered by `ospreyflow apply` from what the deployment's own services
+  `max_connections` (660), rendered by the update's own files step from what the deployment's own services
   hold (ADR-114 Amendment 43). Nothing else to do.
 - **After the update, put the command back as `install.sh` makes it:** `uv tool install --force --editable
   ./cli` in the checkout's folder (administration guide §6a). From v0.5.1 the command loads only the
