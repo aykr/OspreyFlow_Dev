@@ -1,5 +1,5 @@
-"""M9's slow fallback, profiled (the orchestrator, 14 November 2026): with OpenSearch stopped, a name
-search answered from the graph in 5.3-5.5 s at 642,460 nodes against the 5 s figure. This times
+"""M9's slow fallback, profiled (the orchestrator, 14 November 2026): with OpenSearch stopped, a
+name search answered from the graph in 5.3-5.5 s at 642,460 nodes against the 5 s figure. This times
 `GraphPort.search_nodes`' own query (`SearchNodesBuilder`, as `_from_graph` sends it: one past
 `FALLBACK_DEPTH`) beside variants that each take one part away, to find what dominates:
 
@@ -9,14 +9,17 @@ search answered from the graph in 5.3-5.5 s at 642,460 nodes against the 5 s fig
 - `limit_20`: the same with `limit(20)` (the one-past read's cost);
 - `count`: how many vertices match the `or()` alone (the matching, with no rows built);
 - `by_label`: one `hasLabel(T).has(f, v)` per type and its own fields, unioned, with the access
-  filter: the shape a type's index can serve;
+  filter: the shape a type's index can serve; it leaves out `match_any_field`'s gazetteer guard (a
+  request reader matches a gazetteer node on its name alone), so it times the shape and is not
+  itself a fix;
 - and the database's own list of indexes, so `by_label` is read against what is indexed.
 
 **Read-only**: no `apply_schema` (`use_schema` sets the ontology in memory), and every query is a
 `g.V()` read or `SELECT FROM schema:indexes`. Run on d under rules' lease, with rules' agreement,
 after step 4's runs, with the lease's ARCADEDB_* in the environment:
 
-    cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/v052-measure/profile_m9.py \\
+    cd OspreyFlow_Core && .venv/bin/python \\
+        ../OspreyFlow_Build/process/lanes/platform/v052-measure/profile_m9.py \\
         --database <B's database> --repeat 3 "Tomasz Kellly" "Meagan Illiams" ...
 
 It prints one line per query and variant (each repeat's ms, then the median) and writes nothing.

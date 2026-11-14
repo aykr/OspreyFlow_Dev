@@ -98,5 +98,33 @@ from the fallback in 5,507, 5,543, 5,428, 5,301 and 5,404 ms, against the 5,000 
 fallback is slower than the bar's figure. The five suggestions took 1,098–1,483 ms (within 2 s), and the index was
 back in 14.5 s (within 120 s), with 642,460 documents as before. Results in `results-m9`.
 
+**Step 2, the measured run: M1, M3, M4, M5 and M6 met.** Run 20261114T143856Z-516ef319, 14:38:56–14:52Z, at
+8ba5ed6 under rules' lease of d (held since 03:27:42Z), from `OspreyFlow_Core`; "1 failed, 5 passed, 1 deselected
+in 678.60s", no token refused. Rules' SSH dropped at 14:47Z and the run was followed to its end with `remote-log`
+(its whole log: `osprey-runs/rules.meta/runs/20261114T143856Z-516ef319/log`). `RESULTS.md` built by rules with
+`--commit 8ba5ed6d0ed7…`, the JSON in `~/osprey-load/step4/results/`:
+
+| Measure | p50 / p95 / max | Budget / fail | Result |
+| --- | --- | --- | --- |
+| M1 suggestions | 56.8 / 61.3 / 173.3 ms | 300 / 300 ms, any over 2 s | met |
+| M3 names | 856.3 / 912.7 / 1,003.9 ms | 1 / 2 s | met |
+| M4 full text | 884.5 / 957 / 1,005.6 ms | 1.5 / 3 s | met |
+| M5 exact | 857.1 / 914.7 / 1,011.5 ms | 1 / 2 s | met |
+| M6 lag (n 50) | 1,799 / 2,836 / 2,998 ms | 5 / 30 s | met |
+
+The one failure is M10's leak cases, whose controls could not open the case (below). The first run's M5 (p95 939
+ms) agrees with this one's (914.7 ms).
+
+**M10 is unmeasured: the cases' design, not the product.** On the fixed runner every control's request shows its
+error: "HTTP Error 404: Not Found" on the case. The Conduit opens a case only to a principal whose `org_unit` is the
+case's `owning_unit` (`investigations.py` :117, :365); a grant is not enough. The intel case is unit-intel's,
+companies unit-economic's, covert unit-covert's, so the unit-fiu and unit-intel-covert controls, and m10-part
+(unit-records), could not open the intel case, and the cs-covert control worked only because its unit matched. So
+nothing hidden was reached either way: no access divergence (rule 3 is not in question), and `measure_leaks` was
+right to count a 404 as proving nothing. Rules' fix (its case design: m10-part in unit-intel, each control from its
+case's owning unit, `client_size_leaks` refusing a control outside the case's unit, red first) changes
+`step4_stack.SUBJECTS` to match; M10 then has one short queue turn. The never-join rerun did not start (it refused
+while step 2 was still alive after the SSH drop), correctly.
+
 (To be filled in from rules' results: each run's id, start and end, the server's state before it, the runner's lines,
 pytest's summary, M9's agreement with its time, and what each figure means for v0.5.2.)
