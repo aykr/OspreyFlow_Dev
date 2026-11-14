@@ -1,0 +1,7 @@
+head 4ac03de + the test (uncommitted when run), this Mac, offline (closed ports)
+== main's script: red
+E       AssertionError: npm ci ran again with the lock unchanged: its hash did not survive the prune
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_npm_lock_survives_the_prune_so_npm_ci_runs_only_when_the_lock_changes
+1 failed, 87 deselected in 2.35s
+== with stack_lease_npm_lock.diff: green
+75 passed, 13 skipped in 38.84s

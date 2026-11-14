@@ -1,0 +1,16 @@
+head 19b5477 + both diffs (lease regenerated on main 1958316), started 05:06:16Z
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261114T050624Z-0a03afa1/log: bash -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rfs --durations=8 ../OspreyFlow_Build/tests/test_stack_lease.py
+........................................................................ [ 80%]
+.................                                                        [100%]
+============================= slowest 8 durations ==============================
+5.29s call     tests/test_stack_lease.py::test_stop_ends_a_run_its_command_and_its_server_and_the_next_run_is_allowed
+4.13s call     tests/test_stack_lease.py::test_the_reaper_reads_the_process_table_it_is_given
+3.86s call     tests/test_stack_lease.py::test_the_reaper_leaves_every_process_outside_the_run_alone
+3.57s call     tests/test_stack_lease.py::test_the_kill_pass_reads_each_pid_again_and_spares_one_now_another_process
+3.29s call     tests/test_stack_lease.py::test_reap_ends_what_a_run_whose_wrapper_was_killed_left_behind
+3.06s call     tests/test_stack_lease.py::test_the_reaper_kills_what_survives_term
+2.88s call     tests/test_stack_lease.py::test_a_run_ended_by_a_signal_still_reaps_its_server
+2.88s call     tests/test_stack_lease.py::test_a_runs_log_holds_no_error_of_the_reapers_own_reading
+89 passed in 45.32s
+Wall time: 46 s, exit 0 (no stack, no lease; set-up before it 8 s)
+exit 0 at 05:07:12Z

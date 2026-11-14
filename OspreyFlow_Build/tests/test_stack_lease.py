@@ -1675,3 +1675,62 @@ def test_the_reaper_reads_the_process_table_it_is_given(tmp_path: Path) -> None:
         for sleeper in (tagged, plain):
             if sleeper.poll() is None:
                 sleeper.kill()
+
+
+def _whole_host(tmp_path: Path) -> Path:
+    """A stand-in host that runs every call `remote` makes (HOME a folder here, from it, as ssh would), the prune and
+    the npm step included; the follow is answered at once. npm and uv are stand-ins in HOME, npm writing each call to
+    npm.log; rsync is the recording one, so the copy holds only what the test puts there."""
+    log = _remote_tools(tmp_path)
+    home = tmp_path / "home"
+    (home / ".local" / "bin").mkdir(parents=True)
+    (home / ".local" / "node" / "bin").mkdir(parents=True)
+    (home / ".local" / "bin" / "uv").write_text("#!/bin/sh\nexit 0\n")
+    (home / ".local" / "node" / "bin" / "npm").write_text(f'#!/bin/sh\necho "npm $*" >> "{tmp_path}/npm.log"\n')
+    bin_dir = tmp_path / "bin"
+    (bin_dir / "ssh").write_text(
+        f'#!/bin/bash\necho "ssh $*" >> "{log}"\nin="$(cat)"\nfor a; do last="$a"; done\n'
+        f'case "$last" in *"tail -n +1 -F"*) exit 0;; esac\n'
+        f'cd "{home}" && printf "%s\\n" "$in" | HOME="{home}" bash -c "$last"\n'
+    )
+    (bin_dir / "setsid").write_text('#!/bin/sh\nexec "$@"\n')
+    if shutil.which("sha256sum") is None:  # macOS: the hosts have coreutils' sha256sum
+        (bin_dir / "sha256sum").write_text('#!/bin/sh\nexec shasum -a 256 "$@"\n')
+    for tool in [bin_dir / "ssh", bin_dir / "setsid", home / ".local" / "bin" / "uv",
+                 home / ".local" / "node" / "bin" / "npm", *([bin_dir / "sha256sum"] if (bin_dir / "sha256sum").exists() else [])]:
+        tool.chmod(0o755)
+    _held_lease_on_host(home)
+    return home
+
+
+def test_the_npm_lock_survives_the_prune_so_npm_ci_runs_only_when_the_lock_changes(lease, tmp_path: Path) -> None:
+    """The npm step keeps the lock's hash in the lane's meta folder, beside the copy, so the next run's prune (which
+    removes whatever in the copy the worktree does not hold) leaves it: npm ci runs on the first run and not on a
+    second with the same package-lock.json, and again once it changes. Red while the hash was written relative to the
+    copy's OspreyFlow_Core, inside the copy, where every prune removed it and npm ci ran on every run."""
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    home = _whole_host(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    (wt / "OspreyFlow_Core" / "package-lock.json").write_text('{"lockfileVersion": 3}\n')
+    core = home / "osprey-runs" / "case" / "OspreyFlow_Core"
+    core.mkdir(parents=True)
+
+    def run() -> int:
+        # As rsync would: the copy holds the worktree's package-lock.json as it now stands.
+        (core / "package-lock.json").write_text((wt / "OspreyFlow_Core" / "package-lock.json").read_text())
+        ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true")
+        assert ran.returncode == 0, ran.stderr
+        _finished_run(home)
+        for done in (home / "osprey-runs" / "case.meta" / "runs").iterdir():
+            if done.name != "last":
+                (done / "pid").write_text(f"{_dead_pid()}\n")  # over: the next start is not refused as still running
+        npm = tmp_path / "npm.log"
+        return npm.read_text().count("npm ci") if npm.exists() else 0
+
+    assert run() == 1, "the first run did not install the Glass's packages"
+    assert run() == 1, "npm ci ran again with the lock unchanged: its hash did not survive the prune"
+    assert (home / "osprey-runs" / "case.meta" / "npm.lock").exists()
+    assert not list(core.rglob("npm.lock")), "the lock's hash was written inside the copy"
+    (wt / "OspreyFlow_Core" / "package-lock.json").write_text('{"lockfileVersion": 3, "changed": true}\n')
+    assert run() == 2, "a changed package-lock.json did not install again"

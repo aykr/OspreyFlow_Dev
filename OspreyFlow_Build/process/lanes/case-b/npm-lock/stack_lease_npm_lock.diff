@@ -1,0 +1,19 @@
+diff --git a/OspreyFlow_Build/scripts/stack_lease.sh b/OspreyFlow_Build/scripts/stack_lease.sh
+index 3d6d0f7..09fccab 100755
+--- a/OspreyFlow_Build/scripts/stack_lease.sh
++++ b/OspreyFlow_Build/scripts/stack_lease.sh
+@@ -146,10 +146,12 @@ for d,ds,fs in os.walk(\".\"):
+   fi
+   rssh "$h" "cd $rroot/OspreyFlow_Core && ~/.local/bin/uv sync --frozen -q" || { echo "uv sync on $h failed." >&2; return 1; }
+   # The copy as a repository of its own, committed afresh each run, so a test reading HEAD or git ls-files sees
+-  # what was sent (osprey.yaml as committed); and the Glass's packages, installed again only when the lock changes.
++  # what was sent (osprey.yaml as committed); and the Glass's packages, installed again only when the lock changes. The
++  # lock's hash is kept in the lane's meta folder, from $HOME: written relative to the copy's OspreyFlow_Core it sat
++  # inside the copy, and the prune above removed it on every run, so npm ci ran every time (case-b, 14 November 2026).
+   rssh "$h" "cd $rroot && { [ -d .git ] || git init -q; } && git add -A && git -c user.name='OspreyFlow test runner' -c user.email=test-runner@ospreyflow.invalid commit -q --allow-empty -m 'the copy sent for this run'" \
+     || { echo "The git snapshot on $h failed." >&2; return 1; }
+-  rssh "$h" "export PATH=\$HOME/.local/node/bin:\$PATH; cd $rroot/OspreyFlow_Core && l=\$(sha256sum package-lock.json | cut -c1-64); [ \"\$l\" = \"\$(cat $rmeta/npm.lock 2>/dev/null)\" ] || { npm ci --no-audit --no-fund --loglevel=error >/dev/null && mkdir -p $rmeta && echo \$l > $rmeta/npm.lock; }" \
++  rssh "$h" "export PATH=\$HOME/.local/node/bin:\$PATH; cd $rroot/OspreyFlow_Core && l=\$(sha256sum package-lock.json | cut -c1-64); [ \"\$l\" = \"\$(cat \$HOME/$rmeta/npm.lock 2>/dev/null)\" ] || { npm ci --no-audit --no-fund --loglevel=error >/dev/null && mkdir -p \$HOME/$rmeta && echo \$l > \$HOME/$rmeta/npm.lock; }" \
+     || { echo "npm ci on $h failed." >&2; return 1; }
+   # The run is started detached on the host and logged there, so a dropped ssh session loses nothing:
+   # `remote-log <lane>` follows it again. A lane runs one remote command at a time.
