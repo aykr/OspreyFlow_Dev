@@ -35,13 +35,14 @@ function jwt(claims: Record<string, unknown>): string {
   return `${part({ alg: "RS256", typ: "JWT" })}.${part(claims)}.c2lnbmF0dXJl`;
 }
 
-
 export async function fakeIdentityProvider(page: Page, idp: FakeIdentityProvider): Promise<void> {
   const issued = new Map<string, Issued>();
   // Everything on these two origins is answered here, never passed on: on the Mac they are the owner's
   // own deployment's ports (8081, 8000). Registered first, so the routes below (later, so first
-  // matched) answer what they name and this answers the rest.
+  // matched) answer what they name, and so do a spec's own Conduit routes registered after this; these
+  // answer the rest with a 404.
   await page.route("http://localhost:8081/**", (route) => route.fulfill({ status: 404, body: "" }));
+  await page.route(`${API}/**`, (route) => route.fulfill({ status: 404, json: { detail: "not in this fake" } }));
   await page.route(`${IDP}/.well-known/openid-configuration`, (route) =>
     route.fulfill({
       json: {
