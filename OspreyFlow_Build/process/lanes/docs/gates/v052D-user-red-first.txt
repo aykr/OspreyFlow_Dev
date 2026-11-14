@@ -50,3 +50,9 @@ Each plant is in the working tree only, restored after its run; shown as < befor
 
 ## 8. Green
 6 passed in 0.51s
+
+## 9. After the rebase onto main 424e47a (Part C moved the action's words to canvas/selectionActions.ts), the test at fa35faf
+Green: 6 passed (with test_guide_role_words and test_guides_cloud_platform, 60 passed).
+Plant: < '  ask: "Ask the model about these…",'  > '  ask: "Ask about these…",'  (apps/workspace/src/canvas/selectionActions.ts)
+../OspreyFlow_Build/tests/test_user_guide_ask_chat.py:75: AssertionError
+1 failed, 5 passed
