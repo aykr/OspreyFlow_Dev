@@ -1,7 +1,7 @@
 # Step 6 (`v052-r1`) · the install test on the candidate · run sheet
 
 Prepared offline on 14 November 2026 by platform-b, on `lane/platform-b-v052-r1` (main 78564d2 merged in). The day is
-**Wed 25 Nov** (`route.tsv` step 6, after step 5's freeze). ROUTE_052's brief: install v0.5.1, upgrade to the
+**Wed 18 Nov** (the owner's cut moved to Thu 19, 14 November; it was the 25th). ROUTE_052's brief: install v0.5.1, upgrade to the
 candidate, **verify every manifest entry**, run spec 08's scenarios that apply to the shape, then decommission, with
 the operator choosing keep or destroy for the backups. "The full suite runs once, at step 6."
 
@@ -47,8 +47,8 @@ Nothing touches osprey-small.
      otherwise.
 7. **Server memory.**
    - R1's node is capped at 32 GiB, beside osprey-small (about 24) on the 62 GiB server.
-   - **Rules' B stack, kept up under a long lease for step 4 (23 Nov), must be down by the 25th**, or the node cannot
-     be given its 32.
+   - **Rules' B stack, kept up under a long lease for step 4 (23 Nov), must be down before the run** (by the evening of
+     Tue 17 now that the run is on the 18th: to confirm with the orchestrator), or the node cannot be given its 32.
 8. **Platform's two R1 fixes: done** (r1upgrade on main, the fix 326356a, its record e00a09c).
    - `runbook INSTALL` renders the candidate's own copy every time. Another release's kept render is set aside as
      `render.before-upgrade` and never run, and the candidate's render is the kept one after.
@@ -103,7 +103,8 @@ kubeconfig, the kind platform's folder, the checkout's Python). Every kubectl ca
 | 10 | B | `py memory` | the node's and every pod's working set after all of it | `memory.log` |
 | 11a | B | `R1_BACKUPS=unset bash $G/r1_kind.sh py runbook DECOMMISSION`, with `BACKUPS` unset (platform's r1upgrade, 326356a: without `R1_BACKUPS=unset`, R1 still gives `keep` for 30 days, and `R1_BACKUPS=unset` beside a set `BACKUPS` is refused) | **the operator must choose** (audit ruling 3): blocks 1 to 6 run, then step 7 meets the product's own words, "BACKUPS: choose keep or destroy for the backups bucket and its key (there is no default)", and touches nothing of step 7 | `DECOMMISSION-unchosen.log` |
 | 11 | B | `BACKUPS=keep BACKUP_RETENTION_DAYS=30 bash $G/r1_kind.sh py runbook DECOMMISSION --from 7` | the keep path: step 8's check names only the kept backups bucket and key | `DECOMMISSION-keep.log` |
-| 11b | B | **the cluster made again** (`r1_kind.sh down`, then `up` and `py platform`: a keep leaves the backups bucket and key, and a destroy is final on the stand-in, as on AWS), then `py runbook INSTALL`, one set taken (`py backup`), then `BACKUPS=destroy bash $G/r1_kind.sh py runbook DECOMMISSION` | the destroy path in step 7's own order (platform's model, 326356a): the bucket's policy, every object, then the bucket; the key's policy left to the account's administration alone and its deletion scheduled 30 days out; then the Terraform's removal. Step 8's check then says **"backups: destroyed"**, and the S3 stand-in refuses every use of the key (`KMS.KMSInvalidStateException`). | `DECOMMISSION-destroy.log` |
+| 11b | B | **a fresh install of the candidate, proven as the upgraded one is** (the orchestrator, 14 November: the client may install v0.5.2 directly), as **one `stack_lease.sh remote` command of copy B**, so `--candidate auto` finds this install's commit: the cluster made again (`r1_kind.sh down`, then `up` and `py platform`: a keep leaves the backups bucket and key, and a destroy is final on the stand-in, as on AWS), `py runbook INSTALL`, R1's checks (`py check`), then `bash $D/verify_live.sh` (every manifest entry, 50 checks) and `bash $L/r1_live.sh spec08 run` with rows 7b and 7c's two halves and their reds | the candidate installed fresh passes what the upgraded one passed (rows 5, 7 to 7c and 9) | `INSTALL-fresh.log`, `check-fresh.log`, `verify-fresh.log`, `spec08-fresh.log` |
+| 11c | B | one set taken (`py backup`), then `BACKUPS=destroy bash $G/r1_kind.sh py runbook DECOMMISSION` | the destroy path in step 7's own order (platform's model, 326356a): the bucket's policy, every object, then the bucket; the key's policy left to the account's administration alone and its deletion scheduled 30 days out; then the Terraform's removal. Step 8's check then says **"backups: destroyed"**, and the S3 stand-in refuses every use of the key (`KMS.KMSInvalidStateException`). | `DECOMMISSION-destroy.log` |
 | 12 | B | `bash $G/r1_kind.sh down` | nothing of the run left | — |
 | 13 | B | **the full suite once**, through `stack_lease.sh offline` (Q4): `make ci`'s offline gates and `make test` | "the full suite runs once, at step 6" | `suite.log` |
 | 13b | — | what offline cannot run (Q4): CI's `conformance` (ArcadeDB, ClickHouse, Valkey and Postgres; the live store tests, the Entra people and access-store live files among them), `conformance-model` and `-vision`, `six-screen-live-exit-test`, and the nine `trivy-image-*` scans (each builds an image) | CI's run on the candidate's **exact** commit is their evidence (the orchestrator, 14 Nov), recorded here by its run id on the day | `suite-ci-run.txt` (the run id, its commit, each job's result) |
@@ -132,7 +133,7 @@ day adds the following:
 So allow **most of the day**, and the full suite on top: about 80 minutes for CI's run, from its recent runs on main,
 not measured here.
 
-## The day plan (Wed 25 Nov), in order, with times
+## The day plan (Wed 18 Nov), in order, with times
 
 **M** is measured: R1's own records of 13 November, `process/lanes/platform/r1/run/`, on a warm cluster with our
 images already built (INSTALL 17:58:44 to its check 18:04:25; the check to the restore's record about 1.5 min; the
@@ -158,13 +159,14 @@ records do not time.
 | | 10 | memory | 1 min | E |
 | ~11:30 | — | copy B's command ends. Its records are read **before going on**: a FAIL anywhere means a fix, then rows 4 to 10 again (another 1.5–2 h) | 15 min | E |
 | 11:45 | 11a, 11 | the unchosen decommission (blocks 1 to 6, then the refusal at 7), then keep from 7 | 8–10 min | M (≈ 4 min) + E |
-| 12:00 | 11b | the cluster made again (down, up, platform), INSTALL from copy B (images cold again, the registry gone with the cluster), a set, then destroy | 70–100 min | E |
-| 13:40 | 12 | `down`, nothing of the run left | 5 min | E |
-| 13:45 | 13 | the full suite offline: `make ci`'s gates and `make test`, through `stack_lease.sh offline` | 60–90 min | E (CI's own run on main is about 80 min) |
-| 15:15 | 13b, 14 | the CI run on the candidate's exact commit recorded by id; `UPGRADE.log` committed with docs' guide sentence (row 14) | 15 min | E |
-| ~15:30 | — | the report to the orchestrator: every row's record, the leases each ran under | 15 min | — |
+| 12:00 | 11b | **one remote command of copy B:** the cluster made again (down, up, platform), INSTALL fresh from copy B (images cold again, the registry gone with the cluster), R1's checks, then verify (50 checks) and spec 08 with its two halves and their reds on the fresh install | 120–160 min | E (the install and platform as before; verify and spec 08 as rows 7 to 9) |
+| 14:30 | 11c | a set, then destroy | 10 min | M (≈ 4 min for a decommission) + E |
+| 14:40 | 12 | `down`, nothing of the run left | 5 min | E |
+| 14:45 | 13 | the full suite offline: `make ci`'s gates and `make test`, through `stack_lease.sh offline` | 60–90 min | E (CI's own run on main is about 80 min) |
+| 16:15 | 13b, 14 | the CI run on the candidate's exact commit recorded by id; `UPGRADE.log` committed with docs' guide sentence (row 14) | 15 min | E |
+| ~16:30 | — | the report to the orchestrator: every row's record, the leases each ran under | 15 min | — |
 
-**Start at 08:00 sharp, and if a fix is needed after about 13:00, tell the orchestrator before rerunning** (the orchestrator, 14 November: a FAIL costs 1.5 to 2 h, and the 15:30 finish has little slack). **About 7.5 h with no fix**, ending mid-afternoon. A failure in copy B's command costs one more pass of rows 4 to 10,
+**Start at 08:00 sharp, and if a fix is needed after about 13:00, tell the orchestrator before rerunning** (the orchestrator, 14 November: a FAIL costs 1.5 to 2 h, and the 15:30 finish has little slack). **About 8.5 h with no fix**, ending about 16:30; the fresh install's verify and spec 08 (row 11b) add about 50 min to the plan of 14 November. A failure in copy B's command costs one more pass of rows 4 to 10,
 about 1.5 to 2 h, and the day still ends within it. Row 13 does not touch the cluster, but it is kept until after row
 12 because both load one server (a 32 GiB node and the suite's workers). The two cold builds (rows 1 and 4) are the
 largest unknowns: their real times go in the record and replace these estimates for the next release's run.
