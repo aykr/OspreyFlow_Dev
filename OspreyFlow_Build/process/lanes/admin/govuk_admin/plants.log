@@ -1,4 +1,5 @@
-== name in mono, as main drew it (must go red on nameFont): RED
+# plants at 0651bfa (the code under test as at 795cd86; only plants.py changed)
+== name in mono, as main drew it (must fail at /m\.nameFont/): RED at its assertion in 3 test(s)
   1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
     Expected pattern: not /mono/i
     Received string:      "\"IBM Plex Mono\", ui-monospace, monospace"
@@ -9,21 +10,24 @@
     Expected pattern: not /mono/i
     Received string:      "\"IBM Plex Mono\", ui-monospace, monospace"
   3 failed
-== Super user drawn as a button, as main drew it (must go red on actions: a second button): RED
+== Super user drawn as a button, as main drew it (must fail at /a\) => a\.button\)/): RED at its assertion in 3 test(s)
   1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
     - Expected  - 0
     + Received  + 1
     +   "Super user",
+    > 104 |     expect(m.actions.filter((a) => a.button).map((a) => a.text)).toEqual(["Save"]);
   2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
     - Expected  - 0
     + Received  + 1
     +   "Super user",
+    > 104 |     expect(m.actions.filter((a) => a.button).map((a) => a.text)).toEqual(["Save"]);
   3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
     - Expected  - 0
     + Received  + 1
     +   "Super user",
+    > 104 |     expect(m.actions.filter((a) => a.button).map((a) => a.text)).toEqual(["Save"]);
   3 failed
-== Save drawn as a link (must go red on actions: Save not a button): RED
+== Save drawn as a link (must fail at /a\) => a\.button\)/): RED at its assertion in 3 test(s)
   1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
     - Expected  - 3
     + Received  + 1
@@ -31,6 +35,7 @@
     -   "Save",
     - ]
     + Array []
+    > 104 |     expect(m.actions.filter((a) => a.button).map((a) => a.text)).toEqual(["Save"]);
   2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
     - Expected  - 3
     + Received  + 1
@@ -38,6 +43,7 @@
     -   "Save",
     - ]
     + Array []
+    > 104 |     expect(m.actions.filter((a) => a.button).map((a) => a.text)).toEqual(["Save"]);
   3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
     - Expected  - 3
     + Received  + 1
@@ -45,42 +51,54 @@
     -   "Save",
     - ]
     + Array []
+    > 104 |     expect(m.actions.filter((a) => a.button).map((a) => a.text)).toEqual(["Save"]);
   3 failed
-== headers allowed to wrap at desktop width (must go red on headerLines / headerHeight): RED
+== headers allowed to wrap at desktop width (must fail at /m\.headerLines/): RED at its assertion in 3 test(s)
   1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
     Expected: true
     Received: false
+    > 107 |     expect(m.headerLines.every((n) => n === 1)).toBe(true);
   2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
     Expected: true
     Received: false
+    > 107 |     expect(m.headerLines.every((n) => n === 1)).toBe(true);
   3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
     Expected: true
     Received: false
+    > 107 |     expect(m.headerLines.every((n) => n === 1)).toBe(true);
   3 failed
-== headers on one line but as tall as main's (must go red on headerHeight): RED
+== headers on one line but as tall as main's (must fail at /m\.headerHeight/): RED at its assertion in 3 test(s)
   1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
-    Expected: <= 37
-    Received:    66.5
+    Expected: <= 36.5
+    Received:    98.5
+    > 108 |     expect(m.headerHeight).toBeLessThanOrEqual(MAIN[look].headerHeight - 30);
   2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
-    Expected: <= 37
-    Received:    66.5
-  2 failed
-  1 passed (2.2s)
-== People's parts back to h4, as main had them (must go red on headingLevels): RED
+    Expected: <= 36.5
+    Received:    98.5
+    > 108 |     expect(m.headerHeight).toBeLessThanOrEqual(MAIN[look].headerHeight - 30);
+  3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
+    Expected: <= 82.5
+    Received:    100.5
+    > 108 |     expect(m.headerHeight).toBeLessThanOrEqual(MAIN[look].headerHeight - 30);
+  3 failed
+== People's parts back to h4, as main had them (must fail at /m\.headingLevels/): RED at its assertion in 3 test(s)
   1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
     - Expected  - 0
     + Received  + 1
     +   4,
+    > 94 |     expect(m.headingLevels).toEqual([1, 2]);
   2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
     - Expected  - 0
     + Received  + 1
     +   4,
+    > 94 |     expect(m.headingLevels).toEqual([1, 2]);
   3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
     - Expected  - 0
     + Received  + 1
     +   4,
+    > 94 |     expect(m.headingLevels).toEqual([1, 2]);
   3 failed
-== the h2s at the browser's size, above the h1 (must go red on h2sNotSmaller): RED
+== the h2s at the browser's size, above the h1 (must fail at /m\.h2sNotSmaller/): RED at its assertion in 2 test(s)
   1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
     - Expected  - 1
     + Received  + 3
@@ -88,6 +106,7 @@
     + Array [
     +   "Invite a person 19.5px",
     + ]
+    > 95 |     expect(m.h2sNotSmaller).toEqual([]);
   2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
     - Expected  - 1
     + Received  + 3
@@ -95,26 +114,31 @@
     + Array [
     +   "Invite a person 19.5px",
     + ]
+    > 95 |     expect(m.h2sNotSmaller).toEqual([]);
   2 failed
-  1 passed (2.2s)
-== a coming item a button again, as main drew it (must go red on comingLinks, and Tab reaching it): RED
+  1 passed (3.0s)
+== a coming item a button again, as main drew it (must fail at /m\.comingLinks|toBeFocused/): RED at its assertion in 4 test(s)
   1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
     Expected: 0
     Received: 2
+    > 100 |     expect(m.comingLinks).toBe(0);
   2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
     Expected: 0
     Received: 2
+    > 100 |     expect(m.comingLinks).toBe(0);
   3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
     Expected: 0
     Received: 2
+    > 100 |     expect(m.comingLinks).toBe(0);
   4) keyboard/admin.spec.ts:713:1 › a coming section says what it will hold in the side list, and Tab passes over it 
     Expected: focused
     Received: inactive
       - Expect "toBeFocused" getByRole('navigation', { name: 'Admin sections' }).getByRole('button', { name: 'Audit', exact: true }) with timeout 5000ms
       - waiting for getByRole('navigation', { name: 'Admin sections' }).getByRole('button', { name: 'Audit', exact: true })
            - unexpected value "inactive"
+    > 722 |   await expect(section(page, "Audit")).toBeFocused();
   4 failed
-== GOV.UK's 16px rule removed (must go red on the s size): RED
+== GOV.UK's 16px rule removed (must fail at /m\.nav, m\.cell, m\.header, m\.rowLink, m\.comingWhat/): RED at its assertion in 1 test(s)
   1) keyboard/admin-look.spec.ts:112:1 › Admin's People in the GOV.UK look: the Design System's scale, and a person at most 60% of their old height 
     - Expected  - 3
     + Received  + 3
@@ -124,8 +148,9 @@
     +   19,
     +   19,
     +   19,
+    > 116 |   expect([m.nav, m.cell, m.header, m.rowLink, m.comingWhat]).toEqual([16, 16, 16, 16, 16]); // the "s" size
   1 failed
-== GOV.UK's 16px rule in every look (must go red on main's sizes, the row links' size): RED
+== GOV.UK's 16px rule in every look (must fail at /m\.nav, m\.cell, m\.header\]/): RED at its assertion in 2 test(s)
   1) keyboard/admin-look.spec.ts:121:3 › Admin's People in the dark look keeps main's sizes ────────
     - Expected  - 2
     + Received  + 2
@@ -133,6 +158,7 @@
     -   13,
     +   12,
     +   12,
+    > 124 |     expect([m.nav, m.cell, m.header]).toEqual([MAIN[look].nav, MAIN[look].cell, MAIN[look].header]);
   2) keyboard/admin-look.spec.ts:121:3 › Admin's People in the light look keeps main's sizes ───────
     - Expected  - 2
     + Received  + 2
@@ -140,16 +166,31 @@
     -   13,
     +   12,
     +   12,
+    > 124 |     expect([m.nav, m.cell, m.header]).toEqual([MAIN[look].nav, MAIN[look].cell, MAIN[look].header]);
   2 failed
-== a person's actions stacked one per line, as main's actions cell (must go red on the row bounds): RED
+== the row's links at GOV.UK's size in every look (must fail at /m\.rowLink/): RED at its assertion in 2 test(s)
+  1) keyboard/admin-look.spec.ts:121:3 › Admin's People in the dark look keeps main's sizes ────────
+    Expected: 13
+    Received: 16
+    > 125 |     expect(m.rowLink).toBe(MAIN[look].cell); // the row's links at the table's size, not GOV.UK's
+  2) keyboard/admin-look.spec.ts:121:3 › Admin's People in the light look keeps main's sizes ───────
+    Expected: 13
+    Received: 16
+    > 125 |     expect(m.rowLink).toBe(MAIN[look].cell); // the row's links at the table's size, not GOV.UK's
+  2 failed
+  1 passed (2.4s)
+== a person's actions stacked one per line, as main's actions cell (must fail at /m\.row\)/): RED at its assertion in 3 test(s)
   1) keyboard/admin-look.spec.ts:112:1 › Admin's People in the GOV.UK look: the Design System's scale, and a person at most 60% of their old height 
     Expected: <= 160.2
     Received:    277
+    > 117 |   expect(m.row).toBeLessThanOrEqual(MAIN.govuk.row * 0.6);
   2) keyboard/admin-look.spec.ts:121:3 › Admin's People in the dark look keeps main's sizes ────────
     Expected: <= 142
     Received:    265
+    > 126 |     expect(m.row).toBeLessThanOrEqual(MAIN[look].row + ACTION_LINE);
   3) keyboard/admin-look.spec.ts:121:3 › Admin's People in the light look keeps main's sizes ───────
     Expected: <= 142
     Received:    265
+    > 126 |     expect(m.row).toBeLessThanOrEqual(MAIN[look].row + ACTION_LINE);
   3 failed
-plants: 11, missed: 0
+plants: 12, missed: 0
