@@ -343,7 +343,7 @@ def test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line() -> None:
     # Shown only when the Conduit says the suggestions are limited: answered by the graph for want of the index.
     assert '{limited && <span className="global-search__limited">{LIMITED_SUGGESTIONS}</span>}' in BOX
     assert "body.limited === true" in BOX
-    assert "limited: bool = False" in (API / "search.py").read_text(encoding="utf-8")
+    assert re.search(r"^    limited: bool = False$", (API / "search.py").read_text(encoding="utf-8"), re.MULTILINE)
     assert f'Where the search index cannot answer a *Starts with* search, the box says so: "{limited.group(1)}"' in suggestions_text()
 
 
