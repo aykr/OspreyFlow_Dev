@@ -1,3 +1,42 @@
+# admin · audit 1 (v0.5.2) · report (14 November 2026): scheduled runs on Entra ID act as the owner's stored identity
+
+ADR-148 Amendment 16, the owner's ruling 1, option A. On Entra ID, `resolve_for_owner` reads the owner from Admin ›
+People's store:
+- roles and disabled status live;
+- clearance, unit and codes as at the last sign-in, refused once that record is over 24 hours old (`ACCESS_FRESH`, the
+  one constant);
+- an owner not held is `OwnerNotHeld`; a store unread, or wired to another tenant, is `OwnerRecordUnavailable`;
+- the principal is built through `principal_from_claims`.
+
+No refusal says "could not be reached". The 24-hour refusal never counts toward pausing, and its words say what
+follows, caller by caller: a slot runs at its next slot after they sign in; *Run now* and `ospreyflow run` are to be
+asked again; the KYC check's day is left to the rule's next load. At a load, an out-of-date owner's hotlists and
+watches are marked stopped (ADR-044's path; the list shows *Stopped* with no reason yet, a CARRIES row).
+
+Amendment 16 quotes the option and states the limit: the 24 hours run from the last recorded access, with a worked
+Friday-to-Tuesday example; a leaver is to be disabled in People too. The guides follow the docs lane's D1, and spec/10
+mirrors the administration guide.
+
+**Proof:**
+- 22 offline plants, all red (`audit1/plants/`, `replant.py`).
+- Live on stack e: the store, the scheduler (never paused, at the ledger) and the KYC sweep through `deployer_of`, 106
+  passed; two live plants red: the pause count, and the store's tenant guard.
+- The lane review's 3 must-fixes and 10 should-fixes are fixed or narrowed, each with a test.
+
+**Gates at 9ad7744** (on main 1958316):
+- `make -k ci`: exit 0.
+- `make -k test`: 13,581 passed, 3 failed, none this branch's: the guides' PDFs (made at merge), and main's missing
+  `test_feed_live.py` (twice, with `live-collect`).
+- Records are in `audit1/gates/`.
+
+**Carried:**
+- A stopped watch's reason (CARRIES, before the freeze if a lane is free).
+- Owners named by People's display name (CARRIES, after v0.5.2).
+- A watch out of date logs a warning each minute.
+- Reading the owner from Graph is the owner's own later decision.
+
+**Questions for the owner:** none.
+
 # admin · v052-identities (v0.5.2 steps 2-3) · report (14 November 2026): dashboard identities and the report sync on Entra ID
 
 ADR-148 Amendment 10. A dashboard on Entra ID is one app registration, registered by application id. Its role is
