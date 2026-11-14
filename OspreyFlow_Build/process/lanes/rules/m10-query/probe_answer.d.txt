@@ -1,0 +1,109 @@
+# probe_answer.py on stack d, run 20261114T205000Z-011af7e0 (20:50Z), run tree ca012bf (main 8347d28 + platform a28f93e), under the rules lane's lease of 2026-11-14T03:27:42Z, kept raw: the hidden title sits only in each visible result's match.why, quoting the query
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+== hidden Document cs-intel-doc-10063 (SECRET/C, unit-intel) | sent: Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025 | error: 
+   top-level keys: ['counts_exact', 'filters', 'groups', 'limited', 'limited_reason', 'more', 'nodes', 'page', 'page_size', 'query', 'results', 'source', 'total'] | source: index | total: 30222
+   .query: 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'
+   .results[0].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[1].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[2].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[3].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[4].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[5].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[6].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[7].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[8].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[9].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[10].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[11].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[12].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[13].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[14].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[15].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[16].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[17].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[18].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   .results[19].match.why: "Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'"
+   result: ['cs-intel-doc-7963'] Document None name_typo Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'
+   result: ['cs-intel-doc-37040'] Document None name_typo Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'
+   result: ['cs-intel-doc-322'] Document None name_typo Spelt like 'Intelligence report: Meghan Singh, Lowerford, 21 Jan 2025'
+== hidden Document cs-intel-doc-10127 (SECRET/C, unit-intel) | sent: Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026 | error: 
+   top-level keys: ['counts_exact', 'filters', 'groups', 'limited', 'limited_reason', 'more', 'nodes', 'page', 'page_size', 'query', 'results', 'source', 'total'] | source: index | total: 30713
+   .query: 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'
+   .results[0].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[1].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[2].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[3].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[4].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[5].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[6].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[7].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[8].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[9].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[10].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[11].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[12].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[13].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[14].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[15].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[16].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[17].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[18].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   .results[19].match.why: "Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'"
+   result: ['cs-intel-doc-38392'] Document None name_typo Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'
+   result: ['cs-intel-doc-2389'] Document None name_typo Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'
+   result: ['cs-intel-doc-7963'] Document None name_typo Spelt like 'Intelligence report: Grayce Roston, Lowerford, 27 Aug 2026'
+== hidden Document cs-intel-doc-10255 (SECRET/C, unit-intel) | sent: Intelligence report: Olivea Morton, Newmere, 06 Jul 2025 | error: 
+   top-level keys: ['counts_exact', 'filters', 'groups', 'limited', 'limited_reason', 'more', 'nodes', 'page', 'page_size', 'query', 'results', 'source', 'total'] | source: index | total: 30237
+   .query: 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'
+   .results[0].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[1].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[2].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[3].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[4].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[5].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[6].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[7].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[8].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[9].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[10].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[11].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[12].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[13].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[14].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[15].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[16].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[17].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[18].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   .results[19].match.why: "Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'"
+   result: ['cs-intel-doc-8042'] Document None name_typo Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'
+   result: ['cs-intel-doc-35625'] Document None name_typo Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'
+   result: ['cs-intel-doc-37200'] Document None name_typo Spelt like 'Intelligence report: Olivea Morton, Newmere, 06 Jul 2025'
+== hidden Document cs-intel-doc-10265 (SECRET/C, unit-intel) | sent: Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025 | error: 
+   top-level keys: ['counts_exact', 'filters', 'groups', 'limited', 'limited_reason', 'more', 'nodes', 'page', 'page_size', 'query', 'results', 'source', 'total'] | source: index | total: 30646
+   .query: 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'
+   .results[0].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[1].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[2].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[3].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[4].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[5].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[6].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[7].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[8].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[9].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[10].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[11].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[12].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[13].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[14].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[15].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[16].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[17].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[18].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   .results[19].match.why: "Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'"
+   result: ['cs-intel-doc-6861'] Document None name_typo Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'
+   result: ['cs-intel-doc-6444'] Document None name_typo Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'
+   result: ['cs-intel-doc-13054'] Document None name_typo Spelt like 'Intelligence report: Meagan Ullow, Kingshaven, 13 Jul 2025'
+Wall time: 46 s, exit 0 (stack d, the lease rules took at 2026-11-14T03:27:42Z; set-up before it 10 s)
