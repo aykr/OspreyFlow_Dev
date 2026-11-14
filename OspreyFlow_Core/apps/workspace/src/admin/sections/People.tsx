@@ -768,23 +768,29 @@ export const ENTRA_PEOPLE_WORDS =
 
 const FIELD_WORDS: Record<AccessField, string> = { clearance: "clearance", org_unit: "unit", handling_codes: "handling codes" };
 
+/** "clearance", "clearance and unit", "clearance, unit and handling codes", in `EVERY_FIELD`'s order whatever order
+ * the Conduit serves them in. */
+function fieldList(fields: readonly AccessField[]): string {
+  const ws = EVERY_FIELD.filter((f) => fields.includes(f)).map((f) => FIELD_WORDS[f]);
+  return ws.length > 1 ? `${ws.slice(0, -1).join(", ")} and ${ws[ws.length - 1]}` : (ws[0] ?? "");
+}
+
+/** Whether the listed values take a plural verb: more than one, or handling codes alone (a plural noun). */
+function plural(fields: readonly AccessField[]): boolean {
+  return fields.length > 1 || fields[0] === "handling_codes";
+}
+
 /** ADR-148 Amendment 15: on the proof of concept, the values this deployment sets itself, said in words; a person
  * with none set cannot sign in until it is. */
 export function entraPeopleWords(administratorSets: readonly AccessField[]): string {
   if (administratorSets.length === 0) return ENTRA_PEOPLE_WORDS;
-  const here = administratorSets.map((f) => FIELD_WORDS[f]);
-  const listed = here.length > 1 ? `${here.slice(0, -1).join(", ")} and ${here[here.length - 1]}` : here[0];
+  const many = plural(administratorSets);
   return (
-    `People sign in with their organisation's Entra ID account. Their ${listed} ${here.length > 1 ? "are" : "is"} set here, with Access ` +
-    "(none above your own), and they cannot sign in until it is; anything else comes from Entra. Here you also give " +
-    "them roles, add them by object id before they first sign in, and disable them."
+    `People sign in with their organisation's Entra ID account. Their ${fieldList(administratorSets)} ` +
+    `${many ? "are" : "is"} set here, with Access (none above your own), and they cannot sign in until ` +
+    `${many ? "those are" : "it is"} set; anything else comes from Entra. Here you also give them roles, add them by ` +
+    "object id before they first sign in, and disable them."
   );
-}
-
-/** "clearance", "clearance and unit", "clearance, unit and handling codes", in `EVERY_FIELD`'s order. */
-function fieldList(fields: readonly AccessField[]): string {
-  const ws = EVERY_FIELD.filter((f) => fields.includes(f)).map((f) => FIELD_WORDS[f]);
-  return ws.length > 1 ? `${ws.slice(0, -1).join(", ")} and ${ws[ws.length - 1]}` : (ws[0] ?? "");
 }
 
 /** ADR-148 Amendment 17, with Amendment 15: what an admitted guest's values come from. A guest signs in as anyone
@@ -792,10 +798,11 @@ function fieldList(fields: readonly AccessField[]): string {
 export function guestAdmissionWords(administratorSets: readonly AccessField[]): string {
   const here = EVERY_FIELD.filter((f) => administratorSets.includes(f));
   const token = EVERY_FIELD.filter((f) => !administratorSets.includes(f));
+  const many = plural(here);
   const parts = [
     ...(here.length
-      ? [`their ${fieldList(here)} set here with Access, as anyone's ${here.length > 1 ? "are" : "is"}, and they cannot ` +
-          `sign in until ${here.length > 1 ? "they are" : "it is"}`]
+      ? [`their ${fieldList(here)} set here with Access, as anyone's ${many ? "are" : "is"}, and they cannot sign in ` +
+          `until ${many ? "those are" : "it is"} set`]
       : []),
     ...(token.length ? [`${here.length ? "their" : "the same"} ${fieldList(token)} from their token`] : []),
   ];
