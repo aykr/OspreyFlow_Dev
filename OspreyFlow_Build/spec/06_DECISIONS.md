@@ -39662,6 +39662,12 @@ always begins `litellm.<its class>:`.
    unless the deployment sets it, bounds each call the routing sends to a hosted engine. The deployment's own
    model keeps `OSPREY_MODEL_TIMEOUT_SECONDS` (900 by default; ADR-095), since a CPU-only model may truly
    need minutes. A call past its bound is `timed_out`, said with the bound, and is not asked again.
+   - **Where it is set.** Both are the Conduit's environment, set in the deployment's env file. The render did
+     not pass either to the Conduit before this amendment, so `OSPREY_MODEL_TIMEOUT_SECONDS` was never settable
+     on an installed deployment, only its default. The render's two lines and their test
+     (`test_the_conduit_is_told_the_engines_the_defaults_and_key_presence_never_a_key`, red without them) are
+     `process/lanes/studio/model-words/render-timeouts.diff`, for the lane that owns `harness/render.py`.
+     Until that lands, an installed deployment runs on the defaults (120 and 900).
    - **Test:** *a hosted engine is stopped at its own bound and a local model keeps its own* (a real socket
      answering after 0.6 seconds: the hosted call, bounded at 0.2, is stopped before the answer, and the local
      call gets it); *the hosted bound is the deployment's to set*.
