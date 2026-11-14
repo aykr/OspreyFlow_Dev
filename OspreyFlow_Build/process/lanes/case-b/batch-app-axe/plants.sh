@@ -49,6 +49,8 @@ plant "the panel drawn under the App's page, in the App's layout only (light)" "
   's/(\.batch-expansion__actions \{)/.classification-strip ~ .batch-expansion { z-index: -1; }\n$1/' \
   "done.*\\(light\\)" "the batch job's panel in the App, done, has no automated WCAG 2.2 A or AA violation \\(light\\)" \
   "done, has no automated.*\\(light\\)"
+# Red at the case's closing check (the named region reached by role, as assistive technology reaches it), not at
+# axe: the scan is held to the panel by `include`, and the `aria-hidden` ancestor is outside it.
 plant "the panel hidden from assistive technology by the App's markup around it (dark)" "$APP" \
   's/(      \{bearerToken && batchExpansion.asked && \()\n(        <BatchExpansion\n)/$1<div aria-hidden="true">\n$2/; s/(          onClose=\{batchExpansion.close\}\n        \/>\n)(      \)\})/$1        <\/div>\n$2/' \
   "done.*\\(dark\\)" "the batch job's panel in the App, done, has no automated WCAG 2.2 A or AA violation \\(dark\\)" \

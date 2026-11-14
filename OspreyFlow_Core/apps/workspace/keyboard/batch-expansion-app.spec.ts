@@ -133,7 +133,9 @@ for (const look of ["dark", "light", "govuk"] as const) {
       expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
       const contrast = await checkUndecidedContrast(page, results);
       expect(contrast.unlisted, "colour contrast axe left undecided").toEqual([]);
-      // And as a reader reaches it: the named region, its heading holding focus from the refusal's choice.
+      // And as a reader reaches it: the named region, its heading holding focus from the refusal's choice. This is
+      // what finds the App's markup hiding the panel (an `aria-hidden` ancestor): axe's scan, held to the panel by
+      // `include`, does not see an ancestor outside it, and the accessibility tree does.
       await expect(panel(page).getByRole("heading", { name: "Batch job: the whole expansion" })).toBeFocused();
     });
   }
