@@ -1,0 +1,3 @@
+upg-run: max_connections (server): psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  the database system is shutting down
+upg-run: postgres command (compose.yaml): (none)
+upg-run: postgres container started: 2026-11-14T01:07:35.76503975Z

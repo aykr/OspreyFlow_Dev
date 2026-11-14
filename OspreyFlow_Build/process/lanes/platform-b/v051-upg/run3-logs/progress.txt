@@ -1,0 +1,40 @@
+=== 01-install-v0.5.0 06:35:03
+    exit 0 06:35:09
+=== 02-deploy-v0.5.0 06:35:09
+    exit 0 06:38:55
+=== 03a-snap-before 06:38:55
+    exit 0 06:38:56
+=== 03b-pg-before 06:38:56
+    exit 0 06:38:56
+=== 03c-health-before 06:38:56
+    exit 0 06:38:56
+=== 03d-envsnap 06:38:56
+    exit 0 06:38:56
+=== 04-repair-c 06:38:56
+    exit 0 06:38:57
+=== 05-backup-first 06:38:57
+    exit 0 06:39:03
+=== 06a-update-rollback 06:39:03
+    exit 0 06:39:26
+=== 06b-health-rolled-back 06:39:26
+    exit 0 06:39:26
+=== 06c-pg-rolled-back 06:39:26
+    exit 0 06:39:27
+=== 06d-snap-rolled-back 06:39:27
+    exit 0 06:39:27
+=== 06e-update-real 06:39:27
+    exit 0 06:42:04
+=== 07a-health-after 06:42:04
+    exit 0 06:42:05
+=== 07b-pg-after 06:42:05
+    exit 0 06:42:05
+=== 07c-snap-after 06:42:05
+    exit 0 06:42:05
+=== 07d-keys 06:42:05
+    exit 0 06:42:05
+=== (resumed: 07d-keys passed; its one change is OSPREY_RELEASE_VERSION, v0.5.0 to v0.5.1, as the update must; 80 keys the same)
+=== 07e-gateway 06:42:34
+    exit 0 06:42:35
+=== 08-cli-after 06:42:35
+    exit 0 06:42:36
+=== done 06:42:36

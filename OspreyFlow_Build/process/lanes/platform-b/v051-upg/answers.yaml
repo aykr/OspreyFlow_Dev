@@ -1,0 +1,6 @@
+mode: lite
+folders:
+  ingest: /root/osprey-runs/platform-b-upg/ingest
+  tiles: /root/osprey-runs/platform-b-upg/tiles
+demo_packs: [fixture-corp, operation-ledger]
+demo_accounts: true

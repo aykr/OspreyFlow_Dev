@@ -1,0 +1,39 @@
+=== 01-install-v0.5.0 01:10:14
+    exit 0 01:10:21
+=== 02-deploy-v0.5.0 01:10:21
+    exit 0 01:15:54
+=== 03a-snap-before 01:15:54
+    exit 0 01:15:54
+=== 03b-pg-before 01:15:54
+    exit 0 01:15:54
+=== 03c-health-before 01:15:54
+    exit 0 01:15:55
+=== 04-repair-c 01:15:55
+    exit 0 01:15:57
+=== 05-backup-first 01:15:57
+    exit 0 01:16:05
+=== 06-update-emulated 01:16:05
+    exit 0 01:16:27
+=== (resumed: 06-update-emulated passed; its folder diff is the files step changing the deployment, as it must)
+=== 06b-pg-after-files-step 01:16:59
+    exit 0 01:16:59
+=== 07-sync 01:16:59
+    exit 0 01:17:00
+=== 08-stop 01:17:00
+    exit 0 01:17:24
+=== 09-apply-build 01:17:24
+    exit 0 01:27:31
+=== 10a-health-after 01:27:31
+    exit 0 01:27:33
+=== 10b-pg-after 01:27:33
+    exit 0 01:27:33
+=== 10c-snap-after 01:27:33
+    exit 0 01:27:35
+=== 10d-keys 01:27:35
+    exit 0 01:27:35
+=== (resumed: 10d-keys passed; its one change is OSPREY_RELEASE_VERSION, v0.5.0 to the candidate, as the move must; 80 keys the same)
+=== 10e-gateway 01:28:03
+    exit 0 01:28:04
+=== 11-cli-after 01:28:04
+    exit 0 01:28:07
+=== done 01:28:07

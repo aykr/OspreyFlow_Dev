@@ -1,0 +1,6 @@
+upg-run: $ ospreyflow backup --name osprey-upg   (the repaired command: "Back up first")
+backup: FAILED on 'graph'
+  docker compose --env-file /root/osprey-runs/platform-b-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env -f /root/osprey-runs/platform-b-upg/home/.ospreyflow/deployments/osprey-upg/compose.yaml… exited 1
+wget: server returned error: HTTP/1.1 404 Not Found
+The partial set /root/osprey-runs/platform-b-upg/home/OspreyFlow/backups/osprey-upg/20261114T010816Z-osprey-upg-2be985a966a742adb31bbac6c0e14b59962e76ac was removed; nothing was kept.
+upg-run: backup exit 1

@@ -1,0 +1,26 @@
+upg-run: $ ospreyflow --help   (v0.5.0's command, before the repair)
+ModuleNotFoundError: No module named 'httpx'
+upg-run: before the repair, expected to fail: status 1
+upg-run: $ uv tool install --force --editable --with httpx ./cli
+Resolved 9 packages in 83ms
+   Building ospreyflow-cli @ file:///root/osprey-runs/platform-b-upg/repo/cli
+      Built ospreyflow-cli @ file:///root/osprey-runs/platform-b-upg/repo/cli
+Prepared 1 package in 512ms
+Installed 9 packages in 12ms
+ + anyio==4.16.0
+ + certifi==2026.10.23
+ + h11==0.16.0
+ + httpcore==1.0.9
+ + httpx==0.28.1
+ + idna==3.20
+ + ospreyflow-cli==0.1.0 (from file:///root/osprey-runs/platform-b-upg/repo/cli)
+ + pyyaml==6.0.3
+ + typing-extensions==4.16.0
+Installed 1 executable: ospreyflow
+upg-run: uv tool install exit 0
+ospreyflow-cli v0.1.0 [with: httpx]
+- ospreyflow
+upg-run: $ ospreyflow --help
+options:
+  -h, --help      show this help message and exit
+upg-run: ospreyflow --help exit 0

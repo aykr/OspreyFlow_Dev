@@ -1,0 +1,6 @@
+upg-run: fault: refusing pulls of ghcr.io/aykr/ner other than v0.5.0's own sha256:e65e631e9feecc08a33ed8e7a44c161dbf681bd6b9efd0840cab302b4f81b586
+upg-run: $ DOCKER_HOST=unix://<fault socket> ospreyflow update --name osprey-upg --to v0.5.1 --yes
+ospreyflow: the backup did not finish (back up every store: The partial set /root/osprey-runs/platform-b-upg/home/OspreyFlow/backups/osprey-upg/20261114T063925Z-osprey-upg-2be985a966a742adb31bbac6c0e14b59962e76ac was removed; nothing was kept.). Nothing was changed.
+pull_fault: listening on /root/osprey-runs/platform-b-upg/pull-fault.sock, refusing pulls matching '^ghcr\\.io/aykr/ner@sha256:(?!e65e631e9feecc08a33ed8e7a44c161dbf681bd6b9efd0840cab302b4f81b586)'
+upg-run: update (planted to fail) status 1; expected non-zero
+upg-run: checkout after the rollback: v0.5.0

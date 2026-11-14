@@ -1,0 +1,15 @@
+upg-run: --- v0.5.0's update: its own backup and rollback point (harness.update.real_host, _keep_rollback_point)
+upg-run: the update's backup: /root/osprey-runs/platform-b-upg/home/OspreyFlow/backups/osprey-upg/20261114T011606Z-osprey-upg-2be985a966a742adb31bbac6c0e14b59962e76ac
+upg-run: rollback point: /root/osprey-runs/platform-b-upg/home/.ospreyflow/deployments/osprey-upg/rollback/v0.5.0-20261114T011615Z
+upg-run: backup step exit 0
+5647e86 OspreyFlow — from 7d76022
+2be985a OspreyFlow — from 4b8de6c
+upg-run: $ <old .venv>/python -m scripts.refresh --files-only   (PYTHONPATH=<checkout>:<checkout>/packages as v0.5.0's command sets it, main.py:153; OSPREYFLOW_DEPLOYMENT_DIR=<osprey-upg>, as its update sets it)
+{"proxy_changed": true, "routing_changed": false, "theme_changed": false}
+upg-run: files step exit 0
+upg-run: --- the folder around the files step
+upg-folderhash: 29 files before, 30 after
+upg-folderhash: added ['state/refresh-pending.json']
+upg-folderhash: removed none
+upg-folderhash: changed (content or mode) ['compose.yaml', 'deployment.env', 'glass.json', 'litellm.yaml', 'versions.lock']
+upg-run: folder diff exit 1

@@ -1,0 +1,33 @@
+upg-run: --- v0.5.0's update: its own backup and rollback point (harness.update.real_host, _keep_rollback_point)
+Traceback (most recent call last):
+  File "<string>", line 5, in <module>
+  File "/root/osprey-runs/platform-b-upg/repo/harness/update.py", line 675, in backup
+    _ok_real(run, [*python, "-m", "harness.backup", "--profile", directory.name, *pointed,
+  File "/root/osprey-runs/platform-b-upg/repo/harness/update.py", line 719, in _ok_real
+    raise UpdateFailed(step, last[-1] if last else f"exit {code}")
+harness.update.UpdateFailed: back up every store: The partial set /root/osprey-runs/platform-b-upg/home/OspreyFlow/backups/osprey-upg/20261114T010817Z-osprey-upg-2be985a966a742adb31bbac6c0e14b59962e76ac was removed; nothing was kept.
+upg-run: backup step exit 1
+a729ab1 OspreyFlow — from 7d76022
+2be985a OspreyFlow — from 4b8de6c
+upg-run: $ <old .venv>/python -m scripts.refresh --files-only   (OSPREYFLOW_DEPLOYMENT_DIR=<osprey-upg>, as v0.5.0's update runs it)
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/root/osprey-runs/platform-b-upg/repo/scripts/refresh.py", line 57, in <module>
+    from harness import (
+  File "/root/osprey-runs/platform-b-upg/repo/harness/compose_env.py", line 23, in <module>
+    from harness.preflight.ports import read_env_file
+  File "/root/osprey-runs/platform-b-upg/repo/harness/preflight/__init__.py", line 38, in <module>
+    from harness.preflight import (
+  File "/root/osprey-runs/platform-b-upg/repo/harness/preflight/access_key.py", line 13, in <module>
+    from harness.preflight.context import PreflightContext
+  File "/root/osprey-runs/platform-b-upg/repo/harness/preflight/context.py", line 31, in <module>
+    from schemas.deployment import OspreyConfig, host_folder_source
+ModuleNotFoundError: No module named 'schemas'
+upg-run: files step exit 1
+upg-run: --- the folder around the files step
+upg-folderhash: 14 files before, 14 after
+upg-folderhash: added none
+upg-folderhash: removed none
+upg-folderhash: changed (content or mode) none
+upg-run: folder diff exit 0

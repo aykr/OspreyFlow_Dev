@@ -1,0 +1,2 @@
+upg-run: $ uv sync --inexact   (stand-in: install.sh's step, so the build has the candidate's packages)
+upg-run: uv sync exit 0

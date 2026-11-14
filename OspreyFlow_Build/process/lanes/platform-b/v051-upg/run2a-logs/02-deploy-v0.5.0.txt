@@ -1,0 +1,121 @@
+✔ Docker is installed.
+✔ Docker is running.
+✔ Docker Compose version 5 is available (version 2 or later is needed).
+✔ Docker has 67.3 GB of memory; OspreyFlow needs at least 16 GB (32 GB is comfortable).
+✔ 570 GB of disk is free here; OspreyFlow needs at least 60 GB plus the demo packs you choose.
+✔ Git is installed.
+✔ uv is installed.
+✔ Port 8090 is free.
+✔ Port 2500 is free.
+Wrote /root/osprey-runs/platform-b-upg/home/.ospreyflow/deployments/osprey-upg/osprey.yaml.
+v0.5.0: the lock and every owned image are signed by the release workflow.
+
+apply: FAILED at stage 'up'
+  docker compose --env-file /root/osprey-runs/platform-b-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env -f /root/osprey-runs/platform-b-upg/home/.ospreyflow/deployments/osprey-upg/compose.yaml up -d --wait exited 1
+ Container osprey-upg-workspace-1 Creating 
+ Container osprey-upg-postgres-1 Creating 
+ Volume osprey-upg_whisper-models Creating 
+ Volume osprey-upg_whisper-models Creating 
+ Container osprey-upg-arcadedb-1 Creating 
+ Volume osprey-upg_objectstore-data Creating 
+ Volume osprey-upg_objectstore-data Creating 
+ Container osprey-upg-valkey-1 Creating 
+ Network osprey-upg_egress Creating 
+ Network osprey-upg_egress Creating 
+ Volume osprey-upg_opensearch-data Creating 
+ Volume osprey-upg_opensearch-data Creating 
+ Container osprey-upg-ner-1 Creating 
+ Container osprey-upg-ollama-1 Creating 
+ Volume osprey-upg_whisper-models Created 
+ Volume osprey-upg_whisper-models Created 
+ Volume osprey-upg_opensearch-data Created 
+ Volume osprey-upg_opensearch-data Created 
+ Container osprey-upg-opensearch-1 Creating 
+ Volume osprey-upg_objectstore-data Created 
+ Volume osprey-upg_objectstore-data Created 
+ Container osprey-upg-objectstore-1 Creating 
+ Network osprey-upg_egress Created 
+ Network osprey-upg_egress Created 
+ Container osprey-upg-proxy-1 Creating 
+ Container osprey-upg-whisper-models-1 Creating 
+ Container osprey-upg-ollama-models-1 Creating 
+ Container osprey-upg-ollama-1 Created 
+ Container osprey-upg-valkey-1 Created 
+ Container osprey-upg-whisper-models-1 Created 
+ Container osprey-upg-arcadedb-1 Created 
+ Container osprey-upg-whisper-1 Creating 
+ Container osprey-upg-opensearch-1 Created 
+ Container osprey-upg-workspace-1 Created 
+ Container osprey-upg-proxy-1 Created 
+ Container osprey-upg-objectstore-1 Created 
+ Container osprey-upg-ollama-models-1 Created 
+ Container osprey-upg-postgres-1 Created 
+ Container osprey-upg-litellm-db-1 Creating 
+ Container osprey-upg-keycloak-db-1 Creating 
+ Container osprey-upg-ner-1 Created 
+ Container osprey-upg-litellm-db-1 Created 
+ Container osprey-upg-litellm-1 Creating 
+ Container osprey-upg-whisper-1 Created 
+ Container osprey-upg-keycloak-db-1 Created 
+ Container osprey-upg-keycloak-1 Creating 
+ Container osprey-upg-litellm-1 Created 
+ Container osprey-upg-keycloak-1 Created 
+ Container osprey-upg-api-1 Creating 
+ Container osprey-upg-superset-1 Creating 
+ Container osprey-upg-api-1 Created 
+ Container osprey-upg-superset-1 Created 
+ Container osprey-upg-report-sync-1 Creating 
+ Container osprey-upg-report-sync-1 Created 
+ Container osprey-upg-arcadedb-1 Starting 
+ Container osprey-upg-workspace-1 Starting 
+ Container osprey-upg-proxy-1 Starting 
+ Container osprey-upg-ner-1 Starting 
+ Container osprey-upg-whisper-models-1 Starting 
+ Container osprey-upg-objectstore-1 Starting 
+ Container osprey-upg-ollama-models-1 Starting 
+ Container osprey-upg-opensearch-1 Starting 
+ Container osprey-upg-postgres-1 Starting 
+ Container osprey-upg-valkey-1 Starting 
+ Container osprey-upg-ollama-1 Starting 
+ Container osprey-upg-arcadedb-1 Started 
+ Container osprey-upg-arcadedb-1 Waiting 
+ Container osprey-upg-workspace-1 Started 
+ Container osprey-upg-proxy-1 Started 
+ Container osprey-upg-ner-1 Started 
+ Container osprey-upg-whisper-models-1 Started 
+ Container osprey-upg-whisper-models-1 Waiting 
+ Container osprey-upg-arcadedb-1 Healthy 
+ Container osprey-upg-objectstore-1 Started 
+ Container osprey-upg-ollama-models-1 Started 
+ Container osprey-upg-opensearch-1 Started 
+ Container osprey-upg-postgres-1 Started 
+ Container osprey-upg-postgres-1 Waiting 
+ Container osprey-upg-valkey-1 Started 
+ Container osprey-upg-valkey-1 Waiting 
+ Container osprey-upg-ollama-1 Started 
+ Container osprey-upg-valkey-1 Healthy 
+ Container osprey-upg-postgres-1 Healthy 
+ Container osprey-upg-keycloak-db-1 Starting 
+ Container osprey-upg-litellm-db-1 Starting 
+ Container osprey-upg-keycloak-db-1 Started 
+ Container osprey-upg-keycloak-db-1 Waiting 
+ Container osprey-upg-whisper-models-1 Exited 
+ Container osprey-upg-whisper-1 Starting 
+ Container osprey-upg-litellm-db-1 Started 
+ Container osprey-upg-litellm-db-1 Waiting 
+ Container osprey-upg-keycloak-db-1 Error service "keycloak-db" didn't complete successfully: exit 2
+ Container osprey-upg-api-1 not started: condition "service_completed_successfully" of service "keycloak-db" not met 
+ Container osprey-upg-litellm-1 not started: condition "service_completed_successfully" of service "litellm-db" not reached: interrupted by the unmet condition "service_completed_successfully" of service "keycloak-db" 
+ Container osprey-upg-keycloak-1 not started: condition "service_completed_successfully" of service "keycloak-db" not met 
+ Container osprey-upg-superset-1 not started: condition "service_completed_successfully" of service "keycloak-db" not met 
+ Container osprey-upg-report-sync-1 not started: condition "service_completed_successfully" of service "keycloak-db" not met 
+ Container osprey-upg-litellm-db-1 Skipped: condition "service_completed_successfully" of service "litellm-db" not reached: interrupted by the unmet condition "service_completed_successfully" of service "keycloak-db" 
+ Container osprey-upg-whisper-1 interrupted by the unmet condition "service_completed_successfully" of service "keycloak-db" 
+service "keycloak-db" didn't complete successfully: exit 2
+
+  (completed) render [0s]: 7 artefact(s) → /root/osprey-runs/platform-b-upg/home/.ospreyflow/deployments/osprey-upg
+  (completed) preflight [4s]: all checks pass or skip
+  (completed) build [0s]: skipped (--no-build): using the images already in the daemon
+  (completed) uploads [9s]: /root/osprey-runs/platform-b-upg/ingest/uploaded: given to the Conduit (uid 10001); /root/osprey-runs/platform-b-upg/tiles/built: given to the Conduit (uid 10001)
+ospreyflow: The step 'build and start the deployment' failed (exit 1); nothing after it was run.
+upg-run: install (v0.5.0, python -m ospreyflow) exit 1

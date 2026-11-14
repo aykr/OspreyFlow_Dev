@@ -1,0 +1,24 @@
+upg-run: $ uv tool install --force --editable ./cli
+Resolved 2 packages in 2ms
+   Building ospreyflow-cli @ file:///root/osprey-runs/platform-b-upg/repo/cli
+      Built ospreyflow-cli @ file:///root/osprey-runs/platform-b-upg/repo/cli
+Prepared 1 package in 385ms
+Installed 2 packages in 0.99ms
+ + ospreyflow-cli==0.1.0 (from file:///root/osprey-runs/platform-b-upg/repo/cli)
+ + pyyaml==6.0.3
+Installed 1 executable: ospreyflow
+upg-run: uv tool install exit 0
+upg-run: $ uv tool list --show-with
+ospreyflow-cli v0.1.0
+- ospreyflow
+upg-run: no httpx extra
+upg-run: $ ospreyflow --help
+options:
+  -h, --help      show this help message and exit
+upg-run: ospreyflow --help exit 0
+upg-run: $ ospreyflow status --name osprey-upg
+valkey: running, healthy
+whisper: running
+whisper-models: finished
+workspace: running, healthy
+upg-run: status exit 0
