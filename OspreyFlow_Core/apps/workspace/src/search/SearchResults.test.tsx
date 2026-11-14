@@ -6,7 +6,7 @@
 // non-document; the Ask line sending anything rather than handing the words over; the fallback or uncertain counts
 // not said; a refusal hidden; focus not on the heading.
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { Node, SearchPageResponse } from "../../../../packages/schemas/generated";
 import { nodeLabel } from "../canvas/nodeAttributes";
@@ -114,7 +114,7 @@ test("counts that may be incomplete say so", async () => {
 test("the groups are All then the Conduit's, each with its count; choosing one asks again for that group", async () => {
   const { sent } = serve(PAGE(), PAGE({ results: [] }));
   draw();
-  const groups = within(await screen.findByRole("group", { name: "Group" }));
+  const groups = within(await screen.findByRole("group", { name: "Result groups" }));
   // The counts are the Conduit's, never counted from the page (one Person on this page, twelve counted).
   expect(groups.getAllByRole("button").map((b) => b.textContent)).toEqual([
     "All 57", "People 12", "Documents 3", "Mentioned in documents 42",
@@ -177,7 +177,7 @@ test("Back to the view the person left calls back", async () => {
 test("a dataset and a date range filter the search; Clear filters asks again without them", async () => {
   const { sent } = serve(PAGE());
   draw();
-  const filters = within(await screen.findByRole("group", { name: "Filters" }));
+  const filters = within(await screen.findByRole("region", { name: "Filters" }));
   fireEvent.click(filters.getByRole("checkbox", { name: "Fixture Corp (40)" }));
   await waitFor(() => expect(sent.at(-1)).toMatchObject({ filters: { datasets: ["ds-1"] }, page: 1 }));
   fireEvent.change(filters.getByLabelText("From"), { target: { value: "2026-01-01" } });
@@ -202,7 +202,7 @@ test("more results are a page away: Next page asks page 2", async () => {
 test("no results says so, offers the Ask line, and Clear filters where a filter is on", async () => {
   serve(PAGE(), PAGE({ total: 0, groups: [], results: [], nodes: [], more: false }));
   draw();
-  fireEvent.click(within(await screen.findByRole("group", { name: "Filters" })).getByRole("checkbox", { name: "Fixture Corp (40)" }));
+  fireEvent.click(within(await screen.findByRole("region", { name: "Filters" })).getByRole("checkbox", { name: "Fixture Corp (40)" }));
   expect(await screen.findByText("No records match 'Kestrel'.")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Ask a question about 'Kestrel' instead" })).toBeTruthy();
   expect(screen.getAllByRole("button", { name: "Clear filters" }).length).toBeGreaterThan(0);
@@ -217,7 +217,7 @@ test("on the fallback one line says the results are limited, in the Conduit's wo
 test("a dataset the fallback cannot count is listed without a count", async () => {
   serve(PAGE({ filters: { datasets: [{ id: "ds-1", name: "Fixture Corp", count: null }], dates: null } }));
   draw();
-  const filters = within(await screen.findByRole("group", { name: "Filters" }));
+  const filters = within(await screen.findByRole("region", { name: "Filters" }));
   expect(filters.getByRole("checkbox", { name: "Fixture Corp" })).toBeTruthy();
   expect(filters.queryByLabelText("From")).toBeNull();
 });
@@ -233,4 +233,91 @@ test("with no Ask & Chat to hand the words to, there is no Ask line", async () =
   draw({ onAsk: undefined });
   await screen.findByRole("list", { name: "Results" });
   expect(screen.queryByRole("button", { name: /^Ask a question/ })).toBeNull();
+});
+
+test("with a group chosen, the total and its announcement are that group's count", async () => {
+  serve(PAGE(), PAGE());
+  draw();
+  fireEvent.click(within(await screen.findByRole("group", { name: "Result groups" })).getByRole("button", { name: /^People/ }));
+  expect(await screen.findByText("12 records")).toBeTruthy();
+  await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Found 12 records"));
+});
+
+test("a filter set while a group is chosen brings every count from the new answer", async () => {
+  const filtered = PAGE({
+    total: 9,
+    groups: [{ key: "Person", label: "People", count: 5 }, { key: "mentions", label: "Mentioned in documents", count: 4 }],
+    filters: { datasets: [{ id: "ds-1", name: "Fixture Corp", count: 9 }], dates: null },
+  });
+  serve(PAGE(), PAGE(), filtered);
+  draw();
+  fireEvent.click(within(await screen.findByRole("group", { name: "Result groups" })).getByRole("button", { name: /^People/ }));
+  await screen.findByText("12 records");
+  fireEvent.click(within(screen.getByRole("region", { name: "Filters" })).getByRole("checkbox", { name: "Fixture Corp (40)" }));
+  const groups = within(screen.getByRole("group", { name: "Result groups" }));
+  await waitFor(() => expect(groups.getAllByRole("button").map((b) => b.textContent)).toEqual(["All 9", "People 5", "Mentioned in documents 4"]));
+  expect(screen.getByRole("checkbox", { name: "Fixture Corp (9)" })).toBeTruthy();
+  expect(screen.getByText("5 records")).toBeTruthy();
+});
+
+test("after Next page or Clear filters, focus goes to the heading, never lost to the page", async () => {
+  serve(PAGE(), PAGE({ page: 2, more: false }), PAGE());
+  draw();
+  const heading = await screen.findByRole("heading", { name: "Search results for 'Kestrel'" });
+  const next = await screen.findByRole("button", { name: "Next page" });
+  next.focus();
+  fireEvent.click(next);
+  await screen.findByRole("button", { name: "Previous page" });
+  await waitFor(() => expect(document.activeElement).toBe(heading));
+  fireEvent.click(within(screen.getByRole("region", { name: "Filters" })).getByRole("checkbox", { name: "Fixture Corp (40)" }));
+  const clear = await screen.findByRole("button", { name: "Clear filters" });
+  clear.focus();
+  fireEvent.click(clear);
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(heading));
+});
+
+test("on the fallback with no reason given, one line still says the results are limited", async () => {
+  serve(PAGE({ source: "fallback", limited: true, limited_reason: null, counts_exact: false }));
+  draw();
+  expect(await screen.findByText("Results are limited: the search index is not in use.")).toBeTruthy();
+});
+
+test("a record a result names but the answer does not hold is said, and the rest are shown", async () => {
+  const page = PAGE();
+  page.results[0]!.node_ids = ["p1", "p2", "gone"];
+  serve(page);
+  const props = draw();
+  const items = within(await screen.findByRole("list", { name: "Results" })).getAllByRole("listitem");
+  expect(items[0]!.textContent).toContain("1 of its 3 records could not be read.");
+  fireEvent.click(within(items[0]!).getByRole("button", { name: /^Show on graph/ }));
+  expect(props.onShow).toHaveBeenCalledWith([expect.objectContaining({ id: "p1" }), expect.objectContaining({ id: "p2" })]);
+});
+
+describe("under the GOV.UK brand", () => {
+  beforeEach(() => document.documentElement.setAttribute("data-brand", "govuk"));
+  afterEach(() => document.documentElement.removeAttribute("data-brand"));
+
+  test("the pages are GOV.UK pagination: Next page and Previous page as its links", async () => {
+    const { sent } = serve(PAGE(), PAGE({ page: 2, more: false }));
+    draw();
+    const pages = await screen.findByRole("navigation", { name: "Pages" });
+    expect(pages.className).toContain("govuk-pagination");
+    fireEvent.click(within(pages).getByRole("link", { name: "Next page" }));
+    await waitFor(() => expect(sent[1]).toMatchObject({ page: 2 }));
+    expect(await within(screen.getByRole("navigation", { name: "Pages" })).findByRole("link", { name: "Previous page" })).toBeTruthy();
+  });
+
+  test("the dates are GOV.UK date inputs: a day, month and year each, sent once all three make a date", async () => {
+    const { sent } = serve(PAGE());
+    draw();
+    const filters = within(await screen.findByRole("region", { name: "Filters" }));
+    const from = within(filters.getByRole("group", { name: "From" }));
+    expect(from.getByLabelText("Day").className).toContain("govuk-date-input__input");
+    fireEvent.change(from.getByLabelText("Day"), { target: { value: "1" } });
+    fireEvent.change(from.getByLabelText("Month"), { target: { value: "2" } });
+    expect(sent).toHaveLength(1);
+    fireEvent.change(from.getByLabelText("Year"), { target: { value: "2026" } });
+    await waitFor(() => expect(sent.at(-1)).toMatchObject({ filters: { date_from: "2026-02-01" } }));
+  });
 });

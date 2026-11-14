@@ -1,8 +1,9 @@
 // The search results page by keyboard alone (the owner's navigation decision of 13 November 2026, Part A; ADR-145
-// Amendment 15 Part A; rule 13), on `search-results-harness.html`: the real search box and results page, wired as
-// `App.tsx` wires them. Enter on the typed words opens the results with focus on their heading; a group, a filter and
-// the next page are chosen; a result is shown on the graph and a document opened; the Ask line hands the words over;
-// Back returns to the view with focus in the search box. In dark, light and GOV.UK. No `page.mouse`, no `.click()`.
+// Amendment 15 Part A; rule 13), on `search-results-harness.html`: the real search box and results page, through the
+// App's own `useSearchResultsOverlay`. Enter on the typed words opens the results with focus on their heading; a group,
+// a dataset, the next and previous page and the dates are chosen and the filters cleared; a result is shown on the
+// graph and a document read and closed; the Ask line hands the words over; Back returns to the view with focus in the
+// search box. In dark, light and GOV.UK. No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
 import { SEARCH_RESULTS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
@@ -12,7 +13,9 @@ const state = (page: Page) => page.evaluate(() => window.__SEARCH__!);
 const heading = (page: Page) => page.getByRole("heading", { name: "Search results for 'Kestrel'" });
 
 async function press(page: Page, name: string | RegExp): Promise<void> {
-  const button = page.getByRole("button", { name, exact: typeof name === "string" });
+  // GOV.UK's pagination is links; everything else here is a button.
+  const exact = typeof name === "string";
+  const button = page.getByRole("button", { name, exact }).or(page.getByRole("link", { name, exact }));
   await button.focus();
   await expect(button).toBeFocused();
   await page.keyboard.press("Enter");
@@ -62,8 +65,37 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     registerCovered(REGISTRY, "filter-search-results-by-keyboard");
     await press(page, "Next page");
     await expect.poll(async () => (await state(page)).sent.at(-1)).toMatchObject({ page: 2 });
-    await expect(page.getByRole("button", { name: "Previous page" })).toBeVisible();
+    // The new page's top: focus on the heading, never lost with the button that was pressed.
+    await expect(heading(page)).toBeFocused();
     registerCovered(REGISTRY, "next-page-of-results-by-keyboard");
+    await press(page, "Previous page");
+    await expect.poll(async () => (await state(page)).sent.at(-1)).toMatchObject({ page: 1 });
+    await expect(heading(page)).toBeFocused();
+    registerCovered(REGISTRY, "previous-page-of-results-by-keyboard");
+    await press(page, "Clear filters");
+    await expect.poll(async () => (await state(page)).sent.at(-1)).toMatchObject({ filters: {}, page: 1 });
+    await expect(dataset).not.toBeChecked();
+    await expect(heading(page)).toBeFocused();
+    registerCovered(REGISTRY, "clear-search-filters-by-keyboard");
+  });
+
+  test(`${brand} ${theme}: the results are filtered by date by keyboard`, async ({ page }) => {
+    await openByEnter(page, query);
+    await look(page);
+    if (brand === "govuk") {
+      // GOV.UK's date input: a day, a month and a year, each typed.
+      const from = page.getByRole("group", { name: "From" });
+      for (const [label, text] of [["Day", "1"], ["Month", "2"], ["Year", "2026"]] as const) {
+        await from.getByLabel(label).focus();
+        await page.keyboard.type(text);
+      }
+    } else {
+      const from = page.getByLabel("From", { exact: true });
+      await from.focus();
+      await from.fill("2026-02-01");
+    }
+    await expect.poll(async () => (await state(page)).sent.at(-1)).toMatchObject({ filters: { date_from: "2026-02-01" } });
+    registerCovered(REGISTRY, "filter-results-by-date-by-keyboard");
   });
 
   test(`${brand} ${theme}: a result is shown on the graph, a document opened and the Ask line followed, by keyboard`, async ({ page }) => {
@@ -72,6 +104,11 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     const name = await page.getByRole("list", { name: "Results" }).getByRole("heading", { level: 3 }).last().textContent();
     await press(page, `Open ${name}`);
     await expect.poll(async () => (await state(page)).opened).toEqual(["d1"]);
+    // Read over the view, the results hidden (drawn hidden, not only marked so), and back in them when it closes.
+    await expect(page.locator("section.search-results")).toBeHidden();
+    await press(page, "Close");
+    await expect(heading(page)).toBeVisible();
+    await expect(heading(page)).toBeFocused();
     registerCovered(REGISTRY, "open-a-document-from-the-results-by-keyboard");
     await press(page, "Ask a question about 'Kestrel' instead");
     await expect.poll(async () => (await state(page)).asked).toEqual(["Kestrel"]);

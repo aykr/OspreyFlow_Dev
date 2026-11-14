@@ -12,10 +12,10 @@ index 3f69e5c..3f1bda4 100644
    // ADR-143 decisions 4 to 7 (L3.3): a board open with its drawn and loaded items, its inspector, its
    // item and link forms and the withdrawal's question; another member's read-only view; a blank board;
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 89c1230..cf3b32e 100644
+index 89c1230..27d669f 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -1140,6 +1140,19 @@ export const WELCOME_ACTIONS = defineActionRegistry("WELCOME_ACTIONS", [
+@@ -1140,6 +1140,22 @@ export const WELCOME_ACTIONS = defineActionRegistry("WELCOME_ACTIONS", [
    "close-the-welcome-panel",
  ] as const);
  
@@ -26,6 +26,9 @@ index 89c1230..cf3b32e 100644
 +  "choose-a-result-group-by-keyboard",
 +  "filter-search-results-by-keyboard",
 +  "next-page-of-results-by-keyboard",
++  "previous-page-of-results-by-keyboard",
++  "clear-search-filters-by-keyboard",
++  "filter-results-by-date-by-keyboard",
 +  "show-a-result-on-the-graph-by-keyboard",
 +  "open-a-document-from-the-results-by-keyboard",
 +  "ask-instead-from-the-results-by-keyboard",

@@ -46,3 +46,14 @@ test("without onSubmit, Enter chooses the first option, as before", () => {
   fireEvent.keyDown(box, { key: "Enter" });
   expect(onChange).toHaveBeenCalledWith("p1");
 });
+
+test("with onSubmit, ArrowUp from the first option goes back to none, and Enter then submits", () => {
+  const onSubmit = vi.fn();
+  const { box, onChange } = draw(onSubmit);
+  fireEvent.keyDown(box, { key: "ArrowDown" });
+  fireEvent.keyDown(box, { key: "ArrowUp" });
+  expect(box.getAttribute("aria-activedescendant")).toBeNull();
+  fireEvent.keyDown(box, { key: "Enter" });
+  expect(onSubmit).toHaveBeenCalledWith("Kestrel");
+  expect(onChange).not.toHaveBeenCalled();
+});

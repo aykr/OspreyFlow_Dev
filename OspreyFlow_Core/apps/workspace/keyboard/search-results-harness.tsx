@@ -1,7 +1,8 @@
 // Search results keyboard harness (the owner's navigation decision of 13 November 2026, Part A; ADR-145 Amendment 15
 // Part A; `CLAUDE.md` rule 13): the real top bar's search box (`GlobalSearch`) and the real results page
-// (`SearchResults`), wired as `App.tsx` wires them: Enter on the typed words opens the results over the view on
-// screen, which stays beneath them out of reach (`inert`), Back returns to it with focus in the search box. The
+// (`SearchResults`), with the App's own overlay hook (`search/useSearchResultsOverlay.ts`): Enter on the typed words
+// opens the results over the view on screen, which stays beneath them out of reach (`inert`); Back returns to it with
+// focus in the search box; a document read from them (a stand-in reader here) hides them until it closes. The
 // Conduit is a stand-in kept here, so that the axe scan of every harness (`a11y/every-harness.spec.ts`) sees the page
 // filled: `?state=none` answers nothing found, `?state=limited` the fallback, `?state=refused` a refusal; `?open=1`
 // opens the results at load. What was shown, opened and asked is on `window.__SEARCH__`.
@@ -13,6 +14,7 @@ import "../src/design/primitives.css";
 import type { Node } from "../../../packages/schemas/generated";
 import { GlobalSearch } from "../src/search/GlobalSearch";
 import { SearchResults } from "../src/search/SearchResults";
+import { useSearchResultsOverlay } from "../src/search/useSearchResultsOverlay";
 import { applyHarnessBrand } from "./brandHarness";
 
 declare global {
@@ -68,42 +70,54 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 await applyHarnessBrand();
 
 function Harness() {
-  const [searching, setSearching] = useState<string | null>(params.get("open") ? "Kestrel" : null);
-  const back = useRef(false);
+  // The App's own wiring (`search/useSearchResultsOverlay.ts`): when the results show, the view's reach, Back's focus,
+  // and focus back into the results when a document read from them closes. The reader here is a stand-in.
+  const [reading, setReading] = useState<string | null>(null);
+  const results = useSearchResultsOverlay(reading !== null);
+  const opened = useRef(false);
   useEffect(() => {
-    if (searching !== null || !back.current) return;
-    back.current = false;
-    document.querySelector<HTMLElement>('.top-bar [role="combobox"]')?.focus();
-  }, [searching]);
+    if (opened.current || !params.get("open")) return;
+    opened.current = true;
+    results.open("Kestrel", "Graph");
+  }, [results]);
+  const searching = results.searching;
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-app)", color: "var(--text-primary)" }}>
       <div className="top-bar" style={{ padding: "var(--sp-8)" }}>
-        <GlobalSearch apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="c1" onSelect={() => undefined} onSearch={setSearching} />
+        <GlobalSearch apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="c1" onSelect={() => undefined} onSearch={(q) => results.open(q, "Graph")} />
       </div>
       <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <div style={{ display: "contents" }} inert={searching !== null ? true : undefined}>
+        <div style={{ display: "contents" }} inert={results.viewInert ? true : undefined}>
           <main style={{ padding: "var(--sp-16)" }}>
             <h1 style={{ margin: 0 }}>The graph</h1>
             <button type="button" className="btn">A control on the graph</button>
           </main>
+          {reading !== null && (
+            <div role="dialog" aria-label={`Reading: ${reading}`} style={{ padding: "var(--sp-16)" }}>
+              <button type="button" className="btn" onClick={() => setReading(null)}>
+                Close
+              </button>
+            </div>
+          )}
         </div>
         {searching !== null && (
           <SearchResults
-            key={searching}
+            key={searching.at}
+            hidden={results.resultsHidden}
             apiBaseUrl="http://keyboard-test.invalid"
             bearerToken="unused"
             investigationId="c1"
-            query={searching}
-            backLabel="Graph"
-            onBack={() => {
-              back.current = true;
-              setSearching(null);
-            }}
+            query={searching.query}
+            backLabel={searching.left}
+            onBack={results.back}
             onShow={(nodes) => {
               window.__SEARCH__!.shown.push(nodes.map((n) => n.id));
-              setSearching(null);
+              results.leave();
             }}
-            onOpenDocument={(id) => window.__SEARCH__!.opened.push(id)}
+            onOpenDocument={(id) => {
+              window.__SEARCH__!.opened.push(id);
+              setReading(id);
+            }}
             onAsk={(words) => window.__SEARCH__!.asked.push(words)}
           />
         )}

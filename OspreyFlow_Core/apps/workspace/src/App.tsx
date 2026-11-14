@@ -100,6 +100,7 @@ import {
 import { fetchCaseLinkTypes, type CaseLinkTypes } from "./linktypes/linkTypesApi";
 import { GlobalSearch } from "./search/GlobalSearch";
 import { SearchResults } from "./search/SearchResults";
+import { useSearchResultsOverlay } from "./search/useSearchResultsOverlay";
 import { drawSearchResult } from "./search/drawSearchResult";
 import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
 import { IngestStudio } from "./ingest/IngestStudio";
@@ -693,17 +694,7 @@ export function App() {
     null,
   );
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  // The search results page (ADR-145 Amendment 15 Part A): the words searched and the view's name the person left.
-  // While it shows, it fills the main area over that view, which stays as it was beneath it, and no view is current.
-  const [searching, setSearching] = useState<{ query: string; left: string } | null>(null);
-  // Back from the results: focus returns to the search box once the view beneath is reachable again.
-  const focusSearchBox = useRef(false);
-  useEffect(() => {
-    if (searching !== null || !focusSearchBox.current) return;
-    focusSearchBox.current = false;
-    document.querySelector<HTMLElement>('.top-bar [role="combobox"]')?.focus();
-  }, [searching]);
-  // The Ask line's words, carried into Ask & Chat's question box, not sent.
+  // The Ask line's words, carried into Ask & Chat's question box once, not sent: gone when the panel closes.
   const [questionDraft, setQuestionDraft] = useState<{ text: string; at: number } | null>(null);
   // The types the map places (`placeableTypes`): read by the working-set subscription, which is
   // registered once, so a ref rather than the schema state it is worked out from.
@@ -818,6 +809,10 @@ export function App() {
   const [reportsStart, setReportsStart] = useState<{ tab?: "trends"; opened: number }>({ opened: 0 });
   // ADR-098 decision 4: the case's questions to the model, open at once when the case was opened on them.
   const [questionsOpen, setQuestionsOpen] = useState(handoff.view === "questions");
+  // Part A: the search's words are carried into Ask & Chat once; a later opening starts with an empty box.
+  useEffect(() => {
+    if (!questionsOpen) setQuestionDraft(null);
+  }, [questionsOpen]);
   // ADR-100: where to start in a case's data, from the rail (and over an empty canvas).
   const [exploreOpen, setExploreOpen] = useState(false);
   // ADR-097 step 1 (review item 16): the deployment's classifications, lowest first, for the strip.
@@ -1023,6 +1018,10 @@ export function App() {
   const [readerDocumentId, setReaderDocumentId] = useState<string | null>(null);
   // ADR-092 Amendment 3: an email opened from the Inspector, shown until its Document exists.
   const [readerFallback, setReaderFallback] = useState<DocumentReaderView | undefined>(undefined);
+  // The search results page (ADR-145 Amendment 15 Part A), over the view left, which stays as it was beneath it: shared
+  // with the keyboard harness (`search/useSearchResultsOverlay.ts`). A document read from the results hides them.
+  const results = useSearchResultsOverlay(readerDocumentId !== null);
+  const searching = results.searching;
   // ADR-093: every node selected on the canvas, for the Inspector's list.
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   // The selection made where no canvas is drawn (the Matrix view): the same state the canvas reports
@@ -1097,6 +1096,8 @@ export function App() {
     setSelectedNode(null);
     // The view's window, or none: a view keeps no window of the case's.
     timeline?.setWindow(lensWindow(opened));
+    // A saved view opened over the search results leaves them (Part A).
+    results.leave();
     setView("graph");
   }
 
@@ -1635,8 +1636,14 @@ export function App() {
           isAdministrator: principal?.roles?.includes("osprey-admin") ?? false,
           openCase,
           browseCases: () => setBrowsingCases(true),
-          openStudio: () => setView("ingest"),
-          openRules: () => setView("alerts"),
+          openStudio: () => {
+            results.leave();
+            setView("ingest");
+          },
+          openRules: () => {
+            results.leave();
+            setView("alerts");
+          },
           openAlert: (alertId) => navigate(alertPath(alertId)),
           openCaseOnRules: (id) => openRulesOnCase(id),
           answers,
@@ -1752,12 +1759,12 @@ export function App() {
         onSelect:
           id === "boards"
             ? () => {
-                setSearching(null);
+                results.leave();
                 setBoardToOpen(null);
                 setView("boards");
               }
             : () => {
-                setSearching(null);
+                results.leave();
                 setView(id);
               },
       })),
@@ -1782,6 +1789,8 @@ export function App() {
             current={app}
             counts={{ rules: alertCount }}
             onChoose={(place) => {
+              // Another place leaves the search results (Part A); back in the Glass, they are gone.
+              results.leave();
               if (place === "admin") setStartChoice("admin");
               else if (place === "ingest") setView("ingest");
               else if (place === "rules") setView("alerts");
@@ -1801,7 +1810,7 @@ export function App() {
               onApplyDelta={applyStarterDelta}
               // Part A: Enter on the typed words opens the results page over the view on screen.
               onSearch={(query) =>
-                setSearching({ query, left: view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph" })
+                results.open(query, view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph")
               }
               screenNodes={() => {
                 const graph = workingSetRef.current.graph;
@@ -1824,7 +1833,7 @@ export function App() {
                 ...(mainViews.length > 0 ? mainViews : otherViews),
                 ...(dossierNodeId
                   ? [{ id: "dossier", label: "Messages", pressed: view === "dossier" && searching === null, onSelect: () => {
-                      setSearching(null);
+                      results.leave();
                       setView("dossier");
                     } }]
                   : []),
@@ -1888,8 +1897,14 @@ export function App() {
         // choice, drawn by the Studio (`ingest/IngestStudio.tsx`), so the banner does not repeat it.
         datasets={app === "glass" ? caseContext.datasets : null}
         crossLink={crossLinkFor(app, startPlaces(rights), caseContext.name, caseContext.datasets, {
-          toStudio: () => setView("ingest"),
-          toGlass: () => setView(lastGlassView()),
+          toStudio: () => {
+            results.leave();
+            setView("ingest");
+          },
+          toGlass: () => {
+            results.leave();
+            setView(lastGlassView());
+          },
         })}
       />
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
@@ -1906,10 +1921,10 @@ export function App() {
       {/* `position: relative` so the keys panel, over whichever view is on screen, is placed in it. */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
       {/* Part A: the view left stays as it was beneath the search results, out of reach while they show. */}
-      <div style={{ display: "contents" }} inert={app === "glass" && searching !== null && readerDocumentId === null ? true : undefined}>
+      <div style={{ display: "contents" }} inert={app === "glass" && results.viewInert ? true : undefined}>
       {/* ADR-145 Amendment 12: the keys panel over any view the view switch opens, not only the graph's
           (it was drawn beside the graph alone, so Help did nothing visible elsewhere). */}
-      {welcomeOpen && !inCanvasArea && welcomePanel}
+      {welcomeOpen && !inCanvasArea && !results.viewInert && welcomePanel}
       {(view === "graph" || view === "map") && (
         // ADR-097 step 1: what belongs to this view alone, docked above it.
         <div role="toolbar" aria-label={view === "graph" ? "Graph view" : "Map view"} className="view-toolbar">
@@ -2126,7 +2141,7 @@ export function App() {
             )}
             {/* ADR-145 Amendment 12: the keys panel under the canvas toolbar, on the graph, the map and the
                 matrix alike; any other view has it in the column (above). */}
-            {welcomeOpen && welcomePanel}
+            {welcomeOpen && !results.viewInert && welcomePanel}
             {view === "graph" && (
               <GlassCanvas
                 // A view opened or closed draws a different working set: the canvas starts afresh.
@@ -2610,22 +2625,23 @@ export function App() {
       {/* Part A: the results fill the main area, over the view left, hidden (kept) while a document is read from them. */}
       {app === "glass" && searching !== null && investigationId && bearerToken && (
         <SearchResults
-          key={searching.query}
-          hidden={readerDocumentId !== null}
+          key={searching.at}
+          hidden={results.resultsHidden}
           apiBaseUrl={API_BASE_URL}
           bearerToken={bearerToken}
           investigationId={investigationId}
           query={searching.query}
           backLabel={searching.left}
-          onBack={() => {
-            focusSearchBox.current = true;
-            setSearching(null);
-          }}
+          onBack={results.back}
+          // Help's keys panel over the results, not beneath them where nothing can reach it.
+          beside={welcomeOpen ? welcomePanel : null}
           onShow={(nodes) => {
             void seedToCanvas(nodes, []);
             setSelectedNode(nodes[0] ?? null);
-            setSearching(null);
+            results.leave();
             setView("graph");
+            // Focus follows to the graph, once the view is back in reach (never left on the button that went).
+            setTimeout(() => document.querySelector<HTMLElement>('[role="application"][aria-label="Network canvas"]')?.focus(), 0);
           }}
           onOpenDocument={(id) => {
             setReaderFallback(undefined);

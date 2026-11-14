@@ -40,7 +40,9 @@ export interface ComboboxProps {
  * `ArrowUp` move a highlighted option (`aria-activedescendant`, WAI-ARIA combobox pattern);
  * `Enter` selects whichever option is highlighted, defaulting to the first when none has been
  * moved to yet, so a user who types a narrowing query and immediately presses Enter reaches the
- * same result a mouse click on the top option would. */
+ * same result a mouse click on the top option would. With `onSubmit` (the top bar's search, ADR-145
+ * Amendment 15 Part A) nothing is highlighted until the arrow keys move to an option, `ArrowUp` from
+ * the first goes back to none, and `Enter` with none highlighted submits the typed words. */
 export function Combobox({ options, value, onChange, onQueryChange, onSubmit, placeholder, ...aria }: ComboboxProps) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -107,7 +109,7 @@ export function Combobox({ options, value, onChange, onQueryChange, onSubmit, pl
             setHighlighted((i) => Math.min(i + 1, filtered.length - 1));
           } else if (e.key === "ArrowUp") {
             e.preventDefault();
-            setHighlighted((i) => Math.max(i - 1, 0));
+            setHighlighted((i) => Math.max(i - 1, none));
           } else if (e.key === "Enter") {
             e.preventDefault();
             const option = filtered[Math.min(highlighted, filtered.length - 1)];
