@@ -1,0 +1,8 @@
+# plant: no_atexit; fresh PYTHONPYCACHEPREFIX; closed ports; -k exits_without
+# RED
+E         {'osprey-test-idp-fe6accca': {'labels': ['osprey.lane=admin',
+E                                                  'osprey.run=/root/osprey-runs/admin.meta/runs/20261114T050000Z-0123abcd'],
+E                                       'network': 'osprey-test-idp-f43682d5'}}
+E         Use -v to get more diff)
+FAILED ../OspreyFlow_Build/tests/harness/test_run_owned.py::test_a_run_that_exits_without_its_teardown_leaves_nothing_with_its_label
+1 failed, 3 deselected in 1.22s

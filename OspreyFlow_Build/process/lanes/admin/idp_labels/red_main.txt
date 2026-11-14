@@ -1,0 +1,4 @@
+# red on main (763b021): main's own test_organisation_sign_in.py, its network and one Keycloak started as the stack fixture starts them, then TERM as stack_lease.sh stop sends it; Docker a fake on PATH with Docker's refusals (test_run_owned.py's FAKE_DOCKER). Offline, no real container.
+worker exit 143 (TERM)
+left after TERM: containers {'osprey-test-idp-031f2ffd': {'network': 'osprey-test-idp-net00001', 'labels': []}}
+left after TERM: networks {'osprey-test-idp-net00001': []}

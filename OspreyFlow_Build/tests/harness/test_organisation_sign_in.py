@@ -67,6 +67,7 @@ from principal_auth import OidcResolverSettings, PrincipalResolver
 
 from schemas.deployment import OspreyConfig
 
+from .run_owned import Owned, run_labels
 from .tls_fixtures import HOST, NAMES, Authority, docker, key_pem, pem
 
 KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.0"
@@ -74,6 +75,9 @@ ORG_HOST = "login.example.internal"
 ORG_REALM = "org"
 ORG_CLIENT = "osprey-broker"
 ALIAS = "org"
+#: Every container and network this module starts, labelled with its run and removed on TERM and at exit as well
+#: as by the fixture's teardown (`run_owned`): a run ended mid-test leaves none behind (the orchestrator, 14 Nov).
+OWNED = Owned(docker)
 PERSON = {"username": "pat.example", "password": "a-throwaway-password-1",
           "email": "pat.example@example.internal", "firstName": "Pat", "lastName": "Example"}  # fmt: skip
 
@@ -107,6 +111,13 @@ def _write(path: Path, data: bytes, mode: int = 0o644) -> Path:
     return path
 
 
+def _network() -> str:
+    """The stack's own Docker network, labelled with its run and recorded to be removed (`run_owned`)."""
+    name = OWNED.network(f"osprey-test-idp-{uuid.uuid4().hex[:8]}")
+    docker("network", "create", *run_labels(), name)
+    return name
+
+
 def _start_keycloak(
     network: str, *, host: str, folder: Path, certificate: Path, key: Path,
     extra_args: list[str], environment: dict[str, str], volumes: list[str],
@@ -115,7 +126,7 @@ def _start_keycloak(
     name = f"osprey-test-idp-{uuid.uuid4().hex[:8]}"
     port = port or _free_port()
     password = secrets.token_urlsafe(16)
-    argv = ["run", "-d", "--name", name, "--network", network, "--network-alias", host,
+    argv = ["run", "-d", "--name", OWNED.container(name), *run_labels(), "--network", network, "--network-alias", host,
             "-p", f"127.0.0.1:{port}:{port}",
             "-v", f"{certificate}:/certs/cert.pem:ro", "-v", f"{key}:/certs/key.pem:ro",
             "-e", "KC_BOOTSTRAP_ADMIN_USERNAME=admin", "-e", f"KC_BOOTSTRAP_ADMIN_PASSWORD={password}"]  # fmt: skip
@@ -260,8 +271,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
     (folder / "other").mkdir()
     other_ca = _write(folder / "other" / "org-root.pem", pem(other.cert))
 
-    network = f"osprey-test-idp-{uuid.uuid4().hex[:8]}"
-    docker("network", "create", network)
+    network = _network()
     started: list[Keycloak] = []
     # `answer_the_deployment_here` changes this process's resolver and trust store; every test
     # after this module gets them back as they were.
@@ -324,9 +334,8 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         yield Stack(org_kc, deployment_kc, elsewhere_kc, config, elsewhere_config, values,
                     org_secret, redirect, logout)  # fmt: skip
     finally:
-        for keycloak in started:
-            docker("rm", "-f", "-v", keycloak.name, check=False)
-        docker("network", "rm", network, check=False)
+        # Every container started, including one whose start or wait failed (not in `started`), then the network.
+        OWNED.remove_all()
         patched.undo()
         urllib.request.install_opener(None)
 
