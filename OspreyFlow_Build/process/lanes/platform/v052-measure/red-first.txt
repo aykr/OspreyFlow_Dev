@@ -16,3 +16,30 @@ FAILED tests/test_measure_search.py::test_a_class_with_no_budget_is_refused_rath
 1 failed, 4 passed in 9.18s
 
 Not yet built: M6's lag (a write through the Conduit, then search polled until it appears), which needs 3c's and 3d's routes on main to name the write; M2's browser case beside glass-perf.
+
+# ADR-149 Amendment 2's budgets in the timer (the orchestrator's decision 8, 2026-11-14T07:01:01Z), offline on closed ports,
+# a fresh PYTHONPYCACHEPREFIX each run. Red first, with the amendment written and BUDGETS an empty constant (main's
+# behaviour: no accepted figures, a --budgets file required):
+        # passed the last option string
+FAILED tests/test_measure_search.py::test_the_timer_s_budgets_are_the_amendment_s_both_ways
+FAILED tests/test_measure_search.py::test_the_run_judges_against_the_accepted_budgets_with_no_file_of_its_own
+FAILED tests/test_measure_search.py::test_one_suggestion_over_two_seconds_is_not_met_whatever_the_p95
+FAILED tests/test_measure_search.py::test_full_text_is_sent_to_the_search_route_and_judged_at_m4
+4 failed, 5 passed in 10.75s
+  (the first case's first red was the test's own: the amendment is the file's last section; fixed, then red as
+  'assert {} == {suggest, names, fulltext, exact}')
+Then one plant per check at its real call site (plants_budgets.py), each restored after its run:
+plant 1: M1's any-over-2-s check removed
+  tests/test_measure_search.py -k 'over_two_seconds': RED (1 failed, 8 deselected in 3.14s)
+plant 2: the timer's M3 failure figure laxer than the table's
+  tests/test_measure_search.py -k 'both_ways': RED (1 failed, 8 deselected in 0.52s)
+plant 3: the table's M4 failure figure changed alone
+  tests/test_measure_search.py -k 'both_ways': RED (1 failed, 8 deselected in 0.51s)
+plant 4: a timed class with no row in the table
+  tests/test_measure_search.py -k 'both_ways': RED (1 failed, 8 deselected in 0.51s)
+plant 5: a run handed a figures file again
+  tests/test_measure_search.py -k 'no_file_of_its_own': RED (1 failed, 8 deselected in 1.22s)
+plant 6: full text sent to the suggestion route
+  tests/test_measure_search.py -k 'judged_at_m4': RED (1 failed, 8 deselected in 1.02s)
+6/6 red
+Green after: tests/test_measure_search.py and tests/test_adr_reservations.py 16 passed; the ADR checks 23 passed.

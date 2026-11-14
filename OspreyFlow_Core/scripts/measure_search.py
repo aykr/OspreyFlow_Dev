@@ -3,7 +3,7 @@ timed at the Conduit, through its own routes, as the Glass sends them, signed as
 
 Each query class (suggestions, names, full text, exact identifiers, ...) is sent `warmup + n`
 times; the warm-up is discarded and the rest give a p50, p95, p99 and max. A class is judged
-against its budget's **failure figure** (the plan's, once the owner accepts it): "met" or "not
+against its budget's **failure figure** (ADR-149 Amendment 2's, `BUDGETS`): "met" or "not
 met", with why. Three things are never counted as the index's speed, each making its class "not
 met" in words: - an answer from the fallback (`source` is not `index`): its speed is today's
 search's, not OpenSearch's; - an exact identifier not ranked first, where the query names the
@@ -12,7 +12,7 @@ record it must find (`expect_first`); - an error from the Conduit.
 A class with no budget is refused rather than measured against nothing.
 
 python -m scripts.measure_search --base https://<the door> --case <id> --queries <file.jsonl> \\
---budgets <file.json> [--n 200] [--warmup 20] > results.json
+[--n 200] [--warmup 20] > results.json
 
 The bearer token is read from `OSPREY_MEASURE_TOKEN`, never an argument (it would show in the
 process list). Queries are made from B's plants (the `truth` column); none is typed by hand."""
@@ -29,6 +29,18 @@ import urllib.error
 import urllib.request
 from collections.abc import Sequence
 from typing import Any
+
+#: The accepted budgets (ADR-149 Amendment 2; the orchestrator's decision 8, 14 November 2026), by
+#: the query class the timer sends: the p95's budget and failure figure, and M1's second failure
+#: figure, any answer over the fallback's 2 s timeout. Held to the amendment's table both ways by
+#: `tests/test_measure_search.py`; a run is never given figures of its own.
+BUDGETS: dict[str, dict[str, Any]] = {
+    "suggest": {"measure": "M1", "budget_ms": 300.0, "fail_ms": 300.0, "any_over_ms": 2000.0},
+    "names": {"measure": "M3", "budget_ms": 1000.0, "fail_ms": 2000.0},
+    "fulltext": {"measure": "M4", "budget_ms": 1500.0, "fail_ms": 3000.0},
+    # M5: every exact identifier first (a correctness figure), timed as the name search it is.
+    "exact": {"measure": "M5", "budget_ms": 1000.0, "fail_ms": 2000.0},
+}
 
 #: The classes sent to the suggestion route; every other class goes to the search route.
 SUGGEST_CLASSES = frozenset({"suggest"})
@@ -91,7 +103,7 @@ def measure(
     case: str,
     token: str,
     queries: Sequence[dict[str, Any]],
-    budgets: dict[str, dict[str, float]],
+    budgets: dict[str, dict[str, Any]] = BUDGETS,
     n: int,
     warmup: int,
 ) -> dict[str, Any]:
@@ -121,9 +133,14 @@ def measure(
         why = []
         if p95 > budget["fail_ms"]:
             why.append(f"p95 {p95:.0f} ms over the failure figure, {budget['fail_ms']:.0f} ms")
+        over = budget.get("any_over_ms")
+        if over is not None and max(times) > over:
+            slow = sum(1 for t in times if t > over)
+            why.append(f"{slow} of {len(times)} over {over:.0f} ms (max {max(times):.0f} ms)")
         if problems:
             why.append(f"{len(problems)} of {len(times)}: {sorted(set(problems))[0]}")
         out["classes"][name] = {
+            "measure": budget.get("measure", ""),
             "n": len(times),
             "p50_ms": round(_percentile(times, 0.50), 1),
             "p95_ms": round(p95, 1),
@@ -147,7 +164,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         required=True,
         help="JSON lines: {class, query, [expect_first, group, filters]}",
     )
-    parser.add_argument("--budgets", required=True, help="JSON: {class: {budget_ms, fail_ms}}")
     parser.add_argument("--n", type=int, default=200)
     parser.add_argument("--warmup", type=int, default=20)
     args = parser.parse_args(argv)
@@ -158,14 +174,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     with open(args.queries, encoding="utf-8") as handle:
         queries = [json.loads(line) for line in handle if line.strip()]
-    with open(args.budgets, encoding="utf-8") as handle:
-        budgets = json.load(handle)
     result = measure(
         base=args.base,
         case=args.case,
         token=token,
         queries=queries,
-        budgets=budgets,
         n=args.n,
         warmup=args.warmup,
     )
