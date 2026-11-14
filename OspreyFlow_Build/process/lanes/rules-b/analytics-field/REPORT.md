@@ -27,7 +27,7 @@ case-b and platform-b, and branched from main 4ac03de.
   - `test_service_inventory`: `services/search_index`, a folder holding only `__pycache__`, was left
     in the worktree by the D(iii) branch. It has been removed locally, and the test passes.
   - `test_worker_isolation`, `test_write_store_marks` and make's `live-collect`: main's Makefile
-    (602b139) names `tests/services/search_index/test_feed_live.py`, which is not on main until
+    (602b139) names the index feed's live file (`test_feed_live.py`, on rules' branch), which is not on main until
     rules-v052-index lands. Main fails these the same way. This branch does not touch the Makefile.
 
 ## Shared files
