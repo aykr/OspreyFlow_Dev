@@ -36,7 +36,9 @@ Main's own CI will meet the same finding at its next image scan.
    live-service job's list). With all three applied, the coverage check reads "1060 test file(s), 0 allowlisted,
    no new drift". **Rules-b's Whole case (D(iii)) adds one more of the same kind:** `makefile-v052Diii.patch` and a
    ci.yml patch on top of studio's, for `test_ask_whole_case_leak_live.py`. One yes covers all of them if you
-   agree.
+   agree. **Platform's POC seed path adds `process/lanes/platform/v052-seed/live_wiring.diff`** (ci.yml and the
+   Makefile: `test_seed_clickhouse_live.py` in the ClickHouse live job, `test_seed_poc_live.py` in the Postgres live
+   job, both in the test job's ignores). It is independent of the search diffs.
 
 2. **The POC seed path vs the poc's marking ceiling (platform, ADR-148 Am 14).** Spec 08's synthetic data holds
    SECRET items: HMP's network writes a SECRET conflict (`hmp_network.py:427`), and Fixture Corp writes a SECRET
