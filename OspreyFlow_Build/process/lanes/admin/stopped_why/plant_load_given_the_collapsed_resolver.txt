@@ -1,5 +1,8 @@
-# plant: load_given_the_collapsed_resolver (services/api/recipe_run.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k given_the_resolver
+# plant: load_given_the_collapsed_resolver (services/api/recipe_run.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k reason_the_detailed_resolver_gives
 # RED
-E       AssertionError: the collapsed form tells the evaluator nothing
-FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_a_load_s_watches_are_given_the_resolver_that_says_why
-1 failed, 24 deselected in 3.12s
+E       AssertionError: assert [{'principal'...thing'}, ...}] == []
+E         
+E         Left contains one more item: {'principal': Principal(id='owner-1', clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=[], roles=['a...led', 'investigation_id': 'case-1', 'resolved_query': {'error': 'the collapsed form tells the evaluator nothing'}, ...}
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_a_load_s_watches_are_stopped_with_the_reason_the_detailed_resolver_gives
+1 failed, 28 deselected in 3.09s

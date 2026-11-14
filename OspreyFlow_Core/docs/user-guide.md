@@ -1064,12 +1064,25 @@ queue on **Alerts**. There is no Watches tab and no separate inbox.
   monitor**. Each runs as data loads, and on its own as you choose: "Daily at 06:00, and as data
   loads", "Weekly, and as data loads" or "Only as data loads".
 
-**A watch that is *Stopped* says why**, beside the word (ADR-044 Amendment 1): "its owner can no
-longer sign in to OspreyFlow"; on a deployment signing in with Entra ID, that its owner has not
-signed in within the last 24 hours; "the identity provider refused to act as its owner"; "its
-owner's sign-in could not be checked at the last load", tried again at the next; or, for a watched
-pattern, "its saved pattern is no longer its owner's". A hotlist or watch stopped this way is active
-again at the first load that can act as its owner.
+**A watch that is *Stopped* says why**, beside the word, in these words (ADR-044 Amendment 1):
+
+- its owner was disabled, or, as a guest, is no longer admitted: "Its owner can no longer sign in to
+  OspreyFlow."
+- on a deployment signing in with Entra ID, its owner's access is out of date: "Its owner has not
+  signed in to OspreyFlow within the last 24 hours, so their clearance and unit are out of date. It
+  is active again at the first load after they sign in."
+- on Entra ID, its owner is not in *People and roles*: "Its owner is not a person Admin › People
+  holds."
+- the identity provider refused: "The identity provider refused to act as its owner."
+- its owner's sign-in could not be checked: "Its owner's sign-in could not be checked at the last
+  load. It is tried again at the next."
+- its owner could not be acted as, for no reason given: "Its owner could not be acted as at the last
+  load."
+- a watched pattern whose saved pattern is no longer its owner's: "Its saved pattern is no longer
+  its owner's."
+
+A hotlist or watch stopped because its owner could not be acted as is active again at the first load
+that can act as them. One whose saved pattern is no longer its owner's stays stopped until it is.
 
 **From the Glass.** In the Query builder, **Save as a watch** on a saved pattern makes a watched
 pattern of the case's dataset: "Saved as a watch: it runs as data loads and daily, and is kept in

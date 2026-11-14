@@ -63,7 +63,7 @@ describe("the hotlist list", () => {
 // ADR-044 Amendment 1: a stopped hotlist says why, in the Conduit's words, beside Stopped.
 describe("a stopped hotlist in the list", () => {
   it("shows why it is stopped", async () => {
-    const why = "Stopped: its owner can no longer sign in to OspreyFlow.";
+    const why = "Its owner can no longer sign in to OspreyFlow.";
     serve([row({ status: "stopped", status_detail: "revoked", stopped_why: why })]);
     render(<HotlistPanel apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" />);
     expect(await screen.findByText(why)).toBeTruthy();

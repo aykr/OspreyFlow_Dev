@@ -1,0 +1,8 @@
+# plant: not_held_said_as_refused (services/api/watch_status.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k not-held
+# RED
+E         At index 0 diff: ('m-1', 'stopped', 'refused') != ('m-1', 'stopped', 'not_held')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_each_refusal_is_its_reason[not-held]
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_a_load_that_cannot_act_as_a_hotlist_s_owner_stops_it_with_the_reason[not-held]
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_a_load_that_cannot_act_as_a_watch_s_owner_stops_it_with_the_reason[not-held]
+3 failed, 26 deselected in 3.15s

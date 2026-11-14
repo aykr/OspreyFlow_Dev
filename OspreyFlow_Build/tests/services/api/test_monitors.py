@@ -143,20 +143,34 @@ async def test_a_watchs_schedule_is_set_by_its_owner_alone(
 # --- ADR-044 Amendment 1: a stopped watch says why -------------------------------------------------
 
 
-async def test_a_stopped_watch_keeps_why_and_a_reason_not_known_here_is_served_as_none(store) -> None:  # type: ignore[no-untyped-def]
-    import asyncpg
+async def test_a_stopped_watch_keeps_why_and_a_reason_not_known_here_is_served_as_none(
+    store: MonitorStore, pattern_store: PatternStore
+) -> None:
+    """The real column: kept with stopped and served with its words, cleared in the column itself with
+    active (not only hidden by the read), and a reason this release does not know served as none."""
     from services.api.watch_status import STOPPED_WHY
 
-    monitor = await store.create(OWNER, pattern_id="p-stopped-why")
-    await store.set_status(monitor.id, "stopped", "revoked")
-    stopped = await store.get_authorized(monitor.id, OWNER)
-    assert (stopped.status_detail, stopped.stopped_why) == ("revoked", STOPPED_WHY["revoked"])
-    conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    saved = await pattern_store.save(OWNER, pattern_id=None, name="Monitor fixture stopped why",
+                                     definition=_pattern())  # fmt: skip
+    monitor = None
     try:
-        await conn.execute("UPDATE monitors SET status_detail = 'a-later-release-s' WHERE id = $1", monitor.id)
+        monitor = await store.create(OWNER, pattern_id=saved.pattern_id)
+        await store.set_status(monitor.id, "stopped", "revoked")
+        stopped = await store.get_authorized(monitor.id, OWNER)
+        assert (stopped.status_detail, stopped.stopped_why) == ("revoked", STOPPED_WHY["revoked"])
+        async with store._pool.acquire() as conn:
+            await conn.execute("UPDATE monitors SET status_detail = 'a-later-release-s' WHERE id = $1", monitor.id)
+        unknown = await store.get_authorized(monitor.id, OWNER)
+        assert (unknown.status, unknown.status_detail, unknown.stopped_why) == ("stopped", None, None)
+        await store.set_status(monitor.id, "active", "revoked")
+        assert (await store.get_authorized(monitor.id, OWNER)).stopped_why is None
+        async with store._pool.acquire() as conn:
+            assert await conn.fetchval("SELECT status_detail FROM monitors WHERE id = $1", monitor.id) is None
+        await store.set_status(monitor.id, "stopped")  # a later stop with no reason: none, not the old one
+        assert (await store.get_authorized(monitor.id, OWNER)).status_detail is None
     finally:
-        await conn.close()
-    unknown = await store.get_authorized(monitor.id, OWNER)
-    assert (unknown.status, unknown.status_detail, unknown.stopped_why) == ("stopped", None, None)
-    await store.set_status(monitor.id, "active")
-    assert (await store.get_authorized(monitor.id, OWNER)).stopped_why is None
+        if monitor is not None:
+            async with store._pool.acquire() as conn:
+                await conn.execute("DELETE FROM monitors WHERE id = $1", monitor.id)
+        async with pattern_store._pool.acquire() as conn:
+            await conn.execute("DELETE FROM saved_patterns WHERE pattern_id = $1", saved.pattern_id)

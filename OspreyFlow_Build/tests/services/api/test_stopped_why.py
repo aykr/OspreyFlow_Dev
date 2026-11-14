@@ -39,7 +39,7 @@ NOW = datetime(2026, 11, 14, 9, tzinfo=UTC)
 REFUSALS: list[tuple[Exception | None, StoppedReason]] = [
     (PrincipalRevoked("disabled"), "revoked"),
     (PrincipalAccessOutOfDate("owner-1", None), "out_of_date"),
-    (OwnerNotHeld("gone"), "refused"),
+    (OwnerNotHeld("gone"), "not_held"),
     (PrincipalExchangeRefused("refused"), "refused"),
     (PrincipalExchangeUnavailable("down"), "unreachable"),
     (OwnerRecordUnavailable("store down"), "unreachable"),
@@ -107,7 +107,8 @@ def test_every_reason_has_its_words_and_none_names_an_id() -> None:
     assert set(STOPPED_WHY) == set(get_args(StoppedReason))
     for reason, words in STOPPED_WHY.items():
         served = stopped_why(reason)  # what a row is served with: the words, whole, and no id
-        assert served == words and served.startswith("Stopped: ") and OWNER.id not in served, reason
+        assert served == words and OWNER.id not in served, reason
+        assert not served.lower().startswith("stopped"), reason  # the badge already says it
     assert ACCESS_OUT_OF_DATE_WORDS in STOPPED_WHY["out_of_date"]
     assert "could not be reached" not in " ".join(STOPPED_WHY.values())
     assert stopped_why(None) is None and stopped_why("a-reason-a-later-release-wrote") is None
@@ -165,10 +166,22 @@ async def test_a_watch_s_schedule_stops_it_as_revoked_when_its_owner_can_no_long
     assert store.told == [("m-1", "stopped", "revoked")]
 
 
-async def test_a_load_s_watches_are_given_the_resolver_that_says_why() -> None:
-    """`recipe_run` evaluates a load's hotlists and watches with `_watch_owner_resolver`: the loader
-    at once, anyone else through `resolve_for_owner_detailed`, whose refusal reaches the evaluator."""
-    from services.api.recipe_run import _watch_owner_resolver
+async def test_a_load_s_watches_are_stopped_with_the_reason_the_detailed_resolver_gives() -> None:
+    """Through `recipe_run._evaluate_watches_best_effort`, the call site every load's watches run from:
+    another owner's hotlist is stopped with the detailed resolver's reason, and the collapsed form,
+    which tells the evaluator nothing, is never asked (a swap back at the call site fails here)."""
+    from types import SimpleNamespace
+
+    from services.api.recipe_run import _evaluate_watches_best_effort
+
+    other = Hotlist(id="h-2", identifier="07700900124", owner_id="owner-2", review_date=date(2027, 1, 1),
+                    created_at=NOW)  # fmt: skip
+    hotlists, monitors = _Watches([other]), _Watches([])
+    audited: list[dict[str, Any]] = []
+
+    class _Audit:
+        async def record(self, **fields: Any) -> None:
+            audited.append(fields)
 
     class _Resolver:
         async def resolve_for_owner_detailed(self, _o: str) -> Principal:
@@ -177,14 +190,19 @@ async def test_a_load_s_watches_are_given_the_resolver_that_says_why() -> None:
         async def resolve_for_owner(self, _o: str) -> None:
             raise AssertionError("the collapsed form tells the evaluator nothing")
 
-    resolve = _watch_owner_resolver(OWNER, _Resolver())  # type: ignore[arg-type]
-    assert await resolve(OWNER.id) is OWNER
-    with pytest.raises(PrincipalAccessOutOfDate):
-        await resolve("owner-2")
+    await _evaluate_watches_best_effort(
+        _Entry(), principal=OWNER, graph=_Nothing(), handling_scheme=load_uk_le_scheme(),  # type: ignore[arg-type]
+        config=SimpleNamespace(hotlist_alert_policy="strict"), hotlists_store=hotlists,  # type: ignore[arg-type]
+        monitors_store=monitors, patterns_store=_Nothing(), alerts_store=_Nothing(), audit=_Audit(),  # type: ignore[arg-type]
+        valkey=_Nothing(), investigation_id="case-1", action_on_failure="evaluate_watches_failed",  # type: ignore[arg-type]
+        principal_resolver=_Resolver(),  # type: ignore[arg-type]
+    )  # fmt: skip
+    assert audited == []  # nothing failed
+    assert hotlists.told == [("h-2", "stopped", "out_of_date")]
 
 
 def test_the_user_guide_gives_each_reason_in_the_conduit_s_words() -> None:
-    """User guide §7.5 quotes each reason as `STOPPED_WHY` words it (rule 12): a reason reworded in the
+    """User guide §7.5 quotes every reason's served sentence whole (rule 12): a reason reworded in the
     code and not the guide, or added without its sentence, fails here."""
     import re
     from pathlib import Path
@@ -192,12 +210,103 @@ def test_the_user_guide_gives_each_reason_in_the_conduit_s_words() -> None:
     guide = (Path(__file__).resolve().parents[4] / "OspreyFlow_Core/docs/user-guide.md").read_text(encoding="utf-8")
     start = guide.index("### 7.5")
     section = re.sub(r"\s+", " ", guide[start : guide.index("\n### ", start + 1)])
-    quoted = {
-        "revoked": "its owner can no longer sign in to OspreyFlow",
-        "refused": "the identity provider refused to act as its owner",
-        "unreachable": "its owner's sign-in could not be checked at the last load",
-        "pattern_gone": "its saved pattern is no longer its owner's",
-    }
-    for reason, words in quoted.items():
-        assert words in STOPPED_WHY[reason] and words in section, reason
-    assert "has not signed in within the last 24 hours" in section
+    assert [r for r, words in STOPPED_WHY.items() if f'"{words}"' not in section] == []
+
+
+def test_the_administration_guide_s_troubleshooting_row_quotes_the_unreachable_reason_as_served() -> None:
+    """§16 tells an administrator what a hotlist reads when the Conduit cannot act for people: the
+    served sentence for `unreachable`, whole."""
+    import re
+    from pathlib import Path
+
+    guide = (Path(__file__).resolve().parents[4] / "OspreyFlow_Core/docs/administration-guide.md").read_text(encoding="utf-8")
+    row = next(line for line in guide.splitlines() if line.startswith('| Rules say "the rule\'s deployer could not be resolved"'))
+    assert f'"{STOPPED_WHY["unreachable"]}"' in re.sub(r"\s+", " ", row)
+
+
+# --- ADR-044's own named tests: the real resolver, a real exchange, to the stored reason --------------
+
+
+@pytest.fixture
+def admin_users_url():  # type: ignore[no-untyped-def]
+    """The identity provider's users read, as the pre-check asks it (`users/{id}`): every user known,
+    `DISABLED` ones answered `enabled: false`, as Keycloak answers a disabled account."""
+    import json
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from threading import Thread
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_: Any) -> None:
+            pass
+
+        def do_GET(self) -> None:  # noqa: N802 - stdlib handler method name
+            user = self.path.rstrip("/").rsplit("/", 1)[-1]
+            body = json.dumps({"id": user, "username": user, "enabled": user not in DISABLED}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}/admin/realms/osprey/users"
+    finally:
+        server.shutdown()
+
+
+DISABLED = {"owner-disabled"}
+
+
+async def _stopped_with(resolver: Any, owner_id: str) -> list[tuple[str, str, str | None]]:
+    held = Hotlist(id="h-9", identifier="07700900125", owner_id=owner_id, review_date=date(2027, 1, 1),
+                   created_at=NOW)  # fmt: skip
+    store = _Watches([held])
+    try:
+        await evaluate_hotlists_for_entry(_Entry(), graph=_Nothing(), scheme=load_uk_le_scheme(), hotlist_store=store,  # type: ignore[arg-type]
+                                          alert_store=_Nothing(), audit=_Nothing(), valkey=_Nothing(),  # type: ignore[arg-type]
+                                          principal_for_owner=resolver.resolve_for_owner_detailed, policy="strict")  # type: ignore[arg-type]  # fmt: skip
+    finally:
+        await resolver.aclose()
+    return store.told
+
+
+async def test_a_revoked_principal_sets_status_detail_revoked_not_unreachable(
+    jwks_url, token_exchange_url, token_exchange_registry, admin_users_url
+) -> None:  # type: ignore[no-untyped-def]
+    """ADR-044's first named test: the identity provider reached and the account disabled there (the
+    Conduit's own pre-check, as against Keycloak), so the hotlist is stopped as `revoked`."""
+    from services.api.auth import PrincipalResolver
+
+    from tests.conftest import default_claims
+    from tests.services.api.test_auth import _config_with_exchange
+
+    token_exchange_registry.register("owner-disabled", default_claims(sub="owner-disabled"))
+    resolver = PrincipalResolver(_config_with_exchange(jwks_url, token_exchange_url,
+                                                       oidc_admin_users_url=admin_users_url))  # fmt: skip
+    assert await _stopped_with(resolver, "owner-disabled") == [("h-9", "stopped", "revoked")]
+
+
+async def test_an_unreachable_identity_provider_sets_status_detail_unreachable_not_revoked(jwks_url) -> None:  # type: ignore[no-untyped-def]
+    """ADR-044's second named test: the exchange call itself errors (connection refused on a closed
+    port), so the hotlist is stopped as `unreachable`, never `revoked`."""
+    from services.api.auth import PrincipalResolver
+
+    from tests.services.api.test_auth import _config_with_exchange
+
+    resolver = PrincipalResolver(_config_with_exchange(jwks_url, "http://127.0.0.1:9/token-exchange"))
+    assert await _stopped_with(resolver, "owner-1") == [("h-9", "stopped", "unreachable")]
+
+
+async def test_an_owner_the_identity_provider_refuses_sets_status_detail_refused(
+    jwks_url, token_exchange_url
+) -> None:  # type: ignore[no-untyped-def]
+    """The third case between them: the exchange reached and refused (an account it does not know), so
+    `refused`, neither of the two above."""
+    from services.api.auth import PrincipalResolver
+
+    from tests.services.api.test_auth import _config_with_exchange
+
+    resolver = PrincipalResolver(_config_with_exchange(jwks_url, token_exchange_url))
+    assert await _stopped_with(resolver, "owner-unknown") == [("h-9", "stopped", "refused")]

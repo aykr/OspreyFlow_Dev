@@ -38743,31 +38743,41 @@ left unbuilt; its escalation (three consecutive unreachable evaluations) is not 
    (`watch_status.reason_of`):
    - `revoked`: disabled, or a guest no longer admitted;
    - `out_of_date`: on Entra ID, not signed in within 24 hours;
-   - `refused`: the identity provider refused, or People does not hold them;
+   - `not_held`: on Entra ID, Admin › People does not hold them (`OwnerNotHeld`; Entra was not asked);
+   - `refused`: the identity provider refused;
    - `unreachable`: their sign-in could not be checked;
    - `unresolved`: a resolver that told nothing.
    `recipe_run` gives a load's hotlists and watches the detailed resolver (`_watch_owner_resolver`), so a reason is
    specific; rule evaluation keeps its collapsed one. A watch whose saved pattern is no longer its owner's is
    `pattern_gone`; a watch's schedule finding its owner revoked is `revoked`.
-   Which evaluations stop is unchanged: this records why each stops, and stops nothing it did not stop before.
+   Which evaluations stop is unchanged: this records why each stops, and stops nothing it did not stop before. A watch
+   whose owner can be acted as is set active at once, as a hotlist always was, so an earlier reason is never shown once
+   untrue; one whose owner no longer reaches its dataset is skipped, not stopped.
 3. **In true words, never an id** (rule 7). `stopped_why`, served with the row from `watch_status.STOPPED_WHY`, names no
    owner, account or source-system identifier; Entra's out-of-date owner uses `principal_auth.ACCESS_OUT_OF_DATE_WORDS`
-   (Amendment 16's). None says "could not be reached". The Glass's `StatusBadge` shows it beside *Stopped*, and nothing
-   beside *Active*.
+   (Amendment 16's). None says "could not be reached", and none repeats *Stopped*, which the badge already says. The
+   Glass's `StatusBadge` shows it beside *Stopped*, and nothing beside *Active*. Alert sources, on the same tab, still
+   says *Stopped* alone: a CARRIES row for the rules lane, whose file it is.
 4. **What comes next maps here too.** When platform-b's step 4c (the administrator fallback, ADR-148) lands, its
    refusal for a clearance or unit with no value set is one more reason, with its own words, mapped in
    `watch_status.reason_of`; until then such an owner is refused as any other and stopped with that reason.
 
 **Tests.**
+- ADR-044's two named tests, `test_a_revoked_principal_sets_status_detail_revoked_not_unreachable` and
+  `test_an_unreachable_identity_provider_sets_status_detail_unreachable_not_revoked`, in `test_stopped_why.py`: the real
+  `PrincipalResolver` against a loopback token exchange and users read (a disabled account; a closed port), to the
+  reason the stop records, with a third for an exchange refused (`refused`).
 - `tests/services/api/test_stopped_why.py` (offline):
   - every reason has its words, none names an id, and the out-of-date one uses Amendment 16's words;
   - each refusal is its reason;
   - a load stopping a hotlist and a watch, for each refusal, records its reason;
   - a gone pattern and a revoked schedule do too;
-  - the load is given the detailed resolver;
-  - the user guide quotes each reason.
-- `test_hotlists.py` and `test_monitors.py` (live): the real column kept and cleared, served with its words, an unknown
-  reason served as none.
-- `StatusBadge.test.tsx` and `HotlistPanel.test.tsx`: the reason beside *Stopped*, none beside *Active*.
+  - a load's watches stopped with the detailed resolver's reason through `_evaluate_watches_best_effort` itself, the
+    collapsed form never asked;
+  - the user guide quotes every reason's sentence whole, and the administration guide's §16 the `unreachable` one.
+- `test_hotlists.py` and `test_monitors.py` (live): the real column kept, and cleared in the column itself with active,
+  not only hidden by the read; a later stop with no reason served with none; an unknown reason served as none.
+- `StatusBadge.test.tsx`, `HotlistPanel.test.tsx` and `MonitorPanel.test.tsx`: the reason beside *Stopped*, none
+  beside *Active*.
 
 Each rule is planted alone and red (`process/lanes/admin/stopped_why/`).

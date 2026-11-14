@@ -976,12 +976,13 @@ DomainPack = Literal["fibo", "niem", "stix"]
 WatchStatus = Literal["active", "stopped"]
 #: ADR-044 Amendment 1: why a hotlist or watch is `stopped`, kept beside the binary status
 #: (ADR-044's decision): its owner can no longer sign in (`revoked`); on Entra ID their access is
-#: out of date (`out_of_date`, ADR-148 Amendment 16); the identity provider refused to act as them,
-#: or People does not hold them (`refused`); their sign-in could not be checked (`unreachable`);
+#: out of date (`out_of_date`, ADR-148 Amendment 16); Admin › People does not hold them
+#: (`not_held`); the identity provider refused to act as them (`refused`); their sign-in could not
+#: be checked (`unreachable`);
 #: they could not be acted as, for no reason the caller was told (`unresolved`); a watch's saved
 #: pattern is no longer theirs (`pattern_gone`). `None` while active.
 StoppedReason = Literal[
-    "revoked", "out_of_date", "refused", "unreachable", "unresolved", "pattern_gone"
+    "revoked", "out_of_date", "not_held", "refused", "unreachable", "unresolved", "pattern_gone"
 ]
 
 

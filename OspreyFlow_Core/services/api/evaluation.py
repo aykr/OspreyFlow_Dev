@@ -38,7 +38,8 @@ disclosed as such, not silently assumed to be the finer-grained thing a reader m
 **`status`, written on every evaluation attempt — Stage 6c, `06_DECISIONS.md` ADR-036's own
 amendment.** A skipped evaluation (`principal_for_owner` returns `None`, or — for a monitor — its
 own pattern no longer resolves) is not left as a silent in-memory `continue`: the hotlist/monitor
-row's own `status` is written `"stopped"` before skipping, `"active"` on every attempt that
+row's own `status` is written `"stopped"` before skipping, with why (ADR-044 Amendment 1),
+`"active"` on every attempt that
 genuinely resolves a principal and runs, so the owner (or another reader of the list/inbox) can see
 it rather than believe a watch is live when 6c's own synchronous wiring (`app.py`'s
 `run_studio_recipe`) never had a principal to evaluate it as. Not sticky — the next successful
@@ -202,10 +203,9 @@ async def evaluate_hotlists_for_entry(
     ADR-043 (Phase 8 Stage 1):** a real caller's own implementation is a live OAuth2 Token Exchange
     call, not a synchronous lookup — `app.py`'s own `_evaluate_watches_best_effort` is the real
     implementation; this module still makes no assumption about what the callable does beyond
-    awaiting it once per owner. Returning `None` is the disclosed stand-in for ADR-036's own "the
-    monitor stops" when a principal cannot be resolved (unset, refused, or unreachable — ADR-044's
-    own still-undecided question about distinguishing those is not this module's to answer): this
-    evaluation is skipped for that owner, not run against a stale or invented one.
+    awaiting it once per owner. A principal that cannot be resolved (`None`, or a refusal the
+    detailed resolver raises) stops the hotlist with why (ADR-044 Amendment 1, `_owner_or_why`):
+    this evaluation is skipped for that owner, never run against a stale or invented one.
 
     `matcher` below is deliberately unscoped — `06_DECISIONS.md` ADR-038's own addendum records
     why this is a justified exemption rather than an oversight `authorized-query-check` missed
@@ -319,6 +319,10 @@ async def evaluate_monitors_for_entry(
         if recipient is None:
             await monitor_store.set_status(monitor.id, "stopped", why)
             continue
+        # Its owner can be acted as: not stopped, as a hotlist is set active here too, so a reason
+        # left from an earlier stop is never shown once untrue (ADR-044 Amendment 1). A watch whose
+        # owner no longer reaches its dataset is skipped below, not stopped (monitor_schedule's).
+        await monitor_store.set_status(monitor.id, "active")
         # ADR-099 Amendment 3: the pattern is read, and matched, within the monitor's dataset, and
         # only while its owner still reaches it (L2.10 review item 4): narrowing the owner to the
         # dataset must never give back one they have lost.

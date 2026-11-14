@@ -17,11 +17,15 @@ PLANTS = [
     ("pattern_gone_unsaid", EV, "        await monitor_store.set_status(monitor.id, \"stopped\", \"pattern_gone\")", "        await monitor_store.set_status(monitor.id, \"stopped\")", "pattern_is_no_longer"),
     ("schedule_revoked_unsaid", "services/api/monitor_schedule.py", "            await self.monitors.set_status(monitor.id, \"stopped\", \"revoked\")", "            await self.monitors.set_status(monitor.id, \"stopped\")", "schedule_stops_it_as_revoked"),
     ("every_refusal_unresolved", EV, "        return None, reason_of(error)", "        return None, \"unresolved\"", "owner_stops_it_with_the_reason"),
-    ("load_given_the_collapsed_resolver", "services/api/recipe_run.py", "        return await principal_resolver.resolve_for_owner_detailed(owner_id)\n\n    return resolve\n\n\nasync def _rule_gate(", "        return await principal_resolver.resolve_for_owner(owner_id)\n\n    return resolve\n\n\nasync def _rule_gate(", "given_the_resolver"),
+    ("load_given_the_collapsed_resolver", "services/api/recipe_run.py", "    _principal_for_owner = _watch_owner_resolver(principal, principal_resolver)", "    _principal_for_owner = _owner_resolver(principal, principal_resolver)", "reason_the_detailed_resolver_gives"),
     ("out_of_date_read_as_unreachable", WS, "    if isinstance(error, PrincipalAccessOutOfDate):\n        return \"out_of_date\"\n", "", "out-of-date or out_of_date"),
-    ("out_of_date_words_their_own", WS, "        f\"Stopped: its owner {ACCESS_OUT_OF_DATE_WORDS}. It is active again at the first load \"", "        \"Stopped: its owner is out of date. It is active again at the first load \"", "every_reason_has_its_words"),
+    ("out_of_date_words_their_own", WS, "        f\"Its owner {ACCESS_OUT_OF_DATE_WORDS}. It is active again at the first load after they \"", "        \"Its owner is out of date. It is active again at the first load after they \"", "every_reason_has_its_words"),
     ("words_name_the_owner_id", WS, "    return STOPPED_WHY.get(reason) if reason else None", "    return (STOPPED_WHY.get(reason) or '') + ' (owner-1)' if reason in STOPPED_WHY else None", "every_reason_has_its_words"),
-    ("guide_reason_reworded", WS, "    \"refused\": \"Stopped: the identity provider refused to act as its owner.\",", "    \"refused\": \"Stopped: the sign-in service would not act for its owner.\",", "user_guide"),
+    ("not_held_said_as_refused", WS, "    if isinstance(error, OwnerNotHeld):\n        return \"not_held\"\n", "", "not-held"),
+    ("unresolved_left_out_of_the_guide", WS, "    \"unresolved\": \"Its owner could not be acted as at the last load.\",", "    \"unresolved\": \"Its owner could not be acted as at the last load, for now.\",", "user_guide"),
+    ("named_revoked_read_as_refused", WS, "    if isinstance(error, PrincipalRevoked):\n        return \"revoked\"\n", "", "revoked_principal_sets"),
+    ("named_unreachable_read_as_unresolved", WS, "    if isinstance(error, (OwnerRecordUnavailable, PrincipalExchangeUnavailable)):\n        return \"unreachable\"\n", "", "unreachable_identity_provider_sets"),
+    ("guide_reason_reworded", WS, "    \"refused\": \"The identity provider refused to act as its owner.\",", "    \"refused\": \"The sign-in service would not act for its owner.\",", "user_guide"),
 ]
 CLOSED = {"ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "POSTGRES_PASSWORD": "throwaway",
           "VALKEY_PORT": "59993", "CLICKHOUSE_HTTP_PORT": "59994"}

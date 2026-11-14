@@ -218,3 +218,11 @@ async def test_a_stopped_hotlist_keeps_why_until_it_is_active_again(store) -> No
     # A later stop with no reason given is served with none, never the one before it.
     await store.set_status(hotlist.id, "stopped")
     assert (await store.get_authorized(hotlist.id, OWNER)).status_detail is None
+    # A reason this release does not know (a later one's) is served as none, never guessed.
+    conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    try:
+        await conn.execute("UPDATE hotlists SET status_detail = 'a-later-release-s' WHERE id = $1", hotlist.id)
+    finally:
+        await conn.close()
+    unknown = await store.get_authorized(hotlist.id, OWNER)
+    assert (unknown.status, unknown.status_detail, unknown.stopped_why) == ("stopped", None, None)

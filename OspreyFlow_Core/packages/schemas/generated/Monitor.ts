@@ -5,7 +5,7 @@ export type PatternId = string;
 export type OwnerId = string;
 export type Status = "active" | "stopped";
 export type StatusDetail =
-  ("revoked" | "out_of_date" | "refused" | "unreachable" | "unresolved" | "pattern_gone") | null;
+  ("revoked" | "out_of_date" | "not_held" | "refused" | "unreachable" | "unresolved" | "pattern_gone") | null;
 export type StoppedWhy = string | null;
 export type CreatedAt = string;
 export type DatasetId = string | null;

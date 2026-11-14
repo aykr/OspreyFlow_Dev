@@ -1,0 +1,8 @@
+# plant: unresolved_left_out_of_the_guide (services/api/watch_status.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k user_guide
+# RED
+E       AssertionError: assert ['unresolved'] == []
+E         
+E         Left contains one more item: 'unresolved'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_the_user_guide_gives_each_reason_in_the_conduit_s_words
+1 failed, 28 deselected in 3.18s

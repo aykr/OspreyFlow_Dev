@@ -31,7 +31,7 @@ describe("test_a_stopped_hotlist_is_visibly_stopped_not_only_flagged_in_data", (
 
 // ADR-044 Amendment 1: a stopped hotlist or watch says why, beside the label, in the Conduit's words.
 describe("a stopped watch says why", () => {
-  const WHY = "Stopped: its owner can no longer sign in to OspreyFlow.";
+  const WHY = "Its owner can no longer sign in to OspreyFlow.";
 
   test("the reason is shown beside Stopped", () => {
     const { container } = render(<StatusBadge status="stopped" why={WHY} />);
