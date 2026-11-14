@@ -130,7 +130,16 @@ const { chromium } = require("@playwright/test");
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.goto(`http://localhost:5173/?investigation=${process.env.CASE}`);
-  await page.locator(".top-bar [role=\"combobox\"]").waitFor({ timeout: 600000 });
+  const box = page.locator(".top-bar [role=\"combobox\"]");
+  await box.waitFor({ timeout: 600000 });
+  // Through the results page too, so every module it loads has been asked for once, then a reload: what Vite finds to
+  // bundle only on a later request reloads the page, and a page opened during that rebuild draws nothing.
+  await box.fill("warm-up");
+  await box.press("Enter");
+  await page.locator("section.search-results").waitFor({ timeout: 600000 });
+  await page.waitForTimeout(5000);
+  await page.reload();
+  await box.waitFor({ timeout: 600000 });
   await browser.close();
 })().catch((e) => { console.error(String(e)); process.exit(1); });
 ' || { tail -20 "$W/vite.log" | mask; fail "the Glass did not draw its search box in 10 minutes"; }
@@ -141,6 +150,8 @@ OSPREY_REUSE_SERVER=1 OSPREY_TEST_LIVE_GLASS=1 OSPREY_LIVE_API_BASE_URL="http://
 code=${PIPESTATUS[0]}
 echo "# playwright exit $code"
 if [ "$code" -ne 0 ]; then
+  echo "== Vite's log"
+  grep -vE '^\s*$' "$W/vite.log" | mask | tail -30
   for f in test-results/*/error-context.md; do
     [ -f "$f" ] && { echo "== $f"; head -80 "$f" | mask; }
   done
