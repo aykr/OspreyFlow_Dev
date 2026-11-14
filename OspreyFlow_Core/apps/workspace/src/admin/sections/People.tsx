@@ -3,7 +3,6 @@
 // the places they open, their case levels (R3), access and state; the cases with no Author and
 // *Name an Author* (R1); *Disable…* with a transfer for everything they own (A4); inviting a person,
 // and refused organisation sign-ins. Behind `manage_people` (`admin/sections.json`).
-import { currentBrand } from "../../brand/brand";
 import { useEffect, useState } from "react";
 
 import type {
@@ -15,6 +14,7 @@ import type {
   PersonCaseLevel,
   SignInDelivery,
 } from "../../../../../packages/schemas/generated";
+import { currentBrand } from "../../brand/brand";
 import { PLACE_NAME, placesFor } from "../../shell/places";
 import { LEVELS_TIP_ID, RoleAndLevelTips, grantWords, roleTip, roleTipId } from "../tips";
 import { Button, Input, Select } from "../../design/primitives";

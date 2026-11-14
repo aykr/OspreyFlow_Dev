@@ -131,7 +131,7 @@ function Quotas({
       aria-label="Run quotas"
       style={{ display: "grid", gap: "var(--sp-8)" }}
     >
-      <h2 style={{ margin: 0 }}>Run quotas</h2>
+      <h3 style={{ margin: 0 }}>Run quotas</h3>
       {quotas.length === 0 ? (
         <p className="label" style={{ margin: 0 }}>
           {OPERATIONS_WORDS.noQuota}
@@ -285,7 +285,7 @@ export function OperationsFigures({ api }: { api: AdminApi }) {
           aria-label="The scheduler's health"
           style={{ display: "grid", gap: "var(--sp-4)" }}
         >
-          <h2 style={{ margin: 0 }}>The scheduler's health</h2>
+          <h3 style={{ margin: 0 }}>The scheduler's health</h3>
           <p style={{ margin: 0 }}>
             {`${health.running_now} running now; ${health.skipped} skipped while the previous run was going; ${health.missed} missed after downtime.`}
           </p>
@@ -308,7 +308,7 @@ export function OperationsFigures({ api }: { api: AdminApi }) {
           aria-label="External triggers"
           style={{ display: "grid", gap: "var(--sp-4)" }}
         >
-          <h2 style={{ margin: 0 }}>External triggers</h2>
+          <h3 style={{ margin: 0 }}>External triggers</h3>
           {external.length === 0 ? (
             <p className="label" style={{ margin: 0 }}>
               {OPERATIONS_WORDS.noExternal}
@@ -346,7 +346,7 @@ export function OperationsFigures({ api }: { api: AdminApi }) {
           aria-label="Budget alerts"
           style={{ display: "grid", gap: "var(--sp-4)" }}
         >
-          <h2 style={{ margin: 0 }}>Budget alerts</h2>
+          <h3 style={{ margin: 0 }}>Budget alerts</h3>
           <ul style={{ margin: 0 }}>
             {(rollup.alerts ?? []).map((a) => (
               <li

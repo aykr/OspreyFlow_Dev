@@ -28,6 +28,12 @@ PLANTS = [
      [SPEC], "link focus", r"toContain\(\"govuk-link\"\)"),
     ("a local focus rule over GOV.UK's, the class kept", [(CSS, ".admin-row-actions__link[aria-expanded=\"true\"] { font-weight: 700; }", ".admin-row-actions__link[aria-expanded=\"true\"] { font-weight: 700; }\n.admin-place .admin-row-actions__link:focus { background: none; }")],
      [SPEC], "link focus", r"rgb\(255, 221, 0\)"),
+    ("GOV.UK's link focus shadow replaced by the workspace's inset ring, the yellow kept", [(CSS, ".admin-row-actions__link[aria-expanded=\"true\"] { font-weight: 700; }", ".admin-row-actions__link[aria-expanded=\"true\"] { font-weight: 700; }\n.admin-place .admin-row-actions__link:focus { box-shadow: inset 0 0 0 2px var(--focus-ink); }")],
+     [SPEC], "link focus", r"drawn\.shadow"),
+    ("the sections' h3 rule removed (Datasets' details at the browser's h3 size)", [(CSS, ".admin-place__section h3 { font-size: var(--fs-12); line-height: var(--lh-12); font-weight: 700; }\n", "")],
+     [SPEC], "Datasets in|Operations in", r"expect\(offScale"),
+    ("a second h1: Roles' form titled as a page", [("src/admin/sections/Roles.tsx", "<h2 style={{ margin: 0 }}>{title}</h2>", "<h1 style={{ margin: 0 }}>{title}</h1>")],
+     [SPEC], "Roles in", r"level === 1"),
 ]
 
 
@@ -60,8 +66,7 @@ def red_for_its_reason(out: str, why: str) -> tuple[bool, str]:
 
 def main() -> int:
     missed = 0
-    # The orchestrator's registry change (registry-govuk.diff) is applied in the run copy, as for the gates.
-    if subprocess.run(["git", "diff", "--quiet", "--", "OspreyFlow_Core", ":!OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts"], cwd=ROOT).returncode:
+    if subprocess.run(["git", "diff", "--quiet", "--", "OspreyFlow_Core"], cwd=ROOT).returncode:
         sys.exit("the tree has changes: commit them first, since each plant is restored from git")
     for name, edits, specs, grep, why in PLANTS:
         touched = set()

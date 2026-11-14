@@ -48,9 +48,10 @@
 
 .admin-nav { flex: none; width: 220px; display: flex; flex-direction: column; gap: var(--sp-12); }
 .admin-nav .admin-nav__heading { margin: 0 0 var(--sp-4); }
-/* The side list's groups and People's parts are h2s beneath the section's h1 (ADR-145 Amendment 16): drawn
-   at the sizes main gave them as h3 and h4, below the h1, not at the browser's h2 size. GOV.UK's classes size
-   its own. */
+/* Beneath the section's h1, h2s and then h3s (ADR-145 Amendment 16): the side list's groups, and every section's
+   parts (People's, Models' and Maps', the others'), with Datasets' details and Operations' figures nesting h3s.
+   Drawn at the sizes main gave them as h3 to h5, below the h1, not at the browser's sizes; GOV.UK's scale remaps
+   them (19px and 16px under a 36px h1). GOV.UK's classes size the side list's own. */
 .admin-nav h2.label.admin-nav__heading { font-size: var(--fs-14); line-height: var(--lh-14); font-weight: 700; }
 .admin-place__section h2 { font-size: var(--fs-13); line-height: var(--lh-13); font-weight: 700; }
 .admin-place__section h3 { font-size: var(--fs-12); line-height: var(--lh-12); font-weight: 700; }
