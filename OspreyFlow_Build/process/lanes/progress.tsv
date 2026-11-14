@@ -108,7 +108,7 @@ platform-b	v052-r1	L	todo	v0.5.2: R1 on kind with a dashboards check (with platf
 platform	v052-manifest	M	done	v0.5.2 step 2: the poc manifest and its render test
 platform	v052-opensearch	M	done	v0.5.2 step 3a: OpenSearch on poc
 rules	v052-index	L	done	v0.5.2 step 3c: the index feed, rebuild, drift check
-rules	v052-load	M	todo	v0.5.2 B: client-size synthetic data, loaded once
+rules	v052-load	M	review	v0.5.2 B: client-size synthetic data, loaded once
 studio	v052-search	L	done	v0.5.2 step 3d: the search service
 case	v052-fixes	S	done	v0.5.2 step 3e: the Glass's screen fixes
 case	v052-results	M	review	v0.5.2 step 3e′: the search results layout
