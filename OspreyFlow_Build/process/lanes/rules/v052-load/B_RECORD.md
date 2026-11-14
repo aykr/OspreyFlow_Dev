@@ -74,7 +74,7 @@ the test server's host, under the rules lane's lease of stack d (it reads B's fi
 | List | Eligible | Written | Kept out, and why |
 | --- | --- | --- | --- |
 | `leaks.jsonl`: a cs-intel record m10-part may not read, with its control | 12,126: 10,129 SECRET/C (control `m10-cleared-unit-fiu`), 1,997 SECRET/R unit-intel-covert (control `m10-cleared-unit-intel-covert`) | 500, chosen by a hash of the id | none: every hidden record of the case has a control that reads it |
-| `never_join.jsonl`: a planted SAME_AS (`truth` same) joining a visible cs-intel record to another dataset's | 18,115 | 500, the same way | no control: no principal searching the intel case reaches the other dataset (ADR-099 Am 2) |
+| `never_join.jsonl`: a planted SAME_AS (`truth` same) joining a visible cs-intel record to another dataset's, which m10-part's search in the intel case must never return or merge in (ADR-099 Am 2) | 18,115, each with its control in the partner's own case (`partner_case`): 17,337 `m10-cleared-unit-fiu`, 778 `m10-cleared-unit-covert` (SECRET/R) | 500, the same way | none: every partner has a control that reads it in its case (regenerated 08:49:15Z, run 20261114T084915Z-8b25b5b4) |
 
-Both lists are checked before writing (`check_leaks`, `check_never_join`; plants L1 to L4 red,
+Both lists are checked before writing (`check_leaks`, `check_never_join`; plants L1 to L6 red,
 `leaks-red-first.txt`). `counts.json` beside them holds the same counts.
