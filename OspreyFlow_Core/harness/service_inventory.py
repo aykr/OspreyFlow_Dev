@@ -83,7 +83,8 @@ INVENTORY: tuple[ServiceEntry, ...] = (
         created_in="ADR-114 B7",
         note=(
             "Only a Dockerfile: the job worker's image (ADR-114 Amendment 10 point 6), built "
-            "from services/api's code. Lite runs the same loop inside the Conduit."
+            "from services/api's code. Lite runs the same loop inside the Conduit: every profile "
+            "rendering no worker (local-lite, small) sets OSPREY_JOB_WORKER=conduit."
         ),
     ),
     ServiceEntry(

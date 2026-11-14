@@ -786,6 +786,20 @@ nodes the action requires a filter or an explicit acknowledgement. This single c
 stops an analyst turning a legible network into a hairball in one click, and it is the most
 common complaint about link analysis tools.
 
+**At the working set's cap (rule 2; spec/00 §4).** An expansion the cap refuses (the Conduit's 409
+`limit_exceeded`) is said in the over-cap dialog's words, "Too many for the canvas: ‹n› nodes against a limit of
+‹cap›.", with "Nothing has been added.". Nothing is drawn and nothing is cut. The refusal offers the cap's choices,
+each by keyboard:
+- **Expand by one relationship instead:** each type with what it would add. Not offered for an expansion already
+  by one type.
+- **Save a smaller view…:** the over-cap dialog's save form, titled "This expansion is too large", with no *Try
+  again*.
+- **Run as a batch job:** ADR-151.
+
+Escape puts it away. A node taken out while it is open takes it with it. A 409 that is not the cap's stays
+"Expand failed (409). Try again." (`canvas/CapRefusalPrompt.tsx`, `keyboard/canvas-expand-cap.spec.ts`,
+`App.expandCap.test.tsx`).
+
 ### 3.1a Communities on screen (ADR-066)
 
 A `Communities` button on the canvas draws a box round each group of closely linked nodes in the

@@ -182,11 +182,50 @@ def _refuse(config: OspreyConfig) -> None:
     from principal_auth import ClaimMapping
 
     try:
-        ClaimMapping.model_validate(claims.claim_mapping())
+        mapping = ClaimMapping.model_validate(claims.claim_mapping())
     except ValueError as error:
         raise CloudPlatformNotRenderable(
             f"cloud_platform.claims cannot be read as a claim mapping: {error}"
         ) from None
+    by_administrator = [
+        name
+        for name, source in (("clearance", mapping.clearance), ("org_unit", mapping.org_unit),
+                             ("handling_codes", mapping.handling_codes))
+        if source.administrator
+    ]  # fmt: skip
+    held = claims.first_administrator_access or {}
+    if by_administrator and (missing := [f for f in by_administrator if f not in held]):
+        # Amendment 15: nobody could sign in to set anyone's values, the first administrators
+        # included.
+        raise CloudPlatformNotRenderable(
+            f"cloud_platform.claims sets {', '.join(by_administrator)} by the administrator, and "
+            f"first_administrator_access gives the first administrators no {', '.join(missing)}: "
+            "without it nobody can sign in to set anyone's"
+        )
+    # The shapes the Conduit's start takes (`first_administrator_access_from_env`), refused here
+    # in the same words rather than by a Conduit that will not start.
+    wrong = [
+        f
+        for f in by_administrator
+        if not (
+            isinstance(held[f], list) and all(isinstance(c, str) and c for c in held[f])
+            if f == "handling_codes"
+            else isinstance(held[f], str) and held[f]
+        )
+    ]
+    if wrong:
+        raise CloudPlatformNotRenderable(
+            f"cloud_platform.claims.first_administrator_access: {', '.join(wrong)} is not a value "
+            "(clearance and org_unit each a word, handling_codes a list of codes)"
+        )
+    if by_administrator and _cp(config).shape != "poc":
+        # ADR-148 Amendment 15: the fallback is the proof of concept's, while the client's Entra
+        # cannot yet send the values; a production namespace reads every one from Entra ID.
+        raise CloudPlatformNotRenderable(
+            f"cloud_platform.claims sets {', '.join(by_administrator)} by the administrator "
+            "(administrator: true), which only the poc shape allows: name the claim or the group "
+            "table Entra ID sends each in"
+        )
 
 
 def entra_settings(config: OspreyConfig) -> dict[str, str]:
@@ -202,6 +241,13 @@ def entra_settings(config: OspreyConfig) -> dict[str, str]:
         "OIDC_JWKS_URL": claims.jwks_url,
         "OSPREY_CLAIM_MAPPING": json.dumps(claims.claim_mapping(), sort_keys=True),
         "OSPREY_FIRST_ADMINISTRATORS": ",".join(claims.first_administrators),
+        # ADR-148 Amendment 15: what they hold of each value the administrator sets, at install.
+        **(
+            {"OSPREY_FIRST_ADMINISTRATOR_ACCESS": json.dumps(claims.first_administrator_access,
+                                                             sort_keys=True)}  # fmt: skip
+            if claims.first_administrator_access
+            else {}
+        ),
         "SUPERSET_SIGN_IN": "entra",
         **_reporting_on_entra(config, claims),
     }

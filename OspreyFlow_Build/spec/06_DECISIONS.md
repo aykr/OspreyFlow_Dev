@@ -38109,6 +38109,87 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
 - A write that bypasses the adapter is invisible until the drift check or a rebuild; that is why the seed resets
   rebuild.
 
+### ADR-148, Amendment 15 (14 November 2026) — The administrator fallback on Entra ID: a person's clearance, unit or handling codes set in Admin › People, the poc shape alone
+
+*v0.5.2 (the ADR-148 audit's ruling 4c, 13 November 2026: the client page offers it, Amendment 8 point 3 refused it).
+By platform-b. An access step: two review rounds, listed for the owner (round 1's findings are answered below).*
+
+1. **A third source in the claim mapping.** `clearance`, `org_unit` and `handling_codes` each name exactly one of a
+   claim, a group table, or `{administrator: true}` (`principal_auth.ValueSource`, `CodesSource`); an Entra mapping
+   alone may name the third. For such a value the token is never read: the resolver checks the token in full, reads
+   the stored person, and takes the value an administrator set; one never set is refused in words ("your clearance
+   has not been set in this deployment: ask an administrator to set it in Admin › People"), never a default. Such a
+   person is recorded at that first sign-in, so People lists them for an administrator to set. A token carrying a
+   claim for it cannot raise it, and an administrator cannot override a value the mapping reads from the token.
+   Tests: `tests/services/api/test_auth_entra_administrator_access.py`. Record: `process/lanes/platform-b/4c/stepA-red-first.txt`.
+2. **The poc shape alone, at render.** The render refuses `{administrator: true}` on any other shape, in words naming
+   the fields and what Entra should send instead. The Conduit itself accepts the source on any Entra mapping: the
+   poc-only rule is the render's, as the ruling asked. Tests: `test_cloud_platform_entra.py`'s administrator-fallback
+   cases. Record: `stepB-red-first.txt`.
+3. **The first administrators are given their values at install** (`cloud_platform.claims.first_administrator_access`,
+   rendered as `OSPREY_FIRST_ADMINISTRATOR_ACCESS`; required whenever a value is the administrator's, or the render is
+   refused and the Conduit will not start), seeded under the people lock beside their Admin role and audited
+   (`grant_first_administrator_access`), each value only where none is set, so a later change stands across
+   restarts. Without it nobody could sign in to set anyone's values (round 1's must-fix 1). A person whose values the
+   administrator sets, not all set, is not counted among those who can manage people.
+4. **The people store keeps what an administrator set apart** (`admin_clearance`, `admin_org_unit`, `admin_codes`,
+   `access_set_by`, `access_set_at`, added in place), never written at sign-in. `StoredPerson` and `standing()` carry
+   it; People shows it for those values. A person whose every value is set here never ages under `ACCESS_FRESH`
+   (nothing of theirs is read from a token); one with a value missing reads as stale, so nothing is sent to them.
+5. **Setting it is the store's own decision** (rule 3; `entra_people.check_administrator_access`, inside the store's
+   transaction, the setter's row read `FOR SHARE` and the person's `FOR UPDATE`, the audit row written on the same
+   connection): only the values the mapping sources from the administrator are given, one not given left as it is
+   (`PersonAccessInput`), a value Entra sends never given here (409 `entra_holds_accounts`); the setter recorded here,
+   enabled and with their own values set (403 `setter_cannot_set`); no clearance above, and no handling code beyond,
+   what the setter holds **as the store holds them**, whatever their token or the route says (403
+   `above_your_clearance`, `handling_code_you_do_not_hold`); a person not here is a 404 (`no_such_person`). The
+   route's own check stays, on the values given alone, so a partial fallback is not refused for what Entra sends.
+   Keycloak's Access is unchanged (clearance and unit together). An open delta socket closes (1008) when a value set
+   here no longer matches the principal it opened with. Tests: `test_entra_people_administrator_access.py` (the
+   route over a store keeping the real table's rows and the real decision; plant (a) shows a route-only check would
+   have set SECRET for a setter whose token says SECRET and whose stored clearance is lower). Record:
+   `stepCD-red-first.txt`.
+6. **Admin › People on Entra** is told which values it sets (`GET /v1/admin/sign-in`'s `administrator_sets`), says so
+   in words, and offers **Access** for those alone, sending only them. Tests:
+   `apps/workspace/src/admin/PeopleEntraAdministrator.test.tsx`. Record: `stepE-red-first.txt`.
+7. **What only the real table shows is `test_entra_people_live.py`'s Amendment 15 section, run on 14 November 2026
+   on test stack b under platform-b's lease** (`process/lanes/platform-b/4c/am15-live.txt`): the whole live file passed,
+   32 of 32. It covers the columns, a sign-in never overwriting what was set, the transaction's limits from the
+   setter's own row, the audit row on the store's connection, and the tenant clause (another tenant's rows never read
+   or written). It also covers the first administrator resolving on a fresh store, through the start itself, and a
+   later change surviving a restart; a recorded person never seeded past the role gate; and a person with none set
+   recorded and refused until set. Three live plants each went red for their own test: the seed's values given past
+   its role gate, the Access write's audit row after its transaction commits, and the store's clearance limit
+   removed. Not shown by any test: two transactions racing (`FOR SHARE`/`FOR UPDATE` is by design). The
+   administration guide 2.06, §6a.7 and Appendix A, says the rest.
+
+8. **A run acting as its owner (Amendment 16) takes the values set here.** `EntraPeopleStore.owner` reads the
+   administrator's columns for each value the mapping sources from the administrator, and the token's columns for
+   the rest, through the same rule as a sign-in.
+   - **Every value set here:** a value set here never ages, so the owner is current at each read, even one who never
+     signed in. A first administrator's run acts with the values the start seeded.
+   - **Some values set here:** the token's own values still need a sign-in within `ACCESS_FRESH`.
+   - **A value the administrator sets but has not set yet:** the run is refused, as the person's sign-in is.
+   Found by 4c's rebase onto Amendment 16, whose `owner` read the token's columns alone, so under the fallback every
+   run was refused as out of date, and its words told the owner to sign in again, which could never help.
+
+   Tests:
+   - offline: `test_entra_people_administrator_access.py`, the real `_owner` through the real resolver, its four
+     plants red (`process/lanes/platform-b/4c/owner-red-first.txt`);
+   - live: `test_entra_people_live.py`'s `test_am15_a_run_acts_as_its_owner_with_the_values_set_here`, run on
+     14 November on test stack b under platform-b's lease: the whole live file passed, 35 of 35. With `owner` put back
+     to Amendment 16's own read, it went red on the real table (the owner's values `(None, None, [])`), and green
+     again once restored (`process/lanes/platform-b/4c/owner-live.txt`).
+
+   A run refused for a value not set here says so (`OwnerValueNotSet`, a `PrincipalAccessOutOfDate` that never pauses
+   a schedule): "an administrator has not set <the values> for this person in Admin › People", then "it runs at its
+   next slot once an administrator has set it", or for a run asked for by hand "run it again once an administrator has
+   set it". It never says "sign in", which cannot help. Each of Amendment 16's callers uses these words: the
+   scheduler, rules, list refreshes, watches and the KYC sweep. Three plants are red (`owner-red-first.txt`).
+
+   People's stale-access words for a transfer or promotion (4c's second review, could 9) are carried: they read a
+   `PersonAccount`, which cannot tell an unset value from "never signed in" without a schema change.
+
 ## ADR-149 — Search on OpenSearch: the reader's access filter in the query, nodes not yet caught up left out, strict ranking in bands, merged entities over visible hits, the fallback that says so, and one leak test — ACCEPTED (as built)
 
 *13 November 2026. **Accepted: the owner's route to v0.5.2** (`process/lanes/ROUTE_052.md`, step 3d; search scope 1–5,

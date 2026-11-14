@@ -1,0 +1,44 @@
+# 4c steps C and D (ADR-148 Am 15): the people store's administrator-set access, the Access route on Entra, the socket, the first administrators' values. Red first, each pytest with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a). Mac, offline, after round 1's review.
+# The audit row (before and after, on the store's own connection) is the real store's, shown only live; the route tests' fake writes its own, so no offline plant there.
+# Not run here: test_entra_people_live.py's Amendment 15 section (the real table: its transaction, its tenant clause, the audit row on its connection, a sign-in never overwriting what was set, the seed), which needs a stack lease, refused in this session's permissions.
+
+== (a) rule 3: the store's own clearance limit removed (the route's check alone, which the setter's SECRET token passes):
+FAILED test_entra_people_administrator_access.py::test_the_store_refuses_a_clearance_above_the_setter_s_own_as_it_holds_them
+FAILED test_entra_people_administrator_access.py::test_the_decision_is_the_store_s_whatever_the_caller_checked
+2 failed, 84 passed, 1 warning in 7.62s
+
+== (b) the store's own handling-code limit removed:
+FAILED test_entra_people_administrator_access.py::test_the_store_refuses_a_code_beyond_the_setter_s_own_as_it_holds_them
+FAILED test_entra_people_administrator_access.py::test_the_decision_is_the_store_s_whatever_the_caller_checked
+2 failed, 84 passed, 1 warning in 7.73s
+
+== (c) a value Entra sends given here:
+FAILED test_entra_people_administrator_access.py::test_a_value_entra_sends_is_never_given_here
+1 failed, 85 passed, 1 warning in 7.77s
+
+== (d) round 1's should-fix 7: a disabled setter, or one with nothing set, allowed:
+FAILED test_entra_people_administrator_access.py::test_a_setter_who_could_not_sign_in_sets_nothing[disabled]
+FAILED test_entra_people_administrator_access.py::test_a_setter_who_could_not_sign_in_sets_nothing[nothing-set]
+2 failed, 84 passed, 1 warning in 7.69s
+
+== (e) round 1's must-fix 3: the route checking every field, Entra's too (a partial fallback refused for Entra's clearance):
+FAILED test_entra_people_administrator_access.py::test_the_store_refuses_a_code_beyond_the_setter_s_own_as_it_holds_them
+FAILED test_entra_people_administrator_access.py::test_a_partial_fallback_sets_its_value_whatever_entra_says_of_the_others
+2 failed, 84 passed, 1 warning in 7.65s
+
+== (f) the open socket not told of an access change:
+FAILED test_entra_people_administrator_access.py::test_an_open_socket_closes_when_what_the_administrator_set_changes[clearance-changed]
+FAILED test_entra_people_administrator_access.py::test_an_open_socket_closes_when_what_the_administrator_set_changes[unit-changed]
+2 failed, 84 passed, 1 warning in 7.75s
+
+== (h) round 1's must-fix 1: a start with the fallback and no first administrators' values allowed:
+FAILED test_entra_people_administrator_access.py::test_a_start_with_the_fallback_and_no_first_administrators_values_is_refused[an-empty-clearance]
+FAILED test_entra_people_administrator_access.py::test_a_start_with_the_fallback_and_no_first_administrators_values_is_refused[codes-not-a-list]
+2 failed, 84 passed, 1 warning in 10.31s
+
+== (i) round 1's could 13: a person not here answered as the identity provider's refusal (502), not 404:
+FAILED test_entra_people_administrator_access.py::test_a_person_not_here_is_a_404
+1 failed, 85 passed, 1 warning in 14.30s
+
+== green:
+86 passed, 1 warning in 13.89s

@@ -1,0 +1,8 @@
+# plant: small_told_service (harness/render.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k rendered_job_loop and small
+# RED
+E       AssertionError: assert ('service' == 'conduit'
+E         
+E         - conduit
+E         + service)
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_each_profile_s_rendered_job_loop_agrees_with_whether_it_renders_a_worker[small]
+1 failed, 10 deselected in 2.14s

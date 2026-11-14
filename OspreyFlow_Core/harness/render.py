@@ -1547,9 +1547,23 @@ def _grading_env(config: OspreyConfig) -> list[str]:
     return lines
 
 
+#: The profiles that render a job worker service of their own (cluster's and cloud-platform's
+#: `worker` workload, ADR-114 Amendment 10 point 6). Every other profile runs the job loop inside
+#: the Conduit, which reads `OSPREY_JOB_WORKER` (the orchestrator's fix, 14 November 2026).
+_PROFILES_WITH_A_WORKER = frozenset({Profile.CLUSTER.value, Profile.CLOUD_PLATFORM.value})
+
+
+def job_worker_place(profile: str) -> str:
+    """Where a profile's job loop runs: `service`, its own worker workload; `conduit`, the
+    Conduit's lifespan, where no worker is rendered. Never both, so no job stream has two kinds of
+    consumer."""
+    return "service" if profile in _PROFILES_WITH_A_WORKER else "conduit"
+
+
 def _render_env(config: OspreyConfig) -> str:
     lines = [
         f"OSPREY_PROFILE={config.profile.value}",
+        f"OSPREY_JOB_WORKER={job_worker_place(config.profile.value)}",
         f"OSPREY_RELEASE_VERSION={release_version(config)}",
         f"OSPREY_STATE_DIR={STATE_CONTAINER_PATH}",
         f"OSPREY_GRAPH_STORE={config.components.graph_store.value}",

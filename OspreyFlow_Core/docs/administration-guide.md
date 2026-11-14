@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.05** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.06** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.06 | 2026-11-14 | §6a.7, the administrator fallback on the poc shape (ADR-148 Amendment 15): `{administrator: true}` as the source of a person's clearance, unit or handling codes, set in *Admin › People* with Access (none above the setter's own), a person with none set unable to sign in until set, the first administrators' values at install (`first_administrator_access`), refused on any other shape; Appendix A's three claim sources and `first_administrator_access`. PDF reprinted alone. |
 | 2.05 | 2026-11-14 | §6a.8: the Ingest root in the set in every shape (ADR-148 Amendment 13 point 4, amended 14 November): in the standard shape the shared volume's `ingest` folder is a part of its own, so it is no longer among what no set holds, and an upload no longer disagrees with a restore's stores. Held by `tests/test_guides_cloud_platform.py`, reading the render both ways. PDF made by the orchestrator at merge. |
 | 2.04 | 2026-11-14 | §6a.7 and §16's table of what to do when something is wrong: a stopped hotlist or watch says why beside *Stopped*, in the Conduit's words for its owner (ADR-044 Amendment 1). PDF made by the orchestrator at merge. |
 | 2.03 | 2026-11-14 | §6a.8: the backup sets kept 34 days, a day inside RDS's 35-day point-in-time window, since RDS's earliest restorable point lags by up to about a day and the sets' expiry rounds up to midnight UTC (ADR-148 Amendment 13 point 5, amended 14 November); platform's diff, with the retention said to be no longer than that. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
@@ -1635,6 +1636,24 @@ assigned in *Admin › People*, which keeps them in the deployment's own Postgre
   Viewer (never Owner or Editor, refused). Removing it in *Admin › Dashboards* takes away every case
   grant it held; registering the same application id again starts with none.
 
+**Where Entra cannot send a clearance, a unit or handling codes: the administrator sets them (the poc
+shape alone; ADR-148 Amendment 15).** In `cloud_platform.claims`, name `{administrator: true}` as
+the source of `clearance`, `org_unit` or `handling_codes` in place of a claim or a group table. The
+token is then never read for that value: an administrator sets it for each person in *Admin ›
+People* with **Access**, which on Entra ID offers those values alone and shows the others as Entra
+sends them. Nobody can be given a clearance above, or a handling code beyond, what the
+administrator setting it holds as this deployment holds them; the change is audited
+(`set_person_access`, before and after), and a person's open live updates close and reconnect
+with it. **Until it is set, the person cannot sign in**, and is told so in words; they appear in
+People at that first sign-in, for you to set. A sign-in never changes it, and a token carrying a
+claim for it is not read. **The first administrators are given theirs at install**, from
+`cloud_platform.claims.first_administrator_access` (`{clearance: ..., org_unit: ..., handling_codes:
+[...]}`, each value the administrator sets), which the render requires; a restart never overwrites
+a value an administrator has since changed. The render refuses `{administrator: true}` on any shape
+but `poc`: a production namespace reads every value from Entra ID. **A run acting as its owner uses
+the values set here**, and the token's for the rest, from a sign-in within the day. A value set here
+never ages, and one not set yet refuses the run.
+
 **A run acts as its owner as Admin › People holds them** (ADR-148 Amendment 16). Entra ID has no
 way for the Conduit to sign in as a person who is not present, so whatever runs as its owner uses
 what this deployment holds of them: their roles, and whether they are disabled, read from
@@ -3223,11 +3242,12 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `cloud_platform.claims.api_id_uri` | str or none | none | The API's application id URI, which the Glass's scope names |
 | `cloud_platform.claims.token_version` | `2.0` \| `1.0` | `2.0` | The access token version the API's registration is issued (accessTokenAcceptedVersion): the issuer and audience the Conduit checks follow it |
 | `cloud_platform.claims.scope` | str | `access_as_user` | The delegated scope the Glass asks the API for |
-| `cloud_platform.claims.clearance` | mapping | required | Where clearance comes from: {claim: <name>} or {groups: {<group id>: <value>}} |
-| `cloud_platform.claims.org_unit` | mapping | required | Where the organisational unit comes from: {claim: ...} or {groups: {...}} |
-| `cloud_platform.claims.handling_codes` | mapping | required | Where the handling codes come from: {claim: ...} or {groups: {<id>: [codes]}} |
+| `cloud_platform.claims.clearance` | mapping | required | Where clearance comes from: {claim: <name>}, {groups: {<group id>: <value>}}, or {administrator: true}, set in Admin › People |
+| `cloud_platform.claims.org_unit` | mapping | required | Where the organisational unit comes from: {claim: ...}, {groups: {...}}, or {administrator: true} (the poc shape alone) |
+| `cloud_platform.claims.handling_codes` | mapping | required | Where the handling codes come from: {claim: ...}, {groups: {<id>: [codes]}}, or {administrator: true} (the poc shape alone) |
 | `cloud_platform.claims.groups_claim` | str | `groups` | The token claim listing the person's Entra group ids, which a {groups: ...} table above is read from |
 | `cloud_platform.claims.first_administrators` | list of str | required | The people given the Admin role at install, by Entra object id (at least one) |
+| `cloud_platform.claims.first_administrator_access` | mapping or none | none | With {administrator: true} for clearance, org_unit or handling_codes: what the first administrators hold of each such value at install, {clearance: ..., org_unit: ..., handling_codes: [...]}, so they can sign in and set everyone else's; required then |
 | `cloud_platform.claims.claims_mapping_policy` | bool | false | Whether a claims-mapping policy signs the API's tokens with its own key (the keys are then read with ?appid=<api_client_id>) |
 | `cloud_platform.connector_hosts` | list of str | — | The hosts a SQL or API connection may reach, each as host or host:port (a name, not an IPv6 literal), with its networks in egress_nets under the host alone. The namespace's egress allows each host on its ports; the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a port not listed here passes the Conduit and times out at the egress. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432). A host given twice with two ports is reached on both |
 | `cloud_platform.connector_sources` | section | — | The S3 buckets and Athena workgroups an S3 or Athena connection may read: each the Conduit's own egress row and the namespace role's read (ADR-140 Amendment 21). |

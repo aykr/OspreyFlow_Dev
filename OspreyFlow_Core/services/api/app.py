@@ -24,11 +24,11 @@ from __future__ import annotations
 
 import asyncio
 import csv
-import functools
 import io
 import json
 import logging
 import os
+import socket
 import time
 from collections import Counter
 from collections.abc import (
@@ -192,6 +192,7 @@ from schemas.admin import (
     OrganisationArrival,
     OrganisationLinkInput,
     PauseScheduleInput,
+    PersonAccessInput,
     PersonAccount,
     PromotionAlertSetting,
     RegisteredDashboard,
@@ -619,11 +620,9 @@ from .case_views import (
 )
 from .change_stream import touched_node_ids
 from .compute_routes import (
-    JOB_TYPE_COMPUTE_METRIC,
     ComputeMetricAccepted,
     ComputeMetricName,
     ComputeMetricRequest,
-    run_compute_metric_job,
 )
 from .config import ApiConfig, DeploymentModels, GradingSettings, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
@@ -709,7 +708,13 @@ from .entity_pictures import (
     PictureNotFoundError,
     PictureSetResponse,
 )
-from .entra_people import STALE_ACCESS_WORDS, EntraPeopleAdmin, access_current
+from .entra_people import (
+    STALE_ACCESS_WORDS,
+    AccessBeyondTheSetter,
+    EntraPeopleAdmin,
+    NoSuchPerson,
+    access_current,
+)
 from .event_scope import own_events_only
 from .explore import (
     ExploreService,
@@ -884,14 +889,12 @@ from .pattern_ask import (
 )
 from .pattern_store import PatternNotFoundError, PatternStore
 from .patterns import (
-    JOB_TYPE_PATTERN_MATCH,
     PatternPreview,
     PatternRunAccepted,
     SavedPatternList,
     SavePatternRequest,
     preview_pattern,
     run_pattern,
-    run_pattern_match_job,
 )
 from .person_ownership import PostgresOwnershipStore
 from .pipeline_run import (
@@ -1156,7 +1159,7 @@ from .watch_routes import (
     with_what_fired_it,
 )
 from .worker import JobWorker
-from .worker_main import register_all
+from .worker_main import register_all, registered_job_types, run_forever
 from .working_set.models import (
     MAX_NODES,
     CardinalityPreview,
@@ -1520,12 +1523,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # `06_DECISIONS.md` ADR-025: this system's first job-queue worker,
     # generalised by `job_type` rather than resolution-specific — closes
     # `services/api/supersede.py`'s own long-disclosed "no worker attached
-    # yet" gap in the same stroke. Constructed and its handlers registered
-    # here so a standalone worker process (`services/api/worker_main.py`)
-    # has something real to import and drive in a loop; this app process
-    # itself does not spin up that loop — running the worker is deployment
-    # wiring (its own process/container), not additional Conduit logic.
-    job_worker = JobWorker(valkey, jobs, graph)
+    # yet" gap in the same stroke. Its loop runs in its own worker workload
+    # where the profile renders one (cluster, cloud-platform), and here, in the
+    # Conduit's lifespan, where it does not (`job_loop_in_conduit`): one place
+    # per deployment, under a consumer name of the Conduit's own.
+    job_worker = JobWorker(valkey, jobs, graph, consumer_name=_conduit_consumer_name())
     # The supersede and resolution jobs, bound as the standalone worker binds them, by the one
     # function (`worker_main.register_all`): the alerts' repoint journal on both (ADR-109
     # Amendment 11), a layer's split its own case's (ADR-143 Amendment 1), the review flag here.
@@ -1537,11 +1539,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         analyst_layers=datasets_store.layer_ids,
         alerts=alerts_store,
         judgement_store=judgements_store,
+        compute=compute,
     )
-    job_worker.register(
-        JOB_TYPE_COMPUTE_METRIC, functools.partial(run_compute_metric_job, compute=compute)
-    )
-    job_worker.register(JOB_TYPE_PATTERN_MATCH, run_pattern_match_job)
     app.state.job_worker = job_worker
     app.state.principal_resolver = resources.principal_resolver
     # ADR-106: display names for principal ids, resolved when a read is served.
@@ -1624,6 +1623,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         promotion_ageing, promotion_ageing, lambda: app.state.waiting_promotions,
         lambda p: _promotion_recipients(app, p),
     )  # fmt: skip
+    # Where no worker workload is rendered (local-lite, small), the Conduit drains every job
+    # stream itself (the orchestrator's fix, 14 November 2026), as `worker_main` does, stopped at
+    # shutdown; elsewhere the worker does, and this never starts (`job_loop_in_conduit`).
+    job_loop_stop = asyncio.Event()
+    job_loop_task = (
+        asyncio.create_task(
+            run_forever(job_worker, sorted(registered_job_types()), stop=job_loop_stop)
+        )
+        if job_loop_in_conduit()
+        else None
+    )
     promotion_task = asyncio.create_task(
         promotion_ageing_module.run_every(
             app.state.promotion_sweep,
@@ -1639,6 +1649,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         schedule_task.cancel()
         monitoring_task.cancel()
         promotion_task.cancel()
+        if job_loop_task is not None:
+            # A job in hand finishes and is acknowledged; the loop then sees the stop and ends.
+            job_loop_stop.set()
+            try:
+                await asyncio.wait_for(job_loop_task, timeout=JOB_LOOP_STOP_SECONDS)
+            except TimeoutError:
+                job_loop_task.cancel()
         await investigations.close()
         await custom_roles.close()
         await admin_people.close()
@@ -2228,6 +2245,25 @@ async def with_custom_roles(app_: Any, principal: Principal) -> Principal:
     if store is None or not custom_role_ids(principal.roles):
         return principal
     return cast("Principal", await store.expand(principal))
+
+
+#: How long shutdown waits for the Conduit's job loop to finish the job in hand: one `run_once`
+#: blocks for `worker_main.BLOCK_MS` waiting for an entry, then the stop is seen.
+JOB_LOOP_STOP_SECONDS = 10.0
+
+
+def job_loop_in_conduit(environ: Mapping[str, str] | None = None) -> bool:
+    """Whether this Conduit runs the job loop: only where the render says so
+    (`OSPREY_JOB_WORKER=conduit`, `harness.render.job_worker_place`, a profile with no worker
+    workload). Unset, as a test app or a deployment rendered before this is, it does not, so a
+    worker that exists is never joined by a Conduit consuming beside it."""
+    return (os.environ if environ is None else environ).get("OSPREY_JOB_WORKER") == "conduit"
+
+
+def _conduit_consumer_name() -> str:
+    """This Conduit's name in the `workers` consumer group, distinct from every worker's and every
+    other Conduit replica's (`worker_main.consumer_name`'s rule)."""
+    return f"conduit-{socket.gethostname()}"
 
 
 def _owner_with_custom_roles(app_: Any, resolve: Callable[[str], Awaitable[Principal]]) -> Any:
@@ -17236,20 +17272,22 @@ async def person_ownership_route(
 
 
 def _within_your_reach(
-    principal: Principal, access: AccessInput, handling_scheme: HandlingScheme
+    principal: Principal, access: AccessInput | PersonAccessInput, handling_scheme: HandlingScheme
 ) -> None:
     """Nobody is given more than the administrator holds (ADR-114 Amendment 5) — the dashboard rule
     (rule 3) for people: a clearance above one's own, or a handling code one cannot receive, would
-    be a way to read above them. Checked before the identity provider is asked."""
+    be a way to read above them. Checked before the identity provider is asked. A value not given
+    (ADR-148 Amendment 15: one Entra sends) is not being given, so is not checked."""
     order = list(handling_scheme.classification)
-    if access.clearance not in order:
+    if access.clearance is not None and access.clearance not in order:
         raise UnknownRoleError(f"{access.clearance} is not a classification of this deployment")
-    codes = access.receivable_handling_codes
+    codes = access.receivable_handling_codes or []
     unknown = [c for c in codes if c not in handling_scheme.handling_codes]
     if unknown:
         raise UnknownRoleError(f"not a handling code of this deployment: {', '.join(unknown)}")
-    if principal.clearance not in order or order.index(access.clearance) > order.index(
-        principal.clearance
+    if access.clearance is not None and (
+        principal.clearance not in order
+        or order.index(access.clearance) > order.index(principal.clearance)
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -17320,8 +17358,12 @@ async def invite_person_route(
 @app.get("/v1/admin/sign-in", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
 async def sign_in_kind_route(identity_admin: IdentityAdminDep) -> SignInKind:
     """ADR-148 Amendment 8: how people sign in here, so Admin › People offers invite (Keycloak) or
-    add by object id (Entra ID). Behind `manage_people`, as People is."""
-    return SignInKind(kind="entra" if isinstance(identity_admin, EntraPeopleAdmin) else "keycloak")
+    add by object id (Entra ID), and on Entra ID which values it sets itself (Amendment 15). Behind
+    `manage_people`, as People is."""
+    if isinstance(identity_admin, EntraPeopleAdmin):
+        sets = sorted(identity_admin.by_administrator)
+        return SignInKind(kind="entra", administrator_sets=sets)  # type: ignore[arg-type]
+    return SignInKind(kind="keycloak")
 
 
 def _guest_sign_in_admin(identity_admin: Any) -> EntraPeopleAdmin:
@@ -17419,19 +17461,35 @@ async def add_person_by_object_id_route(
 )
 async def set_person_access_route(
     user_id: str,
-    body: AccessInput,
+    body: PersonAccessInput,
     principal: PrincipalDep,
     identity_admin: IdentityAdminDep,
     handling_scheme: HandlingSchemeDep,
     audit: AuditDep,
 ) -> PersonAccount:
     """A person's clearance, unit and receivable handling codes — none above the administrator's."""
-    _within_your_reach(principal, body, handling_scheme)
-    person = await identity_admin.set_access(user_id, body)
+    if isinstance(identity_admin, EntraPeopleAdmin):
+        # ADR-148 Amendment 15: on Entra ID, only the values the claim mapping sources from the
+        # administrator, within the setter's own as the people store holds them (rule 3), audited
+        # in the store's own transaction. A body that sets nothing changes nothing, so writes no
+        # "set by" and no audit row with before equal to after.
+        if (body.clearance, body.org_unit, body.receivable_handling_codes) == (None, None, None):
+            raise UnknownRoleError("Access sets at least one of clearance, unit and handling codes")
+        _within_your_reach(principal, body, handling_scheme)
+        return await identity_admin.set_administrator_access(
+            user_id, principal, body, list(handling_scheme.classification), audit
+        )
+    if body.clearance is None or body.org_unit is None:
+        raise UnknownRoleError("Access sets a clearance and a unit together here")
+    codes = body.receivable_handling_codes or []
+    access = AccessInput(clearance=body.clearance, org_unit=body.org_unit,
+                         receivable_handling_codes=codes)  # fmt: skip
+    _within_your_reach(principal, access, handling_scheme)
+    person = await identity_admin.set_access(user_id, access)
     await audit.record(principal=principal, action="set_person_access",
-                       resolved_query={"user_id": user_id, "clearance": body.clearance,
-                                       "org_unit": body.org_unit,
-                                       "receivable_handling_codes": body.receivable_handling_codes},
+                       resolved_query={"user_id": user_id, "clearance": access.clearance,
+                                       "org_unit": access.org_unit,
+                                       "receivable_handling_codes": codes},
                        result_cardinality=1)  # fmt: skip
     return person
 
@@ -19727,6 +19785,18 @@ async def _identity_admin_refused(request: Request, exc: IdentityAdminRefused) -
     )
 
 
+@app.exception_handler(NoSuchPerson)
+async def _no_such_person(request: Request, exc: NoSuchPerson) -> JSONResponse:
+    """ADR-148 Amendment 15: a person not recorded in this tenant's people store."""
+    return JSONResponse(status_code=404, content={"error": "no_such_person", "detail": str(exc)})
+
+
+@app.exception_handler(AccessBeyondTheSetter)
+async def _access_beyond_the_setter(request: Request, exc: AccessBeyondTheSetter) -> JSONResponse:
+    """ADR-148 Amendment 15: the people store's own limit, answered as the route's own check is."""
+    return JSONResponse(status_code=403, content={"detail": {"error": exc.error, **exc.detail}})
+
+
 @app.exception_handler(PersonActionRefused)
 async def _person_action_refused(request: Request, exc: PersonActionRefused) -> JSONResponse:
     return JSONResponse(status_code=409, content={"error": exc.error, "detail": exc.words})
@@ -20901,6 +20971,15 @@ async def _socket_standing(app_: Any, raw: Principal) -> int | None:
     if stored is None or stored.disabled:
         return status.WS_1008_POLICY_VIOLATION
     if list(dict.fromkeys(stored.roles)) != list(raw.roles):
+        return status.WS_1008_POLICY_VIOLATION
+    # ADR-148 Amendment 15: a value an administrator set, changed since the socket opened.
+    by_administrator: frozenset[str] = getattr(store, "by_administrator", frozenset())
+    if ("clearance" in by_administrator and stored.clearance != raw.clearance) or (
+        "org_unit" in by_administrator and stored.org_unit != raw.org_unit
+    ) or (
+        "handling_codes" in by_administrator
+        and sorted(stored.receivable_handling_codes or ()) != sorted(raw.receivable_handling_codes)
+    ):
         return status.WS_1008_POLICY_VIOLATION
     return None
 

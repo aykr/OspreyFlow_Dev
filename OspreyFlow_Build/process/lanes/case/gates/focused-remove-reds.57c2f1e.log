@@ -1,0 +1,75 @@
+# focused-remove reds at 57c2f1e; each plant restored with `git checkout -- <file>`
+## 1. a node dropped mid-move left in the animation's targets
+plant in src/canvas/GlassCanvas.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-remove-while-arranging.spec.ts -g a\ node\ taken\ out\ while\ the\ canvas\ arranges --workers=1; exit 1
+  ✘  1 keyboard/canvas-remove-while-arranging.spec.ts:31:1 › a node taken out while the canvas arranges is left out of the move, with no error (2.8s)
+    Error: expect(received).toEqual(expected) // deep equality
+    - Expected  - 1
+    + Received  + 3
+    +   "NotFoundGraphError: Graph.setNodeAttribute: could not find the \"n0\" node in the graph.",
+  1 failed
+[WebServer] 10:57:12 [vite] (client) [Unhandled error] NotFoundGraphError: Graph.setNodeAttribute: could not find the "n0" node in the graph.
+## 2. the graph cleared mid-move left in the animation's targets
+plant in src/canvas/GlassCanvas.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-remove-while-arranging.spec.ts -g a\ snapshot\ that\ clears\ the\ graph\ while\ the\ canvas\ arranges --workers=1; exit 1
+  ✘  1 keyboard/canvas-remove-while-arranging.spec.ts:45:1 › a snapshot that clears the graph while the canvas arranges is drawn, with no error (2.7s)
+    Error: expect(received).toEqual(expected) // deep equality
+    - Expected  - 1
+    + Received  + 3
+    +   "NotFoundGraphError: Graph.setNodeAttribute: could not find the \"n0\" node in the graph.",
+  1 failed
+[WebServer] 10:57:16 [vite] (client) [Unhandled error] NotFoundGraphError: Graph.setNodeAttribute: could not find the "n0" node in the graph.
+## 3. a modal popover letting Tab out
+plant in src/design/primitives/Popover.tsx; npx vitest run src/design/primitives/Popover.test.tsx -t as a modal prompt it is the named alertdialog; exit 1
+ ❯ src/design/primitives/Popover.test.tsx (5 tests | 1 failed | 4 skipped) 65ms
+   × as a modal prompt it is the named alertdialog, aria-modal, and Tab and Shift+Tab stay inside it 64ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <button type="button"></button> to be <button type="button"></button> // Object.is equality
+- Expected
++ Received
+## 4. a modal popover not saying so (aria-modal)
+plant in src/design/primitives/Popover.tsx; npx vitest run src/design/primitives/Popover.test.tsx -t as a modal prompt it is the named alertdialog; exit 1
+ ❯ src/design/primitives/Popover.test.tsx (5 tests | 1 failed | 4 skipped) 57ms
+   × as a modal prompt it is the named alertdialog, aria-modal, and Tab and Shift+Tab stay inside it 56ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected null to be 'true' // Object.is equality
+- Expected:
++ Received:
+## 5. every popover made modal
+plant in src/design/primitives/Popover.tsx; npx vitest run src/design/primitives/Popover.test.tsx -t without them it is an unnamed dialog; exit 1
+ ❯ src/design/primitives/Popover.test.tsx (5 tests | 1 failed | 4 skipped) 57ms
+   × without them it is an unnamed dialog, and Tab is left to the page 56ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'true' to be null
+- Expected:
++ Received:
+## 6. the cap's refusal not modal
+plant in src/canvas/CapRefusalPrompt.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g the\ cap's\ refusal\ is\ modal --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:169:1 › the cap's refusal is modal: Tab and Shift+Tab stay inside it (6.0s)
+    Error: expect(locator).toHaveAttribute(expected) failed
+    Expected: "true"
+    Received: ""
+        13 × locator resolved to <div class="popover" role="alertdialog" aria-label="Too large to expand">…</div>
+  1 failed
+## 7. the large expansion's prompt not modal
+plant in src/canvas/LargeExpansionPrompt.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g the\ large\ expansion's\ prompt\ is\ modal\ too --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:175:1 › the large expansion's prompt is modal too: Tab and Shift+Tab stay inside it (6.0s)
+    Error: expect(locator).toHaveAttribute(expected) failed
+    Expected: "true"
+    Received: ""
+        13 × locator resolved to <div class="popover" role="alertdialog" aria-label="Large expansion">…</div>
+  1 failed
+## 8. the shared choices handing over a type's label, not its type
+plant in src/canvas/NarrowingChoices.tsx; npx vitest run src/canvas/CapRefusalPrompt.test.tsx -t hands over its type; exit 1
+ ❯ src/canvas/CapRefusalPrompt.test.tsx (4 tests | 1 failed | 3 skipped) 65ms
+   × each relationship is named by its label with what it would add, and hands over its type 64ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 skipped (4)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'ASSOCIATE_OF' ]
+Received:
+# 8 of 8 red

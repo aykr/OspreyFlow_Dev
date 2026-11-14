@@ -1,0 +1,135 @@
+# expand-cap reds at 50a6c96; each plant restored with `git checkout -- <file>`
+## 1. the 409 taken as any failure again ('Expand failed (409). Try again.')
+plant in src/canvas/GlassCanvas.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g says\ the\ cap's\ own\ figure --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:65:1 › an expansion past the cap says the cap's own figure, adds nothing, and is expanded by one relationship instead by keyboard (6.1s)
+    Error: expect(locator).toContainText(expected) failed
+    Expected substring: "Too many for the canvas: 6,210 nodes against a limit of 5,000."
+    Error: element(s) not found
+      70 |   await expect(page.getByText(/Expand failed \(409\)/)).toHaveCount(0);
+  1 failed
+## 2. no narrowing offered at the cap
+plant in src/canvas/GlassCanvas.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g says\ the\ cap's\ own\ figure --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:65:1 › an expansion past the cap says the cap's own figure, adds nothing, and is expanded by one relationship instead by keyboard (6.1s)
+    Error: expect(locator).toBeVisible() failed
+    Expected: visible
+    Error: element(s) not found
+  1 failed
+## 3. a type chosen expanding by every type again
+plant in src/canvas/GlassCanvas.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g says\ the\ cap's\ own\ figure --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:65:1 › an expansion past the cap says the cap's own figure, adds nothing, and is expanded by one relationship instead by keyboard (1.2s)
+    Error: expect(received).toEqual(expected) // deep equality
+    Expected: ["DEPICTS"]
+    Received: null
+  1 failed
+## 4. Save a smaller view not offered on the canvas
+plant in src/canvas/GlassCanvas.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g is\ saved\ as\ a\ smaller\ view\ by\ keyboard --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:85:1 › an expansion past the cap is saved as a smaller view by keyboard, the cap's figure handed to the App (6.0s)
+    Error: the refusal offers no Save a smaller view…
+    expect(locator).toHaveCount(expected) failed
+    Expected: 1
+    Received: 0
+        14 × locator resolved to 0 elements
+  1 failed
+## 5. Escape not putting the refusal away
+plant in src/canvas/GlassCanvas.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g Escape\ puts\ the\ refusal\ away --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:146:1 › Escape puts the refusal away and nothing is expanded (6.1s)
+    Error: expect(locator).toHaveCount(expected) failed
+    Expected: 0
+    Received: 1
+        14 × locator resolved to 1 element
+  1 failed
+## 6. the App not handling Save a smaller view
+plant in src/App.tsx; npx vitest run src/App.expandCap.test.tsx -t Save a smaller view shows the over-cap dialog; exit 1
+ ❯ src/App.expandCap.test.tsx (2 tests | 1 failed | 1 skipped) 1626ms
+     × Save a smaller view shows the over-cap dialog with the expansion's words, the cap's figure, and no Try again 1131ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 skipped (2)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected undefined to be type of 'function'
+Expected: "function"
+Received: "undefined"
+## 7. the App giving the expansion the case's own words
+plant in src/App.tsx; npx vitest run src/App.expandCap.test.tsx -t Save a smaller view shows the over-cap dialog; exit 1
+ ❯ src/App.expandCap.test.tsx (2 tests | 1 failed | 1 skipped) 1646ms
+     × Save a smaller view shows the over-cap dialog with the expansion's words, the cap's figure, and no Try again 1143ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 skipped (2)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find role="heading" and name "This expansion is too large"
+## 8. Try again offered with nothing to resync
+plant in src/workingset/ViewOverCapDialog.tsx; npx vitest run src/workingset/ViewOverCapDialog.test.tsx -t for an expansion the cap refused; exit 1
+ ❯ src/workingset/ViewOverCapDialog.test.tsx (20 tests | 1 failed | 19 skipped) 75ms
+     × for an expansion the cap refused: its own title and reason, the cap's figure, the save, and no Try again 75ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 19 skipped (20)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <button type="button" …(1)></button> to be null
+- Expected:
++ Received:
+## 9. the dialog's reason ignored
+plant in src/workingset/ViewOverCapDialog.tsx; npx vitest run src/workingset/ViewOverCapDialog.test.tsx -t for an expansion the cap refused; exit 1
+ ❯ src/workingset/ViewOverCapDialog.test.tsx (20 tests | 1 failed | 19 skipped) 66ms
+     × for an expansion the cap refused: its own title and reason, the cap's figure, the save, and no Try again 65ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 19 skipped (20)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find an element with the text: /Expanding Ann Bell would take the canvas past what it can hold\. Nothing has been added\./. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+## 10. any 409 taken for the cap's (the review's)
+plant in src/canvas/GlassCanvas.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g a\ 409\ that\ is\ not\ the\ cap's --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:125:3 › a 409 that is not the cap's stays the expansion's failure, never the cap's refusal (6.0s)
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByText('Expand failed (409). Try again.')
+    Expected: visible
+    Error: element(s) not found
+      - Expect "toBeVisible" getByText('Expand failed (409). Try again.') with timeout 5000ms
+      - waiting for getByText('Expand failed (409). Try again.')
+    > 128 |     await expect(page.getByText("Expand failed (409). Try again.")).toBeVisible();
+  1 failed
+## 11. a chosen relationship sending the first one offered (the review's)
+plant in src/canvas/CapRefusalPrompt.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g says\ the\ cap's\ own\ figure --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:65:1 › an expansion past the cap says the cap's own figure, adds nothing, and is expanded by one relationship instead by keyboard (1.2s)
+    Error: expect(received).toEqual(expected) // deep equality
+    - Expected  - 1
+    + Received  + 1
+  1 failed
+## 12. a refusal kept for a node taken out (the review's)
+plant in src/canvas/GlassCanvas.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g a\ node\ taken\ out\ while\ its\ refusal\ is\ open --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:133:1 › a node taken out while its refusal is open takes the refusal with it, and is never expanded back (6.1s)
+    Error: expect(locator).toHaveCount(expected) failed
+    Expected: 0
+    Received: 1
+        14 × locator resolved to 1 element
+  1 failed
+[WebServer] 10:21:30 [vite] (client) [Unhandled error] NotFoundGraphError: Graph.setNodeAttribute: could not find the "n0" node in the graph.
+## 13. a typed expansion's refusal offering narrowing (the review's)
+plant in src/canvas/GlassCanvas.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g an\ expansion\ by\ one\ link\ type\ the\ cap\ refuses --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:96:1 › an expansion by one link type the cap refuses offers no narrowing, and the save still (6.0s)
+    Error: expect(locator).toHaveCount(expected) failed
+    Expected: 0
+    Received: 1
+        14 × locator resolved to 1 element
+  1 failed
+## 14. the batch hand-off with another depth (the review's)
+plant in src/canvas/GlassCanvas.tsx; npx playwright test --config keyboard/playwright.config.ts keyboard/canvas-expand-cap.spec.ts -g Run\ as\ a\ batch\ job\ hands\ the\ refused\ expansion\ up --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-cap.spec.ts:111:1 › Run as a batch job hands the refused expansion up, when the canvas is given a handler (ADR-151's slot) (1.1s)
+    Error: expect(received).toMatchObject(expected)
+    - Expected  - 1
+    + Received  + 1
+  1 failed
+## 15. the batch choice under another name (the review's; case-b finds it by this one)
+plant in src/canvas/CapRefusalPrompt.tsx; npx vitest run src/canvas/CapRefusalPrompt.test.tsx -t the batch choice; exit 1
+ ❯ src/canvas/CapRefusalPrompt.test.tsx (4 tests | 1 failed | 3 skipped) 80ms
+   × the batch choice (ADR-151) is drawn only with its handler, named exactly Run as a batch job, and calls it 79ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 skipped (4)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Run as a batch job"
+## 16. the reason with no name reading 'Expanding it' (the review's)
+plant in src/App.tsx; npx vitest run src/App.expandCap.test.tsx -t with no name for the node; exit 1
+ ❯ src/App.expandCap.test.tsx (2 tests | 1 failed | 1 skipped) 1475ms
+     × with no name for the node, the reason is a whole sentence of its own 1130ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 skipped (2)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find an element with the text: /^This expansion would take the canvas past what it can hold\. Nothing has been added\./. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+# 16 of 16 red

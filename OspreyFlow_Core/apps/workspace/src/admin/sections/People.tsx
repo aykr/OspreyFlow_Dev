@@ -164,35 +164,60 @@ function CodeChoices({
   );
 }
 
+/** The three values Access sets. On Entra ID only those the deployment sets itself are offered
+ * (ADR-148 Amendment 15); the others are Entra's, shown and sent back as they are. */
+export type AccessField = "clearance" | "org_unit" | "handling_codes";
+const EVERY_FIELD: readonly AccessField[] = ["clearance", "org_unit", "handling_codes"];
+
 function AccessEditor({
   api,
   person,
   scheme,
   onSaved,
+  fields = EVERY_FIELD,
 }: {
   api: AdminApi;
   person: PersonAccount;
   scheme: Scheme;
   onSaved: (p: PersonAccount) => void;
+  fields?: readonly AccessField[];
 }) {
+  const sets = (f: AccessField) => fields.includes(f);
   const [clearance, setClearance] = useState(person.clearance ?? scheme.levels[0] ?? "");
   const [unit, setUnit] = useState(person.org_unit ?? "");
   const [codes, setCodes] = useState(new Set(person.receivable_handling_codes ?? []));
   const [said, setSaid] = useState<string | null>(null);
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-12)", alignItems: "center" }}>
-      <Select aria-label={`Clearance for ${person.username}`} value={clearance} onChange={(e) => setClearance(e.target.value)}>
-        {scheme.levels.map((l) => (
-          <option key={l} value={l}>{l}</option>
-        ))}
-      </Select>
-      <Input aria-label={`Unit for ${person.username}`} value={unit} onChange={(e) => setUnit(e.target.value)} />
-      <CodeChoices codes={scheme.codes} chosen={codes} onChange={setCodes} label={(c) => `Handling code ${c} for ${person.username}`} />
+      {sets("clearance") ? (
+        <Select aria-label={`Clearance for ${person.username}`} value={clearance} onChange={(e) => setClearance(e.target.value)}>
+          {scheme.levels.map((l) => (
+            <option key={l} value={l}>{l}</option>
+          ))}
+        </Select>
+      ) : (
+        <span className="label">Clearance {person.clearance ?? "none"}, from Entra ID</span>
+      )}
+      {sets("org_unit") ? (
+        <Input aria-label={`Unit for ${person.username}`} value={unit} onChange={(e) => setUnit(e.target.value)} />
+      ) : (
+        <span className="label">Unit {person.org_unit ?? "none"}, from Entra ID</span>
+      )}
+      {sets("handling_codes") ? (
+        <CodeChoices codes={scheme.codes} chosen={codes} onChange={setCodes} label={(c) => `Handling code ${c} for ${person.username}`} />
+      ) : (
+        <span className="label">Handling codes {(person.receivable_handling_codes ?? []).join(", ") || "none"}, from Entra ID</span>
+      )}
       <Button
         aria-label={`Save access for ${person.username}`}
-        disabled={!clearance || !unit.trim()}
+        disabled={(sets("clearance") && !clearance) || (sets("org_unit") && !unit.trim())}
         onClick={() =>
-          void setAccess(api, person.id, { clearance, org_unit: unit.trim(), receivable_handling_codes: [...codes] })
+          // ADR-148 Amendment 15: only the values set here; Entra's are not given, so never changed or checked.
+          void setAccess(api, person.id, {
+            ...(sets("clearance") ? { clearance } : {}),
+            ...(sets("org_unit") ? { org_unit: unit.trim() } : {}),
+            ...(sets("handling_codes") ? { receivable_handling_codes: [...codes] } : {}),
+          })
             .then((saved) => {
               setSaid("Saved.");
               onSaved(saved);
@@ -394,6 +419,7 @@ function PersonRow({
   onDelivered,
   onRemoved,
   entra = false,
+  administratorSets = [],
 }: {
   api: AdminApi;
   person: PersonAccount;
@@ -405,6 +431,8 @@ function PersonRow({
   onRemoved: (p: PersonAccount) => void;
   /** Entra ID holds the account: access, sign-in and removal are Entra's, not offered here. */
   entra?: boolean;
+  /** On Entra ID, the values this deployment sets itself (ADR-148 Amendment 15): Access offers those. */
+  administratorSets?: readonly AccessField[];
 }) {
   const customIds = new Set(ctx.custom.map((c) => `role:${c.id}`));
   const [chosen, setChosen] = useState(
@@ -518,7 +546,7 @@ function PersonRow({
             >
               Super user
             </Button>
-            {!entra && (
+            {(!entra || administratorSets.length > 0) && (
               <Button aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
                 Access
               </Button>
@@ -559,7 +587,13 @@ function PersonRow({
       {editing && (
         <tr>
           <td colSpan={ROLES.length + 3}>
-            <AccessEditor api={api} person={person} scheme={scheme} onSaved={onSaved} />
+            <AccessEditor
+              api={api}
+              person={person}
+              scheme={scheme}
+              onSaved={onSaved}
+              fields={entra ? administratorSets : EVERY_FIELD}
+            />
           </td>
         </tr>
       )}
@@ -720,6 +754,21 @@ function Arrivals({
 export const ENTRA_PEOPLE_WORDS =
   "People sign in with their organisation's Entra ID account; their clearance, unit and handling codes come " +
   "from Entra. Here you give them roles, add them by object id before they first sign in, and disable them.";
+
+const FIELD_WORDS: Record<AccessField, string> = { clearance: "clearance", org_unit: "unit", handling_codes: "handling codes" };
+
+/** ADR-148 Amendment 15: on the proof of concept, the values this deployment sets itself, said in words; a person
+ * with none set cannot sign in until it is. */
+export function entraPeopleWords(administratorSets: readonly AccessField[]): string {
+  if (administratorSets.length === 0) return ENTRA_PEOPLE_WORDS;
+  const here = administratorSets.map((f) => FIELD_WORDS[f]);
+  const listed = here.length > 1 ? `${here.slice(0, -1).join(", ")} and ${here[here.length - 1]}` : here[0];
+  return (
+    `People sign in with their organisation's Entra ID account. Their ${listed} ${here.length > 1 ? "are" : "is"} set here, with Access ` +
+    "(none above your own), and they cannot sign in until it is; anything else comes from Entra. Here you also give " +
+    "them roles, add them by object id before they first sign in, and disable them."
+  );
+}
 
 /** ADR-148 Amendment 17: how a guest (B2B) account is marked in the list. */
 export const GUEST_WORDS = "Guest: homed outside this organisation's Entra ID; signs in only while guest accounts are admitted";
@@ -996,6 +1045,7 @@ export function People({ api }: { api: AdminApi }) {
   // ADR-148 Amendment 8: Entra ID's words and form only when the Conduit says so; otherwise today's (an
   // invite refused on Entra is the Conduit's refusal, in its words).
   const [entra, setEntra] = useState(false);
+  const [administratorSets, setAdministratorSets] = useState<AccessField[]>([]);
   const scheme = useScheme(api);
   // The roles and the case levels are the row's context; either failing leaves the rest working.
   const readContext = () => {
@@ -1016,7 +1066,10 @@ export function People({ api }: { api: AdminApi }) {
     listPeople(api).then(setPeople).catch((e: Error) => setProblem(e.message));
     listArrivals(api).then(setArrivals).catch((e: Error) => setArrivalsProblem(e.message));
     signInKind(api)
-      .then((k) => setEntra(k?.kind === "entra"))
+      .then((k) => {
+        setEntra(k?.kind === "entra");
+        setAdministratorSets((k?.administrator_sets ?? []).filter((f): f is AccessField => EVERY_FIELD.includes(f as AccessField)));
+      })
       .catch(() => setEntra(false));
     readContext();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1032,7 +1085,7 @@ export function People({ api }: { api: AdminApi }) {
       </p>
       {entra && (
         <p className="label" style={{ margin: 0 }}>
-          {ENTRA_PEOPLE_WORDS}
+          {entraPeopleWords(administratorSets)}
         </p>
       )}
       {added && (
@@ -1090,6 +1143,7 @@ export function People({ api }: { api: AdminApi }) {
               onSaved={saved}
               onDelivered={setDelivered}
               entra={entra}
+              administratorSets={administratorSets}
               onRemoved={(gone) => {
                 setRemoved(gone);
                 setPeople((current) => (current ?? []).filter((x) => x.id !== gone.id));

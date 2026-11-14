@@ -278,6 +278,7 @@ export type { SystemStatus } from "./SystemStatus";
 export type { EmbeddedDashboard } from "./EmbeddedDashboard";
 export type { DashboardGuestToken } from "./DashboardGuestToken";
 export type { AccessInput } from "./AccessInput";
+export type { PersonAccessInput } from "./PersonAccessInput";
 export type { InviteInput } from "./InviteInput";
 export type { SignInDelivery } from "./SignInDelivery";
 export type { DemoPackStatus } from "./DemoPackStatus";

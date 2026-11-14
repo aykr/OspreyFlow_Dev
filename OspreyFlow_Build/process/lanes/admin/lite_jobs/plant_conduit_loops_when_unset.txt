@@ -1,0 +1,8 @@
+# plant: conduit_loops_when_unset (services/api/app.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k only_where_the_render
+# RED
+E        +  where True = <function job_loop_in_conduit at 0x132a35e40>({'OSPREY_JOB_WORKER': ''})
+E       assert True is False
+E        +  where True = <function job_loop_in_conduit at 0x132a35e40>({})
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_the_conduit_runs_the_job_loop_only_where_the_render_says_so[empty]
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_the_conduit_runs_the_job_loop_only_where_the_render_says_so[unset]
+2 failed, 2 passed, 7 deselected in 9.86s

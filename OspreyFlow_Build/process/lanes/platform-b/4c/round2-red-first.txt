@@ -1,0 +1,21 @@
+4c review round 2's fixes, each planted red then restored green, a fresh PYTHONPYCACHEPREFIX per run (14 November 2026, lane/platform-b-4c on a797f67 plus the working tree):
+(i) a person with a value unset counted as signed in (every route's lock-out)
+  planted: exit 1: 3 failed, 30 deselected, 1 warning in 4.63s
+  restored: exit 0: 3 passed, 30 deselected, 1 warning in 4.12s
+(ii) the first administrators' clearance not checked against the scheme
+  planted: exit 1: 2 failed, 1 passed, 30 deselected, 1 warning in 4.29s
+  restored: exit 0: 3 passed, 30 deselected, 1 warning in 4.06s
+(iii) the first administrators' codes not checked against the scheme
+  planted: exit 1: 1 failed, 1 passed, 31 deselected, 1 warning in 4.51s
+  restored: exit 0: 2 passed, 31 deselected, 1 warning in 4.29s
+(iv) the start's presence check removed
+  planted: exit 1: 3 failed, 3 passed, 27 deselected, 1 warning in 4.13s
+  restored: exit 0: 6 passed, 27 deselected, 1 warning in 4.02s
+(v) the start not handing the values to the seed
+  planted: exit 1: 1 failed, 32 deselected, 1 warning in 4.06s
+  restored: exit 0: 1 passed, 32 deselected, 1 warning in 4.18s
+(vi) the render's shape check removed
+  planted: exit 1: 4 failed, 29 deselected in 1.78s
+  restored: exit 0: 4 passed, 29 deselected in 1.17s
+
+Live-only (no lease; owner, MORNING.md item 4): the seed following the role gate (round 2's 4), the audit rows of the seed's values and of Access in their transactions (7), the start's seed resolved by a token (1) are tests in test_entra_people_live.py's am15 section, collected (32), not run.

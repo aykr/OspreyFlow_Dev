@@ -1,0 +1,2 @@
+# branch at a576e00; stack f, the lease admin took at 2026-11-14T10:23Z; fresh PYTHONPYCACHEPREFIX
+1 passed, 1 deselected, 1 warning in 16.19s

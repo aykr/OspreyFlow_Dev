@@ -1,0 +1,8 @@
+# plant: compute_not_registered (services/api/worker_main.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k enqueues
+# RED
+E         
+E         Extra items in the left set:
+E         'compute_metric'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_every_job_type_the_conduit_enqueues_is_one_the_loop_registers
+1 failed, 10 deselected in 1.57s

@@ -10,11 +10,13 @@
 3d	The search service: names, full text, ranking, groups, suggestions, access	studio	2026-11-14	2026-11-20	y	A	studio:v052-search
 3e	The Glass's screen fixes and the navigation (Part B)	case	2026-11-14	2026-11-16	n	-	case:v052-fixes
 3e′	The search results layout (Part A), against 3d's agreed shape	case	2026-11-17	2026-11-20	y	3e	case:v052-results
-B	Client-size synthetic data at full scale, after the write-path fix (ADR-124 Am 18), loaded once	rules	2026-11-14	2026-11-18	y	3c	rules:v052-load
+B	Client-size synthetic data at full scale, after the write-path fix (ADR-124 Am 18), loaded once	rules	2026-11-14	2026-11-14	y	3c	rules:v052-load
 3f	Promote an expansion to a batch job at the cap (ADR-151, the owner's ruling)	rules-b	2026-11-14	2026-11-16	y	-	rules-b:v052-batch
+3f′	The batch job's screen: its choice on the cap refusal, progress and result (ADR-151)	case-b	2026-11-14	2026-11-16	y	3f	case-b:v052-batch-ui
 3g	The administrator fallback on Entra (audit 4c, ADR-148 Am 15), its post-merge live run	platform-b	2026-11-14	2026-11-16	y	-	platform-b:v052-4c
+3h	A merged pair arrives as one cluster: cluster ids when nodes enter the working set (rule 6; found live 14 Nov)	case	2026-11-14	2026-11-16	y	-	case:v052-cluster-on-entry
 U	An upgrade or fresh install builds the search index (ADR-150 d4: no index made before v052-index has a fingerprint)	platform	2026-11-15	2026-11-16	y	3c	platform:v052-upgrade-index
-4	The measurement session on that load	platform	2026-11-16	2026-11-16	y	B	platform:v052-measure
-5	Feature freeze (the moment the last open feature merges) and the wording sweep at once	docs	2026-11-17	2026-11-17	y	3f,3g,U	docs:v052-sweep
+4	The measurement session on that load	platform	2026-11-15	2026-11-15	y	B	platform:v052-measure
+5	Feature freeze (the moment the last open feature merges) and the wording sweep at once	docs	2026-11-17	2026-11-17	y	3f,3f′,3g,3h,U	docs:v052-sweep
 6	The install test on the candidate, from the manifest: v0.5.1 upgraded, and a fresh v0.5.2 install, each with spec 08's poc scenarios	platform-b	2026-11-18	2026-11-18	y	4,5	platform-b:v052-r1
 7	Cut v0.5.2; print the page tables; the demos when the owner says	orchestrator	2026-11-19	2026-11-19	y	6	-
