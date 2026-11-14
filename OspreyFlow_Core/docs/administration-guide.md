@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.98** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.99** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.99 | 2026-11-14 | §6a.1: *Moving to a new release (poc shape)*, platform-b's paragraph checked against the rendered runbooks: `INSTALL.md` run again from the new release's copy, the backup first as the runbook's *Before an upgrade* does it (the report sync stopped too), the Terraform's pull request applied after the new release's render that makes it (step 3, not step 2), the install's own checks named, v0.5.2's install test planned for 25 November and not yet run, going back not rehearsed. §6a.8: the report sync is rendered only with reporting on. Held by `tests/test_guide_6a_upgrade.py`. PDF made by the orchestrator at merge. |
 | 1.98 | 2026-11-14 | Scheduled runs on Entra ID as built (ADR-148 Amendment 16, the audit's ruling 1, option A). §6a.7: a run acts as its owner as *Admin › People* holds them, roles and disabled read at each run, clearance, unit and codes as at their last sign-in; refused, in its own words, for a disabled owner, one not held, one not signed in within 24 hours (never counted toward pausing) and a store that cannot be read, never as "could not be reached", each followed by what happens next for its caller; the 24 hours run from the last recorded access (worked from a Friday to a Tuesday); a leaver to be disabled in *Admin › People* too; a stopped watch shows no reason yet. §8, §9.5, §9.11 and §6a.10 to match. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 1.97 | 2026-11-14 | §6a, v0.5.2's reporting on the cloud-platform profile (ADR-148 Amendments 9 to 11): Superset and the report sync rendered when switched on, one copy each in development; Superset signing in with Entra ID as its own registration, its role from the person's rights (a holder of `manage_dashboards` its builder, Alpha); the dashboard identities' app-only tokens (Viewer on a case at most; their grants removed with them); their egress, copies and secrets; the `superset` database beside `ospreyflow` and `litellm`; the line saying reporting is not available on Entra ID removed; Power BI reading the mart as an option. Appendix A: `cloud_platform.claims.superset_client_id`. PDF reprinted alone. |
 | 1.96 | 2026-11-13 | §6a.8: what a backup set holds, as ADR-148 Amendment 13 decision 4 and the render have it: the claims part holds, in every shape, the shared volume's published pipelines, model settings and map settings with the map key file, beside the poc shape's Ingest root, and `ospreyflow-backup-claims` runs in every shape; what is not in a set, the tiles and, in the standard shape, the Ingest root on the shared volume; "the shared volume is not backed up" struck. Held by `tests/test_guides_cloud_platform.py`, which reads the rendered values. PDF made by the orchestrator at merge. |
@@ -1119,6 +1120,30 @@ on a kind cluster (R1, 13 November 2026)**, with stand-ins for the platform's pa
 and KMS, EKS's pod identity, RDS, ElastiCache and Entra ID); neither has run against a real account
 or tenant. The standard shape has no rendered runbook yet.
 
+**Moving to a new release (poc shape).** There is no separate upgrade runbook. A new release is
+installed by running `INSTALL.md` again from the new release's copy: its `helm upgrade --install` moves
+the deployment onto the new release's images and values. In order:
+
+1. **Back up first.** Take *A backup now* (section 6a.8) as the runbook's *Before an upgrade* does it,
+   with the Conduit, the workers and the report sync stopped and each one's copy count noted, and check
+   that the set finished (its `manifest.json` is written).
+2. **Get the new release's copy**: its tag, checked out in its own folder, with the deployment's own
+   `osprey.yaml` copied in. Read the release's notes first.
+3. **Render, push and render pinned from that copy**, exactly as section 6a.4 says. The values to
+   install are the new release's pinned render, never the old one's. A release that needs a change in
+   the Terraform says so in its notes, and the Terraform is this render's `terraform/` folder: its pull
+   request is applied now, before the install, as at the first install.
+4. **Run `INSTALL.md` again from that copy**, block by block. Its `helm upgrade --install` replaces
+   each pod on the new release, and its own checks follow, as at the first install: section 6's check
+   that the Conduit reads Entra's settings, and section 7's `/healthz` through the Glass. Then start the Conduit and the workers again at the copy counts noted in
+   step 1, if the install has not.
+
+**What will check it.** v0.5.2's install test, planned for 25 November 2026 on a kind cluster, is to
+install v0.5.1, then the candidate by these steps over it, and check that the data made before the
+upgrade is still there. It has not run yet. **Going back to the previous release** (installing its copy again the same way and
+restoring step 1's backup) **has not been rehearsed**: until it has, treat step 1's backup as the way
+back, and test the new release on the development namespace before production.
+
 **A platform is a settings file**, `harness/cloud_platform/platforms/<name>.yaml`: its ingress class
 and annotations, the controller's namespace, its storage class, its egress policy kind and the
 networks its managed stores answer in, and the names of the secrets the managed stores' details
@@ -1692,8 +1717,8 @@ refusing service's own words. **No alert is raised on it yet: look each morning*
 The nightly run does not stop the Conduit, so its parts are taken minutes apart and a load running
 across 02:15 can be in one part and not another: take the backup before an upgrade with the Conduit
 and the workers stopped (the runbook shows how). Note each one's copy count first. The runbook's
-commands also scale `deployment/report-sync`, which is not rendered on this profile, so its "not
-found" is expected, and they scale the Conduit and the workers back to 1: start them again at the
+commands also scale `deployment/report-sync`, which is rendered only with reporting on
+(`reporting.sync`), so without it its "not found" is expected, and they scale the Conduit and the workers back to 1: start them again at the
 copy counts noted instead (a known issue).
 
 **The restore** replaces what ArcadeDB, ClickHouse and the claims hold with one set, **for one copy of
