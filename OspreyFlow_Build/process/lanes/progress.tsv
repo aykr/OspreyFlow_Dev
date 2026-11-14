@@ -130,7 +130,7 @@ case-b	v052-batch-ui	S	done	v0.5.2: the batch job's choice, progress and result 
 platform	v052-upgrade-index	S	done	v0.5.2: an upgrade or fresh install builds the search index (route step U)	lane/platform-v052-rebuild
 case	v052-cluster-on-entry	M	done	v0.5.2: a merged pair arrives as one cluster (route step 3h)	lane/case-merged-clusters
 rules-b	v052-am20	M	done	v0.5.2: edges_among in chunks of record ids (ADR-124 Am 20; the owner's ruling, 14 Nov, after the 50k run): no id list in a script, so a set past ~10k ids answers	lane/rules-b-am20
-orchestrator	v052-ci	S	building	v0.5.2: main's CI green: Core names no Build folder (6835a1b), the batch routes in the rights table (rules-b), the top bar one line on Linux (case), report sync's one token a pass (platform-b)
+orchestrator	v052-ci	S	done	v0.5.2: main's CI green: Core names no Build folder (6835a1b), the batch routes in the rights table (rules-b), the top bar one line on Linux (case), report sync's one token a pass (platform-b) — green: run 43629572600 on c5941f3, every job, 14 Nov 20:16Z
 case	v052-topbar	S	done	v0.5.2 fix (T): The top bar stays one line: less-used views fold into More views (the owner's design rule; fallback by Sun midday: all but Graph and Map at narrow widths)	lane/case-topbar-linux
 case	v052-tidy	S	done	v0.5.2 fix (Q): The ontology read retried, so the Query builder and link types appear after a failed first read; step 6's live list (5 of 5)	lane/case-tidy-fixes
 case-b	v052-batch-panel	S	done	v0.5.2 fix (P): The batch job's panel only on the canvas, not over Studio, Reports, Boards; a local-lite batch job proven to done	lane/case-b-v052-followup
