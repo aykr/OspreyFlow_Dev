@@ -1249,8 +1249,7 @@ While the job runs, the panel says that closing it does not stop the job, and th
 expansion in the case again follows it while it runs (the Conduit's 409 names the running job). A
 state the Glass does not know is said as a failure, never read as progress.
 
-The jsdom cases are in `workingset/BatchExpansion.test.tsx`, and their red-first record is
-`process/lanes/case-b/batch/plants.sh`. The panel's three actions (*Open the view*, *Try the batch job
+The jsdom cases are in `workingset/BatchExpansion.test.tsx`. The panel's three actions (*Open the view*, *Try the batch job
 again*, *Close*) are proved by keyboard in
 `keyboard/batch-expansion.spec.ts` (registry `BATCH_EXPANSION_ACTIONS`), and so is each of its states
 under axe in the three looks. Starting the job from the cap refusal is proved by keyboard where that
@@ -1260,7 +1259,7 @@ refused `/expand` body, and again under StrictMode. The App holds each choice wi
 it was made in and for, and drops it when either changes, so a panel never follows one case's job in
 another nor shows one person's figure to the next (`workingset/useBatchExpansion.ts` and its test). A
 second choice gets its own panel, and no batch job is offered while a view is open
-(`App.batchExpand.test.tsx`; red-first record `process/lanes/case-b/batch/plants-app.sh`).
+(`App.batchExpand.test.tsx`).
 
 ### 3.2 Social network analysis
 
