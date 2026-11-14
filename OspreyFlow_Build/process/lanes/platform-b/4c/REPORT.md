@@ -35,8 +35,8 @@ lane-reviewer briefed without the lane's own conclusions.
   with some set here, the token's values still need a sign-in within the day; a value set here but not set yet
   refuses the run.
   - Offline: five tests, and four plants red (`owner-red-first.txt`).
-  - Live: `test_am15_a_run_acts_as_its_owner_with_the_values_set_here`, written, not yet run. It waits for the
-    owner's next acquire.
+  - Live: `test_am15_a_run_acts_as_its_owner_with_the_values_set_here`, run on stack b (the owner's acquire): the live file
+    35 of 35, red with Amendment 16's own read planted, green restored (`owner-live.txt`).
   - ADR-148 Amendment 15 has point 8, and §6a.7 a sentence, mirrored.
 - **Round 2's could 9** is carried: the stale-access words (`STALE_ACCESS_WORDS`) advise "sign in
   again", where the fix for a person with a value unset is an administrator setting it. The words are

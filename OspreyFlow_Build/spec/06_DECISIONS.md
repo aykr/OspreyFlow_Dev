@@ -38091,8 +38091,10 @@ By platform-b. An access step: two review rounds, listed for the owner (round 1'
    Tests:
    - offline: `test_entra_people_administrator_access.py`, the real `_owner` through the real resolver, its four
      plants red (`process/lanes/platform-b/4c/owner-red-first.txt`);
-   - live: `test_entra_people_live.py`'s `test_am15_a_run_acts_as_its_owner_with_the_values_set_here`, written and
-     not yet run: it waits on a lease, which the owner acquires.
+   - live: `test_entra_people_live.py`'s `test_am15_a_run_acts_as_its_owner_with_the_values_set_here`, run on
+     14 November on test stack b under platform-b's lease: the whole live file passed, 35 of 35. With `owner` put back
+     to Amendment 16's own read, it went red on the real table (the owner's values `(None, None, [])`), and green
+     again once restored (`process/lanes/platform-b/4c/owner-live.txt`).
 
    A run refused for a value not set here says so (`OwnerValueNotSet`, a `PrincipalAccessOutOfDate` that never pauses
    a schedule): "an administrator has not set <the values> for this person in Admin › People", then "it runs at its
