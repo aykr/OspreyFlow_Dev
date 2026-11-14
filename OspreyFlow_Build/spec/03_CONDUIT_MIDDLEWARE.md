@@ -81,8 +81,10 @@ other route (`05_DEPLOYMENT.md` §2.6.1), and it takes a signed-in principal as 
 route does; any signed-in person may read it. FastAPI's own unauthenticated copies (`/openapi.json`,
 `/docs`, `/redoc`) are switched off: no page of this API answers without sign-in except `/healthz`.
 
-**Its `info.version` is the release, from one source.** The deployment's version is the release tag
-its checkout sits on, else `dev-<short commit>` (ADR-114 Amendment 8), rendered into
+**Its `info.version` is the release, from one source.** The deployment's version is the code's own
+(ADR-114 Amendment 47): its `VERSION` file when that names a release; else, where `.git`'s tree is the
+code's, the release tag its checkout sits on or `dev-<short commit>` (Amendment 8); else `VERSION`'s
+`-dev` text, never an older `.git`'s commit. It is rendered into
 `deployment.env` as `OSPREY_RELEASE_VERSION` by `harness.render.release_version`. The Conduit reads
 it in one place (`services/api/release_version.py`), and both Admin → System and the OpenAPI document
 say that value; neither keeps a version of its own, and neither says FastAPI's default `0.1.0`. A

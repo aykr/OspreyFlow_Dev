@@ -1,0 +1,34 @@
+codeversion (ADR-114 Amendment 47, CARRIES 218), red first and planted, 14 November 2026, platform-b, on the Mac
+(ports pinned: ARCADEDB 59991, POSTGRES 59992, VALKEY 59993, CLICKHOUSE 59994; no stack, no lease). Every case is a
+real git checkout in a temporary folder; each plant restored after, a fresh PYTHONPYCACHEPREFIX for each run.
+
+Red first: tests/harness/test_code_version.py with the names in place and the behaviour as on main
+(checkout_version from .git's tags, glass.json's version git_sha()[:7]):
+  FAILED test_newer_code_over_an_older_git_shows_the_codes_version[v0.5.2]       (v0.5.0)
+  FAILED test_newer_code_over_an_older_git_shows_the_codes_version[v0.5.2-dev]   (v0.5.0)
+  FAILED test_glass_json_and_the_rendered_release_version_are_the_codes[v0.5.2]
+  FAILED test_glass_json_and_the_rendered_release_version_are_the_codes[v0.5.2-dev]
+  FAILED test_a_release_checkout_is_its_release                                  (glass.json showed the commit)
+  FAILED test_a_dev_checkout_with_changed_code_is_the_codes_dev_version
+  FAILED test_code_with_no_git_at_all_is_its_version
+  FAILED test_the_repositorys_own_version_file_is_well_formed                    (no VERSION yet)
+
+Plants:
+  the tree check removed (.git always believed for a -dev VERSION)
+    -> FAILED ..._codes_version[v0.5.2-dev], ..._are_the_codes[v0.5.2-dev], test_a_dev_checkout_with_changed_code_...
+  `--untracked-files=no` removed (a deployment's own files counted as changed code)
+    -> first form of the test stayed GREEN: it used a release VERSION, which is shown before the tree check is
+       asked (rule 15, a plant that fails by another path). The test now uses a -dev checkout:
+    -> FAILED test_untracked_files_do_not_unseat_the_commit (1 failed, 16 passed)
+  The gate, tests/test_version_file.py (CI's test job; first as make version-file-check, withdrawn at the
+  orchestrator's word: a Makefile change is outside the owner's standing word), OspreyFlow_Core/VERSION planted:
+    "0.5.2"       -> FAILED test_the_repositorys_own_version_file_is_well_formed (1 failed, 16 passed)
+    "v0.5.2-rc1"  -> FAILED test_the_repositorys_own_version_file_is_well_formed (1 failed, 16 passed)
+    "v0.5.2-dev"  -> 17 passed (test_version_file.py with test_code_version.py)
+    (the same plants were red through make version-file-check, exit 1, before it was withdrawn)
+  release.yml's step (release_yml.diff, the owner's file, not applied), its run body in bash from OspreyFlow_Core:
+    TAG=v0.5.2 with VERSION v0.5.2-dev -> "::error::the tag v0.5.2 is not the code's VERSION (v0.5.2-dev)", exit 1
+    TAG=v0.5.2-dev                     -> exit 0
+
+Clean: test_code_version.py 17 passed; tests/harness and tests/cli 2279 passed, 203 skipped, 2 errors
+(test_restore_drawn_layer.py: connection refused on the pinned ports, no stack). ruff and mypy clean.

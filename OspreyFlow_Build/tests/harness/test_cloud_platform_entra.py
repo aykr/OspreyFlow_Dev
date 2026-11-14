@@ -185,7 +185,7 @@ def test_keycloaks_deployment_file_is_as_it_was(monkeypatch) -> None:
     `sign_in`, no field moved."""
     import harness.site as site
 
-    monkeypatch.setattr(site, "deployment_version", lambda: "0000000")
+    monkeypatch.setattr(site, "deployment_version", lambda code=None: "0000000")
     raw = _raw()
     raw.pop("cloud_platform")
     raw["profile"] = "local-lite"
