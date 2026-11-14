@@ -1123,21 +1123,22 @@ or tenant. The standard shape has no rendered runbook yet.
 installed by running `INSTALL.md` again from the new release's copy: its `helm upgrade --install` moves
 the deployment onto the new release's images and values. In order:
 
-1. **Back up first.** Take *A backup now* (section 6a.8), with the Conduit and the workers stopped and
-   each one's copy count noted, and check that the set finished (its `manifest.json` is written).
+1. **Back up first.** Take *A backup now* (section 6a.8) as the runbook's *Before an upgrade* does it,
+   with the Conduit, the workers and the report sync stopped and each one's copy count noted, and check
+   that the set finished (its `manifest.json` is written).
 2. **Get the new release's copy**: its tag, checked out in its own folder, with the deployment's own
    `osprey.yaml` copied in. Read the release's notes first. A release that needs a change in the
    Terraform says so, and its pull request is applied before the install, as at the first install.
 3. **Render, push and render pinned from that copy**, exactly as section 6a.4 says. The values to
    install are the new release's pinned render, never the old one's.
 4. **Run `INSTALL.md` again from that copy**, block by block. Its `helm upgrade --install` replaces
-   each pod on the new release, and its own checks end it, as at the first install: the sign-in check
-   and the Glass's health. Then start the Conduit and the workers again at the copy counts noted in
+   each pod on the new release, and its own checks follow, as at the first install: section 6's check
+   that the Conduit reads Entra's settings, and section 7's `/healthz` through the Glass. Then start the Conduit and the workers again at the copy counts noted in
    step 1, if the install has not.
 
-**What it is checked by.** v0.5.2's install test (25 November 2026, on a kind cluster) installs
-v0.5.1, then the candidate by these steps over it, and checks the data made before the upgrade is
-still there. **Going back to the previous release** (installing its copy again the same way and
+**What will check it.** v0.5.2's install test, planned for 25 November 2026 on a kind cluster, is to
+install v0.5.1, then the candidate by these steps over it, and check that the data made before the
+upgrade is still there. It has not run yet. **Going back to the previous release** (installing its copy again the same way and
 restoring step 1's backup) **has not been rehearsed**: until it has, treat step 1's backup as the way
 back, and test the new release on the development namespace before production.
 
@@ -1714,8 +1715,8 @@ refusing service's own words. **No alert is raised on it yet: look each morning*
 The nightly run does not stop the Conduit, so its parts are taken minutes apart and a load running
 across 02:15 can be in one part and not another: take the backup before an upgrade with the Conduit
 and the workers stopped (the runbook shows how). Note each one's copy count first. The runbook's
-commands also scale `deployment/report-sync`, which is not rendered on this profile, so its "not
-found" is expected, and they scale the Conduit and the workers back to 1: start them again at the
+commands also scale `deployment/report-sync`, which is rendered only with reporting on
+(`reporting.sync`), so without it its "not found" is expected, and they scale the Conduit and the workers back to 1: start them again at the
 copy counts noted instead (a known issue).
 
 **The restore** replaces what ArcadeDB, ClickHouse and the claims hold with one set, **for one copy of
