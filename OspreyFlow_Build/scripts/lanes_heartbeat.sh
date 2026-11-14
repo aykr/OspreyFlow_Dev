@@ -73,7 +73,8 @@ FINISH="${OSPREY_FINISH_FILE:-$(dirname "$PROGRESS")/finish.tsv}"
 # the default view and watch show the route; without one, the overview.
 ROUTE="${OSPREY_ROUTE_FILE:-$(dirname "$PROGRESS")/route.tsv}"
 OWNER_DUE="${OSPREY_OWNER_DUE_FILE:-$(dirname "$PROGRESS")/owner_due.tsv}"
-# The merges the merger built (ADR-142 Amendment 7): `<main parent> <lane head> <lane> <step>` a line.
+# The merges the merger built (ADR-142 Amendment 7): `<main parent> <lane head> <lane> <step>` a line, `done` after
+# the step when the merge finished it (read_git).
 LANDED="${OSPREY_LANDED_FILE:-$(dirname "$PROGRESS")/merger/LANDED.md}"
 AUDIT="${OSPREY_AUDIT_FILE:-$(dirname "$PROGRESS")/audit.tsv}"
 ACCOUNTS="${OSPREY_ACCOUNTS_FILE:-$HOME/.ospreyflow/accounts.conf}"   # lanes_launch.sh's own default
@@ -428,7 +429,7 @@ overview() {
   [ "${1:-}" = --full ] && full=1
   lanes="$(mktemp "$DIR/.overview.XXXXXX")"; merges="$(mktemp "$DIR/.merges.XXXXXX")"; needs="$(mktemp "$DIR/.ovneeds.XXXXXX")"
   # shellcheck disable=SC2064   # these files, now
-  trap "rm -f '$lanes' '$merges' '$needs'" EXIT
+  trap "rm -f '$lanes' '$merges' '$needs' '$GIT_PROGRESS'" EXIT
   # What needs the owner, by `show`'s own reading, into this view's own file; watch keeps a copy (OVERVIEW_NEEDS)
   # for its notifications, so another view run meanwhile cannot change what it notifies.
   NEEDS_COPY="$needs" show >/dev/null
@@ -443,7 +444,9 @@ overview() {
   release_merges > "$merges"
   P_CLOCK="$(clock)" P_PROGRESS="$PROGRESS" P_GROUPS="$GROUPS_FILE" P_EST="$ESTIMATES" P_RELEASE="$RELEASE" P_FINISH="$FINISH" \
     P_LANES="$lanes" P_MERGES="$merges" P_NEEDS="$needs" P_DIR="$DIR" P_FULL="$full" perl -CSD -e "$STAGES_PL$OVERVIEW_PL"
-  rm -f "$lanes" "$merges" "$needs"; trap - EXIT
+  rm -f "$lanes" "$merges" "$needs"
+  # shellcheck disable=SC2064   # this file, now
+  trap "rm -f '$GIT_PROGRESS'" EXIT
 }
 
 # shellcheck disable=SC2016   # perl, not the shell, expands these
@@ -669,45 +672,60 @@ print $full ? "\nThe short view: lanes_heartbeat.sh · lane by lane: lanes_heart
   : "\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n";
 '
 
-# The steps git says are merged, "<lane>\t<step>" a line (the owner, 14 November 2026: twice in a day the route
-# showed steps building after they were on main, from hand-typed rows). A progress.tsv row is merged when the
-# branch its sixth column names has its head on main, or when merger/LANDED.md has a line naming its lane and
-# step followed by `done`, whatever its status says. The head must have come in by a merge (an ancestor of main
-# not on main's first-parent line): a branch just cut from main, with nothing of its own, is an ancestor too and
-# is not done. A row with no branch keeps its typed word: a step's parts merge ahead from its branch (step 4's
-# plan, step 5's drafts, step 6's run sheet, 14 November), so the branch named is the one carrying the step's
-# whole delivery, and a branch is never guessed from the lane and step's names.
-merged_by_git() {
-  local ref="${OSPREY_MAIN_REF:-main}" repo="${OSPREY_REPO:-$SCRIPTS_DIR}" line
-  local -a f
-  local spine
-  spine="$(git -C "$repo" rev-list --first-parent "$ref" 2>/dev/null || true)"
-  while IFS= read -r line; do
-    case "$line" in "#"*|"") continue ;; esac
-    IFS=$'\t' read -r -a f <<< "$line"
-    [ "${#f[@]}" -ge 6 ] && [ -n "${f[5]}" ] && [ "${f[5]}" != "-" ] || continue
-    local tip
-    tip="$(git -C "$repo" rev-parse -q --verify "${f[5]}^{commit}" 2>/dev/null)" || continue
-    git -C "$repo" merge-base --is-ancestor "$tip" "$ref" 2>/dev/null || continue
-    case $'\n'"$spine"$'\n' in *$'\n'"$tip"$'\n'*) continue ;; esac
-    printf '%s\t%s\n' "${f[0]}" "${f[1]}"
-  done 2>/dev/null < "$PROGRESS" || true
-  # LANDED.md: `<main parent> <lane head> <lane> <step> done [words]`, the step's last merge. The lines before 14
-  # November are either two commits alone or a part's merge named by its step ("docs v052-sweep part one", "platform
-  # v052-measure" for step 4's plan), so neither form counts; only the word `done` after the step says it finished.
-  awk '$1 ~ /^[0-9a-f]{7,40}$/ && $2 ~ /^[0-9a-f+]{7,}$/ && NF >= 5 && $5 == "done" { print $3 "\t" $4 }' \
-    "$LANDED" 2>/dev/null || true
+# The step table as git has it (the owner, 14 November 2026: twice in a day the route showed steps building after they
+# were on main, and later steps kept their typed dates, from hand-typed rows). Every view reads progress.tsv through
+# this: a row's status reads done, whatever it says, when
+#   - its sixth column names a branch whose head is the second parent of a merge on main's first-parent line, and
+#     that merge's subject names the branch (`merge: <lane> <name>` or `merge(lane/<lane>): <name>, …`, hyphens
+#     aside, as lane/<lane>-<name>; or the branch written whole). The subject is what tells a merged branch from one cut
+#     afresh at a lane's last merged head, which git alone cannot (the lane review of heartbeat-git, finding 1);
+#   - or merger/LANDED.md has `<main parent> <lane head> <lane> <step> done`, tab-separated where the step has a
+#     space, the step progress.tsv's own id.
+# A branch is never guessed from a row's names: a step's parts merge ahead from its branch (step 4's plan, step 5's
+# drafts, step 6's run sheet, 14 November), so the branch a row names is the one whose merge finishes the step.
+TYPED_PROGRESS="$PROGRESS"
+GIT_PROGRESS="$DIR/.progress-git.$$"
+read_git() {
+  local ref="${OSPREY_MAIN_REF:-main}" repo="${OSPREY_REPO:-$SCRIPTS_DIR}" refs merges
+  [ -f "$TYPED_PROGRESS" ] || return 0
+  refs="$(git -C "$repo" for-each-ref --format='%(refname:short)%09%(objectname)' refs/heads 2>/dev/null || true)"
+  merges="$(git -C "$repo" log --first-parent --merges --format='%P%x09%s' "$ref" 2>/dev/null || true)"
+  P_TYPED="$TYPED_PROGRESS" P_REFS="$refs" P_MERGES="$merges" P_LANDED="$LANDED" perl -CSD -e "$GIT_PL" \
+    > "$GIT_PROGRESS.tmp" && mv "$GIT_PROGRESS.tmp" "$GIT_PROGRESS" && PROGRESS="$GIT_PROGRESS"
 }
+# shellcheck disable=SC2016   # perl, not the shell, expands these
+GIT_PL='
+use strict; use warnings;
+my %tip = map { my ($r, $h) = split /\t/; ($r => $h) } grep { /\t/ } split /\n/, $ENV{P_REFS};
+my %by;   # a merged head: the subjects of the first-parent merges that brought it in
+for (split /\n/, $ENV{P_MERGES}) { my ($parents, $subject) = split /\t/, $_, 2; my (undef, @in) = split / /, $parents;
+  push @{ $by{$_} }, $subject // "" for @in }
+sub flat { my ($s) = @_; $s =~ s/-//g; return lc $s }
+sub names_branch { my ($subject, $branch) = @_;
+  return 1 if index($subject, $branch) >= 0;
+  my ($suffix) = $branch =~ m{^lane/(.+)$} or return 0;
+  return ($subject =~ /^merge: (\S+) (\S+)/ || $subject =~ m{^merge\(lane/([^)\s]+)\): ([^,\s]+)})
+    && flat("$1-$2") eq flat($suffix) }
+my %landed;
+if (open(my $h, "<:encoding(UTF-8)", $ENV{P_LANDED})) { while (<$h>) { s/\r?\n\z//;
+  my @f = /\t/ ? split(/\t/) : split(/ +/);
+  $landed{"$f[2]\t$f[3]"} = 1 if @f >= 5 && $f[0] =~ /^[0-9a-f]{7,40}$/ && $f[1] =~ /^[0-9a-f+]{7,}$/ && $f[4] eq "done" } }
+open(my $h, "<:encoding(UTF-8)", $ENV{P_TYPED}) or exit 0;
+while (my $line = <$h>) { $line =~ s/\r?\n\z//;
+  if ($line !~ /^#/ && $line =~ /\t/) { my @f = split /\t/, $line, -1;
+    my $branch = @f >= 6 ? $f[5] =~ s/^\s+|\s+$//gr : "";
+    my $tip = $branch ne "" && $branch ne "-" ? $tip{$branch} : undef;
+    my $merged = defined $tip && grep { names_branch($_, $branch) } @{ $by{$tip} // [] };
+    if (@f >= 4 && ($merged || $landed{"$f[0]\t$f[1]"})) { $f[3] = "done"; $line = join "\t", @f } }
+  print "$line\n" }
+'
 
 # The route view (ROUTE_052.md, "The heartbeat's route view"): one screen, nothing else needing reading.
 route_view() {
   local lanes needs lane st note
-  local merged
   lanes="$(mktemp "$DIR/.route.XXXXXX")"; needs="$(mktemp "$DIR/.routeneeds.XXXXXX")"
-  merged="$(mktemp "$DIR/.routemerged.XXXXXX")"
   # shellcheck disable=SC2064   # these files, now
-  trap "rm -f '$lanes' '$needs' '$merged'" EXIT
-  merged_by_git > "$merged"
+  trap "rm -f '$lanes' '$needs' '$GIT_PROGRESS'" EXIT
   NEEDS_COPY="$needs" show >/dev/null
   if [ -n "${OVERVIEW_NEEDS:-}" ]; then cp "$needs" "$OVERVIEW_NEEDS"; fi
   for lane in $LANES; do
@@ -715,8 +733,10 @@ route_view() {
     printf '%s\t%s\t%s\n' "$lane" "${st:--}" "$note" >> "$lanes"
   done
   P_CLOCK="$(clock)" P_NOW="$(now)" P_PROGRESS="$PROGRESS" P_ROUTE="$ROUTE" P_OWNER_DUE="$OWNER_DUE" \
-    P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_MERGED="$merged" P_DIR="$DIR" perl -CSD -e "$STAGES_PL$ROUTE_PL"
-  rm -f "$lanes" "$needs" "$merged"; trap - EXIT
+    P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_DIR="$DIR" perl -CSD -e "$STAGES_PL$ROUTE_PL"
+  rm -f "$lanes" "$needs"
+  # shellcheck disable=SC2064   # this file, now
+  trap "rm -f '$GIT_PROGRESS'" EXIT
 }
 
 # shellcheck disable=SC2016   # perl, not the shell, expands these
@@ -740,9 +760,6 @@ if (open(my $h, "<:encoding(UTF-8)", $ENV{P_ROUTE})) {
 my @route = grep { @$_ >= 8 } rows($ENV{P_ROUTE});
 my @progress = grep { @$_ >= 5 } rows($ENV{P_PROGRESS});
 my %status; $status{"$_->[0]:$_->[1]"} = $_->[3] for @progress;
-# What git says is merged is done, whatever the row types (merged_by_git).
-for (grep { @$_ >= 2 } rows($ENV{P_MERGED})) { $status{"$_->[0]:$_->[1]"} = "done" }
-$_->[3] = $status{"$_->[0]:$_->[1]"} for @progress;
 my %beat; for (grep { @$_ >= 3 } rows($ENV{P_LANES})) { $beat{$_->[0]} = [$_->[1], $_->[2]] }
 
 # Each step: its state from its lane`s own progress row ("done" only when merged, its gates passed) and beat
@@ -777,7 +794,7 @@ for my $r (@route) {
 my %state_of = map { $_->[0] => $_->[8] } @route;
 for my $r (@route) {
   next unless $r->[8] eq "not started" && $r->[6] ne "-" && $r->[6] ne "";
-  my @after = grep { /\S/ } split /\s*,\s*/, $r->[6];
+  my @after = grep { /\S/ } split /[\s,]+/, $r->[6];
   next if !@after || grep { ($state_of{$_} // "") ne "done" } @after;
   my $gain = day_of($r->[3]) - $today;
   $r->[8] = $gain > 0 ? "ready, " . plural($gain, "day") . " ahead of its start" : "ready";
@@ -893,6 +910,7 @@ watch_loop() {
   : > "$prev"
   while true; do
     clear 2>/dev/null || true
+    read_git
     echo "OspreyFlow lanes · $(date '+%H:%M:%S') · every ${every}s · Ctrl-C to stop"; echo
     if [ "$view" = "--full" ]; then
       show; cp "$DIR/.needs" "$seen"
@@ -919,6 +937,9 @@ watch_loop() {
   done
 }
 
+# shellcheck disable=SC2064   # this file, now
+trap "rm -f '$GIT_PROGRESS'" EXIT
+case "${1:-}" in "" | --overview | --full | --lanes | show | summary) read_git ;; esac
 case "${1:-}" in
   "") if [ -f "$ROUTE" ]; then route_view; else overview; fi ;;
   --overview) overview ;;

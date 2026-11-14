@@ -16,34 +16,52 @@ SCRIPT = "OspreyFlow_Build/scripts/lanes_heartbeat.sh"
 TEST = "tests/test_lanes_heartbeat_route.py"
 
 PLANTS = [
-    ("git's merged steps not read: the typed row stands",
-     'for (grep { @$_ >= 2 } rows($ENV{P_MERGED})) { $status{"$_->[0]:$_->[1]"} = "done" }\n', "\n",
+    ("no view reads git: the typed rows stand",
+     'case "${1:-}" in "" | --overview | --full | --lanes | show | summary) read_git ;; esac\n', "",
      "typed_building_whose_branch", r'assert " done" in _row\(out, "3c"\)'),
-    ("a branch cut from main with nothing of its own counted (no first-parent check)",
-     "    case $'\\n'\"$spine\"$'\\n' in *$'\\n'\"$tip\"$'\\n'*) continue ;; esac\n", "",
-     "not_on_main_by_a_merge", r'assert " not started" in _row\(out, "B"\)$'),
-    ("a branch whose head main lacks counted (no ancestor check)",
-     'git -C "$repo" merge-base --is-ancestor "$tip" "$ref" 2>/dev/null || continue', "true",
-     "not_on_main_by_a_merge", r'" not started" in _row\(out, "3e"\)'),
+    ("the route alone reads git (the first version's shape)",
+     '"" | --overview | --full | --lanes | show | summary) read_git', '"") read_git',
+     "every_view_reads", r'assert "OVERALL: 5 of 11 steps done"'),
+    ("a merged head counted whatever its merge's subject names (a branch cut afresh at a lane's merged head)",
+     "grep { names_branch($_, $branch) }", "grep { 1 }",
+     "not_on_main_by_a_merge", r'lane/rules-next'),
+    ("the merger brief's own subject form not read",
+     r" || $subject =~ m{^merge\(lane/([^)\s]+)\): ([^,\s]+)})", ")",
+     "merger_brief_s_form", r'assert " done" in _row\(gitroute\(16, _branch\(PROGRESS, "v052-fixes", "lane/case-cluster"\)\), "3e"\)'),
     ("a branch guessed from the lane and step's names where the row names none",
-     '[ "${#f[@]}" -ge 6 ] && [ -n "${f[5]}" ] && [ "${f[5]}" != "-" ] || continue',
-     '[ "${#f[@]}" -ge 6 ] || f[5]="lane/${f[0]}-${f[1]}"; [ "${f[5]}" != "-" ] || continue',
+     'my $branch = @f >= 6 ? $f[5] =~ s/^\s+|\s+$//gr : "";', 'my $branch = @f >= 6 ? $f[5] =~ s/^\s+|\s+$//gr : "lane/$f[0]-$f[1]";',
      "never_given_one_by_its_name", r'assert " running" in _row\(gitroute\(16\), "3c"\)'),
     ("a LANDED line counted without `done` (a part's merge, named by its step)",
-     '&& NF >= 5 && $5 == "done"', "&& NF >= 4",
+     ' && $f[4] eq "done" }', ' }',
      "landed_line_counts_only", r'assert " running" in _row\(out, "3c"\) and " not started" in _row\(out, "B"\)'),
+    ("a LANDED line split on spaces alone (a step with a space never read)",
+     'my @f = /\t/ ? split(/\t/) : split(/ +/);', 'my @f = split(/\s+/);',
+     "landed_line_counts_only", r'"platform: P5b rows" not in'),
+    ("an empty middle field collapsed (the branch read from the wrong column)",
+     'my @f = split /\t/, $line, -1;', 'my @f = split /\t+/, $line;',
+     "any_row_shape", r'assert "docs" not in'),
+    ("a missing repository ends the view",
+     "refs/heads 2>/dev/null || true)\"", "refs/heads)\"",
+     "with_no_repository", r'assert out\.returncode == 0'),
     ("no step shown ready",
      '  next unless $r->[8] eq "not started"', '  next; next unless $r->[8] eq "not started"',
      "after_steps_are_all_done_shows_ready", r'assert " ready, 2 days ahead'),
     ("ready without the days it could gain",
      '$r->[8] = $gain > 0 ?', '$r->[8] = 0 ?',
      "after_steps_are_all_done_shows_ready", r'assert " ready, 2 days ahead'),
+    ("ready when any `after` step is done, not every one",
+     'next if !@after || grep { ($state_of{$_} // "") ne "done" } @after;',
+     'next if !@after || !grep { ($state_of{$_} // "") eq "done" } @after;',
+     "after_steps_are_all_done_shows_ready", r'assert " not started" in _row\(out, "4"\)'),
     ("an `after` naming no route step taken as done",
      '($state_of{$_} // "") ne "done"', '($state_of{$_} // "done") ne "done"',
      "ready_needs_every_after_step", r'assert "ready" not in _row\(gitroute\(14, progress\), "3d"\)'),
     ("a step under way shown ready",
      '  next unless $r->[8] eq "not started"', '  next unless $r->[8] ne "done"',
      "ready_needs_every_after_step", r'assert " running" in _row\(gitroute\(14, progress\), "B"\)'),
+    ("an `after` list split on commas alone",
+     r'split /[\s,]+/, $r->[6];', r'split /\s*,\s*/, $r->[6];',
+     "after_list_with_spaces", r'assert " ready" in _row'),
 ]
 
 
@@ -79,7 +97,8 @@ def main() -> int:
         missed += not red
         said = "RED at its assertion" if red else ("GREEN" if not failed else f"red for another reason: {off or stops}")
         print(f"== {name} (must fail at /{why}/): {said}, {failed} failed")
-        print("\n".join(line for line in out.splitlines() if re.search(r"(Error|\d+ (passed|failed))", line))[:1500])
+        for n in stops:
+            print(f"   stopped at {TEST}:{n}: {source[n - 1].strip()[:150]}")
     print(f"plants: {len(PLANTS)}, missed: {missed}")
     return 1 if missed else 0
 

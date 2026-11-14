@@ -385,11 +385,18 @@ def test_a_step_with_spaces_a_slash_and_an_accent_is_found_where_it_was_written(
 # git, its merges `--no-ff` as the merger's are, and LANDED.md's lines are in the shapes it holds today.
 
 def _repo(base: Path) -> Path:
-    """main, with lane/rules-index merged by a merge; lane/rules-load cut from main with nothing of its own;
-    lane/case-fixes with a commit main lacks; lane/rules-v052-index, the name the lane-step convention would
-    give 3c, merged too (a part merged ahead, as step 4's plan was)."""
+    """main, its merges `--no-ff` with the merger's subjects (`merge: <lane> <name> (...)`):
+    - lane/rules-index merged ("merge: rules index");
+    - lane/rules-v052-index, the name the lane-step convention would give 3c, merged as a part ahead, as step 4's
+      plan was;
+    - lane/docs-sites merged ("merge: docs sites");
+    - lane/case-cluster merged in the merger brief's form ("merge(lane/case): cluster, ...");
+    - lane/rules-next cut afresh at lane/rules-index's merged head, as a lane's next step is, nothing of its own;
+    - lane/rules-load cut from main, nothing of its own;
+    - lane/case-fixes with a commit main lacks."""
     env = {**os.environ, "GIT_AUTHOR_NAME": "T", "GIT_AUTHOR_EMAIL": "t@example.invalid",
-           "GIT_COMMITTER_NAME": "T", "GIT_COMMITTER_EMAIL": "t@example.invalid"}  # fmt: skip
+           "GIT_COMMITTER_NAME": "T", "GIT_COMMITTER_EMAIL": "t@example.invalid",
+           "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}  # fmt: skip
     repo = base / "repo"
     repo.mkdir()
 
@@ -398,11 +405,19 @@ def _repo(base: Path) -> Path:
 
     git("init", "-q", "-b", "main")
     git("commit", "-q", "--allow-empty", "-m", "start")
-    for branch in ("lane/rules-index", "lane/rules-v052-index"):
+    for branch, subject in (("lane/rules-index", "merge: rules index (step 3c)"),
+                            ("lane/rules-v052-index", "merge: rules v052-index (3c's plan, a part ahead)"),
+                            ("lane/docs-sites", "merge: docs sites (the two sites)")):  # fmt: skip
         git("checkout", "-q", "-b", branch)
         git("commit", "-q", "--allow-empty", "-m", f"work on {branch}")
         git("checkout", "-q", "main")
-        git("merge", "-q", "--no-ff", branch, "-m", f"merge: {branch}")
+        git("merge", "-q", "--no-ff", branch, "-m", subject)
+    # The merger's brief's own subject (merger/BRIEF.md step 5): merge(lane/<lane>): <name>, <summary> (<head>).
+    git("checkout", "-q", "-b", "lane/case-cluster")
+    git("commit", "-q", "--allow-empty", "-m", "the pair as one")
+    git("checkout", "-q", "main")
+    git("merge", "-q", "--no-ff", "lane/case-cluster", "-m", "merge(lane/case): cluster, the pair as one (abc1234)")
+    git("branch", "lane/rules-next", "lane/rules-index")
     git("branch", "lane/rules-load")
     git("checkout", "-q", "-b", "lane/case-fixes")
     git("commit", "-q", "--allow-empty", "-m", "fixes not yet merged")
@@ -414,12 +429,12 @@ def _repo(base: Path) -> Path:
 def gitroute(route, hb, tmp_path: Path):  # noqa: F811
     repo = _repo(tmp_path)
 
-    def view(day: int = 16, progress: str = PROGRESS, landed: str | None = None) -> str:
-        (tmp_path / "progress.tsv").write_text(progress, encoding="utf-8")
+    def view(day: int = 16, progress: str = PROGRESS, landed: str | None = None, *args: str, **extra: str) -> str:
+        (tmp_path / "progress.tsv").write_bytes(progress.encode("utf-8"))
         if landed is not None:
             (tmp_path / "merger").mkdir(exist_ok=True)
             (tmp_path / "merger" / "LANDED.md").write_text(landed, encoding="utf-8")
-        out = hb(OSPREY_NOW=_at(day), OSPREY_REPO=str(repo), **route.env)
+        out = hb(*args, OSPREY_NOW=_at(day), **{"OSPREY_REPO": str(repo), **route.env, **extra})
         assert out.returncode == 0, out.stderr[-800:]
         return out.stdout
 
@@ -438,10 +453,17 @@ def test_a_row_typed_building_whose_branch_is_on_main_by_a_merge_shows_done(gitr
     assert "3 of 11" not in out and "4 of 11 steps merged" in out  # and so does the finished line
 
 
+def test_a_merge_in_the_merger_brief_s_form_names_its_branch(gitroute) -> None:
+    assert " done" in _row(gitroute(16, _branch(PROGRESS, "v052-fixes", "lane/case-cluster")), "3e")
+
+
 def test_a_branch_not_on_main_by_a_merge_keeps_the_row_s_word(gitroute) -> None:
     # Cut from main with nothing of its own: an ancestor of main, but on its first-parent line, so not done.
     out = gitroute(16, _branch(PROGRESS, "v052-load", "lane/rules-load"))
     assert " not started" in _row(out, "B")
+    # Cut afresh at a lane's merged head for its next step: its head is a merge's second parent, but that merge
+    # names another branch (the lane review, finding 1).
+    assert " not started" in _row(gitroute(16, _branch(PROGRESS, "v052-load", "lane/rules-next")), "B")
     # A commit main lacks; a branch no repository has; a dash: the typed word stands.
     out = gitroute(16, _branch(_branch(PROGRESS, "v052-fixes", "lane/case-fixes"), "v052-load", "lane/gone"))
     assert " not started" in _row(out, "3e") and " not started" in _row(out, "B")
@@ -456,6 +478,10 @@ def test_a_row_naming_no_branch_is_never_given_one_by_its_name(gitroute) -> None
 
 def test_a_landed_line_counts_only_when_it_says_the_step_is_done(gitroute) -> None:
     head = "# Merges the merger prepared\n\nda162e6 b6570fd case L3.H2\n0dcf45d 4e50d89\n"
+    # A step with a space in its id, tab-separated, as progress.tsv holds such steps.
+    spaced = PROGRESS.replace("platform\tP8\t", "platform\tP5b rows\t")
+    out = gitroute(16, spaced, head + "1e88cfce\t87d1689\tplatform\tP5b rows\tdone\n")
+    assert "platform: P5b rows" not in "\n".join(_section(out, "OUTSIDE THIS ROUTE"))
     # Today's forms: two commits alone, and a part named by its step. Neither is the step done.
     out = gitroute(16, landed=head + "8d6a898 a386fe3 rules v052-index part one (v0.5.1)\n"
                    "4283b91 3bd66ec+bcca270 rules v052-load\n")  # fmt: skip
@@ -485,3 +511,35 @@ def test_ready_needs_every_after_step_done_and_a_route_step_to_name(gitroute, tm
     progress = _branch(PROGRESS, "v052-index", "lane/rules-index").replace(
         "v052-load\tM\ttodo", "v052-load\tM\tbuilding")
     assert " running" in _row(gitroute(14, progress), "B")
+
+
+def test_every_view_reads_the_steps_git_says_are_done(gitroute) -> None:
+    """The route, its FINISHED and OUTSIDE lines, --lanes, --overview and summary read one table: a step on main
+    is done in each, not in the route alone (the lane review, finding 4)."""
+    progress = _branch(_branch(PROGRESS, "v052-index", "lane/rules-index"), "sites", "lane/docs-sites")
+    out = gitroute(16, progress)
+    assert "5 of 11 steps merged" in out  # 3 typed done, 3c and docs' sites from git
+    assert "docs" not in "\n".join(_section(out, "OUTSIDE THIS ROUTE"))
+    assert "OVERALL: 5 of 11 steps done" in gitroute(16, progress, None, "--overview")
+    assert "5 of 11 steps done" in gitroute(16, progress, None, "summary").splitlines()[0]
+
+
+def test_a_branch_is_read_from_any_row_shape_the_table_takes(gitroute) -> None:
+    """The last row with no newline, a CRLF row and an empty middle field (the lane review, finding 7)."""
+    rows = PROGRESS.replace("rules\tv052-index\tL\tbuilding\tv0.5.2 step 3c: the index feed\n", "")
+    rows = rows.replace("docs\tsites\tM\tbuilding\tThe two new websites\n",
+                        "docs\tsites\t\tbuilding\tThe two new websites\tlane/docs-sites\r\n")  # fmt: skip
+    out = gitroute(16, rows + "rules\tv052-index\tL\tbuilding\tv0.5.2 step 3c: the index feed\tlane/rules-index")
+    assert " done" in _row(out, "3c")
+    assert "docs" not in "\n".join(_section(out, "OUTSIDE THIS ROUTE"))
+
+
+def test_with_no_repository_the_view_keeps_the_typed_words(gitroute, tmp_path) -> None:
+    out = gitroute(16, _branch(PROGRESS, "v052-index", "lane/rules-index"), None, OSPREY_REPO=str(tmp_path / "none"))
+    assert " running" in _row(out, "3c") and "3 of 11 steps merged" in out
+
+
+def test_an_after_list_with_spaces_is_read_as_its_ids(gitroute, tmp_path) -> None:
+    (tmp_path / "route.tsv").write_text(ROUTE.replace("\t3c\trules:v052-load", "\t3c \trules:v052-load"),
+                                        encoding="utf-8")  # fmt: skip
+    assert " ready" in _row(gitroute(14, _branch(PROGRESS, "v052-index", "lane/rules-index")), "B")
