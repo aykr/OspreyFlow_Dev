@@ -70,7 +70,7 @@ test("an address the reader may not see says so as for a missing alert, and Back
 test("the evidence is opened, and Back to the alert returns to it, still open, by keyboard", async ({ page }) => {
   await page.goto("/keyboard/rules-place-harness.html?address=a1");
   await press(page, page.getByRole("button", { name: "Open the evidence" }));
-  const banner = page.getByRole("region", { name: "Saved view" });
+  const banner = page.getByRole("region", { name: "Saved view", exact: true });
   await expect(banner.getByText("Opened from an alert")).toBeVisible();
   expect(await page.evaluate(() => window.__RULES__?.evidence)).toEqual([{ alertId: "a1", nodeIds: ["n1"] }]);
   registerCovered(REGISTRY, "open-the-evidence-by-keyboard");

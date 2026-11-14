@@ -71,7 +71,7 @@ test("a view is named and saved from its form by keyboard", async ({ page }) => 
 
 test("Back to the whole case is reached from the strip over an opened saved view by keyboard", async ({ page }) => {
   await open(page, "?show=lens");
-  await expect(page.getByRole("region", { name: "Saved view" })).toContainText("2 items in this view could not be shown");
+  await expect(page.getByRole("region", { name: "Saved view", exact: true })).toContainText("2 items in this view could not be shown");
   await press(page, "Back to the whole case");
   await expect.poll(async () => (await state(page)).back).toBe(true);
   registerCovered("VIEW_ACTIONS", "go-back-to-the-case-from-an-open-view-by-keyboard");
@@ -93,7 +93,7 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     await page.keyboard.press("Enter");
     await expect(savedViews).toHaveAttribute("aria-expanded", "true");
     await press(page, "Open Payments in March");
-    const strip = page.getByRole("region", { name: "Saved view" });
+    const strip = page.getByRole("region", { name: "Saved view", exact: true });
     await expect(strip).toBeFocused();
     await expect(strip).toContainText("Saved view: Payments in March");
     await expect(strip).toContainText("Nothing in a saved view changes the case.");
