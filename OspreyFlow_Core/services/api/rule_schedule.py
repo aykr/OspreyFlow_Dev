@@ -33,6 +33,8 @@ from conduit_common.identity import new_id
 from conduit_common.valkey_compat import reply
 from principal_auth import (
     ACCESS_OUT_OF_DATE_WORDS,
+    NEXT_SLOT_WORDS,
+    OwnerNotHeld,
     OwnerRecordUnavailable,
     PrincipalAccessOutOfDate,
     PrincipalExchangeUnavailable,
@@ -324,7 +326,12 @@ class RuleScheduleExecutor:
             raise _Refused(f"the rule's author, {owner}, can no longer sign in") from error
         except PrincipalAccessOutOfDate as error:
             raise _Refused(
-                f"the rule's author, {owner}, {ACCESS_OUT_OF_DATE_WORDS}", outcome="failed"
+                f"the rule's author, {owner}, {ACCESS_OUT_OF_DATE_WORDS}: {NEXT_SLOT_WORDS}",
+                outcome="failed",
+            ) from error
+        except OwnerNotHeld as error:
+            raise _Refused(
+                f"the rule's author, {owner}, is not a person Admin › People holds"
             ) from error
         except OwnerRecordUnavailable as error:
             raise _Refused(

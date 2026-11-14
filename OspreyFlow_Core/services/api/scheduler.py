@@ -32,6 +32,9 @@ from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme, principal_may_view
 from principal_auth import (
     ACCESS_OUT_OF_DATE_WORDS,
+    NEXT_SLOT_WORDS,
+    RUN_AGAIN_WORDS,
+    OwnerNotHeld,
     OwnerRecordUnavailable,
     PrincipalAccessOutOfDate,
     PrincipalExchangeRefused,
@@ -272,6 +275,17 @@ class _Refused(Exception):
         self.kind: NoticeKind = kind
 
 
+def _asked_for(refused: _Refused, recipe: StudioRecipeDraft) -> str:
+    """A refusal's words for a run asked for now (*Run now*, `ospreyflow run`): nothing runs again
+    by itself, so an out-of-date owner's says what to do (ADR-148 Amendment 16)."""
+    if refused.kind == "owner_out_of_date":
+        return (
+            f"the schedule's owner, {recipe.schedule_owner}, {ACCESS_OUT_OF_DATE_WORDS}: "
+            f"{RUN_AGAIN_WORDS}"
+        )
+    return str(refused)
+
+
 @dataclass
 class ScheduleExecutor:
     """Each tick, every scheduled recipe with a slot due is judged and, if it may, run once
@@ -510,7 +524,7 @@ class ScheduleExecutor:
         try:
             owner, case = await self._owner(recipe)
         except _Refused as refused:
-            raise ScheduleRunRefused(str(refused)) from refused
+            raise ScheduleRunRefused(_asked_for(refused, recipe)) from refused
         lock = f"schedule:lock:{recipe.recipe_id}"
         token = uuid4().hex
         if not await reply(self.valkey.set(lock, token, nx=True, ex=_LOCK_SECONDS)):
@@ -528,7 +542,7 @@ class ScheduleExecutor:
         try:
             owner, case = await self._owner(recipe)
         except _Refused as refused:
-            raise ScheduleRunRefused(str(refused)) from refused
+            raise ScheduleRunRefused(_asked_for(refused, recipe)) from refused
         if Right.RUN_PIPELINES not in rights_for(owner.roles):
             raise ScheduleRunRefused(
                 f"the pipeline's owner, {recipe.schedule_owner}, no longer holds the loader's "
@@ -626,7 +640,7 @@ class ScheduleExecutor:
             # ADR-148 Amendment 16: nothing decided about the owner, so never counted toward the
             # three that pause; refused at each slot until they sign in, then run again.
             raise _Refused(
-                f"the schedule's owner, {owner_id}, {ACCESS_OUT_OF_DATE_WORDS}",
+                f"the schedule's owner, {owner_id}, {ACCESS_OUT_OF_DATE_WORDS}: {NEXT_SLOT_WORDS}",
                 kind="owner_out_of_date",
                 about_the_owner=False,
             ) from error
@@ -641,6 +655,12 @@ class ScheduleExecutor:
                 "the identity provider could not be reached to act as the schedule's owner",
                 kind="sign_in_unavailable",
                 about_the_owner=False,
+            ) from error
+        except OwnerNotHeld as error:
+            # ADR-148 Amendment 16: a fact about the owner, counted; Entra itself was not asked.
+            raise _Refused(
+                f"the schedule's owner, {owner_id}, is not a person Admin › People holds",
+                kind="refused_rights",
             ) from error
         except PrincipalExchangeRefused as error:
             # The identity provider was reached and refused: an account it no longer knows, an

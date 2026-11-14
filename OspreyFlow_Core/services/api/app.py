@@ -142,7 +142,6 @@ from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
 from principal_auth import (
     ROLE_LOOKUP_TIMEOUT_SECONDS,
     PrincipalLookupUnavailable,
-    PrincipalRevoked,
     SigningKeysUnavailable,
     in_keys_thread,
 )
@@ -836,6 +835,7 @@ from .list_connector import (
     offered_lists,
 )
 from .list_schedule import ListRefreshExecutor, ListScheduleRefused, check_list_schedule
+from .list_schedule import owner_refusal_words as list_owner_refusal_words
 from .load_checks import READ_ONLY, ChecksRefused, check_choice, checks_view, would_raise
 from .load_records import LedgerSink, may_see_counts, released_from_of, report_view
 from .mapconfig_loader import load_map_config, public_view
@@ -13897,21 +13897,21 @@ def _deployment_list_scheduler(application: FastAPI) -> DeploymentListScheduler:
     async def may_run(owner_id: str) -> str | None:
         try:
             owner = await resolve(owner_id)
-        except PrincipalRevoked:
-            return f"the schedule's owner, {owner_id}, can no longer sign in"
-        except Exception:  # noqa: BLE001 - said, not raised
-            return f"OspreyFlow could not act as the schedule's owner, {owner_id}"
+        except Exception as error:  # noqa: BLE001 - said, not raised
+            return list_owner_refusal_words(error, owner_id)
         if Right.LOAD_SCREENING_LISTS not in rights_for(owner.roles):
             return f"the schedule's owner, {owner_id}, no longer holds load_screening_lists"
         return None
 
     async def run(list_id: str, owner_id: str) -> ListImport:
+        # Audited as the person the schedule runs as, as ADR-133's scheduled refresh is: resolved
+        # before the import, so an owner who cannot be acted as by now (on Entra ID, past the 24
+        # hours since may_run asked) leaves no import standing without its audit row.
+        owner = await resolve(owner_id)
         done = await import_list(
             list_id, store=state.list_store, rows_kept=state.list_rows, trigger="schedule"
         )
         await _rules_on_list_refresh(state, done, DEPLOYMENT_WIDE)
-        # Audited as the person the schedule runs as, as ADR-133's scheduled refresh is.
-        owner = await resolve(owner_id)
         await state.audit.record(
             principal=owner, action="deployment_list_refreshed", investigation_id=None,
             resolved_query={"list_id": list_id, "outcome": done.outcome, "version": done.version,

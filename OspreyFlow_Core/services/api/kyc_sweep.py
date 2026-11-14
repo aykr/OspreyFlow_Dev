@@ -31,7 +31,11 @@ from valkey.asyncio import Valkey
 from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme
 from ports.graph import GraphPort
-from principal_auth import ACCESS_OUT_OF_DATE_WORDS, PrincipalAccessOutOfDate
+from principal_auth import (
+    ACCESS_OUT_OF_DATE_WORDS,
+    PrincipalAccessOutOfDate,
+    PrincipalExchangeError,
+)
 from schemas.domain import Principal
 
 from .alerts import AlertStore
@@ -45,6 +49,12 @@ from .typology_rules import TypologyRuleStore
 
 _LAST_SWEPT = "kyc:sweep:last"
 _CLAIM = "kyc:sweep:claimed:"
+#: ADR-148 Amendment 16: the sweep closes its day whatever happened, so a deployer out of date
+#: leaves that day's lapses unjudged by the sweep; the rule's next load judges its customers.
+KYC_OUT_OF_DATE_NEXT = (
+    "the documents that lapsed are not judged by this day's check; the rule judges its customers "
+    "afresh at its next load"
+)
 log = logging.getLogger(__name__)
 
 
@@ -71,6 +81,7 @@ async def sweep(
     datasets: DatasetStore | None = None,
     deployer_of: Callable[[str], Awaitable[Principal]] | None = None,
 ) -> SweepReport:
+
     """`deployer_of` (`resolve_for_owner_detailed`), when given, is how each rule's deployer is
     acted as, so a refusal can say why: on Entra ID, a deployer not signed in within 24 hours is
     said so (ADR-148 Amendment 16). Without it, `principal_for_owner`'s `None` is the one answer."""
@@ -113,8 +124,11 @@ async def sweep(
                         deployer = await deployer_of(rule.owner_id)
                     except PrincipalAccessOutOfDate:
                         deployer = None
-                        why = f"its deployer, {rule.owner_id}, {ACCESS_OUT_OF_DATE_WORDS}"
-                    except Exception:  # noqa: BLE001 - refused or unreachable: as the None answer
+                        why = (
+                            f"its deployer, {rule.owner_id}, {ACCESS_OUT_OF_DATE_WORDS}: "
+                            f"{KYC_OUT_OF_DATE_NEXT}"
+                        )
+                    except PrincipalExchangeError:  # refused or unreachable: as the None answer
                         deployer = None
                 if deployer is not None and datasets is not None:
                     # As a request is, by what the case reads: in a case reading a composite its

@@ -494,8 +494,10 @@ async def test_a_run_acts_as_its_owner_as_the_store_holds_them(world) -> None:  
         await resolver.aclose()
 
 
-async def test_the_store_answers_no_owner_for_another_tenant(world) -> None:  # type: ignore[no-untyped-def]
+async def test_the_store_refuses_an_owner_read_for_another_tenant(world) -> None:  # type: ignore[no-untyped-def]
+    """As `person` does: a store wired to the wrong tenant is a fault, never every owner "not held"."""
     await world.store.person(TENANT, OID, SEEN)
-    assert await world.store.owner(OTHER_TENANT, OID) is None
+    with pytest.raises(IdentityAdminRefused):
+        await world.store.owner(OTHER_TENANT, OID)
     held = await world.store.owner(TENANT, OID)
     assert held is not None and (held.clearance, held.org_unit) == ("OFFICIAL", "unit-1")

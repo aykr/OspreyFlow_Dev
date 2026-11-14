@@ -456,6 +456,32 @@ async def test_an_identity_provider_outage_is_refused_but_never_pauses_the_sched
     assert "three refused runs in a row" in recipes.paused[recipe.recipe_id]
 
 
+async def test_an_owner_out_of_date_on_entra_is_refused_in_its_words_and_never_pauses_the_schedule(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-148 Amendment 16: an owner not signed in within 24 hours decides nothing about them, so
+    four slots in a row are refused, each in the 24-hour words and told so, and the schedule is
+    never paused; once they sign in it runs at its next slot. Held at the ledger and the pause, not
+    only at the refusal's flag (the lane review of 876383a, should 9)."""
+    from principal_auth import ACCESS_OUT_OF_DATE_WORDS, NEXT_SLOT_WORDS, PrincipalAccessOutOfDate
+
+    recipe = _recipe()
+    recipes, edges = _Recipes([recipe]), _Edges(owner=PrincipalAccessOutOfDate(OWNER.id, None))
+    executor = _executor(recipes, edges, runs, valkey)
+    for day in range(4):
+        await executor.tick(FIRST_SLOT + timedelta(days=day))
+    assert recipe.recipe_id not in recipes.paused
+    rows = await runs.for_recipe(recipe.recipe_id)
+    assert [r.outcome for r in rows] == ["refused"] * 4
+    assert all(f"{ACCESS_OUT_OF_DATE_WORDS}: {NEXT_SLOT_WORDS}" in (r.failure or "") for r in rows)
+    assert all("could not be reached" not in (r.failure or "") for r in rows)
+    assert all("has not signed in to OspreyFlow within the last 24 hours" in words
+               for _, _, words in edges.notices)  # fmt: skip
+    edges.owner = OWNER
+    await executor.tick(FIRST_SLOT + timedelta(days=4))
+    assert len(edges.runs_made) == 1
+
+
 async def test_an_owner_the_identity_provider_no_longer_knows_pauses_on_the_third_slot(
     runs: RecipeRunStore, valkey: Valkey
 ) -> None:

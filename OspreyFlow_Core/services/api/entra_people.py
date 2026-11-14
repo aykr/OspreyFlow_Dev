@@ -355,9 +355,11 @@ class EntraPeopleStore:
 
     async def owner(self, tenant_id: str, oid: str) -> StoredOwner | None:
         """A person as held, for a run acting as them (ADR-148 Amendment 16): read without
-        recording anyone, and only within this store's tenant. None for a person not held."""
+        recording anyone, and only within this store's tenant. None for a person not held; asked for
+        another tenant, it raises, as `person` does: a store wired to the wrong tenant is a fault,
+        never every owner "not held"."""
         if tenant_id != self.tenant_id:
-            return None
+            raise IdentityAdminRefused("the people store is another tenant's")
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT roles, disabled, clearance, org_unit, receivable_handling_codes, "

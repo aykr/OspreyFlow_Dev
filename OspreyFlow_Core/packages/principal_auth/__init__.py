@@ -970,12 +970,22 @@ class OwnerRecordUnavailable(PrincipalExchangeUnavailable):
 
 
 #: ADR-148 Amendment 16: why a run is refused when its owner's access is out of date, after the
-#: owner's id in a caller's sentence ("the schedule's owner, <id>, …"). The 24 hours are
-#: `ACCESS_FRESH`'s.
+#: owner's id in a caller's sentence ("the schedule's owner, <id>, …"), and before what happens
+#: next, which is each caller's own (`NEXT_SLOT_WORDS`, `RUN_AGAIN_WORDS`, the KYC check's). The
+#: 24 hours are `ACCESS_FRESH`'s.
 ACCESS_OUT_OF_DATE_WORDS = (
     "has not signed in to OspreyFlow within the last 24 hours, so their clearance and unit are out "
-    "of date: it runs again once they sign in"
+    "of date"
 )
+#: What happens next for a slot of a schedule (a pipeline's, a rule's, a list's) or a watch.
+NEXT_SLOT_WORDS = "it runs at its next slot after they sign in"
+#: What to do next for a run asked for by hand or by a trigger (*Run now*, `ospreyflow run`).
+RUN_AGAIN_WORDS = "run it again once they have signed in"
+
+
+class OwnerNotHeld(PrincipalExchangeRefused):
+    """On Entra ID (ADR-148 Amendment 16): Admin › People holds no such person. A fact about the
+    owner, so it counts as a refusal of their rights does; Entra itself was not asked."""
 
 
 class PrincipalAccessOutOfDate(PrincipalExchangeUnavailable):
@@ -1307,7 +1317,7 @@ class PrincipalResolver:
                 f"the people store could not be read for owner {owner_id!r}: {type(exc).__name__}"
             ) from exc
         if stored is None:
-            raise PrincipalExchangeRefused(f"owner {owner_id!r} is not a person of this deployment")
+            raise OwnerNotHeld(f"owner {owner_id!r} is not a person of this deployment")
         if not isinstance(stored, StoredOwner):
             raise OwnerRecordUnavailable("the people store answered something not a person")
         if stored.disabled:

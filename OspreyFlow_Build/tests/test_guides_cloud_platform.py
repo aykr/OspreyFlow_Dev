@@ -4,10 +4,11 @@ things the profile does not do, or leaving out what it refuses. The docs lane's 
 (`process/lanes/docs/v052-sweep/README.md`), corrected them. Each case below holds a correction to the code it
 describes, so the words cannot drift from it unnoticed (rule 12):
 
-- on Entra ID nothing can act as its owner: every guide section describing something that runs as its owner (a
-  pipeline's schedule and watched folder, `ospreyflow run`, *Run now* in Operations, a rule's schedule, a list's
-  refresh schedule, a watch, another analyst's hotlist at a load) says so, pointing at §6a.7, and §6a.7 quotes the
-  refusal in the scheduler's own words; no guide says such a run is "marked stopped", which it is not;
+- on Entra ID a run acts as its owner's stored identity (ADR-148 Amendment 16): every guide section describing
+  something that runs as its owner (a pipeline's schedule and watched folder, `ospreyflow run`, *Run now* in
+  Operations, a rule's schedule, a list's refresh schedule, a watch, another analyst's hotlist at a load) points at
+  §6a.7; §6a.7 quotes the 24-hour refusal as each caller words it and the hours the code trusts; no guide says such a
+  run stops on Entra, nor that it is "marked stopped";
 - *Admin › People* on Entra ID refuses what Entra holds, and §9 quotes each refusal as `entra_people.py` words it;
 - the point-in-time restore's days, and one S3 read's object cap, are the code's numbers;
 - §6a.8 says what a backup set holds, and what it leaves out, in each shape as the render backs it up.
@@ -108,12 +109,15 @@ def test_the_owner_run_check_flags_a_section_without_its_note() -> None:
 
 
 def test_section_6a7_quotes_the_24_hour_refusal_as_the_code_words_it() -> None:
-    """The words every run as its owner says when its owner's access is out of date (`ACCESS_OUT_OF_DATE_WORDS`),
-    after the scheduler's "the schedule's owner, <id>,"."""
-    from principal_auth import ACCESS_OUT_OF_DATE_WORDS
+    """The words a run as its owner says when its owner's access is out of date, whole, as each caller builds them:
+    a slot's (`NEXT_SLOT_WORDS`), Run now's and `ospreyflow run`'s (`RUN_AGAIN_WORDS`), the KYC check's."""
+    from principal_auth import ACCESS_OUT_OF_DATE_WORDS, NEXT_SLOT_WORDS, RUN_AGAIN_WORDS
+    from services.api.kyc_sweep import KYC_OUT_OF_DATE_NEXT
 
     text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.7"))
-    assert f"the schedule's owner, <id>, {ACCESS_OUT_OF_DATE_WORDS}" in text
+    assert f"the schedule's owner, <id>, {ACCESS_OUT_OF_DATE_WORDS}: {NEXT_SLOT_WORDS}" in text
+    assert f'ending "{RUN_AGAIN_WORDS}"' in text
+    assert KYC_OUT_OF_DATE_NEXT in text
 
 
 def test_section_6a7_gives_the_hours_the_code_trusts_a_sign_in_for() -> None:
@@ -121,8 +125,8 @@ def test_section_6a7_gives_the_hours_the_code_trusts_a_sign_in_for() -> None:
 
     hours = int(ACCESS_FRESH.total_seconds() // 3600)
     text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.7"))
-    assert f"has not signed in within the last {hours} hours" in text
-    assert "So a schedule runs only on the days its owner signs in." in text
+    assert f"A run is refused when that record is more than {hours} hours old" in text
+    assert "So a schedule runs only while its owner keeps signing in." in text
 
 
 def test_no_guide_says_an_entra_scheduled_run_is_marked_stopped() -> None:
