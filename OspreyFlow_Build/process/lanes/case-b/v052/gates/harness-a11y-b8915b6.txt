@@ -1,0 +1,148 @@
+# make -k harness-a11y at b8915b6, stack_lease.sh offline case-b (no stack, no lease), the run's own log whole, colour codes taken out
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/), logged at osprey-runs/case-b.meta/runs/20261114T004954Z-22060092/log: make -C OspreyFlow_Core harness-a11y
+make: Entering directory '/root/osprey-runs/case-b/OspreyFlow_Core'
+npm run test:a11y --workspace apps/harness
+
+> @ospreyflow/harness@0.0.0 test:a11y
+> playwright test --config a11y/playwright.config.ts
+
+[WebServer] INFO:     Started server process [1790234]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:7519 (Press CTRL+C to quit)
+
+Running 34 tests using 2 workers
+
+  ✓   2 a11y/a11y.spec.ts:37:5 › dark theme Profile screen has no automated wcag2aa violations (3.2s)
+  ✓   1 a11y/install-page.spec.ts:58:5 › install page Mode screen (dark) has no automated WCAG 2.2 A or AA violations (3.4s)
+  ✓   4 a11y/install-page.spec.ts:58:5 › install page Folders screen (dark) has no automated WCAG 2.2 A or AA violations (1.9s)
+  ✓   5 a11y/install-page.spec.ts:58:5 › install page Profile screen (dark) has no automated WCAG 2.2 A or AA violations (1.9s)
+  ✘   3 a11y/a11y.spec.ts:37:5 › dark theme Components screen has no automated wcag2aa violations (1.0m)
+  ✘   6 a11y/install-page.spec.ts:58:5 › install page Components screen (dark) has no automated WCAG 2.2 A or AA violations (1.0m)
+  ✓   8 a11y/install-page.spec.ts:58:5 › install page Map screen (dark) has no automated WCAG 2.2 A or AA violations (2.2s)
+  ✓   9 a11y/install-page.spec.ts:58:5 › install page Models screen (dark) has no automated WCAG 2.2 A or AA violations (1.8s)
+  ✓  10 a11y/install-page.spec.ts:58:5 › install page Governance screen (dark) has no automated WCAG 2.2 A or AA violations (2.0s)
+  ✓  11 a11y/install-page.spec.ts:58:5 › install page Demo packs screen (dark) has no automated WCAG 2.2 A or AA violations (2.0s)
+  ✓  12 a11y/install-page.spec.ts:58:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations (1.8s)
+  ✓  13 a11y/install-page.spec.ts:75:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations (1.8s)
+  ✓  14 a11y/install-page.spec.ts:75:5 › install page Mode screen with the govuk-crime starter (dark) has no automated WCAG 2.2 A or AA violations (1.8s)
+  ✓  15 a11y/install-page.spec.ts:58:5 › install page Mode screen (light) has no automated WCAG 2.2 A or AA violations (2.0s)
+  ✓  16 a11y/install-page.spec.ts:58:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations (1.9s)
+  ✓  17 a11y/install-page.spec.ts:58:5 › install page Profile screen (light) has no automated WCAG 2.2 A or AA violations (2.0s)
+  ✓  18 a11y/install-page.spec.ts:58:5 › install page Components screen (light) has no automated WCAG 2.2 A or AA violations (1.9s)
+  ✓  19 a11y/install-page.spec.ts:58:5 › install page Map screen (light) has no automated WCAG 2.2 A or AA violations (1.8s)
+  ✓  20 a11y/install-page.spec.ts:58:5 › install page Models screen (light) has no automated WCAG 2.2 A or AA violations (1.9s)
+  ✓  21 a11y/install-page.spec.ts:58:5 › install page Governance screen (light) has no automated WCAG 2.2 A or AA violations (2.1s)
+  ✓  22 a11y/install-page.spec.ts:58:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations (1.8s)
+  ✓  23 a11y/install-page.spec.ts:58:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations (1.8s)
+  ✓  24 a11y/install-page.spec.ts:75:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations (1.9s)
+  ✓  25 a11y/install-page.spec.ts:75:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations (2.0s)
+  ✘   7 a11y/a11y.spec.ts:37:5 › dark theme Models screen has no automated wcag2aa violations (1.0m)
+  ✓  26 a11y/a11y.spec.ts:37:5 › dark theme Governance screen has no automated wcag2aa violations (1.8s)
+  ✓  27 a11y/a11y.spec.ts:37:5 › dark theme Geospatial screen has no automated wcag2aa violations (1.5s)
+  ✓  28 a11y/a11y.spec.ts:37:5 › dark theme Preflight screen has no automated wcag2aa violations (1.7s)
+  ✓  29 a11y/a11y.spec.ts:37:5 › light theme Profile screen has no automated wcag2aa violations (1.5s)
+  ✓  30 a11y/a11y.spec.ts:37:5 › light theme Components screen has no automated wcag2aa violations (1.8s)
+  ✓  31 a11y/a11y.spec.ts:37:5 › light theme Models screen has no automated wcag2aa violations (1.7s)
+  ✓  32 a11y/a11y.spec.ts:37:5 › light theme Governance screen has no automated wcag2aa violations (1.7s)
+  ✘  33 a11y/a11y.spec.ts:37:5 › light theme Geospatial screen has no automated wcag2aa violations (1.0m)
+  ✓  34 a11y/a11y.spec.ts:37:5 › light theme Preflight screen has no automated wcag2aa violations (1.6s)
+
+
+  1) a11y/a11y.spec.ts:37:5 › dark theme Components screen has no automated wcag2aa violations ─────
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Components', exact: true })
+
+
+      44 |       }
+      45 |       if (screen !== "Profile") {
+    > 46 |         await page.getByRole("button", { name: screen, exact: true }).focus();
+         |                                                                       ^
+      47 |         await page.keyboard.press("Enter");
+      48 |       }
+      49 |       // The screen's own `<h2>` — waited for so axe scans the screen actually switched to, not a
+        at /root/osprey-runs/case-b/OspreyFlow_Core/apps/harness/a11y/a11y.spec.ts:46:71
+
+    Error Context: test-results/a11y-dark-theme-Components-b6515-utomated-wcag2aa-violations/error-context.md
+
+  2) a11y/a11y.spec.ts:37:5 › dark theme Models screen has no automated wcag2aa violations ─────────
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Models', exact: true })
+
+
+      44 |       }
+      45 |       if (screen !== "Profile") {
+    > 46 |         await page.getByRole("button", { name: screen, exact: true }).focus();
+         |                                                                       ^
+      47 |         await page.keyboard.press("Enter");
+      48 |       }
+      49 |       // The screen's own `<h2>` — waited for so axe scans the screen actually switched to, not a
+        at /root/osprey-runs/case-b/OspreyFlow_Core/apps/harness/a11y/a11y.spec.ts:46:71
+
+    Error Context: test-results/a11y-dark-theme-Models-scr-39f0e-utomated-wcag2aa-violations/error-context.md
+
+  3) a11y/a11y.spec.ts:37:5 › light theme Geospatial screen has no automated wcag2aa violations ────
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Geospatial', exact: true })
+
+
+      44 |       }
+      45 |       if (screen !== "Profile") {
+    > 46 |         await page.getByRole("button", { name: screen, exact: true }).focus();
+         |                                                                       ^
+      47 |         await page.keyboard.press("Enter");
+      48 |       }
+      49 |       // The screen's own `<h2>` — waited for so axe scans the screen actually switched to, not a
+        at /root/osprey-runs/case-b/OspreyFlow_Core/apps/harness/a11y/a11y.spec.ts:46:71
+
+    Error Context: test-results/a11y-light-theme-Geospatia-63b81-utomated-wcag2aa-violations/error-context.md
+
+  4) a11y/install-page.spec.ts:58:5 › install page Components screen (dark) has no automated WCAG 2.2 A or AA violations 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('navigation', { name: 'Install screens' }) to be visible
+
+
+      40 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+      41 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+    > 42 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+         |                                                                   ^
+      43 |   if (theme === "light") {
+      44 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+      45 |   }
+        at openInstallPage (/root/osprey-runs/case-b/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:42:67)
+        at /root/osprey-runs/case-b/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:61:7
+
+    Error Context: test-results/install-page-install-page--c24ae-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  4 failed
+    a11y/a11y.spec.ts:37:5 › dark theme Components screen has no automated wcag2aa violations ──────
+    a11y/a11y.spec.ts:37:5 › dark theme Models screen has no automated wcag2aa violations ──────────
+    a11y/a11y.spec.ts:37:5 › light theme Geospatial screen has no automated wcag2aa violations ─────
+    a11y/install-page.spec.ts:58:5 › install page Components screen (dark) has no automated WCAG 2.2 A or AA violations 
+  30 passed (3.6m)
+npm error Lifecycle script `test:a11y` failed with error:
+npm error code 1
+npm error path /root/osprey-runs/case-b/OspreyFlow_Core/apps/harness
+npm error workspace @ospreyflow/harness@0.0.0
+npm error location /root/osprey-runs/case-b/OspreyFlow_Core/apps/harness
+npm error command failed
+npm error command sh -c playwright test --config a11y/playwright.config.ts
+make: *** [Makefile:175: harness-a11y] Error 1
+make: Leaving directory '/root/osprey-runs/case-b/OspreyFlow_Core'
+Wall time: 221 s, exit 2 (no stack, no lease; set-up before it 56 s)
