@@ -1,29 +1,34 @@
-# v052-selection plants.py --keyboard at f97a0f1 (clean tree; the two shared diffs applied for the run and taken out), slot 3, a fresh PYTHONPYCACHEPREFIX per run, 2026-11-14T00:13:16Z, rc=0
-GREEN unplanted js:src/canvas/selectionActions.test.tsx: Tests  8 passed (8)
+# v052-selection plants.py --keyboard at c75886a (clean tree; the three shared diffs applied for the run and taken out), slot 3, a fresh PYTHONPYCACHEPREFIX per run, 2026-11-14T01:08:10Z, rc=0
+GREEN unplanted js:src/canvas/selectionActions.test.tsx: Tests  10 passed (10)
 GREEN unplanted js:src/design/headingFace.test.ts: Tests  14 passed (14)
-GREEN unplanted js:src/design/primitives/RadialMenu.test.tsx: Tests  23 passed (23)
-GREEN unplanted kb:ContextMenu key opens the menu: 1 passed (1.9s)
-GREEN unplanted kb:Shift\+F10 opens the menu: 1 passed (1.9s)
-GREEN unplanted kb:a link type whose count failed is shown: 1 passed (2.3s)
+GREEN unplanted js:src/design/primitives/RadialMenu.test.tsx: Tests  24 passed (24)
+GREEN unplanted kb:ContextMenu key opens the menu: 1 passed (1.8s)
+GREEN unplanted kb:Shift\+F10 opens the menu: 1 passed (1.7s)
+GREEN unplanted kb:a link type whose count failed is shown: 1 passed (1.7s)
+GREEN unplanted kb:fold only once every count has answered: 1 passed (1.7s)
 GREEN unplanted kb:link types with no links fold: 1 passed (2.0s)
-GREEN unplanted py: 9 passed in 3.32s
-RED   a link whose far end the read left out is counted: 1 failed, 8 passed in 2.26s
-RED   a link of another type is counted: 1 failed, 8 passed in 2.86s
-RED   a link between two neighbours is counted as the node's: 1 failed, 8 passed in 2.42s
+GREEN unplanted py: 9 passed in 2.33s
+RED   a link whose far end the read left out is counted: 1 failed, 8 passed in 2.38s
+RED   a link of another type is counted: 1 failed, 8 passed in 2.26s
+RED   a link between two neighbours is counted as the node's: 1 failed, 8 passed in 2.32s
 RED   every link the read returned counted: 2 failed, 7 passed in 2.33s
-RED   Expand left out of the menu: Tests  5 failed | 3 passed (8)
-RED   the menu's order not the bar's (Expand moved last): Tests  5 failed | 3 passed (8)
-RED   the bar's words drift from the menu's: Tests  6 failed | 2 passed (8)
-RED   Show links offered for one, as the bar does not: Tests  1 failed | 7 passed (8)
-RED   the fold line closes the menu: Tests  1 failed | 22 passed (23)
-RED   Home does nothing: Tests  1 failed | 22 passed (23)
-RED   the menu opens over the bar: Tests  2 failed | 21 passed (23)
-RED   the menu's heading in mono: Tests  1 failed | 22 passed (23)
+RED   Expand left out of the menu: Tests  5 failed | 5 passed (10)
+RED   the menu's order not the bar's (Expand moved last): Tests  5 failed | 5 passed (10)
+RED   the bar's words drift from the menu's: Tests  6 failed | 4 passed (10)
+RED   Show links offered for one, as the bar does not: Tests  1 failed | 9 passed (10)
+RED   the fold line closes the menu: Tests  1 failed | 23 passed (24)
+RED   Home does nothing: Tests  1 failed | 23 passed (24)
+RED   the menu opens over the bar: Tests  2 failed | 22 passed (24)
+RED   the menu's heading in mono: Tests  1 failed | 23 passed (24)
 RED   a heading classed as a value in mono: Tests  12 failed | 2 passed (14)
 RED   a value that is not a heading out of mono: Tests  2 failed | 12 passed (14)
-RED   the ring's own entries not measured against the bar: Tests  1 failed | 22 passed (23)
-RED   focus lost when the focused entry goes: Tests  1 failed | 22 passed (23)
-RED   the menu offers Ask where the bar does not: Tests  1 failed | 7 passed (8)
+RED   the ring's own entries not measured against the bar: Tests  1 failed | 23 passed (24)
+RED   focus lost when the focused entry goes: Tests  2 failed | 22 passed (24)
+RED   focus lost when an entry is replaced and the count is the same: Tests  1 failed | 23 passed (24)
+RED   the fold made as each count arrives: 1 failed
+RED   the menu's Show links ignores the bar's stepper: Tests  1 failed | 9 passed (10)
+RED   the bar's stepper not the canvas's: Tests  1 failed | 9 passed (10)
+RED   the menu leaves out Ask, which the bar offers: Tests  6 failed | 4 passed (10)
 RED   a type whose count failed folded away: 1 failed
 RED   the ContextMenu key opens nothing: 1 failed
 RED   a menu on an unselected node leaves the selection: 1 failed
