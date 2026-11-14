@@ -131,7 +131,7 @@ def test_the_runbooks_say_what_the_client_provides_and_what_is_not_backed_up() -
     from harness.render import REPO_ROOT
 
     recovery = (REPO_ROOT / "deploy/RUNBOOK.md").read_text(encoding="utf-8")
-    assert "create job --from=cronjob/ospreyflow-search-rebuild" in recovery
+    assert "cronjob/ospreyflow-search-rebuild" in recovery and "cronjob/ospreyflow-search-drift" in recovery
     assert "search index rebuilt:" in recovery and "search index drift: none" in recovery
     assert "not backed up" in recovery
 
@@ -144,3 +144,75 @@ def test_the_manifest_lists_the_domain_as_rendered() -> None:
     assert listed["managed"]["opensearch"]["data_nodes"] == 2
     assert listed["managed"]["opensearch"]["signing"] == "sigv4"
     assert yaml.safe_dump(listed).count("v052-opensearch") == 0
+
+
+# -- the restore's search step, run as written (the reviews of searchkind 6998234) -----------------
+
+_KUBECTL = r'''#!/bin/bash
+# A kubectl for the recovery runbook's step 5: each call logged; the Job's pod and outcome as
+# $SCENARIO says (starts: never | fails | succeeds).
+echo "$*" >> "$CALLS"
+case "$*" in
+  *"create job"*) echo "job created" ;;
+  *"get pod"*"phase"*) case "$SCENARIO" in never) echo Pending ;; fails) echo Failed ;; *) echo Succeeded ;; esac ;;
+  *"wait --for=jsonpath={.status.conditions[0].status}=True"*) [ "$SCENARIO" != never ] ;;
+  *"get job"*"succeeded"*) [ "$SCENARIO" = succeeds ] && echo 1 || true ;;
+  *logs*) echo "the Job's last line" ;;
+  *) true ;;
+esac
+'''
+
+
+def _search_step(tmp_path, scenario: str) -> tuple[int, str, list[str]]:  # type: ignore[no-untyped-def]
+    import subprocess
+
+    from harness.render import REPO_ROOT
+
+    recovery = (REPO_ROOT / "deploy/RUNBOOK.md").read_text(encoding="utf-8")
+    step = recovery[recovery.index("# 5. Where the deployment searches with OpenSearch") :]
+    step = step[: step.index("```")].replace("<namespace>", "ospreyflow-poc")
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "kubectl").write_text(_KUBECTL)
+    (bin_ / "sleep").write_text("#!/bin/bash\n")  # the poll's waits, not slept in a test
+    for tool in ("kubectl", "sleep"):
+        (bin_ / tool).chmod(0o755)
+    calls = tmp_path / "calls"
+    done = subprocess.run(["bash", "-c", "set -e\n" + step], capture_output=True, text=True, timeout=60,
+                          env={"PATH": f"{bin_}:/usr/bin:/bin", "CALLS": str(calls), "SCENARIO": scenario})  # fmt: skip
+    return done.returncode, done.stdout + done.stderr, calls.read_text().splitlines()
+
+
+def test_the_restores_search_jobs_are_bounded_in_minutes() -> None:
+    from harness.render import REPO_ROOT
+
+    recovery = (REPO_ROOT / "deploy/RUNBOOK.md").read_text(encoding="utf-8")
+    step = recovery[recovery.index("# 5. Where the deployment searches with OpenSearch") :]
+    step = step[: step.index("```")]
+    bounds = re.findall(r"--timeout=\"?\$?\{?(\w+)", step) + re.findall(r":(\d+m)\b", step)
+    assert "6h" not in step and "1h" not in step
+    assert bounds and all(re.fullmatch(r"\d+m", b) and int(b[:-1]) <= 30 for b in bounds if b[0].isdigit())
+
+
+def test_a_search_job_that_never_starts_stops_the_restore_by_name(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    code, said, calls = _search_step(tmp_path, "never")
+    assert code != 0
+    assert "search-rebuild-" in said and "did not start" in said and "describe pod" in said
+    assert not any("search-drift" in c for c in calls), "the drift check started after a rebuild that never ran"
+
+
+def test_a_search_job_that_fails_stops_the_restore_by_name_at_once(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    code, said, calls = _search_step(tmp_path, "fails")
+    assert code != 0
+    assert "search-rebuild-" in said and "failed" in said
+    # It ended at once: no wait on a condition that a failed Job never reaches.
+    assert not any("condition=complete" in c for c in calls)
+    assert not any("search-drift" in c for c in calls)
+
+
+def test_both_search_jobs_run_when_each_succeeds(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    code, said, calls = _search_step(tmp_path, "succeeds")
+    assert code == 0, said
+    created = [c for c in calls if "create job" in c]
+    assert [("search-rebuild" in c, "search-drift" in c) for c in created] == [(True, False), (False, True)]
+    assert said.count("the Job's last line") == 2

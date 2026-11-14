@@ -320,12 +320,26 @@ done
 # 5. Where the deployment searches with OpenSearch: the search index is not backed up (it is rebuilt from
 #    the graph, ADR-150), so the restore ends with its rebuild, then the drift check, each a Job started from
 #    its standing template (under the namespace's own service account, signing as its role).
-kubectl -n <namespace> create job --from=cronjob/ospreyflow-search-rebuild search-rebuild-$(date -u +%Y%m%dt%H%M%S)
-kubectl -n <namespace> wait --for=condition=complete job -l app.kubernetes.io/name=search-rebuild --timeout=6h
-kubectl -n <namespace> logs -l app.kubernetes.io/name=search-rebuild --tail=1
-kubectl -n <namespace> create job --from=cronjob/ospreyflow-search-drift search-drift-$(date -u +%Y%m%dt%H%M%S)
-kubectl -n <namespace> wait --for=condition=complete job -l app.kubernetes.io/name=search-drift --timeout=1h
-kubectl -n <namespace> logs -l app.kubernetes.io/name=search-drift --tail=1
+#    The Jobs come from cronjob/ospreyflow-search-rebuild, then cronjob/ospreyflow-search-drift.
+#    Each is given five minutes to start and then its own bound (the rebuild 30 minutes, the drift check
+#    10), and stops the restore by name if it does not start, fails, or runs past it.
+for job in search-rebuild:30m search-drift:10m; do
+  J="${job%%:*}-$(date -u +%Y%m%dt%H%M%S)"
+  kubectl -n <namespace> create job --from=cronjob/ospreyflow-"${job%%:*}" "$J"
+  for i in $(seq 60); do   # started (or already ended) within five minutes
+    phase=$(kubectl -n <namespace> get pod -l job-name="$J" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || true)
+    case "$phase" in Running|Succeeded|Failed) break ;; esac
+    sleep 5
+  done
+  case "$phase" in Running|Succeeded|Failed) ;;
+    *) echo "$J did not start in five minutes: kubectl -n <namespace> describe pod -l job-name=$J says why"; false ;;
+  esac
+  kubectl -n <namespace> wait --for=jsonpath='{.status.conditions[0].status}'=True "job/$J" --timeout="${job#*:}" \
+    || { echo "$J ran past ${job#*:}: read its log (kubectl -n <namespace> logs job/$J)"; false; }
+  kubectl -n <namespace> logs "job/$J" --tail=1
+  kubectl -n <namespace> get job "$J" -o jsonpath='{.status.succeeded}' | grep -qx 1 \
+    || { echo "$J failed: read its log (kubectl -n <namespace> logs job/$J)"; false; }
+done
 ```
 
 **A healthy restore.** Each step's log ends in plain words, and none holds a stack trace: the restore Job's

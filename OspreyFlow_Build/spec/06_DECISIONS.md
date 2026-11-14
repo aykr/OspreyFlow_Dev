@@ -37169,6 +37169,37 @@ days in every fixture; step 7 refusing without the choice, and keep and destroy 
 left), and in Helm's own output `tests/cp_policy_check/test_cp_egress_order.py` (the claims backup's read-only shared
 mounts; the search Jobs refused our Secret whole). Red first: `process/lanes/platform/v052-opensearch/` and
 `v052-datasafety/`; the policy check's first run red on the server (`cp-policy-red.txt`), then green.
+
+**The domain on R1's kind cluster (v052-searchkind, the orchestrator's review).** The S3/STS stand-in
+(`tests/fixtures/cloud_platform/s3_standin.py`) answers as the domain, which install step 2's stand-in makes and
+decommission step 7's removes with its disk and name. It refuses what the poc domain refuses, each branch shown red
+by a plant at its own site (`process/lanes/platform/v052-searchkind/plants.py`). It refuses a request:
+- that is unsigned;
+- signed for another service or region;
+- carrying a token that is missing, wrong or expired;
+- whose signature is bad, including a body changed after signing;
+- from a role the access policy (read from the render) does not admit;
+- over five minutes of clock skew;
+- with a body over 10 MiB, answered 413.
+
+It signs paths as botocore does for `es` (normalised, then encoded again). R1's checks prove all of this from the
+namespace's own pods and the stand-in's log. Tests: `tests/test_r1_opensearch_standin.py` and
+`tests/test_r1_kind_standins.py`.
+
+**What the stand-in does not model** (each is a way a real domain may differ from it):
+- **Topology.** It is one node, so an index with replicas reads yellow where the domain's two nodes in two zones
+  read green. Nothing may require green.
+- **Restricted API.** OpenSearch Service refuses some APIs (cluster settings it manages, snapshots to a file system,
+  plugin installs) that the stand-in passes on.
+- **Plugins.** It has the stock image's plugins plus `analysis-phonetic`. The domain's other analysis plugins (for
+  example ICU) are absent.
+- **Security group.** The 443 ingress from the namespace's networks is enforced by the cluster's egress policy, not
+  by the domain.
+- **Limits and protocol.** Request-rate limits (429), the endpoint's TLS policy, presigned or chunked `es`
+  requests, and PATCH are not modelled.
+- **Its own configuration endpoint** (`/_standin/configure`) is unauthenticated, reachable inside the cluster
+  alone.
+
 ### ADR-098, Amendment 7 (13 November 2026) — Ask & Chat reads from what the person chooses, and needs no document
 
 Status: written 13 November 2026 by the rules-b lane (step v052D, parts D(i) and D(ii)) under the
