@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 from scripts import measure_search
@@ -43,6 +44,18 @@ _NAMED = (
     "OSPREY_MEASURE_TOKEN",
     "OSPREY_MEASURE_QUERIES",
 )
+
+
+def _record(measure: str, result: dict[str, Any]) -> None:
+    """Each case's result, as JSON in the folder OSPREY_MEASURE_RESULTS names (the record's table
+    is made from them: `process/lanes/platform/v052-measure/results_table.py`), written before
+    its verdict is asserted, so a figure that fails is recorded too. Nothing where none is named."""
+    folder = os.environ.get("OSPREY_MEASURE_RESULTS", "").strip()
+    if folder:
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        (Path(folder) / f"{measure}.json").write_text(
+            json.dumps(result, indent=2), encoding="utf-8"
+        )
 
 
 def _stack() -> dict[str, str]:
@@ -78,6 +91,7 @@ def test_the_class_is_within_its_failure_figure_on_the_load(query_class: str) ->
         warmup=int(os.environ.get("OSPREY_MEASURE_WARMUP", "20")),
     )
     found = result["classes"][query_class]
+    _record(found["measure"], {**found, "class": query_class})
     assert found["verdict"] == "met", f"{found['measure']} {query_class}: {found['why']}"
 
 
@@ -90,6 +104,7 @@ def test_m6_a_drawn_node_reaches_the_index_within_its_failure_figure() -> None:
         n=int(os.environ.get("OSPREY_MEASURE_LAG_N", "50")),
         warmup=5,
     )
+    _record("M6", found)
     assert found["verdict"] == "met", f"M6 lag: {found['why']}"
 
 
@@ -113,6 +128,7 @@ def test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal() -
         controls=json.loads(os.environ["OSPREY_MEASURE_CONTROLS"]),
         cases=[json.loads(line) for line in lines if line.strip()],
     )
+    _record("M10", found)
     assert found["verdict"] == "met", "M10: " + "; ".join(found["failures"][:20])
 
 
@@ -146,4 +162,5 @@ def test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so() -> N
         stop=lambda: docker("stop"),
         start=lambda: docker("start"),
     )
+    _record("M9", found)
     assert found["verdict"] == "met", "M9: " + "; ".join(found["failures"])

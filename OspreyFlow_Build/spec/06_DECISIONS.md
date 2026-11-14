@@ -38894,3 +38894,21 @@ left unbuilt; its escalation (three consecutive unreachable evaluations) is not 
   beside *Active*.
 
 Each rule is planted alone and red (`process/lanes/admin/stopped_why/`).
+
+### ADR-149, Amendment 3 (14 November 2026) — the fallback offers a further page only when it holds records, and says where its depth stops the list
+
+*Found by docs' reviewer and confirmed by the orchestrator, 14 November: decision 10's fallback offered Next on
+every page past today's search's depth, up to decision 7's 1,000-deep refusal, and each of those pages was empty.
+The results page's own empty line is shown on page 1 alone, so those pages said nothing at all. This amends
+decision 10's "says `more` when it reaches that"; decision 10's text stands as it was otherwise.*
+
+- **`more` is true only when a further page holds records.** On the fallback, that means more of today's search's
+  matches lie past this page. Reaching the depth alone no longer offers Next.
+- **Where the depth stops the list, the line says so.** Today's search stops at `FALLBACK_DEPTH` (100). On the page
+  that ends the list, and on any page past it, the fallback's line gains `DEPTH_REACHED`: " Only the first 100
+  matches are listed: narrow the search to see others." A list that ends because nothing else matches gains
+  nothing, so the words never claim matches the list does not hold.
+- *Tests:* `tests/services/api/test_search_service.py::test_the_fallback_offers_a_next_page_only_when_it_holds_records`
+  and `::test_the_fallback_says_in_words_where_its_depth_stops_the_list`, both red before the change. They are
+  planted again in `process/lanes/studio/v052-search/plants.py`: Next offered past the records, and the depth not
+  said, each red.

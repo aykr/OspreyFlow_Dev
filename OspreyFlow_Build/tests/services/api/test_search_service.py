@@ -16,7 +16,9 @@ suggestions from the index. What a mistake would do, and the case that catches i
   (`test_a_dataset_outside_the_case_is_never_offered`,
   `test_a_filter_on_a_dataset_outside_the_case_is_refused`);
 - a list-valued property crashing a search (`test_a_list_valued_property_never_breaks_a_search`);
-- the fallback cutting silently (rule 2) (`test_the_fallback_says_more_at_its_depth`,
+- the fallback cutting silently, or offering empty pages (rule 2)
+  (`test_the_fallback_offers_a_next_page_only_when_it_holds_records`,
+  `test_the_fallback_says_in_words_where_its_depth_stops_the_list`,
   `test_a_page_past_the_depth_is_refused_on_either_path`,
   `test_the_fallback_narrows_by_group_and_dataset_before_it_pages`);
 - a merge through a member or a link the reader may not see
@@ -408,11 +410,34 @@ def test_an_index_that_answers_badly_is_raised() -> None:
         _ask(SearchPageRequest(query="x"), _Graph(), _Index(error=error))
 
 
-def test_the_fallback_says_more_at_its_depth() -> None:
+def test_the_fallback_offers_a_next_page_only_when_it_holds_records() -> None:
+    """Rule 2 (docs' reviewer, 14 Nov): `more` offered Next on every page past today's search's
+    depth, up to the 1,000-deep refusal, and each of those pages was empty. A further page is
+    offered only when it has records."""
     graph = _Graph(exact=[_typed(f"p{i}") for i in range(s.FALLBACK_DEPTH)])
-    out = _ask(SearchPageRequest(query="x", page=5, page_size=20), graph, None)
-    assert len(out.results) == 20
-    assert out.more is True  # today's search stopped at its depth: there may be more
+    fourth = _ask(SearchPageRequest(query="x", page=4, page_size=20), graph, None)
+    assert len(fourth.results) == 20 and fourth.more is True
+    last = _ask(SearchPageRequest(query="x", page=5, page_size=20), graph, None)
+    assert len(last.results) == 20 and last.more is False
+    past = _ask(SearchPageRequest(query="x", page=6, page_size=20), graph, None)
+    assert past.results == [] and past.more is False
+
+
+def test_the_fallback_says_in_words_where_its_depth_stops_the_list() -> None:
+    """Where today's search stopped at its depth, the page that ends the list (and any past it)
+    says that the list stops there because of the fallback, not because nothing else matches."""
+    stopped = s.DEPTH_REACHED.format(depth=s.FALLBACK_DEPTH)
+    assert str(s.FALLBACK_DEPTH) in stopped
+    graph = _Graph(exact=[_typed(f"p{i}") for i in range(s.FALLBACK_DEPTH)])
+    for page in (5, 6):
+        out = _ask(SearchPageRequest(query="x", page=page, page_size=20), graph, None)
+        assert out.limited_reason == s.LIMITED_REASONS["no_index"] + stopped, page
+    earlier = _ask(SearchPageRequest(query="x", page=4, page_size=20), graph, None)
+    assert earlier.limited_reason == s.LIMITED_REASONS["no_index"]
+    # Fewer matches than the depth: the list ends because nothing else matches, and says nothing.
+    few = _Graph(exact=[_typed(f"p{i}") for i in range(30)])
+    end = _ask(SearchPageRequest(query="x", page=2, page_size=20), few, None)
+    assert end.more is False and end.limited_reason == s.LIMITED_REASONS["no_index"]
 
 
 def test_the_fallback_pages_today_s_results() -> None:
