@@ -1,0 +1,4 @@
+# make -k ci via offline at 6e5def2 (on main 0245427): every target green but product-tree-link-check, the known main failure (spec/02_GLASS_FRONTEND.md's process/lanes/case-b/batch/ references; fixed on main at 936b7e4, the orchestrator, carried as known). Wall time 869 s, exit 2.
+3370:product-tree-link-check: new private-tree references found:
+3375:make: *** [Makefile:119: product-tree-link-check] Error 1
+3547:Wall time: 869 s, exit 2 (no stack, no lease; set-up before it 12 s)
