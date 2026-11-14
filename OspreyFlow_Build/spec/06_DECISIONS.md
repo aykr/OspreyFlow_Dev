@@ -39151,8 +39151,11 @@ reads is its own record") for the write path.*
      `test_a_merge_is_written_to_the_link_a_traversal_reaches_not_a_stray_record` holds the merge to the reached one;
      `test_a_rows_end_not_in_the_graph_is_refused_in_words_never_dropped` holds the bulk refusal;
    - live, `tests/conformance/graph_port/test_write_path_scale.py`: the same load (200 nodes, 200 links, 200 more in
-     bulk) in a graph padded with 2,000 vertices and then with 22,000 takes less than three times as long (a scan
-     takes about ten), its times printed and recorded with the lease they were taken under; and
+     bulk) in a graph padded with 2,000 vertices and then with 102,000 takes less than one and a half times as long,
+     its times printed and recorded with the lease they were taken under. Measured first on stack c under the rules
+     lane's lease, 14 November: 6.63 s and 6.41 s at 2,000 and 22,000 vertices, flat; but at 22,000 one scanning lookup
+     put back stayed under the bound (plants A9 to A11 green), so the graph is made fifty times larger and the bound
+     tighter, until each plant is red by the test's own measure; and
      `test_one_call_writing_one_node_twice_ends_as_one_node`, one call that writes a node twice in one transaction;
    - plants A1 to A13 (`process/lanes/rules/adr124-am18/plants.py`), each lookup put back to its scanning shape, A5
      to the record in the index, each red (`PLANTS_RECORD.txt`); A9 to A11 list the scale test alone, so it is shown

@@ -7,9 +7,12 @@ and loading a client-size dataset grew with its square. It now resolves ids thro
 type's unique `id` index by SQL and starts every traversal from record ids.
 
 The same load (200 nodes, then 200 links between them, then 200 more loaded in bulk) runs against
-the graph padded with 2,000 other vertices and then with 20,000: ten times the graph, and the load
-must take less than three times as long (a scan would take about ten). The times are printed, so a
-run records them. The offline stand-ins refuse the scanning shapes outright
+the graph padded with 2,000 other vertices and then with 102,000: fifty times the graph, and the
+load must take less than one and a half times as long. Measured on the lane stack (14 November,
+stack c): 6.63 s and 6.41 s at 2,000 and 22,000, flat. At 22,000 one scan per item adds only some
+2 s to a 6.6 s load (Amendment 2: 11 ms a scan at 20,000), which no bound can tell from noise, so
+the graph is made large enough that each scanning lookup put back (plants A9 to A11) costs more than
+the whole load does. The times are printed, so a run records them. The offline stand-ins refuse the scanning shapes outright
 (`tests/adapters/graph_arcadedb/edge_store.refuse_scans`); this is the measurement behind them.
 """
 
@@ -85,10 +88,10 @@ async def test_a_loads_time_grows_with_the_load_not_the_graph(graph: GraphArcade
     await _pad(graph, 0, 2_000)
     await _load(graph)  # warm: scripts compiled, types read
     small = await _load(graph)
-    await _pad(graph, 2_000, 20_000)
+    await _pad(graph, 2_000, 100_000)
     large = await _load(graph)
-    print(f"ADR-124 Am 18: the load at 2,000 padding {small:.2f} s, at 22,000 {large:.2f} s")
-    assert large < 3 * small, (small, large)
+    print(f"ADR-124 Am 18: the load at 2,000 padding {small:.2f} s, at 102,000 {large:.2f} s")
+    assert large < 1.5 * small, (small, large)
 
 
 async def test_one_call_writing_one_node_twice_ends_as_one_node(graph: GraphArcadeDBAdapter) -> None:

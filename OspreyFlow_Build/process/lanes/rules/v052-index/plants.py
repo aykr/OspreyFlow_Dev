@@ -128,9 +128,10 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
       f"{FEED}::test_a_deletion_takes_the_document_and_its_text_out"]),
     # --- decisions 4 and 5: the rebuild and the drift check -----------------------------------
     ("V20 a stale document not reported", REBUILD,
-     "                elif indexed[document[\"id\"]] != fingerprint(document):\n",
-     "                elif False:\n",
-     [f"{FEED}::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them"]),
+     "                    elif stream.head[2] != expected:\n",
+     "                    elif False:\n",
+     [f"{FEED}::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them",
+      f"{DRIFT}::test_each_difference_is_found_while_streaming"]),
     ("V21 the rebuild leaves the alias where it was", REBUILD,
      "        {\"add\": {\"index\": index, \"alias\": alias}},\n", "",
      [f"{FEED}::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them"]),
