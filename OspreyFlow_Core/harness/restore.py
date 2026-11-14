@@ -733,14 +733,11 @@ def rebuild_search_index(compose_file: Path) -> None:
     """The search index rebuilt from the restored graph (ADR-114 Amendment 35 point 2; ADR-150
     decision 4): a set carries no index, so a deployment with an OpenSearch gets its index back from
     the graph, in the Conduit's own container. A deployment without one has nothing to rebuild."""
-    services = (yaml.safe_load(compose_file.read_text(encoding="utf-8")) or {}).get("services")
-    if not isinstance(services, dict) or "opensearch" not in services:
+    from harness import search_rebuild
+
+    if not search_rebuild.renders_opensearch(compose_file):
         return
-    _run(
-        _compose(compose_file)
-        + ["exec", "-T", "api", "python", "-m", "scripts.rebuild_search_index"],
-        item="search index",
-    )
+    _run(search_rebuild.rebuild_argv(_compose(compose_file)), item="search index")
 
 
 def restore_models_file(compose_file: Path, models_file: Path) -> None:

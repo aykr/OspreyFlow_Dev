@@ -1705,6 +1705,17 @@ def main(
             )
             result.record("demo-admin", "password set on the disposable admin subject")
 
+        # 4d. The search index made again from the graph where the deployment searches with
+        # OpenSearch (the CARRIES row "an upgrade must rebuild when the mapping changes"; ADR-150
+        # decision 4): an earlier version's index has no mapping fingerprint and a fresh domain's
+        # holds none of the graph, so the indexer would write nothing and search stay on the
+        # fallback. A failed rebuild fails the install, in its own words.
+        from harness import search_rebuild
+
+        if search_rebuild.renders_opensearch(compose_file):
+            _run(search_rebuild.rebuild_argv(_compose(compose_file)), stage="search index")
+            result.record("search index", "rebuilt from the graph")
+
         # 5. Seed, under the ordering guard.
         datasets = [d for d in args.seed.split(",") if d]
         investigation_id = ""

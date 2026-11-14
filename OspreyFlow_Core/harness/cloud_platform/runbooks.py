@@ -54,6 +54,16 @@ def _bi(values: dict[str, Any]) -> str | None:
     return next((r["host"] for r in values["ingress"]["rules"] if r["service"] == "superset"), None)
 
 
+_COUNT = {2: "two", 3: "three", 4: "four"}
+
+
+def entra_registrations(config: OspreyConfig) -> int:
+    """The app registrations the client's Entra administrator makes for this deployment (the poc
+    manifest's `entra` list): the Glass and the API always, Superset's own and the report sync's
+    where reporting renders them (ADR-148 Amendments 8, 9 and 10)."""
+    return 2 + int(config.reporting.superset) + int(config.reporting.sync)
+
+
 def _reporting_registrations(config: OspreyConfig, values: dict[str, Any]) -> str:
     """ADR-148 Amendments 9 and 10: what the client's Entra administrator registers for Superset and
     the report sync, before step 2 (whose Terraform asks for their secrets)."""
@@ -220,6 +230,11 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
         f'kubectl -n "$NS" rollout status {w["kind"].lower()}/{w["name"]} --timeout=900s'
         for w in values["workloads"]
     )
+    # The CARRIES row "an upgrade must rebuild when the mapping changes" (ADR-150 decision 4): on a
+    # fresh install and on every upgrade, the index made again from the graph once the Conduit and
+    # the worker are rolled out, or the step fails naming the Job.
+    if "searchIndex" in values:
+        rollouts += "\n" + _SEARCH_REBUILD.rstrip("\n")
     hosts = [r["host"] for r in values["ingress"]["rules"]]
     glass = next(r["host"] for r in values["ingress"]["rules"] if r["service"] == "workspace")
     host = cp.registry.split("/")[0]
@@ -242,9 +257,9 @@ that folder. If a command fails, stop there: put right what it says, then run it
 A block fenced `bash later` is not part of that order: the words before it say when, if ever, it is run.
 
 **Before step 5, from the client's Entra administrator** (ADR-148 Amendment 8; step 6 checks it):
-two app registrations in tenant `{claims.tenant_id}`, the Glass (application id `{claims.client_id}`)
+{_COUNT[entra_registrations(config)]} app registrations in tenant `{claims.tenant_id}`: the Glass (application id `{claims.client_id}`)
 and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the Glass is
-granted), with the claims `cloud_platform.claims` names.
+granted), with the claims `cloud_platform.claims` names{"; and, for reports, those below" if entra_registrations(config) > 2 else ""}.
 {_reporting_registrations(config, values)}
 **The managed PostgreSQL** allows a `max_connections` of {POSTGRES_MAX_CONNECTIONS}. The least it must allow in this
 shape is {least}: two Conduits side by side during an update, the worker, the gateway and a reserve (ADR-114
@@ -321,7 +336,7 @@ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --t
 ## 6. Sign-in: Entra ID and the first administrators
 
 People sign in with the client's own Entra ID (ADR-148 Amendment 8): there is no sign-in service of
-ours to set up, only the two app registrations *What it needs* asks for, in tenant
+ours to set up, only the {_COUNT[entra_registrations(config)]} app registrations *What it needs* asks for, in tenant
 `{claims.tenant_id}`. The first administrators ({", ".join(claims.first_administrators)}) were given the Admin role when the
 Conduit first started; they give everyone else their roles in Admin › People. Check the Conduit reads
 Entra's settings:
@@ -458,9 +473,9 @@ seeded=1
 )
 <rebuild>"""
 
-_SEED_REBUILD = """\
-# The search index rebuilt from the seeded graph (the seed writes the graph alone): five minutes to
-# start, 30 to finish, deleted and named if it does not.
+_SEARCH_REBUILD = """\
+# The search index rebuilt from the graph as it stands (ADR-150 decision 4): five minutes to start,
+# 30 to finish, deleted and named if it does not.
 J="search-rebuild-$(date -u +%Y%m%dt%H%M%S)"
 kubectl -n "$NS" create job --from=cronjob/ospreyflow-search-rebuild "$J"
 for i in $(seq 60); do
@@ -482,7 +497,7 @@ def _seed_section(values: dict[str, Any]) -> str:
     POC wants it. Not part of the order (`bash later`); nothing where the shape renders no seed."""
     if "seed" not in values:
         return ""
-    rebuild = _SEED_REBUILD if "searchIndex" in values else ""
+    rebuild = _SEARCH_REBUILD if "searchIndex" in values else ""
     return """
 ## 9. Optional: spec 08's acceptance data (a POC alone)
 
