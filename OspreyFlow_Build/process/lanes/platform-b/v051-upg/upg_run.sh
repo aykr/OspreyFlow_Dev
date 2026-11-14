@@ -150,11 +150,16 @@ update-rollback)
   sleep 1
   say "fault: refusing pulls of $name other than v0.5.0's own sha256:$digest"
   say "\$ DOCKER_HOST=unix://<fault socket> ospreyflow update --name osprey-upg --to $2 --yes"
-  $U DOCKER_HOST=unix://$sock ospreyflow update --name osprey-upg --to $2 --yes < /dev/null; rc=$?
+  $U DOCKER_HOST=unix://$sock ospreyflow update --name osprey-upg --to $2 --yes < /dev/null > $R/logs/update-rollback.out 2>&1; rc=$?
   kill $fault; wait $fault 2>/dev/null; rm -f $sock
-  cat $R/logs/pull-fault.err
+  cat $R/logs/update-rollback.out; cat $R/logs/pull-fault.err
   say "update (planted to fail) status $rc; expected non-zero"
   [ $rc != 0 ] || { say "FAILED: the update succeeded although its pull was refused"; exit 1; }
+  # A failure anywhere else proves nothing (run 3's first attempt failed at its backup, under a proxy that lost
+  # an exec's output, and changed nothing): it must have failed at the pull, the fault's, and rolled back.
+  grep -q "refused the pull of $name@sha256:" $R/logs/pull-fault.err || say "FAILED: the fault never refused a pull of $name"
+  grep -q "failed at 'pull the release's images'" $R/logs/update-rollback.out || say "FAILED: the update did not fail at its pull"
+  grep -q "rolled back to v0.5.0" $R/logs/update-rollback.out || say "FAILED: the update did not say it rolled back to v0.5.0"
   say "checkout after the rollback: $(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD)"
   [ "$(git describe --tags --exact-match 2>/dev/null)" = v0.5.0 ] || say "FAILED: the checkout is not back at v0.5.0"
   [ "$(sed -n 's/^OSPREY_RELEASE_VERSION=//p' $D/deployment.env)" = v0.5.0 ] || say "FAILED: the deployment does not say v0.5.0" ;;

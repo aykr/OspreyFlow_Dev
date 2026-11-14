@@ -24,17 +24,18 @@ DAEMON = "/var/run/docker.sock"
 
 
 async def pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    """One direction. Its end is passed on as a half-close, never a close: the Docker command line half-closes
+    an exec's hijacked stream when it has no more input, and the daemon's output follows (run 3's first
+    attempt lost every exec's output to a close here, so the update's backup failed). Both sockets are closed
+    once both directions have ended (`handle`)."""
     try:
         while data := await reader.read(65536):
             writer.write(data)
             await writer.drain()
-    except (ConnectionError, asyncio.CancelledError):
+        if writer.can_write_eof():
+            writer.write_eof()
+    except (ConnectionError, asyncio.CancelledError, OSError):
         pass
-    finally:
-        try:
-            writer.close()
-        except Exception:
-            pass
 
 
 def blocked(target: str, pattern: re.Pattern[str]) -> str | None:
@@ -72,7 +73,14 @@ async def handle(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter,
     up_r, up_w = await asyncio.open_unix_connection(DAEMON)
     up_w.write(head)
     await up_w.drain()
-    await asyncio.gather(pipe(client_r, up_w), pipe(up_r, client_w))
+    try:
+        await asyncio.gather(pipe(client_r, up_w), pipe(up_r, client_w))
+    finally:
+        for writer in (up_w, client_w):
+            try:
+                writer.close()
+            except Exception:
+                pass
 
 
 async def main(sock: str, regex: str) -> None:
