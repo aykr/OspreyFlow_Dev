@@ -1,0 +1,12 @@
+== plant: pid_plan.node_id hashes the key without its kind ('pin:X' and 'cash:X' alike)
+ OspreyFlow_Core/packages/demo_fixtures/pid_plan.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+E       AssertionError: assert {'pid-0ea2e49...cation'}, ...} == {}
+E       AssertionError: assert {'pid-938db8c...Person'}, ...} == {}
+E       AssertionError: assert {'pid-0ea2e49...cation'}, ...} == {}
+FAILED tests/demo_fixtures/test_generator_ids_one_type.py::test_no_pid_id_has_two_types[demo]
+FAILED tests/demo_fixtures/test_generator_ids_one_type.py::test_no_pid_id_has_two_types[scale]
+FAILED tests/demo_fixtures/test_generator_ids_one_type.py::test_no_id_is_shared_between_packs
+3 failed, 2 passed in 2.09s
+== restored
+5 passed in 1.94s
