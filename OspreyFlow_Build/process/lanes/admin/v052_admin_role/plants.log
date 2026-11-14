@@ -1,4 +1,4 @@
-# route A2 plants at b39897a
+# route A2 plants at 2ba4efc
 == the Glass offers every role (no giver rule): RED where it must be; failed: ["a people manager alone is not offered Admin, and each box says why, by the screens' names for rights", 'a right the person holds already, by any role or grant, is not newly given, so the role is offered', "the Super user preset is decided whole: it gives Data Engineer's Operate schedules, so it is not offered", "the offer follows the giver's rights when they are read again"]
 == a right the person holds already counted as newly given: RED where it must be; failed: ['a right the person holds already, by any role or grant, is not newly given, so the role is offered', "the Super user preset is decided whole: it gives Data Engineer's Operate schedules, so it is not offered"]
 == the giver's own rights ignored: every administration right withheld: RED where it must be; failed: ["a people manager alone is not offered Admin, and each box says why, by the screens' names for rights", 'an administrator is offered every role, and nothing is said', "the offer follows the giver's rights when they are read again"]
