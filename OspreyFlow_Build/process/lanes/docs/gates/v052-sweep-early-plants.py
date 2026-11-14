@@ -11,7 +11,8 @@ PY = f"{WT}/OspreyFlow_Core/.venv/bin/python"
 CACHES = tempfile.mkdtemp(prefix="v052-sweep-early-pycache-")
 os.makedirs(CACHES, exist_ok=True)
 TESTS = ["tests/test_guide_navigation_words.py", "tests/test_guides_ports_and_search.py", "tests/test_guides_drawn_merge.py",
-         "tests/test_guides_v051_gaps.py", "tests/test_user_guide_search_results.py", "tests/test_guides_cloud_platform.py"]
+         "tests/test_guides_v051_gaps.py", "tests/test_user_guide_search_results.py", "tests/test_guides_cloud_platform.py",
+         "tests/test_guides_step5_freeze.py", "tests/test_guide_poc_manifest.py"]
 env = dict(os.environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994")
 for k in ("OSPREY_LANE", "PYTHONDONTWRITEBYTECODE"): env.pop(k, None)
 C, W = "OspreyFlow_Core/", "OspreyFlow_Core/apps/workspace/src/"
@@ -92,6 +93,20 @@ PLANTS = [
     ("the administrator fallback gone from a claim's source", C + "packages/principal_auth/__init__.py", "    administrator: bool = False\n", "", ["missing_value_is_given_only_by_the_administrator_fallback"]),
     ("the fallback allowed on every shape", C + "harness/cloud_platform/__init__.py", 'if by_administrator and _cp(config).shape != "poc":', "if False:", ["missing_value_is_given_only_by_the_administrator_fallback"]),
     ("guide: §9's unqualified sentence back", AG, "Unless the mapping names `{administrator: true}` for a value (the poc shape's fallback, section 6a.7), no administrator can give", "No administrator can give", ["missing_value_is_given_only_by_the_administrator_fallback"]),
+    # the whole sweep: part 1 (the freeze's features), part 5 (D5, R7)
+    ("the install's rebuild given another stage", C + "harness/apply.py", '_run(search_rebuild.rebuild_argv(_compose(compose_file)), stage="search index")', '_run(search_rebuild.rebuild_argv(_compose(compose_file)), stage="index")', ["install_rebuilds_the_index"]),
+    ("the update's rebuild gone", C + "harness/update.py", '            _ok(host, search_rebuild.rebuild_argv(compose), "rebuild the search index")\n', "            pass\n", ["update_rebuilds_the_index"]),
+    ("INSTALL.md without the rebuild Job", C + "harness/cloud_platform/runbooks.py", '    if "searchIndex" in values:\n        rollouts += "\\n" + _SEARCH_REBUILD.rstrip("\\n")\n', "", ["platform_s_install_rebuilds_the_index"]),
+    ("the rebuild Job made from the drift check", C + "harness/cloud_platform/runbooks.py", 'kubectl -n "$NS" create job --from=cronjob/ospreyflow-search-rebuild "$J"', 'kubectl -n "$NS" create job --from=cronjob/ospreyflow-search-drift "$J"', ["platform_s_install_rebuilds_the_index"]),
+    ("the registrations always two", C + "harness/cloud_platform/runbooks.py", "    return 2 + int(config.reporting.superset) + int(config.reporting.sync)", "    return 2", ["question_11_counts_the_registrations"]),
+    ("step 6 moved on the route", "OspreyFlow_Build/process/lanes/route.tsv", "\tplatform-b\t2026-11-16\t2026-11-16\t", "\tplatform-b\t2026-11-18\t2026-11-18\t", ["install_test_s_date_is_the_route_s_step_6"]),
+    ("clusters no longer sent on entry", C + "services/api/working_set/service.py", 'REASON_ENTRY = "resolution_on_entry"', 'REASON_ENTRY = "resolution_threshold"', ["records_arrive_as_one_for_this_reader_alone"]),
+    ("guide: clusters said shared", UG, "What is shown as one is worked out for you alone, from the records you may see: a record hidden from you joins nothing.", "What is shown as one is the same for everyone on the case.", ["records_arrive_as_one_for_this_reader_alone"]),
+    ("the manifest's workspace given more memory", C + "harness/cloud_platform/poc_manifest.yaml", "    requests: {cpu: 100m, memory: 128Mi}\n    limits: {cpu: 500m, memory: 256Mi}\n    readiness: {check: \"http://127.0.0.1:8080/\"", "    requests: {cpu: 100m, memory: 256Mi}\n    limits: {cpu: 500m, memory: 256Mi}\n    readiness: {check: \"http://127.0.0.1:8080/\"", ["poc_tables_are_the_manifest_s"]),
+    ("guide: a manifest table kept by hand", AG, "| api | Deployment | 1 | `ospreyflow/api` |", "| api | Deployment | 2 | `ospreyflow/api` |", ["poc_tables_are_the_manifest_s"]),
+    ("the suppression mark's remove label changed", W + "canvas/GlassCanvas.tsx", '? "Remove suppression mark"', '? "Unmark"', ["suppression_mark_hides_nothing"]),
+    ("ingest suppressing a record", C + "services/ingest/engine.py", '"""The headless ingest recipe execution engine', '# a retraction record suppresses the node it names\n"""The headless ingest recipe execution engine', ["suppression_mark_hides_nothing"]),
+    ("guide: a mark said to hide the node", UG, "A mark hides nothing and changes no record:", "A mark hides the node:", ["suppression_mark_hides_nothing"]),
 ]
 def run():
     e = dict(env, PYTHONPYCACHEPREFIX=tempfile.mkdtemp(dir=CACHES))
