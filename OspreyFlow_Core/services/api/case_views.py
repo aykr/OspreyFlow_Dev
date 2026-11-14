@@ -502,6 +502,30 @@ class _Projection(Protocol):
     async def get_resolution_threshold(self, investigation_id: str) -> float: ...
 
 
+#: How many of a view's chosen ids are read for its first item: a bound, so a view of 50,000 costs
+#: what a view of 3 does, whatever the reader may see of it.
+FIRST_ITEM_READ = 50
+
+
+async def first_item(graph: GraphPort, view: StoredCaseView, principal: Principal) -> str | None:
+    """ADR-145 Amendment 17: the first of the view's chosen nodes, in the order chosen, that
+    `principal` may see now, named as the canvas names it; `None` if none of the first
+    `FIRST_ITEM_READ` (and for a filtered view). Read by id through the adapter's access step
+    (rule 3), so a node hidden from them is passed over and never named, and read once whatever
+    they may see. A merged drawing's added nodes are not the creator's choice, and are passed
+    over."""
+    from .questions import canvas_label
+
+    if view.node_ids is None:
+        return None
+    added = set(view.merged_added)
+    candidates = [n for n in view.node_ids if n not in added][:FIRST_ITEM_READ]
+    if not candidates:
+        return None
+    seen = {n.id: n for n in await graph.get_nodes(candidates, principal)}
+    return next((canvas_label(seen[n]) for n in candidates if n in seen), None)
+
+
 async def _read_selection(
     graph: GraphPort, node_ids: Sequence[NodeId], principal: Principal
 ) -> tuple[list[Node], list[Edge]]:

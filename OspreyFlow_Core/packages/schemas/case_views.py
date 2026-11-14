@@ -90,6 +90,10 @@ class CaseView(BaseModel):
     shared: bool = False
     #: How many nodes were chosen, for a view of chosen nodes; `None` for a filtered view.
     chosen: int | None = Field(default=None, ge=0)
+    #: ADR-145 Amendment 17: the first chosen node this reader may see now, as the canvas names it,
+    #: so a view saved under the Glass's default name is told apart in the list; `None` when they
+    #: may see none of the first few, and for a filtered view. Never a hidden node's (rules 3, 7).
+    first_item: str | None = None
     filter: ViewFilter | None = None
     window: Interval | None = None
     threshold: float | None = None
