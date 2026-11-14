@@ -1,0 +1,8 @@
+# plants.py at f59553a, 2026-11-14T20:54:00Z, offline on the Mac (closed ports, slot 9, no stack, fresh pycache)
+built: GREEN - 19 passed in 1.90s
+Q1 a hidden word the case's own query holds kept (red at the build: the check refuses it): RED - 1 error in 1.15s
+Q2 a hidden word in the case's own query not refused by the check: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_leaks.py::test_a_hidden_word_its_own_query_holds_is_refused | 1 failed in 1.27s
+Q3 a leak case's hidden words its title alone (no words left once the query's are dropped): RED - FAILED ../OspreyFlow_Build/tests/test_client_size_leaks.py::test_a_case_asking_the_hidden_title_still_checks_its_hidden_document_s_own_words | 1 failed in 0.91s
+Q4 a case's checked words miscounted: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_leaks.py::test_each_leak_case_counts_its_checked_words_and_the_file_its_share | 1 failed in 1.24s
+restored: GREEN - 19 passed in 1.42s
+exit=0
