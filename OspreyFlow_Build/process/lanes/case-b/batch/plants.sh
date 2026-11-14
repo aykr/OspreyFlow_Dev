@@ -79,18 +79,30 @@ plant "a state not known read as waiting" "$API" \
 plant "a job not this reader's read as progress not read" "$API" \
   's/if \(response.status === 404\) return \{ ok: false, kind: "not_found" \};\n    if \(response.status === 401\)/if (response.status === 401)/' \
   "says a job that is not this reader's, or is gone, can no longer be found"
-plant "the result not opened when the job is done" "$UI" \
-  's/onViewOpenedRef.current\(result.opened\);//' \
-  "opens the job's result as the view when asked, and says that it is open"
+plant "the result not opened when asked" "$UI" \
+  's/await onOpenViewRef.current\(view.id\)/null/' \
+  "opens the job's result as the view when asked, as the App opens any view, and then closes"
+plant "the panel left up once its view is open" "$UI" \
+  's/      onCloseRef.current\(\);\n      return;/      return;/' \
+  "opens the job's result as the view when asked, as the App opens any view, and then closes"
+plant "focus dropped to the page when the pressed button is taken away" "$UI" \
+  's/function keepFocusInThePanel\(\): void \{\n    headingRef.current\?\.focus\(\);/function keepFocusInThePanel(): void {/' \
+  "keeps focus in the panel when the pressed button is taken away (Open the view, Try again)"
+plant "focus dropped to the page when Try again is pressed" "$UI" \
+  's/          onClick=\{\(\) => \{\n            keepFocusInThePanel\(\);\n            setAttempt/          onClick={() => {\n            setAttempt/' \
+  "keeps focus in the panel when Try the batch job again is pressed"
+plant "the effect keyed on the token too (re-run at each renewal)" "$UI" \
+  's/  \}, \[attempt\]\);/  }, [attempt, request, bearerToken]);/' \
+  "stays where it ended when the page renews its token after the job is done"
 plant "a done job's deleted-view words replaced by the Glass's own" "$UI" \
   's/words: job.words \|\| "The batch expansion finished, but the view it saved has since been deleted." \}\);/words: "The batch job finished." });/' \
   "says a done job whose view has since been deleted in the server's words, and opens nothing"
 plant "the carry-on note left up once the job ends" "$UI" \
   's/\{\(shown.phase === "starting" \|\| shown.phase === "watching"\) \&\& \(/{true \&\& (/' \
   "says the job carries on when closed, only while it runs"
-plant "a result view past the canvas's limit said as any failure" "$UI" \
-  's/\} else if \(result.kind === "limit_exceeded"\) \{/} else if (false) {/' \
-  "says a result view past the canvas's limit is kept and was not cut to fit"
+plant "the App's sentence for a view not opened left out" "$UI" \
+  's/but it could not be opened. \$\{problem\}/but it could not be opened./' \
+  "says a result view past the canvas's limit in the App's own sentence, and stays open"
 plant "a failed job offered no second try" "$UI" \
   's/again: true, words: job.words \|\| "The batch expansion could not finish/again: false, words: job.words || "The batch expansion could not finish/' \
   "says a failed job in the server's words, and offers to try it again"

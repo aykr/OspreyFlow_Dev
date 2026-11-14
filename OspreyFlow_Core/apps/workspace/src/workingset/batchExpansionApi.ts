@@ -1,6 +1,6 @@
 // An expansion promoted to a batch job at the working-set cap (ADR-151; spec/00 §4's third choice):
 // the Conduit's worker runs the whole expansion under the requester's own access and saves its
-// result as a private view of the case (ADR-144), which the Glass then opens as the lens. Nothing
+// result as a private view of the case (ADR-144), which the reader's *Open the view* opens as the lens. Nothing
 // joins the case's working set and no delta arrives: the result is the view only.
 //
 // The routes are rules-b's (ADR-151; `services/api/app.py`'s batch expansions, on main at 354c707):
@@ -83,7 +83,7 @@ function unreachable(err: unknown): string {
   return `The server could not be reached: ${err instanceof Error ? err.message : String(err)}`;
 }
 
-/** A saved view as far as the panel reads it: its id to open and its name to say. */
+/** A saved view, checked as far as the panel reads it: its id to open and its name to say. */
 function isView(view: unknown): view is CaseView {
   const v = view as { id?: unknown; name?: unknown } | null | undefined;
   return typeof v === "object" && v !== null && typeof v.id === "string" && v.id !== "" && typeof v.name === "string";

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 
-import { type CaseViewOpened, openView } from "../views/viewsApi";
 import {
   type BatchExpansionJob,
   type BatchExpansionRequest,
@@ -8,7 +7,6 @@ import {
   type Started,
   startBatchExpansion,
 } from "./batchExpansionApi";
-import type { LimitExceeded } from "./models";
 
 const COUNT = new Intl.NumberFormat("en-GB");
 /** Readings of the job's progress that fail in a row (a server error, no answer) before the panel
@@ -22,9 +20,11 @@ export interface BatchExpansionProps {
   apiBaseUrl: string;
   bearerToken: string;
   investigationId: string;
-  /** The reader chose *Open the view* and the job's result was opened: show it as the read-only lens
-   * (ADR-144). Never called unasked: the reader may be working elsewhere when the job finishes. */
-  onViewOpened: (opened: CaseViewOpened) => void;
+  /** The reader chose *Open the view*: open the job's result as the read-only lens (ADR-144), as the App
+   * opens any view (its `openLens`, so the latest view asked for wins). Null when it is open, or another view
+   * was asked for since; otherwise the App's sentence saying why it could not be. Never called unasked: the
+   * reader may be working elsewhere when the job finishes. Once it is open the panel closes itself. */
+  onOpenView: (viewId: string) => Promise<string | null>;
   onClose: () => void;
   /** How often the job is asked where it is, in milliseconds (ADR-151: every 2 s). */
   pollMs?: number;
@@ -38,7 +38,6 @@ type Shown =
   | { phase: "watching"; words: string; trouble: string | null }
   | { phase: "done"; words: string; view: { id: string; name: string } }
   | { phase: "opening"; words: string }
-  | { phase: "opened"; words: string }
   | { phase: "stopped"; words: string; again: boolean };
 
 function what(kind: "nodes" | "edges" | null | undefined): string {
@@ -49,7 +48,7 @@ function what(kind: "nodes" | "edges" | null | undefined): string {
 function refusalWords(job: BatchExpansionJob): string {
   if (job.words) return job.words;
   const refusal = job.refusal;
-  if (refusal && refusal.cap != null && refusal.would_be != null) {
+  if (refusal && typeof refusal.cap === "number" && typeof refusal.would_be === "number") {
     return `The batch expansion was refused: ${COUNT.format(refusal.would_be)} ${what(refusal.cap_kind)} against a limit of ${COUNT.format(refusal.cap)}. Nothing was saved. Narrow it by link type, depth or dates and try again.`;
   }
   return "The batch expansion was refused, and nothing was saved. Narrow it by link type, depth or dates and try again.";
@@ -68,15 +67,17 @@ export function BatchExpansion({
   apiBaseUrl,
   bearerToken,
   investigationId,
-  onViewOpened,
+  onOpenView,
   onClose,
   pollMs = 2000,
   mayStartAgain = true,
 }: BatchExpansionProps) {
   const [shown, setShown] = useState<Shown>({ phase: "starting" });
   const [attempt, setAttempt] = useState(0);
-  const onViewOpenedRef = useRef(onViewOpened);
-  onViewOpenedRef.current = onViewOpened;
+  const onOpenViewRef = useRef(onOpenView);
+  onOpenViewRef.current = onOpenView;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   // Read at each request, never a reason to start again: one job per panel and per *Try again*. The
   // token is the newest the page holds, so a renewal mid-job is used by the next poll.
   const asked = useRef({ apiBaseUrl, bearerToken, investigationId, request, pollMs });
@@ -96,31 +97,22 @@ export function BatchExpansion({
     };
   }, []);
 
+  // The button pressed is taken away by what it does (*Open the view*, *Try the batch job again*), so focus
+  // goes to the panel's heading first, never to the page's top (rule 13; spec 02 §3.1h).
+  function keepFocusInThePanel(): void {
+    headingRef.current?.focus();
+  }
+
   async function openResult(view: { id: string; name: string }, words: string): Promise<void> {
+    keepFocusInThePanel();
     setShown({ phase: "opening", words });
-    const { apiBaseUrl, bearerToken, investigationId } = asked.current;
-    const result = await openView(apiBaseUrl, bearerToken, investigationId, view.id);
+    const problem = await onOpenViewRef.current(view.id);
     if (!mounted.current) return;
-    const name = view.name;
-    if (result.ok) {
-      setShown({ phase: "opened", words });
-      onViewOpenedRef.current(result.opened);
-    } else if (result.kind === "limit_exceeded") {
-      const wouldBe: LimitExceeded = result.wouldBe;
-      setShown({
-        phase: "stopped",
-        again: false,
-        words: `The batch job saved its result as the view “${name}”, but it holds more than the canvas can: ${COUNT.format(wouldBe.would_be)} ${what(wouldBe.cap_kind)} against a limit of ${COUNT.format(wouldBe.cap)}. Nothing was cut to fit; the view is kept in Views in this case.`,
-      });
-    } else if (result.kind === "not_found") {
-      setShown({
-        phase: "stopped",
-        again: false,
-        words: `The batch job saved its result as the view “${name}”, but it could not be opened. It may have been deleted.`,
-      });
-    } else {
-      setShown({ phase: "stopped", again: false, words: `The batch job saved its result as the view “${name}”, but it could not be opened: ${result.message}` });
+    if (problem === null) {
+      onCloseRef.current();
+      return;
     }
+    setShown({ phase: "stopped", again: false, words: `The batch job saved its result as the view “${view.name}”, but it could not be opened. ${problem}` });
   }
 
   useEffect(() => {
@@ -250,7 +242,6 @@ export function BatchExpansion({
         {shown.phase === "watching" && shown.words}
         {shown.phase === "done" && shown.words}
         {shown.phase === "opening" && `${shown.words} Opening the view.`.trim()}
-        {shown.phase === "opened" && `${shown.words} It is open on the canvas.`.trim()}
       </div>
       {shown.phase === "watching" && shown.trouble !== null && (
         <p className="batch-expansion__trouble">{shown.trouble}</p>
@@ -276,7 +267,10 @@ export function BatchExpansion({
           </button>
         )}
         {shown.phase === "stopped" && shown.again && mayStartAgain && (
-          <button type="button" className="btn btn--primary" onClick={() => setAttempt((n) => n + 1)}>
+          <button type="button" className="btn btn--primary" onClick={() => {
+            keepFocusInThePanel();
+            setAttempt((n) => n + 1);
+          }}>
             Try the batch job again
           </button>
         )}

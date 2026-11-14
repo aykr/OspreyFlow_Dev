@@ -15,7 +15,7 @@ UI=$WS/src/workingset/BatchExpansion.tsx
 HOOK=$WS/src/workingset/useBatchExpansion.ts
 REG=$WS/keyboard/actionRegistry.ts
 : "${OSPREY_PORTS_SLOT:?set the Playwright slot of this lane}"
-git diff --quiet -- "$APP" "$CANVAS" "$UI" "$HOOK" "$REG" || { echo "commit first: the plants restore from HEAD"; exit 2; }
+git diff --quiet -- "$APP" "$CANVAS" "$UI" "$HOOK" "$REG" "$WS/src/workingset/batchExpansionApi.ts" || { echo "commit first: the plants restore from HEAD"; exit 2; }
 git apply OspreyFlow_Build/process/lanes/case-b/registry-ADR151.patch || exit 2
 trap 'git checkout -q HEAD -- "$REG"' EXIT
 fails=0
@@ -45,10 +45,22 @@ plant "a batch job offered while a view is open" "$APP" \
   's/bearerToken && investigationId && lens === null\n/bearerToken \&\& investigationId\n/' \
   jsdom "FAIL  src/App.batchExpand.test.tsx > .* > offers no batch job while a view is open"
 plant "the job's result not shown as the lens" "$APP" \
-  's/(key=\{batchExpansion.asked.n\}.*?)showLens\(opened\);/$1/s' \
+  's/const problem = await openLens\(viewId\);/const problem = null;/' \
   jsdom "FAIL  src/App.batchExpand.test.tsx > .* > opens the batch job's panel"
+plant "the job's result opened around openLens (an earlier click wins)" "$APP" \
+  's/const problem = await openLens\(viewId\);/const opened = await openView(API_BASE_URL, bearerToken, batchExpansion.asked!.caseId, viewId); if (opened.ok) showLens(opened.opened); const problem = null;/' \
+  jsdom "FAIL  src/App.batchExpand.test.tsx > .* > a view asked for after Open the view wins"
+plant "the App holding the panel for no person" "$APP" \
+  's/useBatchExpansion\(investigationId, session\?\.sub \?\? null\)/useBatchExpansion(investigationId, null)/' \
+  jsdom "FAIL  src/App.batchExpand.test.tsx > .* > someone else signing in in place takes the panel away"
+plant "the App letting a failed job be tried again in a view" "$APP" \
+  's/mayStartAgain=\{lens === null\}/mayStartAgain/' \
+  jsdom "FAIL  src/App.batchExpand.test.tsx > .* > offers no second try of a failed job once a view is open"
 plant "a second choice reusing the first's panel" "$APP" \
   's/key=\{batchExpansion.asked.n\}/key="batch"/' \
+  jsdom "FAIL  src/App.batchExpand.test.tsx > .* > a second choice while the first runs opens its own panel"
+plant "a 409 for a second choice not followed" "$WS/src/workingset/batchExpansionApi.ts" \
+  's/response.status === 409 && body.error === "batch_expansion_running"/false/' \
   jsdom "FAIL  src/App.batchExpand.test.tsx > .* > a second choice while the first runs opens its own panel"
 plant "the choice kept when another case is opened" "$HOOK" \
   's/asked.caseId === caseId && asked.who === who/asked.who === who/' \
@@ -77,13 +89,16 @@ plant "Open the view out of the Tab order" "$UI" \
 plant "the canvas handing up another depth than the one refused" "$CANVAS" \
   's/onRunExpansionAsBatch\(\{ nodeId, edgeType, depth, refused \}\)/onRunExpansionAsBatch({ nodeId, edgeType, depth: depth + 1, refused })/' \
   keys "^\s+[0-9]+\) .*› an expansion past the cap is run as a batch job by keyboard"
-plant "the panel's Close out of the Tab order" "$UI" \
-  's/<button type="button" className="btn" onClick=\{onClose\}>/<button type="button" className="btn" tabIndex={-1} onClick={onClose}>/' \
+plant "a second POST under StrictMode, by keyboard" "$UI" \
+  's/if \(startedRef.current\?\.attempt !== attempt\) \{/if (true) {/' \
+  keys "^\s+[0-9]+\) .*› an expansion past the cap is run as a batch job by keyboard, and its result opened as the view \(StrictMode\)"
+plant "focus taken from the panel while the job runs" "$UI" \
+  's/(  async function watch\(jobId: string\): Promise<void> \{\n)/$1      (document.activeElement as HTMLElement | null)?.blur();\n/' \
   keys "^\s+[0-9]+\) .*› an expansion past the cap is run as a batch job by keyboard"
 
 a="$(jsdom)"; h="$(hook)"; u="$(panel)"; k="$(keys)"
-if grep -q "Tests  3 passed" <<<"$a" && grep -q "Tests  5 passed" <<<"$h" && grep -q "Tests  25 passed" <<<"$u" \
+if grep -q "Tests  7 passed" <<<"$a" && grep -q "Tests  5 passed" <<<"$h" && grep -q "Tests  28 passed" <<<"$u" \
   && grep -qE "^\s+2 passed" <<<"$k" && ! grep -qE "^\s+[0-9]+ failed" <<<"$k"; then
-  echo "unplanted: App jsdom 3 passed, hook 5 passed, panel 25 passed, keyboard 2 passed (plain and StrictMode)"
+  echo "unplanted: App jsdom 7 passed, hook 5 passed, panel 28 passed, keyboard 2 passed (plain and StrictMode)"
 else echo "UNPLANTED NOT GREEN"; grep -E "Tests |passed|failed" <<<"$a$h$u$k"; fails=1; fi
 [ "$fails" = 0 ] && echo "every plant red for its reason, unplanted green" || { echo "SOME PLANT WRONG"; exit 1; }

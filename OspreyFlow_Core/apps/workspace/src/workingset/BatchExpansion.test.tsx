@@ -75,19 +75,22 @@ async function openTheView(): Promise<void> {
   fireEvent.click(await screen.findByRole("button", { name: "Open the view" }));
 }
 
-function show(onViewOpened = vi.fn(), onClose = vi.fn()) {
+/** The App's `openLens`: null once the view is open, or the App's sentence for why it could not be. */
+const opens = (answer: string | null = null) => vi.fn<(viewId: string) => Promise<string | null>>(async () => answer);
+
+function show(onOpenView = opens(), onClose = vi.fn()) {
   render(
     <BatchExpansion
       request={REQUEST}
       apiBaseUrl="http://conduit"
       bearerToken="tok"
       investigationId="c1"
-      onViewOpened={onViewOpened}
+      onOpenView={onOpenView}
       onClose={onClose}
       pollMs={5}
     />,
   );
-  return { onViewOpened, onClose };
+  return { onOpenView, onClose };
 }
 
 const alertText = async () => (await screen.findByRole("alert")).textContent ?? "";
@@ -124,31 +127,66 @@ describe("BatchExpansion", () => {
 
   it("says a done job in the server's words and offers Open the view, opening nothing unasked", async () => {
     const calls = conduit(QUEUED, [DONE]);
-    const { onViewOpened } = show();
-    expect(await screen.findByRole("button", { name: "Open the view" })).toBeTruthy();
-    expect(statusText()).toBe("Saved 61,200 nodes and 140,388 links as your private view “Expansion of Ada Lovelace”.");
+    const { onOpenView } = show();
+    await waitFor(() => expect(statusText()).toContain("Saved 61,200 nodes and 140,388 links"));
     await new Promise((r) => setTimeout(r, 40));
-    expect(onViewOpened).not.toHaveBeenCalled();
+    expect(onOpenView).not.toHaveBeenCalled();
+    expect(calls.some((c) => c.url.includes("/views/"))).toBe(false);
+    expect(screen.getByRole("button", { name: "Open the view" })).toBeTruthy();
+    expect(statusText()).toBe("Saved 61,200 nodes and 140,388 links as your private view “Expansion of Ada Lovelace”.");
+  });
+
+  it("opens the job's result as the view when asked, as the App opens any view, and then closes", async () => {
+    const calls = conduit(QUEUED, [DONE]);
+    const { onOpenView, onClose } = show();
+    await openTheView();
+    await waitFor(() => expect(onOpenView).toHaveBeenCalledWith("v9"));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    // The App opens it (its `openLens`), so the latest view asked for wins; the panel fetches no view itself.
     expect(calls.some((c) => c.url.includes("/views/"))).toBe(false);
   });
 
-  it("opens the job's result as the view when asked, and says that it is open", async () => {
+  it("keeps focus in the panel when the pressed button is taken away (Open the view, Try again)", async () => {
+    conduit(QUEUED, [DONE]);
+    let answer!: (problem: string | null) => void;
+    show(vi.fn(() => new Promise<string | null>((resolve) => (answer = resolve))));
+    const open = await screen.findByRole("button", { name: "Open the view" });
+    open.focus();
+    fireEvent.click(open);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Open the view" })).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Batch job: the whole expansion" }));
+    await act(async () => answer("That view could not be opened. It may have been deleted, or not shared with you."));
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Batch job: the whole expansion" }));
+  });
+
+  it("keeps focus in the panel when Try the batch job again is pressed", async () => {
+    conduit(QUEUED, [{ status: 200, body: job("failed", "The batch expansion could not finish, and nothing was saved. Try again, or narrow the expansion.") }]);
+    show();
+    const again = await screen.findByRole("button", { name: "Try the batch job again" });
+    again.focus();
+    fireEvent.click(again);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Try the batch job again" })).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Batch job: the whole expansion" }));
+  });
+
+  it("stays where it ended when the page renews its token after the job is done", async () => {
     const calls = conduit(QUEUED, [DONE]);
-    const { onViewOpened } = show();
-    await openTheView();
-    await waitFor(() => expect(onViewOpened).toHaveBeenCalledWith(OPENED));
-    expect(statusText()).toBe(
-      "Saved 61,200 nodes and 140,388 links as your private view “Expansion of Ada Lovelace”. It is open on the canvas.",
-    );
-    expect(calls.some((c) => c.url === "http://conduit/v1/investigations/c1/views/v9")).toBe(true);
-    expect(screen.queryByRole("button", { name: "Open the view" })).toBeNull();
+    const props = { apiBaseUrl: "http://conduit", investigationId: "c1", onOpenView: opens(), onClose: vi.fn(), pollMs: 5 };
+    const { rerender } = render(<BatchExpansion {...props} request={REQUEST} bearerToken="tok" />);
+    await screen.findByRole("button", { name: "Open the view" });
+    const asked = calls.length;
+    rerender(<BatchExpansion {...props} request={{ ...REQUEST }} bearerToken="renewed" />);
+    await new Promise((r) => setTimeout(r, 40));
+    expect(screen.getByRole("button", { name: "Open the view" })).toBeTruthy();
+    expect(statusText()).toBe("Saved 61,200 nodes and 140,388 links as your private view “Expansion of Ada Lovelace”.");
+    expect(calls.length).toBe(asked);
   });
 
   it("sends one POST under React's StrictMode, which runs the start twice on one mount", async () => {
     const calls = conduit(QUEUED, [QUEUED, DONE]);
     render(
       <StrictMode>
-        <BatchExpansion request={REQUEST} apiBaseUrl="http://conduit" bearerToken="tok" investigationId="c1" onViewOpened={vi.fn()} onClose={vi.fn()} pollMs={5} />
+        <BatchExpansion request={REQUEST} apiBaseUrl="http://conduit" bearerToken="tok" investigationId="c1" onOpenView={opens()} onClose={vi.fn()} pollMs={5} />
       </StrictMode>,
     );
     await screen.findByRole("button", { name: "Open the view" });
@@ -158,7 +196,7 @@ describe("BatchExpansion", () => {
 
   it("offers no second try where a batch job may not be chosen (a view open)", async () => {
     conduit(QUEUED, [{ status: 200, body: job("failed", "The batch expansion could not finish, and nothing was saved. Try again, or narrow the expansion.") }]);
-    render(<BatchExpansion request={REQUEST} apiBaseUrl="http://conduit" bearerToken="tok" investigationId="c1" onViewOpened={vi.fn()} onClose={vi.fn()} pollMs={5} mayStartAgain={false} />);
+    render(<BatchExpansion request={REQUEST} apiBaseUrl="http://conduit" bearerToken="tok" investigationId="c1" onOpenView={opens()} onClose={vi.fn()} pollMs={5} mayStartAgain={false} />);
     expect(await alertText()).toBe("The batch expansion could not finish, and nothing was saved. Try again, or narrow the expansion.");
     expect(screen.queryByRole("button", { name: "Try the batch job again" })).toBeNull();
   });
@@ -207,11 +245,11 @@ describe("BatchExpansion", () => {
 
   it("says a refused job in the server's words, and opens nothing", async () => {
     const words = "Too many for a batch job: 812,000 nodes against a limit of 500,000. Nothing was saved. Choose a link type, a smaller depth or dates, and run it again.";
-    const { onViewOpened } = (conduit(QUEUED, [
+    const { onOpenView } = (conduit(QUEUED, [
       { status: 200, body: job("refused", words, { refusal: { code: "too_many_nodes", cap_kind: "nodes", cap: 500_000, would_be: 812_000 } }) },
     ]), show());
     expect(await alertText()).toBe(words);
-    expect(onViewOpened).not.toHaveBeenCalled();
+    expect(onOpenView).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Try the batch job again" })).toBeNull();
   });
 
@@ -234,9 +272,9 @@ describe("BatchExpansion", () => {
   it("says a done job whose view has since been deleted in the server's words, and opens nothing", async () => {
     const words = "The batch expansion finished, but the view it saved has since been deleted.";
     const calls = conduit(QUEUED, [{ status: 200, body: job("done", words, { view: null }) }]);
-    const { onViewOpened } = show();
+    const { onOpenView } = show();
     expect(await alertText()).toBe(words);
-    expect(onViewOpened).not.toHaveBeenCalled();
+    expect(onOpenView).not.toHaveBeenCalled();
     expect(calls.some((c) => c.url.includes("/views/"))).toBe(false);
   });
 
@@ -256,21 +294,22 @@ describe("BatchExpansion", () => {
     );
   });
 
-  it("says a result view past the canvas's limit is kept and was not cut to fit", async () => {
-    const { onViewOpened } = (conduit(QUEUED, [DONE], { status: 409, body: { ...REFUSED, would_be: 58_000 } }), show());
+  it("says a result view past the canvas's limit in the App's own sentence, and stays open", async () => {
+    conduit(QUEUED, [DONE]);
+    const { onClose } = show(opens("This view holds more than the canvas can: 58,000 nodes against a limit of 50,000. Nothing was cut to fit."));
     await openTheView();
     expect(await alertText()).toBe(
-      "The batch job saved its result as the view “Expansion of Ada Lovelace”, but it holds more than the canvas can: 58,000 nodes against a limit of 50,000. Nothing was cut to fit; the view is kept in Views in this case.",
+      "The batch job saved its result as the view “Expansion of Ada Lovelace”, but it could not be opened. This view holds more than the canvas can: 58,000 nodes against a limit of 50,000. Nothing was cut to fit.",
     );
-    expect(onViewOpened).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("says a result view that could not be opened could not be", async () => {
-    conduit(QUEUED, [DONE], { status: 404 });
-    show();
+    conduit(QUEUED, [DONE]);
+    show(opens("That view could not be opened. It may have been deleted, or not shared with you."));
     await openTheView();
     expect(await alertText()).toBe(
-      "The batch job saved its result as the view “Expansion of Ada Lovelace”, but it could not be opened. It may have been deleted.",
+      "The batch job saved its result as the view “Expansion of Ada Lovelace”, but it could not be opened. That view could not be opened. It may have been deleted, or not shared with you.",
     );
   });
 
@@ -282,10 +321,10 @@ describe("BatchExpansion", () => {
 
   it("says when the progress could not be read, and goes on asking", async () => {
     const calls = conduit(QUEUED, [{ status: 503 }, { status: 503 }, DONE]);
-    const { onViewOpened } = show();
+    const { onOpenView } = show();
     await screen.findByText("The job's progress could not be read (503). Still trying.");
     await openTheView();
-    await waitFor(() => expect(onViewOpened).toHaveBeenCalled());
+    await waitFor(() => expect(onOpenView).toHaveBeenCalled());
     expect(reads(calls)).toHaveLength(3);
   });
 
@@ -309,17 +348,16 @@ describe("BatchExpansion", () => {
 
   it("starts one job, whatever the panel is given later: a new request object, a renewed token", async () => {
     const calls = conduit(QUEUED, [...Array<typeof QUEUED>(20).fill(QUEUED), DONE]);
-    const onViewOpened = vi.fn();
-    const props = { apiBaseUrl: "http://conduit", investigationId: "c1", onViewOpened, onClose: vi.fn(), pollMs: 5 };
+    const onOpenView = opens();
+    const props = { apiBaseUrl: "http://conduit", investigationId: "c1", onOpenView, onClose: vi.fn(), pollMs: 5 };
     const { rerender } = render(<BatchExpansion {...props} request={REQUEST} bearerToken="tok" />);
     await waitFor(() => expect(reads(calls).length).toBeGreaterThan(0));
     rerender(<BatchExpansion {...props} request={{ ...REQUEST }} bearerToken="renewed" />);
     await openTheView();
-    await waitFor(() => expect(onViewOpened).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onOpenView).toHaveBeenCalledTimes(1));
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
-    // The readings after the renewal, and the view's opening, carry the renewed token.
-    expect(calls.at(-1)?.url).toBe("http://conduit/v1/investigations/c1/views/v9");
-    expect(calls.at(-1)?.auth).toBe("Bearer renewed");
+    // The readings after the renewal carry the renewed token.
+    expect(reads(calls).at(-1)?.auth).toBe("Bearer renewed");
   });
 
   it("stops asking once closed", async () => {

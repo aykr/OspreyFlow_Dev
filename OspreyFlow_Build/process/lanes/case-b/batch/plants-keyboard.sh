@@ -2,7 +2,8 @@
 # Rule 15 for the batch job's keyboard and axe cases (keyboard/batch-expansion.spec.ts): each plant
 # breaks what one case proves, in the panel itself, and that case must go red with its words kept;
 # then all is put back and the whole spec is green. Run from the repository root at a clean commit,
-# with this lane's local Playwright slot (OSPREY_PORTS_SLOT, the orchestrator's: 3).
+# with this lane's local Playwright slot (OSPREY_PORTS_SLOT, the orchestrator's: 3). The registry's ids are applied
+# from registry-ADR151.patch for the run and put back after it.
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 WS=OspreyFlow_Core/apps/workspace
@@ -10,7 +11,11 @@ UI=$WS/src/workingset/BatchExpansion.tsx
 CSS=$WS/src/design/primitives.css
 SPEC=keyboard/batch-expansion.spec.ts
 : "${OSPREY_PORTS_SLOT:?set the Playwright slot of this lane}"
-git diff --quiet -- "$UI" "$CSS" || { echo "commit first: the plants restore from HEAD"; exit 2; }
+REG=$WS/keyboard/actionRegistry.ts
+git diff --quiet -- "$UI" "$CSS" "$REG" || { echo "commit first: the plants restore from HEAD"; exit 2; }
+# The spec names BATCH_EXPANSION_ACTIONS, a shared file's registry the orchestrator commits from the patch at merge.
+git apply OspreyFlow_Build/process/lanes/case-b/registry-ADR151.patch || exit 2
+trap 'git checkout -q HEAD -- "$REG"' EXIT
 fails=0
 run() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts "$SPEC" --workers=1 --reporter=line ${1:+--grep "$1"} 2>&1); }
 

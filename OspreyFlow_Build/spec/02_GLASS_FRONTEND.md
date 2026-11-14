@@ -1224,8 +1224,11 @@ the newest token the page holds. It shows the server's sentence for each stage, 
 given ("Expanding from 12 nodes", "Saving the view"), and its own words only where the server sent
 none. Nothing joins the working set: when the job is done, the panel says so in the server's words and
 offers *Open the view* (ADR-151), which opens its result, a private view of the case, as the read-only
-lens (§3.1h). It never opens unasked: the job may finish minutes later, with the analyst in another view
-or place. The panel then says the view is open, or says why it could not be opened. A view past the canvas's limit is kept and named, and nothing is cut to fit.
+lens (§3.1h), as the App opens any view: a view asked for after it wins. It never opens unasked: the job
+may finish minutes later, with the analyst in another view or place. Once the view is open the panel
+closes and the lens's banner takes focus; otherwise the panel says why it could not be opened, in the
+App's own sentence. When *Open the view* or *Try the batch job again* is pressed, the button goes and
+focus moves to the panel's heading, never to the page's top; a job ending moves no focus. A view past the canvas's limit is kept and named, and nothing is cut to fit.
 
 The refusals are said in words:
 - a case level below Editor, in the Conduit's own sentence;

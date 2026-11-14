@@ -14,7 +14,7 @@ import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
-import type { CaseViewOpened } from "../src/views/viewsApi";
+import { openView } from "../src/views/viewsApi";
 import { BatchExpansion } from "../src/workingset/BatchExpansion";
 import type { BatchExpansionRequest } from "../src/workingset/batchExpansionApi";
 import { applyHarnessBrand } from "./brandHarness";
@@ -103,9 +103,17 @@ function Harness() {
           bearerToken="harness"
           investigationId="c1"
           pollMs={Number(params.get("poll") ?? 150)}
-          onViewOpened={(view: CaseViewOpened) => {
-            window.__BATCH__!.opened = view.view.id;
-            setOpened(view.view.name);
+          // As the App's `openLens` does: the view opened, or the App's sentence for why it could not be.
+          onOpenView={async (viewId) => {
+            const result = await openView(window.location.origin, "harness", "c1", viewId);
+            if (result.ok) {
+              window.__BATCH__!.opened = result.opened.view.id;
+              setOpened(result.opened.view.name);
+              return null;
+            }
+            return result.kind === "limit_exceeded"
+              ? `This view holds more than the canvas can: ${result.wouldBe.would_be.toLocaleString("en-GB")} nodes against a limit of ${result.wouldBe.cap.toLocaleString("en-GB")}. Nothing was cut to fit.`
+              : "That view could not be opened. It may have been deleted, or not shared with you.";
           }}
           onClose={() => {
             window.__BATCH__!.closed = true;

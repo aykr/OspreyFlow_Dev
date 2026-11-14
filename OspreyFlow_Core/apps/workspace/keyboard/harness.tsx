@@ -429,8 +429,9 @@ function HarnessBatchPanel() {
       bearerToken="unused"
       investigationId="keyboard-fixture"
       pollMs={100}
-      onViewOpened={(opened) => {
-        window.__KEYBOARD__!.batchViewOpened = opened.view.id;
+      onOpenView={async (viewId) => {
+        window.__KEYBOARD__!.batchViewOpened = viewId;
+        return null;
       }}
       onClose={() => setAsked(null)}
     />

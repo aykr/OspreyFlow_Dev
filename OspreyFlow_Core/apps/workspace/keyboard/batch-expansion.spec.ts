@@ -52,7 +52,9 @@ test("the panel says each stage in the route's words, and its result is opened a
   expect((await state(page)).opened).toBeNull();
   await tabTo(page, "Open the view");
   await expect.poll(async () => (await state(page)).opened).toBe("v-batch");
-  await expect(status).toHaveText("Saved 41,203 nodes and 96,114 links as your private view “Expansion of Ledger Holdings Ltd”. It is open on the canvas.");
+  // Its work done, the panel closes; the lens says what is open.
+  await expect(panel(page)).toHaveCount(0);
+  await expect(page.getByText("The lens shows the view “Expansion of Ledger Holdings Ltd”.")).toBeVisible();
   registerCovered(REGISTRY, "open-a-batch-jobs-view-by-keyboard");
 });
 
@@ -62,6 +64,8 @@ test("a failed batch job is tried again by keyboard, and runs to its view", asyn
     "The batch expansion could not finish, and nothing was saved. Try again, or narrow the expansion.",
   );
   await tabTo(page, "Try the batch job again");
+  // The button pressed is gone; focus stays in the panel, on its heading, not the page's top.
+  await expect(page.getByRole("heading", { name: "Batch job: the whole expansion" })).toBeFocused();
   await expect(page.getByRole("button", { name: "Open the view", exact: true })).toBeVisible();
   expect((await state(page)).sent.filter((s) => s.method === "POST")).toHaveLength(2);
   registerCovered(REGISTRY, "try-a-failed-batch-job-again-by-keyboard");
@@ -92,10 +96,6 @@ test("a job already running in the case is followed, not refused", async ({ page
 const STATES: [string, (page: Page) => Promise<void>][] = [
   ["running", (page) => expect(panel(page).getByRole("status")).toHaveText("Expanding from 12 nodes.")],
   ["done", (page) => expect(page.getByRole("button", { name: "Open the view", exact: true })).toBeVisible()],
-  ["opened", async (page) => {
-    await tabTo(page, "Open the view");
-    await expect(panel(page).getByRole("status")).toContainText("It is open on the canvas.");
-  }],
   ["refused", (page) => expect(panel(page).getByRole("alert")).toContainText("812,000 nodes against a limit of 500,000")],
   ["failed", (page) => expect(page.getByRole("button", { name: "Try the batch job again" })).toBeVisible()],
   ["forbidden", (page) => expect(panel(page).getByRole("alert")).toHaveText("You hold Reader in this case; this needs Editor.")],
@@ -111,7 +111,7 @@ const STATES: [string, (page: Page) => Promise<void>][] = [
 for (const look of ["dark", "light", "govuk"] as const) {
   for (const [job, drawn] of STATES) {
     test(`the batch job's panel, ${job}, has no automated WCAG 2.2 A or AA violation (${look})`, async ({ page }) => {
-      await open(page, `job=${job === "opened" ? "done" : job}`, look);
+      await open(page, `job=${job}`, look);
       await drawn(page);
       const results = await new AxeBuilder({ page }).include(".batch-expansion").withTags(WCAG_TAGS).analyze();
       expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);

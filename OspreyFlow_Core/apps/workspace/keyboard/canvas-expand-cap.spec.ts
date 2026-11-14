@@ -183,7 +183,7 @@ test("the large expansion's prompt is modal too: Tab and Shift+Tab stay inside i
 
 // ADR-151, case-b's: *Run as a batch job* by keyboard, end to end. The refused expansion sent to the Conduit as the
 // canvas sent it to `/expand`, the batch job's panel taking focus and following the job in the server's words, its
-// result opened by *Open the view*, and the panel closed by keyboard. The Conduit here answers as rules-b's route
+// result opened by *Open the view*, after which the panel closes. The Conduit here answers as rules-b's route
 // does (`services/api/app.py`'s batch expansions, `packages/schemas/batch_expansion.py`); its refusals are the
 // panel's own cases (`batch-expansion.spec.ts`, `BatchExpansion.test.tsx`), as the App's half is
 // `App.batchExpand.test.tsx`. Run again under StrictMode (`?strict=1`), as every dev build mounts the App: one POST.
@@ -226,13 +226,13 @@ for (const strict of [false, true]) {
       await expect(button, `${name} was not reached by Tab from the panel's heading`).toBeFocused();
       await page.keyboard.press("Enter");
     };
-    await panel.getByRole("heading", { name: "Batch job: the whole expansion" }).focus();
+    // Focus has stayed on the panel's heading while the job ran: nothing took it.
+    await expect(panel.getByRole("heading", { name: "Batch job: the whole expansion" })).toBeFocused();
     await tabTo("Open the view");
     await expect.poll(() => page.evaluate(() => (window as unknown as Recorded).__KEYBOARD__?.batchViewOpened)).toBe("v-batch");
-    await expect(status).toHaveText("Saved 6,210 nodes and 9,004 links as your private view “Expanded, whole”. It is open on the canvas.");
-    expect(started).toHaveLength(1);
-    await tabTo("Close");
+    // Its work done, the panel closes (the App's lens then takes focus, `ViewLensBanner`).
     await expect(panel).toHaveCount(0);
+    expect(started).toHaveLength(1);
     if (!strict) registerCovered(REGISTRY, "run-an-over-cap-expansion-as-a-batch-job-by-keyboard");
   });
 }

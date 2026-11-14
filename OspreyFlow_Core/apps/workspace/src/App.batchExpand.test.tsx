@@ -12,6 +12,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vi
 
 import type { App as AppComponent } from "./App";
 import type { GlassCanvasProps } from "./canvas/GlassCanvas";
+import type { ReactElement } from "react";
 import type { LimitExceeded } from "./workingset/models";
 
 const canvasProps: { current: Partial<GlassCanvasProps> | null } = { current: null };
@@ -77,6 +78,8 @@ const PAGE = {
 }; // prettier-ignore
 
 const sent: { url: string; body: unknown }[] = [];
+/** A case's own answer, asked before the table: a Response, a promise of one, or null for the table's. */
+let answerFirst: ((url: string, method: string) => Response | Promise<Response> | null) | null = null;
 
 beforeEach(() => {
   sent.length = 0;
@@ -110,12 +113,16 @@ beforeEach(() => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     const url = String(input).split("?")[0]!;
     sent.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    const special = answerFirst?.(url, init?.method ?? "GET");
+    if (special) return Promise.resolve(special);
     const found = answers.find(([pattern]) => pattern.test(url));
     return found ? Promise.resolve(new Response(JSON.stringify(found[1]))) : new Promise<Response>(() => undefined);
   });
 });
 
 afterEach(() => {
+  answerFirst = null;
+  vi.mocked(userManager.renewSilently).mockImplementation(() => new Promise(() => undefined));
   cleanup();
   vi.restoreAllMocks();
   sessionStorage.clear();
@@ -144,8 +151,7 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     fireEvent.click(open);
     const lens = await screen.findByRole("region", { name: "Open view" });
     expect(within(lens).getByText("Kestrel, expanded")).toBeTruthy();
-    expect(screen.getByText("Saved 6,210 nodes and 9,004 links as your private view “Kestrel, expanded”. It is open on the canvas.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    // Its work done, the panel closes; the lens says what is open.
     await waitFor(() => expect(panel()).toBeNull());
    }, 15_000);
 
@@ -171,5 +177,92 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     await waitFor(() => expect(posts()).toHaveLength(2));
     expect(posts()[1]!.body).toEqual({ request: { node_ids: ["p1"], depth: 2, edge_types: null } });
     expect(screen.getAllByRole("region", { name: "Batch job: the whole expansion" })).toHaveLength(1);
+  }, 15_000);
+
+  test("a view asked for after Open the view wins, as any later view does (openLens)", async () => {
+    let releaseBatchView!: () => void;
+    answerFirst = (url) =>
+      url.endsWith("/inv-1/views/v-batch")
+        ? new Promise<Response>((resolve) => {
+            releaseBatchView = () => resolve(new Response(JSON.stringify({ view: BATCH_VIEW, nodes: [kestrel], edges: [], layout: {}, missing: 0 })));
+          })
+        : null;
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
+    act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
+    fireEvent.click(await screen.findByRole("button", { name: "Open the view" }, { timeout: 5000 }));
+    await waitFor(() => expect(sent.some((s) => s.url.endsWith("/inv-1/views/v-batch"))).toBe(true));
+    const viewsMenu = canvasProps.current!.viewsMenu as ReactElement<{ onOpen: (view: { id: string }) => void }>;
+    act(() => viewsMenu.props.onOpen({ id: "v-shared" }));
+    const lens = await screen.findByRole("region", { name: "Open view" });
+    expect(within(lens).getByText("Payments in March")).toBeTruthy();
+    await act(async () => releaseBatchView());
+    await new Promise((r) => setTimeout(r, 40));
+    expect(within(screen.getByRole("region", { name: "Open view" })).getByText("Payments in March")).toBeTruthy();
+  }, 15_000);
+
+  test("a second choice while the first runs opens its own panel, which follows the job the Conduit names", async () => {
+    let starts = 0;
+    answerFirst = (url, method) =>
+      method === "POST" && url.endsWith("/inv-1/batch-expansions") && ++starts > 1
+        ? new Response(JSON.stringify({ error: "batch_expansion_running", detail: "A batch expansion of yours is already running in this case, so another was not started. Follow that one, or wait for it to finish.", id: "j1" }), { status: 409 })
+        : null;
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
+    const posts = () => sent.filter((s) => s.url.endsWith("/inv-1/batch-expansions"));
+    act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    act(() => canvasProps.current!.onRunExpansionAsBatch!({ ...ASKED, depth: 2 }));
+    await waitFor(() => expect(posts()).toHaveLength(2));
+    expect(posts()[1]!.body).toEqual({ request: { node_ids: ["p1"], depth: 2, edge_types: null } });
+    expect(screen.getAllByRole("region", { name: "Batch job: the whole expansion" })).toHaveLength(1);
+    // Followed, so without the second request's figures, and its reading is the running job's.
+    await screen.findByText("A batch expansion of yours is already running in this case, so another was not started. Follow that one, or wait for it to finish.");
+    expect(screen.queryByText(/The canvas refused/)).toBeNull();
+    expect(await screen.findByRole("button", { name: "Open the view" }, { timeout: 5000 })).toBeTruthy();
+  }, 15_000);
+
+  test("someone else signing in in place takes the panel away, with its figures", async () => {
+    vi.mocked(userManager.renewSilently).mockResolvedValue({
+      access_token: "b-token",
+      expires_at: Math.floor(Date.now() / 1000) + 300,
+      profile: { sub: "analyst-2", username: "osprey-demo-analyst-2", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] },
+    } as never); // prettier-ignore
+    let refuse = false;
+    answerFirst = (url) => (refuse && url.endsWith("/inv-1/batch-expansions/j1") ? ((refuse = false), new Response("{}", { status: 401 })) : null);
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
+    // Held at queued, so the panel is still following when the sign-in changes.
+    const held = answerFirst;
+    answerFirst = (url, method) =>
+      held(url, method) ??
+      (url.endsWith("/inv-1/batch-expansions/j1") ? new Response(JSON.stringify({ id: "j1", state: "queued", words: "Waiting for the batch expansion to start.", view: null, nodes: null, links: null, refusal: null })) : null);
+    act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
+    expect(await screen.findByText(/The canvas refused 6,210 nodes/)).toBeTruthy();
+    fireEvent.pointerDown(window); // the person's own action, so the refused reading is renewed (ADR-050 Amendment 2)
+    refuse = true;
+    await waitFor(() => expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalled(), { timeout: 5000 });
+    await waitFor(() => expect(panel()).toBeNull(), { timeout: 5000 });
+    expect(screen.queryByText(/The canvas refused 6,210 nodes/)).toBeNull();
+  }, 15_000);
+
+  test("offers no second try of a failed job once a view is open", async () => {
+    answerFirst = (url) =>
+      url.endsWith("/inv-1/batch-expansions/j1")
+        ? new Response(JSON.stringify({ id: "j1", state: "failed", words: "The batch expansion could not finish, and nothing was saved. Try again, or narrow the expansion.", view: null, nodes: null, links: null, refusal: null }))
+        : null;
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
+    act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
+    expect(await screen.findByRole("button", { name: "Try the batch job again" }, { timeout: 5000 })).toBeTruthy();
+    const viewsMenu = canvasProps.current!.viewsMenu as ReactElement<{ onOpen: (view: { id: string }) => void }>;
+    act(() => viewsMenu.props.onOpen({ id: "v-shared" }));
+    await screen.findByRole("region", { name: "Open view" });
+    expect(panel()).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Try the batch job again" })).toBeNull();
   }, 15_000);
 });

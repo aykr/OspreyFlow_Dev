@@ -2692,9 +2692,12 @@ export function App() {
           investigationId={batchExpansion.asked.caseId}
           // *Try the batch job again* only where a batch job may be chosen: not while a view is open.
           mayStartAgain={lens === null}
-          onViewOpened={(opened) => {
+          // Opened as any view is (`openLens`: the latest view asked for wins); a problem is the panel's to say.
+          onOpenView={async (viewId) => {
             setViewsRead((n) => n + 1);
-            showLens(opened);
+            const problem = await openLens(viewId);
+            if (problem !== null) setViewProblem(null);
+            return problem;
           }}
           onClose={batchExpansion.close}
         />
