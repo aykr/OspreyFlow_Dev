@@ -39105,3 +39105,175 @@ rollouts, and a failed one failing the step naming it). The behaviour they wire 
 `tests/services/search_index/test_upgrade_rebuild.py`: a v0.5.1 index with no fingerprint holds the indexer
 (`MappingOutOfDate`, the outbox kept) until a rebuild, then it drains. That test passes on main as it stood
 before this amendment, because the mechanism was there and no path ran it; the three wiring tests above are its red.
+
+---
+
+## ADR-151 — Promote the expansion to a batch job at the working-set cap: the refused expansion run by the worker under the requester's own access, saved as a private view of the case, said in words and never cut — ACCEPTED (design)
+
+Status: design, from the owner's ruling of 14 November 2026 (v0.5.2: build the cap's third choice), reserved for
+rules-b (the Conduit and the worker) and case-b (the Glass) in `ADR_RESERVATIONS.md`. **Not built.** It builds the
+third of the three choices that `00_ARCHITECTURE.md` §4, `03_CONDUIT_MIDDLEWARE.md` §4 and ADR-007 give at the cap
+("promote the expansion to a batch job whose result is a saved subgraph"). `promote_to_batch` has been named in
+the typed `limit_exceeded` since Phase 4, and nothing has answered it until now. ADR-144 and its Amendment 2 are
+unchanged: the saved subgraph *is* a view.
+
+### Context
+
+When an expansion would take the reader's view of the case past 50,000 nodes or 250,000 links, it is refused
+(`LimitExceeded`) with `save_as_view`, `filter` and `promote_to_batch`. The first two are built (ADR-144
+Amendment 2 decision 5). What is refused is the case's working set *plus* the expansion. The expansion's own
+result is often well under the cap: a few seeds expanded to depth 3 in a case that is already large. That result
+can be kept as a lens without joining the working set, and so without breaching it.
+
+Found reading the tree for this design: **`local-lite` runs no job worker.** The Conduit builds a `JobWorker`
+and registers its handlers (`app.py`, "this app process itself does not spin up that loop"). Only `cluster`
+and `cloud-platform` run the worker image (`harness/cluster.py`, `harness/cloud_platform/profile.yaml`). The
+service inventory's note ("Lite runs the same loop inside the Conduit") is not true of the code. A job
+submitted on `local-lite` today is never run. That is pre-existing and true of every job type
+(`supersede_node`, `resolve_entity_type`, `pattern_match`, `compute_metric`). The orchestrator gave it to the
+admin lane as a fix of its own, landed on 14 November 2026: where the render says `OSPREY_JOB_WORKER=conduit`
+(every profile that renders no worker), the Conduit's lifespan runs `worker_main.run_forever` over every
+registered job type, and the inventory note is corrected.
+
+### Decision
+
+1. **The route takes the refused expansion's own request.**
+   - `POST /v1/investigations/{id}/batch-expansions`, behind the same checks as `POST …/expand`: the case at
+     Editor (`InvestigationEditorDep`) and the `investigate` right.
+   - The body is `{request: ExpandRequest, justification?: str, name?: str}`, which is `ExpandBody` with a
+     view name added. The Glass sends exactly what was refused.
+   - It answers **202** with a `BatchExpansion` (decision 4), `state: "queued"`, and enqueues one
+     `batch_expand` job.
+   - Nothing is read from the graph on the request path, and nothing joins the working set or its delta
+     stream.
+   - A reader below Editor is refused as `expand` refuses them, and no job is enqueued.
+   - The route does not ask whether the expansion would really breach. An expansion that fits is still run
+     and saved as asked.
+2. **One at a time.** A requester with a `batch_expand` queued or running on the same case is refused
+   **409** `{"error": "batch_expansion_running", "detail": <words>, "id": <the running one>}`, so the Glass
+   can follow the running job instead.
+3. **The job runs under the requester's own access, filtered in the adapter (rules 3 and 4).**
+   - The payload carries the requester's principal as the route scoped it. This is `pattern_match`'s
+     precedent (`patterns.py`).
+   - At run time the job re-checks that the requester still holds Editor on the case. Losing it refuses the
+     job (`no_longer_an_editor`).
+   - It re-scopes the principal to the case's datasets as they are now, with `scope_to_case`, as
+     `scope_a_monitor` does outside a request.
+   - It then calls `GraphPort.expand(request, principal)`, the very read the synchronous route makes, with
+     the access filter in the traversal. A node the requester may not read is never returned, so it is never
+     a candidate for the view.
+   - Nothing is filtered after retrieval, and no unscoped principal is used.
+4. **What the job says.** `GET /v1/investigations/{id}/batch-expansions/{job_id}` answers a `BatchExpansion`:
+   ```
+   { id, state: "queued" | "running" | "done" | "refused" | "failed",
+     words: str,                     # always present, a whole sentence
+     view: CaseView | null,          # done: the saved view (ADR-144's wire shape)
+     nodes: int | null, links: int | null,   # done: what the view holds
+     refusal: { code, cap_kind?, cap?, would_be? } | null }   # refused only
+   ```
+   - The route has the same case-level check as the views routes. A job is its requester's: another member,
+     or any job id not theirs on this case, gets 404, as for a private view (ADR-041's existence rule).
+   - `words` while running names the stage in plain terms: "Expanding from 12 nodes", then "Counting the
+     links among 41,203 nodes", then "Saving the view". `JobRecord` gains an optional `progress` sentence,
+     written at each stage.
+   - The Glass polls every two seconds. The SSE stream that spec 03 §3.3 names for `/v1/jobs/{id}/events` is
+     not built here; no `/v1/jobs` route exists to check access on.
+   - `failed` is said in this ADR's words only ("The batch expansion could not finish, and nothing was
+     saved. Try again, or narrow the expansion."). An exception's own text is never served (rule 7).
+5. **Never cut (rule 2). The result is saved as a private view, or refused with figures.**
+   - The job counts the nodes the expansion returned, seeds included. If they pass `MAX_NODES`, it is
+     refused `too_many_nodes` with `cap` and `would_be`, in words: "The expansion found 63,412 nodes, more
+     than the 50,000 a view can show, so nothing was saved. Narrow it by link type, depth or dates and try
+     again."
+   - Otherwise it counts the links among them that the requester may see. These are the links that opening
+     the view will show (`open_view` reads `edges_among`). Past `MAX_EDGES` it is refused `too_many_links`
+     with figures, in the same words.
+   - An expansion that finds nothing the requester may see is refused `found_nothing`, as ADR-144
+     Amendment 2 decision 5 refuses an empty view.
+   - A job that runs longer than **ten minutes** is refused `took_too_long` with the stage it reached.
+   - The cap is the view's cap because `open_view` refuses a view past it. A larger batch figure would save
+     a view that never opens.
+   - Otherwise the result is saved through `CaseViewStore.save` as a **private** view, created by the
+     requester: `node_ids` are the expansion's nodes, `window` is the request's `temporal_window`, and there
+     is no layout and no threshold. Its name is the body's `name`, or "Expanded from 12 nodes, 14 Nov 2026
+     14:05".
+   - `CaseViewInput` bounds a selection that a client posts at 10,000 ids. That bound is on a request body.
+     The batch's selection is the adapter's answer for the requester, not client input. The job validates the
+     view's input through `BatchViewInput`, a subclass of `CaseViewInput`, so it inherits every validator the
+     client's input has and any added later; only the selection's bound is raised, to the view's cap. It never
+     uses `model_construct`, which would skip every validator, not only the bound (the orchestrator's ruling
+     of 14 November 2026; `test_a_batch_view_passes_the_same_validators_a_client_view_does`, red with
+     `model_construct`).
+     Bounding the batch at 10,000 instead would refuse most of the expansions the cap refuses, so the third
+     choice would answer almost nothing.
+   - It is ADR-144's live lens. Each opening re-reads the case as its reader may see it. A shared reader sees
+     their own level, and `missing` counts the rest without naming them.
+6. **Where it runs: where the job worker runs.** `batch_expand` is registered in `worker_main.register_all`,
+   so the worker image runs it in `cluster` and `cloud-platform`, and the Conduit's own loop runs it on
+   `local-lite` (the admin lane's fix). Nothing here special-cases it. Every consumer reads the stream
+   through the one consumer group (`workers`), so each job goes to exactly one consumer, even with a Conduit
+   and a worker both reading it.
+7. **Audit.**
+   - Submission records `batch_expand`, with the request and the justification, as `expand` records its own.
+   - The saved view records `save_case_view` with `{"view_id", "from_batch": job_id}` and the node count.
+   - A refusal records `batch_expand_refused` with its code.
+
+### Tests to write first, named
+
+- `test_a_hidden_node_never_lands_in_the_batch_view`: a node adjacent to a seed and held above the
+  requester's handling is absent from the stored view's `node_ids`, and from a shared reader's open of it.
+  It goes red with the job expanding under an unscoped principal.
+- `test_a_principal_who_cannot_edit_the_case_cannot_start_a_batch`: a Viewer is refused, and the queue
+  is unchanged. It goes red with the route at Viewer.
+- `test_a_batch_whose_requester_lost_edit_is_refused_and_saves_nothing`.
+- `test_a_batch_past_the_cap_is_refused_with_figures_and_saves_nothing`, for both nodes and links. It goes
+  red with the result sliced to the cap.
+- `test_a_batch_finding_nothing_is_refused`, and `test_a_second_batch_while_one_runs_is_refused_naming_it`.
+- `test_another_members_batch_is_not_found`.
+- `test_a_failed_batch_says_this_adrs_words_not_the_exception`.
+- `test_the_saved_view_opens_as_the_lens`: done, it opens through `GET …/views/{id}` with the same nodes.
+- `test_the_worker_registers_batch_expand`: `register_all` binds it, so the worker image and the Conduit
+  register the same handler.
+- `test_a_batch_view_opened_after_a_clearance_drop_hides_what_was_lost`: a node visible to the requester
+  when the job ran is in the saved selection. After their clearance drops, it is absent from their open of the
+  view, and `missing` counts it. It goes red with `open_view` returning the stored selection. This is the test
+  for the clearance snapshot in **Cost**. ADR-144's
+  `test_a_view_shows_the_rest_and_counts_the_missing` proves a different reader, not the same reader later.
+- The Glass's tests are case-b's: the cap dialog's third button, the progress, done and refused words, and
+  *Open the view*, beside case's `keyboard/canvas-expand-cap.spec.ts` (the expansion's cap prompt, not the
+  view's over-cap dialog). Rule 13 applies.
+- Live on a leased stack: the leak test and the ten-minute bound against ArcadeDB. Each rule is planted alone
+  and shown red (`process/lanes/rules-b/v052batch/`).
+
+### Spec edits in the same change
+
+- `03_CONDUIT_MIDDLEWARE.md`: the two routes are added to §3.2, and §4 says where `promote_to_batch` leads.
+- `08_ACCEPTANCE_SCENARIOS.md` gains a scenario: an expansion refused at the cap is promoted, saved as a
+  private view, and opened.
+
+### Cost
+
+- **The principal is snapshotted at submission.** A clearance lowered at the IdP during the job's ten minutes
+  is not seen until the view is next opened. The open re-reads under the reader's current principal, so the
+  view never shows more than its reader may see. The node ids saved were chosen under the old clearance, and
+  `missing` counts them (`test_a_batch_view_opened_after_a_clearance_drop_hides_what_was_lost`).
+- **`edges_among` at 50,000 ids is still not measured.** On stack e (14 November 2026), expand from one seed over
+  4,001 nodes took 1.1 s, and `edges_among` over those 4,001 had not answered within the run's remaining seconds.
+  Writing them by the ordinary path took 417 s, so the run never reached 50,000 (`process/lanes/rules-b/v052batch/live.txt`).
+  The ten-minute bound is a guess, and its failure is a safe one: a batch too slow to count is refused
+  `took_too_long` in words, and saves nothing, never a cut. A measurement at 50,000 needs the bulk loader to set up,
+  as a run of its own.
+- **Not durable past 24 hours.** A job's record lives 24 hours (`JOB_TTL_SECONDS`), and the view it saved is
+  durable.
+- **No cancel.** A job runs to done, refused or its ten minutes.
+- **A job its worker abandons stays pending in the stream.** Nothing reclaims a pending entry (no
+  `XAUTOCLAIM`; the admin lane's finding, 14 November 2026). So a job still `running` a minute past its ten
+  minutes is said as `failed`, and its claim is taken over, so its requester can start another rather than
+  waiting out the record's 24 hours (`JobRecord.started_at`;
+  `test_a_job_left_running_by_a_stopped_worker_is_failed_and_does_not_block`). The job itself is not run
+  again.
+
+### Revisit if
+
+Analysts need a batch result larger than a view can open. Then the cap on opening a view is reopened in
+ADR-007's terms (measure, then raise), not worked around here.

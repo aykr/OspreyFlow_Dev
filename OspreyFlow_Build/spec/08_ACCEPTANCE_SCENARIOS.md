@@ -651,6 +651,7 @@ Run against both scenarios, on both the `local-lite` and `cluster` profiles.
 | Every model-derived node is `inferred` until confirmed; no automatic promotion occurs | `01_DOMAIN_MODEL.md` §2.1 |
 | No filter removes a node from the canvas; all filtering dims | `02_GLASS_FRONTEND.md` §2 |
 | The status bar's count of dimmed items, and its standing sentence when material is withheld, are correct at every step | An analyst must never mistake a partial picture for a complete one, nor learn how much is hidden (ADR-124) |
+| An expansion past the working-set cap is never cut: promoted to a batch job, it is saved as a private view of the case and opens as the lens, or it is refused with its figures; a node the analyst may not read is never in the view (`tests/services/api/test_batch_expansion.py`; live in `test_batch_expansion_live.py`) | Silent truncation is a correctness failure (ADR-007, ADR-151) |
 | The performance budget holds throughout | `02_GLASS_FRONTEND.md` §5 |
 | Results are identical on both profiles, allowing only floating-point tolerance on iterative metrics | Transportability |
 | Disconnecting the network mid-scenario on `local-lite` changes nothing | Air-gap capability is a claim that must be tested |

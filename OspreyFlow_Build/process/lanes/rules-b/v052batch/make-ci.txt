@@ -1,0 +1,5 @@
+# make -k ci via offline at 6eb5440 (main c514da6), the three patches applied unstaged: every target green, exit 0. Replaces the run at ccd2466, taken before the rebase.
+Running on ospreyflow-test (stack offline, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261114T120336Z-e71b2185/log: sh -c cd OspreyFlow_Build && make -k ci
+test-file-coverage-check: 1106 test file(s), 0 allowlisted, no new drift.
+Wall time: 866 s, exit 0 (no stack, no lease; set-up before it 27 s)
+exit=0 at 6eb5440

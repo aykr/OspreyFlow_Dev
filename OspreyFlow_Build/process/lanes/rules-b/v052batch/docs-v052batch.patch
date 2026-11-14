@@ -1,0 +1,85 @@
+diff --git a/OspreyFlow_Build/tests/test_user_guide_batch_expansion.py b/OspreyFlow_Build/tests/test_user_guide_batch_expansion.py
+new file mode 100644
+index 0000000..6f3baaa
+--- /dev/null
++++ b/OspreyFlow_Build/tests/test_user_guide_batch_expansion.py
+@@ -0,0 +1,46 @@
++"""The user guide's §5.2 on the cap's third choice (ADR-151), held to the code: the view's limits are
++the working set's own figures, and each claim the guide makes about the job is one the code keeps.
++Red with the guide's old sentence (reduce, or save a smaller view, and nothing of a batch job), and
++with either figure changed in the code."""
++
++from __future__ import annotations
++
++import re
++from pathlib import Path
++
++from services.api import batch_expansion
++from services.api.working_set.models import MAX_EDGES, MAX_NODES
++
++GUIDE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core" / "docs" / "user-guide.md"
++
++
++def _section_5_2() -> str:
++    text = GUIDE.read_text(encoding="utf-8")
++    start = text.index("### 5.2 The graph")
++    return text[start : text.index("\n### ", start + 1)]
++
++
++def test_section_5_2_offers_the_batch_job_at_the_cap() -> None:
++    section = _section_5_2()
++    flat = re.sub(r"\s+", " ", section)
++    # The cap prompt's button, exactly (case's canvas/CapRefusalPrompt.tsx).
++    assert "**Run as a batch job**" in flat
++    assert "saves what it finds as a private view of the case" in flat
++    assert "nothing is added to the case's own graph" in flat
++    assert "its result opens as your private view" in flat
++    assert "One batch job of yours runs in a case at a time" in flat
++    # The Glass panel's own sentence, quoted whole (case-b's BatchExpansion.tsx, after its review):
++    # the Conduit's 409 follows the reader's running batch in the case, and only while it runs.
++    assert (
++        '"Closing this does not stop the job. While it runs, asking for a batch expansion in this '
++        'case again follows it."' in flat
++    )
++
++
++def test_the_guides_figures_are_the_views_limits() -> None:
++    flat = re.sub(r"\s+", " ", _section_5_2())
++    assert f"more than **{MAX_NODES:,}** nodes or **{MAX_EDGES:,}** links" in flat
++    assert (batch_expansion.MAX_NODES, batch_expansion.MAX_EDGES) == (MAX_NODES, MAX_EDGES)
++    # "narrow it by link type, depth or dates": the refusal's own advice.
++    assert "Narrow it by link type, depth or dates" in batch_expansion._NARROW  # noqa: SLF001
++    assert "narrow it by link type, depth or dates" in flat
+diff --git a/OspreyFlow_Core/docs/user-guide.md b/OspreyFlow_Core/docs/user-guide.md
+index 8cb491a..f0a92e4 100644
+--- a/OspreyFlow_Core/docs/user-guide.md
++++ b/OspreyFlow_Core/docs/user-guide.md
+@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
+ <!-- document-control:begin -->
+ ## Document control
+ 
+-**Version 1.59** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
++**Version 1.60** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+ 
+ | Version | Date | What changed |
+ | --- | --- | --- |
++| 1.60 | 2026-11-14 | §5.2: an expansion past the working set's limit may be **run as a batch job** (ADR-151): run on the server as you, saved as a private view of the case, or refused with its figures past a view's own limit of 50,000 nodes and 250,000 links; its result opens as your private view when it is done, and the job carries on with the panel closed. Held by `tests/test_user_guide_batch_expansion.py`. PDF made by the orchestrator at merge. |
+ | 1.59 | 2026-11-14 | §5.5: the fallback's depth line as studio's fix words it, "Only the first 100 matches are listed, and the filters apply to those alone.", shown only where the search found more than 100: the fallback asks one past its depth, so exactly 100 matches is a whole list. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
+ | 1.58 | 2026-11-14 | §5.5: the fallback's paging as studio's fix built it: *Next page* offered only while a further page holds records, and where the search reached the fallback's 100, the last page's line adds, even with a dataset or a group chosen, "Only the first 100 matches are listed: narrow the search to see others." in the Conduit's words. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
+ | 1.57 | 2026-11-14 | §5.5: the search results page as v0.5.2's step 3e′ built it (ADR-145 Amendment 15 Part A, spec 02 §2.0c): Enter on the typed words opens it over the view, a suggestion moved to still chosen; the heading and the Conduit's count, a group's own once chosen; the groups, the datasets and dates, *Clear filters*; 20 a page; each result's *Show on graph* (the records it stands for, one that could not be read said) and, for a document, *Open* (the results set aside while it is read over the view); *Back to ‹view›*; the empty line; the Ask line; a search over 200 characters refused with its limit named, never cut, and the Conduit's other refusals in its words; the fallback's one line, its first 100 exact matches, counts always marked incomplete, datasets without counts and no dates. §12: Enter in the top bar's search box. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
+@@ -328,7 +329,14 @@ held by this…, Set picture… and Mark for suppression; with two selected, onl
+ to…, Split from… and Find paths to…. In a view, the menu offers only what changes nothing in the
+ case. An expansion that would add more than
+ **500** nodes asks first, offering one relationship at a time, all of them, or nothing. An expansion
+-past the working set's own limit is refused; reduce what is drawn, or save a smaller view, and try again.
++past the working set's own limit is refused; reduce what is drawn, save a smaller view, or **Run as a
++batch job**. A batch job runs the same expansion on the server as you, reading only what you may see,
++and saves what it finds as a private view of the case; nothing is added to the case's own graph. When
++it is done, its result opens as your private view; if it cannot be opened, it stays in *Views in this
++case*. A result too large for a view to show, more than **50,000** nodes or **250,000** links, is
++refused with its figures and saves nothing: narrow it by link type, depth or dates. One batch job of
++yours runs in a case at a time, and its panel says so: "Closing this does not stop the job. While it
++runs, asking for a batch expansion in this case again follows it."
+ 
+ **Reading a link.** A link's stroke says where it came from: **solid** from a record, **dashed**
+ inferred by a model, **dotted** unresolved. Hovering names its type and how many such links join the

@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:  # the import is deferred at runtime — see `main()`'s own comment.
     from .alerts import AlertStore
     from .assessments import JudgementStore
+    from .batch_expansion import BatchExpandBindings
     from .worker import JobWorker
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,8 @@ def registered_job_types() -> dict[str, str]:
         # never ran, and not here, so enqueued on every profile and run on none.
         "compute_metric": "services.api.compute_routes:run_compute_metric_job",
         "pattern_match": "services.api.patterns:run_pattern_match_job",
+        # ADR-151: the cap's third choice, run where the job worker runs.
+        "batch_expand": "services.api.batch_expansion:run_batch_expand_job",
     }
 
 
@@ -88,6 +91,7 @@ def register_all(
     alerts: AlertStore | None,
     judgement_store: JudgementStore | None,
     compute: Any = None,
+    batch: BatchExpandBindings,
 ) -> None:
     """Every handler in `registered_job_types` on `worker`, with what each needs bound, as the
     Conduit's own lifespan binds them (`app.py`): the resolution job its ontology, handling scheme,
@@ -96,7 +100,9 @@ def register_all(
     either replaces is followed by the alerts citing it. `judgement_store`, the supersede job's
     review-flag hook (`01_DOMAIN_MODEL.md` §5): required, `None` named explicitly where there is
     none, so a registration that forgot it (the deployed worker's did, the L2.8d review's item 6)
-    is refused by the type check rather than flagging nothing. `main` calls this, and so does the
+    is refused by the type check rather than flagging nothing. `batch`, the batch expansion's
+    stores (ADR-151): required too, so a registration cannot leave the job unable to save its view
+    or check its requester's level. `main` calls this, and so does the
     Conduit's lifespan (`app.py`), so the two registrations are one (the L2.8c review's item 13);
     `test_worker_registration.py` proves both. `compute`, the compute job's port: the Conduit passes
     its own; the worker's process, which has none, gets the same in-process one the Conduit builds
@@ -113,6 +119,7 @@ def register_all(
             "alerts": alerts,
         },
         "compute_metric": {"compute": compute if compute is not None else _compute_port()},
+        "batch_expand": {**batch.as_kwargs(), "valkey": valkey},
     }
     for job_type, dotted in registered_job_types().items():
         module_name, _, attribute = dotted.partition(":")
@@ -163,8 +170,12 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
 
     from .alerts import AlertStore
     from .assessments import JudgementStore
+    from .audit import AuditWriter
+    from .batch_expansion import BatchExpandBindings
+    from .case_views import PostgresCaseViewStore
     from .config import ApiConfig, PostgresConfig
     from .datasets import PostgresDatasetStore
+    from .investigations import InvestigationStore
     from .jobs import JobQueue
     from .worker import JobWorker
 
@@ -178,13 +189,23 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
     await graph.apply_schema(load_default_ontology())
 
     client = Valkey(**config.valkey.client_kwargs())
-    worker = JobWorker(client, JobQueue(client), graph, consumer_name=consumer_name())
+    queue = JobQueue(client)
+    worker = JobWorker(client, queue, graph, consumer_name=consumer_name())
     # The case layers come from the dataset store, read at each run (a layer made since counts).
     datasets = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
     # The alerts' repoint journal (ADR-109 Amendment 11): what a job replaces, alerts follow.
     alerts = await AlertStore.connect(PostgresConfig.from_env().dsn)
     # The supersede job flags the judgements citing a corrected node, as the Conduit's does.
     judgements = await JudgementStore.connect(PostgresConfig.from_env().dsn)
+    # ADR-151: the batch expansion checks its requester's level, saves its view and audits both.
+    investigations = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
+    batch = BatchExpandBindings(
+        views=await PostgresCaseViewStore.connect(PostgresConfig.from_env().dsn),
+        investigations=lambda: investigations,
+        datasets=datasets,
+        jobs=queue,
+        audit=await AuditWriter.connect(PostgresConfig.from_env().dsn),
+    )
     register_all(
         worker,
         ontology=load_default_ontology(),
@@ -193,6 +214,7 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
         analyst_layers=datasets.layer_ids,
         alerts=alerts,
         judgement_store=judgements,
+        batch=batch,
     )
 
     stop = asyncio.Event()

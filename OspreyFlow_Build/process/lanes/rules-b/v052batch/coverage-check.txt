@@ -1,0 +1,14 @@
+# tools.test_file_coverage_check at e4db7b8 (main debfc28)
+== both patches
+test-file-coverage-check: 1100 test file(s), 0 allowlisted, no new drift.
+exit=
+== ci.yml patch alone
+test-file-coverage-check: `ci.yml`'s `test` job ignores these but `Makefile`'s `test` target does not: tests/services/api/test_batch_expansion_live.py
+exit=
+== Makefile patch alone
+test-file-coverage-check: live-service test file(s) not correctly wired (need both a `test`-job ignore and a live-service-job listing): tests/services/api/test_batch_expansion_live.py: in neither the `test` job's ignore list nor any live-service job
+test-file-coverage-check: `Makefile`'s `test` target ignores these but `ci.yml`'s `test` job does not: tests/services/api/test_batch_expansion_live.py
+exit=
+== neither
+test-file-coverage-check: live-service test file(s) not correctly wired (need both a `test`-job ignore and a live-service-job listing): tests/services/api/test_batch_expansion_live.py: in neither the `test` job's ignore list nor any live-service job
+exit=
