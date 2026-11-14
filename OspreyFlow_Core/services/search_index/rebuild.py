@@ -139,11 +139,19 @@ class Drift:
     refused_count: int = 0
     #: The outboxes still held rows when the check ran: a change on its way shows as drift.
     pending: bool = False
+    #: Documents in the index the streams never read: of another kind than node or text, or
+    #: without the key they are sorted by (which OpenSearch sorts last). Counted, by the index's
+    #: own count less the documents read, so none is passed over unsaid (rule 2).
+    unread_count: int = 0
 
     @property
     def none(self) -> bool:
         return not (
-            self.missing_count or self.extra_count or self.stale_count or self.refused_count
+            self.missing_count
+            or self.extra_count
+            or self.stale_count
+            or self.refused_count
+            or self.unread_count
         )
 
     def _note(self, kind: str, doc_id: str) -> None:
@@ -183,9 +191,14 @@ class _Stream:
                 "hits"
             ]["hits"]
             self._done = len(hits) < self._page
+            # A document without the key is sorted after every one with it: it and every one
+            # after it are left unread here, and counted as unread by the check.
+            keyed = [h for h in hits if h["_source"].get(self._key) is not None]
+            if len(keyed) < len(hits):
+                self._done = True
             self._buffer = [
                 (str(h["_source"][self._key]), str(h["_id"]), fingerprint(h["_source"]))
-                for h in hits
+                for h in keyed
             ]
             self._buffer.reverse()
         before = self.head
@@ -268,7 +281,8 @@ async def drift(
             report._note("extra", stream.head[1])
             await stream.advance()
     await _sort_missing(client, alias, missing, report)
-    report.index_documents = nodes_stream.seen + texts_stream.seen
+    report.index_documents = int((await client.count(index=alias))["count"])
+    report.unread_count = report.index_documents - nodes_stream.seen - texts_stream.seen
     return report
 
 

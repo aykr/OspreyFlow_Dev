@@ -56,9 +56,15 @@ async def _run() -> int:
         print(f"refused: {doc_id}: {reason}")
     if report.refused_count > _SHOWN:
         print(f"refused: and {report.refused_count - _SHOWN} more")
+    if report.unread_count:
+        print(
+            f"unread: {report.unread_count} documents of another kind or without their id, "
+            "which no stream reads"
+        )
     print(
         f"search index drift: {report.missing_count} missing, {report.extra_count} extra, "
-        f"{report.stale_count} stale, {report.refused_count} refused "
+        f"{report.stale_count} stale, {report.refused_count} refused, "
+        f"{report.unread_count} unread "
         f"({report.graph_nodes} nodes in the graph, "
         f"{report.index_documents} documents in the index); "
         "python -m scripts.rebuild_search_index mends it"

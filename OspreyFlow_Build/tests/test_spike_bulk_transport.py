@@ -14,6 +14,8 @@ from typing import Any
 import pytest
 from scripts import spike_bulk_transport as spike
 
+from tests.adapters.graph_arcadedb.edge_store import refuse_scans
+
 
 def test_the_working_database_is_refused_before_any_connection() -> None:
     """Catches the spike creating, dropping or loading into a database that is not its own: the
@@ -75,8 +77,7 @@ class _Client:
         self.queries.append(query)
         if self.refuse and self.refuse in query:
             raise RuntimeError("cannot parse")
-        if "project(" in query and "label()" in query:
-            return []
+        refuse_scans(query)  # as every stand-in of the store does (ADR-124 Amendment 18)
         if "limit(1).count()" in query:
             return [{"result": 0}]
         if "project(" in query:  # stored pairs, degrees: rows of projections, none here

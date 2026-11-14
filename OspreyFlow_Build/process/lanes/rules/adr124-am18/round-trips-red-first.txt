@@ -1,5 +1,0 @@
-R1 node lookup asks every type: 1 failed, 5 passed in 0.73s
-R2 link ends ask every type: 2 failed, 4 passed in 0.77s
-R3 no second look for a missed end: 1 failed, 5 passed in 0.74s
-R4 an id in two types kept silently: 1 failed, 5 passed in 0.73s
-restored: 6 passed in 0.71s

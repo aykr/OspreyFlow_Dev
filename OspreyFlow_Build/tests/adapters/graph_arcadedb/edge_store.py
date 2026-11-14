@@ -42,7 +42,9 @@ RESERVED_PARAMETER_NAMES = frozenset(
 #: The stand-in refuses it (rule 15: what the real store does badly enough to fail a load at size,
 #: it refuses), so the write path must resolve ids through each type's unique `id` index by SQL
 #: and start from record ids (ADR-124 Amendment 18).
-_SCANS = re.compile(r'(^g|\.)(V|E)\(\)(\.hasLabel\([^)]*\))?\.has\("id"')
+#: Any filter steps may come first (`g.V().has("reverted",false).has("id",…)` still reads the whole
+#: store), and the property may be quoted either way.
+_SCANS = re.compile(r"""(^g|\.)(V|E)\(\)(\.(hasLabel|has|hasNot)\([^)]*\))*?\.has\((["'])id\5""")
 
 
 def refuse_scans(query: str) -> None:
@@ -138,8 +140,6 @@ class CountingStore:
     ) -> list[Any]:
         self.queries.append(query)
         refuse_scans(query)
-        if query.endswith(".label()"):
-            return [{"result": physical_type_name(NODE_TYPE)}]
         if query.startswith("g.V().outE("):  # the corpus total, one whole-corpus traversal
             seen = [e for e in self.edges.values() if self._counts(e, query)]
             return [{"result": sum(e["occurrences"] for e in seen)}]

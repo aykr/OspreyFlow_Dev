@@ -232,19 +232,27 @@ class FakeOpenSearch:
         after = (body.get("search_after") or [None])[0]
         # The page alone is built (heapq), so the stand-in's own memory is the page's, as a client's
         # is against a real cluster: a test measuring the caller's memory measures the caller.
+        # A document without the sort key is sorted after every one with it, as OpenSearch sorts a
+        # missing value last (`"missing": "_last"`, the default for an ascending sort).
+        def rank(source: dict[str, Any]) -> tuple[int, Any]:
+            return (1, "") if source.get(key) is None else (0, source[key])
+
         chosen = heapq.nsmallest(
             size,
             (
-                (s[key], d, s)
+                (rank(s), d, s)
                 for i in self.resolve(index)
                 for d, s in self.docs[i].items()
-                if (name is None or s.get(name) == value) and (after is None or s[key] > after)
+                if (name is None or s.get(name) == value)
+                and (after is None or rank(s) > (0, after))
             ),
             key=lambda t: t[0],
         )
         if self.unordered:
             chosen.reverse()
-        return {"hits": {"hits": [{"_id": d, "_source": s, "sort": [k]} for k, d, s in chosen]}}
+        return {
+            "hits": {"hits": [{"_id": d, "_source": s, "sort": [k[1]]} for k, d, s in chosen]}
+        }
 
     async def mget(self, *, index: str, body: Any) -> dict[str, Any]:
         held = {d: s for i in self.resolve(index) for d, s in self.docs[i].items()}

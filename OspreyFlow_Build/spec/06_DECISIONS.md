@@ -39143,7 +39143,9 @@ reads is its own record") for the write path.*
 4. **Held by** (rule 12):
    - offline, every stand-in of the store refuses a traversal that starts from the whole store by `id`
      (`tests/adapters/graph_arcadedb/edge_store.refuse_scans`, used by `CountingStore`, the node store of
-     `test_write_onto_a_reverted_node.py` and the stray-records store), and `test_gremlin_bulk_transport_shapes.py`'s
+     `test_write_onto_a_reverted_node.py`, the stray-records store, `tests/ingest`'s `TypedStore` and the bulk spike's
+     client; it catches the property quoted either way and any filter step before it, and `test_refuse_scans.py`
+     shows it on each shape and on the write path's own, which pass, red as it was before, S1), and `test_gremlin_bulk_transport_shapes.py`'s
      `test_no_lookup_scans_the_store_by_id` holds the bulk path's four lookups and its write: red first, 35 offline
      tests on the old write path by the refusal itself (`process/lanes/rules/adr124-am18/red-first.txt`, which shows
      40: the other five are live files, `test_client_row_limit.py` and `test_datasets_index.py`, that failed for want of
@@ -39153,7 +39155,7 @@ reads is its own record") for the write path.*
    - offline, `test_write_path_round_trips.py` counts a call's lookups: a node write asks its own type alone, a link
      write the types its link joins, both unmoved by thirty more types in the store; an end of the wrong type is
      refused for its type; an id in two types stops the write; plants R1 to R4 each red
-     (`process/lanes/rules/adr124-am18/round-trips-red-first.txt`);
+     (`process/lanes/rules/adr124-am18/review-red-first.txt`);
    - offline, `CountingStore` keeps a stray second record of a link that its `id` index answers with, and
      `test_a_merge_is_written_to_the_link_a_traversal_reaches_not_a_stray_record` holds the merge to the reached one;
      `test_a_rows_end_not_in_the_graph_is_refused_in_words_never_dropped` holds the bulk refusal;
@@ -39191,7 +39193,12 @@ about 4.5 GB at thirty million) and left a streaming check to CARRIES.*
    whole-set check, 0.32 MB to 3.18 MB: `process/lanes/rules/v052-index/drift-stream-red-first.txt`), each difference
    found across pages, an extra before the first id and a node listed but not live, the cut lists, each stream's
    order and the command's exit; live, `test_feed_live.py`'s drift case pages by one and two, so `search_after` is
-   sent to the real cluster; plants V78 (the whole index in one page) to V86.
+   sent to the real cluster; plants V78 (the whole index in one page) to V86. A document no stream reads, of another
+   kind than node or text or without the key its kind is sorted by (which OpenSearch sorts after every one with it),
+   is counted as unread, from the index's own count less the documents read, and the check is not clean while one is
+   there (`test_a_document_no_stream_reads_is_counted_unread_never_passed_over`); the stand-in's refusal of a page
+   over `max_result_window` is shown firing; plants D1 to D3 each red
+   (`process/lanes/rules/adr124-am18/review-red-first.txt`).
 2. **What it does not change.** What the check compares (decision 5: missing, extra, stale, refused, and the outboxes'
    pending) and its exit on drift, 1.
 3. **Measured** on step B's load (stack d, 14 November, `process/lanes/rules/v052-load/B_RECORD.md`): 570,460 nodes

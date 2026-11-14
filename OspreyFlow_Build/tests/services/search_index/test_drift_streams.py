@@ -194,3 +194,25 @@ async def test_a_stream_out_of_order_is_raised(monkeypatch: pytest.MonkeyPatch) 
     graph.ids = list(reversed(graph.ids))
     with pytest.raises(DriftOrderError):
         await drift(graph, texts, client, ALIAS, SCHEMA, page=2)  # type: ignore[arg-type]
+
+
+async def test_a_document_no_stream_reads_is_counted_unread_never_passed_over() -> None:
+    """A document of another kind, or one without the key its kind is sorted by (which OpenSearch
+    sorts after every one with it), is read by neither stream: it is counted as unread, from the
+    index's own count, so the check is not clean while it is there (rule 2)."""
+    client, graph, texts = await _world(4)
+    (index,) = client.resolve(ALIAS)
+    client.docs[index]["odd-kind"] = {"kind": "other", "id": "zzz"}
+    client.docs[index]["no-key"] = {"kind": "node"}
+    report = await drift(graph, texts, client, ALIAS, SCHEMA, page=2)  # type: ignore[arg-type]
+    assert report.unread_count == 2
+    assert not report.none
+
+
+async def test_a_page_larger_than_the_result_window_is_refused_as_opensearch_refuses_it() -> None:
+    """Rule 15: the stand-in refuses what the cluster refuses, shown firing."""
+    from opensearchpy import TransportError
+
+    client, graph, texts = await _world(2)
+    with pytest.raises(TransportError):
+        await drift(graph, texts, client, ALIAS, SCHEMA, page=10_001)  # type: ignore[arg-type]
