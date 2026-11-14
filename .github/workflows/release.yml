@@ -63,6 +63,17 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@v4
+      # ADR-114 Amendment 47: the version a deployment shows is the code's own VERSION, so a release
+      # whose VERSION is not its tag would name itself wrongly everywhere it is installed.
+      - name: Refuse a tag that is not the code's own VERSION
+        env:
+          TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+        run: |
+          stamped="$(cat VERSION)"
+          if [ "$stamped" != "$TAG" ]; then
+            echo "::error::the tag $TAG is not the code's VERSION ($stamped): the candidate commit sets OspreyFlow_Core/VERSION to the tag"
+            exit 1
+          fi
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
       - name: Refuse to release unless main's own CI is green for this commit

@@ -2071,3 +2071,13 @@ Also asked by the lanes:
 2. **The top bar's fallback**: if the full fold is not ready by Sun 15 midday, the candidate takes the simplest rule (at narrow widths every view but Graph and Map under More views), held by the same narrow-width and wide-font tests in both looks; the polished fold after the cut.
 3. **Mark for suppression on the demo**: its wording says what it does today (a mark and a reason, hiding nothing yet); if that is more than wording, the action is hidden on the demo and the owner told (row M, case-b).
 4. **Search behaviours accepted by the owner as designed (ADR-149)**: a merged entity on two pages, a Document counted in two groups, and no matched field on a typo match.
+
+## 14 November 2026, evening (3): the owner's answers on the demo and Part 3
+
+1. **release.yml refuses a tag that differs from OspreyFlow_Core/VERSION**: applied on the owner's word (platform-b's release_yml.diff, ADR-114 Am 47); the candidate commit sets VERSION to v0.5.2.
+2. **Visitors get a "Demo visitor" role**: a custom role in Admin › Roles, the analyst's rights minus create_case, share_case, remove_case and export; made at the demo update, its rights recorded. No code.
+3. **Isolation: a case each over the shared demo datasets**, the visitor its Editor; visitors removed in Admin › People at the end, never by a restore.
+4. **The model's spend: one shared limit for now**, set to what the owner will spend; a per-visitor allowance (an ADR-135 amendment and code) after the cut if wanted.
+5. **No harness command to add a visitor**: Admin › People is enough; the orchestrator writes the owner's steps with the demo update.
+6. **Part 3's second site uses Gemini with its own budget.**
+7. **Part 3's cutover after the cut**, in a window of about an hour the owner names, once platform has proved it on a test stack.
