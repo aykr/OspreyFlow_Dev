@@ -970,21 +970,31 @@ def test_a_run_reaps_a_server_that_left_its_process_group(lease, tmp_path: Path)
 
 @_REAPS
 def test_the_reaper_leaves_every_process_outside_the_run_alone(lease, tmp_path: Path) -> None:
-    """Another run's server (another tag) and an untagged process are never ended."""
+    """Another run's server (another tag) and an untagged process are never ended, while the run's own detached
+    server is: the reaper read the host's table, not an empty one, so sparing the other two was its choice."""
     lease("acquire", "studio", "a run")
     lease("acquire", "case", "a run")
     home = _host(tmp_path)
+    pidfile = tmp_path / "server.pid"
     other = subprocess.Popen(["sleep", "300"], env={**os.environ, "OSPREY_RUN_TAG": f"{home}/osprey-runs/x.meta/runs/1"})
     plain = subprocess.Popen(["sleep", "300"], env={k: v for k, v in os.environ.items() if k != "OSPREY_RUN_TAG"})
+    server = None
     try:
         wt = _lane_worktree(tmp_path)
-        assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true", proc=REAL_PROC).returncode == 0
+        ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--",
+                      "sh", "-c", f'python3 -c "$1" "{pidfile}"', "sh", _DETACHED, proc=REAL_PROC)  # fmt: skip
+        assert ran.returncode == 0, ran.stderr
+        server = _pid_from(pidfile)
         _finished_run(home)
+        assert _gone_within(server), f"the run's own server {server} outlived it: the reaper read no table"
         time.sleep(1)
         assert other.poll() is None and plain.poll() is None
     finally:
         other.kill()
         plain.kill()
+        if server is not None:
+            _end(server)
+        _end_tagged(home)
 
 
 @_REAPS
@@ -1133,14 +1143,24 @@ def test_the_reaper_never_matches_a_tag_inside_another_value(tmp_path: Path) -> 
 def test_a_runs_log_holds_no_error_of_the_reapers_own_reading(lease, tmp_path: Path) -> None:
     """The reaper reads every process's environment; none of its reads may print an error into the run's log (a
     redirection that failed printed "Permission denied" or "No such file" before; should-fix 3). As root on the
-    server every environment is readable, so this guards the shape rather than proving the old one red there."""
+    server every environment is readable, so this guards the shape rather than proving the old one red there. The
+    run leaves a server behind and the log says it was reaped: the reaper read the host's table, not an empty one."""
     lease("acquire", "studio", "a run")
     lease("acquire", "case", "a run")
     home = _host(tmp_path)
+    pidfile = tmp_path / "server.pid"
     wt = _lane_worktree(tmp_path)
-    assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true", proc=REAL_PROC).returncode == 0
-    log = (_finished_run(home) / "log").read_text()
-    assert "Permission denied" not in log and "No such file" not in log, log
+    ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--",
+                  "sh", "-c", f'python3 -c "$1" "{pidfile}"', "sh", _DETACHED, proc=REAL_PROC)  # fmt: skip
+    server = _pid_from(pidfile)
+    try:
+        assert ran.returncode == 0, ran.stderr
+        log = (_finished_run(home) / "log").read_text()
+        assert "Reaped 1 process" in log, log
+        assert "Permission denied" not in log and "No such file" not in log, log
+    finally:
+        _end(server)
+        _end_tagged(home)
 
 
 def test_two_runs_named_alike_are_refused_in_words_not_shared(lease, tmp_path: Path) -> None:

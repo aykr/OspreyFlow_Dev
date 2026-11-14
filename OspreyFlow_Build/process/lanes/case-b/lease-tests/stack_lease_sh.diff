@@ -1,0 +1,28 @@
+diff --git a/OspreyFlow_Build/scripts/stack_lease.sh b/OspreyFlow_Build/scripts/stack_lease.sh
+index 3d6d0f7..855043d 100755
+--- a/OspreyFlow_Build/scripts/stack_lease.sh
++++ b/OspreyFlow_Build/scripts/stack_lease.sh
+@@ -207,14 +207,19 @@ for d,ds,fs in os.walk(\".\"):
+ # newline never matches, and with no redirection that could print its own error. Each pid's environment is read
+ # again before TERM and before KILL: a pid that ended and was given to another process is never signalled.
+ # OSPREY_REAPED holds how many were ended, for the caller's words.
++# The process table read is $OSPREY_PROC_ROOT when set, else /proc. Nothing on a host sets it, and ssh does not carry
++# it there, so a real run reads /proc. tests/test_stack_lease.py sets it to an empty folder for a run that is not
++# about reaping: the scan reads every process on the host, one grep each, so its cost is the host's (9.4 s at 2,586
++# processes on ospreyflow-test, 14 November 2026), and a test waiting on a run's exit file waited on every other
++# lane's run on the host (case-b's lease-tests record).
+ # shellcheck disable=SC2016
+ REAPER='osprey_reap() {
+-  local tag="$1" p pid hit="" n=0
++  local tag="$1" p pid hit="" n=0 root="${OSPREY_PROC_ROOT:-/proc}"
+   OSPREY_REAPED=0
+   [ -n "$tag" ] || { echo "No run tag to reap by: nothing reaped." >&2; return 2; }
+-  osprey_tagged() { grep -qzxF "OSPREY_RUN_TAG=$tag" "/proc/$1/environ" 2>/dev/null; }
+-  for p in /proc/[0-9]*; do
+-    pid="${p#/proc/}"
++  osprey_tagged() { grep -qzxF "OSPREY_RUN_TAG=$tag" "${OSPREY_PROC_ROOT:-/proc}/$1/environ" 2>/dev/null; }
++  for p in "$root"/[0-9]*; do
++    pid="${p##*/}"
+     [ "$pid" = "$$" ] && continue
+     if osprey_tagged "$pid"; then hit="$hit $pid"; fi
+   done
