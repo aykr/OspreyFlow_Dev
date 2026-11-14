@@ -87,6 +87,11 @@ PLANTS = [
     ("guide: §2's refresh on every view", UG, "(on the view it had, where that is the graph, the map, the Matrix or Figures; on any other view, the Glass's first)", "on the view it had", ["refresh_keeps_you_signed_in"]),
     ("guide: question 13's fourth part struck", AG, "and a document's text only for the unit that holds it,", "", ["section_6a11_asks"]),
     ("guide: who may merge cut short", DG, "It is merged only into a dataset of the drawing's unit.", "", ["who_may_merge"]),
+    ("the match's own link not made by _inferred", C + "services/api/drawn_merge.py", 'provenance=self._inferred(record, f"{r.drawn}:{r.loaded}", r.score, now),', 'provenance=self._asserted(record, f"{r.drawn}:{r.loaded}", r.score, now),', ["proposed_never_merged_in_storage"]),
+    ("a site saying PostgreSQL full-text for search", SITES, "OpenSearch for search, PostgreSQL for cases", "PostgreSQL full-text for search, PostgreSQL for cases", ["guides_and_the_sites_give_search_as_built"]),
+    ("the administrator fallback gone from a claim's source", C + "packages/principal_auth/__init__.py", "    administrator: bool = False\n", "", ["missing_value_is_given_only_by_the_administrator_fallback"]),
+    ("the fallback allowed on every shape", C + "harness/cloud_platform/__init__.py", 'if by_administrator and _cp(config).shape != "poc":', "if False:", ["missing_value_is_given_only_by_the_administrator_fallback"]),
+    ("guide: §9's unqualified sentence back", AG, "Unless the mapping names `{administrator: true}` for a value (the poc shape's fallback, section 6a.7), no administrator can give", "No administrator can give", ["missing_value_is_given_only_by_the_administrator_fallback"]),
 ]
 def run():
     e = dict(env, PYTHONPYCACHEPREFIX=tempfile.mkdtemp(dir=CACHES))
@@ -126,7 +131,7 @@ for label, path, old, new, want in PLANTS:
     ok &= not missing
     gone = [l.strip() for l in old.splitlines() if l.strip() and l not in new.splitlines()] or [old.strip()]
     came = [l.strip() for l in new.splitlines() if l.strip() and l not in old.splitlines()] or ["(removed)"]
-    print(f"== {label} [{path.rsplit('/', 1)[-1]}]\n   - " + "\n   - ".join(repr(l[:150]) for l in gone) + "\n   + " + "\n   + ".join(repr(l[:150]) for l in came) + "\n   {summary}\n   red: {', '.join(failed) or 'none'}" + (f"\n   <-- NOT red: {missing}" if missing else "") + "\n")
+    print(f"== {label} [{path.rsplit('/', 1)[-1]}]\n   - " + "\n   - ".join(repr(l[:150]) for l in gone) + "\n   + " + "\n   + ".join(repr(l[:150]) for l in came) + f"\n   {summary}\n   red: {', '.join(failed) or 'none'}" + (f"\n   <-- NOT red: {missing}" if missing else "") + "\n")
 failed, summary = run()
 print(f"== restored: {summary}")
 print("each plant red in the tests that hold it:", ok and not failed)
