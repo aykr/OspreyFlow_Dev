@@ -38938,7 +38938,10 @@ audience check, in no words a person could act on, and INSTALL's section 8 left 
 1. **The Conduit says the mismatch in words** (`principal_auth.TokenVersionMismatch`, a `PrincipalResolutionError`, 401):
    "the API's app registration issues v1.0 access tokens (issuer …), and this deployment expects v2.0
    (cloud_platform.claims.token_version: "2.0"): set requestedAccessTokenVersion to 2 in the API registration's
-   manifest, or set token_version to "1.0" in osprey.yaml and render again", and the reverse.
+   manifest, or set token_version to "1.0" in osprey.yaml and render again", and the reverse. The words are in
+   the 401's `detail` and the Conduit's log. **The Glass's sign-in page does not show them**: it shows its general
+   words for a refused sign-in, and shows the Conduit's own words only for a disabled account (Amendment 8). That is
+   carried, as a defect a user can see (14 November).
 2. **Only a token the tenant signed reaches the words, and none is let in by them.** When an Entra token is
    refused, its signature is checked again with the tenant's key, issuer and audience aside, and the words are given
    only for this tenant's own issuer in the other version's form (`https://sts.windows.net/<tid>/` for v1.0,
