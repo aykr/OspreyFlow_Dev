@@ -1217,8 +1217,8 @@ which show the case, and again on the Graph once the analyst is back on the case
 the cap.
 
 **Views ▾ by the graph (ADR-144 Amendment 3) — withdrawn (ADR-144 Amendment 6, the owner, 14 November 2026).** The
-canvas toolbar has no *Views* menu: the case line's *Saved views (n)* is the one route to a case's saved views
-(ADR-145 Amendment 17).
+canvas toolbar has no *Views* menu: the case line's *Saved views (n)* is the one route on the case's own screen to its
+saved views; *All cases* still lists each case's saved views (ADR-145 Amendment 17).
 
 **Where views are listed (ADR-144 decision 5).** The **Cases** panel (opened by the case switcher's *All cases*, or
 at its views by the case line's *Saved views (n)*, ADR-145 Amendment 15) shows, first, the open

@@ -40061,8 +40061,8 @@ jsdom and accessibility case that named the old words. The red record is
 ### ADR-144, Amendment 6 (14 November 2026) — Amendment 3's *Views* menu on the graph's toolbar is withdrawn
 
 On the owner's word, 14 November 2026 (ADR-145 Amendment 17): a second route to the same saved views, named *Views*,
-was one of the screen's four meanings of "view". The case line's **Saved views (n)** is the one route to a case's saved
-views. `views/ViewsMenu.tsx`, its test and `GlassCanvas`'s `viewsMenu` slot are removed; the keyboard registry's
+was one of the screen's four meanings of "view". The case line's **Saved views (n)** is the one route on the case's own screen to its saved
+views; *All cases* still lists each case's saved views. `views/ViewsMenu.tsx`, its test and `GlassCanvas`'s `viewsMenu` slot are removed; the keyboard registry's
 `open-a-view-from-views-by-the-graph-by-keyboard` becomes
 `open-a-saved-view-from-the-case-line-and-back-to-the-whole-case-by-keyboard` (`keyboard/views.spec.ts`).
 `src/App.views.test.tsx` holds that the toolbar has no *Views*.

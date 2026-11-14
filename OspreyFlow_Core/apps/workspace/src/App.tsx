@@ -2247,7 +2247,7 @@ export function App() {
                 }}
                 lens={lens !== null}
                 // ADR-144 Amendment 6: the toolbar's *Views* menu (Amendment 3) is withdrawn on the owner's word; the case
-                // line's *Saved views (n)* is the one way to the saved views.
+                // line's *Saved views (n)* is the one route on the case's own screen (All cases still lists them).
                 onSelectionChange={(nodeIds) => {
                   setSelectedNodeIds(nodeIds);
                   const first = nodeIds[0];
