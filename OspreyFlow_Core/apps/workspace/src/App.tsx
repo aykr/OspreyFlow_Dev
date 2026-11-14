@@ -34,6 +34,7 @@ import { installUnauthorisedWatch } from "./auth/unauthorised";
 import { SessionPrompt } from "./auth/SessionPrompt";
 import { createTokenRenewal, type RenewedUser, type TokenRenewal, watchActivity } from "./auth/tokenRenewal";
 import { DISABLED_ACCOUNT_WORDS, isDisabledRefusal } from "./auth/disabledAccount";
+import { actionableRefusalWords } from "./auth/refusalWords";
 import { SignInScreen } from "./auth/SignInScreen";
 import { deploymentMarking, deploymentReportsUrl, deploymentWelcome } from "./auth/oidcConfig";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
@@ -525,11 +526,14 @@ export function App() {
     if (isDevBypass) return false;
     // ADR-148 Amendment 8: disabled in this deployment, said only when the Conduit says so; no
     // renewal is tried, since Entra would sign them in again to the same refusal.
-    if (refusal && (await isDisabledRefusal(refusal))) {
+    // ADR-148 Amendments 15, 17, 18: a refusal tagged as one the person can act on, in the Conduit's words.
+    const words = refusal ? ((await actionableRefusalWords(refusal)) ??
+      ((await isDisabledRefusal(refusal)) ? DISABLED_ACCOUNT_WORDS : null)) : null;
+    if (words !== null) {
       unauthenticatedHandledRef.current = true;
       setBearerToken("");
       setSession(null);
-      setSignInReason(DISABLED_ACCOUNT_WORDS);
+      setSignInReason(words);
       return false;
     }
     if (!hasResolvedAPrincipalOnceRef.current) {
