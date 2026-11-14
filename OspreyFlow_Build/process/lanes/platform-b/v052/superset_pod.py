@@ -11,7 +11,8 @@ redirect it builds is the registered `https://bi.<host>/oauth-authorized/entra`;
     python -I superset_pod.py <glass host> build <login_hint> <title> [<slug>]
     python -I superset_pod.py <glass host> embedded <superset dashboard id> <guest token>
 
-Each prints one JSON line. A person's Superset session is kept in /tmp between calls of one run.
+Each prints one JSON line, never a token. A person's Superset session is kept in /tmp between calls of one
+run. `build` with a slug already taken by that board answers it as existing (200), so a rerun does not stop.
 """
 
 from __future__ import annotations
@@ -65,8 +66,10 @@ def signin(glass: str, hint: str) -> dict[str, Any]:
     authorize = started.headers.get("location", "")
     if started.status_code != 302 or "/oauth2/v2.0/authorize" not in authorize:
         return {"signed_in": False, "stage": "superset's redirect", "status": started.status_code, "location": authorize}
-    if f"redirect_uri={urllib.parse.quote(f'https://bi.{glass}/oauth-authorized/entra', safe='')}" not in authorize:
-        return {"signed_in": False, "stage": "the redirect Superset names", "location": authorize}
+    # The redirect Superset names, decoded and compared whole: Entra matches a registered redirect exactly.
+    named = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(authorize).query)).get("redirect_uri")
+    if named != f"https://bi.{glass}/oauth-authorized/entra":
+        return {"signed_in": False, "stage": "the redirect Superset names", "redirect_uri": named}
     answered = httpx.get(with_login_hint(authorize, hint), follow_redirects=False, timeout=60)
     back = answered.headers.get("location", "")
     if answered.status_code != 302 or "/oauth-authorized/entra?" not in back:
@@ -96,6 +99,11 @@ def build(glass: str, hint: str, title: str, slug: str | None) -> dict[str, Any]
                        headers={"X-CSRFToken": csrf.json()["result"], "Referer": f"https://bi.{glass}/"})  # fmt: skip
     _keep(client, hint)
     result = made.json() if made.headers.get("content-type", "").startswith("application/json") else {}
+    if made.status_code == 422 and slug:
+        # A rerun (rows 4 to 9 again after a fix): the slug is taken, by this board if it is there.
+        there = client.get(f"/api/v1/dashboard/{slug}")
+        if there.status_code == 200:
+            return {"status": 200, "existing": True, "id": there.json().get("result", {}).get("id")}
     return {"status": made.status_code, "id": result.get("id"), "said": made.text[:200]}
 
 

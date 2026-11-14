@@ -17,12 +17,19 @@ What it shows, each line PASS or FAIL, stopping at the first that fails (R1's wa
    Reports Viewer Gamma, the person with no role refused; and a role re-read at the next sign-in.
 4. **Building** (the owner's Q2): the administrator saves the board `r1-board`; the builder saves a
    dashboard (201); the Reports Viewer is refused (403).
-5. **Embedding** (Amendment 11 point 8): through the Glass's door, the Reports Viewer is offered
-   `r1-board` and given a guest token, which opens the board in Superset (and nothing opens without it);
-   a person with no reports right is refused (403); one whose clearance is below the identity's is
-   offered nothing and refused the token (404).
+5. **Embedding** (Amendment 11 point 8), through the Glass's door: the Reports Viewer is offered
+   `r1-board` and given a guest token, which opens the board in Superset (and nothing opens without it).
+   **Each refusal the Conduit's `may_open` makes is asked** (rules 3 and 4): no reports right is refused the
+   listing and the token (403); a Reports Viewer with no level on the identity's case, one of another unit,
+   and one whose clearance is below the identity's are each offered nothing and refused the token (404, the
+   same as a board that does not exist).
 
-    python3 dashboards_check.py run       # on the run's host, after R1's install, kubectl at the cluster
+**Run it through `r1_live.sh dashboards run`** (from OspreyFlow_Core), which gives it R1's own
+environment: its kubectl, its kubeconfig, the kind platform's folder and the checkout's Python. Every kubectl
+call names R1's namespace. No token, and no secret, is printed or recorded: a guest token is reported by its
+status alone, and the report sync's secret reaches the Secret through kubectl's stdin, never its command line.
+
+    bash ../OspreyFlow_Build/process/lanes/platform-b/v052/r1_live.sh dashboards run
     python3 dashboards_check.py plan      # the steps, offline
 
 Needs, in the run's `osprey.yaml` (r1_kind_osprey.yaml): `reporting: {sync: true, superset: true}` and
@@ -61,15 +68,16 @@ PLAN = [
     "a case, with Viewer for the Reports Viewer and the dashboard identity",
     "the dashboard identity r1-board registered by the report sync's application id",
     "the report sync given its secret, restarted, and its first pull seen",
-    "Superset: the administrator signs in as Admin and saves the board r1-board",
-    "Superset: the builder signs in as Alpha and saves a dashboard",
-    "Superset: the Reports Viewer signs in as Gamma and is refused saving one",
-    "Superset: the person with no role is refused at sign-in",
+    "Superset: the administrator, the builder and the Reports Viewer sign in as Admin, Alpha and Gamma, "
+    "each Superset account the Conduit's principal (the object id)",
+    "Superset: the administrator saves the board r1-board (or finds it, on a rerun)",
+    "Superset: the builder saves a dashboard; the Reports Viewer is refused saving one (403)",
+    "Superset: the person with no role is refused by Superset at sign-in (its /api/v1/me/ 401)",
     "Superset: a role is re-read at the next sign-in (the builder made a Reports Viewer: Gamma)",
     "embedding: the Reports Viewer is offered r1-board and its guest token opens it, nothing without",
-    "embedding: no reports right is refused (403); a lower clearance is offered nothing (404)",
+    "embedding: no reports right is refused the listing and the token (403)",
+    "embedding: no level on the identity's case, another unit, a lower clearance: offered nothing, refused (404)",
 ]
-
 
 
 def report_sync_dashboards(client_id: str, secret: str) -> str:
@@ -78,6 +86,7 @@ def report_sync_dashboards(client_id: str, secret: str) -> str:
     `tests/test_v052_dashboards_check.py`)."""
     return json.dumps([{"client_id": client_id, "secret": secret}])
 
+
 def _r1() -> Any:
     sys.path.insert(0, str(GATES))
     import r1_kind  # platform's driver, imported, never changed here
@@ -85,17 +94,25 @@ def _r1() -> Any:
     return r1_kind
 
 
+def kube(r1: Any, *args: str, stdin: str | None = None) -> str:
+    """kubectl in R1's namespace, always named: never whatever a kubeconfig's context points at."""
+    return r1.kubectl("-n", r1.NS, *args, stdin=stdin)
+
+
 def pod(r1: Any, *args: str) -> dict[str, Any]:
     """`superset_pod.py` in the api pod, its one JSON line back."""
-    out = r1.kubectl("exec", "-i", "deploy/api", "--", "/app/.venv/bin/python", "-I", "-", r1.GLASS, *args,
-                     stdin=POD_SCRIPT.read_text())  # fmt: skip
+    out = kube(r1, "exec", "-i", "deploy/api", "--", "/app/.venv/bin/python", "-I", "-", r1.GLASS, *args,
+               stdin=POD_SCRIPT.read_text())  # fmt: skip
     return json.loads(out.strip().splitlines()[-1])
 
 
-def run() -> None:
+def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
+    """The check; `r1` and `ask` (superset_pod's answers) are R1's driver and the pod, or a test's fakes, and
+    `sleep` the wait between reads of the report sync's first pull (a test's waits nothing)."""
     import yaml
 
-    r1 = _r1()
+    r1 = r1 or _r1()
+    ask = ask or (lambda *args: pod(r1, *args))
     log = r1.record("dashboards")
     lines: list[str] = []
 
@@ -149,57 +166,75 @@ def run() -> None:
     # `{"client_id", "secret"}` alone, applied into our Secret, and the report sync restarted. The run's
     # Terraform stand-in holds `[]` (r1_kind.py), so the apply's write is made here, in the shape it writes.
     given = report_sync_dashboards(app_id, secret)
-    r1.kubectl("patch", "secret", "ospreyflow-secrets", "--type", "merge",
-               "-p", json.dumps({"stringData": {"REPORT_SYNC_DASHBOARDS": given}}))  # fmt: skip
-    r1.kubectl("rollout", "restart", "deploy/report-sync")
-    r1.kubectl("rollout", "status", "deploy/report-sync", "--timeout=10m")
+    kube(r1, "patch", "secret", "ospreyflow-secrets", "--type", "merge", "--patch-file", "/dev/stdin",
+         stdin=json.dumps({"stringData": {"REPORT_SYNC_DASHBOARDS": given}}))  # fmt: skip
+    kube(r1, "rollout", "restart", "deploy/report-sync")
+    kube(r1, "rollout", "status", "deploy/report-sync", "--timeout=10m")
     pulled = None
     for _ in range(60):
         listed = c.get("/v1/admin/dashboards", headers=admin).json()
         pulled = next((d for d in listed if d.get("client_id") == app_id), None)
         if pulled and pulled.get("last_pulled"):
             break
-        time.sleep(10)
+        sleep(10)
     ok("the report sync signs in with its app-only token and pulls the case (Admin › Dashboards)",
        bool(pulled and pulled.get("last_pulled") and not pulled.get("last_failure")), pulled)
 
     # 3 and 4. Superset's sign-in, its roles, building.
     for hint in ("admin@r1.test", "builder@r1.test", "reader@r1.test"):
-        s = pod(r1, "signin", hint)
+        s = ask("signin", hint)
         ok(f"{hint} signs in to Superset as {SUPERSET_ROLE[hint][0]}",
            s.get("signed_in") is True and s.get("roles") == SUPERSET_ROLE[hint], s)
-        ok(f"{hint}'s Superset account is the Conduit's principal", s.get("username") == people[hint], s)
-    s = pod(r1, "build", "admin@r1.test", "R1 board", BOARD)
-    ok(f"the administrator saves the board {BOARD}", s.get("status") == 201, s)
+        # Superset keys its user by the Entra object id (Amendment 9): the Conduit's principal, not a name.
+        ok(f"{hint}'s Superset account is the Conduit's principal (the object id)", s.get("username") == people[hint], s)
+    s = ask("build", "admin@r1.test", "R1 board", BOARD)
+    ok(f"the administrator saves the board {BOARD} (or finds it, on a rerun)",
+       s.get("status") == 201 or (s.get("status") == 200 and s.get("existing") is True), s)
     board_id = s.get("id")
-    s = pod(r1, "build", "builder@r1.test", "R1 builder's own board")
+    s = ask("build", "builder@r1.test", "R1 builder's own board")
     ok("the builder saves a dashboard", s.get("status") == 201, s)
-    s = pod(r1, "build", "reader@r1.test", "R1 refused board")
-    ok("the Reports Viewer is refused saving one", s.get("status") == 403, s)
-    s = pod(r1, "signin", "nobody@r1.test")
-    ok("the person with no reports right is refused at Superset's sign-in", s.get("signed_in") is False, s)
+    s = ask("build", "reader@r1.test", "R1 refused board")
+    ok("the Reports Viewer is refused saving one (403)", s.get("status") == 403, s)
+    s = ask("signin", "nobody@r1.test")
+    ok("the person with no reports right is refused by Superset at sign-in (its /api/v1/me/ 401)",
+       s.get("signed_in") is False and s.get("stage") == "superset" and s.get("me") == 401, s)
     r = c.put(f"/v1/admin/people/{people['builder@r1.test']}/roles", headers=admin, json={"roles": ["reports_viewer"]})
-    s = pod(r1, "signin", "builder@r1.test")
+    s = ask("signin", "builder@r1.test")
     ok("a role is re-read at the next sign-in (the builder, now a Reports Viewer, is Gamma)",
        r.status_code == 200 and s.get("roles") == ["Gamma"], s)
 
-    # 5. Embedding, through the Glass's door.
+    # 5. Embedding, through the Glass's door. A guest token is reported by its status, never its text.
+    def offered(headers: dict[str, str]) -> tuple[int, bool]:
+        r = c.get("/v1/reports/dashboards", headers=headers)
+        return r.status_code, r.status_code == 200 and any(d.get("slug") == BOARD for d in r.json())
+
+    def guest(headers: dict[str, str]) -> tuple[int, str | None]:
+        r = c.post(f"/v1/reports/dashboards/{BOARD}/guest-token", headers=headers)
+        return r.status_code, (r.json().get("token") if r.status_code == 200 else None)
+
     reader = token("reader@r1.test")
-    r = c.get("/v1/reports/dashboards", headers=reader)
-    ok(f"the Reports Viewer is offered {BOARD}", r.status_code == 200 and any(d.get("slug") == BOARD for d in r.json()), r.text[:200])
-    r = c.post(f"/v1/reports/dashboards/{BOARD}/guest-token", headers=reader)
-    ok("and given a guest token for it", r.status_code == 200 and r.json().get("token"), f"{r.status_code} {r.text[:200]}")
-    s = pod(r1, "embedded", str(board_id), r.json()["token"])
+    status, has = offered(reader)
+    ok(f"the Reports Viewer is offered {BOARD}", status == 200 and has, f"listing {status}, offered {has}")
+    status, guest_token = guest(reader)
+    ok("and given a guest token for it", status == 200 and bool(guest_token), f"guest token {status}")
+    s = ask("embedded", str(board_id), guest_token or "")
     ok("which opens the board in Superset, which nothing opens without it",
        s.get("with_token") == 200 and s.get("without") in (401, 403), s)
-    r = c.post(f"/v1/reports/dashboards/{BOARD}/guest-token", headers=token("nobody@r1.test"))
-    ok("a person with no reports right is refused the token", r.status_code == 403, f"{r.status_code} {r.text[:160]}")
-    lower = token("reader@r1.test", **{clearance_claim: "PUBLIC"})
-    r = c.get("/v1/reports/dashboards", headers=lower)
-    offered = r.status_code == 200 and not any(d.get("slug") == BOARD for d in r.json())
-    r = c.post(f"/v1/reports/dashboards/{BOARD}/guest-token", headers=lower)
-    ok("a clearance below the identity's is offered nothing and refused the token (404)",
-       offered and r.status_code == 404, f"{r.status_code} {r.text[:160]}")
+    nobody = token("nobody@r1.test")
+    listing, _ = offered(nobody)
+    refused, _ = guest(nobody)
+    ok("a person with no reports right is refused the listing and the token (403, 403)",
+       (listing, refused) == (403, 403), f"listing {listing}, guest token {refused}")
+    unit_claim = claims["org_unit"]["claim"]
+    for who, headers in (
+        ("a Reports Viewer with no level on the identity's case (the builder, now Gamma)", token("builder@r1.test")),
+        ("a Reports Viewer of another unit", token("reader@r1.test", **{unit_claim: "r1-another-unit"})),
+        ("a Reports Viewer whose clearance is below the identity's", token("reader@r1.test", **{clearance_claim: "PUBLIC"})),
+    ):
+        listing, has = offered(headers)
+        refused, _ = guest(headers)
+        ok(f"{who} is offered nothing and refused the token (404)",
+           listing == 200 and not has and refused == 404, f"listing {listing}, offered {has}, guest token {refused}")
 
 
 def main(argv: list[str]) -> int:
