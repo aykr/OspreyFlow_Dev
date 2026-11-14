@@ -60,7 +60,9 @@ test("Bedrock in London is added by keyboard, signed in by the IAM role with no 
   await onCloudPlatform(page);
   await press(page, "Add an engine");
   await page.getByLabel("Kind of engine", { exact: true }).focus();
-  await page.keyboard.press("End"); // the last kind listed, Bedrock
+  // Type-ahead on the closed list, as the gateway's case does: on macOS End and the arrow keys open
+  // a closed list instead of moving the choice, so "End" left the kind unchanged there.
+  await page.keyboard.type("Amazon"); // "Amazon Bedrock in London, by the gateway's own IAM role"
   await expect(page.getByLabel("Engine name", { exact: true })).toHaveValue("bedrock");
   await expect(page.getByText(/no key is kept/)).toBeVisible();
   await typeInto(page, "Label analysts see", "Bedrock");
