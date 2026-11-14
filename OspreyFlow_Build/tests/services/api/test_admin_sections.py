@@ -291,7 +291,8 @@ def test_every_section_file_is_a_section_s_screen() -> None:
 
 
 _SCREENS_BLOCK = re.compile(r"export const SCREENS\b.*?> = \{(.*?)\n\};", re.S)
-_SCREEN_ENTRY = re.compile(r"^\s*\"?([\w-]+)\"?:\s*\(api\)\s*=>\s*<(\w+)\b", re.M)
+#: An entry `id: (api) => <Screen …>`, or `(api, rights) =>` for a screen given the giver's rights (route A2).
+_SCREEN_ENTRY = re.compile(r"^\s*\"?([\w-]+)\"?:\s*\(api(?:,\s*rights)?\)\s*=>\s*<(\w+)\b", re.M)
 
 
 def drawn_screens(text: str, path: Path) -> dict[str, str | None]:

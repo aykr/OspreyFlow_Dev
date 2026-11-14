@@ -1037,6 +1037,8 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "read-a-roles-tip-by-keyboard",
   "read-a-teams-lead-tip-by-keyboard",
   "read-a-datasets-authors-tip-by-keyboard",
+  // Route A2: a role the giver may not give says why on its own box.
+  "read-why-a-role-is-not-offered-by-keyboard",
 ] as const);
 
 // ADR-145 decision 11 (A2), L2.7: the top bar's Needs you and the Studio's proposals reminder.
