@@ -1,0 +1,20 @@
+# v052-ingestpart (MORNING item 6, (a), the orchestrator's decision under the owner's standing rule), 2026-11-14T06:55:53Z
+# Offline on closed ports 59991-59994, OSPREY_LANE unset, a fresh PYTHONPYCACHEPREFIX each run.
+Red first against main's behaviour, the new names added as main behaves (INGEST_PART a constant, shared_parts giving
+SHARED_PARTS, writers taking parts and ignoring it), so the red is the behaviour, not an import:
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_the_ingest_root_joins_the_set_wherever_it_is_not_a_claim_of_its_own[development]
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_the_ingest_root_joins_the_set_wherever_it_is_not_a_claim_of_its_own[production]
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_every_pod_writing_the_shared_ingest_folder_is_a_writer[development]
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_every_pod_writing_the_shared_ingest_folder_is_a_writer[production]
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_the_recovery_runbook_says_the_claims_run_is_every_shapes_and_what_it_holds
+5 failed, 16 passed in 6.52s
+Their reasons: the parts lacked {'name': 'shared-ingest', 'subPath': 'ingest'}; 'dropper' (mounting ingest/uploaded alone)
+not among ['api', 'arcadedb', 'backup', 'backup-claims']; the recovery runbook named no `ingest` folder part.
+
+Green after: test_cloud_platform_data_safety 21 passed; with tests/harness/test_cloud_platform*.py (less the gateway file,
+which the Mac's venv cannot import: no opensearchpy), tests/cp_policy_check (less its two docker files), test_backups_render,
+test_s3_standin, test_guides_cloud_platform and the R1 kind suites: 426 passed, 39 skipped; failing, not this change's:
+test_with_bedrock_enabled_the_gateway_runs_as_its_own_account (opensearchpy), and docs' test_section_6a8_names_what_the_set
+_holds_as_the_render_backs_it_up, red until the guide follows (docs told).
+Helm-backed, on the server only (make test): test_cp_egress_order's claims-run mounts per shape, test_backups_chart's
+standard claims run and the new standard restore putting the ingest folder back writable.

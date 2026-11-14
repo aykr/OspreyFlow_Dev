@@ -335,16 +335,20 @@ def test_the_claims_backup_reads_the_shared_claim_s_parts_read_only(
 ) -> None:
     """The ADR-148 audit's ruling 3 (v0.5.2), in Helm's own output: the claims backup mounts the
     shared claim's three folders read-only, each at its part's name, and names them to the runner."""
-    docs, _, _ = rendered
+    docs, values, _ = rendered
     job = next(d for d in docs if d["kind"] == "CronJob" and d["metadata"]["name"] == "ospreyflow-backup-claims")
     spec = pod_spec(job)
     container = spec["containers"][0]
     mounts = {m["mountPath"]: m for m in container["volumeMounts"] if m["name"] == "shared"}
-    assert {path: (m["subPath"], m.get("readOnly")) for path, m in mounts.items()} == {
+    expected = {
         "/claims/shared-recipes": ("data/recipes", True),
         "/claims/shared-model-settings": ("model-settings", True),
         "/claims/shared-map-settings": ("map-settings", True),
     }
+    # MORNING item 6, (a): where the Ingest root is no claim of its own, its shared folder too.
+    if not any(c["name"] == "ingest" for c in (values.get("storage") or {}).get("claims") or []):
+        expected["/claims/shared-ingest"] = ("ingest", True)
+    assert {path: (m["subPath"], m.get("readOnly")) for path, m in mounts.items()} == expected
     [shared] = [v for v in spec["volumes"] if v["name"] == "shared"]
     assert shared["persistentVolumeClaim"] == {"claimName": "ospreyflow-shared", "readOnly": True}
     named = next(e["value"] for e in container["env"] if e["name"] == "OSPREY_BACKUP_CLAIMS").split(",")

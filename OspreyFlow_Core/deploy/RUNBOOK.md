@@ -162,8 +162,10 @@ the managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and stag
 platform's, under its own snapshots and versioning, and **this section covers what the deployment runs
 itself**: ArcadeDB, ClickHouse, the shared claim's published pipelines (`data/recipes`), model settings
 (`model-settings`) and map settings with the map key file (`map-settings`), in every shape (ADR-148
-Amendment 13), and in the proof-of-concept shape the Ingest root's claim beside them
-(`ospreyflow-ingest`: uploads and the drop folder). **The restore below is supported for one copy of
+Amendment 13), and the Ingest root (uploads and the drop folder) beside them: in the proof-of-concept
+shape its own claim (`ospreyflow-ingest`), and in the standard shape the shared claim's `ingest` folder,
+a part of its own (`shared-ingest`), read-only to the backup and put back by `restore-claims`. Uploads
+can be large, so the claims run's size and time grow with them. **The restore below is supported for one copy of
 each store** (development, and the proof-of-concept shape); the production shape's (three ArcadeDB
 copies, ClickHouse ON CLUSTER with two replicas) is not supported yet, and the render refuses it.
 
