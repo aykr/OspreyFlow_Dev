@@ -74,6 +74,10 @@ ROUTE_RIGHTS = {
     "open_case_view": None,
     "share_case_view": "investigate",
     "delete_case_view": "investigate",
+    # ADR-151: the cap's third choice. Starting one works the case (Editor, as `expand`); reading one
+    # back is the case's level alone, as opening a view is.
+    "start_batch_expansion": "investigate",
+    "get_batch_expansion": None,
     # ADR-143 decisions 4 to 7 (L3.3): boards, behind the case's level; reading needs investigate,
     # drawing needs draw_on_boards at Editor. A drawing with no case also needs create_case, which
     # it names first.
