@@ -102,6 +102,7 @@ Main's own CI will meet the same finding at its next image scan.
   - Show on graph leaves the results for the graph.
   - Open keeps the results, hidden under the reader.
   - Results come 20 to a page.
+  - The search box's own Filters shape its suggestions only, not the results page.
 - **Rules-b, Whole case (D(iii), planned):**
   - A question over the search's 200 characters is refused in words for Whole case, never cut or reduced to
     keywords. Questions elsewhere go to 2,000.
