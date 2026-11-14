@@ -330,9 +330,12 @@ class ExpansionOutcome(BaseModel):
     #: `not_asked` past the automatic limits; `view_full` when they would have passed the cap, so
     #: none was added (never some of them) and the canvas says so.
     links_among: Literal["added", "not_asked", "view_full"] = "not_asked"
-    #: Step 3h (ADR-124 Amendment 19): the cluster each of the reader's nodes is in at the case's τ, for every
-    #: node in a cluster of more than one, computed for this reader alone over what they may see. On this
-    #: response only, never the shared stream (rule 3). None when no node of theirs is in such a cluster.
+    #: Step 3h (ADR-124 Amendment 19): the cluster each of the reader's nodes is in at the case's τ,
+    #: for every
+    #: node in a cluster of more than one, computed for this reader alone over what they may see. On
+    #: this
+    #: response only, never the shared stream (rule 3). None when no node of theirs is in such a
+    #: cluster.
     clusters: DeltaReproject | None = None
 
 

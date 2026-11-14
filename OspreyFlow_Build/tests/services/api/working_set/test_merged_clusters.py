@@ -47,7 +47,9 @@ NOT_CLEARED = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="u")
 
 
 def _handling(classification: str = "OFFICIAL") -> Handling:
-    return Handling(classification=classification, handling_code="P", originator="u", owning_unit="u")
+    return Handling(
+        classification=classification, handling_code="P", originator="u", owning_unit="u"
+    )
 
 
 def _provenance() -> Provenance:
@@ -63,7 +65,14 @@ def _audit() -> AuditStub:
 
 
 def _person(node_id: str, classification: str = "OFFICIAL") -> Node:
-    return Node(id=node_id, type="Person", properties={}, provenance=_provenance(), handling=_handling(classification), audit=_audit())
+    return Node(
+        id=node_id,
+        type="Person",
+        properties={},
+        provenance=_provenance(),
+        handling=_handling(classification),
+        audit=_audit(),
+    )
 
 
 def _same_as(node_a: str, node_b: str, score: float = 0.999991) -> Edge:
@@ -95,10 +104,17 @@ class AdapterLikeGraph(FakeGraphPort):
             if (not req.edge_types or e.type in req.edge_types)
             and (e.source in asked or e.target in asked)
             and self._edge_readable(principal, e)
-            and all(end in world_nodes and self._node_readable(principal, world_nodes[end]) for end in (e.source, e.target))
+            and all(
+                end in world_nodes and self._node_readable(principal, world_nodes[end])
+                for end in (e.source, e.target)
+            )
         ]
         ids = asked | {end for e in links for end in (e.source, e.target)}
-        nodes = [world_nodes[i] for i in sorted(ids) if i in world_nodes and self._node_readable(principal, world_nodes[i])]
+        nodes = [
+            world_nodes[i]
+            for i in sorted(ids)
+            if i in world_nodes and self._node_readable(principal, world_nodes[i])
+        ]
         return Subgraph(nodes=nodes, edges=links)
 
 
@@ -116,7 +132,9 @@ def _shared(clusters: DeltaReproject | None, *ids: str) -> str | None:
     return found.pop() if len(found) == 1 and None not in found else None
 
 
-async def test_a_pair_already_merged_at_the_cases_threshold_arrives_with_a_shared_cluster_id() -> None:
+async def test_a_pair_already_merged_at_the_cases_threshold_arrives_with_a_shared_cluster_id() -> (
+    None
+):
     a, b = _person("p-a"), _person("p-b")
     service, _ = _service([a, b], [_same_as("p-a", "p-b")])
     outcome = await service.seed(INVESTIGATION, [a, b], [], CLEARED)
@@ -154,7 +172,9 @@ async def test_a_member_hidden_from_the_reader_gives_the_other_no_cluster_id() -
     assert other.clusters is None or "p-z" not in set(other.clusters.affected_cluster_ids.values())
 
 
-async def test_the_clusters_go_on_the_readers_own_response_never_the_shared_stream_or_store() -> None:
+async def test_the_clusters_go_on_the_readers_own_response_never_the_shared_stream_or_store() -> (
+    None
+):
     a, b = _person("p-a"), _person("p-b")
     service, store = _service([a, b], [_same_as("p-a", "p-b")])
     outcome = await service.seed(INVESTIGATION, [a, b], [], CLEARED)
@@ -169,11 +189,15 @@ async def test_an_expansion_that_brings_the_other_member_joins_them() -> None:
     a, b = _person("p-a"), _person("p-b")
     service, _ = _service([a, b], [_same_as("p-a", "p-b")])
     await service.seed(INVESTIGATION, [a], [], CLEARED)
-    outcome = await service.expand(INVESTIGATION, ExpandRequest(node_ids=["p-a"], depth=1, edge_types=["SAME_AS"]), CLEARED)
+    outcome = await service.expand(
+        INVESTIGATION, ExpandRequest(node_ids=["p-a"], depth=1, edge_types=["SAME_AS"]), CLEARED
+    )
     assert _shared(outcome.clusters, "p-a", "p-b") is not None
 
 
-async def test_another_readers_threshold_move_gives_no_cluster_id_through_a_member_this_one_may_not_see() -> None:
+async def test_another_readers_threshold_move_gives_no_cluster_id_through_a_member_this_one_may_not_see() -> (
+    None
+):
     # The leak ADR-124 Amendment 19 closes. V and X are joined only through H, which B is not cleared for. A is,
     # and moves the threshold: A's own answer carries the cluster. B is sent no cluster id for V or X, neither in
     # the stream's delta nor in B's own snapshot: V and X joined, to B, would tell B that something B cannot see
@@ -186,13 +210,21 @@ async def test_another_readers_threshold_move_gives_no_cluster_id_through_a_memb
     from services.resolve.projection import THRESHOLD_BALANCED, THRESHOLD_STRICT
 
     v, h, x = _person("p-v"), _person("p-h", classification="SECRET"), _person("p-x")
-    service, store = _service([v, h, x], [_same_as("p-v", "p-h", 0.97), _same_as("p-h", "p-x", 0.97)])
+    service, store = _service(
+        [v, h, x], [_same_as("p-v", "p-h", 0.97), _same_as("p-h", "p-x", 0.97)]
+    )
     await store.set_threshold(INVESTIGATION, THRESHOLD_STRICT)
     await service.seed(INVESTIGATION, [v, h, x], [], CLEARED)
 
     moved = await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_BALANCED, CLEARED)
-    assert set(moved.delta.affected_cluster_ids.values()) == {"p-h"}, "the move did not join them, so it tests nothing"
-    shared_after = [d for d in (await store.deltas_after(INVESTIGATION, 0) or []) if isinstance(d, DeltaReproject)]
+    assert set(moved.delta.affected_cluster_ids.values()) == {"p-h"}, (
+        "the move did not join them, so it tests nothing"
+    )
+    shared_after = [
+        d
+        for d in (await store.deltas_after(INVESTIGATION, 0) or [])
+        if isinstance(d, DeltaReproject)
+    ]
     assert shared_after, "the move put nothing on the shared stream"
     known = await store.source_fidelity_nodes(INVESTIGATION)
     for stored in shared_after:
@@ -202,20 +234,30 @@ async def test_another_readers_threshold_move_gives_no_cluster_id_through_a_memb
     assert {n.id: n.resolution.cluster_id for n in snapshot.nodes} == {"p-v": None, "p-x": None}
     # A's own: the three, one cluster.
     (cleared,) = await service.sync(INVESTIGATION, CLEARED, last_acknowledged_seq=None)
-    assert len({n.resolution.cluster_id for n in cleared.nodes}) == 1 and None not in {n.resolution.cluster_id for n in cleared.nodes}
+    assert len({n.resolution.cluster_id for n in cleared.nodes}) == 1 and None not in {
+        n.resolution.cluster_id for n in cleared.nodes
+    }
 
 
 async def test_a_cluster_id_stored_before_the_amendment_reaches_no_reader() -> None:
     # Stored nodes may still carry a cluster_id a threshold move wrote before ADR-124 Amendment 19: it is ignored on
     # every read (`_without_cluster` in `_project`), so no snapshot and no delta sends it, and each reader's own
     # clusters stand in its place.
-    v = _person("p-v").model_copy(update={"resolution": _person("p-v").resolution.model_copy(update={"cluster_id": "p-h"})})
-    x = _person("p-x").model_copy(update={"resolution": _person("p-x").resolution.model_copy(update={"cluster_id": "p-h"})})
+    v = _person("p-v").model_copy(
+        update={"resolution": _person("p-v").resolution.model_copy(update={"cluster_id": "p-h"})}
+    )
+    x = _person("p-x").model_copy(
+        update={"resolution": _person("p-x").resolution.model_copy(update={"cluster_id": "p-h"})}
+    )
     service, store = _service([v, x], [])
     await store.add_nodes(INVESTIGATION, [v, x])
     (snapshot,) = await service.sync(INVESTIGATION, NOT_CLEARED, last_acknowledged_seq=None)
     assert {n.id: n.resolution.cluster_id for n in snapshot.nodes} == {"p-v": None, "p-x": None}
     from services.api.working_set.models import DeltaAdd
 
-    sent = service.project_delta(DeltaAdd(seq=1, nodes=[v, x], edges=[]), NOT_CLEARED, await store.source_fidelity_nodes(INVESTIGATION))
+    sent = service.project_delta(
+        DeltaAdd(seq=1, nodes=[v, x], edges=[]),
+        NOT_CLEARED,
+        await store.source_fidelity_nodes(INVESTIGATION),
+    )
     assert all(n.resolution.cluster_id is None for n in sent.nodes)  # type: ignore[union-attr]

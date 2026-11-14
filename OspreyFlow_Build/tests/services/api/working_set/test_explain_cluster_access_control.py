@@ -122,7 +122,10 @@ async def test_explain_cluster_omits_a_hidden_member_rather_than_naming_its_id(
         store = FakeWorkingSetStore()
         await store.add_nodes(
             INVESTIGATION,
-            [_stub_node(official_id, "OFFICIAL", cluster_id=None), _stub_node(secret_id, "SECRET", cluster_id=None)],
+            [
+                _stub_node(official_id, "OFFICIAL", cluster_id=None),
+                _stub_node(secret_id, "SECRET", cluster_id=None),
+            ],
         )
         service = WorkingSetService(graph, store, load_uk_le_scheme())
         cluster_id = min(official_id, secret_id)
@@ -132,6 +135,7 @@ async def test_explain_cluster_omits_a_hidden_member_rather_than_naming_its_id(
             await service.explain_cluster(INVESTIGATION, cluster_id, OFFICIAL)
         with pytest.raises(ClusterNotFoundError):
             await service.explain_cluster(INVESTIGATION, official_id, OFFICIAL)
+
 
 async def test_explain_cluster_of_only_hidden_members_is_indistinguishable_from_not_found(
     factory: GraphAdapterFactory,
