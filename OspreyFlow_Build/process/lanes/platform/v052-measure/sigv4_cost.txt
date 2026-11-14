@@ -1,0 +1,9 @@
+{
+  "signatures": 20000,
+  "body_bytes": 1365,
+  "p50_us": 34.8,
+  "p95_us": 38.2,
+  "max_us": 729.3,
+  "machine": "arm64 arm",
+  "python": "3.12.14"
+}
