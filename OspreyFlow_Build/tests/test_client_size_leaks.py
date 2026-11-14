@@ -204,3 +204,61 @@ def test_a_part_cleared_subject_of_another_unit_than_the_case_is_refused(
     with pytest.raises(leaks.LeakCaseRefused, match="the part-cleared m10-part is of unit-records"):
         leaks.check_leaks(made["leaks"][:1], case_records, {**people, leaks.PART: part},
                           "unit-intel")  # fmt: skip
+
+
+def _corpus(folder: Path) -> str:
+    case_records, people = _world(folder)
+    return leaks.visible_corpus(folder, "intel", case_records, people[leaks.PART])
+
+
+def test_no_written_case_s_hidden_word_is_in_what_the_part_cleared_may_read(
+    folder: Path, made: dict[str, Any]
+) -> None:
+    """A hidden word an answer may show for a visible reason proves no leak (step 4's second M10
+    run: a hidden number inside the visible record's own `+44…`, a hidden spelling of a name in a
+    visible report)."""
+    corpus = _corpus(folder)
+    for case in (*made["leaks"], *made["never_join"]):
+        assert not any(leaks.seen(w, corpus) for w in case["never_text"]), case
+    dropped = made["counts"]["never_text_dropped"]
+    assert set(dropped) == {"leaks", "never_join"} and all(n >= 0 for n in dropped.values())
+
+
+def _visible(folder: Path, kind: str) -> leaks.Record:
+    case_records, people = _world(folder)
+    return next(
+        r for r in case_records.values() if r.type == kind and leaks.may_read(people[leaks.PART], r)
+    )
+
+
+def test_a_hidden_word_inside_a_visible_number_is_refused(
+    folder: Path, made: dict[str, Any]
+) -> None:
+    """Red first, the shape the generator wrote before: the hidden partner's number without its
+    `+`, inside a visible number's own form."""
+    case_records, people = _world(folder)
+    number = next(
+        str(r.props.get("e164") or r.props.get("value_normalised"))
+        for r in case_records.values()
+        if r.type == "Endpoint" and leaks.may_read(people[leaks.PART], r)
+        and (r.props.get("e164") or r.props.get("value_normalised"))
+    )  # fmt: skip
+    planted = {**made["never_join"][0], "never_text": [number.lstrip("+")]}
+    others = leaks.records(folder, only={planted["hidden"]})
+    with pytest.raises(leaks.LeakCaseRefused, match="is in what m10-part may read"):
+        leaks.check_never_join(
+            [planted], case_records, people, others, leaks.case_units(folder), "cs-intel",
+            _corpus(folder),
+        )  # fmt: skip
+
+
+def test_a_hidden_word_in_a_visible_document_s_text_is_refused(
+    folder: Path, made: dict[str, Any]
+) -> None:
+    case_records, people = _world(folder)
+    document = _visible(folder, "Document")
+    text = next(iter(leaks._document_texts(folder, "intel", {document.id})))
+    phrase = " ".join(text.split()[3:6])
+    planted = {**made["leaks"][0], "never_text": [phrase.upper()]}
+    with pytest.raises(leaks.LeakCaseRefused, match="is in what m10-part may read"):
+        leaks.check_leaks([planted], case_records, people, "unit-intel", _corpus(folder))
