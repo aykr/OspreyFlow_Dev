@@ -40,8 +40,9 @@ export type Started =
   | { ok: true; job: BatchExpansionJob }
   /** The reader already has a batch job on this case: the one to follow, and the server's words. */
   | { ok: true; running: { id: string; words: string } }
-  /** The case level is too low: a batch job needs Editor, as `/expand` does. */
-  | { ok: false; kind: "forbidden" }
+  /** The case level is too low: a batch job needs Editor, as `/expand` does. `words` is the
+   * Conduit's own sentence (`_authorized_at`'s `detail`), shown as given, when it sent one. */
+  | { ok: false; kind: "forbidden"; words: string | null }
   /** The account lacks the right the route names (`require_right`'s `right_required`). */
   | { ok: false; kind: "right_required" }
   | { ok: false; kind: "not_found" }
@@ -51,6 +52,8 @@ export type Read =
   | { ok: true; job: BatchExpansionJob }
   | { ok: false; kind: "not_found" }
   | { ok: false; kind: "unreachable"; message: string }
+  /** The reading itself refused (401 the sign-in ended, 403): asking again changes nothing. */
+  | { ok: false; kind: "refused"; message: string }
   | { ok: false; kind: "unknown"; message: string };
 
 const STATES = new Set(["queued", "running", "done", "refused", "failed"]);
@@ -115,8 +118,9 @@ export async function startBatchExpansion(
       return { ok: true, running: { id: body.id, words: typeof body.detail === "string" ? body.detail : "" } };
     }
     if (response.status === 403) {
-      const detail = body.detail as Record<string, unknown> | undefined;
-      return { ok: false, kind: detail?.error === "right_required" ? "right_required" : "forbidden" };
+      const detail = (typeof body.detail === "object" ? body.detail : undefined) as Record<string, unknown> | undefined;
+      if (detail?.error === "right_required") return { ok: false, kind: "right_required" };
+      return { ok: false, kind: "forbidden", words: typeof body.detail === "string" && body.detail ? body.detail : null };
     }
     if (response.status === 404) return { ok: false, kind: "not_found" };
     return { ok: false, kind: "failed", message: `The batch job could not be started (${response.status}).` };
@@ -132,6 +136,12 @@ export async function readBatchExpansion(apiBaseUrl: string, bearerToken: string
       headers: headers(bearerToken),
     });
     if (response.status === 404) return { ok: false, kind: "not_found" };
+    if (response.status === 401) {
+      return { ok: false, kind: "refused", message: "The job's progress could not be read: your sign-in has ended. Sign in again." };
+    }
+    if (response.status === 403) {
+      return { ok: false, kind: "refused", message: "The job's progress could not be read: you can no longer read this case's batch expansions." };
+    }
     if (!response.ok) return { ok: false, kind: "unreachable", message: `The job's progress could not be read (${response.status}).` };
     const job = asJob(await bodyOf(response));
     if (job) return { ok: true, job };

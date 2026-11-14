@@ -1,9 +1,11 @@
 // Batch expansion harness (ADR-151): `workingset/BatchExpansion.tsx` alone, following one job to its
-// end against a stand-in of rules-b's route kept here, so the axe scan of every harness
-// (`a11y/every-harness.spec.ts`) and `batch-expansion.spec.ts` see each state filled. `?job=` picks
-// the job's end: `done` (the default; the view opens), `refused`, `failed` (then done on a second
-// try), `deleted` (done, its view since deleted), `forbidden` (a reader below Editor), `running`
-// (it never ends), `following` (a job of the reader's already running here, the 409). Each stage's
+// end against a stand-in of rules-b's route kept here. `a11y/every-harness.spec.ts` scans it with no
+// query (one state: the job starting); `batch-expansion.spec.ts` scans each `?job=` state in the three
+// looks. `?job=` picks the job's end: `done` (the default; the view opens), `refused`, `failed` (then
+// done on a second try), `deleted` (done, its view since deleted), `forbidden` (a reader below
+// Editor, the Conduit's sentence), `noright` (an account without the right), `overlimit` (done, its
+// view past the canvas's limit), `trouble` (its progress unread, still trying), `running` (it never
+// ends), `following` (a job of the reader's already running here, the 409). Each stage's
 // words are the route's own sentences. `?step=1`: the job moves on only when the spec sets
 // `window.__BATCH__.stage` (0 queued, 1-3 the stages, 4 its end), so each stage stands until it has
 // been read rather than for one poll's length. What was sent and opened are on `window.__BATCH__`.
@@ -32,6 +34,7 @@ const STAGES = ["Expanding from 12 nodes.", "Counting the links among 41,203 nod
 const job = (state: string, words: string, more: Record<string, unknown> = {}) =>
   ({ id: end === "following" ? "j-running" : "j1", state, words, view: null, nodes: null, links: null, refusal: null, ...more });
 const ENDS: Record<string, ReturnType<typeof job>> = {
+  overlimit: job("done", "Saved 58,000 nodes and 131,940 links as your private view “Expansion of Ledger Holdings Ltd”.", { view: VIEW, nodes: 58_000, links: 131_940 }),
   done: job("done", "Saved 41,203 nodes and 96,114 links as your private view “Expansion of Ledger Holdings Ltd”.", { view: VIEW, nodes: 41_203, links: 96_114 }),
   refused: job("refused", "Too many for a batch expansion: 812,000 nodes against a limit of 500,000, so nothing was saved. Narrow it by link type, depth or dates and try again.",
     { refusal: { code: "too_many_nodes", cap_kind: "nodes", cap: 500_000, would_be: 812_000 } }),
@@ -53,7 +56,8 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === "/v1/investigations/c1/batch-expansions" && method === "POST") {
     starts += 1;
     reads = 0;
-    if (end === "forbidden") return json(403, { detail: "Editor is needed in this case." });
+    if (end === "forbidden") return json(403, { detail: "You hold Reader in this case; this needs Editor." });
+    if (end === "noright") return json(403, { detail: { error: "right_required", right: "investigate" } });
     if (end === "following") {
       return json(409, { error: "batch_expansion_running", id: "j-running",
         detail: "A batch expansion of yours is already running in this case, so another was not started. Follow that one, or wait for it to finish." });
@@ -62,6 +66,7 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   }
   if (/^\/v1\/investigations\/c1\/batch-expansions\/[^/]+$/.test(path)) {
     reads += 1;
+    if (end === "trouble" && reads > 1) return json(503, {});
     const at = stepped ? window.__BATCH__!.stage : reads;
     if (stepped && at === 0) return json(200, job("queued", QUEUED));
     if (at <= STAGES.length || end === "running" || end === "following") {
@@ -70,7 +75,11 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     // A failed job's second try runs to done.
     return json(200, end === "failed" && starts > 1 ? ENDS.done : (ENDS[end] ?? ENDS.done));
   }
-  if (path === "/v1/investigations/c1/views/v-batch") return json(200, OPENED);
+  if (path === "/v1/investigations/c1/views/v-batch") {
+    return end === "overlimit"
+      ? json(409, { error: "limit_exceeded", cap_kind: "nodes", cap: 50_000, would_be: 58_000, options: ["save_as_view", "filter", "promote_to_batch"] })
+      : json(200, OPENED);
+  }
   return json(404, {});
 };
 

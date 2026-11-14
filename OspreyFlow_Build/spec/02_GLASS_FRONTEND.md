@@ -1217,28 +1217,36 @@ Opening another case from the drawer reloads the page, as every case switch does
 expansion, the refusal on the canvas offers *Run as a batch job* beside expanding by one relationship
 and saving a smaller view. Choosing it sends exactly the refused expansion to the Conduit
 (`POST …/batch-expansions`), and a panel at the canvas's foot, `workingset/BatchExpansion.tsx`, follows
-the job. The panel is not modal, so the analyst can go on working while the job runs. It asks where the
-job is every two seconds and shows the server's sentence for each stage as given ("Expanding from 12
-nodes", "Saving the view"). It adds no words of its own to a stage, a refusal or a failure. Nothing
-joins the working set: when the job is done, its result, a private view of the case, opens as the
-read-only lens (§3.1h). The panel then says so, or says why the view could not be opened. A view past
-the canvas's limit is kept and named, and nothing is cut to fit.
+the job. The panel starts one job, whatever it is given later, until *Try again*. It is not modal, so
+the analyst can go on working while the job runs. It asks where the job is every two seconds, with
+the newest token the page holds. It shows the server's sentence for each stage, refusal and failure as
+given ("Expanding from 12 nodes", "Saving the view"), and its own words only where the server sent
+none. Nothing joins the working set: when the job is done, its result, a private view of the case,
+opens as the read-only lens (§3.1h). The panel then says so, or says why the view could not be
+opened. A view past the canvas's limit is kept and named, and nothing is cut to fit.
 
 The refusals are said in words:
-- a case level below Editor, or an account without the right to expand (each named, and no job
-  started);
+- a case level below Editor, in the Conduit's own sentence;
+- an account without the right to expand (each, and no job started);
 - a case not opened;
-- a job already running in the case, which the panel follows instead of starting another;
+- a batch expansion of the reader's already running in the case, which the panel follows instead of
+  starting another, without this request's figures, since it may be another expansion;
 - a job refused for its size or for another reason, with figures and how to narrow;
 - a failed job, which offers *Try the batch job again*;
-- a job no longer found.
+- a job not the reader's or no longer shared;
+- a done job whose view has since been deleted;
+- a reading refused (the sign-in ended) or failing for a minute, after which the panel stops asking
+  and says the job carries on.
 
-While the job runs the panel says that closing it does not stop the job, and that running the same
-expansion again as a batch job follows it (the Conduit's 409 names the running job). A done job whose view
-has since been deleted says so in the server's words, with nothing to open. A state the Glass does
-not know is said as a failure, never read as progress. The jsdom cases are in
-`workingset/BatchExpansion.test.tsx`, and their red-first record is
-`process/lanes/case-b/batch/plants.sh`. The keyboard case is `run-an-expansion-as-a-batch-job-by-keyboard`.
+While the job runs, the panel says that closing it does not stop the job, and that asking for a batch
+expansion in the case again follows it while it runs (the Conduit's 409 names the running job). A
+state the Glass does not know is said as a failure, never read as progress.
+
+The jsdom cases are in `workingset/BatchExpansion.test.tsx`, and their red-first record is
+`process/lanes/case-b/batch/plants.sh`. The panel's two actions are proved by keyboard in
+`keyboard/batch-expansion.spec.ts` (registry `BATCH_EXPANSION_ACTIONS`), and so is each of its states
+under axe in the three looks. Starting the job from the cap refusal is proved by keyboard where that
+refusal's own cases are (`keyboard/canvas-expand-cap.spec.ts`), once the refusal is on main.
 
 ### 3.2 Social network analysis
 

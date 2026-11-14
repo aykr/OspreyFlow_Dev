@@ -7,6 +7,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
+import { checkUndecidedContrast } from "../a11y/undecidedContrast";
 import { BATCH_EXPANSION_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
 
 const REGISTRY = "BATCH_EXPANSION_ACTIONS";
@@ -89,7 +90,11 @@ const STATES: [string, (page: Page) => Promise<void>][] = [
   ["done", (page) => expect(panel(page).getByRole("status")).toContainText("Its result is open as the view")],
   ["refused", (page) => expect(panel(page).getByRole("alert")).toContainText("812,000 nodes against a limit of 500,000")],
   ["failed", (page) => expect(page.getByRole("button", { name: "Try the batch job again" })).toBeVisible()],
-  ["forbidden", (page) => expect(panel(page).getByRole("alert")).toContainText("it needs the Editor level")],
+  ["forbidden", (page) => expect(panel(page).getByRole("alert")).toHaveText("You hold Reader in this case; this needs Editor.")],
+  ["noright", (page) => expect(panel(page).getByRole("alert")).toContainText("does not hold the right to expand")],
+  ["overlimit", (page) => expect(panel(page).getByRole("alert")).toContainText("Nothing was cut to fit")],
+  ["trouble", (page) => expect(panel(page)).toContainText("Still trying.")],
+  ["following", (page) => expect(panel(page).getByRole("status")).toHaveText("Expanding from 12 nodes.")],
   ["deleted", (page) => expect(panel(page).getByRole("alert")).toHaveText("The batch expansion finished, but the view it saved has since been deleted.")],
 ];
 for (const look of ["dark", "light", "govuk"] as const) {
@@ -99,6 +104,8 @@ for (const look of ["dark", "light", "govuk"] as const) {
       await drawn(page);
       const results = await new AxeBuilder({ page }).include(".batch-expansion").withTags(WCAG_TAGS).analyze();
       expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+      const contrast = await checkUndecidedContrast(page, results);
+      expect(contrast.unlisted, "colour contrast axe left undecided").toEqual([]);
     });
   }
 }

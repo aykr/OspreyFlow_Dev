@@ -10,10 +10,13 @@ import {
 import type { LimitExceeded } from "./models";
 
 const COUNT = new Intl.NumberFormat("en-GB");
+/** Readings of the job's progress that fail in a row (a server error, no answer) before the panel
+ * stops asking and says so: a minute at the route's two seconds. */
+const TROUBLES_BEFORE_STOPPING = 30;
 
 export interface BatchExpansionProps {
-  /** The expansion the cap refused, as the canvas handed it over. Held by the caller, so it is the
-   * same object for the panel's whole life: a new one starts a new job. */
+  /** The expansion the cap refused, as the canvas handed it over. Read once, when the panel starts
+   * the job: a new object at a later render (or a renewed token, ADR-050) starts nothing. */
   request: BatchExpansionRequest;
   apiBaseUrl: string;
   bearerToken: string;
@@ -41,9 +44,9 @@ function refusalWords(job: BatchExpansionJob): string {
   if (job.words) return job.words;
   const refusal = job.refusal;
   if (refusal && refusal.cap !== undefined && refusal.would_be !== undefined) {
-    return `The batch job was refused: ${COUNT.format(refusal.would_be)} ${what(refusal.cap_kind)} against a limit of ${COUNT.format(refusal.cap)}. Nothing was saved.`;
+    return `The batch expansion was refused: ${COUNT.format(refusal.would_be)} ${what(refusal.cap_kind)} against a limit of ${COUNT.format(refusal.cap)}. Nothing was saved. Narrow it by link type, depth or dates and try again.`;
   }
-  return "The batch job was refused. Nothing was saved.";
+  return "The batch expansion was refused, and nothing was saved. Narrow it by link type, depth or dates and try again.";
 }
 
 /**
@@ -67,6 +70,11 @@ export function BatchExpansion({
   const [attempt, setAttempt] = useState(0);
   const onViewOpenedRef = useRef(onViewOpened);
   onViewOpenedRef.current = onViewOpened;
+  // Read at each request, never a reason to start again: one job per panel and per *Try again*. The
+  // token is the newest the page holds, so a renewal mid-job is used by the next poll.
+  const asked = useRef({ apiBaseUrl, bearerToken, investigationId, request, pollMs });
+  asked.current = { ...asked.current, apiBaseUrl, bearerToken, investigationId, pollMs };
+  const [following, setFollowing] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -76,14 +84,17 @@ export function BatchExpansion({
   useEffect(() => {
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let troubles = 0;
+    const { request: startWith } = asked.current;
 
     async function finish(job: BatchExpansionJob): Promise<void> {
       if (!job.view) {
         // Done, its view deleted since (ADR-151): the server's sentence says so; there is nothing to open.
-        setShown({ phase: "stopped", again: false, words: job.words || "The batch job finished, but the view it saved has since been deleted." });
+        setShown({ phase: "stopped", again: false, words: job.words || "The batch expansion finished, but the view it saved has since been deleted." });
         return;
       }
       setShown({ phase: "opening", words: job.words });
+      const { apiBaseUrl, bearerToken, investigationId } = asked.current;
       const result = await openView(apiBaseUrl, bearerToken, investigationId, job.view.id);
       if (!live) return;
       const name = job.view.name;
@@ -109,6 +120,7 @@ export function BatchExpansion({
     }
 
     async function watch(jobId: string): Promise<void> {
+      const { apiBaseUrl, bearerToken, investigationId, pollMs } = asked.current;
       const read = await readBatchExpansion(apiBaseUrl, bearerToken, investigationId, jobId);
       if (!live) return;
       if (read.ok) {
@@ -119,19 +131,30 @@ export function BatchExpansion({
           return;
         }
         if (job.state === "failed") {
-          setShown({ phase: "stopped", again: true, words: job.words || "The batch job failed on the server." });
+          setShown({ phase: "stopped", again: true, words: job.words || "The batch expansion could not finish, and nothing was saved. Try again, or narrow the expansion." });
           return;
         }
+        troubles = 0;
         setShown({ phase: "watching", words: job.words || "The batch job is under way.", trouble: null });
       } else if (read.kind === "not_found") {
         setShown({
           phase: "stopped",
           again: false,
-          words: "The batch job can no longer be found. It may have been cancelled, or the case closed or no longer shared with you.",
+          words: "The batch expansion can no longer be found: it is not one of yours in this case, or the case is no longer shared with you.",
         });
+        return;
+      } else if (read.kind === "refused") {
+        setShown({ phase: "stopped", again: false, words: read.message });
         return;
       } else if (read.kind === "unknown") {
         setShown({ phase: "stopped", again: false, words: read.message });
+        return;
+      } else if ((troubles += 1) >= TROUBLES_BEFORE_STOPPING) {
+        setShown({
+          phase: "stopped",
+          again: false,
+          words: `${read.message} The batch expansion carries on on the server; while it runs, asking for a batch expansion in this case again follows it.`,
+        });
         return;
       } else {
         const trouble = `${read.message} Still trying.`;
@@ -146,10 +169,12 @@ export function BatchExpansion({
 
     async function start(): Promise<void> {
       setShown({ phase: "starting" });
-      const started = await startBatchExpansion(apiBaseUrl, bearerToken, investigationId, request);
+      const { apiBaseUrl, bearerToken, investigationId, pollMs } = asked.current;
+      const started = await startBatchExpansion(apiBaseUrl, bearerToken, investigationId, startWith);
       if (!live) return;
       if (started.ok) {
         const [id, words] = "job" in started ? [started.job.id, started.job.words] : [started.running.id, started.running.words];
+        setFollowing(!("job" in started));
         setShown({ phase: "watching", words: words || "The batch job is under way.", trouble: null });
         timer = setTimeout(() => void watch(id), pollMs);
         return;
@@ -158,7 +183,9 @@ export function BatchExpansion({
         setShown({
           phase: "stopped",
           again: false,
-          words: "You cannot run a batch job in this case: it needs the Editor level, since its result is saved as a view of the case. No job was started.",
+          words:
+            started.words ??
+            "You cannot run a batch job in this case: it needs the Editor level, since its result is saved as a view of the case. No job was started.",
         });
       } else if (started.kind === "right_required") {
         setShown({
@@ -182,18 +209,20 @@ export function BatchExpansion({
       live = false;
       if (timer !== undefined) clearTimeout(timer);
     };
-  }, [apiBaseUrl, bearerToken, investigationId, request, pollMs, attempt]);
+  }, [attempt]);
 
   return (
     <section className="batch-expansion" role="region" aria-labelledby="batch-expansion-title">
       <h2 id="batch-expansion-title" className="batch-expansion__title" tabIndex={-1} ref={headingRef}>
         Batch job: the whole expansion
       </h2>
+      {!following && (
       <p className="batch-expansion__figure">
         The canvas refused {COUNT.format(request.refused.would_be)} {what(request.refused.cap_kind)} against its limit of{" "}
         {COUNT.format(request.refused.cap)}. The server runs the whole expansion instead and saves the result as a view of
         this case, private to you; nothing is added to the canvas.
       </p>
+      )}
       <div role="status" aria-live="polite" className="batch-expansion__status">
         {shown.phase === "starting" && "Starting the batch job."}
         {shown.phase === "watching" && shown.words}
@@ -210,7 +239,7 @@ export function BatchExpansion({
       )}
       {(shown.phase === "starting" || shown.phase === "watching") && (
         <p className="batch-expansion__figure">
-          Closing this does not stop the job; run the same expansion again as a batch job to follow it.
+          Closing this does not stop the job. While it runs, asking for a batch expansion in this case again follows it.
         </p>
       )}
       <div className="batch-expansion__actions">
