@@ -144,19 +144,37 @@ test("the Filters panel floats over the page too, so opening it does not grow th
   expect((await page.locator("header.app-header").boundingBox())!.height).toBeLessThan(60);
 });
 
-test("at 924 wide the bar wraps to two lines and nothing leaves the window (ADR-115 Amendment 2)", async ({ page }) => {
-  // Found in the signed-in sitting, 14 October 2026: one fixed-height line 1,189 px wide, the account
-  // menu off screen and the page scrolling sideways.
-  await page.setViewportSize({ width: 924, height: 600 });
-  await page.goto("/keyboard/top-bar-harness.html");
+// ADR-115 Amendment 2 (found in the signed-in sitting, 14 October 2026: one fixed-height line 1,189 px wide, the
+// account menu off screen and the page scrolling sideways), as ADR-115 Amendment 7 has it: the bar folds first, and
+// whole items wrap only once everything that folds has folded. Whether 924 then fits on one line is the platform's
+// fonts' (it does on macOS, not on Linux), so at 924 the case holds what is true on both; at 700 nothing fits on one
+// line with any font, and the two lines are proved there.
+async function nothingLeaves(page: import("@playwright/test").Page, width: number) {
   const account = page.getByRole("button", { name: /osprey-demo-analyst · OFFICIAL/ });
   await expect(account).toBeVisible();
   const box = (await account.boundingBox())!;
-  expect(box.x + box.width).toBeLessThanOrEqual(924);
+  expect(box.x + box.width).toBeLessThanOrEqual(width);
   await expect(account).toContainText("OFFICIAL"); // the clearance stays on screen
   const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
   expect(widths[0]).toBeLessThanOrEqual(widths[1]);
-  const height = (await page.locator("header.app-header").boundingBox())!.height;
+}
+
+test("at 924 wide the bar folds before it wraps, and nothing leaves the window (ADR-115 Amendments 2 and 7)", async ({ page }) => {
+  await page.setViewportSize({ width: 924, height: 600 });
+  await page.goto("/keyboard/top-bar-harness.html");
+  await nothingLeaves(page, 924);
+  await expect(page.locator("header.top-bar")).toHaveAttribute("data-folded", /^dashboards/);
+  expect((await page.locator("header.app-header").boundingBox())!.height).toBeLessThan(110); // never three lines
+});
+
+test("at 700 wide, with everything folded, whole items wrap to two lines with room above and below (ADR-115 Amendments 2 and 7)", async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 600 });
+  await page.goto("/keyboard/top-bar-harness.html");
+  await nothingLeaves(page, 700);
+  const bar = page.locator("header.top-bar");
+  await expect(bar).toHaveAttribute("data-folded", /graph$/);
+  await expect(bar).toHaveClass(/top-bar--wrapped/);
+  const height = (await bar.boundingBox())!.height;
   expect(height).toBeGreaterThan(60); // two lines
   expect(height).toBeLessThan(110); // not three
 });

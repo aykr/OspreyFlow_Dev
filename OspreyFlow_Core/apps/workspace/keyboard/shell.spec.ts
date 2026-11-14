@@ -689,7 +689,7 @@ for (const shown of GOVUK_PAGES) {
 // ADR-145 Amendment 14 decision 2 (the owner, 13 November 2026: "the Cases panel covers the top navigation"):
 // a drawer opens under the top bar and the context row, so the places, the top bar's controls, the GOV.UK header's
 // navigation and the row's case switcher and cross-link stay in view and can be clicked while it is open. In each
-// look the scans use, at 1440 and again after the window narrows to 900, where the bar and the row wrap and the
+// look the scans use, at 1440 and again after the window narrows to 700, where the bar and the row wrap and the
 // drawer is measured again.
 for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
   test(`${brand} ${theme}: an open drawer starts under the top bar and the context row, the navigation above it uncovered`, async ({ page }) => {
@@ -722,8 +722,9 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     };
     await expect.poll(measure).toMatchObject({ underTheChrome: true, covered: [] });
     const wide = await measure();
-    await page.setViewportSize({ width: 900, height: 900 });
-    // At 900 the row wraps, so the chrome is deeper; the drawer is measured again and follows it.
+    // At 700 the bar wraps even with everything folded (ADR-115 Amendment 7; at 900 it fits on one line with macOS's
+    // fonts), so the chrome is deeper; the drawer is measured again and follows it.
+    await page.setViewportSize({ width: 700, height: 900 });
     await expect.poll(async () => (await measure()).chrome).toBeGreaterThan(wide.chrome);
     await expect.poll(measure).toMatchObject({ underTheChrome: true, covered: [] });
     // Its own way out is reached by keyboard: the drawer takes focus as it opens, and Tab reaches Close.

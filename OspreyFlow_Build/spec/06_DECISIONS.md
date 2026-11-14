@@ -39603,3 +39603,25 @@ This amends Amendment 1; its other text stands.*
   - "says the Conduit's own words when it refuses what was typed";
   - "still says unavailable for a refusal with no words…".
 - *Planted:* each is planted again in `process/lanes/studio/v052-search/plants.py`, and each plant is red.
+
+### ADR-115, Amendment 7 (14 November 2026) — the top bar folds before it wraps
+
+The owner's ruling of 14 November 2026, after main's CI (run 43597467719) drew the Glass's top bar 73 pixels high,
+two lines, at 1,440 wide on Linux; a client's Windows or smaller screen would see the same.
+- **The decision.** When the bar's items do not fit on one line, what is used least folds away first, in
+  `shell/railLayout.ts`'s `BAR_FOLD_ORDER` (spec 02 §2.0 has the order and the mechanism): *Build a report* and the
+  views into *More views*, the places into one menu, *Graph* last. The bar stays one line high. Only once everything
+  that folds has folded do whole items wrap (Amendment 3, ADR-065 decision 6), and only then do the two lines take
+  Amendment 2's room above and below.
+- **How it reconciles with Amendments 2 and 3.** Amendment 2's rule 1 ("below 1,100 pixels the header becomes two
+  rows") is replaced: a narrow window now folds first, and two rows are its last resort, no longer its rule; its test
+  (at 924 the document no wider than the window and the account menu on screen, its clearance shown) holds unchanged.
+  Amendment 2's padding no longer follows a 1,100-pixel breakpoint; it is the wrapped bar's own (`.top-bar--wrapped`).
+  Amendment 3 stands: whether items fit is not a breakpoint, and the account and its clearance never leave the screen.
+- **Tests.** `keyboard/top-bar.spec.ts`: one line and 44 high at 1,024 in the dark, light and GOV.UK looks, for the
+  four views and for every place with *Build a report*; one line with a wider font forced; nothing folded at 1,440
+  and unfolded on widening; at 924 folded with nothing leaving the window (one line on macOS's fonts, two on
+  Linux's); at 700 everything folded and two lines with their room. `keyboard/shell.spec.ts`: each folded view, the
+  folded link and a folded place by keyboard (rule 13), and the open drawer measured again under the two-line chrome
+  at 700 (at 900 the folded bar fits on one line on macOS). The red record is
+  `process/lanes/case/gates/topbar-fold-reds.<head>.log`.
