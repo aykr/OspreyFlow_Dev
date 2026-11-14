@@ -20,10 +20,9 @@ export interface SelectionBarProps {
    * them within it (Amendment 4). Offered for two or more. */
   onLinksAmong?: (degree: number) => void;
   /** ADR-098 decision 4, ADR-144 decision 4: save the selection as a private view and ask the model
-   * about its Documents in it. Offered while the selection holds at least one Document
-   * (`documentCount`). */
+   * about it there. Offered whenever anything is selected (ADR-098 Amendment 7: a question needs no
+   * Document; with none, the model answers from the links and events). */
   onAsk?: () => void;
-  documentCount?: number;
   /** ADR-128 decision 2: what Select what is lit did, said while its selection stands, with the
    * words "undated links are not included". Absent: the selection did not come from it. */
   litNote?: string;
@@ -44,7 +43,6 @@ export function SelectionBar({
   onSaveView,
   onLinksAmong,
   onAsk,
-  documentCount = 0,
   litNote,
   onUndoLit,
   onRemove,
@@ -135,7 +133,7 @@ export function SelectionBar({
           </span>
         </span>
       )}
-      {onAsk && documentCount > 0 && (
+      {onAsk && (
         <button type="button" className="btn btn--quiet" onClick={onAsk}>
           Ask the model about these…
         </button>

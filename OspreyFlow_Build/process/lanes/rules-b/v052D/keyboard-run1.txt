@@ -1,0 +1,156 @@
+
+Running 21 tests using 2 workers
+
+[1/21] keyboard/questions.spec.ts:68:1 › Ctrl+Enter in the question asks it, and the answer joins the conversation
+[2/21] keyboard/selection.spec.ts:41:1 › the selection bar says how many once, and its Clear empties the selection
+[3/21] keyboard/questions.spec.ts:79:1 › Tab from the question reaches Ask, and Enter asks
+[4/21] keyboard/questions.spec.ts:91:1 › a document the answer draws on opens to read by keyboard
+[5/21] keyboard/questions.spec.ts:99:1 › a proposal is accepted by keyboard, and its change reaches the view
+[6/21] keyboard/questions.spec.ts:109:1 › the drawer closes from its visible Close button, reached by keyboard
+[7/21] keyboard/questions.spec.ts:120:1 › a proposal is rejected by keyboard, and nothing reaches the view
+[8/21] keyboard/questions.spec.ts:158:1 › asking, then reaching a [G-n] from the answer by Tab, selects what it stands for on the real canvas
+[WebServer] 22:24:10 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[9/21] keyboard/selection.spec.ts:56:1 › Escape on the canvas clears the selection, which the canvas describes, inside a visible focus ring
+  1) keyboard/questions.spec.ts:158:1 › asking, then reaching a [G-n] from the answer by Tab, selects what it stands for on the real canvas 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Array [
+        Object {
+          "question": "Who is connected to n0?",
+    +     "read_from": "graph",
+          "selected_link_ids": Array [],
+          "selected_node_ids": Array [],
+        },
+      ]
+
+      165 |   await page.keyboard.press("Control+Enter");
+      166 |   await expect(page.getByRole("button", { name: "Select [G-1] on the canvas" })).toHaveCount(2);
+    > 167 |   expect(scopes).toEqual([{ question: "Who is connected to n0?", selected_node_ids: [], selected_link_ids: [] }]);
+          |                  ^
+      168 |   const state = () => page.evaluate(() => ({ nodes: window.__KEYBOARD__!.selection, edge: window.__KEYBOARD__!.selectedEdge }));
+      169 |   await page.getByLabel("Your question").focus();
+      170 |
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/questions.spec.ts:167:18
+
+    Error Context: test-results/questions-asking-then-reac-871bf-ands-for-on-the-real-canvas/error-context.md
+
+
+[WebServer] 22:24:11 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[10/21] keyboard/selection.spec.ts:72:1 › the selection bar's Remove from view takes the selected nodes out, through a real DELETE
+[11/21] keyboard/questions.spec.ts:190:1 › the model engine is reached from the question by Shift+Tab, changed by keyboard, and named in the question
+  2) keyboard/questions.spec.ts:190:1 › the model engine is reached from the question by Shift+Tab, changed by keyboard, and named in the question 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Answered by This deployment\'s own model (qwen2.5:7b-instruct)')
+    Expected: visible
+    Error: strict mode violation: getByText('Answered by This deployment\'s own model (qwen2.5:7b-instruct)') resolved to 2 elements:
+        1) <p>Answered by This deployment's own model (qwen2.5:…</p> aka getByText('Answered by This deployment\'s own model (qwen2.5:7b-instruct)', { exact: true })
+        2) <p>Will be answered by This deployment's own model (…</p> aka getByText('Will be answered by This')
+
+    Call log:
+      - Expect "toBeVisible" getByText('Answered by This deployment\'s own model (qwen2.5:7b-instruct)') with timeout 5000ms
+      - waiting for getByText('Answered by This deployment\'s own model (qwen2.5:7b-instruct)')
+
+
+      218 |   await page.keyboard.type("Who wrote about the plant?");
+      219 |   await page.keyboard.press("Control+Enter");
+    > 220 |   await expect(page.getByText("Answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeVisible();
+          |                                                                                                 ^
+      221 |   expect((scopes[0] as { engine?: string }).engine).toBe("local");
+      222 |   registerCovered(REGISTRY, "choose-the-model-engine-by-keyboard");
+      223 | });
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/questions.spec.ts:220:97
+
+    Error Context: test-results/questions-the-model-engine-97df8-d-and-named-in-the-question/error-context.md
+
+
+[WebServer] 22:24:13 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[WebServer] 22:24:13 [vite] (client) [Unhandled error] NotFoundGraphError: Graph.setNodeAttribute: could not find the "n0" node in the graph.
+[WebServer]  > findRelevantNodeData ../../node_modules/graphology/dist/graphology.mjs:506:12
+[WebServer]  > Class.<computed> [as setNodeAttribute] ../../node_modules/graphology/dist/graphology.mjs:604:32
+[WebServer]  > step ../../node_modules/sigma/dist/normalization-be445518.esm.js:78:37
+[WebServer] 
+
+[12/21] keyboard/selection.spec.ts:85:1 › the selection bar's Show links among these asks for the links among the selected nodes (ADR-098)
+[13/21] keyboard/questions.spec.ts:225:1 › asked in a view, the questions go through it, and Ask about the whole case instead leaves it, by keyboard (ADR-144 decision 4)
+[14/21] keyboard/questions.spec.ts:252:1 › what to read from is chosen by arrow keys, the Conduit says what will be read, and the question sends the choice (ADR-098 Amendment 7)
+[WebServer] 22:24:15 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[15/21] keyboard/selection.spec.ts:104:1 › the selection bar's degrees ask for the routes within them, by keyboard
+[WebServer] 22:24:17 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[16/21] keyboard/selection.spec.ts:131:1 › the selection bar's Ask the model about these… saves the selection as a private view, named for its items, and asks in it (ADR-098 Amendment 7, ADR-144)
+[WebServer] 22:24:19 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[17/21] keyboard/selection.spec.ts:165:1 › the selection bar's Expand asks to expand each selected node
+  3) keyboard/questions.spec.ts:252:1 › what to read from is chosen by arrow keys, the Conduit says what will be read, and the question sends the choice (ADR-098 Amendment 7) 
+
+    Error: expect(locator).toBeChecked() failed
+
+    Locator:  getByRole('radio', { name: 'Selected items' })
+    Expected: checked
+    Received: unchecked
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toBeChecked" getByRole('radio', { name: 'Selected items' }) with timeout 5000ms
+      - waiting for getByRole('radio', { name: 'Selected items' })
+        14 × locator resolved to <input checked type="radio" name="_r_0_" value="selection" id="_r_0_-selection"/>
+           - unexpected value "unchecked"
+
+
+      273 |   await everything.focus();
+      274 |   await page.keyboard.press("ArrowUp");
+    > 275 |   await expect(selected).toBeChecked();
+          |                          ^
+      276 |   await expect.poll(() => willReads.at(-1)?.read_from).toBe("selection");
+      277 |   registerCovered(REGISTRY, "choose-what-to-read-from-by-keyboard");
+      278 | });
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/questions.spec.ts:275:26
+
+    Error Context: test-results/questions-what-to-read-fro-c587b-choice-ADR-098-Amendment-7-/error-context.md
+
+
+[18/21] keyboard/questions.spec.ts:280:1 › every registered questions action has its own proving test case above
+[WebServer] 22:24:20 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+  4) keyboard/questions.spec.ts:280:1 › every registered questions action has its own proving test case above 
+
+    Error: QUESTIONS_ACTIONS: keyboard action(s) registered with no proving test case: ask-a-question-with-ctrl-enter, ask-a-question-with-the-ask-button, open-a-cited-document-by-keyboard, accept-a-proposal-by-keyboard, reject-a-proposal-by-keyboard, close-the-questions-drawer-by-keyboard, select-a-graph-fact-from-an-answer-by-keyboard, choose-the-model-engine-by-keyboard, ask-in-a-view-then-about-the-whole-case-by-keyboard, choose-what-to-read-from-by-keyboard
+
+       at actionRegistry.ts:73
+
+      71 |   const missing = actions.filter((id) => !seen.has(id));
+      72 |   if (missing.length > 0) {
+    > 73 |     throw new Error(
+         |           ^
+      74 |       `${registryName}: keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
+      75 |     );
+      76 |   }
+        at assertAllCovered (/Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts:73:11)
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/questions.spec.ts:281:3
+
+    Error Context: test-results/questions-every-registered-a5f60-own-proving-test-case-above/error-context.md
+
+
+[19/21] keyboard/selection.spec.ts:177:1 › the list's name centres on that node and leaves the selection as it was
+[WebServer] 22:24:21 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[20/21] keyboard/selection.spec.ts:187:1 › the list's × takes that node out of the selection
+[WebServer] 22:24:22 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[21/21] keyboard/selection.spec.ts:195:1 › every registered selection action has its own proving test case above
+  4 failed
+    keyboard/questions.spec.ts:158:1 › asking, then reaching a [G-n] from the answer by Tab, selects what it stands for on the real canvas 
+    keyboard/questions.spec.ts:190:1 › the model engine is reached from the question by Shift+Tab, changed by keyboard, and named in the question 
+    keyboard/questions.spec.ts:252:1 › what to read from is chosen by arrow keys, the Conduit says what will be read, and the question sends the choice (ADR-098 Amendment 7) 
+    keyboard/questions.spec.ts:280:1 › every registered questions action has its own proving test case above 
+  17 passed (17.3s)

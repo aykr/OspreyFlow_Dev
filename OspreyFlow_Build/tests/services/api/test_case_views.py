@@ -620,6 +620,45 @@ def test_asking_in_a_private_view_is_refused_to_another_member(
     assert asked.status_code == 404 and asked.json() == {"error": "view_not_found"}
 
 
+def test_will_read_in_a_private_view_is_refused_to_another_member(
+    world: _World, conversation: tuple[_Questions, str]
+) -> None:
+    """ADR-098 Amendment 7 (rule 4): what a question in Alice's private view would read is refused
+    to Bob as for a view that does not exist, before anything is read."""
+    _, view_id = conversation
+    url = f"/v1/investigations/{CASE}/questions/will-read"
+    refused = _as("bob").post(url, json={"view_id": view_id})
+    missing = _as("bob").post(url, json={"view_id": "no-such-view"})
+    assert refused.status_code == 404 and refused.json() == {"error": "view_not_found"}
+    assert refused.json() == missing.json()
+
+
+def test_the_will_read_view_check_fails_with_the_view_check_removed(
+    world: _World, conversation: tuple[_Questions, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15: with the store's view check planted out, Bob's will-read in Alice's view is no
+    longer refused."""
+    questions, view_id = conversation
+    from services.api.questions import ReadSummary, WillRead
+
+    reached: list[object] = []
+
+    async def will_read(*_: object, **kw: object) -> WillRead:
+        reached.append(kw.get("view_node_ids"))
+        read = ReadSummary(
+            read_from="graph", documents=0, documents_without_text=0, items=1, links=0,
+            events=0, selected=0, first_selected=None,
+        )  # fmt: skip
+        return WillRead(read=read, engine="local", engine_label="local", model="m",
+                        unusable=[], refused=None)  # fmt: skip
+
+    monkeypatch.setattr(questions, "will_read", will_read, raising=False)
+    monkeypatch.setattr(case_views_module, "visible_to", lambda view, reader: True)
+    url = f"/v1/investigations/{CASE}/questions/will-read"
+    assert _as("bob").post(url, json={"view_id": view_id}).status_code == 200
+    assert reached  # Bob's request reached what the view holds
+
+
 async def test_the_store_never_mixes_a_views_conversation_with_the_cases() -> None:
     from services.api.questions import InMemoryQuestionStore
 

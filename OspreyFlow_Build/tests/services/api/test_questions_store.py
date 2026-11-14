@@ -8,7 +8,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from services.api.config import PostgresConfig
-from services.api.questions import GraphCitation, PostgresQuestionStore, QuestionEntry
+from services.api.questions import (
+    GraphCitation,
+    PostgresQuestionStore,
+    QuestionEntry,
+    ReadSummary,
+)
 
 from conduit_common.identity import new_id
 from schemas.domain import Handling
@@ -52,6 +57,17 @@ def _entry(case: str, at: datetime, question: str) -> QuestionEntry:
             )
         ],
         event_scopes=["parent-1"],
+        # ADR-098 Amendment 7: what the question read is kept with it, every figure.
+        read=ReadSummary(
+            read_from="selection",
+            documents=2,
+            documents_without_text=1,
+            items=3,
+            links=4,
+            events=5,
+            selected=2,
+            first_selected="Tarbuck, Kyle",
+        ),
     )
 
 
@@ -85,6 +101,7 @@ async def test_a_question_stored_before_graph_facts_reads_back_with_none(store) 
     assert listed.question == "old"
     assert (listed.graph_node_ids, listed.graph_link_ids, listed.graph_citations) == ([], [], [])
     assert listed.engine is None  # ADR-135: not recorded before engines were
+    assert listed.read is None  # ADR-098 Amendment 7: not recorded before it was
 
 
 async def test_a_row_stored_before_events_were_recorded_reads_back_as_not_recorded(store) -> None:

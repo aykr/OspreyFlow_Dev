@@ -128,22 +128,22 @@ test("the selection bar's degrees ask for the routes within them, by keyboard", 
   registerCovered("SELECTION_ACTIONS", "show-links-within-degrees-from-the-selection-bar");
 });
 
-test("the selection bar's Ask the model about these… saves the selection as a private view, named for its documents, and asks in it (ADR-098, ADR-144)", async ({ page }) => {
+test("the selection bar's Ask the model about these… saves the selection as a private view, named for its items, and asks in it (ADR-098 Amendment 7, ADR-144)", async ({ page }) => {
   let body: { node_ids: string[]; name?: string } | null = null;
   await page.route("**/*/investigations/*/views", async (route) => {
     body = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "view-q", case_id: "keyboard-fixture", name: "Questions on 1 document", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
+      body: JSON.stringify({ id: "view-q", case_id: "keyboard-fixture", name: "Questions on 2 items", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
     });
   });
   await page.goto("/keyboard/harness.html?fixture=emails");
   await page.getByRole("application", { name: "Network canvas" }).focus();
   const bar = page.getByRole("toolbar", { name: "Selection" });
-  // A selection with no Document is not offered it.
+  // A selection with no Document is offered it too (ADR-098 Amendment 7).
   await expect.poll(() => selection(page)).not.toEqual([]);
-  await expect(bar.getByRole("button", { name: "Ask the model about these…" })).toHaveCount(0);
+  await expect(bar.getByRole("button", { name: "Ask the model about these…" })).toHaveCount(1);
   for (let i = 0; i < 8; i++) {
     if ((await focused(page)) === "email:ev-1") break;
     await page.keyboard.press("Control+Shift+ArrowRight"); // every node in turn, linked or not
@@ -153,7 +153,8 @@ test("the selection bar's Ask the model about these… saves the selection as a 
   await expect.poll(() => selection(page)).toContain("email:ev-1");
   await bar.getByRole("button", { name: "Ask the model about these…" }).focus();
   await page.keyboard.press("Enter");
-  await expect.poll(() => body?.name).toBe("Questions on 1 document");
+  const chosen = (await selection(page)).length;
+  await expect.poll(() => body?.name).toBe(`Questions on ${chosen} item${chosen === 1 ? "" : "s"}`);
   expect(body!.node_ids).toContain("email:ev-1");
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __KEYBOARD__?: { askedIn?: string | null } }).__KEYBOARD__?.askedIn))

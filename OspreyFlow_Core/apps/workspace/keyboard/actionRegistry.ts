@@ -762,6 +762,9 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   // ADR-144 decision 4 (L3.2b): asked in a private view (*Ask the model about these*), and left for
   // the whole case by *Ask about the whole case instead*.
   "ask-in-a-view-then-about-the-whole-case-by-keyboard",
+  // ADR-098 Amendment 7: what to read from (Selected items, Everything on the graph; Whole case
+  // disabled with why) is chosen by arrow keys, and the question sends the choice.
+  "choose-what-to-read-from-by-keyboard",
 ] as const);
 
 /** Files added straight to a case (ADR-094 step 3): from the strip over the canvas, standing alone,

@@ -1,11 +1,17 @@
 """Questions to the model about a case's documents (`06_DECISIONS.md` ADR-098 decision 4).
 
-An analyst asks the model about the case's Documents, or about the Documents they chose, opened as a
-private case view (*Ask the model about these*, ADR-144 decision 4). The model reads every Document
-in the case's view that the analyst can see, whole, and answers from them only, saying which it
-draws on; anything it proposes (an entity, with the words that name it) is a pending finding in
-the same review queue as an extraction's, inferred until a person accepts it (rule 5), and placed
-in the Document where its words are, or left out and counted when they are not there. The
+An analyst asks the model about what they choose to read from (ADR-098 Amendment 7): *Selected
+items* (the selection, its links and their Documents), *Everything on the graph* (every item, link
+and Document they can see), or *Whole case* (refused in words until the case's search service is
+called, part D(iii)). A selection is the default when there is one. The model reads every Document
+in that scope that the analyst can see, whole, and answers from them and the graph facts, saying
+which it draws on. With no Document to read it answers from the links and events, and the answer's
+`read` summary says so; there is no refusal for want of documents. The same summary, counted as the
+analyst, is given before asking by *will read* (`QuestionsService.will_read`), with the engine the
+routing will use and the engines it cannot, each with its reason. Anything it proposes (an entity,
+with the words that name it) is a pending finding in the same review queue as an extraction's,
+inferred until a person accepts it (rule 5), and placed in the Document where its words are, or
+left out and counted when they are not there. The
 conversation is kept with the case, or with the view it was asked in, read then only by those who
 may see the view (the owner's ruling of 8 November 2026).
 
@@ -30,6 +36,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 
@@ -44,7 +51,6 @@ from ports.graph import GraphPort
 from ports.model import ModelPort
 from schemas.analytics import EventFilter, TrendInterval, TrendRequest
 from schemas.domain import (
-    Edge,
     EdgeWrite,
     Handling,
     Interval,
@@ -56,6 +62,7 @@ from schemas.domain import (
     SourceRef,
 )
 from schemas.model import ExtractionRequest
+from schemas.questions import ReadSummary, UnusableEngine, WillRead
 
 from .dataset_scope import refuse_writing_in_an_unconverted_case
 from .datasets import DatasetStore
@@ -64,12 +71,22 @@ from .email_extraction import _edge_from_write
 from .event_scope import CaseRecords, own_events_only
 from .evidence_brief import (
     EvidenceBrief,
+    EvidenceScope,
     cited_numbers,
+    display_name,
     scope_of,
     strip_unheld,
     write_brief,
 )
 from .link_ids import as_stored
+from .model_routing import (
+    LOCAL,
+    LOCAL_LABEL,
+    EngineRefused,
+    ModelEgressRefused,
+    ModelRoutes,
+    RoutedModel,
+)
 from .review import (
     DocumentNotFoundError,
     ExtractionCandidateNotFoundError,
@@ -101,6 +118,14 @@ _INSTRUCTIONS = (
     "places and identifiers (email addresses, phone numbers) your answer rests on, each with "
     "the number of the document it is in and `quote`, the exact words in that document that "
     "name it. Describe patterns (who wrote to whom, when, about what) in the answer."
+)
+
+#: In place of `_INSTRUCTIONS` when the scope holds no Document with text to read (ADR-098
+#: Amendment 7): the question is answered from the graph facts alone, never refused.
+_NO_DOCUMENTS_INSTRUCTIONS = (
+    "You answer an analyst's question. There are no documents to read: answer using only the "
+    "graph facts below, and say so if they do not answer it. Leave `cited` and `entities` empty. "
+    "Describe patterns (who is linked to whom, when, how often) in the answer."
 )
 
 #: Added to the instructions only when there are graph facts to read.
@@ -156,6 +181,11 @@ class GraphCitation(BaseModel):
     link_ids: list[str]
 
 
+#: What a question reads from (ADR-098 Amendment 7). `case` is *Whole case*, refused until the
+#: case's search service is called (part D(iii)).
+ReadFrom = Literal["selection", "graph", "case"]
+
+
 class QuestionEntry(BaseModel):
     """One question and its answer, as kept with the case."""
 
@@ -195,6 +225,8 @@ class QuestionEntry(BaseModel):
     #: November 2026 on L3.2's Q2): its conversation is kept with the view, read only by those who
     #: may see the view. `None` for the case's own conversation.
     view_id: str | None = None
+    #: What the question read (ADR-098 Amendment 7); `None` for an entry kept before it was.
+    read: ReadSummary | None = None
 
 
 class QuestionAnswer(BaseModel):
@@ -218,6 +250,8 @@ class QuestionAnswer(BaseModel):
     #: answer. `engine` is `None` for an answer kept before engines were recorded.
     engine: str | None = None
     model: str | None = None
+    #: ADR-098 Amendment 7: what was read; `None` for an answer kept before it was recorded.
+    read: ReadSummary | None = None
 
 
 class QuestionAccepted(BaseModel):
@@ -225,8 +259,12 @@ class QuestionAccepted(BaseModel):
     delta: DeltaAdd
 
 
-class AskRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+class ScopeRequest(BaseModel):
+    """What a question is asked over: the body of *will read*, and of a question with its words."""
+
+    #: ADR-098 Amendment 7: *Selected items*, *Everything on the graph* or *Whole case*; none is the
+    #: selection when there is one, else the graph.
+    read_from: ReadFrom | None = None
     #: What the analyst has selected on the canvas: the evidence brief is these and one link around
     #: them. Nothing selected is the whole view. An id the analyst may not see selects nothing, as
     #: one that does not exist does.
@@ -243,7 +281,7 @@ class AskRequest(BaseModel):
     view_id: str | None = Field(default=None, min_length=1, max_length=64)
 
     @model_validator(mode="after")
-    def _window_runs_forward(self) -> AskRequest:
+    def _window_runs_forward(self) -> ScopeRequest:
         if (
             self.window is not None
             and self.window.valid_to is not None
@@ -251,6 +289,39 @@ class AskRequest(BaseModel):
         ):
             raise ValueError("the window ends before it starts")
         return self
+
+
+class AskRequest(ScopeRequest):
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+
+
+#: The identifiers a thing with no name is known by, in the canvas's order
+#: (`apps/workspace/src/canvas/labelChoices.ts`, `IDENTIFYING`).
+_CANVAS_IDENTIFYING = (
+    "account_number", "imei", "imsi", "e164", "email", "handle", "org_ref", "registration",
+)  # fmt: skip
+
+
+def canvas_label(node: Node) -> str:
+    """A node as the canvas names it by default (`labelChoices.ts`'s `defaultLabel`): a person as
+    "FAMILY, Given", a thing by its name, title, normalised value or identifier. Failing all of
+    those it is called as the brief calls it (`display_name`), never by its id (rule 7). Used for
+    "About: …", which the person reads beside the canvas."""
+    props = node.properties
+
+    def text(key: str) -> str | None:
+        value = props.get(key)
+        return " ".join(value.split()) or None if isinstance(value, str) else None
+
+    family = text("family_name")
+    if family is not None:
+        given = text("given_names")
+        return f"{family}, {given}" if given is not None else family
+    for key in ("name", "title", "value_normalised", *_CANVAS_IDENTIFYING):
+        found = text(key)
+        if found is not None:
+            return found
+    return display_name(node)
 
 
 def shared_handling(handlings: Sequence[Handling]) -> Handling | None:
@@ -261,8 +332,52 @@ def shared_handling(handlings: Sequence[Handling]) -> Handling | None:
     return handlings[0] if len(codes) == 1 else None
 
 
-class NoDocumentsError(Exception):
-    """The case holds no Document the analyst can see, so there is nothing to ask about."""
+class NothingToReadError(Exception):
+    """The scope holds nothing the analyst can see: nothing selected that their view holds, or an
+    empty graph. A selected id they may not see is answered as one that does not exist."""
+
+    def __init__(self, words: str) -> None:
+        super().__init__(words)
+        self.words = words
+
+
+class ReadFromUnavailableError(Exception):
+    """*Whole case* asked for before the case's search service is called (part D(iii))."""
+
+    #: The one wording, shown by the panel too (`QuestionsPanel.tsx`'s `WHOLE_CASE_UNAVAILABLE`,
+    #: held to this by `test_questions_read_from.py`).
+    words = (
+        "Whole case is not available yet: it will read the case's datasets through the case's "
+        "search. Choose Selected items or Everything on the graph."
+    )
+
+    def __init__(self) -> None:
+        super().__init__(self.words)
+
+
+_NOTHING_SELECTED = (
+    "Nothing is selected. Select items on the canvas, or choose Everything on the graph."
+)
+_SELECTION_NOT_HELD = (
+    "Nothing you selected is on the graph. Select items on the canvas, or choose Everything on the "
+    "graph."
+)
+_EMPTY_GRAPH = "The graph holds nothing to read. Add items to the canvas first."
+
+
+@dataclass(frozen=True)
+class _Material:
+    """What one question reads, gathered as the asker, for the question and *will read* alike."""
+
+    documents: list[tuple[str, str | None, str, Handling]]
+    brief: EvidenceBrief
+    event_handlings: list[Handling]
+    event_scopes: list[str]
+    read: ReadSummary
+
+    @property
+    def handling(self) -> Handling | None:
+        return shared_handling([h for _, _, _, h in self.documents] + list(self.brief.handlings))
 
 
 #: The third option: ask in a case view of fewer Documents (ADR-144 decision 4).
@@ -379,6 +494,8 @@ ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS event_scopes JSONB;
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS engine TEXT;
 -- ADR-144 decision 4: the view a question was asked in; NULL for the case's own conversation.
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS view_id TEXT;
+-- ADR-098 Amendment 7: what the question read; NULL for an answer kept before it was recorded.
+ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS read JSONB;
 """
 
 
@@ -405,9 +522,9 @@ class PostgresQuestionStore:
                 "INSERT INTO case_questions (id, investigation_id, author, question, answer, "
                 "document_ids, read_ids, candidate_ids, unplaced, model, created_at, "
                 "graph_node_ids, graph_link_ids, graph_citations, event_handlings, event_scopes, "
-                "engine, view_id) "
+                "engine, view_id, read) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, "
-                "$17, $18)",
+                "$17, $18, $19)",
                 entry.id,
                 entry.investigation_id,
                 entry.author,
@@ -426,6 +543,7 @@ class PostgresQuestionStore:
                 None if entry.event_scopes is None else json.dumps(entry.event_scopes),
                 entry.engine,
                 entry.view_id,
+                None if entry.read is None else entry.read.model_dump_json(),
             )
 
     async def list_for_case(
@@ -453,6 +571,7 @@ class PostgresQuestionStore:
                     "event_scopes": (
                         None if row["event_scopes"] is None else json.loads(row["event_scopes"])
                     ),
+                    "read": None if row["read"] is None else json.loads(row["read"]),
                 }
             )
             for row in rows
@@ -497,10 +616,11 @@ class QuestionsService:
 
     async def _documents(
         self, investigation_id: str, principal: Principal, nodes: Sequence[Node]
-    ) -> list[tuple[str, str | None, str, Handling]]:
-        """`(id, title, text, handling)` of every Document among `nodes`, the case's view as the
-        analyst may see it."""
+    ) -> tuple[list[tuple[str, str | None, str, Handling]], int]:
+        """`(id, title, text, handling)` of every Document among `nodes` (the scope, as the analyst
+        may see it) that has text, and how many have none (an image, say): counted, never read."""
         found: list[tuple[str, str | None, str, Handling]] = []
+        without_text = 0
         for node in sorted(
             (n for n in nodes if n.type == DOCUMENT_TYPE),
             key=lambda n: str(n.properties.get("title", n.id)),
@@ -508,7 +628,9 @@ class QuestionsService:
             view = await self._reader.read(investigation_id, node.id, principal)
             if view.text.strip():
                 found.append((node.id, view.title, view.text, node.handling))
-        return found
+            else:
+                without_text += 1
+        return found, without_text
 
     async def _events_per_month(
         self,
@@ -556,30 +678,17 @@ class QuestionsService:
         self,
         investigation_id: str,
         principal: Principal,
-        nodes: Sequence[Node],
-        edges: Sequence[Edge],
-        selected_node_ids: Sequence[str],
-        selected_link_ids: Sequence[str],
+        scope: EvidenceScope,
         window: Interval | None,
         documents_chars: int,
-    ) -> tuple[EvidenceBrief, list[Handling], list[str]]:
+    ) -> tuple[EvidenceBrief, list[Handling], list[str], int]:
         """The brief for what `principal` selected, from their own view, refused whole when it and
         the documents do not fit together (rule 2). The cap is checked before the events are read,
         so the links the events are asked over are only ever as many as the budget allows. Returns,
         with the brief, the distinct handlings of the events it counted and the ancestor cases they
         were read from: kept with the answer, so a later reader is shown it only if they could have
-        seen every one, and could have read those cases themselves (rule 3)."""
-        scope = scope_of(
-            nodes,
-            edges,
-            selected_node_ids=selected_node_ids,
-            selected_link_ids=selected_link_ids,
-            window=(
-                NarrowingFilter(valid_from=window.valid_from, valid_to=window.valid_to)
-                if window is not None
-                else None
-            ),
-        )
+        seen every one, and could have read those cases themselves (rule 3), and the number of
+        events counted."""
         named = await self._datasets.of_case(investigation_id, principal)
         labels = {d.id: d.name for d in named}
         # ADR-099 Amendment 12: a composite's links carry its members' ids, so its members are
@@ -595,7 +704,185 @@ class QuestionsService:
         if months:
             brief = write_brief(scope, labels, months, event_handlings)
             _fits(documents_chars, len(brief.text))
-        return brief, event_handlings, event_scopes
+        return brief, event_handlings, event_scopes, sum(count for _, count in months)
+
+    async def _gather(
+        self,
+        investigation_id: str,
+        principal: Principal,
+        *,
+        selected_node_ids: Sequence[str],
+        selected_link_ids: Sequence[str],
+        window: Interval | None,
+        view_node_ids: Sequence[str] | None,
+        read_from: ReadFrom | None,
+    ) -> _Material:
+        """What a question reads (ADR-098 Amendment 7), from the asker's own view (or the part of
+        it a case view holds): the scope, its Documents, the brief within the budget (rule 2), and
+        the summary of it all. Refused before anything is read when there is nothing to read, and
+        for *Whole case* until it is built."""
+        if read_from == "case":
+            raise ReadFromUnavailableError()
+        asked = bool(selected_node_ids) or bool(selected_link_ids)
+        chosen = read_from or ("selection" if asked else "graph")
+        if chosen == "selection" and not asked:
+            raise NothingToReadError(_NOTHING_SELECTED)
+        nodes, edges = await self._working_set.visible_membership(investigation_id, principal)
+        if view_node_ids is not None:
+            in_view = set(view_node_ids)
+            nodes = [n for n in nodes if n.id in in_view]
+            edges = [e for e in edges if e.source in in_view and e.target in in_view]
+        picked_nodes = selected_node_ids if chosen == "selection" else ()
+        picked_links = selected_link_ids if chosen == "selection" else ()
+        scope = scope_of(
+            nodes,
+            edges,
+            selected_node_ids=picked_nodes,
+            selected_link_ids=picked_links,
+            window=(
+                NarrowingFilter(valid_from=window.valid_from, valid_to=window.valid_to)
+                if window is not None
+                else None
+            ),
+        )
+        if not scope.nodes:
+            raise NothingToReadError(_SELECTION_NOT_HELD if chosen == "selection" else _EMPTY_GRAPH)
+        documents, without_text = await self._documents(investigation_id, principal, scope.nodes)
+        documents_chars = sum(len(text) for _, _, text, _ in documents)
+        brief, event_handlings, event_scopes, events = await self._evidence_brief(
+            investigation_id, principal, scope, window, documents_chars
+        )
+        # Counted from the asker's view alone: a selected id it does not hold is not counted, as
+        # one that does not exist is not (rule 3). A selected link is counted only when it is in
+        # the scope's links (inside the window, too), so every link counted is one the kept entry
+        # names in `graph_link_ids`, which a later reader must see to be shown it.
+        held = {n.id: n for n in nodes}
+        held_nodes = [held[i] for i in dict.fromkeys(picked_nodes) if i in held]
+        wanted_links = set(picked_links)
+        held_links = {e.id for e in scope.edges if e.id in wanted_links}
+        read = ReadSummary(
+            read_from=chosen,
+            documents=len(documents),
+            documents_without_text=without_text,
+            items=sum(1 for n in scope.nodes if n.type != DOCUMENT_TYPE),
+            links=len(scope.edges),
+            events=events,
+            selected=len(held_nodes) + len(held_links),
+            first_selected=canvas_label(held_nodes[0]) if held_nodes else None,
+        )
+        return _Material(documents, brief, event_handlings, event_scopes, read)
+
+    async def will_read(
+        self,
+        investigation_id: str,
+        principal: Principal,
+        *,
+        selected_node_ids: Sequence[str] = (),
+        selected_link_ids: Sequence[str] = (),
+        window: Interval | None = None,
+        engine: str | None = None,
+        view_node_ids: Sequence[str] | None = None,
+        read_from: ReadFrom | None = None,
+    ) -> WillRead:
+        """What `ask` would read with the same scope, and the engine that would answer, decided as
+        the routing will decide it on the same material (ADR-135 Amendment 12). Nothing is sent.
+        The rules on what may leave for a hosted engine are the routing's own and are not changed:
+        this only says what it would do."""
+        material = await self._gather(
+            investigation_id,
+            principal,
+            selected_node_ids=selected_node_ids,
+            selected_link_ids=selected_link_ids,
+            window=window,
+            view_node_ids=view_node_ids,
+            read_from=read_from,
+        )
+        routed = self._model if isinstance(self._model, RoutedModel) else None
+        if routed is None:
+            return WillRead(
+                read=material.read, engine=LOCAL, engine_label=LOCAL_LABEL,
+                model=self._default_model, unusable=[], refused=None,
+            )  # fmt: skip
+        datasets = await self._datasets.ids_of_case(investigation_id)
+        routes = routed.routes
+        unusable = await self._unusable(investigation_id, principal, routes, material.handling)
+        try:
+            choice = routed.choose(
+                "extraction", self._default_model, material.handling, engine, datasets,
+                await routed.held(datasets),
+            )  # fmt: skip
+        except EngineRefused as refused:
+            return WillRead(
+                read=material.read, engine=None, engine_label=None, model=None,
+                unusable=unusable, refused=str(refused),
+            )  # fmt: skip
+        except ModelEgressRefused as refused:
+            said = await self._egress_words(investigation_id, principal, refused)
+            return WillRead(
+                read=material.read, engine=None, engine_label=None, model=None,
+                unusable=unusable, refused=str(said),
+            )  # fmt: skip
+        label = LOCAL_LABEL if choice.engine == LOCAL else routes.engines[choice.engine].label
+        return WillRead(
+            read=material.read,
+            engine=choice.engine,
+            engine_label=label,
+            model=choice.model,
+            unusable=[u for u in unusable if u.name != choice.engine],
+            refused=None,
+        )
+
+    async def _egress_words(
+        self, investigation_id: str, principal: Principal, refused: ModelEgressRefused
+    ) -> ModelEgressRefused:
+        """The routing's refusal names the case's datasets. A caller the store names none to
+        (ADR-099 Amendment 11) is told the same thing without them (rule 3), as `_unusable` and
+        `GET …/models/engines` tell them; the decision itself is the routing's, unchanged."""
+        if await self._datasets.of_case(investigation_id, principal):
+            return refused
+        return ModelEgressRefused(
+            "No engine may answer this question: what it reads may not be sent to the hosted "
+            "engine, and this deployment has no local extraction model to use instead."
+        )
+
+    async def _unusable(
+        self,
+        investigation_id: str,
+        principal: Principal,
+        routes: ModelRoutes,
+        handling: Handling | None,
+    ) -> list[UnusableEngine]:
+        """The hosted engines the deployment has that cannot answer this question, each with its
+        reason: no model for questions, the case's data may not reach it (judged as
+        `GET …/models/engines` judges it, so the datasets are named only to a caller the store
+        names them to), or the material's handling may not leave."""
+        named = await self._datasets.of_case(investigation_id, principal)
+        case_datasets = await self._datasets.ids_of_case(investigation_id) if named else []
+        held = await self._datasets.egress_of(case_datasets)
+        out: list[UnusableEngine] = []
+        for offered in routes.offered(case_datasets, held):
+            if offered.name == LOCAL:
+                continue
+            reason: str | None = None
+            if "extraction" not in offered.roles:
+                reason = f"{offered.label} has no model for questions on this deployment."
+            elif not offered.available:
+                reason = offered.reason or "Not available for this case."
+            elif handling is None:
+                reason = (
+                    "Not available for this question: what it reads carries more than one "
+                    "handling code, and material whose handling is not one code is never sent to "
+                    "a hosted engine."
+                )
+            elif handling.handling_code not in routes.sendable:
+                reason = (
+                    f"Not available for this question: material with handling code "
+                    f"{handling.handling_code} may not be sent to a hosted engine on this "
+                    "deployment."
+                )
+            if reason is not None:
+                out.append(UnusableEngine(name=offered.name, label=offered.label, reason=reason))
+        return out
 
     async def ask(
         self,
@@ -609,47 +896,48 @@ class QuestionsService:
         engine: str | None = None,
         view_id: str | None = None,
         view_node_ids: Sequence[str] | None = None,
+        read_from: ReadFrom | None = None,
     ) -> QuestionAnswer:
         """`view_id` and `view_node_ids`: asked in a case view the route has let the asker see
         (ADR-144 decision 4). The model reads only what the view holds of the case as the asker
-        sees it, and the entry is kept with the view."""
-        nodes, edges = await self._working_set.visible_membership(investigation_id, principal)
-        if view_node_ids is not None:
-            in_view = set(view_node_ids)
-            nodes = [n for n in nodes if n.id in in_view]
-            edges = [e for e in edges if e.source in in_view and e.target in in_view]
-        documents = await self._documents(investigation_id, principal, nodes)
-        if not documents:
-            raise NoDocumentsError(investigation_id)
-        documents_chars = sum(len(text) for _, _, text, _ in documents)
-        brief, event_handlings, event_scopes = await self._evidence_brief(
+        sees it, and the entry is kept with the view. `read_from`: ADR-098 Amendment 7."""
+        material = await self._gather(
             investigation_id,
             principal,
-            nodes,
-            edges,
-            selected_node_ids,
-            selected_link_ids,
-            window,
-            documents_chars,
+            selected_node_ids=selected_node_ids,
+            selected_link_ids=selected_link_ids,
+            window=window,
+            view_node_ids=view_node_ids,
+            read_from=read_from,
         )
-        numbered = "\n\n".join(
-            f"Document {i}: {title or '(no title)'}\n{text}"
-            for i, (_, title, text, _) in enumerate(documents, start=1)
-        )
-        graph_section = f"{_GRAPH_INSTRUCTIONS}\n\n{brief.text}\n\n" if brief.text else ""
-        result = await self._model.extract(
-            ExtractionRequest(
-                document_id=f"questions:{investigation_id}",
-                text=f"{_INSTRUCTIONS}\n\n{numbered}\n\n{graph_section}Question: {question}",
-                json_schema=_schema(),
-                model=self._default_model,
-                handling=shared_handling([h for _, _, _, h in documents] + list(brief.handlings)),
-                engine=engine,
-                # ADR-136: what is sent is read from the case, so it comes from the case's
-                # datasets; a hosted engine sees it only when every one of them allows it.
-                datasets=await self._datasets.ids_of_case(investigation_id),
+        documents, brief = material.documents, material.brief
+        event_handlings, event_scopes = material.event_handlings, material.event_scopes
+        if documents:
+            numbered = "\n\n".join(
+                f"Document {i}: {title or '(no title)'}\n{text}"
+                for i, (_, title, text, _) in enumerate(documents, start=1)
             )
-        )
+            reading = f"{_INSTRUCTIONS}\n\n{numbered}\n\n"
+        else:
+            reading = f"{_NO_DOCUMENTS_INSTRUCTIONS}\n\n"
+        graph_section = f"{_GRAPH_INSTRUCTIONS}\n\n{brief.text}\n\n" if brief.text else ""
+        try:
+            result = await self._model.extract(
+                ExtractionRequest(
+                    document_id=f"questions:{investigation_id}",
+                    text=f"{reading}{graph_section}Question: {question}",
+                    json_schema=_schema(),
+                    model=self._default_model,
+                    handling=material.handling,
+                    engine=engine,
+                    # ADR-136: what is sent is read from the case, so it comes from the case's
+                    # datasets; a hosted engine sees it only when every one of them allows it.
+                    datasets=await self._datasets.ids_of_case(investigation_id),
+                )
+            )
+        except ModelEgressRefused as refused:
+            # The same words as *will read* gives this caller (rule 3).
+            raise await self._egress_words(investigation_id, principal, refused) from None
         data = result.data
         answer = str(data.get("answer") or "").strip()
         document_numbers = [n for n in data.get("cited") or [] if isinstance(n, int)]
@@ -740,6 +1028,7 @@ class QuestionsService:
             event_handlings=event_handlings,
             event_scopes=event_scopes,
             view_id=view_id,
+            read=material.read,
         )
         await self._store.add(entry)
         titles = {d: t for d, t, _, _ in documents}
@@ -755,6 +1044,7 @@ class QuestionsService:
             graph_citations=graph_citations,
             engine=entry.engine,
             model=entry.model,
+            read=entry.read,
         )
 
     async def _handling_of(
@@ -836,6 +1126,7 @@ class QuestionsService:
                     graph_citations=entry.graph_citations,
                     engine=entry.engine,
                     model=entry.model,
+                    read=entry.read,
                 )
             )
         return out
@@ -924,11 +1215,16 @@ __all__: Sequence[str] = (
     "Citation",
     "GraphCitation",
     "InMemoryQuestionStore",
-    "NoDocumentsError",
+    "NothingToReadError",
     "PostgresQuestionStore",
     "QuestionAccepted",
     "QuestionAnswer",
     "QuestionsLimitExceeded",
     "QuestionsService",
     "QuestionsTooLargeError",
+    "ReadFromUnavailableError",
+    "ReadSummary",
+    "ScopeRequest",
+    "UnusableEngine",
+    "WillRead",
 )

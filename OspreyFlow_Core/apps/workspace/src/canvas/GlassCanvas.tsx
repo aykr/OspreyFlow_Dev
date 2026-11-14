@@ -3282,15 +3282,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       return true;
     }
 
-    // ADR-098 decision 4: the selection's Documents, Group Nodes' members included.
-    const selectedDocumentCount = (() => {
+    // ADR-098 Amendment 7: the selection's items, Group Nodes' members included, for the name of
+    // the view *Ask the model about these* saves (a question needs no Document).
+    const selectedItemCount = (() => {
       let count = 0;
       for (const id of new Set(Array.from(selected).flatMap((s) => {
         const group = foldedViewRef.current?.groups.get(s);
         if (!group) return [s];
         return allGroups.find((c) => c.id === group.communityId)?.members ?? [];
       }))) {
-        if (graph.hasNode(id) && graph.getNodeAttribute(id, "data")?.type === "Document") count += 1;
+        if (graph.hasNode(id)) count += 1;
       }
       return count;
     })();
@@ -3301,8 +3302,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     }
 
     async function askAboutSelected(): Promise<void> {
-      const n = selectedDocumentCount;
-      const saved = await saveSelection(`Questions on ${n} document${n === 1 ? "" : "s"}`);
+      const n = selectedItemCount;
+      const saved = await saveSelection(`Questions on ${n} item${n === 1 ? "" : "s"}`);
       if ("refusal" in saved) {
         sayOnCanvas(saved.refusal);
         return;
@@ -3679,7 +3680,6 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           }
           onSaveView={onViewSaved ? () => setSavingView(true) : undefined}
           onAsk={onAskInView ? () => void askAboutSelected() : undefined}
-          documentCount={selectedDocumentCount}
           litNote={
             litStands && lit ? litNote(lit.window) : undefined
           }

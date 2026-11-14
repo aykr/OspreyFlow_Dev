@@ -196,6 +196,8 @@ ROUTE_RIGHTS = {
     "accept_document_candidates_route": "extract_files",
     "reject_document_candidate_route": "extract_files",
     "ask_question_route": "ask_model",
+    # ADR-098 Amendment 7: what a question would read, and the engine that would answer it.
+    "will_read_route": "ask_model",
     "list_questions_route": "investigate",
     "accept_question_candidate_route": "extract_files",
     "reject_question_candidate_route": "extract_files",

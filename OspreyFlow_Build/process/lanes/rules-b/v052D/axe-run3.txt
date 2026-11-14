@@ -1,0 +1,8 @@
+
+Running 4 tests using 1 worker
+
+[1/4] a11y/every-harness.spec.ts:388:7 › questions-harness.html (dark) has no automated WCAG 2.2 A or AA violations
+[2/4] a11y/every-harness.spec.ts:388:7 › questions-harness.html (light) has no automated WCAG 2.2 A or AA violations
+[3/4] a11y/every-harness.spec.ts:388:7 › questions-harness.html (govuk) has no automated WCAG 2.2 A or AA violations
+[4/4] a11y/every-harness.spec.ts:424:5 › questions-harness.html: every labelled field's name contains its visible label (2.5.3)
+  4 passed (5.6s)

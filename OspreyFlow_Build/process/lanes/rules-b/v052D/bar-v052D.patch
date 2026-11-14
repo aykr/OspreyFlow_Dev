@@ -1,0 +1,147 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/selection.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/selection.spec.ts
+index 6b7c804..445c2ae 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/selection.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/selection.spec.ts
+@@ -128,22 +128,22 @@ test("the selection bar's degrees ask for the routes within them, by keyboard",
+   registerCovered("SELECTION_ACTIONS", "show-links-within-degrees-from-the-selection-bar");
+ });
+ 
+-test("the selection bar's Ask the model about these… saves the selection as a private view, named for its documents, and asks in it (ADR-098, ADR-144)", async ({ page }) => {
++test("the selection bar's Ask the model about these… saves the selection as a private view, named for its items, and asks in it (ADR-098 Amendment 7, ADR-144)", async ({ page }) => {
+   let body: { node_ids: string[]; name?: string } | null = null;
+   await page.route("**/*/investigations/*/views", async (route) => {
+     body = route.request().postDataJSON();
+     await route.fulfill({
+       status: 201,
+       contentType: "application/json",
+-      body: JSON.stringify({ id: "view-q", case_id: "keyboard-fixture", name: "Questions on 1 document", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
++      body: JSON.stringify({ id: "view-q", case_id: "keyboard-fixture", name: "Questions on 2 items", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
+     });
+   });
+   await page.goto("/keyboard/harness.html?fixture=emails");
+   await page.getByRole("application", { name: "Network canvas" }).focus();
+   const bar = page.getByRole("toolbar", { name: "Selection" });
+-  // A selection with no Document is not offered it.
++  // A selection with no Document is offered it too (ADR-098 Amendment 7).
+   await expect.poll(() => selection(page)).not.toEqual([]);
+-  await expect(bar.getByRole("button", { name: "Ask the model about these…" })).toHaveCount(0);
++  await expect(bar.getByRole("button", { name: "Ask the model about these…" })).toHaveCount(1);
+   for (let i = 0; i < 8; i++) {
+     if ((await focused(page)) === "email:ev-1") break;
+     await page.keyboard.press("Control+Shift+ArrowRight"); // every node in turn, linked or not
+@@ -153,7 +153,8 @@ test("the selection bar's Ask the model about these… saves the selection as a
+   await expect.poll(() => selection(page)).toContain("email:ev-1");
+   await bar.getByRole("button", { name: "Ask the model about these…" }).focus();
+   await page.keyboard.press("Enter");
+-  await expect.poll(() => body?.name).toBe("Questions on 1 document");
++  const chosen = (await selection(page)).length;
++  await expect.poll(() => body?.name).toBe(`Questions on ${chosen} item${chosen === 1 ? "" : "s"}`);
+   expect(body!.node_ids).toContain("email:ev-1");
+   await expect
+     .poll(() => page.evaluate(() => (window as unknown as { __KEYBOARD__?: { askedIn?: string | null } }).__KEYBOARD__?.askedIn))
+diff --git a/OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx b/OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx
+index 7865e9f..6fc38f0 100644
+--- a/OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx
+@@ -3282,15 +3282,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
+       return true;
+     }
+ 
+-    // ADR-098 decision 4: the selection's Documents, Group Nodes' members included.
+-    const selectedDocumentCount = (() => {
++    // ADR-098 Amendment 7: the selection's items, Group Nodes' members included, for the name of
++    // the view *Ask the model about these* saves (a question needs no Document).
++    const selectedItemCount = (() => {
+       let count = 0;
+       for (const id of new Set(Array.from(selected).flatMap((s) => {
+         const group = foldedViewRef.current?.groups.get(s);
+         if (!group) return [s];
+         return allGroups.find((c) => c.id === group.communityId)?.members ?? [];
+       }))) {
+-        if (graph.hasNode(id) && graph.getNodeAttribute(id, "data")?.type === "Document") count += 1;
++        if (graph.hasNode(id)) count += 1;
+       }
+       return count;
+     })();
+@@ -3301,8 +3302,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
+     }
+ 
+     async function askAboutSelected(): Promise<void> {
+-      const n = selectedDocumentCount;
+-      const saved = await saveSelection(`Questions on ${n} document${n === 1 ? "" : "s"}`);
++      const n = selectedItemCount;
++      const saved = await saveSelection(`Questions on ${n} item${n === 1 ? "" : "s"}`);
+       if ("refusal" in saved) {
+         sayOnCanvas(saved.refusal);
+         return;
+@@ -3679,7 +3680,6 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
+           }
+           onSaveView={onViewSaved ? () => setSavingView(true) : undefined}
+           onAsk={onAskInView ? () => void askAboutSelected() : undefined}
+-          documentCount={selectedDocumentCount}
+           litNote={
+             litStands && lit ? litNote(lit.window) : undefined
+           }
+diff --git a/OspreyFlow_Core/apps/workspace/src/canvas/SelectionBar.test.tsx b/OspreyFlow_Core/apps/workspace/src/canvas/SelectionBar.test.tsx
+index 8965cee..ec71275 100644
+--- a/OspreyFlow_Core/apps/workspace/src/canvas/SelectionBar.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/canvas/SelectionBar.test.tsx
+@@ -53,7 +53,7 @@ describe("SelectionBar", () => {
+ 
+   it("in a view offers Save as a view, Ask and Clear, and nothing that changes the case", () => {
+     // The owner's ruling of 8 November 2026 (ADR-144 Amendment 2): an opened view is read-only.
+-    render(<SelectionBar count={2} onSaveView={vi.fn()} onAsk={vi.fn()} documentCount={1} onClear={vi.fn()} />);
++    render(<SelectionBar count={2} onSaveView={vi.fn()} onAsk={vi.fn()} onClear={vi.fn()} />);
+     const names = screen.getAllByRole("button").map((b) => b.textContent?.trim());
+     expect(names).toEqual(["Ask the model about these…", "Save as a view", "Clear Esc"]);
+   });
+@@ -111,13 +111,9 @@ describe("SelectionBar: Show links among these", () => {
+     expect(screen.queryByRole("button", { name: "Show links among these" })).toBeNull();
+   });
+ 
+-  it("offers Ask the model about these… only while the selection holds a Document (ADR-098 decision 4)", () => {
++  it("offers Ask the model about these… whatever is selected, Document or not (ADR-098 Amendment 7)", () => {
+     const ask = vi.fn();
+-    const { rerender } = render(
+-      <SelectionBar count={2} onAsk={ask} documentCount={0} onRemove={() => {}} onClear={() => {}} />,
+-    );
+-    expect(screen.queryByRole("button", { name: "Ask the model about these…" })).toBeNull();
+-    rerender(<SelectionBar count={2} onAsk={ask} documentCount={1} onRemove={() => {}} onClear={() => {}} />);
++    render(<SelectionBar count={2} onAsk={ask} onRemove={() => {}} onClear={() => {}} />);
+     fireEvent.click(screen.getByRole("button", { name: "Ask the model about these…" }));
+     expect(ask).toHaveBeenCalledTimes(1);
+   });
+diff --git a/OspreyFlow_Core/apps/workspace/src/canvas/SelectionBar.tsx b/OspreyFlow_Core/apps/workspace/src/canvas/SelectionBar.tsx
+index 17cb2df..5217926 100644
+--- a/OspreyFlow_Core/apps/workspace/src/canvas/SelectionBar.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/canvas/SelectionBar.tsx
+@@ -20,10 +20,9 @@ export interface SelectionBarProps {
+    * them within it (Amendment 4). Offered for two or more. */
+   onLinksAmong?: (degree: number) => void;
+   /** ADR-098 decision 4, ADR-144 decision 4: save the selection as a private view and ask the model
+-   * about its Documents in it. Offered while the selection holds at least one Document
+-   * (`documentCount`). */
++   * about it there. Offered whenever anything is selected (ADR-098 Amendment 7: a question needs no
++   * Document; with none, the model answers from the links and events). */
+   onAsk?: () => void;
+-  documentCount?: number;
+   /** ADR-128 decision 2: what Select what is lit did, said while its selection stands, with the
+    * words "undated links are not included". Absent: the selection did not come from it. */
+   litNote?: string;
+@@ -44,7 +43,6 @@ export function SelectionBar({
+   onSaveView,
+   onLinksAmong,
+   onAsk,
+-  documentCount = 0,
+   litNote,
+   onUndoLit,
+   onRemove,
+@@ -135,7 +133,7 @@ export function SelectionBar({
+           </span>
+         </span>
+       )}
+-      {onAsk && documentCount > 0 && (
++      {onAsk && (
+         <button type="button" className="btn btn--quiet" onClick={onAsk}>
+           Ask the model about these…
+         </button>

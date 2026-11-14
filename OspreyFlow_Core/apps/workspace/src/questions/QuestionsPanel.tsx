@@ -1,8 +1,10 @@
-// The case's questions to the model (ADR-098 decision 4): the analyst asks, the model answers from
-// the Documents in the case's view that the analyst can see, citing them, and what it proposes is
-// listed with Accept and Reject — inferred until accepted, and accepted onto this case's canvas.
-// The conversation is the case's, and shown to each reader as far as they may see it.
-import { useEffect, useState } from "react";
+// The case's questions to the model (ADR-098 decision 4): the analyst chooses what to read from
+// (ADR-098 Amendment 7: *Selected items*, *Everything on the graph*, *Whole case*), is told by the
+// Conduit what that will read and which engine will answer (never counted here), asks, and the
+// model answers from those Documents and graph facts, citing them; what it proposes is listed with
+// Accept and Reject — inferred until accepted, and accepted onto this case's canvas. The
+// conversation is the case's, and shown to each reader as far as they may see it.
+import { useEffect, useId, useRef, useState } from "react";
 
 import { AnsweredBy, EnginePicker, useEngineChoice } from "../models/engines";
 import { candidateLabel, candidateSource, type EmailCandidate } from "../inspector/linkEventsApi";
@@ -12,7 +14,11 @@ import {
   askQuestion,
   listQuestions,
   rejectProposal,
+  willRead,
   type QuestionAnswer,
+  type ReadFrom,
+  type ReadSummary,
+  type WillRead,
 } from "./questionsApi";
 
 export interface QuestionsPanelProps {
@@ -36,6 +42,54 @@ export interface QuestionsPanelProps {
   /** Leave the view's conversation for the case's own. */
   onLeaveView?: () => void;
 }
+
+/** *Whole case* until the case's search is called (part D(iii)): offered, disabled, with why. */
+/** The server's own words (`ReadFromUnavailableError.words`, held to these by
+ * `test_questions_read_from.py`), shown before anything is asked. */
+export const WHOLE_CASE_UNAVAILABLE =
+  "Whole case is not available yet: it will read the case's datasets through the case's search. Choose Selected items or Everything on the graph.";
+
+const READ_FROM_CHOICES: { value: ReadFrom; label: string }[] = [
+  { value: "selection", label: "Selected items" },
+  { value: "graph", label: "Everything on the graph" },
+  { value: "case", label: "Whole case" },
+];
+
+function counted(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** "About: Tarbuck, Kyle and 1 other", or "About: everything on the graph", from the Conduit's
+ * summary (the first selected item's name is the Conduit's, as the asker may see it). */
+export function aboutWords(read: ReadSummary): string {
+  if (read.read_from === "graph") return "About: everything on the graph";
+  if (read.first_selected === null) return `About: ${counted(read.selected, "selected item", "selected items")}`;
+  const others = read.selected - 1;
+  return others > 0
+    ? `About: ${read.first_selected} and ${counted(others, "other", "others")}`
+    : `About: ${read.first_selected}`;
+}
+
+/** What was or will be read, in words: the documents (and those with no text, which are not), the
+ * other items, the links and the events counted on them. */
+export function readWords(read: ReadSummary): string {
+  const parts = [
+    counted(read.documents, "document", "documents"),
+    counted(read.items, "item", "items"),
+    counted(read.links, "link", "links"),
+  ];
+  if (read.events > 0) parts.push(counted(read.events, "event", "events"));
+  const listed = `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  const unread =
+    read.documents_without_text > 0
+      ? ` (${counted(read.documents_without_text, "document has", "documents have")} no text to read)`
+      : "";
+  return `${listed}${unread}`;
+}
+
+/** How long the scope must stay still before *will read* is asked (each answer reads the scope's
+ * documents and writes an audit row). */
+export const WILL_READ_DEBOUNCE_MS = 300;
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -65,6 +119,27 @@ export function QuestionsPanel({
   const [problem, setProblem] = useState<string | null>(null);
   // ADR-135 decision 5: the engine to ask, among those offered for extraction.
   const engineChoice = useEngineChoice(apiBaseUrl, bearerToken, "extraction", investigationId);
+  // ADR-098 Amendment 7: what to read from. The selection is the default when there is one; a
+  // choice of Selected items with nothing selected falls back to the graph.
+  const nodeIds = selection?.nodeIds ?? [];
+  const linkIds = selection?.linkIds ?? [];
+  const hasSelection = nodeIds.length + linkIds.length > 0;
+  const [picked, setPicked] = useState<ReadFrom | null>(null);
+  const readFrom: ReadFrom =
+    picked === "graph" || (picked === "selection" && hasSelection) ? picked : hasSelection ? "selection" : "graph";
+  // What will be read and who will answer, from the Conduit (`will-read`), for the scope as it is now.
+  const [will, setWill] = useState<WillRead | null>(null);
+  const [willProblem, setWillProblem] = useState<string | null>(null);
+  const [willAsked, setWillAsked] = useState(0);
+  // Keyed on the body *will read* actually sends: under Everything on the graph a click on the
+  // canvas changes nothing sent, so asks nothing. The timeline window is read as the panel draws,
+  // and again when the question box takes focus (`willAsked`), as the question itself reads it.
+  const sentNodeIds = readFrom === "selection" ? nodeIds : [];
+  const sentLinkIds = readFrom === "selection" ? linkIds : [];
+  const timelineWindow = getTimelineWindow?.() ?? null;
+  const askedWindow = useRef<string>("");
+  const scopeKey = JSON.stringify([readFrom, sentNodeIds, sentLinkIds, timelineWindow, engineChoice.chosen, viewId, investigationId]);
+  const radioName = useId();
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +156,38 @@ export function QuestionsPanel({
     };
   }, [apiBaseUrl, bearerToken, investigationId, viewId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    // The last answer is for another scope: it is not shown, and Ask waits, until this one comes.
+    setWill(null);
+    setWillProblem(null);
+    // Debounced: a run of changes (selecting several items) asks once, after the last.
+    const timer = window.setTimeout(() => {
+      const sentWindow = getTimelineWindow?.() ?? null;
+      askedWindow.current = JSON.stringify(sentWindow);
+      willRead(apiBaseUrl, bearerToken, investigationId, {
+        nodeIds: sentNodeIds,
+        linkIds: sentLinkIds,
+        window: sentWindow,
+        engine: engineChoice.chosen,
+        viewId,
+        readFrom,
+      })
+        .then((found) => !cancelled && setWill(found))
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          setWill(null);
+          setWillProblem(err instanceof Error ? err.message : String(err));
+        });
+    }, WILL_READ_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // `scopeKey` stands for the scope's own values; `willAsked` asks again after a question.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiBaseUrl, bearerToken, scopeKey, willAsked]);
+
   async function ask(): Promise<void> {
     const text = question.trim();
     if (!text || asking) return;
@@ -88,14 +195,16 @@ export function QuestionsPanel({
     setProblem(null);
     try {
       const answered = await askQuestion(apiBaseUrl, bearerToken, investigationId, text, {
-        nodeIds: selection?.nodeIds ?? [],
-        linkIds: selection?.linkIds ?? [],
+        nodeIds: sentNodeIds,
+        linkIds: sentLinkIds,
         window: getTimelineWindow?.() ?? null,
         engine: engineChoice.chosen,
         viewId,
+        readFrom,
       });
       setEntries((prev) => [...(prev ?? []), answered]);
       setQuestion("");
+      setWillAsked((n) => n + 1);
     } catch (err) {
       setProblem(err instanceof Error ? err.message : String(err));
     } finally {
@@ -146,9 +255,9 @@ export function QuestionsPanel({
         </p>
       )}
       <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
-        The model reads the documents in this {view ? "view" : "case"} that you can see, whole, and the links around
-        what you have selected (the whole view when nothing is). What it proposes is a suggestion
-        until you accept it.
+        The model reads what you choose below, as far as you may see it: the documents whole, the
+        items, their links and the events on them. What it proposes is a suggestion until you
+        accept it.
       </p>
       {entries === null && <p style={{ margin: 0 }}>Loading the questions…</p>}
       {entries !== null && entries.length === 0 && (
@@ -164,6 +273,7 @@ export function QuestionsPanel({
               </p>
               <AnswerText entry={entry} onSelectFacts={onSelectFacts} />
               <AnsweredBy engine={entry.engine} model={entry.model} engines={engineChoice.engines} />
+              {entry.read && <ReadLine read={entry.read} />}
               {entry.citations.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)", alignItems: "center" }}>
                   <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>Draws on</span>
@@ -236,7 +346,78 @@ export function QuestionsPanel({
         }}
         style={{ display: "grid", gap: "var(--sp-8)" }}
       >
-        <EnginePicker choice={engineChoice} id="questions-engine" disabled={asking} />
+        {/* Rows far enough apart that each radio keeps its 24px target (WCAG 2.2, 2.5.8). */}
+        <fieldset style={{ border: 0, margin: 0, padding: 0, display: "grid", gap: "var(--sp-8)" }}>
+          <legend style={{ fontSize: "var(--fs-12)", padding: 0, marginBottom: "var(--sp-4)" }}>Read from</legend>
+          {READ_FROM_CHOICES.map((choice) => {
+            const unavailable = choice.value === "case" || (choice.value === "selection" && !hasSelection);
+            const id = `${radioName}-${choice.value}`;
+            return (
+              <span key={choice.value} style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+                <input
+                  type="radio"
+                  id={id}
+                  name={radioName}
+                  value={choice.value}
+                  checked={readFrom === choice.value}
+                  disabled={asking || unavailable}
+                  aria-describedby={choice.value === "case" ? `${radioName}-case-why` : undefined}
+                  onChange={() => setPicked(choice.value)}
+                />
+                <label htmlFor={id}>
+                  {choice.label}
+                  {choice.value === "selection" && !hasSelection && (
+                    <span style={{ color: "var(--text-tertiary)" }}> (nothing is selected)</span>
+                  )}
+                </label>
+              </span>
+            );
+          })}
+          <p id={`${radioName}-case-why`} style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
+            {WHOLE_CASE_UNAVAILABLE}
+          </p>
+        </fieldset>
+        <div aria-live="polite" data-testid="will-read" style={{ display: "grid", gap: "var(--sp-2)" }}>
+          {will === null && willProblem === null && (
+            <p style={{ margin: 0, color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>Working out what will be read…</p>
+          )}
+          {willProblem !== null && <p style={{ margin: 0 }}>{willProblem}</p>}
+          {will !== null && willProblem === null && (
+            <>
+              <p style={{ margin: 0 }}>{aboutWords(will.read)}</p>
+              <p style={{ margin: 0 }}>Will read: {readWords(will.read)}</p>
+              {will.read.documents === 0 && (
+                <p style={{ margin: 0, color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
+                  No documents will be read: the answer will come from the links and events.
+                </p>
+              )}
+              {will.engine_label !== null ? (
+                <p style={{ margin: 0 }}>
+                  Will be answered by {will.engine_label}
+                  {will.model ? ` (${will.model})` : ""}
+                </p>
+              ) : (
+                <p style={{ margin: 0 }}>{will.refused ?? "No engine may answer this question."}</p>
+              )}
+            </>
+          )}
+        </div>
+        {engineChoice.failed && (
+          <p style={{ margin: 0, color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>
+            The list of model engines could not be loaded, so there is no choice of engine: the
+            question goes to the deployment&rsquo;s default.
+          </p>
+        )}
+        <EnginePicker choice={engineChoice} id="questions-engine" disabled={asking} reasons={will?.unusable} />
+        {engineChoice.chosen === null && will !== null && will.unusable.length > 0 && (
+          <div style={{ display: "grid", gap: "var(--sp-2)" }}>
+            {will.unusable.map((engine) => (
+              <p key={engine.name} style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
+                {`${engine.label}: ${engine.reason}`}
+              </p>
+            ))}
+          </div>
+        )}
         <label htmlFor="questions-input" style={{ fontSize: "var(--fs-12)" }}>
           Your question
         </label>
@@ -248,6 +429,11 @@ export function QuestionsPanel({
           value={question}
           disabled={asking}
           onChange={(e) => setQuestion(e.target.value)}
+          // The timeline window may have moved without the panel being drawn again: if it has,
+          // *will read* is asked again before the question is, as the question will read it.
+          onFocus={() => {
+            if (JSON.stringify(getTimelineWindow?.() ?? null) !== askedWindow.current) setWillAsked((n) => n + 1);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
@@ -261,7 +447,7 @@ export function QuestionsPanel({
           </button>
           {asking && (
             <span role="status" style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
-              The model is reading the documents…
+              The model is reading…
             </span>
           )}
         </div>
@@ -272,6 +458,18 @@ export function QuestionsPanel({
         </p>
       )}
     </section>
+  );
+}
+
+/** What an answer read, from its kept summary: with no document, the answer says it came from the
+ * links and events (ADR-098 Amendment 7). */
+function ReadLine({ read }: { read: ReadSummary }) {
+  return (
+    <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
+      {read.documents === 0
+        ? `No documents were read: the answer comes from the links and events (read: ${readWords(read)}).`
+        : `Read: ${readWords(read)}.`}
+    </p>
   );
 }
 
