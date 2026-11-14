@@ -1089,7 +1089,8 @@ is as much a source as a row.
 **Where people sign in with Entra ID** (a deployment on a shared platform), your rules, hotlists and
 watches are judged at another person's load, and your watch's own runs happen, only while you have
 used OspreyFlow within the last 24 hours. Otherwise, at a load your hotlists and watches are marked
-stopped until the first load after you sign in again: the administration guide, §6a.7, says why.
+*Stopped*, without a reason shown, until the first load after you sign in again: the administration
+guide, §6a.7, says why.
 
 ### 7.6 The rule editor: a rule written as a sentence
 

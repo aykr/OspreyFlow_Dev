@@ -1,0 +1,5 @@
+# plant: owner_tenant_as_not_held (OspreyFlow_Core/services/api/entra_people.py), at aeaf809 with the plant uncommitted; stack e, the lease admin took at 2026-11-14T04:09Z; fresh PYTHONPYCACHEPREFIX
+# run: ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py -k 'another_tenant'
+E       Failed: DID NOT RAISE IdentityAdminRefused
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_the_store_refuses_an_owner_read_for_another_tenant
+1 failed, 2 passed, 20 deselected in 2.92s

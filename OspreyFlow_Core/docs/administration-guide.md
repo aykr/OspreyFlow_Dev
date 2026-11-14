@@ -1613,7 +1613,8 @@ and what happens next, depends on what was asked:
   load". The check does not come back for that day;
 - **at a load**: the owner's hotlists and watches are marked stopped, as for any owner who cannot be
   acted as, and are made active again at the first load after they sign in; a stopped watch's own
-  runs wait for that load. Their rules are not judged at that load.
+  runs wait for that load. Their rules are not judged at that load. The watch list shows *Stopped*
+  and does not yet say why.
 
 **Other refusals.** An owner disabled in *Admin › People* is refused, and three such refusals in a
 row pause a schedule, as on Keycloak; so is an owner *Admin › People* does not hold ("is not a

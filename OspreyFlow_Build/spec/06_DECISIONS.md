@@ -37766,7 +37766,8 @@ part of this amendment.
      - the daily KYC check's audit: `KYC_OUT_OF_DATE_NEXT`, that day's lapses not judged by the check.
    - At a load, the callers that collapse a refusal to `None` (anyone else's rules, hotlists and watches, and the
      Rescreener) say what they said before, that the owner could not be resolved, and leave the owner's items out: a
-     hotlist or watch is marked stopped until a load after the owner signs in, as ADR-044's path has always done.
+     hotlist or watch is marked stopped until a load after the owner signs in, as ADR-044's path has always done. The
+     watch list shows *Stopped* without a reason, for this as for every ADR-044 stop: saying why is a CARRIES row.
    - An owner not held is said as "is not a person Admin › People holds".
    - The schedule's notice has a kind of its own, `owner_out_of_date`: "did not run: its owner has not signed in to
      OspreyFlow within the last 24 hours. It runs again once they sign in."
