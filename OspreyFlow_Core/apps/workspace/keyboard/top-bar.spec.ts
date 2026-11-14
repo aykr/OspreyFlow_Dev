@@ -219,8 +219,8 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
       await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
       await page.addStyleTag({ content: WIDER_FONT });
       // The wider font changes the bar's height or its items' widths; the bar folds further on its own.
-      await expect.poll(() => page.locator("header.top-bar").evaluate((bar) => (bar as HTMLElement).dataset.folded ?? "")).not.toBe("");
       await oneLine(page, 1024);
+      await expect(page.locator("header.top-bar")).toHaveAttribute("data-folded", /.+/);
     });
   }
 }
