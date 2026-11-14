@@ -111,5 +111,17 @@ Not planted: the render giving no pod the address while it makes the domain; it 
 ../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:118: AssertionError
 1 failed, 4 passed in 1.42s
 
-## 17. Green
+## 18. The CronJobs' modules: the test as at this commit, on main's tree (rules' index step not landed)
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:118: AssertionError
+1 failed, 4 passed in 1.39s
+
+## 19. Green with rules' two modules in place (taken from lane/rules-v052-index at a879b3c, working tree only, removed after)
+5 passed in 1.44s
+
+## 20. Render: the drift check's CronJob dropped, the guide still naming it (rules' modules in place)
+-    "ospreyflow-search-drift": ("search-drift", "scripts.search_index_drift"),
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:112: AssertionError
+1 failed, 4 passed in 1.40s
+
+## 17. Green (before the modules check; 18 and 19 supersede it)
 5 passed in 1.37s
