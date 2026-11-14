@@ -961,6 +961,24 @@ def test_the_live_wrapper_gives_install_verify_r1s_own_environment(tmp_path: Pat
     assert named["ARGV"][1:] == ["verify", "--candidate", "abc", "--allow-pending"]
 
 
+def test_spec08s_live_wrapper_gives_spec08_poc_r1s_own_environment(tmp_path: Path) -> None:
+    """The orchestrator's review of step 6's sheet: spec08_poc.py's own command (`r1_kind.sh py ... run`) handed its
+    arguments to r1_kind.py's argparse; spec08_live.sh runs it with what r1_kind.sh sets for its own Python."""
+    here = Path(iv.__file__).resolve().parent
+    ours = _env_seen(here / "spec08_live.sh", ["-k", "door"], tmp_path / "a")
+    import os
+
+    gates = Path(os.environ.get("OSPREY_V052_R1_GATES") or here.parents[1] / "platform" / "gates")
+    r1 = _env_seen(gates / "r1_kind.sh", ["py", "x"], tmp_path / "b")
+    for key in ("KUBECONFIG", "OSPREY_PLATFORM_FOLDERS"):
+        assert ours[key] == r1[key].replace(str(tmp_path / "b"), str(tmp_path / "a")), key
+    assert ours["PATH"].split(":")[0] == r1["PATH"].split(":")[0].replace(str(tmp_path / "b"), str(tmp_path / "a"))
+    assert Path(ours["ARGV"][0]) == here / "spec08_poc.py" and ours["ARGV"][1:] == ["run", "-k", "door"]
+    assert ours["PYTHONPATH"].split(":")[0] == ".", ours["PYTHONPATH"]  # run() imports scripts.seed_ingest_folder
+    doc = (here / "spec08_poc.py").read_text(encoding="utf-8").split('"""', 2)[1]
+    assert "spec08_live.sh" in doc and "r1_kind.sh py ../../case-b" not in doc
+
+
 def _copy_repo(tmp: Path) -> tuple[Any, str, str, str]:
     """A stack_lease copy: each run commits afresh (`commit --allow-empty`) on top of the last."""
     import subprocess

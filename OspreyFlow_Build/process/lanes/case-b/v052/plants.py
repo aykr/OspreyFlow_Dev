@@ -80,6 +80,11 @@ PLANTS: list[tuple[str, str, str, str]] = [
     ('install_verify.py', '        found += [c["image"] for c in w.get("initContainers") or []]', '        pass', "init containers' references left out of the candidate's"),
     ('install_verify.py', '            if obj:\n                return read_workload', '            if obj and kind == "deployment":\n                return read_workload', 'a StatefulSet is never found'),
     ('install_verify.py', '        for field in ("updated", "ready", "available"):\n            if got.get(field) != w["count"]:', '        for field in ("updated", "available"):\n            if got.get(field) != w["count"]:', 'a workload not ready passes'),
+    ('spec08_live.sh', 'export PATH="$HOME/osprey-runs/platform.tools/bin:$PATH" KUBECONFIG="$STATE/kubeconfig"', 'export PATH="$HOME/osprey-runs/platform.tools/bin:$PATH"', "spec08's wrapper without r1's kubeconfig"),
+    ('spec08_live.sh', 'PYTHONPATH=.:packages:cli exec .venv/bin/python "$HERE/spec08_poc.py" run "$@"', 'PYTHONPATH=packages:cli exec .venv/bin/python "$HERE/spec08_poc.py" run "$@"', "spec08's wrapper without the Core on the path (run() imports scripts.)"),
+    ('spec08_poc.py', '    bash ../OspreyFlow_Build/process/lanes/case-b/v052/spec08_live.sh [pytest arguments]', '    bash ../OspreyFlow_Build/process/lanes/platform/gates/r1_kind.sh py ../../case-b/v052/spec08_poc.py run', "spec08's docstring names r1_kind.sh py again"),
+    ('spec08_poc.py', '    "test_a7_an_unknown_field_name_is_refused_rather_than_ignored": None,', '    "test_a7_an_unknown_field_name_is_refused_rather_than_ignored": NO_SEED,', "A7's refusal left waiting on the seed"),
+    ('spec08_poc.py', '    "test_the_stream_opens_through_the_proxy_with_a_ticket": None,', '    "test_the_stream_opens_through_the_proxy_with_a_ticket": NO_SEED,', "the stream's seed-free half left waiting on the seed"),
 ]
 
 
@@ -137,11 +142,40 @@ def route_plants(tmp: Path) -> int:
     return bad
 
 
-def run(folder: Path) -> tuple[int, str]:
+#: Plants in a copy of spec 08's module (the over-the-wire proof), which the driver's tests read by
+#: OSPREY_V052_SPEC08_MODULE: a seeded step moved back into a seed-free half split from its seeded case.
+SPEC08_PLANTS: list[tuple[str, str, str]] = [
+    ('        assert opening["op"] == "snapshot" and opening["nodes"] == [], opening\n\n\ndef test_the_delta_stream',
+     '        assert opening["op"] == "snapshot" and opening["nodes"] == [], opening\n        _find(analyst, PRINCIPAL_SUBJECT_PRISON_NUMBER)\n\n\ndef test_the_delta_stream',
+     "the stream's seed-free half finds a seeded subject"),
+    ('    assert hostile.status_code >= 400, (\n        f"a field name carrying SQL was accepted: {hostile.status_code} {hostile.text[:200]}"\n    )\n\n\ndef test_a7_the_events',
+     '    assert hostile.status_code >= 400, (\n        f"a field name carrying SQL was accepted: {hostile.status_code} {hostile.text[:200]}"\n    )\n    assert analyst.post("/v1/analytics/cross-filter", json={}).json()["category"]["total"] > 0\n\n\ndef test_a7_the_events',
+     "A7's refusal half counts the seeded events"),
+]
+
+
+def spec08_plants(tmp: Path, base: Path) -> int:
+    original = MODULE.read_text()
+    bad = 0
+    for i, (line, planted, what) in enumerate(SPEC08_PLANTS):
+        if original.count(line) != 1:
+            print(f"MISS  {what}: the line is not in {MODULE.name} exactly once")
+            bad += 1
+            continue
+        folder = tmp / f"m{i}"
+        shutil.copytree(base, folder)
+        (folder / MODULE.name).write_text(original.replace(line, planted))
+        code, said = run(folder, folder / MODULE.name)
+        print(f"{'RED  ' if code else 'GREEN'} {what}: {said}")
+        bad += code == 0
+    return bad
+
+
+def run(folder: Path, module: Path | None = None) -> tuple[int, str]:
     done = subprocess.run(
         [sys.executable, "-m", "pytest", "-c", str(HERE.parents[3] / "pytest.ini"), "-p", "no:cacheprovider", "-q", "-x",
          "-p", "no:randomly", str(folder)], capture_output=True, text=True, check=False,
-        env={**os.environ, "OSPREY_V052_SPEC08_MODULE": str(HERE.parents[3] / "tests" / "scenarios" / "test_phase8_exit_over_the_wire.py"),
+        env={**os.environ, "OSPREY_V052_SPEC08_MODULE": str(module or HERE.parents[3] / "tests" / "scenarios" / "test_phase8_exit_over_the_wire.py"),
              "OSPREY_V052_R1_GATES": str(HERE.parents[1] / "platform" / "gates"),
              # A fresh bytecode cache for every run (the orchestrator's CARRIES, 1cd8b5a): a .pyc is matched to its
              # source by mtime to the second and size, so a rewrite within a second could run the last plant's code.
@@ -171,6 +205,7 @@ def main() -> int:
             print(f"{'RED  ' if code else 'GREEN'} {what}: {said}")
             bad += code == 0
         bad += route_plants(Path(tmp))
+        bad += spec08_plants(Path(tmp), base)
     print("every plant red, unplanted green" if not bad else f"{bad} plant(s) not shown red")
     return 1 if bad else 0
 

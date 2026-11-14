@@ -77,14 +77,18 @@ poc with its reason, and **stops the run** if the module (as written, whatever `
 disposition or a disposition for a gone case. The runner makes an empty case and uploads the CDR fixture through
 `POST .../ingest/source-files`, the analyst's own door.
 
-**12 of 27 cases run; 15 rest on a seed ("no seed path on poc").** The 15 rest on the `hmp`, `fixture-corp` and
+**14 of 29 cases run; 15 rest on a seed ("no seed path on poc").** The 15 rest on the `hmp`, `fixture-corp` and
 `scenarios` seed datasets, and `harness.apply`'s seed is compose-only. What runs: the door, the ingest root and the
 Studio, B1–B3 and the find-and-open case on their load, A1's grid, redraw and centroid, and B13 (both) and B14 on
-the uploaded seizure record. B13–B14 were broken on every shape until c6c6044 (their fixture asked `POST
+the uploaded seizure record, and two seed-free halves split from seeded cases (the orchestrator's review of
+step 6's sheet): the WebSocket through the poc ingress (ticket, upgrade and the empty snapshot; its delta waits on
+the seed) and A7's refusal of a hostile field name (the events table's survival waits). B13–B14 were broken on every shape until c6c6044 (their fixture asked `POST
 /v1/hotlists` and `GET /v1/alerts`, moved under the case); B12 and B19–B20 had drifted the same way. All five calls are
 fixed, and `tests/scenarios/test_over_the_wire_routes_exist.py` holds every call in the module to the Conduit's routes.
 
-`python spec08_poc.py table` prints the dispositions.
+`python spec08_poc.py table` prints the dispositions. On the kind cluster, under a lease, from OspreyFlow_Core:
+`bash ../OspreyFlow_Build/process/lanes/case-b/v052/spec08_live.sh [pytest arguments]` (r1_kind.sh's own environment;
+`r1_kind.sh py` hands its arguments to r1_kind.py's argparse and cannot run it).
 
 ## Red first
 

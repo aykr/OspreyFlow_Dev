@@ -67,7 +67,7 @@ sightings into a rendered deployment.
 | A6 | **over the wire** | `test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` — not an extraction row |
 | B6 | **over the wire + the Glass** | `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; `apps/workspace/live/scenario-b-document.spec.ts` for the highlight in place |
 | B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_at_its_address_in_its_own_case_with_its_entities` |
-| A7 | **over the wire** | `test_a7_reports_can_be_filtered_to_one_item_category`, `test_a7_an_unknown_field_name_is_refused_rather_than_ignored` — the "Known gap" below is closed by `EventFilter.value_filters` |
+| A7 | **over the wire** | `test_a7_reports_can_be_filtered_to_one_item_category`, `test_a7_an_unknown_field_name_is_refused_rather_than_ignored`, `test_a7_the_events_table_survives_a_refused_field_name` (the refusal split from the table's survival, so the refusal runs where there is no seed) — the "Known gap" below is closed by `EventFilter.value_filters` |
 | A15 | **over the wire** | `test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification` |
 
 **Every row, by tier, on the closing-pass proof.** "Rendered" is

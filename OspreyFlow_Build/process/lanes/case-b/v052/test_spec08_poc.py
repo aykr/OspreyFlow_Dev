@@ -18,7 +18,7 @@ import spec08_poc as s8
 
 def test_every_case_of_the_module_has_a_disposition_and_no_other() -> None:
     cases = s8.cases_in(s8.MODULE.read_text(encoding="utf-8"))
-    assert len(cases) >= 27, cases  # a floor, so the reading cannot find nothing and agree
+    assert len(cases) >= 29, cases  # a floor, so the reading cannot find nothing and agree
     s8.check_cases(cases)
 
 
@@ -43,8 +43,8 @@ def test_the_counts_reported_are_the_tables() -> None:
     """The figures the README, the friction row and the orchestrator were given."""
     runs = [c for c, r in s8.DISPOSITIONS.items() if r is None]
     seeded = [c for c, r in s8.DISPOSITIONS.items() if r == s8.NO_SEED]
-    assert (len(runs), len(seeded)) == (12, 15)
-    assert len(runs) + len(seeded) == len(s8.DISPOSITIONS) == 27
+    assert (len(runs), len(seeded)) == (14, 15)
+    assert len(runs) + len(seeded) == len(s8.DISPOSITIONS) == 29
     assert "test_b14_an_alert_opens_at_its_address_in_its_own_case_with_its_entities" in runs
     assert "test_b7_a_shared_messaging_handle_is_common_to_the_second_cohort" in seeded
 
@@ -56,6 +56,33 @@ class Item:
 
     def add_marker(self, marker: Any) -> None:
         self.markers.append(marker)
+
+
+#: The seed-free halves split from seeded cases (the orchestrator's review of step 6's sheet), each with its seeded half.
+SPLIT = {
+    "test_the_stream_opens_through_the_proxy_with_a_ticket": "test_the_delta_stream_is_reachable_through_the_proxy",
+    "test_a7_an_unknown_field_name_is_refused_rather_than_ignored": "test_a7_the_events_table_survives_a_refused_field_name",
+}
+#: What a case does that rests on a seed: it finds a seeded identifier, or reads a count the seed put there.
+SEEDED = ("_find(", "_in_case(", '["total"] > 0', "PRINCIPAL_SUBJECT")
+
+
+def _case_source(name: str) -> str:
+    import ast
+
+    source = s8.MODULE.read_text(encoding="utf-8")
+    node = next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == name)
+    return ast.get_source_segment(source, node) or ""
+
+
+@pytest.mark.parametrize("ours, seeded", list(SPLIT.items()))
+def test_a_seed_free_half_runs_on_poc_and_reaches_no_seed(ours: str, seeded: str) -> None:
+    """Each split case's seed-free half runs on poc, and its body does nothing that rests on a seed (red if a seeded
+    step is moved back into it); its seeded half still waits on the seed and holds what the half left out."""
+    assert s8.DISPOSITIONS[ours] is None and s8.DISPOSITIONS[seeded] == s8.NO_SEED
+    body = _case_source(ours)
+    assert not [w for w in SEEDED if w in body], [w for w in SEEDED if w in body]
+    assert [w for w in SEEDED if w in _case_source(seeded)], seeded
 
 
 def test_the_plugin_skips_exactly_the_cases_that_cannot_run_and_swaps_the_sign_in() -> None:
