@@ -97,3 +97,4 @@ b925385 cb54a90 case-b lease-tests, with its stack_lease.sh diff
 fd96c11 d8971cd platform-b v052-sheet
 4116841 252df74 admin audit1 (ruling 1, option A), three guide PDFs reprinted
 296ab81 a46e2ee rules v052-index (step 3c), with v052-index_ci_yml.diff (the owner's word)
+c1373da 7ba5f37 studio v052-search (step 3d), with its two diffs (the owner's word)
