@@ -1,0 +1,67 @@
+diff -ru a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
+--- a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md	2026-11-14 16:21:41
++++ b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md	2026-11-14 16:21:41
+@@ -2937,7 +2937,7 @@
+ | Your install | How it is updated |
+ | --- | --- |
+ | Lite, installed from a release tag | `ospreyflow update` (below) |
+-| Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so. `start --build` does not rebuild the search index, so where the deployment searches with OpenSearch, rebuild it after the first `start --build` onto v0.5.2: in the deployment's own folder (`~/.ospreyflow/deployments/<name>/`), `docker compose --env-file deployment.env -f compose.yaml exec -T api python -m scripts.rebuild_search_index`, as `apply` runs it; until then search is limited to exact identifiers |
++| Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so. Where the deployment searches with OpenSearch, `start --build` rebuilds the search index from the graph as its last step, as `install` and `update` do. If the rebuild fails it says so: the stack is up, search is limited to exact identifiers, and running `start --build` again rebuilds it |
+ | Small | **Not yet by `update`**: its first step, the backup, refuses a deployment on a managed database (section 13). The cloud's own backups protect the data |
+ | Small on your own server, installed from a release tag | `ospreyflow update`, as Lite: its backup is written to `<server.backups>/<deployment>/` first |
+ | Enterprise | Move the checkout to the release's tag and run the install again: the chart is upgraded in place, every password and account kept |
+diff -ru a/OspreyFlow_Build/tests/test_guides_step5_freeze.py b/OspreyFlow_Build/tests/test_guides_step5_freeze.py
+--- a/OspreyFlow_Build/tests/test_guides_step5_freeze.py	2026-11-14 16:21:41
++++ b/OspreyFlow_Build/tests/test_guides_step5_freeze.py	2026-11-14 16:22:15
+@@ -3,8 +3,8 @@
+ 
+ - step U, ADR-150 Amendment 2: the search index rebuilt from the graph wherever OpenSearch is searched, on install
+   (`harness/apply.py`), on update (`harness/update.py`) and in the cloud-platform `INSTALL.md` (`runbooks.py`'s
+-  `_SEARCH_REBUILD`); the install's app registrations counted (`entra_registrations`); `start --build`, which does
+-  not rebuild;
++  `_SEARCH_REBUILD`); the install's app registrations counted (`entra_registrations`); and, by step S9,
++  `start --build` (`scripts/refresh.py`), last;
+ - step 3f′, the batch job's limits;
+ - step 3h, ADR-124 Amendment 19: clusters worked out per reader as nodes enter, never shared;
+ - R7, the mark for suppression as built.
+@@ -71,16 +71,19 @@
+             "before v0.5.2 is not one v0.5.2 writes to). If anything fails after the backup it **rolls back**") in guide("administration")  # fmt: skip
+ 
+ 
+-def test_start_build_does_not_rebuild_and_the_guide_says_how_to() -> None:
+-    refresh = read("scripts/refresh.py")
+-    assert "search_rebuild" not in refresh and "rebuild_search_index" not in refresh, "start --build rebuilds now"
+-    assert '"scripts.rebuild_search_index"' in read("harness/search_rebuild.py")
+-    assert '"--env-file", str(compose_file.parent / "deployment.env"), "-f", str(compose_file),' in fold(read("harness/apply.py"))
++def test_start_build_rebuilds_last_and_the_guide_says_so() -> None:
++    body = function("scripts/refresh.py", "_refresh")
++    rebuilt = function("scripts/refresh.py", "_search_index_rebuilt")
++    assert body.rstrip().endswith('_search_index_rebuilt(directory / "compose.yaml", compose, run)'), "the last step"
++    assert body.index("code = register(") < body.index("_search_index_rebuilt("), "after the sign-in accounts"
++    assert "if not search_rebuild.renders_opensearch(compose_file): return" in rebuilt
++    assert "run(search_rebuild.rebuild_argv(compose))" in rebuilt
++    assert "so search answers only exact identifiers" in rebuilt
+     text = guide("administration")
+-    assert ("`start --build` does not rebuild the search index, so where the deployment searches with OpenSearch, "
+-            "rebuild it after the first `start --build` onto v0.5.2") in text  # fmt: skip
+-    assert ("`docker compose --env-file deployment.env -f compose.yaml exec -T api python -m scripts.rebuild_search_index`, "
+-            "as `apply` runs it") in text  # fmt: skip
++    assert "`start --build` does not rebuild" not in text
++    assert ("Where the deployment searches with OpenSearch, `start --build` rebuilds the search index from the graph as "
++            "its last step, as `install` and `update` do. If the rebuild fails it says so: the stack is up, search is "
++            "limited to exact identifiers, and running `start --build` again rebuilds it") in text  # fmt: skip
+ 
+ 
+ def test_the_platform_s_install_rebuilds_the_index_by_a_job_after_its_rollouts() -> None:
+diff -ru a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
+--- a/OspreyFlow_Core/docs/administration-guide.md	2026-11-14 16:21:41
++++ b/OspreyFlow_Core/docs/administration-guide.md	2026-11-14 16:21:41
+@@ -3150,7 +3150,7 @@
+ | Your install | How it is updated |
+ | --- | --- |
+ | Lite, installed from a release tag | `ospreyflow update` (below) |
+-| Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so. `start --build` does not rebuild the search index, so where the deployment searches with OpenSearch, rebuild it after the first `start --build` onto v0.5.2: in the deployment's own folder (`~/.ospreyflow/deployments/<name>/`), `docker compose --env-file deployment.env -f compose.yaml exec -T api python -m scripts.rebuild_search_index`, as `apply` runs it; until then search is limited to exact identifiers |
++| Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so. Where the deployment searches with OpenSearch, `start --build` rebuilds the search index from the graph as its last step, as `install` and `update` do. If the rebuild fails it says so: the stack is up, search is limited to exact identifiers, and running `start --build` again rebuilds it |
+ | Small | **Not yet by `update`**: its first step, the backup, refuses a deployment on a managed database (section 13). The cloud's own backups protect the data |
+ | Small on your own server, installed from a release tag | `ospreyflow update`, as Lite: its backup is written to `<server.backups>/<deployment>/` first |
+ | Enterprise | Move the checkout to the release's tag and run the install again: the chart is upgraded in place, every password and account kept |

@@ -14,3 +14,5 @@ plant 4: a rebuild whatever compose renders
 plant 5: a failed rebuild in the compose call's own words
   ../OspreyFlow_Build/tests/test_refresh_search_rebuild.py -k 'fails': RED (1 failed, 2 deselected in 0.70s)
 5/5 red
+
+Rebased onto main 3fd95b9 (docs' v0.5.2 sweep merged): the fix c288544 is now c89d78f. Docs' new test_guides_step5_freeze.py::test_start_build_does_not_rebuild_and_the_guide_says_how_to holds the old behaviour (refresh.py with no search_rebuild, and the guide's rebuild by hand), so it is red on this branch until docs_guides.diff lands with it. That diff (docs' files: the administration guide's Lite row in OspreyFlow_Core/docs/administration-guide.md and its spec/10 copy, and the test made test_start_build_rebuilds_last_and_the_guide_says_so, held to refresh.py's own code) applies on main; with it applied: test_guides_step5_freeze, test_guides_cloud_platform_search, test_spec_doc_paths 19 passed; test_admin_guide, test_admin_guide_copies, test_guide_role_words with it 117 passed; its start_build test red on main's refresh.py (1 failed).
