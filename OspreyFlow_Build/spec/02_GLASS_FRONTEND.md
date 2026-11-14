@@ -1217,7 +1217,9 @@ Opening another case from the drawer reloads the page, as every case switch does
 expansion, the refusal on the canvas offers *Run as a batch job* beside expanding by one relationship
 and saving a smaller view. Choosing it sends exactly the refused expansion to the Conduit
 (`POST …/batch-expansions`), and a panel at the canvas's foot, `workingset/BatchExpansion.tsx`, follows
-the job. The panel starts one job, whatever it is given later, until *Try again*, and sends one POST
+the job. It is drawn on the Graph alone: elsewhere in the case (Reports, Figures, the Map, the Studio) it is
+hidden, not closed, so it goes on following its job and is there again on the way back to the canvas. The panel
+starts one job, whatever it is given later, until *Try again*, and sends one POST
 under React's StrictMode, which runs its start twice on one mount. It is not modal, so
 the analyst can go on working while the job runs. It asks where the job is every two seconds, with
 the newest token the page holds. It shows the server's sentence for each stage, refusal and failure as
