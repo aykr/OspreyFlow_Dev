@@ -38801,6 +38801,13 @@ Amendment 6 point 8, which refused every guest (B2B) account outright.
    their own token gives (a guest's token often carries none of the tenant's extension attributes or groups, and is
    then refused as any person missing them is), and the roles Admin › People gives. The person is recorded as a guest
    (`entra_people.guest`), and People marks them.
+   - *With the administrator fallback* (Amendment 15, line added 14 November 2026): a value the mapping sources from
+     the administrator is a guest's as anyone's, the one set in People with Access, never their token's, and a guest
+     with it never set is refused in a member's words. The Guests form says which values come from People and which
+     from the token, from `GET /v1/admin/sign-in`'s `administrator_sets` (`guestAdmissionWords`). Held by
+     `test_entra_guests.py::test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token`
+     (red at its own assertion with a guest's token clearance planted in, `process/lanes/admin/guest_words/`) and by
+     `PeopleEntraAdministrator.test.tsx`'s *Guests words*, for every set the mapping can name.
 4. **Turned off, a guest already recorded is refused everywhere a person is read.** At their next request (by token,
    decision 2). An open live view (`standing` answers them as disabled). A run acting as them as its owner
    (Amendment 16's stored owner): `PrincipalRevoked`, counted as an owner who can no longer sign in. **Not** a reporting

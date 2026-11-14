@@ -29,6 +29,7 @@ from tests.services.api.test_auth_entra_claims import (
     _GOOD,
     BY_EXTENSION,
     BY_GROUPS,
+    EXT,
     G_CODE_R,
     G_OFFICIAL,
     G_UNIT_1,
@@ -196,3 +197,26 @@ def test_the_one_construction_path_refuses_a_guest_s_claims_unless_told_they_wer
     guest = principal_from_claims(entra_claims(**_GOOD, acct=1), BY_EXTENSION, stored, guest_admitted=True)
     member = principal_from_claims(entra_claims(**_GOOD), BY_EXTENSION, stored)
     assert guest.model_dump() == member.model_dump()
+
+
+def test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token() -> None:
+    """ADR-148 Amendment 17 point 3, with Amendment 15: admitted, a guest is any person, so where the mapping sources a
+    value from the administrator a guest's is the one set in People (their token's claim is not read) and the rest come
+    from their token; with it never set, the guest is refused in a member's words. What the Guests form says
+    (`guestAdmissionWords`, PeopleEntraAdministrator.test.tsx) rests on this."""
+    from principal_auth import ClaimMapping, StoredPerson, principal_from_claims
+
+    clearance_set_here = ClaimMapping.model_validate(BY_EXTENSION.model_dump() | {"clearance": {"administrator": True}})
+    token = {**_GOOD, f"{EXT}_clearance": "OFFICIAL-SENSITIVE"}
+    stored = StoredPerson(roles=("analyst",), disabled=False, clearance="OFFICIAL")
+    guest = principal_from_claims(entra_claims(**token, acct=1), clearance_set_here, stored, guest_admitted=True)
+    assert (guest.clearance, guest.org_unit) == ("OFFICIAL", "unit-1")
+    assert guest.model_dump() == principal_from_claims(entra_claims(**token), clearance_set_here, stored).model_dump()
+
+    never_set = StoredPerson(roles=("analyst",), disabled=False)
+    with pytest.raises(PrincipalResolutionError) as as_guest:
+        principal_from_claims(entra_claims(**token, acct=1), clearance_set_here, never_set, guest_admitted=True)
+    with pytest.raises(PrincipalResolutionError) as as_member:
+        principal_from_claims(entra_claims(**token), clearance_set_here, never_set)
+    assert str(as_guest.value) == str(as_member.value)
+    assert "clearance" in str(as_guest.value)

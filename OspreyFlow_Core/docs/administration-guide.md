@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.08** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.09** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.09 | 2026-11-14 | §6a.7: an admitted guest under the administrator fallback takes the values set with *Access*, never their token's, and the Guests form says which come from where (ADR-148 Amendment 17, line added). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.08 | 2026-11-14 | §9.1: a coming Admin section is plain words with a *Coming* tag, never a link, and a person's actions in *People and roles* sit on a line beneath them (ADR-145 Amendment 16). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.07 | 2026-11-14 | §6a.7: a token of the other version than `token_version` is refused in words naming `requestedAccessTokenVersion` and the setting, and INSTALL step 6's check shows them after the first sign-in (ADR-148 Amendment 18). |
 | 2.06 | 2026-11-14 | §6a.7, the administrator fallback on the poc shape (ADR-148 Amendment 15): `{administrator: true}` as the source of a person's clearance, unit or handling codes, set in *Admin › People* with Access (none above the setter's own), a person with none set unable to sign in until set, the first administrators' values at install (`first_administrator_access`), refused on any other shape; Appendix A's three claim sources and `first_administrator_access`. PDF reprinted alone. |
@@ -1585,7 +1586,10 @@ stays `sub`.
 any person does: through the same mapping, so with the clearance, unit and handling codes their own
 token gives (a guest's token from another directory often carries none of your extension attributes
 or groups, and is then refused as anyone missing a clearance or unit is), and the roles you give them
-in *People and roles*, which marks them as a guest. Nothing gives a guest more than a member with the
+in *People and roles*, which marks them as a guest. Where this deployment sets a value itself (the
+administrator fallback, `administrator: true`), a guest's is the one set with **Access**, as anyone's
+is, never their token's, and they cannot sign in until it is set; the Guests form says which values
+come from where. Nothing gives a guest more than a member with the
 same token would have. Turning it off refuses every guest at their next request to OspreyFlow, an open
 live view included, and a run acting as a guest as its owner stops, counted as an owner who can no
 longer sign in (above); a guest stops counting as someone who can manage people, and is shown as

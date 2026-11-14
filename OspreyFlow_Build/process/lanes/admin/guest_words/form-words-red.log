@@ -1,0 +1,26 @@
+   ✓ Admin › People on Entra ID with the administrator fallback (6)
+     ✓ says which values are set here, and Access offers those alone, sending Entra's back unchanged 301ms
+     ✓ shows the Conduit's refusal, a clearance above the setter's own, in its words 73ms
+     ✓ shows the store's refusal 403 in its words 72ms
+     ✓ shows the store's refusal 404 in its words 60ms
+     ✓ without the fallback, Entra's People offers no Access (the control) 22ms
+     ✓ says one value in the singular, every value in a list 1ms
+     × with nothing set here 31ms
+     × with clearance set here 86ms
+     × with org_unit set here 24ms
+     × with clearance, org_unit set here 25ms
+     × with handling_codes set here 21ms
+     × with clearance, handling_codes set here 32ms
+     × with org_unit, handling_codes set here 53ms
+     × with clearance, org_unit, handling_codes set here 18ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'A guest account is homed outside your…' to contain 'clearance, unit and handling codes fr…'
+AssertionError: expected 'A guest account is homed outside your…' to contain 'clearance set here with Access'
+AssertionError: expected 'A guest account is homed outside your…' to contain 'unit set here with Access'
+AssertionError: expected 'A guest account is homed outside your…' to contain 'clearance and unit set here with Acce…'
+AssertionError: expected 'A guest account is homed outside your…' to contain 'handling codes set here with Access'
+AssertionError: expected 'A guest account is homed outside your…' to contain 'clearance and handling codes set here…'
+AssertionError: expected 'A guest account is homed outside your…' to contain 'unit and handling codes set here with…'
+AssertionError: expected 'A guest account is homed outside your…' to contain 'clearance, unit and handling codes se…'
+ Test Files  1 failed (1)
+      Tests  8 failed | 6 passed (14)

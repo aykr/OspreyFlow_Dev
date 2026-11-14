@@ -114,3 +114,32 @@ describe("Admin › People on Entra ID with the administrator fallback", () => {
     );
   });
 });
+
+// ADR-148 Amendment 17, as Amendment 15 bears on it: a guest admitted signs in as anyone does, so where this
+// deployment sets a value itself (`administrator_sets`, served sorted, as the Conduit sorts them), a guest's comes
+// from People too, never from their token. The Guests form says which, for every set the mapping can name.
+describe("Admin › People's Guests words, by what the deployment sets itself", () => {
+  const WORDS = { clearance: "clearance", org_unit: "unit", handling_codes: "handling codes" } as const;
+  const FIELDS = ["clearance", "org_unit", "handling_codes"] as const;
+  const listed = (ws: string[]) => (ws.length > 1 ? `${ws.slice(0, -1).join(", ")} and ${ws[ws.length - 1]}` : ws[0]);
+  const subsets = [0, 1, 2, 3, 4, 5, 6, 7].map((bits) => FIELDS.filter((_, i) => bits & (1 << i)));
+  for (const sets of subsets) {
+    it(`with ${sets.length ? sets.join(", ") : "nothing"} set here`, async () => {
+      serve([...sets].sort(), (path) => (path === "sign-in/guests" ? json(200, { admitted: false }) : null));
+      place();
+      const form = await screen.findByRole("form", { name: "Guests" });
+      const words = await waitFor(() => {
+        const p = form.querySelector("p")!.textContent!.replace(/\s+/g, " ");
+        expect(p).toMatch(/Admitted, a guest signs in as anyone does/);
+        return p;
+      });
+      const here = FIELDS.filter((f) => sets.includes(f)).map((f) => WORDS[f]);
+      const token = FIELDS.filter((f) => !sets.includes(f)).map((f) => WORDS[f]);
+      if (here.length) expect(words).toContain(`${listed(here)} set here with Access`);
+      else expect(words).not.toContain("set here");
+      if (token.length) expect(words).toContain(`${listed(token)} from their token`);
+      else expect(words).not.toContain("token");
+      expect(words).toContain("the roles you give them here");
+    });
+  }
+});

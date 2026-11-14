@@ -1,0 +1,8 @@
+# Plant 1: a guest skips the values the deployment sets (verified kept as the token gave it). Red, but at principal_auth's own assert (line 874), not the test's: the library refuses it first.
+# Plant 2: a guest's token clearance used where the deployment sets it. Must be red at the test's own assertion.
+tests/services/api/test_entra_guests.py:213: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
+E   AssertionError: assert ('OFFICIAL-SE...VE', 'unit-1') == ('OFFICIAL', 'unit-1')
+E     
+E     At index 0 diff: 'OFFICIAL-SENSITIVE' != 'OFFICIAL'
+E     Use -v to get more diff
+1 failed, 16 deselected in 1.23s

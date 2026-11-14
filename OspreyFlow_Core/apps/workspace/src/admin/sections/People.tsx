@@ -781,13 +781,38 @@ export function entraPeopleWords(administratorSets: readonly AccessField[]): str
   );
 }
 
+/** "clearance", "clearance and unit", "clearance, unit and handling codes", in `EVERY_FIELD`'s order. */
+function fieldList(fields: readonly AccessField[]): string {
+  const ws = EVERY_FIELD.filter((f) => fields.includes(f)).map((f) => FIELD_WORDS[f]);
+  return ws.length > 1 ? `${ws.slice(0, -1).join(", ")} and ${ws[ws.length - 1]}` : (ws[0] ?? "");
+}
+
+/** ADR-148 Amendment 17, with Amendment 15: what an admitted guest's values come from. A guest signs in as anyone
+ * does, so a value this deployment sets itself comes from People, with Access, and the rest from their token. */
+export function guestAdmissionWords(administratorSets: readonly AccessField[]): string {
+  const here = EVERY_FIELD.filter((f) => administratorSets.includes(f));
+  const token = EVERY_FIELD.filter((f) => !administratorSets.includes(f));
+  const parts = [
+    ...(here.length
+      ? [`their ${fieldList(here)} set here with Access, as anyone's ${here.length > 1 ? "are" : "is"}, and they cannot ` +
+          `sign in until ${here.length > 1 ? "they are" : "it is"}`]
+      : []),
+    ...(token.length ? [`${here.length ? "their" : "the same"} ${fieldList(token)} from their token`] : []),
+  ];
+  return (
+    "A guest account is homed outside your organisation's Entra ID (another organisation's, or another identity " +
+    `provider) and invited into yours. Admitted, a guest signs in as anyone does: ${parts.join("; ")}` +
+    `${here.length ? ";" : ","} and the roles you give them here.`
+  );
+}
+
 /** ADR-148 Amendment 17: how a guest (B2B) account is marked in the list. */
 export const GUEST_WORDS = "Guest: homed outside this organisation's Entra ID; signs in only while guest accounts are admitted";
 
 /** ADR-148 Amendment 17: whether guest (B2B) accounts may sign in, off until an administrator of people turns it on.
- * Admitted, a guest signs in as anyone does, with the clearance, unit and codes their own token gives; turned off,
- * a guest already here is refused at their next request. */
-function GuestsForm({ api }: { api: AdminApi }) {
+ * Admitted, a guest signs in as anyone does (`guestAdmissionWords`); turned off, a guest already here is refused at
+ * their next request. */
+function GuestsForm({ api, administratorSets }: { api: AdminApi; administratorSets: readonly AccessField[] }) {
   const [admitted, setAdmitted] = useState<boolean | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => {
@@ -799,9 +824,7 @@ function GuestsForm({ api }: { api: AdminApi }) {
     <form aria-label="Guests" style={{ display: "grid", gap: "var(--sp-8)", maxWidth: "32rem" }} onSubmit={(e) => e.preventDefault()}>
       <h2 className="value" style={{ margin: 0 }}>Guests</h2>
       <p className="label" style={{ margin: 0 }}>
-        A guest account is homed outside your organisation's Entra ID (another organisation's, or another identity
-        provider) and invited into yours. Admitted, a guest signs in
-        as anyone does: the same clearance, unit and codes from their token, and the roles you give them here.
+        {guestAdmissionWords(administratorSets)}
       </p>
       <label className="label" style={{ display: "inline-flex", gap: "var(--sp-4)", alignItems: "center" }}>
         <input
@@ -1173,7 +1196,7 @@ export function People({ api }: { api: AdminApi }) {
               setPeople((current) => [...(current ?? []), person]);
             }}
           />
-          <GuestsForm api={api} />
+          <GuestsForm api={api} administratorSets={administratorSets} />
         </>
       ) : (
         <InviteForm
