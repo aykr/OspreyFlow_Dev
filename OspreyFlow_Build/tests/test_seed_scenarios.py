@@ -28,7 +28,6 @@ from scripts.seed_scenarios import (
     load_sighting_events,
 )
 
-from adapters.analytics_clickhouse.testing import clickhouse_adapter
 from adapters.analytics_duckdb.testing import duckdb_adapter
 from ontology.handling import HandlingScheme, load_uk_le_scheme
 from ports.analytics import AnalyticsPort
@@ -244,11 +243,10 @@ def test_fixture_corps_population_is_untouched_by_this_seeder() -> None:
 
 #: Each analytics engine a deployment can name (`components.analytics_engine`): the seed writes
 #: its sightings to the deployment's own store (ADR-148 Amendment 14), so B18 holds on each.
-#: ClickHouse's is the live server `make test` runs beside (`CLICKHOUSE_HTTP_PORT`), never a fake
-#: of it (rule 15).
+#: DuckDB's here; ClickHouse's against the live server in `tests/test_seed_clickhouse_live.py`
+#: (never a fake of it, rule 15), which runs this same case with this map's other entry.
 STORES: dict[str, Callable[[list, HandlingScheme], AbstractAsyncContextManager[AnalyticsPort]]] = {
     "duckdb": duckdb_adapter,
-    "clickhouse": clickhouse_adapter,
 }
 
 

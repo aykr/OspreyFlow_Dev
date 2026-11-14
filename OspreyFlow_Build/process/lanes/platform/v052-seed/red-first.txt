@@ -118,3 +118,29 @@ FAILED tests/test_seed_hmp_rerun.py::test_a_rerun_over_a_graph_whose_events_were
 The restore's writers (the seed left out), red first: FAILED tests/harness/test_cloud_platform_seed.py::test_a_restore_refuses_to_run_beside_the_seed
 
 Green: tests/harness, tests/cp_policy_check, tests/cloud_platform_backup, the seed suites and scenarios/test_hmp_network: 1880 passed, 499 skipped (the ClickHouse parameters deselected offline; the Helm cases skipped on the Mac). One run of tests/cloud_platform_backup earlier showed 1 failed, 180 passed, not reproduced in two reruns (181 passed); its name was not captured, so it is watched in the gates.
+The live cases on the test server's stack g (stack_lease.sh acquire platform ... g, the orchestrator's yes; up, remote, down, release), run 20261114T015817Z-cbaa940a: 28 passed, among them test_seed_scenarios' B18 and test_seed_analytics' HMP events and places through the live ClickHouse (port 18129), and test_seed_poc_live's three cases against the live Postgres (the unit from a sign-in; one never signed in refused; another tenant's row not theirs).
+
+Red on the live ClickHouse (rule 15), the re-seed check planted out of load_sighting_events (missing = every event), run on stack g, fresh PYTHONPYCACHEPREFIX:
+        graph) passed while the Glass, reading the analytics store, drew nothing — measured in a real
+FAILED tests/test_seed_scenarios.py::test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads[duckdb]
+FAILED tests/test_seed_scenarios.py::test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads[clickhouse]
+2 failed in 7.56s
+Wall time: 13 s, exit 0 (stack g, the lease platform took at 2026-11-14T01:57:15Z; set-up before it 18 s)
+
+The Helm-backed cases on the server (stack_lease.sh offline platform), each plant restored after its run:
+== Plant 1: the gate's allowlist entry for the seed removed
+Running on ospreyflow-test (stack offline, osprey-runs/platform/), logged at osprey-runs/platform.meta/runs/20261114T020021Z-80215b36/log
+FAILED tests/cp_policy_check/test_cp_egress_order.py::test_the_seed_holds_the_graph_s_and_clickhouse_s_passwords_alone_and_no_token[poc]
+1 failed, 1 passed, 2 skipped, 39 deselected in 10.04s
+Wall time: 14 s, exit 0 (no stack, no lease; set-up before it 15 s)
+== Plant 2: the seed's manifest entry removed
+Running on ospreyflow-test (stack offline, osprey-runs/platform/), logged at osprey-runs/platform.meta/runs/20261114T020053Z-5c71295e/log
+FAILED tests/cp_policy_check/test_cp_egress_order.py::test_every_cronjob_the_poc_chart_renders_is_in_the_manifest
+1 failed, 1 passed, 2 skipped, 39 deselected in 11.01s
+Wall time: 15 s, exit 0 (no stack, no lease; set-up before it 16 s)
+== As built
+Running on ospreyflow-test (stack offline, osprey-runs/platform/), logged at osprey-runs/platform.meta/runs/20261114T020138Z-857205ff/log
+2 passed, 2 skipped, 39 deselected in 10.29s
+Wall time: 15 s, exit 0 (no stack, no lease; set-up before it 29 s)
+
+make -k test at 81deb23 on the server, run 20261114T020226Z-ed0c4a01: exit 2. pytest 6 failed, 3 errors, 13462 passed. Main's own: 6a8 (docs'), test_worker_isolation, test_write_store_marks. Mine: the two ClickHouse cases and test_seed_poc_live's three (errors) ran in make test, whose ports are closed, and test_test_file_coverage_check named test_seed_poc_live.py as wired nowhere. Fixed: the ClickHouse cases moved to tests/test_seed_clickhouse_live.py (the same cases, ClickHouse's adapter); both live files' wiring sent as v052-seed/live_wiring.diff (ci.yml's ClickHouse and Postgres live jobs and the test job's ignores; the Makefile's test ignores and its ClickHouse target), never committed: they are the owner's files. It applies cleanly (git apply --check); the coverage check's green waits on it. vitest: case's MatrixView.budget under load.

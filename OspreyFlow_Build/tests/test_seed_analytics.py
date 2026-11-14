@@ -126,7 +126,7 @@ async def test_on_duckdb_the_events_land_in_the_deployments_own_file(
     assert held == {e.event_id for e in events}
 
 
-@pytest.mark.parametrize("engine", ["duckdb", "clickhouse"])
+@pytest.mark.parametrize("engine", ["duckdb"])  # ClickHouse's: tests/test_seed_clickhouse_live.py
 async def test_hmps_events_and_places_go_through_each_store(engine: str) -> None:
     """HMP's own event and place shapes through each store a deployment can name (ClickHouse's the
     live server beside `make test`'s stack, never a fake): its events loaded and read back by id,
