@@ -9,7 +9,7 @@
 // variables, against a stack holding Fixture Corp. OSPREY_LIVE_INVESTIGATION_ID must be the case Fixture Corp was
 // seeded into (`seed_fixture_corp --investigation-scope`): the seed is what makes a case read its dataset (ADR-099),
 // and a fresh case reads none, so search there finds nothing (`search_access.py`: "An empty case sees nothing").
-// Only Show on graph changes the case's working set, so it is checked against a count it first asserts is 0.
+// Only Show on graph changes the case's working set, so it runs on a case no earlier case of this file has seeded.
 import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
 import { apiBaseUrl, investigationId, liveOnly, required, workspaceUrl } from "./live";
 
@@ -72,14 +72,24 @@ test("every body the page sends is one the route accepts", async ({ page }) => {
   expect(refused, `the route refused bodies the page sent: ${JSON.stringify(sent)}`).toEqual([]);
 });
 
-test("Show on graph adds the results' records to the working set", async ({ page }) => {
+test("Show on graph sends the result's records to the case's working set, and the Conduit takes them", async ({ page, request }) => {
+  // What the page sends is held to what the route answered: every record the first result stands for, by id. Read
+  // from the network, not the screen: the Conduit's working set is what Show on graph changes (`/seed`).
+  const answer = await ask(request, investigationId(), { query: QUERY, group: null, filters: {}, page: 1, page_size: PAGE_SIZE });
+  expect(answer.status(), await answer.text()).toBe(200);
+  const first = ((await answer.json()) as { results: { node_ids: string[] }[] }).results[0];
+  expect(first, `the route found nothing for ${QUERY}`).toBeDefined();
+
   await page.goto(workspaceUrl());
-  const nodes = async () => Number(/(\d+)\s*nodes/.exec((await page.getByRole("status").first().textContent()) ?? "")?.[1] ?? 0);
-  expect(await nodes(), "the seeded case's working set must start empty, or a pass proves nothing").toBe(0);
   await search(page, QUERY);
+  const seeded = page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname.endsWith("/seed"));
   await results(page).getByRole("button", { name: /^Show on graph: / }).first().click();
+  const response = await seeded;
+  expect(response.status(), await response.text()).toBeLessThan(300);
+  const sent = (response.request().postDataJSON() as { nodes: { id: string }[] }).nodes.map((n) => n.id).sort();
+  expect(sent).toEqual([...first!.node_ids].sort());
   await expect(results(page)).toBeHidden();
-  await expect.poll(nodes, { timeout: 30_000 }).toBeGreaterThan(0);
+  await expect(page.getByRole("application", { name: "Network canvas" })).toBeVisible();
 });
 
 test("a query longer than the route takes is refused on screen with the limit named, never cut (rule 2)", async ({ page }) => {

@@ -122,6 +122,9 @@ OSPREY_TEST_LIVE_GLASS=1 OSPREY_LIVE_API_BASE_URL="http://127.0.0.1:$CP" OSPREY_
 code=${PIPESTATUS[0]}
 echo "# playwright exit $code"
 if [ "$code" -ne 0 ]; then
+  for f in test-results/*/error-context.md; do
+    [ -f "$f" ] && { echo "== $f"; head -80 "$f" | mask; }
+  done
   echo "== the last of the Conduit's log"
   tail -40 "$W/conduit.second.log" | mask
 fi
