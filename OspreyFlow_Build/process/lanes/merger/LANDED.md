@@ -77,3 +77,4 @@ ad4cc89 3de0896 platform v052-runbookclaims
 661a588 14f7680 rules-b v052D (Part D), with audit, spec03, registry and bar patches
 b1d1f07 e73ecc0 case-b v052-r1-driver (step 6's driver)
 cf09c42 5e89793 platform v052-searchkind, with v052-standin
+7af832b 425a54a platform v052-pgmemory (main's render-memory red)
