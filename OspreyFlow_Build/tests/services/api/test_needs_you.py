@@ -330,16 +330,38 @@ def test_no_proposal_is_counted_without_accept_types(world: SimpleNamespace) -> 
     assert world.link_types.asked == []
 
 
-def test_a_promotion_no_longer_waiting_is_not_shown(world: SimpleNamespace) -> None:
+def _clock_at(monkeypatch: pytest.MonkeyPatch, at: datetime) -> None:
+    """The Conduit's clock at `at`: the route reads `datetime.now(UTC)` in `app.py`, so its age is
+    the test's and never today's (rule 15: a test that passes or fails by the calendar proves
+    nothing)."""
+    import services.api.app as app_module
+
+    class _Frozen(datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> datetime:  # type: ignore[override]
+            return at if tz is None else at.astimezone(tz)
+
+    monkeypatch.setattr(app_module, "datetime", _Frozen)
+
+
+# Ages whose figure holds the stored alert's "3" (13, 23), so a substring check of the old words
+# would be wrong on them, and one that does not (4).
+@pytest.mark.parametrize("age", [4, 13, 23])
+def test_a_promotion_no_longer_waiting_is_not_shown(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, age: int
+) -> None:
     """Approved, rejected or withdrawn since its alert, a promotion leaves the seam's waiting list,
     and *Needs you* no longer serves it: the alert's store keeps it, the read asks the seam. Its
-    words are said as they stand now, not as they stood when raised. Red with the waiting list not
-    asked."""
+    words are said as they stand now, not as they stood when raised (3 days): the whole sentence,
+    at the clock's age, never a fragment of it. Red with the waiting list not asked, and with the
+    stored words served."""
     import asyncio
 
+    _clock_at(monkeypatch, T0 + timedelta(days=age, hours=1))
     asyncio.run(_raise(world, ["rev-1"]))
     [notice] = _read(world, "rev-1")["promotions_overdue"]
-    assert "has waited" in notice["words"] and "3 days" not in notice["words"]  # its age now
+    said = f"Promotion load-7 into Prison records has waited {age} days for review."
+    assert notice["words"] == said
     world.waiting.waiting = []
     assert _read(world, "rev-1")["promotions_overdue"] == []
 
