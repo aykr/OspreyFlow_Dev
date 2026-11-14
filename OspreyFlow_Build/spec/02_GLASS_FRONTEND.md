@@ -1246,7 +1246,10 @@ The jsdom cases are in `workingset/BatchExpansion.test.tsx`, and their red-first
 `process/lanes/case-b/batch/plants.sh`. The panel's two actions are proved by keyboard in
 `keyboard/batch-expansion.spec.ts` (registry `BATCH_EXPANSION_ACTIONS`), and so is each of its states
 under axe in the three looks. Starting the job from the cap refusal is proved by keyboard where that
-refusal's own cases are (`keyboard/canvas-expand-cap.spec.ts`), once the refusal is on main.
+refusal's own cases are (`keyboard/canvas-expand-cap.spec.ts`, registry `CANVAS_CAP_ACTIONS`), from
+*Run as a batch job* through the panel to its result opened as the view. The App holds the request with
+the case it was asked in and shows the panel only in that case, and offers no batch job while a view is
+open (`App.batchExpand.test.tsx`; red-first record `process/lanes/case-b/batch/plants-app.sh`).
 
 ### 3.2 Social network analysis
 
