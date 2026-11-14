@@ -78,6 +78,11 @@ count records).
   - Show on graph leaves the results for the graph.
   - Open keeps the results, hidden under the reader.
   - Results come 20 to a page.
+- **Rules-b, Whole case (D(iii), planned):**
+  - A question over the search's 200 characters is refused in words for Whole case, never cut or reduced to
+    keywords. Questions elsewhere go to 2,000.
+  - One page of 50 is read, and the answer says when there were more.
+  - There is no timeline window for Whole case.
 - **Rules-b, Ask & Chat:**
   - Ask stays enabled while the "Will read" summary loads, since the answer says what it read.
   - A refusal's dataset names are scrubbed for a caller who may not see them.
