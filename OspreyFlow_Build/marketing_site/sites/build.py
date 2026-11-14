@@ -508,7 +508,7 @@ def org_contribute():
         '<strong>Plain words on screen.</strong> A refusal says what was refused and why, in words a person can act on.',
         '<strong>You have the right to submit it.</strong> Contributions are made under the Apache License 2.0.']), 'tint')
     b += sec('How a change is reviewed', '<ol class="steps"><li>Open an issue describing the problem, or comment on an existing one.</li>'
-        '<li>Open a pull request. A maintainer runs the project\'s checks on it before it is merged: tests, licence checks, accessibility scans and image scans.</li>'
+        '<li>Open a pull request.</li>'
         '<li>A maintainer reviews it. A change to access control or to what may leave a deployment gets a second reviewer.</li>'
         '<li>Once merged, it ships in the next release and is named in the change log.</li></ol>'
         '<p class="note">The repository\'s contributing guide and code of conduct are not yet in the repository. Until then, open an issue to start a conversation.</p>')
