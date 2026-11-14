@@ -7,4 +7,3 @@ export/chartExport.ts	rgba(0, 0, 0, 0.75)
 # MapLibre paint values: a transparent fill (MapLibre takes a colour, not `none`) and the
 # sites-loading scrim over the map.
 map/MapView.tsx	rgba(0,0,0,0)
-map/MapView.tsx	rgba(0,0,0,0.4)
