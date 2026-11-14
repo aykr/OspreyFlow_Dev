@@ -27,6 +27,7 @@ from conduit_common.identity import new_id
 from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme
 from principal_auth import (
+    PEOPLE_SECTION,
     OwnerNotHeld,
     OwnerRecordUnavailable,
     PrincipalAccessOutOfDate,
@@ -82,9 +83,9 @@ def owner_refusal_words(error: BaseException, owner_id: str) -> str:
             f"{out_of_date_next(error)}"
         )
     if isinstance(error, OwnerNotHeld):
-        return f"the schedule's owner, {owner_id}, is not a person Admin › People holds"
+        return f"the schedule's owner, {owner_id}, is not held in {PEOPLE_SECTION}"
     if isinstance(error, OwnerRecordUnavailable):
-        return "Admin › People's store could not be read to act as the schedule's owner"
+        return f"the people store behind {PEOPLE_SECTION} could not be read to act as the schedule's owner"
     return f"OspreyFlow could not act as the schedule's owner, {owner_id}"
 
 

@@ -29,6 +29,7 @@ CORE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core"
 SECTIONS = CORE / "apps/workspace/src/admin/sections.json"
 #: "Admin › People" (or "Admin -> People", the ASCII arrow) not followed by the section's own words.
 ALONE = re.compile(r"Admin (?:›|->) People(?! and roles)")
+VERSION_ROW = re.compile(r"^\| \d+\.\d+ \|")
 
 
 def _rail_label(screen: str) -> str:
@@ -54,8 +55,8 @@ def _docstrings(tree: ast.Module) -> set[int]:
 def _strings(path: Path, *, docstrings: bool) -> list[tuple[int, str]]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     skip = set() if docstrings else _docstrings(tree)
-    return [(n.lineno, n.value) for n in ast.walk(tree)
-            if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in skip]  # fmt: skip
+    return sorted((n.lineno, n.value) for n in ast.walk(tree)
+                  if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in skip)  # fmt: skip
 
 
 def _said_alone() -> list[str]:
@@ -70,8 +71,9 @@ def _said_alone() -> list[str]:
         found += [f"{path.relative_to(CORE)}:{n}" for n, s in _strings(path, docstrings=True) if ALONE.search(s)]
     for path in [*sorted((CORE / "packages/schemas/generated").glob("*.ts")), CORE / "docs/administration-guide.md",
                  CORE / "docs/user-guide.md"]:  # fmt: skip
+        # A guide's version rows record what an earlier version said, and are kept as written.
         found += [f"{path.relative_to(CORE)}:{n}" for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
-                  if ALONE.search(line)]  # fmt: skip
+                  if ALONE.search(line) and not VERSION_ROW.match(line)]  # fmt: skip
     return found
 
 

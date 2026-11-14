@@ -542,11 +542,15 @@ class StoredOwner:
     guest: bool = False
 
 
+#: The Admin section where people's roles, access and guests are set, as the Glass's side list names it
+#: (`apps/workspace/src/admin/sections.json`; `tests/test_people_section_words.py` reads it there).
+PEOPLE_SECTION = "Admin › People and roles"
+
 #: ADR-148 Amendment 17: why a guest (B2B) account is refused while the deployment does not admit
 #: guests.
 GUESTS_NOT_ADMITTED_WORDS = (
     "this is a guest account, homed outside this organisation's Entra ID, and this deployment does "
-    "not admit guests: an administrator can admit them in Admin › People"
+    f"not admit guests: an administrator can admit them in {PEOPLE_SECTION}"
 )
 
 
@@ -798,7 +802,7 @@ def _with_what_the_administrator_set(
         if held is None or (field != "codes" and not held):
             raise AccessNotSet(
                 f"your {what} not been set in this deployment: ask an administrator to set "
-                f"{'them' if field == 'codes' else 'it'} in Admin › People"
+                f"{'them' if field == 'codes' else 'it'} in {PEOPLE_SECTION}"
             )
         taken[field] = list(held) if field == "codes" else held
     return dataclasses.replace(verified, **taken) if taken else verified
@@ -1106,7 +1110,7 @@ class OwnerValueNotSet(PrincipalAccessOutOfDate):
 
     def __init__(self, owner_id: str, unset: tuple[str, ...]) -> None:
         super().__init__(owner_id, None)
-        self.args = (f"owner {owner_id!r}: {', '.join(unset)} not set in Admin › People",)
+        self.args = (f"owner {owner_id!r}: {', '.join(unset)} not set in {PEOPLE_SECTION}",)
         self.unset = unset
 
 
@@ -1118,7 +1122,7 @@ def out_of_date_words(error: PrincipalAccessOutOfDate) -> str:
     """Why a run cannot act as its owner, in words a person can act on."""
     if isinstance(error, OwnerValueNotSet):
         unset = _listed(error.unset)
-        return f"an administrator has not set {unset} for this person in Admin › People"
+        return f"an administrator has not set {unset} for this person in {PEOPLE_SECTION}"
     return ACCESS_OUT_OF_DATE_WORDS
 
 

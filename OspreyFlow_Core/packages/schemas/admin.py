@@ -192,7 +192,7 @@ class GuestSignInInput(BaseModel):
 
 
 class AddPersonInput(BaseModel):
-    """A person added to Admin › People by their Entra object id, ahead of their first sign-in
+    """A person added to Admin › People and roles by their Entra object id, ahead of their first sign-in
     (ADR-148 Amendment 8). Only on Entra ID sign-in; Graph gives the object id."""
 
     object_id: str = Field(

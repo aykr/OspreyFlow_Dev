@@ -231,6 +231,9 @@ def _refused(what: str) -> PersonActionRefused:
     return PersonActionRefused("entra_holds_accounts", f"{what} {ENTRA_HOLDS_ACCOUNTS}")
 
 
+#: Each value in a person's words, as the Guests form says them (`People.tsx`'s `FIELD_WORDS`).
+VALUE_WORDS = {"clearance": "clearance", "org_unit": "unit", "handling_codes": "handling codes"}
+
 #: ADR-148 Amendment 15: the values a claim mapping may source from the administrator, by the name
 #: `ClaimMapping` gives each, and the store's column holding what the administrator set.
 ADMINISTRATOR_FIELDS = {"clearance": "admin_clearance", "org_unit": "admin_org_unit",
@@ -398,7 +401,11 @@ def check_administrator_access(
     given = {"clearance": access.clearance, "org_unit": access.org_unit,
              "handling_codes": access.receivable_handling_codes}  # fmt: skip
     if entra_s := [f for f, v in given.items() if v is not None and f not in by_administrator]:
-        raise _refused(f"Here {' and '.join(entra_s)} come from Entra ID, and are changed there.")
+        # In words, as the Guests form says them (People.tsx's fieldList): never a field's name.
+        said = [VALUE_WORDS[f] for f in entra_s]
+        many = len(said) > 1 or entra_s == ["handling_codes"]
+        raise _refused(f"Here a person's {' and '.join(said)} {'come' if many else 'comes'} from Entra ID, "
+                       f"and {'are' if many else 'is'} changed there.")  # fmt: skip
     if (
         setter is None
         or setter["disabled"]
