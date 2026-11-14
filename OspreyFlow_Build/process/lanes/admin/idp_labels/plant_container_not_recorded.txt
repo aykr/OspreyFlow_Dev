@@ -1,0 +1,8 @@
+# plant: container_not_recorded; fresh PYTHONPYCACHEPREFIX; closed ports; -k term or exits_without
+# RED
+E                                                  'osprey.run=/root/osprey-runs/admin.meta/runs/20261114T050000Z-0123abcd'],
+E                                       'network': 'osprey-test-idp-fe1317ee'}}
+E         Use -v to get more diff)
+FAILED ../OspreyFlow_Build/tests/harness/test_run_owned.py::test_a_run_ended_mid_test_by_term_leaves_nothing_with_its_label
+FAILED ../OspreyFlow_Build/tests/harness/test_run_owned.py::test_a_run_that_exits_without_its_teardown_leaves_nothing_with_its_label
+2 failed, 2 deselected in 1.82s

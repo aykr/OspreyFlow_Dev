@@ -1,0 +1,2 @@
+# with stack_lease_reap.diff applied: test_stack_lease_docker_reap.py and test_stack_lease.py
+74 passed, 16 skipped in 22.55s

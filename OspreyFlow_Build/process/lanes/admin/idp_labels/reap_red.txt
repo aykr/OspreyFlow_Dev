@@ -1,0 +1,8 @@
+# test_stack_lease_docker_reap.py against main's stack_lease.sh (before the diff): red
+E       AssertionError: assert ['osprey-test...idp-bbbb0001'] == ['osprey-test...idp-bbbb0001']
+E         
+E         At index 1 diff: 'osprey-test-idp-aaaa0001' != 'osprey-test-idp-bbbb0001'
+E         Left contains 2 more items, first extra item: 'osprey-test-idp-aaaa0002'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/test_stack_lease_docker_reap.py::test_the_reaper_removes_the_runs_labelled_containers_then_its_network_and_nothing_else
+1 failed, 2 passed in 0.60s

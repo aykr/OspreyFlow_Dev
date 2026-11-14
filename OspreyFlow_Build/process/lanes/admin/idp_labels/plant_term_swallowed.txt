@@ -1,0 +1,5 @@
+# plant: term_swallowed; fresh PYTHONPYCACHEPREFIX; closed ports; -k term
+# RED
+E                   subprocess.TimeoutExpired: Command '['/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/.venv/bin/python', '-c', '\nimport sys, time\nfrom pathlib import Path\nfrom tests.harness import test_organisation_sign_in as m\nnetwork = m._network()\nm._start_keycloak(network, host="login.example.internal", folder=Path("."), certificate=Path("/c.pem"),\n                  key=Path("/k.pem"), extra_args=[], environment={}, volumes=[], command=["start-dev"],\n                  port=55555)\nprint("started", flush=True)\nif sys.argv[1] == "term":\n    time.sleep(60)\n', 'term']' timed out after 30 seconds
+FAILED ../OspreyFlow_Build/tests/harness/test_run_owned.py::test_a_run_ended_mid_test_by_term_leaves_nothing_with_its_label
+1 failed, 3 deselected in 31.23s

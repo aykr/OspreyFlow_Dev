@@ -1,0 +1,95 @@
+"""`stack_lease.sh`'s reaper removes the Docker objects a run left, by the run's label (the orchestrator's ruling of
+14 November 2026, after the test server ran out of memory with test-IdP Keycloaks no run could be shown to own).
+`tests/harness/run_owned.py` labels them `osprey.run=<OSPREY_RUN_TAG>`; `stop` and `reap` send the reaper the run's
+folder, which is that tag. Docker is a fake on PATH with Docker's refusals (rule 15): a network a container is still
+on is not removed, `rm` of nothing is an error. Another run's objects, and unlabelled ones, stay."""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+from pathlib import Path
+
+from tests.test_stack_lease import _reaper_shell
+
+TAG = "/root/osprey-runs/admin.meta/runs/20261114T050000Z-0123abcd"
+OTHER = "/root/osprey-runs/case-b.meta/runs/20261114T044000Z-89abcdef"
+
+FAKE_DOCKER = r'''#!/usr/bin/env python3
+import json, os, sys
+path = os.environ["FAKE_DOCKER_STATE"]
+state = json.load(open(path))
+args = sys.argv[1:]
+state.setdefault("calls", []).append(args)
+def done(code=0, out=""):
+    json.dump(state, open(path, "w"))
+    if out: print(out)
+    sys.exit(code)
+def matching(objects, a):
+    want = a[a.index("--filter") + 1].removeprefix("label=")
+    return [n for n, o in objects.items() if want in o["labels"]]
+if args[:2] == ["ps", "-aq"]:
+    done(0, "\n".join(matching(state["containers"], args)))
+if args[:3] == ["network", "ls", "-q"]:
+    done(0, "\n".join(matching(state["networks"], args)))
+if args[0] == "rm":
+    names = [a for a in args[1:] if not a.startswith("-")]
+    if not names or any(n not in state["containers"] for n in names): done(1)
+    for n in names: del state["containers"][n]
+    done(0)
+if args[:2] == ["network", "rm"]:
+    names = args[2:]
+    code = 0
+    for n in names:
+        if n not in state["networks"] or any(c["network"] == n for c in state["containers"].values()):
+            code = 1; continue
+        del state["networks"][n]
+    done(code)
+done(1)
+'''
+
+
+def _world(tmp_path: Path) -> tuple[dict[str, str], Path]:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "docker").write_text(FAKE_DOCKER, encoding="utf-8")
+    (bin_dir / "docker").chmod(0o755)
+    state = tmp_path / "docker.json"
+    mine, theirs = [f"osprey.run={TAG}", "osprey.lane=admin"], [f"osprey.run={OTHER}", "osprey.lane=case-b"]
+    state.write_text(json.dumps({
+        "containers": {
+            "osprey-test-idp-aaaa0001": {"network": "osprey-test-idp-net0001", "labels": mine},
+            "osprey-test-idp-aaaa0002": {"network": "osprey-test-idp-net0001", "labels": mine},
+            "osprey-test-idp-bbbb0001": {"network": "osprey-test-idp-net0002", "labels": theirs},
+            "osprey-test-b-pg": {"network": "ospreyflow-test", "labels": []},
+        },
+        "networks": {"osprey-test-idp-net0001": {"labels": mine}, "osprey-test-idp-net0002": {"labels": theirs},
+                     "ospreyflow-test": {"labels": []}},
+    }), encoding="utf-8")  # fmt: skip
+    env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_DOCKER_STATE": str(state)}
+    return env, state
+
+
+def test_the_reaper_removes_the_runs_labelled_containers_then_its_network_and_nothing_else(tmp_path: Path) -> None:
+    env, state = _world(tmp_path)
+    ran = subprocess.run(_reaper_shell(f'osprey_reap "{TAG}"'), env=env, capture_output=True, text=True, timeout=30)
+    assert ran.returncode == 0, ran.stderr
+    left = json.loads(state.read_text())
+    assert sorted(left["containers"]) == ["osprey-test-b-pg", "osprey-test-idp-bbbb0001"]
+    assert sorted(left["networks"]) == ["osprey-test-idp-net0002", "ospreyflow-test"]
+    assert "Docker" in ran.stderr and "2 container(s)" in ran.stderr
+
+
+def test_an_empty_tag_asks_docker_nothing(tmp_path: Path) -> None:
+    env, state = _world(tmp_path)
+    ran = subprocess.run(_reaper_shell('osprey_reap ""'), env=env, capture_output=True, text=True, timeout=30)
+    assert ran.returncode == 2
+    assert "calls" not in json.loads(state.read_text())
+
+
+def test_a_host_without_docker_reaps_its_processes_as_before(tmp_path: Path) -> None:
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    ran = subprocess.run(_reaper_shell(f'osprey_reap "{TAG}"; echo "rc=$?"'), env=env, capture_output=True, text=True,
+                         timeout=30)  # fmt: skip
+    assert "rc=0" in ran.stdout, ran.stderr

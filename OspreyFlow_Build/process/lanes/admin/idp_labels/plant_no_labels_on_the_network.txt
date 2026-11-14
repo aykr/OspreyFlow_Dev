@@ -1,0 +1,8 @@
+# plant: no_labels_on_the_network; fresh PYTHONPYCACHEPREFIX; closed ports; -k labels
+# RED
+E            +    where <built-in method startswith of str object at 0x10847cc60> = 'osprey-test-idp-85731735'.startswith
+E             
+E             Right contains 2 more items, first extra item: 'osprey.lane=admin'
+E             Use -v to get more diff)
+FAILED ../OspreyFlow_Build/tests/harness/test_run_owned.py::test_the_fixture_labels_its_containers_and_network_with_the_lane_and_the_run
+1 failed, 3 deselected in 1.18s

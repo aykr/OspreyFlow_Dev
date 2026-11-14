@@ -207,6 +207,9 @@ for d,ds,fs in os.walk(\".\"):
 # newline never matches, and with no redirection that could print its own error. Each pid's environment is read
 # again before TERM and before KILL: a pid that ended and was given to another process is never signalled.
 # OSPREY_REAPED holds how many were ended, for the caller's words.
+# Then the Docker objects the run left, by its label (`osprey.run=<tag>`, which tests/harness/run_owned.py gives the
+# test-IdP containers and network; the orchestrator's ruling of 14 November 2026): containers first, then networks,
+# which Docker refuses to remove while a container is on them. Another run's, and unlabelled ones, are never touched.
 # shellcheck disable=SC2016
 REAPER='osprey_reap() {
   local tag="$1" p pid hit="" n=0
@@ -222,6 +225,14 @@ REAPER='osprey_reap() {
   if [ -n "$hit" ]; then sleep 2; for pid in $hit; do if osprey_tagged "$pid"; then kill -9 "$pid" 2>/dev/null; fi; done; fi
   OSPREY_REAPED=$n
   if [ "$n" -gt 0 ]; then echo "Reaped $n process(es) the run left behind ($tag)." >&2; fi
+  if command -v docker >/dev/null 2>&1; then
+    local ids nets c=0
+    ids=$(docker ps -aq --filter "label=osprey.run=$tag" 2>/dev/null)
+    if [ -n "$ids" ]; then c=$(printf "%s\n" $ids | wc -l | tr -d " "); docker rm -f -v $ids >/dev/null 2>&1; fi
+    nets=$(docker network ls -q --filter "label=osprey.run=$tag" 2>/dev/null)
+    if [ -n "$nets" ]; then docker network rm $nets >/dev/null 2>&1; fi
+    if [ "$c" -gt 0 ]; then echo "Removed $c container(s) the run left in Docker, and their network(s) ($tag)." >&2; fi
+  fi
   return 0
 }'
 # Whether any process of a run's own session is alive: the wrapper is its session's leader (setsid), so cmd.sh and its
