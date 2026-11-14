@@ -1,0 +1,11 @@
+Running on ospreyflow-test (stack f, osprey-runs/studio/), logged at osprey-runs/studio.meta/runs/20261114T135203Z-1efc1e26/log: bash -c echo "load at start: $(uptime)"; OspreyFlow_Core/.venv/bin/python OspreyFlow_Build/process/lanes/studio/reseed-types/live_reseed.py --only fixture-corp --org-unit fixture-corp=unit-intel; rc=$?; echo "load at end: $(uptime)"; exit $rc
+load at start:  13:52:04 up 18 days, 22:30,  9 users,  load average: 2.47, 2.92, 5.32
+=== fixture-corp (scripts.seed_fixture_corp, dataset fixture-corp)
+before: {'mx_Organisation': 3, 'mx_Person': 65}
+seed (as main): exit 0; 0 refusal line(s)
+after seed (as main): {'mx_Organisation': 3, 'mx_Person': 65}
+reseed (at main): exit 0; 0 refusal line(s)
+after reseed (at main): {'mx_Organisation': 3, 'mx_Person': 65}
+=== every run clean
+load at end:  13:52:12 up 18 days, 22:30, 10 users,  load average: 2.56, 2.92, 5.29
+Wall time: 9 s, exit 0 (stack f, the lease studio took at 2026-11-14T13:15:51Z; set-up before it 8 s)
