@@ -1,0 +1,9 @@
+# route A2 plants at 6431894
+== the Glass offers every role (no giver rule): RED where it must be; failed: ['a people manager alone is not offered Admin, nor a custom role carrying Administer system, and is told who can', 'each administration right the giver lacks is named, as the screens name rights']
+== a role the person holds is withheld too (taking it away refused): RED where it must be; failed: ['a people manager alone is not offered Admin, nor a custom role carrying Administer system, and is told who can', 'a person who already holds Admin keeps the box offered: taking it away gives nothing']
+== the words name the first right alone: RED where it must be; failed: ['a people manager alone is not offered Admin, nor a custom role carrying Administer system, and is told who can']
+== the invite form offers every role: RED where it must be; failed: ['a people manager alone is not offered Admin, nor a custom role carrying Administer system, and is told who can']
+== the giver's rights never reach People: RED where it must be; failed: ['a people manager alone is not offered Admin, nor a custom role carrying Administer system, and is told who can', 'each administration right the giver lacks is named, as the screens name rights']
+== the Conduit's roles route without the giver rule: RED where it must be; failed: ['tests/services/api/test_entra_people.py::test_on_entra_a_people_manager_alone_cannot_give_administration[admin-role]', 'tests/services/api/test_entra_people.py::test_on_entra_a_people_manager_alone_cannot_give_administration[single-right]']
+== the Glass's list of administration rights short of one: RED where it must be; failed: ['tests/test_admin_giver_rights.py::test_the_glass_withholds_by_the_conduit_s_administration_rights']
+plants: 7, missed: 0
