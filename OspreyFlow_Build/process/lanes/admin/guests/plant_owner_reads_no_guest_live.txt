@@ -1,0 +1,5 @@
+# plant: owner_reads_no_guest (entra_people.py), at 9f932af uncommitted; stack e, the lease admin took at 2026-11-14T07:06Z; fresh PYTHONPYCACHEPREFIX
+E       AssertionError: assert (StoredOwner(roles=(), disabled=False, clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=('R',), access_read_at=datetime.datetime(2026, 11, 14, 7, 8, 2, 482361, tzinfo=datetime.timezone.utc), guest=False) is not None and False is True)
+E        +  where False = StoredOwner(roles=(), disabled=False, clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=('R',), access_read_at=datetime.datetime(2026, 11, 14, 7, 8, 2, 482361, tzinfo=datetime.timezone.utc), guest=False).guest
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_guest_is_recorded_as_one_and_stands_disabled_once_guests_are_no_longer_admitted
+1 failed, 3 passed, 23 deselected in 8.71s
