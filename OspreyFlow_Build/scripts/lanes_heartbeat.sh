@@ -73,6 +73,8 @@ FINISH="${OSPREY_FINISH_FILE:-$(dirname "$PROGRESS")/finish.tsv}"
 # the default view and watch show the route; without one, the overview.
 ROUTE="${OSPREY_ROUTE_FILE:-$(dirname "$PROGRESS")/route.tsv}"
 OWNER_DUE="${OSPREY_OWNER_DUE_FILE:-$(dirname "$PROGRESS")/owner_due.tsv}"
+# The merges the merger built (ADR-142 Amendment 7): `<main parent> <lane head> <lane> <step>` a line.
+LANDED="${OSPREY_LANDED_FILE:-$(dirname "$PROGRESS")/merger/LANDED.md}"
 AUDIT="${OSPREY_AUDIT_FILE:-$(dirname "$PROGRESS")/audit.tsv}"
 ACCOUNTS="${OSPREY_ACCOUNTS_FILE:-$HOME/.ospreyflow/accounts.conf}"   # lanes_launch.sh's own default
 mkdir -p "$DIR"
@@ -667,12 +669,45 @@ print $full ? "\nThe short view: lanes_heartbeat.sh · lane by lane: lanes_heart
   : "\nEvery block in full: lanes_heartbeat.sh --full · lane by lane: lanes_heartbeat.sh --lanes\n";
 '
 
+# The steps git says are merged, "<lane>\t<step>" a line (the owner, 14 November 2026: twice in a day the route
+# showed steps building after they were on main, from hand-typed rows). A progress.tsv row is merged when the
+# branch its sixth column names has its head on main, or when merger/LANDED.md has a line naming its lane and
+# step followed by `done`, whatever its status says. The head must have come in by a merge (an ancestor of main
+# not on main's first-parent line): a branch just cut from main, with nothing of its own, is an ancestor too and
+# is not done. A row with no branch keeps its typed word: a step's parts merge ahead from its branch (step 4's
+# plan, step 5's drafts, step 6's run sheet, 14 November), so the branch named is the one carrying the step's
+# whole delivery, and a branch is never guessed from the lane and step's names.
+merged_by_git() {
+  local ref="${OSPREY_MAIN_REF:-main}" repo="${OSPREY_REPO:-$SCRIPTS_DIR}" line
+  local -a f
+  local spine
+  spine="$(git -C "$repo" rev-list --first-parent "$ref" 2>/dev/null || true)"
+  while IFS= read -r line; do
+    case "$line" in "#"*|"") continue ;; esac
+    IFS=$'\t' read -r -a f <<< "$line"
+    [ "${#f[@]}" -ge 6 ] && [ -n "${f[5]}" ] && [ "${f[5]}" != "-" ] || continue
+    local tip
+    tip="$(git -C "$repo" rev-parse -q --verify "${f[5]}^{commit}" 2>/dev/null)" || continue
+    git -C "$repo" merge-base --is-ancestor "$tip" "$ref" 2>/dev/null || continue
+    case $'\n'"$spine"$'\n' in *$'\n'"$tip"$'\n'*) continue ;; esac
+    printf '%s\t%s\n' "${f[0]}" "${f[1]}"
+  done 2>/dev/null < "$PROGRESS" || true
+  # LANDED.md: `<main parent> <lane head> <lane> <step> done [words]`, the step's last merge. The lines before 14
+  # November are either two commits alone or a part's merge named by its step ("docs v052-sweep part one", "platform
+  # v052-measure" for step 4's plan), so neither form counts; only the word `done` after the step says it finished.
+  awk '$1 ~ /^[0-9a-f]{7,40}$/ && $2 ~ /^[0-9a-f+]{7,}$/ && NF >= 5 && $5 == "done" { print $3 "\t" $4 }' \
+    "$LANDED" 2>/dev/null || true
+}
+
 # The route view (ROUTE_052.md, "The heartbeat's route view"): one screen, nothing else needing reading.
 route_view() {
   local lanes needs lane st note
+  local merged
   lanes="$(mktemp "$DIR/.route.XXXXXX")"; needs="$(mktemp "$DIR/.routeneeds.XXXXXX")"
+  merged="$(mktemp "$DIR/.routemerged.XXXXXX")"
   # shellcheck disable=SC2064   # these files, now
-  trap "rm -f '$lanes' '$needs'" EXIT
+  trap "rm -f '$lanes' '$needs' '$merged'" EXIT
+  merged_by_git > "$merged"
   NEEDS_COPY="$needs" show >/dev/null
   if [ -n "${OVERVIEW_NEEDS:-}" ]; then cp "$needs" "$OVERVIEW_NEEDS"; fi
   for lane in $LANES; do
@@ -680,8 +715,8 @@ route_view() {
     printf '%s\t%s\t%s\n' "$lane" "${st:--}" "$note" >> "$lanes"
   done
   P_CLOCK="$(clock)" P_NOW="$(now)" P_PROGRESS="$PROGRESS" P_ROUTE="$ROUTE" P_OWNER_DUE="$OWNER_DUE" \
-    P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_DIR="$DIR" perl -CSD -e "$STAGES_PL$ROUTE_PL"
-  rm -f "$lanes" "$needs"; trap - EXIT
+    P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_MERGED="$merged" P_DIR="$DIR" perl -CSD -e "$STAGES_PL$ROUTE_PL"
+  rm -f "$lanes" "$needs" "$merged"; trap - EXIT
 }
 
 # shellcheck disable=SC2016   # perl, not the shell, expands these
@@ -705,6 +740,9 @@ if (open(my $h, "<:encoding(UTF-8)", $ENV{P_ROUTE})) {
 my @route = grep { @$_ >= 8 } rows($ENV{P_ROUTE});
 my @progress = grep { @$_ >= 5 } rows($ENV{P_PROGRESS});
 my %status; $status{"$_->[0]:$_->[1]"} = $_->[3] for @progress;
+# What git says is merged is done, whatever the row types (merged_by_git).
+for (grep { @$_ >= 2 } rows($ENV{P_MERGED})) { $status{"$_->[0]:$_->[1]"} = "done" }
+$_->[3] = $status{"$_->[0]:$_->[1]"} for @progress;
 my %beat; for (grep { @$_ >= 3 } rows($ENV{P_LANES})) { $beat{$_->[0]} = [$_->[1], $_->[2]] }
 
 # Each step: its state from its lane`s own progress row ("done" only when merged, its gates passed) and beat
@@ -734,6 +772,16 @@ for my $r (@route) {
   push @done, $r if $state eq "done";
   push @risk, $r if $state ne "done" && $crit eq "y" && day_of($end) < $today;
 }
+# Ready to start (the owner, 14 November 2026): a step not started whose `after` steps are all done, whatever
+# its typed start, with the days it could gain against that start. An `after` naming no route step is not done.
+my %state_of = map { $_->[0] => $_->[8] } @route;
+for my $r (@route) {
+  next unless $r->[8] eq "not started" && $r->[6] ne "-" && $r->[6] ne "";
+  my @after = grep { /\S/ } split /\s*,\s*/, $r->[6];
+  next if !@after || grep { ($state_of{$_} // "") ne "done" } @after;
+  my $gain = day_of($r->[3]) - $today;
+  $r->[8] = $gain > 0 ? "ready, " . plural($gain, "day") . " ahead of its start" : "ready";
+}
 
 my $first = (sort { $a <=> $b } map { day_of($_->[3]) } @route)[0] // $today;
 my $last = defined $target ? day_of($target) : $today;
@@ -744,9 +792,9 @@ my $word = (@done < @route && $today > $last) ? "late" : @risk ? "at risk" : "on
 print "OSPREYFLOW · $ENV{P_CLOCK}\n";
 printf "ROUTE TO %s · %s · %s · %s\n", uc $release, (defined $target ? said($target) : "no date"),
   ($left >= 0 ? plural($left, "day") . " left" : plural(-$left, "day") . " past"), $word;
-my $built = grep { $_->[8] =~ /^built/ } @route;
-printf "  %s %d of %d steps done%s · %s day %d of %d\n", bar(@route ? @done / @route : 0, 20), scalar @done,
-  scalar @route, ($built ? " · $built built, waiting to merge" : ""), bar($total ? $used / $total : 0, 13), $used, $total;
+my $built = grep { $_->[8] =~ /^built/ } @route; my $ready = grep { $_->[8] =~ /^ready/ } @route;
+printf "  %s %d of %d steps done%s%s · %s day %d of %d\n", bar(@route ? @done / @route : 0, 20), scalar @done,
+  scalar @route, ($built ? " · $built built, waiting to merge" : ""), ($ready ? " · $ready ready to start" : ""), bar($total ? $used / $total : 0, 13), $used, $total;
 if (my ($r) = sort { day_of($a->[4]) <=> day_of($b->[4]) } @risk) {
   my $more = @risk > 1 ? sprintf(" (+%d more at risk)", @risk - 1) : "";
   print cut(sprintf("  At risk: %s %s (%s) was due %s", $r->[0], $r->[1], $r->[2], said($r->[4])),
@@ -768,7 +816,7 @@ for my $r (@route) {
   # The state, then only what is worth saying: its stage, days behind, what it waits on; then its title.
   my @said = ($staged ? "$state, $staged" : $state);
   push @said, plural($late, "day") . " behind" if $state ne "done" && $late > 0;
-  push @said, "after $after" if $state ne "done" && $after ne "-" && $after ne "";
+  push @said, "after $after" if $state ne "done" && $state !~ /^ready/ && $after ne "-" && $after ne "";
   my $line = sprintf("  %-3s %s %-12s %-9s %s %s · %s", $id, ($crit eq "y" ? "★" : " "), $lane, $dates,
     bar($frac, 6), join(" · ", @said), $title);
   push @rows, [cut($line, 120), $listed];

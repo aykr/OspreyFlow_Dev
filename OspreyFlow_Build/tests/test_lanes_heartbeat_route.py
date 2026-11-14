@@ -17,6 +17,8 @@ written by the real `beat`, every stage list by the real `stages`, and the clock
 
 from __future__ import annotations
 
+import os
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -373,3 +375,113 @@ def test_a_step_with_spaces_a_slash_and_an_accent_is_found_where_it_was_written(
     out = route(16)
     assert "running, stage 2 of 2" in _row(out, "3c")
     assert _under(out, "3c") == ["✅ 1. Plan", "⏳ 2. Feed"]
+
+
+# --- done from git, ready from the route (the owner, 14 November 2026) --------------------------------
+# Twice in a day the route showed steps building after they were on main, and later steps kept their typed dates
+# after the steps before them finished, both from hand-typed rows. A row's step is done when the branch its sixth
+# column names has its head on main through a merge, or merger/LANDED.md says it landed `done`; a step not started
+# whose `after` steps are all done is ready, with the days it could gain. Rule 15: the repository is built by real
+# git, its merges `--no-ff` as the merger's are, and LANDED.md's lines are in the shapes it holds today.
+
+def _repo(base: Path) -> Path:
+    """main, with lane/rules-index merged by a merge; lane/rules-load cut from main with nothing of its own;
+    lane/case-fixes with a commit main lacks; lane/rules-v052-index, the name the lane-step convention would
+    give 3c, merged too (a part merged ahead, as step 4's plan was)."""
+    env = {**os.environ, "GIT_AUTHOR_NAME": "T", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+           "GIT_COMMITTER_NAME": "T", "GIT_COMMITTER_EMAIL": "t@example.invalid"}  # fmt: skip
+    repo = base / "repo"
+    repo.mkdir()
+
+    def git(*a: str) -> None:
+        subprocess.run(["git", *a], cwd=repo, env=env, check=True, capture_output=True, text=True)
+
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "start")
+    for branch in ("lane/rules-index", "lane/rules-v052-index"):
+        git("checkout", "-q", "-b", branch)
+        git("commit", "-q", "--allow-empty", "-m", f"work on {branch}")
+        git("checkout", "-q", "main")
+        git("merge", "-q", "--no-ff", branch, "-m", f"merge: {branch}")
+    git("branch", "lane/rules-load")
+    git("checkout", "-q", "-b", "lane/case-fixes")
+    git("commit", "-q", "--allow-empty", "-m", "fixes not yet merged")
+    git("checkout", "-q", "main")
+    return repo
+
+
+@pytest.fixture
+def gitroute(route, hb, tmp_path: Path):  # noqa: F811
+    repo = _repo(tmp_path)
+
+    def view(day: int = 16, progress: str = PROGRESS, landed: str | None = None) -> str:
+        (tmp_path / "progress.tsv").write_text(progress, encoding="utf-8")
+        if landed is not None:
+            (tmp_path / "merger").mkdir(exist_ok=True)
+            (tmp_path / "merger" / "LANDED.md").write_text(landed, encoding="utf-8")
+        out = hb(OSPREY_NOW=_at(day), OSPREY_REPO=str(repo), **route.env)
+        assert out.returncode == 0, out.stderr[-800:]
+        return out.stdout
+
+    return view
+
+
+def _branch(progress: str, step: str, branch: str) -> str:
+    row = next(line for line in progress.splitlines() if f"\t{step}\t" in line)
+    return progress.replace(row, f"{row}\t{branch}")
+
+
+def test_a_row_typed_building_whose_branch_is_on_main_by_a_merge_shows_done(gitroute) -> None:
+    out = gitroute(16, _branch(PROGRESS, "v052-index", "lane/rules-index"))
+    assert " done" in _row(out, "3c") and "running" not in _row(out, "3c")
+    assert "2 of 8 steps done" in out  # the headline counts it
+    assert "3 of 11" not in out and "4 of 11 steps merged" in out  # and so does the finished line
+
+
+def test_a_branch_not_on_main_by_a_merge_keeps_the_row_s_word(gitroute) -> None:
+    # Cut from main with nothing of its own: an ancestor of main, but on its first-parent line, so not done.
+    out = gitroute(16, _branch(PROGRESS, "v052-load", "lane/rules-load"))
+    assert " not started" in _row(out, "B")
+    # A commit main lacks; a branch no repository has; a dash: the typed word stands.
+    out = gitroute(16, _branch(_branch(PROGRESS, "v052-fixes", "lane/case-fixes"), "v052-load", "lane/gone"))
+    assert " not started" in _row(out, "3e") and " not started" in _row(out, "B")
+    assert " running" in _row(gitroute(16, _branch(PROGRESS, "v052-index", "-")), "3c")
+
+
+def test_a_row_naming_no_branch_is_never_given_one_by_its_name(gitroute) -> None:
+    """lane/rules-v052-index is the lane-step convention's name for 3c and is on main by a merge, as step 4's
+    plan, step 5's drafts and step 6's run sheet were on 14 November while their steps were not done."""
+    assert " running" in _row(gitroute(16), "3c")
+
+
+def test_a_landed_line_counts_only_when_it_says_the_step_is_done(gitroute) -> None:
+    head = "# Merges the merger prepared\n\nda162e6 b6570fd case L3.H2\n0dcf45d 4e50d89\n"
+    # Today's forms: two commits alone, and a part named by its step. Neither is the step done.
+    out = gitroute(16, landed=head + "8d6a898 a386fe3 rules v052-index part one (v0.5.1)\n"
+                   "4283b91 3bd66ec+bcca270 rules v052-load\n")  # fmt: skip
+    assert " running" in _row(out, "3c") and " not started" in _row(out, "B")
+    out = gitroute(16, landed=head + "aca0591 2916cf6 rules v052-index done (step 3c)\n")
+    assert " done" in _row(out, "3c")
+    assert " done" not in _row(out, "B")  # a line for one lane's step is not another's (B, after 3c, is ready)
+
+
+def test_a_step_whose_after_steps_are_all_done_shows_ready_with_the_days(gitroute) -> None:
+    """B is after 3c and typed to start on the 16th; on the 14th, 3c done, it is ready two days ahead. Step 4
+    is after 3c, 3d and B: 3d is built, waiting to merge, so 4 is not ready."""
+    out = gitroute(14, _branch(PROGRESS, "v052-index", "lane/rules-index"))
+    assert " ready, 2 days ahead of its start" in _row(out, "B") and "after 3c" not in _row(out, "B")
+    assert " not started" in _row(out, "4") and "after 3c,3d,B" in _row(out, "4")
+    assert "· 1 ready to start" in out
+    # On its typed start or after it, ready alone.
+    assert _row(gitroute(16, _branch(PROGRESS, "v052-index", "lane/rules-index")), "B").count("ready ·") == 1
+
+
+def test_ready_needs_every_after_step_done_and_a_route_step_to_name(gitroute, tmp_path) -> None:
+    # 3d is after A, which is no step of the route: never ready, though 3d is built here.
+    progress = _branch(PROGRESS, "v052-index", "lane/rules-index").replace(
+        "v052-search\tL\treview", "v052-search\tL\ttodo")
+    assert "ready" not in _row(gitroute(14, progress), "3d")
+    # A step under way is not ready: it has started.
+    progress = _branch(PROGRESS, "v052-index", "lane/rules-index").replace(
+        "v052-load\tM\ttodo", "v052-load\tM\tbuilding")
+    assert " running" in _row(gitroute(14, progress), "B")
