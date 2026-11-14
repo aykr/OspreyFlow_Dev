@@ -145,3 +145,6 @@ studio	v052-pipeline-words	Ingest Studio	Client install
 case-b	v052-help-everywhere	Four places, the Glass and Admin	Client install
 studio	v052-model-words	Four places, the Glass and Admin	Client install
 admin	v052-admin-grant	Four places, the Glass and Admin	Client install
+case	v052-suppress-reload	Cases and drawing boards	Client install
+case	v052-suppress-reason	Cases and drawing boards	Client install
+platform	v052-startbuild-index	Four places, the Glass and Admin	Client install

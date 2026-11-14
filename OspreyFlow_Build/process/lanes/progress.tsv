@@ -147,3 +147,6 @@ studio	v052-pipeline-words	S	building	v0.5.2 fix (N): The Ingest Studio's messag
 case-b	v052-help-everywhere	S	building	v0.5.2 fix (H): Help (?) opens its panel from every view, not only Graph
 studio	v052-model-words	S	building	v0.5.2 fix (D2): The model's refusals in words: the provider's 429 and 401, a time-out said instead of a 500, a deadline on the Glass's model fetches (studio's demo research)
 admin	v052-admin-grant	S	building	v0.5.2 fix (A2): Only an administrator can give the osprey-admin role; a people manager is refused in words (studio's demo research; rule 4)
+case	v052-suppress-reload	S	building	v0.5.2 fix (S7): Mark for suppression survives a reload: the marks are read back, and a marked node offers Remove
+case	v052-suppress-reason	S	building	v0.5.2 fix (S8): Mark for suppression asks the analyst for a reason (ADR-046 step 1), not a fixed one
+platform	v052-startbuild-index	S	building	v0.5.2 fix (S9): ospreyflow start --build rebuilds the search index, as install and update do
