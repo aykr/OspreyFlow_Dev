@@ -217,11 +217,18 @@ PLANTS = [
         f"{T_S}::test_with_no_index_the_fallback_says_there_is_none",
     ),
     Plant(
-        "the fallback's depth not reported as more",
+        "Next offered on empty pages past the fallback's depth (docs' reviewer, 14 Nov)",
         S,
-        "        more=len(found) > start + size or reached,",
-        "        more=len(found) > start + size,",
-        f"{T_S}::test_the_fallback_says_more_at_its_depth",
+        "    more = len(found) > start + size\n",
+        "    more = len(found) > start + size or reached\n",
+        f"{T_S}::test_the_fallback_offers_a_next_page_only_when_it_holds_records",
+    ),
+    Plant(
+        "the list stopped by the fallback's depth without saying so",
+        S,
+        "    if reached and not more:\n        reason += DEPTH_REACHED.format(depth=FALLBACK_DEPTH)\n",
+        "",
+        f"{T_S}::test_the_fallback_says_in_words_where_its_depth_stops_the_list",
     ),
     Plant(
         "the fallback's group applied after paging",
