@@ -66,3 +66,13 @@ Each plant in the working tree only, restored after its run, shown as < before a
 5 passed in 0.55s
 
 Not shown red on their own: line 81 (section 7's /healthz: the render's text has several, so no single plant removes it), line 89 ('is to install', red in run 2 beside line 88) and line 100's reporting-on half (red in run 2 by the struck words). Each is a second assertion on a sentence another run already shows red.
+
+== Step order (platform-b, via the orchestrator, 14 Nov): the Terraform's pull request after step 3
+test_the_terraform_s_pull_request_follows_the_render_that_makes_it, offline, closed ports 59991-59994:
+- green on the fix: 6 passed.
+- red on the guide at a5c3833 (the sentence in step 2): step 3 lacks "the Terraform is this render's
+  `terraform/` folder" (assert ... is True).
+- red with the fix kept and step 2 planted with "its pull request is applied before the install":
+  AssertionError: the pull request in the render's step, not before it; ['2', '3'] == ['3'].
+- spec/10 mirrored with --write; test_admin_guide_copies, test_guide_6a_upgrade and
+  test_guides_cloud_platform: 18 passed.
