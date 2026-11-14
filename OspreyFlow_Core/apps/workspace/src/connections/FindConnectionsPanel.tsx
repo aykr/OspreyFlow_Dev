@@ -176,8 +176,8 @@ export function FindConnectionsPanel({
   async function add(route: Path, key: string): Promise<void> {
     setError(null);
     try {
-      const delta = await seedRoute(context, route, canvas);
-      if (delta) onDelta(delta);
+      // The add, then the reader's own clusters (ADR-124 Amendment 19).
+      for (const delta of (await seedRoute(context, route, canvas)) ?? []) onDelta(delta);
       onMark(degreeMarks(route));
       setMarked(true);
       setAdded((prev) => new Set(prev).add(key));

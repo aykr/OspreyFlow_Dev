@@ -134,3 +134,15 @@ export interface ClusterExplanation {
   member_node_ids: string[];
   pairs: PairwiseExplanation[];
 }
+
+/** A seed's or an expansion's answer (`ExpansionOutcome` in `models.py`): its delta and, since ADR-124
+ * Amendment 19, the cluster each of the reader's own nodes is in at the case's τ, for them alone. */
+export interface ExpansionOutcome {
+  delta: WorkingSetDelta;
+  clusters?: DeltaReproject | null;
+}
+
+/** What to apply of an outcome, in order: its delta, then the reader's own clusters, if any. */
+export function outcomeDeltas(outcome: ExpansionOutcome): WorkingSetDelta[] {
+  return outcome.clusters ? [outcome.delta, outcome.clusters] : [outcome.delta];
+}

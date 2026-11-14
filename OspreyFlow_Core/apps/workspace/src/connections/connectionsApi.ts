@@ -5,7 +5,7 @@
 // way the Pathfinder puts a path there (ADR-033): what the canvas lacks is sent to the case's `/seed`,
 // so it is part of the working set, not only drawn.
 import type { Connections, Edge, Node, Path } from "../../../../packages/schemas/generated";
-import type { WorkingSetDelta } from "../workingset/models";
+import { outcomeDeltas, type ExpansionOutcome, type WorkingSetDelta } from "../workingset/models";
 
 export interface ConnectionsContext {
   apiBaseUrl: string;
@@ -69,18 +69,18 @@ export async function findConnections(
   return (await response.json()) as Connections;
 }
 
-/** Sends what the canvas lacks of `route` to the case's working set, and gives back the change to
- * draw; `null` when the route is already all there, so nothing is asked. */
+/** Sends what the canvas lacks of `route` to the case's working set, and gives back the changes to
+ * draw, in order; `null` when the route is already all there, so nothing is asked. */
 export async function seedRoute(
   context: ConnectionsContext,
   route: Path,
   canvas: CanvasContents,
-): Promise<WorkingSetDelta | null> {
+): Promise<WorkingSetDelta[] | null> {
   return seedElements(context, route.nodes, route.edges, canvas, "The route");
 }
 
 /** Sends what the canvas lacks of `nodes` and `edges` to the case's working set — each once — and
- * gives back the change to draw; `null` when all of it is there already. Also how Explore adds what
+ * gives back the changes to draw, in order (the add, then the reader's own clusters); `null` when all of it is there already. Also how Explore adds what
  * an analyst chose (ADR-100 Amendment 9), so the server's working set and the canvas's own counters
  * see it, rather than a local add neither does. */
 export async function seedElements(
@@ -89,7 +89,7 @@ export async function seedElements(
   edges: readonly Edge[],
   canvas: CanvasContents,
   what = "It",
-): Promise<WorkingSetDelta | null> {
+): Promise<WorkingSetDelta[] | null> {
   const lackingNodes = [...new Map(nodes.filter((n) => !canvas.hasNode(n.id)).map((n) => [n.id, n])).values()];
   const lackingEdges = [...new Map(edges.filter((e) => !canvas.hasEdge(e.id)).map((e) => [e.id, e])).values()];
   if (lackingNodes.length === 0 && lackingEdges.length === 0) return null;
@@ -99,6 +99,6 @@ export async function seedElements(
     body: JSON.stringify({ nodes: lackingNodes, edges: lackingEdges }),
   });
   if (!response.ok) throw new Error(`${what} could not be added to the canvas (${response.status}). Try again.`);
-  const outcome = (await response.json()) as { delta: WorkingSetDelta };
-  return outcome.delta;
+  // The add, then the reader's own clusters (ADR-124 Amendment 19), in that order.
+  return outcomeDeltas((await response.json()) as ExpansionOutcome);
 }

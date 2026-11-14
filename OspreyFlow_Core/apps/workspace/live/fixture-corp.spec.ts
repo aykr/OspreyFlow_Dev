@@ -284,6 +284,24 @@ test("explain on a merged cluster names the pair's real resolution score", async
   // Round 12d read the resulting `merged: 0` as the fixture being wrong and compared the edges'
   // `weight` (§6.1's load-time strength) against §C5's match `score`. Round 12e measured both:
   // every stored `score` matches §C5 exactly. The fixture was never at fault.
+  // What the Glass is sent, said if Explain is not offered: each frame on the case's stream and each seed,
+  // expansion and threshold answer, their ops and cluster ids (ADR-124 Amendment 19, step 3h).
+  const heard: string[] = [];
+  const said = (from: string, body: string) => {
+    try {
+      const b = JSON.parse(body) as Record<string, unknown>;
+      const one = (d: Record<string, unknown> | undefined) =>
+        d ? `${String(d.op)}#${String(d.seq)} ${JSON.stringify(d.affected_cluster_ids ?? (d.nodes as { id: string; resolution?: { cluster_id?: string } }[] | undefined)?.map((n) => [n.id, n.resolution?.cluster_id ?? null]) ?? "")}` : "";
+      heard.push(`${from}: ${one((b.delta as Record<string, unknown>) ?? b)}${b.clusters ? ` + ${one(b.clusters as Record<string, unknown>)}` : ""}`.slice(0, 600));
+    } catch {
+      heard.push(`${from}: ${body.slice(0, 120)}`);
+    }
+  };
+  page.on("websocket", (ws) => ws.on("framereceived", (f) => said("stream", String(f.payload))));
+  page.on("response", async (r) => {
+    const path = new URL(r.url()).pathname;
+    if (r.request().method() !== "GET" && /\/(seed|expand|resolution\/threshold)$/.test(path)) said(path.split("/").slice(-1)[0]!, await r.text().catch(() => ""));
+  });
   await page.goto(await freshWorkspaceUrl(request));
   await showExactly(page, PAIR_A.nino, PAIR_A.id);
   await showExactly(page, PAIR_B.nino, PAIR_B.id);
@@ -330,7 +348,7 @@ test("explain on a merged cluster names the pair's real resolution score", async
   await canvas.focus();
   await page.keyboard.press("\\");
   const explain = menu.getByRole("menuitem", { name: /Explain cluster/ });
-  await expect(explain).toBeVisible();
+  await expect(explain, `Explain cluster not offered. What the Glass was sent:\n${heard.join("\n")}`).toBeVisible();
   await explain.click();
 
   // The canvas's popover, picked by its own heading: it has no name, and the keys panel the Glass

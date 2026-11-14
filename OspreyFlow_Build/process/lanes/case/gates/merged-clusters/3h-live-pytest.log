@@ -1,0 +1,130 @@
+Running on ospreyflow-test (stack b, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T113757Z-1c611d27/log: sh -c cd OspreyFlow_Build && ../OspreyFlow_Core/.venv/bin/python -m pytest -p no:cacheprovider -q -rfE tests/services/api/working_set/
+........................................................................ [ 22%]
+.......................................F................................ [ 44%]
+........................................................................ [ 67%]
+........................................................................ [ 89%]
+.................................                                        [100%]
+=================================== FAILURES ===================================
+_ test_explain_cluster_omits_a_hidden_member_rather_than_naming_its_id[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x73c1c6899da0>)
+
+    async def test_explain_cluster_omits_a_hidden_member_rather_than_naming_its_id(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        async with factory.context() as graph:
+            official_write = _node_write("OFFICIAL", "+441111111111")
+            secret_write = _node_write("SECRET", "+442222222222")
+            tx = await graph.begin_transaction()
+            (official_id, secret_id) = await graph.upsert_nodes([official_write, secret_write], tx)
+            await graph.commit_transaction(tx)
+    
+            cluster_id = official_id
+            store = FakeWorkingSetStore()
+            await store.add_nodes(
+                INVESTIGATION,
+                [
+                    _stub_node(official_id, "OFFICIAL", cluster_id=cluster_id),
+                    _stub_node(secret_id, "SECRET", cluster_id=cluster_id),
+                ],
+            )
+    
+            service = WorkingSetService(graph, store, load_uk_le_scheme())
+    
+>           official_view = await service.explain_cluster(INVESTIGATION, cluster_id, OFFICIAL)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/services/api/working_set/test_explain_cluster_access_control.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <services.api.working_set.service.WorkingSetService object at 0x73c1a44cef00>
+investigation_id = 'inv-1', cluster_id = '01M7CXKJX22PQ3B3EN63PK4R0Y'
+principal = Principal(id='analyst-official', clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=[], roles=[], datasets=None, routes=None)
+
+    async def explain_cluster(
+        self, investigation_id: str, cluster_id: ClusterId, principal: Principal
+    ) -> ClusterExplanation:
+        """`GET /v1/resolution/explain/{cluster}` (`03_CONDUIT_MIDDLEWARE.md` §3.5): "the
+        comparison vector and score that produced a cluster... Return the per-comparison match
+        weights, not just the total." Reads the working set's *last-computed*
+        `resolution.cluster_id` annotation — `set_resolution_threshold`/`manual_link`/
+        `manual_split` are the only writers of it — rather than recomputing clusters fresh, so
+        what an analyst sees explained is exactly the clustering their session is currently
+        showing, not whatever a threshold that happens to be current right now would produce.
+    
+        Found alongside Phase 6a Stage 2's own `set_resolution_threshold` gap, same cause: this
+        route names a `cluster_id`, not individual nodes, so nothing upstream of this method had
+        ever checked that every member of that cluster is visible to `principal` — a lower-
+        clearance principal naming a cluster containing a hidden node would previously get that
+        node's own id back directly in `member_node_ids`, worse than an aggregate-count leak. The
+        candidate membership (from investigation-shared, unfiltered `source_fidelity_nodes`) is
+        narrowed to `expand`'s own principal-filtered result before being returned, the same
+        pattern as `set_resolution_threshold`; an empty result after narrowing raises
+        `ClusterNotFoundError`, indistinguishable from the cluster never having existed, per
+        the same existence-leak discipline access control must hold to."""
+        # ADR-124 Amendment 19: the reader's own clusters, as their canvas was given them, not a value
+        # stored on the shared nodes (none is any more).
+        clusters = await self._reader_clusters(investigation_id, principal)
+        candidate_ids = {node_id for node_id, cluster in clusters.items() if cluster == cluster_id}
+        if not candidate_ids:
+>           raise ClusterNotFoundError(cluster_id)
+E           services.api.working_set.models.ClusterNotFoundError: 01M7CXKJX22PQ3B3EN63PK4R0Y
+
+../OspreyFlow_Core/services/api/working_set/service.py:870: ClusterNotFoundError
+=============================== warnings summary ===============================
+../OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/case/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+--------------------- 15 unmarked test(s) reached a store ----------------------
+tests/services/api/working_set/test_compute_access_control.py::test_a_hidden_neighbour_never_inflates_a_visible_nodes_computed_degree[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_connection_strength_access_control.py::test_a_dataset_trigger_the_reader_cannot_read_is_neither_applied_nor_told[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_connection_strength_access_control.py::test_a_hidden_record_never_thickens_a_visible_link_through_the_case_read[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_connection_strength_access_control.py::test_client_parity_through_the_case_read_never_counts_a_hidden_link[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_connection_strength_access_control.py::test_the_case_rarity_read_in_the_clients_measure_never_counts_a_hidden_holder[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_connection_strength_access_control.py::test_the_case_rarity_read_never_counts_or_names_a_hidden_entity[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_explain_cluster_access_control.py::test_explain_cluster_of_only_hidden_members_is_indistinguishable_from_not_found[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_explain_cluster_access_control.py::test_explain_cluster_omits_a_hidden_member_rather_than_naming_its_id[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_link_weight_on_the_wire.py::test_the_weight_on_the_wire_is_the_stored_weight[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_manual_resolution_access_control.py::test_manual_link_denies_a_lower_clearance_principal_naming_a_hidden_node[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_no_corpus_count_reveals_a_secret_link.py::test_an_official_analyst_s_expansion_carries_no_count_that_reveals_a_secret_link[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_resolution_threshold_access_control.py::test_a_principal_blind_to_a_node_cannot_reset_its_persisted_cluster_state[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_seed_against_the_vault.py::test_a_hidden_a_superseded_and_an_absent_id_answer_alike_on_the_adapter[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_seed_against_the_vault.py::test_a_link_with_an_unverified_end_is_dropped_against_the_adapter[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_seed_against_the_vault.py::test_seed_stores_the_vaults_bodies_and_refuses_forged_ones[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+============================= slowest 30 durations =============================
+8.88s call     tests/services/api/working_set/test_links_among.py::test_routes_past_the_cap_add_nothing_and_raise_limit_exceeded
+8.38s call     tests/services/api/working_set/test_links_among.py::test_links_that_would_pass_the_cap_are_left_out_of_an_expansion_and_it_says_so
+8.04s call     tests/services/api/working_set/test_service.py::test_expand_past_the_edge_cap_raises_limit_exceeded
+6.52s call     tests/services/api/working_set/test_links_among.py::test_on_demand_past_the_cap_adds_nothing_and_raises_limit_exceeded
+2.71s call     tests/services/api/working_set/test_compute_access_control.py::test_a_hidden_neighbour_never_inflates_a_visible_nodes_computed_degree[graph_arcadedb[gremlin]]
+1.85s call     tests/services/api/working_set/test_service.py::test_a_breach_leaves_the_sequence_counter_untouched
+1.76s call     tests/services/api/working_set/test_service.py::test_expand_past_the_node_cap_raises_limit_exceeded_with_all_three_options
+1.25s call     tests/services/api/working_set/test_connection_strength_access_control.py::test_a_hidden_record_never_thickens_a_visible_link_through_the_case_read[graph_arcadedb[gremlin]]
+1.19s call     tests/services/api/working_set/test_connection_strength_access_control.py::test_the_case_rarity_read_never_counts_or_names_a_hidden_entity[graph_arcadedb[gremlin]]
+1.05s call     tests/services/api/working_set/test_connection_strength_access_control.py::test_the_case_rarity_read_in_the_clients_measure_never_counts_a_hidden_holder[graph_arcadedb[gremlin]]
+1.00s call     tests/services/api/working_set/test_connection_strength_access_control.py::test_client_parity_through_the_case_read_never_counts_a_hidden_link[graph_arcadedb[gremlin]]
+0.88s call     tests/services/api/working_set/test_connection_strength_access_control.py::test_a_dataset_trigger_the_reader_cannot_read_is_neither_applied_nor_told[graph_arcadedb[gremlin]]
+0.74s call     tests/services/api/working_set/test_seed_against_the_vault.py::test_a_link_with_an_unverified_end_is_dropped_against_the_adapter[graph_arcadedb[gremlin]]
+0.71s call     tests/services/api/working_set/test_link_weight_on_the_wire.py::test_the_weight_on_the_wire_is_the_stored_weight[graph_arcadedb[gremlin]]
+0.60s call     tests/services/api/working_set/test_seed_against_the_vault.py::test_seed_stores_the_vaults_bodies_and_refuses_forged_ones[graph_arcadedb[gremlin]]
+0.60s call     tests/services/api/working_set/test_manual_resolution_access_control.py::test_manual_link_denies_a_lower_clearance_principal_naming_a_hidden_node[graph_arcadedb[gremlin]]
+0.56s call     tests/services/api/working_set/test_no_corpus_count_reveals_a_secret_link.py::test_an_official_analyst_s_expansion_carries_no_count_that_reveals_a_secret_link[graph_arcadedb[gremlin]]
+0.54s call     tests/services/api/working_set/test_seed_against_the_vault.py::test_a_hidden_a_superseded_and_an_absent_id_answer_alike_on_the_adapter[graph_arcadedb[gremlin]]
+0.49s call     tests/services/api/working_set/test_links_among.py::test_at_a_degree_the_routes_between_the_selected_nodes_are_drawn
+0.46s call     tests/services/api/working_set/test_links_among.py::test_on_demand_the_links_among_the_whole_view_are_added
+0.44s call     tests/services/api/working_set/test_access_index.py::test_after_every_random_operation_the_counts_are_the_projections_for_each_reader
+0.44s call     tests/services/api/working_set/test_links_among_hides_hidden_ids.py::test_a_stored_hidden_id_and_an_absent_id_give_the_same_links_among[1]
+0.37s call     tests/services/api/working_set/test_explain_cluster_access_control.py::test_explain_cluster_of_only_hidden_members_is_indistinguishable_from_not_found[graph_arcadedb[gremlin]]
+0.37s call     tests/services/api/working_set/test_resolution_threshold_access_control.py::test_a_principal_blind_to_a_node_cannot_reset_its_persisted_cluster_state[graph_arcadedb[gremlin]]
+0.33s call     tests/services/api/working_set/test_explain_cluster_access_control.py::test_explain_cluster_omits_a_hidden_member_rather_than_naming_its_id[graph_arcadedb[gremlin]]
+0.30s call     tests/services/api/working_set/test_access_index.py::test_every_structure_equals_what_the_bodies_say_after_any_run_of_operations
+0.14s call     tests/services/api/working_set/test_access_index.py::test_each_operation_is_covered_by_the_runs_above
+0.05s call     tests/services/api/working_set/test_restore_and_remove.py::test_the_restore_route_answers_the_restorers_view_and_publishes_the_whole
+0.02s call     tests/services/api/working_set/test_links_among.py::test_a_large_expansion_does_not_ask_and_says_so
+0.01s call     tests/services/api/working_set/test_access_index.py::test_random_service_writes_leave_every_structure_equal_to_the_bodies
+=========================== short test summary info ============================
+FAILED tests/services/api/working_set/test_explain_cluster_access_control.py::test_explain_cluster_omits_a_hidden_member_rather_than_naming_its_id[graph_arcadedb[gremlin]]
+1 failed, 320 passed, 1 warning in 59.98s
+Wall time: 62 s, exit 1 (stack b, the lease case took at 2026-11-14T11:37:22Z; set-up before it 17 s)

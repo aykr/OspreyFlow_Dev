@@ -135,6 +135,22 @@ if [ "${LIVE_DIAG:-}" = 1 ]; then
       -d '{"query":"QQ118439C","page":1,"page_size":20}' |
       "$PY" -c 'import json,sys; b=json.load(sys.stdin); print([(n["id"], n.get("resolution")) for n in b.get("nodes", [])][:3])'
   done
+  echo "== step 3h: the identical pair seeded into the fresh case, one at a time; each answer's clusters"
+  for nino in QQ118439C QQ843781D; do
+    curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$FRESH/search" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+      -d "{\"query\":\"$nino\",\"page\":1,\"page_size\":20}" >"$W/found.json"
+    "$PY" -c 'import json,sys; b=json.load(open(sys.argv[1])); print(json.dumps({"nodes": b["nodes"][:1], "edges": []}))' "$W/found.json" >"$W/seed.json"
+    printf 'seed %s: ' "$nino"
+    curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$FRESH/seed" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+      -d @"$W/seed.json" | "$PY" -c 'import json,sys; b=json.load(sys.stdin); print({"added": [n["id"] for n in b.get("delta",{}).get("nodes",[])], "clusters": b.get("clusters"), "detail": b.get("detail")})'
+  done
+  printf 'expand identical-1 by SAME_AS: '
+  curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$FRESH/expand" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+    -d '{"request":{"node_ids":["corp-res-identical-1"],"depth":1,"edge_types":["SAME_AS"]}}' |
+    "$PY" -c 'import json,sys; b=json.load(sys.stdin); d=b.get("delta",{}); print({"added": [n["id"] for n in d.get("nodes",[])], "edges": len(d.get("edges",[])), "clusters": (b.get("clusters") or {}).get("affected_cluster_ids"), "detail": b.get("detail")})'
+  printf 'threshold to Strict: '
+  curl -s -X PUT "http://127.0.0.1:$CP/v1/investigations/$FRESH/resolution/threshold" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+    -d '{"threshold":0.99}' | head -c 600; echo
   echo "== the case's datasets"
   curl -s "http://127.0.0.1:$CP/v1/investigations/$CASE/datasets" -H "Authorization: Bearer $TOKEN" | head -c 900; echo
   echo "== the index asked directly for the identifier"

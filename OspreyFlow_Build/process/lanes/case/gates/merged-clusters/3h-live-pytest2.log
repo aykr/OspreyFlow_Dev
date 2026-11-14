@@ -1,0 +1,15 @@
+Running on ospreyflow-test (stack b, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T113952Z-b2473d8c/log: sh -c cd OspreyFlow_Build && ../OspreyFlow_Core/.venv/bin/python -m pytest -p no:cacheprovider -q -rfE tests/services/api/working_set/test_explain_cluster_access_control.py tests/services/api/working_set/test_resolution_threshold_access_control.py
+...                                                                      [100%]
+---------------------- 3 unmarked test(s) reached a store ----------------------
+tests/services/api/working_set/test_explain_cluster_access_control.py::test_explain_cluster_of_only_hidden_members_is_indistinguishable_from_not_found[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_explain_cluster_access_control.py::test_explain_cluster_omits_a_hidden_member_rather_than_naming_its_id[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/services/api/working_set/test_resolution_threshold_access_control.py::test_a_principal_blind_to_a_node_cannot_reset_its_persisted_cluster_state[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+============================= slowest 30 durations =============================
+0.59s call     tests/services/api/working_set/test_explain_cluster_access_control.py::test_explain_cluster_of_only_hidden_members_is_indistinguishable_from_not_found[graph_arcadedb[gremlin]]
+0.58s call     tests/services/api/working_set/test_resolution_threshold_access_control.py::test_a_principal_blind_to_a_node_cannot_reset_its_persisted_cluster_state[graph_arcadedb[gremlin]]
+0.49s call     tests/services/api/working_set/test_explain_cluster_access_control.py::test_explain_cluster_omits_a_hidden_member_rather_than_naming_its_id[graph_arcadedb[gremlin]]
+0.13s setup    tests/services/api/working_set/test_explain_cluster_access_control.py::test_explain_cluster_omits_a_hidden_member_rather_than_naming_its_id[graph_arcadedb[gremlin]]
+
+(5 durations < 0.005s hidden.  Use -vv to show these durations.)
+3 passed in 3.22s
+Wall time: 4 s, exit 0 (stack b, the lease case took at 2026-11-14T11:37:22Z; set-up before it 12 s)

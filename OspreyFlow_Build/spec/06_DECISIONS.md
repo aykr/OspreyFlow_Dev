@@ -28546,6 +28546,76 @@ or transactions tie together, which is what the inbox withholds (rule 3).
 `tests/scenarios/test_phase7_stage6c_watch_routes.py::test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities`,
 changed to this amendment (ratified at L2.8's merge).
 
+
+### ADR-124, Amendment 19 (14 November 2026) — clusters per reader; nothing shared carries a cluster id (step 3h)
+
+Status: accepted 14 November 2026. The orchestrator ruled it required behaviour (rule 6's collapse at query time, and
+rule 3), not a new choice, and told the owner it was decided. Built by the case lane.
+
+**Context.** Two faults, found together.
+- **A pair already merged never read as one.** Cluster ids reached the canvas only in a threshold or manual-resolution
+  delta, and only for nodes whose cluster membership changed (`services/resolve/projection.py`'s `diff_clusters`). A pair
+  merged at the case's τ when it entered the working set never carried one: *Explain cluster* was never offered for the
+  very pairs it explains, and its members were not drawn together. Measured live on 14 November 2026: the suggestion and
+  search routes return `resolution.cluster_id: None` for Fixture Corp's identical pair, merged at every detent
+  (`process/lanes/case/gates/live-redesign/RECORD.md`).
+- **A threshold move leaked through the shared path (rule 3).** `set_resolution_threshold`, and the manual link and split,
+  wrote the acting reader's clusters onto the case's shared stored nodes and appended them to the shared stream as one
+  `DeltaReproject`. `project_delta` cut its keys to nodes the reader may read, but not its values. A cluster id is a node
+  id (its smallest member's), so a value could name a node hidden from that reader. A cluster formed through a member a
+  reader may not see also told them the member was there: V and X, joined only through H, arrived with one id for a
+  reader not cleared for H. Snapshots carried the stored values too.
+
+**Decision.**
+1. **Clusters are computed per reader, and only for that reader.** A reader's clusters at the case's τ come from their own
+   visible nodes and the `SAME_AS` and `NOT_SAME_AS` links among them that the adapter gives them (`narrow_to_visible`,
+   an `expand` over those types). A member they may not see contributes no cluster id and joins nothing. Each cluster's
+   id is its smallest visible member's (`WorkingSetService._reader_clusters`).
+2. **Where a reader receives them, on their own answers only:**
+   - A seed's or an expansion's answer carries `clusters`: a `DeltaReproject` with the reason `resolution_on_entry`, for
+     every node now in a cluster of more than one. It is computed out from the nodes the add brought, through the view's
+     resolution links, so an add whose nodes have none reads one small `expand`.
+   - Their sync snapshot's nodes carry them.
+   - A threshold move's, or a manual link's or split's, own answer carries the acting reader's change.
+   - The Glass applies `clusters` after the add (`outcomeDeltas`). It does not take them for a change of the resolution:
+     a fold made from a same-as link stays folded.
+3. **Nothing shared carries a cluster id.** The shared stream gets a marker for a threshold move or a manual decision: a
+   `DeltaReproject` with no ids, as §3.2 of spec 03 shows it. No cluster id is written to the case's stored nodes. Every
+   read strips a stored value (`_without_cluster` in `_project`), so a value written before this amendment reaches no
+   reader, and a stored reproject that carries ids is sent as the marker.
+4. **The accepted cost.** Another reader's threshold move reaches a reader's canvas at their next sync or expand, not at
+   once. Their canvas is never wrong in the meantime, only behind.
+
+**Tests (rule 12).**
+- `tests/services/api/working_set/test_merged_clusters.py`:
+  - a seeded, already-merged pair arrives with a shared cluster id;
+  - the second member seeded alone joins the first;
+  - a pair below τ says nothing;
+  - a member hidden from the reader gives the other no cluster id, and no value is the hidden id;
+  - the clusters are on the reader's own answer, never the shared stream or store;
+  - an expansion that brings the other member joins them;
+  - another reader's threshold move gives no cluster id through a member this one may not see, in the delta and in their
+    snapshot (the leak, planted back and shown red). Its first version moved Balanced to Strict at 0.999991, which changes
+    no cluster, so it stayed green with the old path planted back and proved nothing (rule 15). It now moves from apart at
+    Strict to merged at Balanced, and asserts the move joined them, so it cannot go vacuous again;
+  - a cluster id stored before the amendment reaches no reader.
+- `tests/services/api/working_set/test_delta_projection.py`: a stored reproject reaches every reader as a marker.
+- `tests/services/api/working_set/test_resolution_threshold.py` and `test_manual_resolution.py`: each reader's clusters
+  are read from their own snapshot, and nothing is stored on the nodes.
+- `OspreyFlow_Core/apps/workspace/src/connections/connectionsApi.test.ts`: the add, then the clusters, in order.
+- `keyboard/canvas-clusters-on-entry.spec.ts`:
+  - *Explain cluster* is offered on a pair already merged;
+  - its members are drawn on its anchor;
+  - a fold stays folded.
+- `keyboard/canvas-expand-stream-first.spec.ts`: an expansion whose add the case's stream draws before its answer
+  lands is still that expansion's own. Found by the live check: the canvas said "Nothing new" and the notice held its
+  keys, so the next menu never opened. *Nothing new* is judged against what the canvas held when the expansion was
+  asked for.
+- `test_explain_cluster_access_control.py` (against ArcadeDB): the pair is joined by a real SAME_AS. The cleared reader
+  explains both; to the reader not cleared for one, the other is in no cluster, refused as one that never existed.
+- The live check: `live/fixture-corp.spec.ts`'s explain case, which says what the Glass was sent when it fails.
+- The reds: `process/lanes/case/gates/merged_clusters_reds.py`.
+
 ### ADR-112, Amendment 6 (8 November 2026) — a right to edit a dataset's domain model, edit_target_model (D8), held by the data engineer, behind the dataset's own gate
 
 Status: accepted; the orchestrator's settlement of 8 November 2026 on the case lane's recommendation,

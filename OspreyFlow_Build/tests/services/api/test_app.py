@@ -85,9 +85,7 @@ class _FakeWorkingSet:
             raise self.expand_error
         return ExpansionOutcome(delta=DeltaAdd(seq=2, nodes=[_node("hub")], edges=[]))
 
-    async def current_membership(
-        self, investigation_id: str
-    ) -> tuple[list[Node], list[Edge]]:
+    async def current_membership(self, investigation_id: str) -> tuple[list[Node], list[Edge]]:
         """Route-wiring tests below only assert on the seed/expand/branch/
         remove response itself, not on what a history step recorded — a
         fixed empty snapshot is enough; `working_set/test_service.py`
@@ -173,9 +171,7 @@ class _FakeHistory:
             nodes=nodes,
             edges=edges,
         )
-        self.recorded.append(
-            {"investigation_id": investigation_id, "seq": seq, "label": label}
-        )
+        self.recorded.append({"investigation_id": investigation_id, "seq": seq, "label": label})
         return step
 
 
@@ -238,7 +234,9 @@ def test_get_investigation_denies_a_principal_in_a_different_org_unit(
     gets the *same* 404 an unknown id would — existence-leak discipline
     extended to the investigation id, per `investigations.py`'s
     `InvestigationNotFoundError` docstring."""
-    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
+    other_unit_principal = Principal(
+        id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"]
+    )
     app.dependency_overrides[get_principal] = lambda: other_unit_principal
 
     response = client.get("/v1/investigations/inv-1")
@@ -284,7 +282,11 @@ def test_expand_answers_with_no_count_of_what_was_withheld(client: TestClient) -
     )
 
     assert response.status_code == 200
-    assert set(response.json()) == {"delta", "links_among"}
+    assert set(response.json()) == {
+        "delta",
+        "links_among",
+        "clusters",
+    }  # clusters: the reader's own (ADR-124 Am 19), not a count
 
 
 def test_seed_answers_with_no_count_of_what_was_withheld(client: TestClient) -> None:
@@ -294,7 +296,11 @@ def test_seed_answers_with_no_count_of_what_was_withheld(client: TestClient) -> 
     )
 
     assert response.status_code == 200
-    assert set(response.json()) == {"delta", "links_among"}
+    assert set(response.json()) == {
+        "delta",
+        "links_among",
+        "clusters",
+    }  # clusters: the reader's own (ADR-124 Am 19), not a count
 
 
 def test_an_audit_write_failure_returns_503_and_discloses_nothing(client: TestClient) -> None:

@@ -77,6 +77,9 @@ declare global {
       removeNode?: (nodeId: string) => void;
       /** Land a `snapshot` of the working set without one node, as a resync does: the graph is cleared and drawn again. */
       resnapshotWithout?: (nodeId: string) => void;
+      /** Land an `add` of a copy of `fromId` under `newId`, as the case's stream does before an answer reaches
+       * the canvas; returns the copy's body, to answer a route with. */
+      landCopy?: (fromId: string, newId: string) => unknown;
       /** The cluster id the working set holds on a node now (ADR-124: what a manual link's answer
        * moved), or `null` when it holds none. */
       clusterOf: (nodeId: string) => string | null;
@@ -181,6 +184,11 @@ window.__CANVAS__ = {
   hasNode: (id) => workingSet.graph.hasNode(id),
   removeNode: (id) =>
     workingSet.store.getState().applyDelta({ seq: workingSet.store.getState().seq + 1, op: "remove", node_ids: [id] }),
+  landCopy: (fromId, newId) => {
+    const node = { ...workingSet.graph.getNodeAttribute(fromId, "data"), id: newId };
+    workingSet.store.getState().applyDelta({ seq: workingSet.store.getState().seq + 1, op: "add", nodes: [node], edges: [] });
+    return node;
+  },
   resnapshotWithout: (id) => {
     const graph = workingSet.graph;
     const nodes = graph.filterNodes((n) => n !== id).map((n) => graph.getNodeAttribute(n, "data"));

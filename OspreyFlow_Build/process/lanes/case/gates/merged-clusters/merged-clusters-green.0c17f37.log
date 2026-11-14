@@ -1,0 +1,12 @@
+# merged-clusters green at 0c17f37, here
+tsc exit 0
+ Test Files  388 passed (388)
+      Tests  3455 passed (3455)
+# OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts --workers=1
+  1 skipped
+  884 passed (9.6m)
+# pytest tests/services/api/working_set (closed ports; the graph_arcadedb cases need a stack)
+E           httpx.ConnectError: All connection attempts failed
+E                   httpcore.ConnectError: All connection attempts failed
+E           httpx.ConnectError: All connection attempts failed
+15 failed, 306 passed, 1 warning in 21.28s

@@ -1,0 +1,41 @@
+# fixture-corp live at 122c923 on stack b (lease 13:45Z, released after), host load 2.88 at the run (uptime 2.05 before the lease), after the queue's turn: make test and make -k ci done, nothing else running
+Running on ospreyflow-test (stack b, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T134558Z-90186fb3/log: env LIVE_SPECS=live/fixture-corp.spec.ts bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: scripts.seed_fixture_corp into a case the seed makes
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+Case 'Live search check 20261114T134559Z' is 01M7D4XN2NEXBD5E2KZQ4B5MBA.
+  check: no id stored more than once (whole shared graph)
+Seeded 10 resolution Person nodes and 17 real SAME_AS edges.
+Seeded 21 community-ring nodes and 63 edges across 3 rings.
+Seeded the path-spoke hub 'corp-path-hub' with spokes of length [1, 2, 3, 4, 5, 6, 7, 8], including a SECRET shortcut on the length-3 spoke.
+case: 01M7D4XN2NEXBD5E2KZQ4B5MBA
+# step: the search index rebuilt from the graph
+search index rebuilt: 68 documents from 68 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t134608046145
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 2.88 3.25 6.42
+[warm-up +0.8 s] loaded
+[warm-up +1.4 s] console warning: [.WebGL-0x6a407f07200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.4 s] console warning: [.WebGL-0x6a407f05a00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.4 s] console warning: [.WebGL-0x6a407f0b400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.4 s] search box drawn
+[warm-up +1.5 s] console warning: [.WebGL-0x6a407f07200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+[warm-up +1.6 s] console error: [ECharts] Component toolbox is used but not imported.
+import { ToolboxComponent } from 'echarts/components';
+echarts.use([ToolboxComponent]);
+# warm-up: the Glass drew its search box after 8 s
+
+Running 5 tests using 1 worker
+
+[1/5] live/fixture-corp.spec.ts:197:1 › the query builder finds Fixture Corp entities and reports how many matched
+[2/5] live/fixture-corp.spec.ts:212:1 › moving the resolution threshold live reports what merged and what split
+[3/5] live/fixture-corp.spec.ts:246:1 › a Fixture Corp entity is reachable from the search box by its nino
+[4/5] live/fixture-corp.spec.ts:267:1 › explain on a merged cluster names the pair's real resolution score
+[5/5] live/fixture-corp.spec.ts:378:1 › the pathfinder finds a path between two ring members, and reports its length
+  5 passed (19.7s)
+# playwright exit 0
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T134558Z-90186fb3).
+Wall time: 58 s, exit 0 (stack b, the lease case took at 2026-11-14T13:45:46Z; set-up before it 8 s)

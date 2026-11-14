@@ -715,13 +715,14 @@ export function App() {
     if (!investigationId) return false;
     const { graph, store } = workingSetRef.current;
     try {
-      const delta = await seedElements(
+      const deltas = await seedElements(
         { apiBaseUrl: API_BASE_URL, bearerToken, investigationId },
         nodes,
         edges,
         { hasNode: (id) => graph.hasNode(id), hasEdge: (id) => graph.hasEdge(id) },
       );
-      if (delta) store.getState().applyDelta(delta);
+      // The add, then the reader's own clusters (ADR-124 Amendment 19).
+      for (const delta of deltas ?? []) store.getState().applyDelta(delta);
       return true;
     } catch (error) {
       setToast(error instanceof Error ? error.message : String(error));

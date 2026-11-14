@@ -439,7 +439,9 @@ The delta protocol, client-bound:
 ```
 
 Every delta is projected for its reader before it is sent (ADR-124 decision 4). A delta names only
-what that reader may see: a removal names only ids they may read, a reproject carries no figures,
+what that reader may see: a removal names only ids they may read, a reproject carries no figures
+and no cluster ids (a marker: each reader's own clusters come with their own seed, expansion,
+snapshot and threshold answers, ADR-124 Amendment 19),
 and a replacement that would name a hidden link is sent as a removal, an addition, or nothing,
 by ADR-124's four-row table. The stored form of a removal or a replacement carries a record of what
 it removed; the record is never sent. There is no `update` operation and no `notice` operation

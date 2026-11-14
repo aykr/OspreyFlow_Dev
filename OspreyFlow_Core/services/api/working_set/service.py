@@ -120,6 +120,38 @@ def _decode_comparison_vector(raw: Any) -> dict[str, Any] | None:
 #: is one of them too; an older entry may hold prose that names ids, and is sent as the threshold.
 REASON_THRESHOLD = "resolution_threshold"
 REASON_MANUAL = "manual_resolution"
+#: Step 3h (ADR-124 Amendment 19): a reader's own clusters, sent as nodes enter their view.
+REASON_ENTRY = "resolution_on_entry"
+
+
+def _without_cluster(node: Node) -> Node:
+    """A node as the shared path sends it (ADR-124 Amendment 19): with no cluster id. A cluster id
+    is a node id
+    (the cluster's root), and a cluster joined through a member one reader may not see tells them it
+    is there,
+    so the only cluster id a reader is ever sent is one computed for them (`_reader_clusters`). A
+    value stored
+    before the amendment is dropped here, on every read, and never reaches a reader."""
+    if node.resolution.cluster_id is None:
+        return node
+    return node.model_copy(
+        update={"resolution": node.resolution.model_copy(update={"cluster_id": None})}
+    )
+
+
+def _with_clusters(nodes: list[Node], clusters: Mapping[NodeId, ClusterId]) -> list[Node]:
+    """`nodes` with the reader's own cluster ids set (`_reader_clusters`); a node in no cluster of
+    more than one
+    has none."""
+    return [
+        n.model_copy(
+            update={"resolution": n.resolution.model_copy(update={"cluster_id": clusters[n.id]})}
+        )
+        if n.id in clusters
+        else n
+        for n in nodes
+    ]
+
 
 #: ADR-098 decision 1: an expansion that adds at most this many new nodes, into a view of at most
 #: `AUTO_LINKS_MAX_VIEW_NODES`, also brings the links among its nodes and the view. Beyond either,
@@ -400,7 +432,9 @@ class WorkingSetService:
         }
         # ADR-130 Amendment 2: each element is sent with its sources only where every dataset it
         # belongs to is one the reader's case reads. A copy: the stored bodies keep the record.
-        visible_nodes = [withhold_sources(n, principal) for n in nodes if n.id in readable]
+        visible_nodes = [
+            _without_cluster(withhold_sources(n, principal)) for n in nodes if n.id in readable
+        ]
         visible_edges: list[Edge] = []
         hidden_edges = 0
         for e in edges:
@@ -451,23 +485,15 @@ class WorkingSetService:
         if isinstance(delta, DeltaReplaceEdge):
             return self._project_replacement(delta, principal, known)
         if isinstance(delta, DeltaReproject):
-            readable = {
-                node_id
-                for node_id in delta.affected_cluster_ids
-                if node_id in (known or {})
-                and principal_may_read(
-                    (known or {})[node_id].handling,
-                    (known or {})[node_id].datasets,
-                    principal,
-                    self._scheme,
-                )
-            }
+            # ADR-124 Amendment 19: a marker, never another reader's cluster ids. A value is a node
+            # id,
+            # and a cluster another reader formed through a member this one may not see would tell
+            # them it is there (rule 3). Stored reprojects from before the amendment carry ids; none
+            # is sent. The reader's own clusters come with their own reads (`_reader_clusters`).
             return DeltaReproject(
                 seq=delta.seq,
                 reason=REASON_MANUAL if delta.reason == REASON_MANUAL else REASON_THRESHOLD,
-                affected_cluster_ids={
-                    k: v for k, v in delta.affected_cluster_ids.items() if k in readable
-                },
+                affected_cluster_ids={},
             )
         # No rule for it, so nothing to send: a delta of a kind added later names ids of its own,
         # and passing it on unprojected is how a hidden one reaches a socket.
@@ -619,26 +645,22 @@ class WorkingSetService:
         after = compute_clusters(visible_ids, same_as_edges, not_same_as_edges, tau)
         delta_counts = diff_clusters(before, after)
 
-        updated_nodes = [
-            node.model_copy(
-                update={
-                    "resolution": node.resolution.model_copy(update={"cluster_id": after[node_id]})
-                }
-            )
-            for node_id, node in nodes_by_id.items()
-            if node_id in after
-        ]
-        if updated_nodes:
-            await self._store.add_nodes(investigation_id, updated_nodes)
+        # ADR-124 Amendment 19: no cluster id is written to the case's shared nodes, and the shared
+        # stream gets a marker only; the acting reader's own clusters, from their own view, go back
+        # on
+        # their response. Every other reader computes their own on their next read (rule 3).
         await self._store.set_threshold(investigation_id, tau)
 
         seq = await self._store.next_seq(investigation_id)
+        await self._store.append_delta(
+            investigation_id,
+            DeltaReproject(seq=seq, reason=REASON_THRESHOLD, affected_cluster_ids={}),
+        )
         delta = DeltaReproject(
             seq=seq,
             reason=REASON_THRESHOLD,
             affected_cluster_ids=delta_counts.affected_cluster_ids,
         )
-        await self._store.append_delta(investigation_id, delta)
         return ResolutionOutcome(
             delta=delta,
             merged=delta_counts.merged,
@@ -814,25 +836,18 @@ class WorkingSetService:
         after = compute_clusters(visible_ids, same_as_edges, not_same_as_edges, tau)
         delta_counts = diff_clusters(before, after)
 
-        updated_nodes = [
-            node.model_copy(
-                update={
-                    "resolution": node.resolution.model_copy(update={"cluster_id": after[node_id]})
-                }
-            )
-            for node_id, node in nodes_by_id.items()
-            if node_id in after
-        ]
-        if updated_nodes:
-            await self._store.add_nodes(investigation_id, updated_nodes)
-
+        # ADR-124 Amendment 19, as for a threshold move: a marker on the shared stream, the actor's
+        # own
+        # clusters on their response, nothing written to the shared nodes.
         seq = await self._store.next_seq(investigation_id)
+        await self._store.append_delta(
+            investigation_id, DeltaReproject(seq=seq, reason=REASON_MANUAL, affected_cluster_ids={})
+        )
         delta = DeltaReproject(
             seq=seq,
             reason=REASON_MANUAL,
             affected_cluster_ids=delta_counts.affected_cluster_ids,
         )
-        await self._store.append_delta(investigation_id, delta)
         outcome = ResolutionOutcome(
             delta=delta,
             merged=delta_counts.merged,
@@ -862,12 +877,11 @@ class WorkingSetService:
         pattern as `set_resolution_threshold`; an empty result after narrowing raises
         `ClusterNotFoundError`, indistinguishable from the cluster never having existed, per
         the same existence-leak discipline access control must hold to."""
-        nodes_by_id = await self._store.source_fidelity_nodes(investigation_id)
-        candidate_ids = {
-            node_id
-            for node_id, node in nodes_by_id.items()
-            if node.resolution.cluster_id == cluster_id
-        }
+        # ADR-124 Amendment 19: the reader's own clusters, as their canvas was given them, not a
+        # value
+        # stored on the shared nodes (none is any more).
+        clusters = await self._reader_clusters(investigation_id, principal)
+        candidate_ids = {node_id for node_id, cluster in clusters.items() if cluster == cluster_id}
         if not candidate_ids:
             raise ClusterNotFoundError(cluster_id)
 
@@ -899,6 +913,85 @@ class WorkingSetService:
         return ClusterExplanation(
             cluster_id=cluster_id, member_node_ids=sorted(member_ids), pairs=pairs
         )
+
+    async def _reader_clusters(
+        self,
+        investigation_id: str,
+        principal: Principal,
+        *,
+        touching: Iterable[NodeId] | None = None,
+    ) -> dict[NodeId, ClusterId]:
+        """Step 3h (ADR-124 Amendment 19; rule 6, "collapses them at query time"): the cluster each
+        of
+        `principal`'s nodes is in at the case's τ, for every node in a cluster of more than one.
+
+        Over what they may see, and only that (rule 3): their own visible nodes (the counted index's
+        entries, not the bodies), narrowed again by the adapter, and the SAME_AS and NOT_SAME_AS
+        links
+        among them it gives them. That is `narrow_to_visible`, an `expand` over those types, the
+        read a
+        threshold move makes (`edges_among` is not asked past `AUTO_LINKS_MAX_VIEW_NODES`). A member
+        they may not see is in neither, so it contributes no cluster id and joins nothing, and each
+        cluster's id is its smallest visible member's (`compute_clusters`), never a hidden one's.
+
+        `touching`: only the clusters these nodes are in, walked out from them through the view's
+        resolution links (an add's new nodes): an add whose nodes have no such link reads one small
+        `expand` and stops, rather than the whole view's. Left out, the whole view (a snapshot).
+        A view that cannot be counted (a handling code the scheme no longer defines) gets no
+        clusters: nothing is said rather than something unchecked. For this reader's responses
+        only."""
+        if self._graph is None:
+            # A service built with no graph (a store-only test, a stream's replay): no link can be
+            # read,
+            # so no cluster is said.
+            return {}
+        try:
+            view = await self._reader_counts(investigation_id, principal)
+        except HandlingSchemeError:
+            return {}
+        in_view = await view.visible_node_ids()
+        if len(in_view) < 2:
+            return {}
+        if touching is None:
+            result = await narrow_to_visible(
+                self._graph, sorted(in_view), principal, edge_types=[SAME_AS, NOT_SAME_AS]
+            )
+            members, links = set(result.nodes), list(result.edges)
+        else:
+            # Out from the new nodes, one `expand` a step: each node the adapter shows this reader,
+            # in their
+            # view, and each resolution link it gives them with both ends shown and in their view.
+            members, links = set(), []
+            seen_links: set[EdgeId] = set()
+            frontier = {n for n in touching if n in in_view}
+            while frontier:
+                step = await self._graph.expand(
+                    ExpandRequest(
+                        node_ids=sorted(frontier), depth=1, edge_types=[SAME_AS, NOT_SAME_AS]
+                    ),
+                    principal,
+                )
+                shown = {n.id for n in step.nodes} & in_view
+                members |= frontier & shown
+                reached: set[NodeId] = set()
+                for e in step.edges:
+                    if e.id in seen_links or e.source not in shown or e.target not in shown:
+                        continue
+                    seen_links.add(e.id)
+                    links.append(e)
+                    reached |= {e.source, e.target}
+                frontier = reached - members
+            links = [e for e in links if e.source in members and e.target in members]
+        same_as = [e for e in links if e.type == SAME_AS]
+        if not same_as:
+            return {}
+        not_same_as = [e for e in links if e.type == NOT_SAME_AS]
+        tau = await self.get_resolution_threshold(investigation_id)
+        clusters = compute_clusters(sorted(members), same_as, not_same_as, tau)
+        sizes: dict[ClusterId, int] = {}
+        for cluster in clusters.values():
+            sizes[cluster] = sizes.get(cluster, 0) + 1
+        return {node_id: cluster for node_id, cluster in clusters.items() if sizes[cluster] > 1}
 
     async def _reader_counts(self, investigation_id: str, principal: Principal) -> _ReaderCounts:
         """`principal`'s own figures for the case (ADR-124 decision 2): the nodes and links in their
@@ -1307,7 +1400,18 @@ class WorkingSetService:
                 await self._store.clear(investigation_id)
             raise
 
-        return ExpansionOutcome(delta=delta)
+        # Step 3h: the reader's own clusters as nodes, or a resolution link, enter their view.
+        clusters: DeltaReproject | None = None
+        if new_nodes or any(e.type in (SAME_AS, NOT_SAME_AS) for e in new_edges):
+            touched = {n.id for n in new_nodes} | {
+                end for e in new_edges for end in (e.source, e.target)
+            }
+            ids = await self._reader_clusters(investigation_id, principal, touching=touched)
+            if ids:
+                clusters = DeltaReproject(
+                    seq=delta.seq, reason=REASON_ENTRY, affected_cluster_ids=ids
+                )
+        return ExpansionOutcome(delta=delta, clusters=clusters)
 
     async def current_membership(self, investigation_id: str) -> tuple[list[Node], list[Edge]]:
         """The full source-fidelity (unfiltered) membership — `app.py`'s
@@ -1709,6 +1813,10 @@ class WorkingSetService:
         edges = await self._store.source_fidelity_edges(investigation_id)
         visible_nodes, visible_edges, _ = self._project(
             list(nodes.values()), list(edges.values()), principal
+        )
+        # Step 3h: the reader's own clusters, set on the snapshot they are sent.
+        visible_nodes = _with_clusters(
+            visible_nodes, await self._reader_clusters(investigation_id, principal)
         )
         return [
             DeltaSnapshot(

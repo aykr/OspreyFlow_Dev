@@ -21,10 +21,11 @@ import pytest
 from services.api.working_set.models import ClusterNotFoundError
 from services.api.working_set.service import WorkingSetService
 
-from conduit_common.identity import new_node_id, now_utc
+from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import (
     AuditStub,
+    EdgeWrite,
     Node,
     NodeWrite,
     Principal,
@@ -76,7 +77,7 @@ def _node_write(classification: str, value_normalised: str) -> NodeWrite:
     )
 
 
-def _stub_node(node_id: str, classification: str, cluster_id: str) -> Node:
+def _stub_node(node_id: str, classification: str, cluster_id: str | None) -> Node:
     return Node(
         id=node_id,
         type="Endpoint",
@@ -91,31 +92,49 @@ def _stub_node(node_id: str, classification: str, cluster_id: str) -> Node:
 async def test_explain_cluster_omits_a_hidden_member_rather_than_naming_its_id(
     factory: GraphAdapterFactory,
 ) -> None:
+    """ADR-124 Amendment 19: a reader's clusters are their own, from the members and links they may see. The pair
+    is joined by a real SAME_AS in the graph, the shape the amendment reads (before it, the test planted a
+    cluster id on the stored nodes, which nothing writes any more). The cleared reader explains a cluster of the
+    two. To the reader not cleared for the SECRET member, the other is in no cluster: explaining it is refused
+    exactly as a cluster that never existed is, so its member is neither named nor implied (rule 3)."""
     async with factory.context() as graph:
         official_write = _node_write("OFFICIAL", "+441111111111")
         secret_write = _node_write("SECRET", "+442222222222")
         tx = await graph.begin_transaction()
         (official_id, secret_id) = await graph.upsert_nodes([official_write, secret_write], tx)
+        await graph.upsert_edges(
+            [
+                EdgeWrite(
+                    id=new_edge_id(),
+                    type="SAME_AS",
+                    source=official_id,
+                    target=secret_id,
+                    properties={"score": 1.0},
+                    provenance=_provenance(),
+                    handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
+                    created_by="loader-1",
+                    created_at=now_utc(),
+                )
+            ],
+            tx,
+        )
         await graph.commit_transaction(tx)
-
-        cluster_id = official_id
         store = FakeWorkingSetStore()
         await store.add_nodes(
             INVESTIGATION,
             [
-                _stub_node(official_id, "OFFICIAL", cluster_id=cluster_id),
-                _stub_node(secret_id, "SECRET", cluster_id=cluster_id),
+                _stub_node(official_id, "OFFICIAL", cluster_id=None),
+                _stub_node(secret_id, "SECRET", cluster_id=None),
             ],
         )
-
         service = WorkingSetService(graph, store, load_uk_le_scheme())
-
-        official_view = await service.explain_cluster(INVESTIGATION, cluster_id, OFFICIAL)
-        assert official_view.member_node_ids == [official_id]
-        assert secret_id not in official_view.member_node_ids
-
+        cluster_id = min(official_id, secret_id)
         secret_view = await service.explain_cluster(INVESTIGATION, cluster_id, SECRET)
         assert set(secret_view.member_node_ids) == {official_id, secret_id}
+        with pytest.raises(ClusterNotFoundError):
+            await service.explain_cluster(INVESTIGATION, cluster_id, OFFICIAL)
+        with pytest.raises(ClusterNotFoundError):
+            await service.explain_cluster(INVESTIGATION, official_id, OFFICIAL)
 
 
 async def test_explain_cluster_of_only_hidden_members_is_indistinguishable_from_not_found(

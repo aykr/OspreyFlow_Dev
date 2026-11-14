@@ -1,0 +1,85 @@
+# merged-clusters reds at 01181bd; each plant restored with `git checkout -- <files>`
+## 1. an add's own clusters left off its answer
+plant in OspreyFlow_Core/services/api/working_set/service.py; -p no:cacheprovider -q tests/services/api/working_set/test_merged_clusters.py::test_a_pair_already_merged_at_the_cases_threshold_arrives_with_a_shared_cluster_id; exit 1
+>       assert _shared(outcome.clusters, "p-a", "p-b") is not None
+E       AssertionError: assert None is not None
+tests/services/api/working_set/test_merged_clusters.py:123: AssertionError
+FAILED tests/services/api/working_set/test_merged_clusters.py::test_a_pair_already_merged_at_the_cases_threshold_arrives_with_a_shared_cluster_id
+1 failed in 1.79s
+## 2. the walk not reaching the members already on the canvas
+plant in OspreyFlow_Core/services/api/working_set/service.py; -p no:cacheprovider -q tests/services/api/working_set/test_merged_clusters.py::test_the_second_member_seeded_alone_joins_the_first_already_on_the_canvas; exit 1
+        assert first.clusters is None or "p-a" not in first.clusters.affected_cluster_ids
+>       assert _shared(second.clusters, "p-a", "p-b") is not None
+E       AssertionError: assert None is not None
+tests/services/api/working_set/test_merged_clusters.py:133: AssertionError
+FAILED tests/services/api/working_set/test_merged_clusters.py::test_the_second_member_seeded_alone_joins_the_first_already_on_the_canvas
+1 failed in 0.94s
+## 3. an add's clusters put on the shared stream
+plant in OspreyFlow_Core/services/api/working_set/service.py; -p no:cacheprovider -q tests/services/api/working_set/test_merged_clusters.py::test_the_clusters_go_on_the_readers_own_response_never_the_shared_stream_or_store; exit 1
+        assert outcome.clusters is not None
+>       assert not any(isinstance(d, DeltaReproject) for d in deltas)
+E       assert not True
+tests/services/api/working_set/test_merged_clusters.py:163: AssertionError
+FAILED tests/services/api/working_set/test_merged_clusters.py::test_the_clusters_go_on_the_readers_own_response_never_the_shared_stream_or_store
+1 failed in 0.91s
+## 4. the old shared path: the actor's ids on the shared stream, and passed on with the keys a reader may read
+plant in OspreyFlow_Core/services/api/working_set/service.py; -p no:cacheprovider -q tests/services/api/working_set/test_merged_clusters.py::test_another_readers_threshold_move_gives_no_cluster_id_through_a_member_this_one_may_not_see; exit 1
+        assert set(moved.delta.affected_cluster_ids.values()) == {"p-h"}, "the move did not join them, so it tests nothing"
+        assert shared_after, "the move put nothing on the shared stream"
+>           assert isinstance(sent, DeltaReproject) and sent.affected_cluster_ids == {}
+E           AssertionError: assert (True and {'p-v': 'p-h', 'p-x': 'p-h'} == {}
+tests/services/api/working_set/test_merged_clusters.py:200: AssertionError
+FAILED tests/services/api/working_set/test_merged_clusters.py::test_another_readers_threshold_move_gives_no_cluster_id_through_a_member_this_one_may_not_see
+1 failed in 0.91s
+## 5. a cluster id stored before the amendment sent on
+plant in OspreyFlow_Core/services/api/working_set/service.py; -p no:cacheprovider -q tests/services/api/working_set/test_merged_clusters.py::test_a_cluster_id_stored_before_the_amendment_reaches_no_reader; exit 1
+>       assert {n.id: n.resolution.cluster_id for n in snapshot.nodes} == {"p-v": None, "p-x": None}
+E       AssertionError: assert {'p-v': 'p-h', 'p-x': 'p-h'} == {'p-v': None, 'p-x': None}
+tests/services/api/working_set/test_merged_clusters.py:217: AssertionError
+FAILED tests/services/api/working_set/test_merged_clusters.py::test_a_cluster_id_stored_before_the_amendment_reaches_no_reader
+1 failed in 0.88s
+## 6. explain reading a cluster from the stored nodes again
+plant in OspreyFlow_Core/services/api/working_set/service.py; -p no:cacheprovider -q tests/services/api/working_set/test_manual_resolution.py::test_explain_cluster_returns_the_direct_edges_between_current_members; exit 1
+        assert clusters["n1"] == clusters["n2"]
+E           services.api.working_set.models.ClusterNotFoundError: n1
+FAILED tests/services/api/working_set/test_manual_resolution.py::test_explain_cluster_returns_the_direct_edges_between_current_members
+1 failed in 0.91s
+## 7. the snapshot without the reader's own clusters
+plant in OspreyFlow_Core/services/api/working_set/service.py; -p no:cacheprovider -q tests/services/api/working_set/test_resolution_threshold.py::test_msisdn_and_imsi_endpoints_cluster_together_the_device_does_not; exit 1
+>       assert clusters["sim-msisdn"] == clusters["sim-imsi"]
+E       AssertionError: assert 'sim-msisdn' == 'sim-imsi'
+tests/services/api/working_set/test_resolution_threshold.py:256: AssertionError
+FAILED tests/services/api/working_set/test_resolution_threshold.py::test_msisdn_and_imsi_endpoints_cluster_together_the_device_does_not
+1 failed in 0.87s
+## 8. the client dropping the clusters a seed answers with
+plant in OspreyFlow_Core/apps/workspace/src/workingset/models.ts; run src/connections/connectionsApi.test.ts -t hands back the reader's own clusters after the add; exit 1
+ ❯ src/connections/connectionsApi.test.ts (11 tests | 1 failed | 10 skipped) 16ms
+     × hands back the reader's own clusters after the add, in that order (ADR-124 Amendment 19) 15ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 10 skipped (11)
+AssertionError: expected [ { op: 'add' } ] to deeply equal [ { op: 'add' }, …(1) ]
+- Expected
++ Received
+## 9. the canvas not applying an expansion's clusters
+plant in OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx; keyboard/canvas-clusters-on-entry.spec.ts -g Explain\ cluster\ is\ offered\ on\ a\ pair\ already\ merged --workers=1; exit 1
+  ✘  1 keyboard/canvas-clusters-on-entry.spec.ts:31:1 › an expansion's own clusters are applied: Explain cluster is offered on a pair already merged (15.2s)
+    Error: expect(received).toBe(expected) // Object.is equality
+    Expected: 1
+    Received: 0
+  1 failed
+## 10. a reader's own clusters taken for a change of the resolution (the folds opened)
+plant in OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx; keyboard/canvas-clusters-on-entry.spec.ts -g a\ fold\ made\ from\ a\ same\-as\ link\ stays\ folded --workers=1; exit 1
+  ✘  1 keyboard/canvas-clusters-on-entry.spec.ts:52:1 › a fold made from a same-as link stays folded when an expansion's own clusters arrive (1.5s)
+    Error: expect(received).toBe(expected) // Object.is equality
+    Expected: 3
+    Received: 0
+  1 failed
+## 11. 'nothing new' judged against the canvas as the answer finds it (the stream drew it first; found live)
+plant in OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx; keyboard/canvas-expand-stream-first.spec.ts -g nodes\ the\ stream\ drew\ first\ are\ still\ the\ expansion's\ own --workers=1; exit 1
+  ✘  1 keyboard/canvas-expand-stream-first.spec.ts:10:1 › nodes the stream drew first are still the expansion's own: no 'Nothing new' (6.4s)
+    Error: expect(locator).toHaveCount(expected) failed
+    Expected: 0
+    Received: 1
+        14 × locator resolved to 1 element
+  1 failed
+# 11 of 11 red
