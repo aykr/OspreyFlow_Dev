@@ -1206,7 +1206,7 @@ bursts. So a LimitRange in the namespace with a default CPU limit puts that limi
 container, and a ResourceQuota counting `limits.cpu` refuses every pod that names none: both are
 questions for the platform's team (section 6a.11). **The poc shape names a CPU limit on every
 container** (0.5 by default; the Glass 0.5, the Conduit 2, the workers 2, named-entity extraction 1,
-ArcadeDB 2, ClickHouse 2), for a namespace whose quota counts them. ArcadeDB's Java heap is three
+ArcadeDB 2, ClickHouse 2, the search index's rebuild and drift check 2), for a namespace whose quota counts them. ArcadeDB's Java heap is three
 quarters of its memory limit. **These sizes are proposals, not measurements**: no load has yet run
 on the platform.
 
@@ -1225,6 +1225,7 @@ on the platform.
 | Laurium, when it is the extraction engine | 1 | 1 | 0.25 | 1 GiB | 2 GiB |
 | The backups' and the restore's Jobs | — | — | 0.5 | 2 GiB | 4 GiB |
 | The restore's ArcadeDB step | — | — | 1 | 12 GiB | 12 GiB |
+| The search index's rebuild and drift check, when OpenSearch is used | — | — | 0.5 | 2 GiB | 4 GiB |
 | Every init container, and any container not named above | — | — | 0.1 | 256 MiB | 512 MiB |
 
 From renders of the repository's synthetic deployments, counting each running copy:
@@ -1348,6 +1349,7 @@ single ports, never a range:
 | ArcadeDB; ClickHouse Keeper | Their own copies |
 | ClickHouse | Its own copies and, in the standard shape, ClickHouse Keeper; S3 and STS, for its backups |
 | The backups' runs and the restore | S3 and STS; ArcadeDB and ClickHouse, or the cluster's API, as each needs (section 6a.8) |
+| The search index's rebuild and drift check, when OpenSearch is used | ArcadeDB; the managed stores' networks (OpenSearch on 443); S3 and STS |
 | The Glass | The Conduit |
 | Superset, when reporting is on | The Conduit (who signed in); the managed stores' networks (its database and the mart, its rate limits); Entra ID's sign-in host |
 | The report sync, when reporting is on | The Conduit; the managed stores' networks (the mart); S3 and STS; Entra ID's sign-in host (its token) |
@@ -2885,8 +2887,10 @@ removed container, so a restart, `ospreyflow apply`, an update and `uninstall --
 earlier kept PostgreSQL and ArcadeDB in unnamed volumes, and Valkey and OpenSearch inside their
 containers; its data is moved into the named volumes once (section 14). A backup reads each store through its own
 running server, so it is the same wherever the data is kept. **Not in a backup:** Valkey's working
-sets and queues, and OpenSearch, which holds no index of OspreyFlow's yet — so there is nothing of it
-to restore or rebuild, and a restore starts it empty.
+sets and queues, and OpenSearch's search index, which is rebuilt from the graph instead: a restore's
+last step, once the graph and the texts are back, runs `python -m scripts.rebuild_search_index` in the
+Conduit's container, in a deployment that runs an OpenSearch (`components.search: opensearch`, the
+default). With `postgres-fulltext` there is no index to rebuild.
 
 **A backup that fails** removes the set it had started, and says
 so, so no half-written set is left beside the good ones. If it cannot remove all of it, it says what

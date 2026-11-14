@@ -141,3 +141,87 @@ def test_section_6a_names_the_standard_shape_s_shared_folders_as_mounted() -> No
     # Staging is the platform's bucket: no sentence in §6a puts it on the shared volume.
     if "staging" not in mounted:
         assert re.findall(r"[^.]*shared[^.]*\bstaging\b[^.]*\.", section("## 6a")) == []
+
+
+# ---------------------------------------------------------------- the index's Jobs: their size and way out
+
+JOBS_ROW = "| The search index's rebuild and drift check, when OpenSearch is used |"
+
+
+def _row(text: str) -> list[str]:
+    line = next((ln for ln in text.splitlines() if ln.startswith(JOBS_ROW)), "")
+    return [cell.strip() for cell in line.strip("|").split("|")][1:] if line else []
+
+
+def _cpu(value: str) -> str:
+    return f"{int(value[:-1]) / 1000:g}" if value.endswith("m") else f"{float(value):g}"
+
+
+def _mem(value: str) -> str:
+    return value.replace("Gi", " GiB").replace("Mi", " MiB")
+
+
+def test_section_6a2_sizes_the_index_jobs_as_rendered() -> None:
+    """Each shape's `searchIndex.resources`, the Conduit's own size; the poc shape's CPU limit too."""
+    six_a2 = section("### 6a.2")
+    rows = _row(_section(ADMIN, "### 6a.2"))
+    assert bool(rows) is any(jobs_of(values(f, "opensearch")) for f in SHAPES), "§6a.2's row for the index's Jobs"
+    assert not any(jobs_of(values(f, "postgres-fulltext")) for f in SHAPES), "the row's 'when OpenSearch is used'"
+    for f in SHAPES:
+        size = values(f, "opensearch")["searchIndex"]["resources"]
+        assert rows == ["—", "—", _cpu(size["requests"]["cpu"]), _mem(size["requests"]["memory"]),
+                        _mem(size["limits"]["memory"])], f  # fmt: skip
+    poc_limit = values("poc", "opensearch")["searchIndex"]["resources"]["limits"].get("cpu")
+    assert (f"the search index's rebuild and drift check {_cpu(poc_limit)})" in six_a2) is bool(poc_limit)
+
+
+#: The guide's words for what the index's Jobs reach, each against the render's egress row.
+REACH = {
+    "ArcadeDB": lambda r: "arcadedb" in {p["name"] for p in r.get("toPods") or []},
+    "ClickHouse": lambda r: "clickhouse" in {p["name"] for p in r.get("toPods") or []},
+    "the managed stores' networks": lambda r: bool(r.get("managed")),
+    "S3 and STS": lambda r: {h.split(".")[0] for h in r.get("hosts") or []} >= {"s3", "sts"},
+}
+
+
+def test_section_6a5_gives_the_index_jobs_the_way_out_the_render_gives_them() -> None:
+    cells = _row(_section(ADMIN, "### 6a.5"))
+    assert cells, "§6a.5's row for the index's Jobs"
+    for f in SHAPES:
+        v = values(f, "opensearch")
+        egress = {r["name"]: r for r in v["egress"]["workloads"]}
+        for job in jobs_of(v):
+            r = egress[job["label"]]
+            assert {w for w, holds in REACH.items() if holds(r)} == {w for w in REACH if w in cells[0]}, (f, job)
+            assert set(r) <= {"name", "toPods", "managed", "hosts"}, f"a way out the row does not name: {r}"
+        assert ("(OpenSearch on 443)" in cells[0]) is (443 in v["egress"]["managedPorts"])
+
+
+# ---------------------------------------------------------------- §13: a local restore rebuilds the index
+
+
+def test_section_13_says_a_local_restore_rebuilds_the_index_last_where_there_is_one(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import inspect
+
+    from harness import restore
+    from harness.render import render as render_local
+
+    from schemas.deployment import SearchBackend
+    from tests.harness.test_search_index_render_and_restore import _config
+    from tests.harness.test_render import _fake_resolver
+
+    def rebuilds(search: SearchBackend) -> bool:
+        compose = tmp_path / f"{search.value}.yaml"
+        compose.write_text(render_local(_config(tmp_path, search), resolver=_fake_resolver).artefacts["compose.yaml"])
+        ran: list[list[str]] = []
+        monkeypatch.setattr(restore, "_run", lambda command, **_: ran.append(command) or "")
+        restore.rebuild_search_index(compose)
+        return any("scripts.rebuild_search_index" in c for c in ran)
+
+    text = re.sub(r"\s+", " ", _section(ADMIN, "## 13"))
+    assert "holds no index of OspreyFlow's yet" not in text
+    said = "runs `python -m scripts.rebuild_search_index` in the Conduit's container"
+    assert (said in text) is rebuilds(SearchBackend.OPENSEARCH)
+    assert ("With `postgres-fulltext` there is no index to rebuild." in text) is (not rebuilds(SearchBackend.POSTGRES_FULLTEXT))
+    last = inspect.getsource(restore.run_restore).rstrip().splitlines()[-2].strip()
+    assert ("a restore's last step" in text) is (last == "rebuild_search_index(compose_file)")
