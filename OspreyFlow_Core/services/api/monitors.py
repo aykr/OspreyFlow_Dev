@@ -56,7 +56,7 @@ def _detail(row: asyncpg.Record) -> StoppedReason | None:
     """ADR-044 Amendment 1: the stopped reason, only while stopped, and only one this release
     knows."""
     detail = row["status_detail"] if row["status"] == "stopped" else None
-    return detail if stopped_why(detail) is not None else None  # type: ignore[return-value]
+    return detail if stopped_why(detail) is not None else None
 
 
 def _row_to_monitor(row: asyncpg.Record) -> Monitor:
