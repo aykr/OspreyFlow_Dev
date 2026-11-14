@@ -93,3 +93,4 @@ b925385 cb54a90 case-b lease-tests, with its stack_lease.sh diff
 1d331f8 e28565f case-b npm-lock, with its stack_lease.sh diff
 2d3fe2f 6d1a5cf rules-b analytics-field (A7's 500)
 8a5bde1 0b480e8 platform-b v052-r1 (step 6's run sheet and checks)
+428e993 7568835 platform-b v052-rls (the guest token's RLS read)
