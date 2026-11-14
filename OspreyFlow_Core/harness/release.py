@@ -63,14 +63,69 @@ def _git(repo: Path, *args: str) -> str | None:
     return out if done.returncode == 0 and out else None
 
 
+#: The code's own version (ADR-114 Amendment 47): one line in `OspreyFlow_Core/VERSION`, the
+#: release this code is ("v0.5.2") or the release it is heading to ("v0.5.2-dev"). The cut sets
+#: it to the tag; main then moves to the next `-dev`.
+VERSION_FILE = "VERSION"
+_DEV_VERSION = re.compile(r"^v(\d+)\.(\d+)\.(\d+)-dev$")
+
+
+def version_file_problem(code: Path) -> str | None:
+    """What is wrong with the code's VERSION file, in words, or None when it is well formed."""
+    try:
+        text = (code / VERSION_FILE).read_text(encoding="utf-8")
+    except OSError as e:
+        return f"{code / VERSION_FILE} cannot be read: {e}"
+    lines = text.splitlines()
+    if len(lines) != 1 or not (is_version(lines[0]) or _DEV_VERSION.match(lines[0])):
+        return (
+            f"{code / VERSION_FILE} must be one line, a release (v0.5.2) or the release the code "
+            f"is heading to (v0.5.2-dev); it holds {text!r}"
+        )
+    return None
+
+
+def _stamped_version(code: Path) -> str | None:
+    """The code's own VERSION, or None when it has none or a malformed one (never shown; the gate in
+    `tests/harness/test_code_version.py` holds the committed file well formed)."""
+    if version_file_problem(code) is not None:
+        return None
+    return (code / VERSION_FILE).read_text(encoding="utf-8").strip()
+
+
+def _tree_is_the_commits(code: Path) -> bool:
+    """Whether `.git`'s HEAD describes this code: inside a checkout, with no tracked file under
+    `code` changed since the commit. Untracked files (osprey.yaml, rendered output) are a
+    deployment's own, not the code."""
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(code), "status", "--porcelain", "--untracked-files=no", "--", "."],
+            capture_output=True, text=True, timeout=30, check=False,
+        )  # fmt: skip
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return done.returncode == 0 and done.stdout.strip() == ""
+
+
 def checkout_version(repo: Path) -> str:
-    """The release the checkout sits on, else `dev-<short commit>` (`dev-unknown` outside git)."""
+    """The code's version (ADR-114 Amendment 47): its VERSION when that names a release; else,
+    where `.git`'s tree is the code's, the release tag HEAD sits on or `dev-<short commit>`; else
+    VERSION's `-dev` text. A tree with no VERSION file (before the amendment) is read from `.git`
+    alone, as before: the release it sits on, else `dev-<short commit>` (`dev-unknown` outside
+    git)."""
+    stamped = _stamped_version(repo)
+    if stamped is not None and is_version(stamped):
+        return stamped
+    if stamped is not None and not _tree_is_the_commits(repo):
+        return stamped
     tags = _git(repo, "tag", "--points-at", "HEAD") or ""
     releases = [t for t in tags.splitlines() if is_version(t)]
     if releases:
         return max(releases, key=_parts)
     short = _git(repo, "rev-parse", "--short", "HEAD")
-    return f"dev-{short}" if short else "dev-unknown"
+    if short:
+        return f"dev-{short}"
+    return stamped if stamped is not None else "dev-unknown"
 
 
 def origin_url(repo: Path) -> str:

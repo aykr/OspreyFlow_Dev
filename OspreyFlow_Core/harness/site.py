@@ -384,12 +384,14 @@ def highest_marking(config: OspreyConfig) -> str:
     return chosen
 
 
-def deployment_version() -> str:
-    """What the welcome page's footer names: the commit the deployment was built from, short, until
-    stage B5's release tags exist."""
-    from harness.render import git_sha
+def deployment_version(code: Path | None = None) -> str:
+    """What glass.json's `version` (the welcome page's footer) names: the code's version, as
+    `OSPREY_RELEASE_VERSION` is (ADR-114 Amendment 47), never `.git`'s commit when the code is
+    newer."""
+    from harness.release import checkout_version
+    from harness.render import REPO_ROOT
 
-    return git_sha()[:7]
+    return checkout_version(code if code is not None else REPO_ROOT)
 
 
 def organisation_label(config: OspreyConfig) -> str | None:
@@ -433,7 +435,9 @@ def render_glass_settings(config: OspreyConfig, *, entra: EntraSignInConfig | No
         "welcome": {"about": welcome.about, "links": links},
         # ADR-132: the deployment's brand and what its page title, GOV.UK footer and banner name.
         "appearance": config.appearance.told(),
-        "version": deployment_version(),
+        "version": deployment_version(
+            None if config.components.source_path is None else Path(config.components.source_path)
+        ),
     }
     if config.reporting.superset:
         # The owner's ruling of 13 November 2026 (Q2): where "Build a report" opens Superset, for a
