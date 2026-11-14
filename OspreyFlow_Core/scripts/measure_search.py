@@ -40,7 +40,14 @@ BUDGETS: dict[str, dict[str, Any]] = {
     "fulltext": {"measure": "M4", "budget_ms": 1500.0, "fail_ms": 3000.0},
     # M5: every exact identifier first (a correctness figure), timed as the name search it is.
     "exact": {"measure": "M5", "budget_ms": 1000.0, "fail_ms": 2000.0},
+    # M6: a drawn node, from the Conduit's write to the index answering it (`measure_lag`).
+    "lag": {"measure": "M6", "budget_ms": 5000.0, "fail_ms": 30000.0},
 }
+#: The classes `measure` sends as queries; `lag` is timed by `measure_lag`, a write then a poll.
+QUERY_CLASSES = tuple(sorted(c for c in BUDGETS if c != "lag"))
+#: How often M6 asks the search whether the drawn node is there, and how long before it gives up.
+LAG_POLL_SECONDS = 0.1
+LAG_GIVE_UP_SECONDS = 60.0
 
 #: The classes sent to the suggestion route; every other class goes to the search route.
 SUGGEST_CLASSES = frozenset({"suggest"})
@@ -108,6 +115,10 @@ def measure(
     warmup: int,
 ) -> dict[str, Any]:
     classes = sorted({q["class"] for q in queries})
+    if "lag" in classes:
+        raise SystemExit(
+            "lag is not a query class: M6 is timed by measure_lag, a write then a poll"
+        )
     unbudgeted = [c for c in classes if c not in budgets]
     if unbudgeted:
         raise SystemExit(
@@ -153,6 +164,96 @@ def measure(
             "why": "; ".join(why),
         }
     return out
+
+
+def measure_lag(
+    *,
+    base: str,
+    case: str,
+    token: str,
+    n: int,
+    warmup: int,
+    budget: dict[str, Any] | None = None,
+    poll_seconds: float = LAG_POLL_SECONDS,
+    give_up_seconds: float = LAG_GIVE_UP_SECONDS,
+) -> dict[str, Any]:
+    """M6, the index feed's lag (ADR-149 Amendment 2): a node drawn on a board through the Conduit
+    (`POST .../boards/{board}/items`, the smallest write through the adapter's `upsert_nodes`, so
+    through the outbox in its transaction), timed from the request until the case's search answers
+    it from the index (`source` "index"), polled every `poll_seconds`. No route says the indexer
+    has drained an event, and the analyst sees the search, so the search is the measure. The board
+    is made once, outside the clock. Both requests are signed as one principal (a node on a
+    private board is visible to its author). A worker's death mid-run hands the indexer's lease
+    over after up to 30 s: a run that meets one is not the steady state, and is not to be read as
+    M6's figure. The drawn nodes stay in the case, each named `M6 <unique>`."""
+    import uuid
+
+    budget = budget or BUDGETS["lag"]
+    ms, board, error = _send(base, f"/v1/investigations/{case}/boards", {"name": "M6"}, token)
+    if board is None or "id" not in board:
+        raise SystemExit(f"M6: no board to draw on ({error or board})")
+    times: list[float] = []
+    problems: list[str] = []
+    for i in range(warmup + n):
+        unique = f"m6{uuid.uuid4().hex[:12]}"
+        item = {
+            "type": "Person",
+            "label": f"M6 {unique}",
+            "marking": "OFFICIAL",
+            "grading": {"source": "B", "intelligence": "2", "handling": "1"},
+            "source_note": "M6",
+            "x": 0.2,
+            "y": 0.3,
+            "properties": {"family_name": unique},
+        }
+        started = time.perf_counter()
+        _ms, made, error = _send(
+            base, f"/v1/investigations/{case}/boards/{board['id']}/items", item, token
+        )
+        if made is None or "element_id" not in made:
+            problem = f"the draw was refused ({error or made})"
+        else:
+            problem = _wait_for(base, case, token, unique, made["element_id"], poll_seconds,
+                                started + give_up_seconds)  # fmt: skip
+        lag = (time.perf_counter() - started) * 1000
+        if i < warmup:
+            continue
+        times.append(lag)
+        if problem:
+            problems.append(problem)
+    p95 = _percentile(times, 0.95)
+    why = []
+    if p95 > budget["fail_ms"]:
+        why.append(f"p95 {p95:.0f} ms over the failure figure, {budget['fail_ms']:.0f} ms")
+    if problems:
+        why.append(f"{len(problems)} of {len(times)}: {sorted(set(problems))[0]}")
+    return {
+        "measure": budget.get("measure", "M6"),
+        "n": len(times),
+        "p50_ms": round(_percentile(times, 0.50), 1),
+        "p95_ms": round(p95, 1),
+        "max_ms": round(max(times), 1),
+        "budget_ms": budget["budget_ms"],
+        "fail_ms": budget["fail_ms"],
+        "within_budget": p95 <= budget["budget_ms"] and not problems,
+        "verdict": "not met" if why else "met",
+        "why": "; ".join(why),
+    }
+
+
+def _wait_for(
+    base: str, case: str, token: str, unique: str, node: str, poll: float, deadline: float
+) -> str:
+    """'' once the index answers `node` for `unique`; else what was wrong. A fallback answer,
+    even holding the node, is not the index's, and the polling goes on."""
+    body = {"query": unique, "page": 1, "page_size": 20}
+    while time.perf_counter() < deadline:
+        _ms, answer, _error = _send(base, f"/v1/investigations/{case}/search", body, token)
+        if answer is not None and answer.get("source", "index") == "index":
+            if any(node in hit.get("node_ids", []) for hit in answer.get("results") or []):
+                return ""
+        time.sleep(poll)
+    return "not searchable from the index in time"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
