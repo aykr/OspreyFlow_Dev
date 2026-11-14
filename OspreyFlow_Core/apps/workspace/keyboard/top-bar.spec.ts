@@ -4,6 +4,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
+import { checkUndecidedContrast } from "../a11y/undecidedContrast";
+
 declare global {
   interface Window {
     __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean; rail: string[] };
@@ -191,6 +193,8 @@ for (const look of ["dark", "light", "govuk"] as const) {
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
       .analyze();
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+    const contrast = await checkUndecidedContrast(page, results);
+    expect(contrast.unlisted, "colour contrast axe left undecided").toEqual([]);
     // It is a fact about every answer while it stands, so unlike the "more match" nudge it never fades.
     await page.waitForTimeout(5000);
     await expect(page.getByRole("status")).not.toHaveAttribute("data-faded", "true");

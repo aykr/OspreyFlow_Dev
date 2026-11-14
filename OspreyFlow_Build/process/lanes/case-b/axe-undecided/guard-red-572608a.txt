@@ -1,0 +1,9 @@
+     ✓ flags a scan that reads only its violations 1ms
+     ✓ passes a scan followed by the check 0ms
+     ✓ flags a file with a second scan left unchecked 0ms
+     ✓ does not take the check's own definition for a scan 0ms
+     × finds no scan in either app that leaves it undecided 64ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/testing/axeUndecided.test.ts > every axe scan judges the contrast axe left undecided > finds no scan in either app that leaves it undecided
++   "workspace/keyboard/top-bar.spec.ts: 1 axe scan(s), 0 checkUndecidedContrast call(s)",
+      Tests  1 failed | 4 passed (5)
