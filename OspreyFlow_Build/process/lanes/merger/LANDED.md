@@ -89,3 +89,5 @@ beff3b6 b68a513 admin v052 (step 3b's identities)
 8acbc29 c626a5b docs spec10 (the guide's two copies held as one)
 f193666 e00a09c platform v052-r1upgrade
 8412c67 6fcdb62 admin idp-labels, with stack_lease_reap.diff
+b925385 cb54a90 case-b lease-tests, with its stack_lease.sh diff
+1d331f8 e28565f case-b npm-lock, with its stack_lease.sh diff
