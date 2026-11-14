@@ -1,0 +1,33 @@
+# v052-r1reporting: red first (rule 15), 2026-11-14T03:53:05Z, offline on closed ports 59991-59994, a fresh PYTHONPYCACHEPREFIX each run
+## plant 1: main's r1_kind_osprey.yaml (reporting off, no superset_client_id)
+E       AssertionError: assert ['listed, not...ase superset'] == []
+E         
+E         Left contains 5 more items, first extra item: 'listed, not rendered: workloads superset'
+E         Use -v to get more diff
+E       KeyError: 'reporting'
+E       KeyError: 'SUPERSET_OIDC_CLIENT_SECRET'
+## plant 2: superset_client_id not the Entra stand-in's registration
+E       AssertionError: assert 'cccccccc-ddd...-000000000009' == 'cccccccc-ddd...-000000000001'
+E         
+E         - cccccccc-dddd-4eee-8fff-000000000001
+E         ?                                    ^
+E         + cccccccc-dddd-4eee-8fff-000000000009
+E         ?                                    ^
+## plant 3: main's r1_kind.py (the Terraform stand-in knows neither variable)
+E                           SystemExit: the Terraform stand-in does not know var.report_sync_dashboards (secrets.tf, ospreyflow-secrets.REPORT_SYNC_DASHBOARDS): say what the apply would give
+E                           SystemExit: the Terraform stand-in does not know var.report_sync_dashboards (secrets.tf, ospreyflow-secrets.REPORT_SYNC_DASHBOARDS): say what the apply would give
+2 failed, 15 deselected in 0.87s
+## plant 4: Superset's secret not the tenant's
+E       AssertionError: assert 'not-the-tenants' == '<the tenant's per-run secret>'
+E         
+E         - <the tenant's per-run secret>
+E         + not-the-tenants
+1 failed, 16 deselected in 0.69s
+## plant 5: report_sync_dashboards not [] at install
+E       assert [{}] == []
+E         
+E         Left contains one more item: {}
+E         Use -v to get more diff
+1 failed, 16 deselected in 0.69s
+## green (R1's offline suite and the poc manifest's render test)
+95 passed in 35.05s

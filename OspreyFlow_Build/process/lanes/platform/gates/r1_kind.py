@@ -455,6 +455,11 @@ def _terraform_values(prefix: str, roles: dict[str, str]) -> dict[str, str]:
         "aws_iam_role.backup.arn": roles["ospreyflow-backup"],
         "aws_iam_role.backup_clickhouse.arn": roles["ospreyflow-backup-clickhouse"],
         '"https://${aws_opensearch_domain.search.endpoint}"': f"https://{SEARCH_HOST}",
+        # The variables install step 2 has the operator give with reporting on (ADR-148 Amendments 9
+        # and 10): Superset's client secret, the Entra stand-in's for its registration (made per run),
+        # and the dashboard identities, `[]` until step 6a registers one, as the install runbook says.
+        "var.superset_oidc_client_secret": entra_clients()["superset"],
+        "var.report_sync_dashboards": "[]",
     }
     for name in ("postgres", "redis"):  # the managed stand-ins' own, set when they were made
         passwords[name] = PASSWORD
