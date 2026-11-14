@@ -3,8 +3,10 @@
 // panel in the Graph view alone and looked dead in Map, Reports, Ownership and the others. `shell.spec.ts` proves
 // Help over the top bar's harness, which has one view; this drives the real `/` (signed in through
 // `fakeIdentityProvider.ts`, a case kept in the tab, the Conduit faked with what the workspace reads), goes to each
-// view the switch and More views offer, presses Help on the rail by keyboard, and holds that the panel opens there,
-// takes focus, and closes again by Help.
+// view the switch and More views offer (each focused, then Enter), presses Help on the rail by keyboard, and holds
+// that the panel opens there, takes focus, and closes again by Help. The eight views of the switch and More views;
+// not Messages (the dossier), a view open as the lens, or the search results page, which draw Help's panel by their
+// own routes (App.tsx's `beside`) and are not this case's.
 import { expect, test, type Page } from "@playwright/test";
 
 import { HELP_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";

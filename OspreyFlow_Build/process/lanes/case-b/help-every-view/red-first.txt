@@ -7,7 +7,7 @@ What was missing was rule 13's case for it in the real Glass: `shell.spec.ts` pr
 harness, which has one view, and `App.help.test.tsx` proves it in jsdom over Reports alone.
 
 The new case, keyboard/help-every-view.spec.ts: the real `/` signed in (keyboard/fakeIdentityProvider.ts), a
-case kept in the tab, each of the eight views reached by keyboard (the switch's buttons, More views' items), and
+case kept in the tab, each of the eight views of the switch and More views gone to by keyboard (each button focused, then Enter; not reached by Tab), not Messages, a lens or the search results, and
 in each Help pressed on the rail opens the panel, the panel takes focus, and Help closes it. All eight views are
 required (`offered` must equal the list), so a view no longer offered cannot pass by being skipped.
 
@@ -20,3 +20,5 @@ Unplanted: help-every-view.spec.ts and shell.spec.ts, 62 passed (unplanted.log).
 
 The registry id (HELP_ACTIONS: open-help-from-every-view-by-keyboard) is registry-help.patch here, for the
 orchestrator to commit before the merge (actionRegistry.ts is shared); the spec does not typecheck without it.
+
+Scripted since as plants.sh (restores from a saved copy); its record is plants-<head>.txt.
