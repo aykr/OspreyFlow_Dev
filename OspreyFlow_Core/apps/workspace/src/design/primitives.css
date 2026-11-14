@@ -184,6 +184,8 @@
 /* The right-click list (ADR-078): the name at the left, its count quieter at the right edge, and a
    small heading over each group with a hairline between groups. Tokens only. */
 .radial-menu__list { min-width: 240px; }
+/* The canvas's expansion prompts (`LargeExpansionPrompt`, `CapRefusalPrompt`): their words and choices in one column. */
+.expansion-prompt { display: flex; flex-direction: column; gap: var(--sp-6); min-width: 280px; }
 /* Above the canvas's own layers: its labels and nodes were drawn over the menu's top row. */
 .radial-menu, .radial-menu__list { z-index: 40; }
 .radial-menu__list .radial-menu__item {

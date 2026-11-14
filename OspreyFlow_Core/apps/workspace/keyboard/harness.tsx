@@ -71,6 +71,8 @@ declare global {
       reproject: (clusterIds: Record<string, string>) => void;
       /** Land a `remove` delta for one node, as when another reader's change takes it out. */
       removeNode?: (nodeId: string) => void;
+      /** Land a `snapshot` of the working set without one node, as a resync does: the graph is cleared and drawn again. */
+      resnapshotWithout?: (nodeId: string) => void;
       /** The cluster id the working set holds on a node now (ADR-124: what a manual link's answer
        * moved), or `null` when it holds none. */
       clusterOf: (nodeId: string) => string | null;
@@ -175,6 +177,12 @@ window.__CANVAS__ = {
   hasNode: (id) => workingSet.graph.hasNode(id),
   removeNode: (id) =>
     workingSet.store.getState().applyDelta({ seq: workingSet.store.getState().seq + 1, op: "remove", node_ids: [id] }),
+  resnapshotWithout: (id) => {
+    const graph = workingSet.graph;
+    const nodes = graph.filterNodes((n) => n !== id).map((n) => graph.getNodeAttribute(n, "data"));
+    const edges = graph.filterEdges((_, __, source, target) => source !== id && target !== id).map((e) => graph.getEdgeAttribute(e, "data"));
+    workingSet.store.getState().applyDelta({ seq: workingSet.store.getState().seq + 1, op: "snapshot", nodes, edges });
+  },
   reproject: (clusterIds) =>
     workingSet.store.getState().applyDelta({
       seq: workingSet.store.getState().seq + 1,

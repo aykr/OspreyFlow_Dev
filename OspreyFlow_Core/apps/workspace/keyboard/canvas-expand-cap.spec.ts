@@ -152,6 +152,34 @@ test("Escape puts the refusal away and nothing is expanded", async ({ page }) =>
   expect(sent).toHaveLength(1);
 });
 
+/** Tab from a prompt's last control comes back to its first, and Shift+Tab from its first to its last:
+ * a keyboard user stays in the choice the canvas waits on (aria-modal). */
+async function holdsFocus(page: Page, prompt: ReturnType<Page["getByRole"]>): Promise<void> {
+  await expect(prompt).toHaveAttribute("aria-modal", "true");
+  const controls = prompt.getByRole("button");
+  const first = controls.first();
+  const last = controls.last();
+  await last.focus();
+  await page.keyboard.press("Tab");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(last).toBeFocused();
+}
+
+test("the cap's refusal is modal: Tab and Shift+Tab stay inside it", async ({ page }) => {
+  await answerExpansions(page);
+  await expandTheFocusedNode(page);
+  await holdsFocus(page, refusal(page));
+});
+
+test("the large expansion's prompt is modal too: Tab and Shift+Tab stay inside it", async ({ page }) => {
+  await page.route("**/*/expand/preview", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ candidate_node_count: 900, candidate_edge_count: 0, link_count: 2 }) }),
+  );
+  await expandTheFocusedNode(page);
+  await holdsFocus(page, page.getByRole("alertdialog", { name: "Large expansion" }));
+});
+
 // Last in the file: the check reads the cases above it, run in order on one worker.
 test("every registered over-cap expansion action has its own proving test case above", () => {
   assertAllCovered(REGISTRY, CANVAS_CAP_ACTIONS);
