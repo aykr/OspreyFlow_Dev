@@ -475,9 +475,13 @@ def test_the_client_check_flags_a_name_inside_an_animation(sites: Path, syntheti
 
 
 def test_the_build_refuses_a_release_its_pages_were_not_checked_against(tmp_path: Path) -> None:
+    """A release after the one the pages were checked against, in the CHANGELOG's own shape, is refused by name."""
+    checked = re.search(r"^CHECKED_AGAINST = '(v(\d+)\.(\d+)\.(\d+))'$", (SITES / "build.py").read_text(encoding="utf-8"), re.M)
+    assert checked, "build.py's CHECKED_AGAINST"
+    later = f"v{checked.group(2)}.{checked.group(3)}.{int(checked.group(4)) + 1}"
     changelog = tmp_path / "CHANGELOG.md"
-    changelog.write_text("# Changelog\n\n## Unreleased\n\n## v0.5.1 — 2026-11-14\n\n## v0.5.0 — 2026-11-10\n", encoding="utf-8")
+    changelog.write_text(f"# Changelog\n\n## Unreleased\n\n## {later} — 2026-12-01\n\n## {checked.group(1)} — 2026-11-14\n", encoding="utf-8")
     run = subprocess.run([sys.executable, str(SITES / "build.py"), "--out", str(tmp_path / "out"), "--changelog", str(changelog)],
                          capture_output=True, text=True)  # fmt: skip
     assert run.returncode != 0
-    assert "latest release is v0.5.1, and the pages were checked against v0.5.0" in run.stderr
+    assert f"latest release is {later}, and the pages were checked against {checked.group(1)}" in run.stderr

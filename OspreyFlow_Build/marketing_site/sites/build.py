@@ -21,7 +21,7 @@ OUT = Path(__file__).resolve().parent
 SOURCE = OUT / 'source'
 CHANGELOG = OUT.parents[2] / 'OspreyFlow_Core' / 'CHANGELOG.md'
 #: The release every claim on the pages was last checked against (docs lane, 13 November 2026).
-CHECKED_AGAINST = 'v0.5.0'
+CHECKED_AGAINST = 'v0.5.1'
 sys.path.insert(0, str(OUT))
 import overview as OV, govanim as GV  # noqa: E402
 
@@ -338,7 +338,7 @@ def org_features():
         '<div class="pair">' + fig('map-time') + fig('matrix') + '</div>', ident='glass')
     b += sec('Ingest Studio: bringing data in', split(ul([
         '<strong>1 Model.</strong> A domain model for each dataset: its entity types, link types and markings. Starters for crime, anti-money laundering, fraud and cyber.',
-        '<strong>2 Sources.</strong> Files, a SQL database, an HTTP API or JSON files, each with a declared marking and legal basis.',
+        '<strong>2 Sources.</strong> Files, a SQL database, an HTTP API or JSON files, and on the shared-platform profile S3 buckets and Athena, each with a declared marking and legal basis.',
         '<strong>3 Pipelines.</strong> Each source with its own profile, mapping and load, published as a version.',
         '<strong>4 Runs.</strong> By hand, on a schedule or when a file arrives. Verify shows what a file would create and which rows it would reject before anything loads.',
         '<strong>Held rows.</strong> A rule can hold rows for a reviewer before a load commits.',
@@ -364,10 +364,10 @@ def org_features():
         'An analyst can propose a new link type; a data engineer decides whether it joins the domain model.',
         'A withdrawn item is kept in the record, never erased.']) + '</div></div>', 'tint', 'boards')
     b += sec('Models and questions', split(ul([
-        "<strong>Questions.</strong> Ask about the documents and the graph around your selection. Each cited fact is a button that selects it on the canvas.",
-        '<strong>Extraction.</strong> Names, numbers and places found in documents arrive as inferred, to accept or reject.',
+        "<strong>Ask &amp; Chat.</strong> Ask about the documents and the graph around your selection. Each cited fact is a button that selects it on the canvas.",
+        '<strong>Extraction.</strong> Names, numbers and places found in documents arrive as inferred, to accept or reject. On the shared-platform profile, a second, open-source extraction engine for structured facts in documents.',
         '<strong>Local by default.</strong> Extraction, vision, transcription and embeddings run on the deployment itself.',
-        "<strong>Hosted engines, by permission.</strong> Each dataset has an egress setting, and material leaves only when that and its handling code both allow it.",
+        "<strong>Hosted engines, by permission.</strong> Each dataset has an egress setting, and material leaves only when that and its handling code both allow it. On the shared-platform profile, your organisation's own AI gateway, or Amazon Bedrock in London.",
         '<strong>Every answer names the engine and model that produced it.</strong>',
         '<strong>Keys are write-only,</strong> held by the model gateway alone, with limits and usage per engine.']), fig('questions'), flip=True), ident='models')
     b += sec('Admin and access', cards([
@@ -376,17 +376,17 @@ def org_features():
         ('Markings and clearance', 'Handling markings on every record, a highest allowed marking per dataset, and reads filtered in the store.'),
         ('Audit', 'Who did what and when, including every export, every approval and every change to what may leave the deployment.'),
         ('Dashboards', 'Apache Superset embedded in a case with the same sign-in, reading a reporting feed.'),
-        ('Backups and updates', 'Signed releases. On one computer or a server of your own, installed from a release, an update is backed up first and rolled back on failure; Enterprise is updated by installing the new release.')]), 'tint', 'admin')
+        ('Backups and updates', 'Signed releases. On one computer or a server of your own, installed from a release, an update is backed up first and rolled back on failure; Enterprise is updated by installing the new release.'),
+        ('A shared government platform', "A profile for shared government Kubernetes platforms: one namespace, the platform's managed services, non-root containers and a single-copy shape for a proof of concept, with sign-in through Microsoft Entra ID. Installed and checked on a test cluster, not yet on a platform. In this release, loads there are started by hand and reporting is not on it; the administration guide's section 6a has every limit.")]), 'tint', 'admin')
     b += sec('Architecture', '<p class="intro">Three tiers, separated by four typed ports, so an engine can be swapped without touching what sits above it.</p>' + cards([
         ('The Glass', 'React and TypeScript. Sigma.js and Graphology for the network, MapLibre GL with PMTiles for maps, Apache ECharts for charts, GOV.UK Frontend for the GOV.UK theme.'),
         ('The Conduit', 'Python and FastAPI. The API, access control, entity resolution, extraction and model routing. Stateless.'),
         ('The Vault', 'ArcadeDB for the graph, DuckDB or ClickHouse for analytics, OpenSearch or PostgreSQL for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage or Azure Blob, LiteLLM as the model gateway.')]) +
         '<p>The four ports are the graph, analytics, compute and models. An adapter is supported once it passes the same conformance suite as every other adapter behind that port.</p>', ident='architecture')
     b += sec('On main, coming with the next release', ul([
-        'A profile for shared government Kubernetes platforms: one namespace, the platform\'s managed services, non-root containers and a single-copy shape for a proof of concept. Not yet installed on a platform.',
-        'S3 and Athena as sources in the Ingest Studio.',
-        'A second, open-source extraction engine for structured facts in documents.',
-        "Routing to your organisation's own AI gateway, or to Amazon Bedrock in London, on the shared-platform profile."]) +
+        'On the shared-platform profile, scheduled runs: a pipeline\'s schedule and watched folder, rules, watches and list refreshes running as their owner.',
+        'Reporting on the shared-platform profile, through Apache Superset.',
+        'The shared-platform profile\'s data-safety fixes, to its backups and restore.']) +
         f'<p>These are merged in development and not in release {RELEASE}. They arrive with the next release.</p>', 'tint', 'coming')
     return page('org', 'features.html', 'Features · OspreyFlow', 'Every feature in the current OspreyFlow release: analysis, ingest, monitoring, drawing boards, models and administration.', b)
 
@@ -625,7 +625,7 @@ def net_services():
     b += sec('Deployment options', cards([
         ('Your cloud account', 'AWS or Azure, on one server or a Kubernetes cluster, using the cloud\'s managed services.'),
         ('Your own data centre', 'One Linux server or a cluster in your network, with your own certificates.'),
-        ('A shared government platform', 'A profile for shared Kubernetes platforms is arriving with the next release.')]))
+        ('A shared government platform', 'A profile for shared Kubernetes platforms, in the current release: installed and checked on a test cluster, not yet on a platform.')]))
     b += sec('Who we are', f'<p>Solirius Reply created OspreyFlow and leads its development. <a href="{ORG}/team.html">Meet the team</a> on the project\'s own site.</p>', 'tint')
     return page('net', 'services.html', 'Services · OspreyFlow', 'How Solirius Reply helps organisations adopt OspreyFlow: a pilot, a build, and running it.', b)
 
