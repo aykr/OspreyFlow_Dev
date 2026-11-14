@@ -42,6 +42,12 @@ class _Conduit(BaseHTTPRequestHandler):
     # (no words), "stuck" (the stop does not take), "never_back" (the start does not).
     index_down = False
     fallback = ""
+    # A token's life, as the Conduit meets it: after `expires_after` requests every request is
+    # refused with 401, as Keycloak's token is once its `exp` passes (step 4's rerun on d, 14
+    # November 2026: the realm's default 300 s, every send after about five minutes refused).
+    # `control_fails`: the cleared principal's request answered with this status instead.
+    expires_after = 0
+    control_fails = 0
 
     def do_POST(self) -> None:  # noqa: N802 - http.server's name
         if self.path.startswith("/_control/"):  # the stand-in docker's stop and start (M9)
@@ -52,6 +58,14 @@ class _Conduit(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.seen.append((self.path, body, self.headers.get("Authorization", "")))
         time.sleep(self.delay)
+        if self.expires_after and len(self.seen) > self.expires_after:
+            self._refuse(401, {"detail": "the token has expired"})
+            return
+        if self.control_fails and self.headers.get("Authorization", "").startswith(
+            "Bearer cleared-"
+        ):
+            self._refuse(self.control_fails, {"detail": "the store is unavailable"})
+            return
         status = 200
         if self.index_down and self.path.endswith(("/search", "/suggest")):
             answer = self._fallback_answer()
@@ -86,6 +100,14 @@ class _Conduit(BaseHTTPRequestHandler):
                 "results": hits if self.exact_first else hits[::-1],
                 "nodes": [],
             }
+        data = json.dumps(answer).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _refuse(self, status: int, answer: dict[str, Any]) -> None:
         data = json.dumps(answer).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -151,6 +173,7 @@ def conduit() -> Iterator[str]:
     _Conduit.lag, _Conduit.refuse_draw, _Conduit.drawn = 0.0, False, {}
     _Conduit.leak_world, _Conduit.leak, _Conduit.partner_only = False, "", False
     _Conduit.index_down, _Conduit.fallback = False, ""
+    _Conduit.expires_after, _Conduit.control_fails = 0, 0
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Conduit)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -774,3 +797,50 @@ def test_the_live_gate_fails_m9_when_the_fallback_is_silent(conduit: str, tmp_pa
     done = _run_live_m9(conduit, tmp_path)
     assert done.returncode != 0 and "M9:" in done.stdout and "did not say so" in done.stdout
     assert _Conduit.index_down is False
+
+
+# --- a token that dies mid-run (step 4's rerun on d, 14 November 2026) ---------------------------
+
+
+def test_a_token_refused_mid_run_stops_the_measure_and_says_its_figures_are_void(
+    conduit: str,
+) -> None:
+    """Rule 15: the fake models the Conduit's refusal of an expired token, not only its grant.
+    Before, a 401 was one more slow error and the class reported as measured."""
+    _Conduit.expires_after = 4
+    with pytest.raises(measure_search.TokenRefused) as stopped:
+        _run(conduit)
+    said = str(stopped.value)
+    assert "401" in said and "void" in said, said
+    assert len(_Conduit.seen) == 5, "stopped at the first refusal, not measured on"
+
+
+def test_a_token_refused_mid_run_stops_m10_rather_than_reading_as_reaching_nothing(
+    conduit: str,
+) -> None:
+    _Conduit.expires_after = 1
+    with pytest.raises(measure_search.TokenRefused):
+        _leaks(conduit)
+
+
+def test_a_control_that_errs_says_its_error_not_the_ids_it_did_not_name(conduit: str) -> None:
+    """Before, a failed control request listed every hidden id as unnamed and hid the error."""
+    _Conduit.control_fails = 500
+    result = _leaks(conduit)
+    assert result["verdict"] == "not met"
+    assert all("500" in f for f in result["failures"]), result["failures"]
+    assert not any("hid-1" in f for f in result["failures"]), result["failures"]
+
+
+def test_the_live_gate_stops_the_whole_run_on_a_refused_token(conduit: str, tmp_path: Path) -> None:
+    """A run whose results are void must not report as finished: the first 401 ends the session
+    (pytest.exit), so no later case measures on and no later result file is written."""
+    _Conduit.expires_after = 2
+    results = tmp_path / "results"
+    done = _run_live(tmp_path, conduit, {"OSPREY_MEASURE_RESULTS": str(results)})
+    said = done.stdout + done.stderr
+    assert done.returncode != 0, said
+    assert "401" in said and "void" in said, said[-2000:]
+    assert " passed" not in said.splitlines()[-1], said[-600:]
+    assert not results.exists() or not list(results.iterdir()), "no result written past it"
+

@@ -59,6 +59,13 @@ def _percentile(values: Sequence[float], q: float) -> float:
     return ordered[rank - 1]
 
 
+class TokenRefused(SystemExit):
+    """The Conduit refused the token (401): it expired or was never valid. Every figure from here
+    would time a refusal, so the run stops and says its figures are void rather than finishing as
+    if it had measured (step 4's rerun on d, 14 November 2026: the tokens died at 300 s and M4,
+    M3, M1, M6 and M10 ran on, refused)."""
+
+
 def _send(
     base: str, path: str, body: dict[str, Any], token: str
 ) -> tuple[float, dict[str, Any] | None, str]:
@@ -73,6 +80,13 @@ def _send(
         with urllib.request.urlopen(request, timeout=30) as answer:
             data = json.loads(answer.read())
         return (time.perf_counter() - started) * 1000, data, ""
+    except urllib.error.HTTPError as error:
+        if error.code == 401:
+            raise TokenRefused(
+                f"the Conduit refused the token (HTTP 401) on {path}: it has expired or was never "
+                "valid, so this run's figures from here are void; the run stops"
+            ) from error
+        return (time.perf_counter() - started) * 1000, None, f"{type(error).__name__}: {error}"
     except (urllib.error.URLError, OSError, ValueError) as error:
         return (time.perf_counter() - started) * 1000, None, f"{type(error).__name__}: {error}"
 
@@ -319,7 +333,8 @@ def measure_leaks(
         unreached = [n for n in leak["never_ids"] if not any(n in t for t in seen)]
         if control is None or unreached:
             failures.append(
-                f"{name}: the cleared principal's answer does not name {unreached or error}, so "
+                f"{name}: the cleared principal's answer does not name "
+                f"{unreached if control is not None else error}, so "
                 "the case reaches nothing hidden and proves nothing"
             )
             continue

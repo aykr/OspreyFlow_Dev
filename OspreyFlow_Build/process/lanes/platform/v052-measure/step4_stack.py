@@ -49,6 +49,13 @@ CORE = ROOT / "OspreyFlow_Core"
 BUILD = ROOT / "OspreyFlow_Build"
 KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.0"
 REALM = "osprey"
+#: How long the realm's tokens live, and the least a minted token must live for the run to start.
+#: Each token is minted once, before the command, and handed to it in its environment alone (no
+#: password reaches the child to mint again), so every token must outlive the whole command: the
+#: deployment's rendered realm sets no lifespan, Keycloak's 300 s applied, and step 4's rerun on d
+#: (14 November 2026) was refused from about five minutes in. Step 2 takes about eight minutes.
+TOKEN_LIFE_S = 4 * 3600
+TOKEN_LIFE_NEEDED_S = 3600
 LANE = os.environ.get("OSPREY_LANE", "platform")
 
 #: Step 4's subjects as rules granted them on stack d (14 November 2026): one cleared control per
@@ -339,6 +346,30 @@ def _post(url: str, data: dict[str, str]) -> dict[str, Any]:
         return result
 
 
+def token_life(token: str) -> int:
+    """A token's own life as the IdP granted it, `exp - iat`, read from its payload (no check of
+    the signature: the Conduit checks that; this reads only what was granted)."""
+    import base64
+
+    payload = token.split(".")[1]
+    claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    return int(claims["exp"]) - int(claims["iat"])
+
+
+def short_lived(tokens: dict[str, str]) -> str | None:
+    """Why the run must not start, if any minted token dies before the run could end: what the IdP
+    granted counts, not what the realm asked for."""
+    short = {name: token_life(t) for name, t in tokens.items()}
+    short = {name: life for name, life in short.items() if life < TOKEN_LIFE_NEEDED_S}
+    if not short:
+        return None
+    named = ", ".join(f"{name} {life} s" for name, life in sorted(short.items()))
+    return (
+        f"the IdP granted tokens shorter than the run's {TOKEN_LIFE_NEEDED_S} s ({named}): they "
+        "would be refused mid-measure and void every figure after"
+    )
+
+
 def mint(issuer: str, secret: str, subject: str) -> str:
     """The Conduit client's own token, exchanged for `subject`'s (RFC 8693, `subject_token`
     present: ADR-043's 24 September finding)."""
@@ -403,6 +434,12 @@ def realm_document() -> dict[str, Any]:
 
     realm = render_realm(OspreyConfig.model_validate({"profile": "local-lite"}), realm_name=REALM)
     realm["users"] = realm_users()
+    # A user session's idle and maximum life cap a token's own, so they are raised with it.
+    realm |= {
+        "accessTokenLifespan": TOKEN_LIFE_S,
+        "ssoSessionIdleTimeout": TOKEN_LIFE_S,
+        "ssoSessionMaxLifespan": TOKEN_LIFE_S,
+    }
     return realm
 
 
@@ -511,6 +548,10 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
           flush=True)  # fmt: skip
 
     tokens = {s["username"]: mint(issuer, secret, s["username"]) for s in (*SUBJECTS, PROBE)}
+    short = short_lived(tokens)
+    if short:
+        print(f"step4: preflight refused: {short}; the command was not run", flush=True)
+        return 2
     refused = preflight(base, case, tokens["m10-measure"], tokens[PROBE["username"]])
     if refused:
         print(f"step4: preflight refused: {refused}; the command was not run", flush=True)

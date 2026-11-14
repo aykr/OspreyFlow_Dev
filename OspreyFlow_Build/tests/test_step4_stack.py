@@ -261,3 +261,40 @@ def test_each_image_builds_from_core_whatever_directory_the_runner_starts_in(
     assert given.is_absolute() and given.is_file(), given
     assert given == step4.CORE / dockerfile
     assert argv[0] == "build" and argv[-1] == str(step4.CORE)
+
+
+# --- the tokens outlive the run (step 4's rerun on d, 14 November 2026) ---------------------------
+
+
+def _jwt(life: int, subject: str = "m10-measure") -> str:
+    """A token as Keycloak shapes it: header.payload.signature, base64url, `iat` and `exp`."""
+    import base64
+
+    def part(value: dict[str, Any]) -> str:
+        return base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip("=")
+
+    payload = {"sub": subject, "iat": 1_763_000_000, "exp": 1_763_000_000 + life}
+    return f"{part({'alg': 'RS256'})}.{part(payload)}.c2ln"
+
+
+def test_the_realm_grants_tokens_a_life_longer_than_the_run() -> None:
+    """The deployment's rendered realm sets no `accessTokenLifespan`, so Keycloak's 300 s applied
+    and every send after about five minutes was refused."""
+    realm = step4.realm_document()
+    assert realm.get("accessTokenLifespan", 300) >= step4.TOKEN_LIFE_NEEDED_S, realm.get(
+        "accessTokenLifespan"
+    )
+    for client in realm.get("clients", []):
+        own = (client.get("attributes") or {}).get("access.token.lifespan")
+        assert own is None or int(own) >= step4.TOKEN_LIFE_NEEDED_S, client["clientId"]
+
+
+def test_a_token_minted_shorter_than_the_run_stops_the_run_before_it_measures() -> None:
+    """The IdP's own answer is what counts, not the realm we asked for: a fake IdP's 300 s token
+    is refused by name, as the run would otherwise die mid-measure."""
+    tokens = {"m10-measure": _jwt(4 * 3600), "m10-part": _jwt(300, "m10-part")}
+    said = step4.short_lived(tokens)
+    assert said is not None and "m10-part" in said and "300" in said, said
+    assert "m10-measure" not in said
+    assert step4.short_lived({"m10-measure": _jwt(4 * 3600)}) is None
+

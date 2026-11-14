@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,19 @@ _NAMED = (
     "OSPREY_MEASURE_TOKEN",
     "OSPREY_MEASURE_QUERIES",
 )
+
+
+def _void_on_401(measure: Callable[..., dict[str, Any]]) -> Callable[..., dict[str, Any]]:
+    """The first refused token ends the whole run, saying so: a run whose figures are void must not
+    report as finished, and no later case measures on (step 4's rerun on d, 14 November 2026)."""
+
+    def guarded(**kwargs: Any) -> dict[str, Any]:
+        try:
+            return measure(**kwargs)
+        except measure_search.TokenRefused as refused:
+            pytest.exit(f"step 4: {refused}", returncode=3)
+
+    return guarded
 
 
 def _record(measure: str, result: dict[str, Any]) -> None:
@@ -82,7 +96,7 @@ def test_the_class_is_within_its_failure_figure_on_the_load(query_class: str) ->
     assert queries, (
         f"the queries file holds no {query_class!r} query: the class would pass unmeasured"
     )
-    result = measure_search.measure(
+    result = _void_on_401(measure_search.measure)(
         base=stack["OSPREY_MEASURE_BASE"],
         case=stack["OSPREY_MEASURE_CASE"],
         token=stack["OSPREY_MEASURE_TOKEN"],
@@ -97,7 +111,7 @@ def test_the_class_is_within_its_failure_figure_on_the_load(query_class: str) ->
 
 def test_m6_a_drawn_node_reaches_the_index_within_its_failure_figure() -> None:
     stack = _stack()
-    found = measure_search.measure_lag(
+    found = _void_on_401(measure_search.measure_lag)(
         base=stack["OSPREY_MEASURE_BASE"],
         case=stack["OSPREY_MEASURE_CASE"],
         token=stack["OSPREY_MEASURE_TOKEN"],
@@ -121,7 +135,7 @@ def test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal() -
             "principal and the controls"
         )
     lines = Path(os.environ["OSPREY_MEASURE_LEAKS"]).read_text(encoding="utf-8").splitlines()
-    found = measure_search.measure_leaks(
+    found = _void_on_401(measure_search.measure_leaks)(
         base=stack["OSPREY_MEASURE_BASE"],
         case=stack["OSPREY_MEASURE_CASE"],
         token=os.environ["OSPREY_MEASURE_PART_TOKEN"],
@@ -154,7 +168,7 @@ def test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so() -> N
     def docker(verb: str) -> None:
         subprocess.run(["docker", verb, container], check=True, capture_output=True)
 
-    found = measure_search.measure_fallback(
+    found = _void_on_401(measure_search.measure_fallback)(
         base=stack["OSPREY_MEASURE_BASE"],
         case=stack["OSPREY_MEASURE_CASE"],
         token=stack["OSPREY_MEASURE_TOKEN"],
