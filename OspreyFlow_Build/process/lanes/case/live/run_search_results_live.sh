@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# v052-results' live check (ADR-145 Amendment 15 Part A against ADR-149's route): live/search-results.spec.ts on a
-# leased stack's own host, with the Conduit and Vite there too, so nothing crosses the network from the Mac (the
+# v052-results' live check (ADR-145 Amendment 15 Part A against ADR-149's route), and any other live spec on the same
+# set-up (LIVE_SEED, LIVE_SPECS below): live/search-results.spec.ts by default, on a leased stack's own host, with the Conduit and Vite there too, so nothing crosses the network from the Mac (the
 # orchestrator, 14 November 2026). Run from the worktree root:
 #   OspreyFlow_Build/scripts/stack_lease.sh remote case -- bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
 # The order is DEMO_GUIDE.md §3's, less its first Conduit: a token and its JWKS; Fixture Corp seeded into a case the
@@ -64,12 +64,16 @@ conduit_up() {
 # The seed makes the case (`--case-name`) as analyst-1 of unit-1, the token's own account, so it is the case's first
 # Author and the case reads Fixture Corp's dataset (scripts/case_seed.py's scope_for). The Conduit's POST
 # /v1/investigations takes no empty body now (ADR-099 Amendment 12: a case names its one dataset).
-echo "# step: Fixture Corp seeded into a case the seed makes"
+# LIVE_SEED (default scripts.seed_fixture_corp) and LIVE_SPECS (default live/search-results.spec.ts) let the same
+# set-up hold other live specs: scripts.seed_hmp_fixture for the scenario specs, which take the HMP fixture.
+SEED=${LIVE_SEED:-scripts.seed_fixture_corp}
+SPECS=${LIVE_SPECS:-live/search-results.spec.ts}
+echo "# step: $SEED into a case the seed makes"
 # A case of its own each run: the seed reuses a case of the same name, and the stack's Postgres keeps cases and their
 # working sets between runs, so a second run's Show on graph found its records already there and sent nothing (the run
 # at eb8a4ed). The graph is dropped above; the case's working set is not.
 NAME="Live search check $(date -u +%Y%m%dT%H%M%SZ)"
-"$PY" -m scripts.seed_fixture_corp --case-name "$NAME" --principal-id analyst-1 --org-unit unit-1 >"$W/seed.txt" 2>&1
+"$PY" -m "$SEED" --case-name "$NAME" --principal-id analyst-1 --org-unit unit-1 >"$W/seed.txt" 2>&1
 seeded=$?
 mask <"$W/seed.txt" | tail -8
 [ "$seeded" -eq 0 ] || fail "seed"
@@ -108,6 +112,22 @@ if [ "${LIVE_DIAG:-}" = 1 ]; then
   done
   curl -s "http://127.0.0.1:${OPENSEARCH_PORT}/ospreyflow-default/_search?q=type:Person&size=2" |
     "$PY" -c 'import json,sys; b=json.load(sys.stdin); print(b["hits"]["total"]); [print(json.dumps(h["_source"])[:900]) for h in b["hits"]["hits"]]'
+  echo "== a fresh case naming the seeded case's one dataset, as live.ts's freshInvestigation makes it"
+  DS=$(curl -s "http://127.0.0.1:$CP/v1/investigations/$CASE/datasets" -H "Authorization: Bearer $TOKEN" | "$PY" -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')
+  FRESH=$(curl -s -X POST "http://127.0.0.1:$CP/v1/investigations" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+    -d "{\"dataset_ids\":[\"$DS\"]}" | "$PY" -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+  echo "fresh case reads: $(curl -s "http://127.0.0.1:$CP/v1/investigations/$FRESH/datasets" -H "Authorization: Bearer $TOKEN" | head -c 300)"
+  for q in QQ118439C QQ1184; do
+    printf 'fresh search %s: ' "$q"
+    curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$FRESH/search" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+      -d "{\"query\":\"$q\",\"page\":1,\"page_size\":20}" | head -c 300; echo
+    printf 'fresh suggest %s: ' "$q"
+    curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$FRESH/suggest" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+      -d "{\"query\":\"$q\"}" | head -c 400; echo
+    printf 'seeded suggest %s: ' "$q"
+    curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$CASE/suggest" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+      -d "{\"query\":\"$q\"}" | head -c 400; echo
+  done
   echo "== the case's datasets"
   curl -s "http://127.0.0.1:$CP/v1/investigations/$CASE/datasets" -H "Authorization: Bearer $TOKEN" | head -c 900; echo
   echo "== the index asked directly for the identifier"
@@ -133,9 +153,21 @@ const { chromium } = require("@playwright/test");
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
+  // What the browser saw, said when the Glass does not draw: its console, page errors and failed or slow requests.
+  const t0 = Date.now();
+  const say = (m) => console.log(`[warm-up +${((Date.now() - t0) / 1000).toFixed(1)} s] ${m}`);
+  page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") say(`console ${m.type()}: ${m.text().slice(0, 300)}`); });
+  page.on("pageerror", (e) => say(`page error: ${String(e).slice(0, 300)}`));
+  page.on("requestfailed", (r) => say(`request failed: ${r.url().slice(0, 160)} ${r.failure()?.errorText ?? ""}`));
+  page.on("response", (r) => { if (r.status() >= 400) say(`response ${r.status()}: ${r.url().slice(0, 160)}`); });
   await page.goto(`http://localhost:5173/?investigation=${process.env.CASE}`);
+  say("loaded");
   const box = page.locator(".top-bar [role=\"combobox\"]");
-  await box.waitFor({ timeout: 600000 });
+  await box.waitFor({ timeout: 240000 }).catch(async (e) => {
+    say(`no search box; the body holds ${(await page.locator("body").innerText()).slice(0, 400).replace(/\s+/g, " ")}`);
+    throw e;
+  });
+  say("search box drawn");
   // Through the results page too, so every module it loads has been asked for once, then a reload: what Vite finds to
   // bundle only on a later request reloads the page, and a page opened during that rebuild draws nothing.
   await box.fill("warm-up");
@@ -146,11 +178,11 @@ const { chromium } = require("@playwright/test");
   await box.waitFor({ timeout: 600000 });
   await browser.close();
 })().catch((e) => { console.error(String(e)); process.exit(1); });
-' || { tail -20 "$W/vite.log" | mask; fail "the Glass did not draw its search box in 10 minutes"; }
+' || { tail -20 "$W/vite.log" | mask; fail "the Glass did not draw its search box in 4 minutes"; }
 echo "# warm-up: the Glass drew its search box after $(( $(date +%s) - started )) s"
 OSPREY_REUSE_SERVER=1 OSPREY_TEST_LIVE_GLASS=1 OSPREY_LIVE_API_BASE_URL="http://127.0.0.1:$CP" OSPREY_LIVE_BEARER_TOKEN="$TOKEN" \
   OSPREY_LIVE_INVESTIGATION_ID="$CASE" \
-  npx playwright test --config live/playwright.config.ts live/search-results.spec.ts --reporter=line 2>&1 | mask
+  npx playwright test --config live/playwright.config.ts $SPECS --reporter=line 2>&1 | mask
 code=${PIPESTATUS[0]}
 echo "# playwright exit $code"
 if [ "$code" -ne 0 ]; then

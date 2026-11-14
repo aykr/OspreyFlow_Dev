@@ -1,0 +1,410 @@
+Running on ospreyflow-test (stack g, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T083203Z-96fc6ee9/log: env LIVE_SEED=scripts.seed_hmp_fixture LIVE_SPECS=live/scenario-a-a12-a15.spec.ts bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: scripts.seed_hmp_fixture into a case the seed makes
+Case 'Live search check 20261114T083204Z' is 01M7CJYTYT687NWEB2VWXBE2AX.
+Seeded 400 Person nodes, 10 yards, 262 current-window and 4 prior-period incident events.
+Put the prison, its yards, the towns and the accounts on the map.
+  check: no id stored more than once (whole shared graph)
+Loaded 809 network events (calls, visits, payments, custody, incidents); 1075 events in all under investigation_scope='01M7CJYTYT687NWEB2VWXBE2AX'.
+case: 01M7CJYTYT687NWEB2VWXBE2AX
+# step: the search index rebuilt from the graph
+search index rebuilt: 1203 documents from 1203 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t083257521382
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 5.38 6.00 8.66
+[warm-up +0.8 s] loaded
+[warm-up +1.1 s] console warning: [.WebGL-0x199c07ed2200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] console warning: [.WebGL-0x199c07ece600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] console warning: [.WebGL-0x199c07f13200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] search box drawn
+[warm-up +1.2 s] console error: [ECharts] Component toolbox is used but not imported.
+import { ToolboxComponent } from 'echarts/components';
+echarts.use([ToolboxComponent]);
+[warm-up +1.3 s] console warning: [.WebGL-0x199c07ed2200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+# warm-up: the Glass drew its search box after 7 s
+
+Running 3 tests using 1 worker
+
+[1/3] live/scenario-a-a12-a15.spec.ts:107:1 › A12 — the Clique Metric ranks nodes in the metrics panel
+  1) live/scenario-a-a12-a15.spec.ts:107:1 › A12 — the Clique Metric ranks nodes in the metrics panel 
+
+    Error: could not create a fresh investigation (422): {"error":"dataset_refused"}
+
+       at live.ts:66
+
+      64 |   });
+      65 |   if (!response.ok()) {
+    > 66 |     throw new Error(
+         |           ^
+      67 |       `could not create a fresh investigation (${response.status()}): ${await response.text()}`,
+      68 |     );
+      69 |   }
+        at freshInvestigation (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/live.ts:66:11)
+        at freshWorkspaceUrl (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/live.ts:77:29)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/scenario-a-a12-a15.spec.ts:114:19
+
+    Error Context: test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[2/3] live/scenario-a-a12-a15.spec.ts:178:1 › A13–A15 — a judgement is recorded against the investigation
+  2) live/scenario-a-a12-a15.spec.ts:178:1 › A13–A15 — a judgement is recorded against the investigation 
+
+    Error: could not create a fresh investigation (422): {"error":"dataset_refused"}
+
+       at live.ts:66
+
+      64 |   });
+      65 |   if (!response.ok()) {
+    > 66 |     throw new Error(
+         |           ^
+      67 |       `could not create a fresh investigation (${response.status()}): ${await response.text()}`,
+      68 |     );
+      69 |   }
+        at freshInvestigation (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/live.ts:66:11)
+        at freshWorkspaceUrl (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/live.ts:77:29)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/scenario-a-a12-a15.spec.ts:184:19
+
+    Error Context: test-results/scenario-a-a12-a15-A13–A15-3babb-d-against-the-investigation/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/scenario-a-a12-a15-A13–A15-3babb-d-against-the-investigation/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/scenario-a-a12-a15-A13–A15-3babb-d-against-the-investigation/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[3/3] live/scenario-a-a12-a15.spec.ts:205:1 › A15 — export names what it blocked, and takes a justification
+  3) live/scenario-a-a12-a15.spec.ts:205:1 › A15 — export names what it blocked, and takes a justification 
+
+    Error: could not create a fresh investigation (422): {"error":"dataset_refused"}
+
+       at live.ts:66
+
+      64 |   });
+      65 |   if (!response.ok()) {
+    > 66 |     throw new Error(
+         |           ^
+      67 |       `could not create a fresh investigation (${response.status()}): ${await response.text()}`,
+      68 |     );
+      69 |   }
+        at freshInvestigation (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/live.ts:66:11)
+        at freshWorkspaceUrl (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/live.ts:77:29)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/scenario-a-a12-a15.spec.ts:212:19
+
+    Error Context: test-results/scenario-a-a12-a15-A15-—-e-be3e7-d-and-takes-a-justification/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/scenario-a-a12-a15-A15-—-e-be3e7-d-and-takes-a-justification/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/scenario-a-a12-a15-A15-—-e-be3e7-d-and-takes-a-justification/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  3 failed
+    live/scenario-a-a12-a15.spec.ts:107:1 › A12 — the Clique Metric ranks nodes in the metrics panel 
+    live/scenario-a-a12-a15.spec.ts:178:1 › A13–A15 — a judgement is recorded against the investigation 
+    live/scenario-a-a12-a15.spec.ts:205:1 › A15 — export names what it blocked, and takes a justification 
+# playwright exit 1
+== Vite's log
+  VITE v8.3.4  ready in 138 ms
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+== test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: scenario-a-a12-a15.spec.ts >> A12 — the Clique Metric ranks nodes in the metrics panel
+- Location: live/scenario-a-a12-a15.spec.ts:107:1
+
+# Error details
+
+```
+Error: could not create a fresh investigation (422): {"error":"dataset_refused"}
+```
+
+# Test source
+
+```ts
+  1  | // Shared helpers for the live tier. Nothing here mocks anything — that is the whole point of
+  2  | // the directory (`playwright.config.ts`'s own header has the reasoning).
+  3  | 
+  4  | import { type APIRequestContext, test } from "@playwright/test";
+  5  | 
+  6  | /** The opt-in gate. Skipped rather than failed when it is absent: a developer running the whole
+  7  |  * workspace test suite has no stack up, and that is not a defect. */
+  8  | export const liveOnly = () =>
+  9  |   test.skip(
+  10 |     process.env.OSPREY_TEST_LIVE_GLASS !== "1",
+  11 |     "needs a hand-brought-up demo stack (DEMO_GUIDE.md §3) — opt in with " +
+  12 |       "OSPREY_TEST_LIVE_GLASS=1 and set OSPREY_LIVE_API_BASE_URL, OSPREY_LIVE_BEARER_TOKEN " +
+  13 |       "and OSPREY_LIVE_INVESTIGATION_ID.",
+  14 |   );
+  15 | 
+  16 | /** No default, deliberately. A live spec that fell back to a plausible-looking value would
+  17 |  * quietly test the wrong deployment, and report a pass for it. */
+  18 | export function required(name: string): string {
+  19 |   const value = process.env[name];
+  20 |   if (!value) {
+  21 |     throw new Error(
+  22 |       `${name} is not set. The live tier has no defaults: it must be pointed at the stack the ` +
+  23 |         `operator actually brought up, never guess one. See DEMO_GUIDE.md §3.`,
+  24 |     );
+  25 |   }
+  26 |   return value;
+  27 | }
+  28 | 
+  29 | export const apiBaseUrl = () => required("OSPREY_LIVE_API_BASE_URL");
+  30 | export const investigationId = () => required("OSPREY_LIVE_INVESTIGATION_ID");
+  31 | 
+  32 | /** The Glass reads the investigation from `?investigation=<id>` once on load, and it takes
+  33 |  * precedence over `sessionStorage` (`02_GLASS_FRONTEND.md` §2.1) — so every live spec opens a URL
+  34 |  * of this shape rather than the bare root, which would create its own investigation silently. */
+  35 | export const workspaceUrl = () => `/?investigation=${investigationId()}`;
+  36 | 
+  37 | /** **A fresh investigation per test, and it is not tidiness — it is the fix for a false green.**
+  38 |  *
+  39 |  * Round 12c's diagnosis: the working set is *server-side* and keyed by investigation, and the
+  40 |  * Glass loads it on open. Measured directly — opening a bare URL against an investigation another
+  41 |  * process had expanded in showed "19 nodes 18 edges" before the spec touched anything. So every
+  42 |  * live test sharing one investigation inherits whatever any earlier test, any earlier *run*, or
+  43 |  * any manual poke left behind.
+  44 |  *
+  45 |  * That is what made A12 green in round 12 and red in 12b. Nothing about the product changed
+  46 |  * between them: round 12 ran the tier repeatedly against one long-lived investigation until
+  47 |  * earlier attempts had populated it, at which point A12's `edgeCount > 0` was satisfied without
+  48 |  * its own expansion contributing anything; 12b used a fresh investigation and the same assertion
+  49 |  * correctly failed. `CLAUDE.md` rule 15's "a gate's first green is not a result, it is an
+  50 |  * untested state" — here the green was a *later* run's artefact, which is worse, because it looks
+  51 |  * like a confirmation.
+  52 |  *
+  53 |  * Creating the investigation through the real route rather than reusing
+  54 |  * `OSPREY_LIVE_INVESTIGATION_ID`: search and expand are not investigation-scoped (checked
+  55 |  * directly against the routes), so the seeded fixture graph is reachable from any investigation,
+  56 |  * while the working set — the thing that leaks — starts empty and provably so. */
+  57 | export async function freshInvestigation(
+  58 |   request: APIRequestContext,
+  59 | ): Promise<string> {
+  60 |   const response = await request.post(`${apiBaseUrl()}/v1/investigations`, {
+== test-results/scenario-a-a12-a15-A13–A15-3babb-d-against-the-investigation/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: scenario-a-a12-a15.spec.ts >> A13–A15 — a judgement is recorded against the investigation
+- Location: live/scenario-a-a12-a15.spec.ts:178:1
+
+# Error details
+
+```
+Error: could not create a fresh investigation (422): {"error":"dataset_refused"}
+```
+
+# Test source
+
+```ts
+  1  | // Shared helpers for the live tier. Nothing here mocks anything — that is the whole point of
+  2  | // the directory (`playwright.config.ts`'s own header has the reasoning).
+  3  | 
+  4  | import { type APIRequestContext, test } from "@playwright/test";
+  5  | 
+  6  | /** The opt-in gate. Skipped rather than failed when it is absent: a developer running the whole
+  7  |  * workspace test suite has no stack up, and that is not a defect. */
+  8  | export const liveOnly = () =>
+  9  |   test.skip(
+  10 |     process.env.OSPREY_TEST_LIVE_GLASS !== "1",
+  11 |     "needs a hand-brought-up demo stack (DEMO_GUIDE.md §3) — opt in with " +
+  12 |       "OSPREY_TEST_LIVE_GLASS=1 and set OSPREY_LIVE_API_BASE_URL, OSPREY_LIVE_BEARER_TOKEN " +
+  13 |       "and OSPREY_LIVE_INVESTIGATION_ID.",
+  14 |   );
+  15 | 
+  16 | /** No default, deliberately. A live spec that fell back to a plausible-looking value would
+  17 |  * quietly test the wrong deployment, and report a pass for it. */
+  18 | export function required(name: string): string {
+  19 |   const value = process.env[name];
+  20 |   if (!value) {
+  21 |     throw new Error(
+  22 |       `${name} is not set. The live tier has no defaults: it must be pointed at the stack the ` +
+  23 |         `operator actually brought up, never guess one. See DEMO_GUIDE.md §3.`,
+  24 |     );
+  25 |   }
+  26 |   return value;
+  27 | }
+  28 | 
+  29 | export const apiBaseUrl = () => required("OSPREY_LIVE_API_BASE_URL");
+  30 | export const investigationId = () => required("OSPREY_LIVE_INVESTIGATION_ID");
+  31 | 
+  32 | /** The Glass reads the investigation from `?investigation=<id>` once on load, and it takes
+  33 |  * precedence over `sessionStorage` (`02_GLASS_FRONTEND.md` §2.1) — so every live spec opens a URL
+  34 |  * of this shape rather than the bare root, which would create its own investigation silently. */
+  35 | export const workspaceUrl = () => `/?investigation=${investigationId()}`;
+  36 | 
+  37 | /** **A fresh investigation per test, and it is not tidiness — it is the fix for a false green.**
+  38 |  *
+  39 |  * Round 12c's diagnosis: the working set is *server-side* and keyed by investigation, and the
+  40 |  * Glass loads it on open. Measured directly — opening a bare URL against an investigation another
+  41 |  * process had expanded in showed "19 nodes 18 edges" before the spec touched anything. So every
+  42 |  * live test sharing one investigation inherits whatever any earlier test, any earlier *run*, or
+  43 |  * any manual poke left behind.
+  44 |  *
+  45 |  * That is what made A12 green in round 12 and red in 12b. Nothing about the product changed
+  46 |  * between them: round 12 ran the tier repeatedly against one long-lived investigation until
+  47 |  * earlier attempts had populated it, at which point A12's `edgeCount > 0` was satisfied without
+  48 |  * its own expansion contributing anything; 12b used a fresh investigation and the same assertion
+  49 |  * correctly failed. `CLAUDE.md` rule 15's "a gate's first green is not a result, it is an
+  50 |  * untested state" — here the green was a *later* run's artefact, which is worse, because it looks
+  51 |  * like a confirmation.
+  52 |  *
+  53 |  * Creating the investigation through the real route rather than reusing
+  54 |  * `OSPREY_LIVE_INVESTIGATION_ID`: search and expand are not investigation-scoped (checked
+  55 |  * directly against the routes), so the seeded fixture graph is reachable from any investigation,
+  56 |  * while the working set — the thing that leaks — starts empty and provably so. */
+  57 | export async function freshInvestigation(
+  58 |   request: APIRequestContext,
+  59 | ): Promise<string> {
+  60 |   const response = await request.post(`${apiBaseUrl()}/v1/investigations`, {
+== test-results/scenario-a-a12-a15-A15-—-e-be3e7-d-and-takes-a-justification/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: scenario-a-a12-a15.spec.ts >> A15 — export names what it blocked, and takes a justification
+- Location: live/scenario-a-a12-a15.spec.ts:205:1
+
+# Error details
+
+```
+Error: could not create a fresh investigation (422): {"error":"dataset_refused"}
+```
+
+# Test source
+
+```ts
+  1  | // Shared helpers for the live tier. Nothing here mocks anything — that is the whole point of
+  2  | // the directory (`playwright.config.ts`'s own header has the reasoning).
+  3  | 
+  4  | import { type APIRequestContext, test } from "@playwright/test";
+  5  | 
+  6  | /** The opt-in gate. Skipped rather than failed when it is absent: a developer running the whole
+  7  |  * workspace test suite has no stack up, and that is not a defect. */
+  8  | export const liveOnly = () =>
+  9  |   test.skip(
+  10 |     process.env.OSPREY_TEST_LIVE_GLASS !== "1",
+  11 |     "needs a hand-brought-up demo stack (DEMO_GUIDE.md §3) — opt in with " +
+  12 |       "OSPREY_TEST_LIVE_GLASS=1 and set OSPREY_LIVE_API_BASE_URL, OSPREY_LIVE_BEARER_TOKEN " +
+  13 |       "and OSPREY_LIVE_INVESTIGATION_ID.",
+  14 |   );
+  15 | 
+  16 | /** No default, deliberately. A live spec that fell back to a plausible-looking value would
+  17 |  * quietly test the wrong deployment, and report a pass for it. */
+  18 | export function required(name: string): string {
+  19 |   const value = process.env[name];
+  20 |   if (!value) {
+  21 |     throw new Error(
+  22 |       `${name} is not set. The live tier has no defaults: it must be pointed at the stack the ` +
+  23 |         `operator actually brought up, never guess one. See DEMO_GUIDE.md §3.`,
+  24 |     );
+  25 |   }
+  26 |   return value;
+  27 | }
+  28 | 
+  29 | export const apiBaseUrl = () => required("OSPREY_LIVE_API_BASE_URL");
+  30 | export const investigationId = () => required("OSPREY_LIVE_INVESTIGATION_ID");
+  31 | 
+  32 | /** The Glass reads the investigation from `?investigation=<id>` once on load, and it takes
+  33 |  * precedence over `sessionStorage` (`02_GLASS_FRONTEND.md` §2.1) — so every live spec opens a URL
+  34 |  * of this shape rather than the bare root, which would create its own investigation silently. */
+  35 | export const workspaceUrl = () => `/?investigation=${investigationId()}`;
+  36 | 
+  37 | /** **A fresh investigation per test, and it is not tidiness — it is the fix for a false green.**
+  38 |  *
+  39 |  * Round 12c's diagnosis: the working set is *server-side* and keyed by investigation, and the
+  40 |  * Glass loads it on open. Measured directly — opening a bare URL against an investigation another
+  41 |  * process had expanded in showed "19 nodes 18 edges" before the spec touched anything. So every
+  42 |  * live test sharing one investigation inherits whatever any earlier test, any earlier *run*, or
+  43 |  * any manual poke left behind.
+  44 |  *
+  45 |  * That is what made A12 green in round 12 and red in 12b. Nothing about the product changed
+  46 |  * between them: round 12 ran the tier repeatedly against one long-lived investigation until
+  47 |  * earlier attempts had populated it, at which point A12's `edgeCount > 0` was satisfied without
+  48 |  * its own expansion contributing anything; 12b used a fresh investigation and the same assertion
+  49 |  * correctly failed. `CLAUDE.md` rule 15's "a gate's first green is not a result, it is an
+  50 |  * untested state" — here the green was a *later* run's artefact, which is worse, because it looks
+  51 |  * like a confirmation.
+  52 |  *
+  53 |  * Creating the investigation through the real route rather than reusing
+  54 |  * `OSPREY_LIVE_INVESTIGATION_ID`: search and expand are not investigation-scoped (checked
+  55 |  * directly against the routes), so the seeded fixture graph is reachable from any investigation,
+  56 |  * while the working set — the thing that leaks — starts empty and provably so. */
+  57 | export async function freshInvestigation(
+  58 |   request: APIRequestContext,
+  59 | ): Promise<string> {
+  60 |   const response = await request.post(`${apiBaseUrl()}/v1/investigations`, {
+== the last of the Conduit's log
+INFO:     127.0.0.1:32902 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32846 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/strength-influencers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32860 - "GET /v1/map/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32864 - "POST /v1/analytics/geobins HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32902 - "GET /v1/ontology HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32896 - "GET /v1/investigations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32880 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/judgements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32864 - "GET /v1/me/needs-you HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32864 - "GET /v1/ontology HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32846 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/datasets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32902 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/resolution/threshold HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32860 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32902 - "GET /v1/ontology HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32896 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/link-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32880 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/strength-influencers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32846 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/judgements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32860 - "GET /v1/yardstick HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32864 - "GET /v1/investigations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32896 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/judgements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32880 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/explore/counts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32902 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/assumptions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32846 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/gaps HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32864 - "POST /v1/analytics/histogram HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32860 - "POST /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/compute/degree HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32896 - "GET /v1/me/needs-you HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32880 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/resolution/threshold HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32902 - "GET /v1/investigations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32846 - "GET /v1/yardstick HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32880 - "GET /v1/investigations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32864 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/assumptions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32860 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/gaps HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32902 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/explore/counts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32896 - "GET /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/judgements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32880 - "POST /v1/analytics/histogram HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32846 - "POST /v1/investigations/01M7CJYTYT687NWEB2VWXBE2AX/compute/degree HTTP/1.1" 200 OK
+/root/osprey-runs/case/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  response = await handler(conn, exc)  # type: ignore[arg-type]
+INFO:     127.0.0.1:32914 - "POST /v1/investigations HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:32924 - "POST /v1/investigations HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:32930 - "POST /v1/investigations HTTP/1.1" 422 Unprocessable Entity
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T083203Z-96fc6ee9).
+Wall time: 78 s, exit 1 (stack g, the lease case took at 2026-11-14T08:19:24Z; set-up before it 6 s)

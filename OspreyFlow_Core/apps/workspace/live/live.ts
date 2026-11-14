@@ -51,16 +51,38 @@ export const workspaceUrl = () => `/?investigation=${investigationId()}`;
  * like a confirmation.
  *
  * Creating the investigation through the real route rather than reusing
- * `OSPREY_LIVE_INVESTIGATION_ID`: search and expand are not investigation-scoped (checked
- * directly against the routes), so the seeded fixture graph is reachable from any investigation,
- * while the working set — the thing that leaks — starts empty and provably so. */
+ * `OSPREY_LIVE_INVESTIGATION_ID`, **reading the one dataset that seeded case reads.** Search and
+ * expand were once not investigation-scoped, so any case reached the seeded graph; since ADR-099
+ * a case reads only its own datasets, and Amendment 12 has `POST /v1/investigations` name exactly
+ * one (`dataset_ids`) or make an empty one, refusing a body with neither (422). An empty dataset
+ * would find nothing, so the fresh case names the seeded case's own: the same records reachable,
+ * while the working set — the thing that leaks — starts empty and provably so. The seeded case is
+ * read through the real route too (`GET …/datasets`), and one reading other than exactly one
+ * dataset is refused in words, never guessed between. */
 export async function freshInvestigation(
   request: APIRequestContext,
 ): Promise<string> {
+  const headers = { Authorization: `Bearer ${required("OSPREY_LIVE_BEARER_TOKEN")}` };
+  const seeded = await request.get(
+    `${apiBaseUrl()}/v1/investigations/${encodeURIComponent(investigationId())}/datasets`,
+    { headers },
+  );
+  if (!seeded.ok()) {
+    throw new Error(
+      `could not read the seeded case's datasets (${seeded.status()}): ${await seeded.text()}`,
+    );
+  }
+  const datasets = (await seeded.json()) as { id: string }[];
+  if (datasets.length !== 1) {
+    throw new Error(
+      `the seeded case (OSPREY_LIVE_INVESTIGATION_ID) reads ${datasets.length} datasets, not one: ` +
+        "a fresh case names exactly one (ADR-099 Amendment 12), and the live tier will not guess " +
+        "which. Seed the fixture into a case of its own (DEMO_GUIDE.md §3.4).",
+    );
+  }
   const response = await request.post(`${apiBaseUrl()}/v1/investigations`, {
-    headers: {
-      Authorization: `Bearer ${required("OSPREY_LIVE_BEARER_TOKEN")}`,
-    },
+    headers,
+    data: { dataset_ids: [datasets[0]!.id] },
   });
   if (!response.ok()) {
     throw new Error(
