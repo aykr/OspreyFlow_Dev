@@ -1,0 +1,38 @@
+Running on ospreyflow-test (stack offline, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261114T123115Z-b5d3c475/log: bash -c set -o pipefail; cd OspreyFlow_Core || exit 2; rc=0
+F="scripts/client_size_leaks.py scripts/client_size_plan.py scripts/client_size_text.py scripts/generate_client_size.py scripts/load_client_size.py"
+step() { name=$1; shift; echo "== $name"; "$@" 2>&1 | tail -4; c=$?; echo "-- $name exit=$c"; [ $c -eq 0 ] || rc=1; }
+step "own tests" .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q ../OspreyFlow_Build/tests/test_client_size_leaks.py ../OspreyFlow_Build/tests/test_generate_client_size.py ../OspreyFlow_Build/tests/test_load_client_size.py
+step "citation-check" env PYTHONPATH=../OspreyFlow_Build .venv/bin/python -m tools.doc_citations_check
+step "test-file-coverage-check" env PYTHONPATH=../OspreyFlow_Build .venv/bin/python -m tools.test_file_coverage_check
+step "ruff check ." .venv/bin/ruff check .
+step "ruff format --check (the lane's Core files)" .venv/bin/ruff format --check $F
+step "mypy packages services harness" .venv/bin/mypy packages services harness
+step "mypy (the lane's scripts)" .venv/bin/mypy $F
+echo "checks rc=$rc"; exit $rc
+== own tests
+0.03s call     tests/test_load_client_size.py::test_every_node_id_names_a_source_whose_marking_it_carries
+0.02s call     tests/test_client_size_leaks.py::test_a_never_join_control_that_cannot_read_the_partner_in_its_case_is_refused
+0.02s call     tests/test_generate_client_size.py::test_every_file_in_the_manifest_is_the_file_on_disk
+45 passed, 3 warnings in 36.09s
+-- own tests exit=0
+== citation-check
+doc-citations-check: 2904 file(s) scanned, every cited path exists.
+-- citation-check exit=0
+== test-file-coverage-check
+test-file-coverage-check: 1114 test file(s), 0 allowlisted, no new drift.
+-- test-file-coverage-check exit=0
+== ruff check .
+All checks passed!
+-- ruff check . exit=0
+== ruff format --check (the lane's Core files)
+5 files already formatted
+-- ruff format --check (the lane's Core files) exit=0
+== mypy packages services harness
+Success: no issues found in 491 source files
+-- mypy packages services harness exit=0
+== mypy (the lane's scripts)
+Success: no issues found in 5 source files
+-- mypy (the lane's scripts) exit=0
+checks rc=0
+Wall time: 65 s, exit 0 (no stack, no lease; set-up before it 18 s)
+exit=0 at d0d2649
