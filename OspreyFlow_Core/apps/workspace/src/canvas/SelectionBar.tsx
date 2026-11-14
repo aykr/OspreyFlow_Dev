@@ -5,10 +5,18 @@
 // (ADR-144 decision 4). Escape clears, as on the canvas.
 import { useState } from "react";
 
+import { SELECTION_WORDS as W } from "./selectionActions";
+
 /** ADR-098 Amendment 4: the furthest the routes are looked for, and how many may be selected to
  * look past one degree — the Conduit's `LINKS_AMONG_MAX_DEGREE` and `LINKS_AMONG_ROUTE_NODES`. */
 const MAX_DEGREE = 6;
 const ROUTE_NODES = 8;
+
+/** How far *Show links* looks for `count` selected at the stepper's `degree`: past one degree only for at
+ * most ROUTE_NODES. The bar's reading and the right-click menu's *Show links* both (ADR-078 Amendment 1). */
+export function degreeShown(count: number, degree: number): number {
+  return count <= ROUTE_NODES ? degree : 1;
+}
 
 export interface SelectionBarProps {
   count: number;
@@ -19,11 +27,14 @@ export interface SelectionBarProps {
   /** ADR-098: draw the links among the selected nodes, and with a degree above 1 the routes between
    * them within it (Amendment 4). Offered for two or more. */
   onLinksAmong?: (degree: number) => void;
+  /** The stepper's degree, held by whoever also offers *Show links* elsewhere (the canvas, for its menu), so
+   * the two look as far; with `onDegreeChange`. Absent: the bar holds its own. */
+  degree?: number;
+  onDegreeChange?: (degree: number) => void;
   /** ADR-098 decision 4, ADR-144 decision 4: save the selection as a private view and ask the model
-   * about its Documents in it. Offered while the selection holds at least one Document
-   * (`documentCount`). */
+   * about it there. Offered whenever anything is selected (ADR-098 Amendment 7: a question needs no
+   * Document; with none, the model answers from the links and events). */
   onAsk?: () => void;
-  documentCount?: number;
   /** ADR-128 decision 2: what Select what is lit did, said while its selection stands, with the
    * words "undated links are not included". Absent: the selection did not come from it. */
   litNote?: string;
@@ -43,17 +54,20 @@ export function SelectionBar({
   onExpand,
   onSaveView,
   onLinksAmong,
+  degree: heldDegree,
+  onDegreeChange,
   onAsk,
-  documentCount = 0,
   litNote,
   onUndoLit,
   onRemove,
   onClear,
 }: SelectionBarProps) {
-  const [degree, setDegree] = useState(1);
+  const [ownDegree, setOwnDegree] = useState(1);
+  const degree = heldDegree ?? ownDegree;
+  const setDegree = (next: number) => (onDegreeChange ? onDegreeChange(next) : setOwnDegree(next));
   if (count === 0) return null;
   const routesAllowed = count <= ROUTE_NODES;
-  const shown = routesAllowed ? degree : 1;
+  const shown = degreeShown(count, degree);
   return (
     <div
       role="toolbar"
@@ -76,13 +90,13 @@ export function SelectionBar({
       )}
       {litNote && onUndoLit && (
         <button type="button" className="btn btn--quiet" onClick={onUndoLit}>
-          Undo select what is lit
+          {W.undoLit}
         </button>
       )}
       {onExpand && (
         // ADR-115 E4 (review items 2 and 5): the bar's one primary action, in brass.
         <button type="button" className="btn btn--primary" onClick={onExpand}>
-          Expand
+          {W.expand}
         </button>
       )}
       {onLinksAmong && count > 1 && (
@@ -95,7 +109,7 @@ export function SelectionBar({
             aria-label="Show links among these"
             onClick={() => onLinksAmong(shown)}
           >
-            Show links
+            {W.linksAmong}
           </button>
           <span
             className="selection-bar__stepper"
@@ -135,19 +149,19 @@ export function SelectionBar({
           </span>
         </span>
       )}
-      {onAsk && documentCount > 0 && (
+      {onAsk && (
         <button type="button" className="btn btn--quiet" onClick={onAsk}>
-          Ask the model about these…
+          {W.ask}
         </button>
       )}
       {onSaveView && (
         <button type="button" className="btn btn--quiet" onClick={onSaveView}>
-          Save as a view
+          {W.saveView}
         </button>
       )}
       {onRemove && (
         <button type="button" className="btn btn--quiet" onClick={onRemove}>
-          Remove from view
+          {W.remove}
         </button>
       )}
       <span className="selection-bar__divider" aria-hidden="true" />
@@ -157,7 +171,7 @@ export function SelectionBar({
         onClick={onClear}
         aria-keyshortcuts="Escape"
       >
-        Clear{" "}
+        {W.clear}{" "}
         <kbd className="key-cap" aria-hidden="true">
           Esc
         </kbd>

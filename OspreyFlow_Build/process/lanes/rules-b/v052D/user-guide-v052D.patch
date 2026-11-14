@@ -1,0 +1,26 @@
+diff --git a/OspreyFlow_Core/docs/user-guide.md b/OspreyFlow_Core/docs/user-guide.md
+index 98e61e0..8252148 100644
+--- a/OspreyFlow_Core/docs/user-guide.md
++++ b/OspreyFlow_Core/docs/user-guide.md
+@@ -785,11 +785,17 @@ the case's analyst layer.
+ 
+ ![Ask & Chat (named Questions in this picture): ask about the documents in this case](images/user/12-questions.png)
+ 
+-**Ask & Chat** (on the rail; it was named *Questions*) asks the deployment's model about the documents in this case that you can see, and about
+-**graph facts**. It answers from those only, citing each — **Draws on** opens a document. What it
++**Ask & Chat** (on the rail; it was named *Questions*) asks the deployment's model about what you choose
++under **Read from**: **Selected items** (what you have selected, everything one link from it, and the
++documents among them; the choice when something is selected), **Everything on the graph** (every item,
++link and document you can see), or **Whole case** (not available yet, and it says why). Above the
++question it says what that is about ("About: Tarbuck, Kyle and 1 other"), what will be read ("Will read:
++1 document, 3 items and 2 links") and which engine will answer, before anything is sent. It answers
++from the documents and **graph facts** only, citing each — **Draws on** opens a document. With no
++document to read it answers from the links and events, and says so under the answer. What it
+ proposes, you **Accept** or **Reject**; an accepted proposal enters the graph as *inferred*.
+-**Ask the model about these…** on a selection of documents starts a case of its own for them. Asking
+-needs Editor, and at least one document you can see in the case.
++**Ask the model about these…** on any selection saves it as a private view and asks there. Asking
++needs Editor.
+ 
+ **Graph facts.** Along with the documents, the model is given a numbered, plain account of the graph
+ around what you have selected and one link beyond it (the whole view when nothing is selected). A

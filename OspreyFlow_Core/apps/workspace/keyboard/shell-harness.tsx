@@ -9,6 +9,8 @@ import { BrandFrame } from "../src/brand/BrandFrame";
 import { PLAIN_APPEARANCE } from "../src/brand/brand";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { TopBar } from "../src/shell/TopBar";
+import { Drawer } from "../src/design/primitives/Drawer";
+import { ContextBanner } from "../src/shell/ContextBanner";
 
 const brand = await applyHarnessBrand();
 // ADR-132 Amendment 7: `?banner=1` gives the deployment's own banner words (the owner's wording for
@@ -21,6 +23,9 @@ const phase = asked === "alone" ? "none" : "beta";
 // ADR-132 Amendment 7: `?host=` stands for the page's own address (a harness is served on localhost,
 // which is not gov.uk), so the footer on gov.uk can be shown too.
 const hostname = new URLSearchParams(window.location.search).get("host") ?? window.location.hostname;
+// ADR-145 Amendment 14 decision 2: `?drawer=1` opens a drawer (the Cases drawer's frame) over the page,
+// so where it starts can be measured against the top bar and the GOV.UK header's navigation.
+const drawer = new URLSearchParams(window.location.search).get("drawer") === "1";
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
@@ -40,6 +45,22 @@ createRoot(container).render(
       caseSwitcher={<button type="button" className="btn">Case: Example</button>}
       account={null}
     />
+    {drawer && (
+      // The Glass's context row as `App.tsx` draws it, its case switcher and cross-link at its end, which the
+      // drawer must not cover either (ADR-145 Amendment 14 decision 2).
+      <ContextBanner
+        place="glass"
+        onViews={() => undefined}
+        caseSwitcher={<button type="button" className="btn">Case: Example</button>}
+        datasets={["Prison intel"]}
+        crossLink={{ label: "Open this case's data in the Ingest Studio ↗", onFollow: () => undefined }}
+      />
+    )}
     <button type="button" className="btn">Workspace control</button>
+    {drawer && (
+      <Drawer open onClose={() => undefined} title="Cases">
+        <p>The case's views and the cases, as the Glass's Cases drawer lists them.</p>
+      </Drawer>
+    )}
   </BrandFrame>,
 );

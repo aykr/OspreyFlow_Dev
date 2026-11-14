@@ -116,6 +116,16 @@ def _psql(name: str, setting: str) -> str:
     return done.stdout.strip()
 
 
+def _initialised(name: str) -> bool:
+    """The image's entrypoint, on a first start, runs a temporary server for its set-up and stops
+    it before the real one starts (`docker-entrypoint.sh`). Asked before then, a probe can be
+    answered by the temporary server and the next one by nothing: measured on the test server on 14
+    November 2026, the temporary server ready at 01:46:59.561, shutting down at .710, the real one
+    ready at 01:47:00.088. So the server is the real one only once the set-up says so."""
+    logs = docker("logs", name, check=False)
+    return "PostgreSQL init process complete" in logs.stdout + logs.stderr
+
+
 def test_postgres_starts_with_the_rendered_settings_and_refuses_an_impossible_one() -> None:
     services, _env = _rendered(_own_server(32))
     command = services["postgres"]["command"]
@@ -123,14 +133,21 @@ def test_postgres_starts_with_the_rendered_settings_and_refuses_an_impossible_on
     docker("run", "-d", "--name", name, "--memory", "2g", "-e", "POSTGRES_PASSWORD=throwaway",
            POSTGRES_IMAGE, *command)  # fmt: skip
     try:
-        assert _wait(name, lambda: _psql(name, "shared_buffers") != ""), docker(
+
+        def ready() -> bool:
+            return _initialised(name) and _psql(name, "shared_buffers") != ""
+
+        assert _wait(name, ready), docker(
             "logs", name, check=False
         ).stderr[-1500:]
         assert _psql(name, "shared_buffers") == "1GB"
         assert _psql(name, "effective_cache_size") == "3GB"
     finally:
         docker("rm", "-f", "-v", name, check=False)
-    impossible = postgres_command(StoreMemory(8, 512, 64 * 1024, 3 * 64 * 1024))
+    # Clearly beyond its 512 MiB: 256 GiB of buffers, whose descriptors alone (about 2 GiB) are
+    # written at start. At 64 GiB they were about 512 MiB, the container's whole limit, and on a
+    # host that always overcommits (`vm.overcommit_memory=1`, the test server) it sometimes started.
+    impossible = postgres_command(StoreMemory(8, 512, 256 * 1024, 3 * 256 * 1024))
     refused = _name("postgres")
     docker("run", "-d", "--name", refused, "--memory", "512m", "-e", "POSTGRES_PASSWORD=throwaway",
            POSTGRES_IMAGE, *impossible)  # fmt: skip

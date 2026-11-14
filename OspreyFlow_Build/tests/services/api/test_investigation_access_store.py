@@ -146,13 +146,16 @@ async def test_an_account_removed_everywhere_holds_no_level_in_any_case(
     second = await store.create(AUTHOR, name="Second")
     await store.set_grant(first.id, "bob", AccessLevel.VIEWER, by=AUTHOR)
     await store.set_grant(second.id, "bob", AccessLevel.VIEWER, by=AUTHOR)
-    await store.set_grant(second.id, "carol", AccessLevel.VIEWER, by=AUTHOR)
+    # Another account of the same unit: a grant never widens past the unit, so OUTSIDER would hold
+    # no level here whatever the revoke did.
+    other = Principal(id="erin", clearance="OFFICIAL", org_unit="unit-1")
+    await store.set_grant(second.id, other.id, AccessLevel.VIEWER, by=AUTHOR)
 
     assert sorted(await store.revoke_everywhere("bob", by=AUTHOR)) == sorted([first.id, second.id])
     for case in (first, second):
         with pytest.raises(InvestigationNotFoundError):
             await store.get_authorized(case.id, COLLEAGUE, need=AccessLevel.VIEWER)
-    assert await store.effective_level(second.id, OUTSIDER) is AccessLevel.VIEWER
+    assert await store.effective_level(second.id, other) is AccessLevel.VIEWER
     assert [h.action for h in await store.access_history(first.id)][-1] == "revoke"
     assert await store.revoke_everywhere("bob", by=AUTHOR) == []
 
@@ -812,8 +815,11 @@ async def test_a_dashboard_reads_the_case_it_was_granted_and_no_other(
         async def record(self, *_: Any, **__: Any) -> None:
             return None
 
-    async def _figures(*_: Any, **__: Any) -> Any:
-        return object()
+    from schemas.domain import ReportFigures
+
+    async def _figures(*_: Any, **__: Any) -> ReportFigures:
+        now = datetime.now(UTC)
+        return ReportFigures(period_weeks=12, as_of=now.date(), generated_at=now, alerts_total=0)
 
     a = await store.create(AUTHOR, name="A")
     b = await store.create(AUTHOR, name="B")

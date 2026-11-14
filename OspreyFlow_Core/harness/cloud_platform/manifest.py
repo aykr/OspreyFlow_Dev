@@ -99,7 +99,10 @@ def rendered(config: Any, *, resolver: Any = None) -> dict[str, Any]:
     backups = values.get("backups")
     if backups:
         own = {"image": _repository(backups["image"], registry), **_sizes(backups["resources"])}
-        claims = [c for c in (values.get("storage") or {}).get("claims") or []]
+        # The chart's own condition (backups.yaml's `if $parts`): a claim of the shape's own, or the
+        # shared claim's parts, which every shape's sets hold (ADR-148 Amendment 13 decision 4).
+        of_its_own = (values.get("storage") or {}).get("claims") or []
+        claims = [*of_its_own, *(backups.get("shared") or [])]
         jobs["ospreyflow-backup"] = {"kind": "CronJob", "schedule": backups["schedule"], **own}
         if claims:
             jobs["ospreyflow-backup-claims"] = {

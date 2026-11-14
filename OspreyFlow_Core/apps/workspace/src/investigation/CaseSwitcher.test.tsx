@@ -72,3 +72,23 @@ describe("CaseSwitcher's menu", () => {
     expect(list.querySelectorAll(":scope > li")).toHaveLength(2);
   });
 });
+
+// ADR-145 Amendment 14 decision 4: in the Glass the banner already says what the case reads, so the
+// switcher there draws no badge; in Rules and Monitoring and the Studio, where the banner names no
+// dataset, it still does (the default).
+describe("CaseSwitcher's badge where the row already names the datasets", () => {
+  it("is left out with showScope false, and drawn by default", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify([{ id: "c1", name: "Ledger", level: "author", created_at: "2026-10-01T00:00:00Z", created_by: "a", datasets: ["Enron"] }])),
+      ),
+    );
+    const { unmount } = render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} showScope={false} />);
+    await screen.findByRole("button", { name: "Case: Ledger" });
+    expect(screen.queryByText("ENRON")).toBeNull();
+    unmount();
+    render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} />);
+    expect(await screen.findByText("ENRON")).toBeTruthy();
+  });
+});

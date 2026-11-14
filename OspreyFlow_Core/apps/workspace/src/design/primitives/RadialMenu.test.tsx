@@ -176,3 +176,125 @@ it("closes on an Escape pressed as soon as it is in the page", async () => {
   );
   expect(closed).toBe(1);
 });
+
+// ADR-078 Amendment 1 (the owner's Part C, 13 November 2026): every action is reachable by keyboard,
+// the menu never opens over the bottom bar, and a fold line opens in place.
+describe("moving through the menu by keyboard", () => {
+  const items = () => [item("first", undefined), item("second", undefined), item("third", undefined)];
+  const focusedText = () => (document.activeElement?.textContent ?? "").trim();
+
+  it.each(["list", "radial"] as const)("arrows step through the entries and wrap, in the %s layout", (layout) => {
+    render(<RadialMenu x={0} y={0} layout={layout} onClose={() => {}} items={items()} />);
+    const menu = screen.getByRole("menu");
+    expect(focusedText()).toBe("first");
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
+    expect(focusedText()).toBe("second");
+    fireEvent.keyDown(menu, { key: "ArrowUp" });
+    fireEvent.keyDown(menu, { key: "ArrowUp" });
+    expect(focusedText()).toBe("third");
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
+    expect(focusedText()).toBe("first");
+  });
+
+  it("Home and End go to the first and last entries", () => {
+    render(<RadialMenu x={0} y={0} layout="list" onClose={() => {}} items={items()} />);
+    const menu = screen.getByRole("menu");
+    fireEvent.keyDown(menu, { key: "End" });
+    expect(focusedText()).toBe("third");
+    fireEvent.keyDown(menu, { key: "Home" });
+    expect(focusedText()).toBe("first");
+  });
+
+  it("Enter on the focused entry acts and closes", () => {
+    const close = vi.fn();
+    const list = items();
+    render(<RadialMenu x={0} y={0} layout="list" onClose={close} items={list} />);
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "ArrowDown" });
+    fireEvent.click(document.activeElement as HTMLElement);
+    expect(list[1]?.onSelect).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("an entry that keeps the menu open", () => {
+  it("acts without closing, and focus stays in the menu", () => {
+    const close = vi.fn();
+    const fold: RadialMenuItem = { id: "fold", label: "7 types with no links", count: undefined, onSelect: vi.fn(), keepsOpen: true };
+    render(<RadialMenu x={0} y={0} layout="list" onClose={close} items={[fold, item("other", undefined)]} />);
+    fireEvent.click(screen.getByRole("menuitem", { name: "7 types with no links" }));
+    expect(fold.onSelect).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    expect(screen.getByRole("menu").contains(document.activeElement)).toBe(true);
+  });
+});
+
+describe("when the entries change under the keyboard", () => {
+  it("keeps focus in the menu when the focused entry goes", () => {
+    const { rerender } = render(
+      <RadialMenu x={0} y={0} layout="list" onClose={() => {}} items={[item("a", undefined), item("b", undefined)]} />,
+    );
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "End" });
+    expect(document.activeElement?.textContent).toBe("b");
+    rerender(<RadialMenu x={0} y={0} layout="list" onClose={() => {}} items={[item("a", undefined)]} />);
+    expect(screen.getByRole("menu").contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "End" });
+    expect(document.activeElement?.textContent).toBe("a");
+  });
+});
+
+describe("when an entry is replaced by another, the count of entries the same", () => {
+  it("keeps focus in the menu", () => {
+    const { rerender } = render(
+      <RadialMenu x={0} y={0} layout="list" onClose={() => {}} items={[item("a", undefined), item("USES", 0)]} />,
+    );
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "End" });
+    expect(document.activeElement?.textContent).toBe("USES (0)");
+    rerender(<RadialMenu x={0} y={0} layout="list" onClose={() => {}} items={[item("a", undefined), item("1 type with no links", undefined)]} />);
+    expect(screen.getByRole("menu").contains(document.activeElement)).toBe(true);
+  });
+});
+
+describe("keeping clear of the bottom bar", () => {
+  function rect(top: number, height: number): DOMRect {
+    return { top, bottom: top + height, left: 0, right: 200, width: 200, height, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+  }
+
+  it("moves up so its last entry sits above what it must not cover", () => {
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return this.getAttribute("role") === "menu" ? rect(Number.parseFloat(this.style.top), 300) : rect(0, 0);
+    });
+    render(<RadialMenu x={40} y={500} layout="list" onClose={() => {}} items={[item("a", undefined)]} keepAbove={() => 600} />);
+    expect(Number.parseFloat(screen.getByRole("menu").style.top)).toBeLessThanOrEqual(600 - 300);
+    spy.mockRestore();
+  });
+
+  it("in the radial layout, keeps the ring's lowest entry above it, not only the list's own box", () => {
+    // The ring's entries sit outside the list's box (RADIUS below its top): measured by their own boxes.
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const menu = this.closest<HTMLElement>("[role='menu']");
+      const top = Number.parseFloat(menu?.style.top ?? "0");
+      return this.getAttribute("role") === "menu" ? rect(top, 10) : rect(top + 96, 30);
+    });
+    render(<RadialMenu x={40} y={500} layout="radial" onClose={() => {}} items={[item("a", undefined), item("b", undefined)]} keepAbove={() => 600} />);
+    expect(Number.parseFloat(screen.getByRole("menu").style.top) + 96 + 30).toBeLessThanOrEqual(600);
+    spy.mockRestore();
+  });
+
+  it("stays where it opened when it already sits above it", () => {
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return this.getAttribute("role") === "menu" ? rect(Number.parseFloat(this.style.top), 100) : rect(0, 0);
+    });
+    render(<RadialMenu x={40} y={200} layout="list" onClose={() => {}} items={[item("a", undefined)]} keepAbove={() => 600} />);
+    expect(screen.getByRole("menu").style.top).toBe("200px");
+    spy.mockRestore();
+  });
+});
+
+// ADR-097 Amendment 3 (the owner's Part E): the menu's heading is in the page's own face; mono is for values.
+describe("the menu's heading", () => {
+  it("is in the page's face, not the mono", () => {
+    render(<RadialMenu x={0} y={0} layout="list" title="2 selected" onClose={() => {}} items={[item("a", undefined)]} />);
+    const heading = screen.getByText("2 selected");
+    expect(heading.style.fontFamily).not.toContain("mono");
+  });
+});

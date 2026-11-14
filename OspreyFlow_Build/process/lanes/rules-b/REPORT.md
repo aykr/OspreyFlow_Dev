@@ -1,67 +1,105 @@
-# rules-b lane · report · guides, the guides from Home by the places a person may open (12 November 2026)
+# rules-b lane · report · v052D, Ask & Chat parts D(i) and D(ii) (13 November 2026)
 
-(T3b's report is in git history, at 2102d21 and before.) Branch `lane/rules-b-guides`, rebased on main a536c34.
-Gated head: **09dda7a**. ADR-145 Amendment 10 is written; the orchestrator flips its reservation at merge.
+(The guides step's report is in git history, at 69ef543 and before.) Brief: `BRIEF_v052D.md`. Branch
+`lane/rules-b-v052D`, rebased on main 779bd41. Built at 0482cb6, reviewed and fixed in 9245030, 35d9c58 and 2cc8d4b. Gated head:
+**a0cfa1a** (code); the records after it change no code.
+ADR-098 Am 7, ADR-129 Am 4, ADR-135 Am 12 and ADR-144 Am 4 are written. D(iii), *Whole case* through the
+search service, is the next part, after studio's search service lands (Fri 20 Nov).
 
 ## Reconciliation at the start
-There was no HANDOFF.md and no wip commit, and the step was untouched. No route, link, test or amendment existed;
-`lane/rules-b-guides` did not exist. T3b (2102d21) was already in main.
+The paused session (sol) left `wip(rules-b)` f2016bf with only HANDOFF.md: the design was worked out and no code
+was written. On the ayan account, `git reset --hard` was refused by the permission classifier. So the wip commit
+was rebased onto main dec68d0, and the first commit after it (b060644) deletes HANDOFF.md. The guides step (the
+pasted BRIEF.md) was already on main (`services/api/guides.py`, `home/guides.ts`). The first beat showed the
+orchestrator's PAUSE nudge of 21:48:57Z, which predates the 21:49:35Z pause-done. The orchestrator confirmed it
+was stale.
+
+| Item | At the start | Now |
+| --- | --- | --- |
+| read_from, no-docs answer, read summary, will-read route | untouched | done: `test_questions_read_from.py` (29; 12 plants red, `v052D/server-plants.txt`) |
+| Panel: radios, About, Will read, engine named, unusable, failed list | untouched | done: `QuestionsPanel.test.tsx` (41 in `src/questions`; 9 plants red, `v052D/glass-plants.txt`) |
+| Bar reconciled (ADR-144 d4) | untouched | done, as `bar-v052D.patch` (case's files) |
+| Keyboard and axe | untouched | done: `questions.spec.ts` new case (21/21, `keyboard-run3.txt`); axe dark, light and GOV.UK (`axe-run3.txt`) |
+| Amendments | reserved | written, brought to the reviewed build (2cc8d4b) |
+| packages/schemas commit | none | 0482cb6 (the review fixes after it depend on it; the orchestrator agreed) |
 
 ## Exit criteria
-| Criterion (BRIEF.md) | Met | Proved by |
+| Criterion (BRIEF_v052D D(i), D(ii)) | Met | Proved by |
 | --- | --- | --- |
-| User guide under the Glass, developer under the Studio, administration under Admin; none under R&M; no architecture guide | yes | `HomePage.test.tsx` *links each guide under its own place's card*; `test_guides.py` *the glass links each guide under the place the conduit serves it for* |
-| No card, no guide | yes | `HomePage.test.tsx`'s six rights sets and the rights-unread case (red 7 ways with links outside the cards); `start.spec.ts` *only the guides of the cards a person's rights open are linked* |
-| `GET /v1/guides/{…}` serves the deployment's PDF only to whom the place opens; 403 in words otherwise; the place's own check | yes | `test_guides.py` matrix (every role, preset, legacy role, single right, nobody; 64 red with the check removed); live `test_route_rights.py` *…signed in for real*, including a person with no roles claim (PASSED, `gates/02f3752.live-rights.txt`) |
-| `test_route_rights.py` rows | yes | `read_guide_route: None` (a place, not a right; its check is `require_guide_place`) |
-| Byte for byte the file in the image | yes | `test_guides.py` byte test; the live case against the checkout's file; `guides/image_check.sh`, green at 09dda7a and red with a stale PDF planted (`gates/09dda7a.image.txt`) |
-| Image carries `docs/pdf/` | yes, ratified | Dockerfile: the folder made 755, then the three PDFs and the manifest `--chmod=0444`; `test_guides.py` holds the line (red removed, with the architecture guide, without `--chmod`, without the folder made first) |
-| Glass: a link under each card's words, new tab, token never in a URL | yes | `guides.test.ts` (11 cases, red 5 ways); `HomePage.test.tsx` (link, handled click, words on failure, the catch) |
-| Keyboard (rule 13) | yes | `start.spec.ts`: `read-a-place-s-guide-from-home-by-keyboard`, `read-why-a-guide-was-refused-on-home-by-keyboard`; red 3 ways (`guides/keyboard-plants.txt`) |
-| Axe in dark, light and GOV.UK; tokens only; British English | yes | `every-harness` start-harness's default and new `guide=refused` states, 18 passed with reflow (`gates/02f3752.browser.txt`) |
-| ADR-145 Amendment 10, each sentence with its test | yes | `spec/06_DECISIONS.md` |
-| Docs lines | as a patch | `docs-guides.patch` |
+| Radios Selected items · Everything on the graph · Whole case; the first the default with a selection | yes | `QuestionsPanel.test.tsx` *defaults to Selected items …*, *with nothing selected …*; `questions.spec.ts` *what to read from is chosen by arrow keys …* (red with the radios' onChange a no-op: `v052D/keyboard-plant.txt`) |
+| "About: Tarbuck, Kyle and 1 other" / "About: everything on the graph" | yes | *defaults to Selected items …*; *never counts in the Glass* (red with the panel's own count) |
+| "Will read: …" from the server, never counted in the client | yes | `test_questions_read_from.py` *will read counts what the question then reads and sends nothing*; the panel case above |
+| The engine always named, even with one | yes | *will read names the engine that will answer, not the one chosen* (red); *names the engine … even when there is only one* (red) |
+| Engines that cannot be used, with reasons | yes | *will read lists an engine the material's own handling code may not reach* (red), *… no model for questions*, *… handling may not reach*; panel *lists the engines that cannot answer …* |
+| A failed engine list said as failed | yes | *says the engine list failed, never that there is none* (red) |
+| The bar's Ask reconciled (ADR-144 d4) | yes, as a patch | `bar-v052D.patch`: `SelectionBar.test.tsx`, `selection.spec.ts` (green applied, slot 9) |
+| NoDocumentsError and its 422 removed; no docs answered from links and events, and said | yes | *with no document the model answers from the links and events and the answer says so* (red with the refusal planted back); `test_no_documents_is_no_longer_a_refusal` |
+| read_from: Selected items narrows to the selection, its links and their documents | yes | *selected items reads the selection, its links and their documents* (red) |
+| read summary on the answer (packages/schemas, last) | yes | *the read summary is kept with the answer and read back* (red); `test_questions_store.py` live; 0482cb6 |
+| Dry-run will-read route, the same rule | yes | the will-read cases; `test_route_rights.py`, `test_investigation_levels.py` |
+| Engine list with reasons from the case refusals | yes | `_unusable` uses `ModelRoutes.offered(case_datasets, held)` as `GET …/models/engines` does |
+| The rules on what may leave do not change | yes | `model_routing.py` untouched; will-read calls `RoutedModel.choose` as asking does |
+| Rule 4: a reader without access is not counted, quoted or cited | yes | *a hidden document and item are not counted, quoted or cited* (red with the request's count); *the cleared reader is counted …*; *an answer whose summary counts a hidden document is not shown to a lower reader* |
+| Keyboard and axe in both looks; QUESTIONS_ACTIONS as a diff | yes | 21/21 keyboard (`v052D/keyboard-run3.txt`); axe dark, light and GOV.UK (`v052D/axe-run3.txt`); `registry-v052D.patch` |
 
 ## Gates (raw, under `gates/`)
-- `make test` at 09dda7a: 12,847 passed, 2 failed in pytest and 1 in test-js; live-collect clean (`09dda7a.test.txt`). The same at 02f3752.
-- `make -k ci` at 09dda7a: red on `route-coverage-check` alone, with the trivy scans green (`09dda7a.ci.txt`). The same at 02f3752.
-- Failures, each explained:
-  - `route-coverage-check` and `test_route_coverage_check.py`: expected. `spec03-guides.patch` holds the row; green with it applied.
-  - `test_webapp_preflight.py::test_gpu_is_skipped…`: the GPU server's own; other lanes' gates fail it too.
-  - `MatrixView.budget` (3,995 ms against 2,500): load, recorded in MORNING.md. It passed alone on the Mac. Untouched here.
-- Live, leased on stack b, at 02f3752 (`02f3752.live.txt`): 410 passed and 11 failed.
-  - The 11 are in `test_apply_env.py` and `test_phase8_exit_criterion_end_to_end.py`, the harness's apply on the server. They fail the same way in rules', case's and studio's live gates.
-  - `test_route_rights.py` and `test_guides.py`, verbose: 86 passed at 02f3752 and again at 09dda7a (`09dda7a.live-rights.txt`).
-  - The broad live run was not repeated at 09dda7a. Only the Dockerfile, a static test and the check script changed, and no live file reaches them.
-- The image check found a real defect at 02f3752 (`02f3752.image-red.txt`): `--chmod` gave the folders 0444, so the Conduit's user could not enter them and the route would have answered 503. Fixed in 09dda7a, which is why the gates were run again.
-- Browser on the Mac, slot 9, at 02f3752: keyboard and hit targets 26 passed, axe and reflow 18, unit 185. The code those runs reach is unchanged since.
+At a0cfa1a with `audit-v052D.patch`, `spec03-v052D.patch` and `registry-v052D.patch` applied unstaged, reverted after.
+
+| Gate | Result | Red items, and why none is this branch's |
+| --- | --- | --- |
+| `make test` (offline) | exit 2: pytest 12 failed / 13328 passed; test-js 7 | Python: the backups chart and rows tests (7), `test_guides_cloud_platform` 6a8, `test_worker_isolation` (missing `search_index/test_feed_live.py`), `test_write_store_marks` (`NEEDS_CADDY`) and `test_stack_lease` ×2 are main's reds at 779bd41, fixed on main since (f896864, e5fab5a; MORNING's "missing feed file"). test-js: `App.test.tsx`'s hook, `App.chrome`, `App.matrix` ×3 and `MatrixView` ×2 time out under the server's load (5 s/10 s), the known MatrixView timing; no questions file fails. |
+| `make -k ci` (offline) | exit 2: only `harness-a11y` | `install-page.spec.ts` ×3, each a 1.0 m timeout; the every-harness axe, `questions-harness` included, passed. |
+| live, stack e (`live rules-b --base main`) | exit 1: 12 failed / 467 passed | `test_apply_env.py` ×10 (apply never wrote `deployment.env`), `test_golden_set` recall and `test_phase8_exit_criterion_end_to_end` (ConnectError, no model on the stack). `test_route_rights.py` and `test_questions_store.py` ran and passed. |
+| the route-rights row plant (stack e, same lease) | red as it should be | `will_read_route`'s row removed: `test_every_route_names_the_right_the_table_gives_it` fails (`v052D/live-rights-plant.txt`). |
+| server plants (offline, a fresh `PYTHONPYCACHEPREFIX` per run) | 12 of 12 red; control 29 passed | `v052D/server-plants.txt` |
 
 ## Decisions taken
-- **The place check is a dependency, not a static place or right.** `require_guide_place` follows the guide's name; `test_place_routes.py` reads static checks only. One route, as the orchestrator accepted; `test_guides.py` asks every principal.
-- **A name not among the three is 404 `no_such_guide`, before the place check.** Guide names are public, so nothing is learnt. A refused reader still gets 403 before any file is touched, so cannot tell whether the deployment carries the PDF.
-- **A missing PDF is 503 `guide_not_carried`, in words.** It is never an empty or another document.
-- **`OSPREY_GUIDES_DIR` overrides the folder for a test.** The default is `/app/docs/pdf` in the image and the checkout's folder in development.
-- **A real `<a href>` to the route, its click and middle click handled.** It is announced as a link; the token goes in a header.
-- **Where the browser shows no PDFs (`navigator.pdfViewerEnabled` false), the PDF is saved as `ospreyflow-<guide>-guide.pdf` and no tab is opened.** A tab sent to a blob would download it under a random name. Headless Chromium takes this path, so the keyboard case checks the saved file's name and bytes; `guides.test.ts` holds the tab's path.
-- **A shown guide's blob is kept while its tab is open** (checked every 5 s). A saved one is kept for 60 s.
-- **The folder is made before the `--chmod=0444` copy.** This is the image check's finding.
+1. **The wip commit.** `reset --hard` was refused, so it is rebased, not dropped; HANDOFF.md is deleted in
+   b060644. The orchestrator agreed. The merger may squash both.
+2. **No `read_from` is the selection when there is one, else the graph** (the brief's "default when something is
+   selected"). `selection` with nothing selected is 422 `nothing_to_read`. The panel never sends it: *Selected
+   items* is disabled, "(nothing is selected)", until something is.
+3. **`selected` counts the selected nodes and links the asker's view holds; `first_selected` names nodes only.**
+   A link alone gives "About: 1 selected item".
+4. **Will-read is audited** (`will_read_question`, the stricter option: it is a read of the case), which needs
+   admin's `audit_section.py`: `audit-v052D.patch`.
+5. **Only hosted engines are listed as unusable.** A deployment with no local model says so through the routing's
+   refusal words, not as a listed engine.
+6. **One new keyboard id** (`choose-what-to-read-from-by-keyboard`), not the handoff's three. *Will read* and *Will
+   be answered by* are announced (an `aria-live` region), not activated. The engine choice already has its id.
+7. **The engine picker stays hidden below two engines** (ADR-135 d5, the Q3 answer): the engine is still always
+   named, by will-read's line.
+8. **Every `ReadSummary` and `WillRead` field is required in the schema**, since the Conduit always sends it, so
+   the generated TS types carry no optional fields the panel would have to guard.
+9. **In a case view, *Read from* applies within the view** (the graph is the view's items).
+10. **Whole case is disabled in the panel and refused 422 by the server**, the interim the owner accepted
+    (handoff), until D(iii).
+11. **The will-read block is an `aria-live="polite"` region, not a second `role="status"`**, so the view's status
+    line stays the panel's one status (the in-view keyboard case reads `getByRole("status")`).
+12. **Ask stays enabled while will-read is loading** (accepted by the orchestrator): the question itself is routed
+    and refused by the same rule, so a slow dry run never blocks it.
+13. **The routing's refusal is scrubbed of dataset names for a caller the store names none to** (ADR-099 Am 11),
+    in will-read and in the question's 409 alike, rather than replaced by "not known", so the two still decide
+    identically (accepted by the orchestrator).
+14. **`QueryBuilderPanel`'s failed-list words are left alone**: not this lane's file; listed for the orchestrator.
+15. **The reviews' items, all fixed before the gates**: About in the canvas's form (`canvas_label`, never an id);
+    a selected link counted only inside the scope's links; will-read keyed on the body sent, debounced, asked again
+    on focus when the timeline window moved; the picker keeps the case's reasons while will-read is pending or
+    refused; a 200 with no engine list is a failure; *Whole case* in the server's words; the questions harness
+    under GOV.UK too; will-read in a private view refused to another member (with its plant).
 
-## Out of the lane's map
-- Committed, ratified by the orchestrator: `services/api/Dockerfile`; `shell/startScreen.tsx` (rules'); `home/**` and `keyboard/start*.{ts,tsx}` (rules', named by the brief).
-- Committed: the tests `test_route_rights.py`, `test_no_corpus_counts_on_the_wire.py`, `test_reports_viewer_journey.py`.
-- As patches (`PATCHES.md`):
-  - `registry-guides.patch`: goes in at merge. `actionRegistry.ts` is not committed on the branch.
-  - `every-harness-guides.patch`: the refused state.
-  - `spec03-guides.patch`: route-coverage needs it.
-  - `spec02-guides.patch`.
-  - `docs-guides.patch`: for docs. The PDFs are re-rendered by docs.
+## Out of the lane's map (sent as patches, `process/lanes/rules-b/v052D/`)
+See `PATCHES.md` § v052D.
 
 ## Requests to the orchestrator
-- Apply the five patches at merge.
-- Flip ADR-145 Am 10 to written.
+- Apply `audit-v052D.patch` and `spec03-v052D.patch` with the merge (each gate red without it), and
+  `registry-v052D.patch` (the new keyboard case registers its id).
+- `bar-v052D.patch` to case/case-b. Agreed with case-b: whichever branch lands second drops the `documentCount > 0`
+  gate in both `SelectionBar.tsx` and `selectionActions.ts`; if case-b lands first, rules-b regenerates the patch
+  against `selectionActions.ts`. `user-guide-v052D.patch` to docs.
 
 ## Questions for the owner
 None.
 
 ## Still running
-Nothing. Stack b is down and released; no containers, check images or remote processes are left.
+Nothing.

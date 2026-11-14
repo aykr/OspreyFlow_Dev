@@ -69,3 +69,17 @@ f5a6f3d fcdfec4 rules deps-opensearch (v0.5.2)
 258b510 7ca69aa docs v052-sweep D2/D3/D8
 89ee482 528fef4 platform-b hygiene (v0.5.2)
 7addbe6 f630917 admin hb2 (the heartbeat's stages per step, names and built count)
+daa2733 58d2ea0 case v052-fixes (v0.5.2 step 3e and Part B), with its shared-files diff
+f7891fb e5fab5a platform-b caddy-mark (main's NEEDS_CADDY red)
+b9957c7 f896864 platform v052-backupsfix (main's seven Helm reds)
+ad4cc89 3de0896 platform v052-runbookclaims
+5178332 82504af platform v052-bedrockkeys
+661a588 14f7680 rules-b v052D (Part D), with audit, spec03, registry and bar patches
+b1d1f07 e73ecc0 case-b v052-r1-driver (step 6's driver)
+cf09c42 5e89793 platform v052-searchkind, with v052-standin
+7af832b 425a54a platform v052-pgmemory (main's render-memory red)
+2b8c642 5f0f64e case-b v052-selection (Parts C and E), with tokens, registry and every-harness diffs
+d97dde2 5f2aec7 docs 6a8 (main's 6a8 red), admin guide PDF reprinted
+7a0cad7 c3f4600 docs 6a8-shared, admin guide PDF reprinted (1.96)
+6c35698 60eca34 case-b budget (timed unit cases run alone)
+beff3b6 b68a513 admin v052 (step 3b's identities)

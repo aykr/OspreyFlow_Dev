@@ -9,7 +9,8 @@ describes, so the words cannot drift from it unnoticed (rule 12):
   refresh schedule, a watch, another analyst's hotlist at a load) says so, pointing at §6a.7, and §6a.7 quotes the
   refusal in the scheduler's own words; no guide says such a run is "marked stopped", which it is not;
 - *Admin › People* on Entra ID refuses what Entra holds, and §9 quotes each refusal as `entra_people.py` words it;
-- the point-in-time restore's days, and one S3 read's object cap, are the code's numbers.
+- the point-in-time restore's days, and one S3 read's object cap, are the code's numbers;
+- §6a.8 says what a backup set holds, and what it leaves out, in each shape as the render backs it up.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -123,17 +125,39 @@ def test_the_people_check_flags_a_refusal_left_out() -> None:
 # ---------------------------------------------------------------- the code's numbers
 
 
-def _terraform(name: str) -> str:
-    source = (CORE / "harness/cloud_platform/terraform.py").read_text(encoding="utf-8")
-    m = re.search(rf'\("{name}",\s*"(\d+)"\)', source)
-    assert m, f"{name} not found in terraform.py"
-    return m.group(1)
+def _rendered(setting: str, file: str) -> str:
+    """`setting`'s value in the rendered Terraform's `file`, the one value every fixture renders: read from what
+    the `cloud-platform` profile renders, never from a literal in the renderer's source (an argument built from a
+    constant, as `str(EXPIRE_DAYS)` is, has no literal to read)."""
+    import yaml
+    from harness.render import render
+    from tools.cp_policy_check import FIXTURES, _resolver
+
+    from schemas.deployment import OspreyConfig
+
+    values: set[str] = set()
+    for fixture in sorted(FIXTURES.glob("*.yaml")):
+        config = OspreyConfig.model_validate(yaml.safe_load(fixture.read_text(encoding="utf-8")))
+        text = render(config, resolver=_resolver).artefacts[f"terraform/{file}"]
+        values |= set(re.findall(rf"^\s*{setting}\s*=\s*(\d+)\s*$", text, re.MULTILINE))
+    assert len(values) == 1, f"{setting} in {file}: rendered as {sorted(values) or 'nothing'}"
+    return values.pop()
 
 
 def test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days() -> None:
-    days = _terraform("backup_retention_period")
+    days = _rendered("backup_retention_period", "rds.tf")
     text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.8"))
     assert f"point-in-time restore for {days} days" in text
+    sets = _rendered("days", "backups.tf")  # the sets' own expiry, the bucket's lifecycle rule
+    assert f"against the sets' {sets}:" in text
+    # A set outliving RDS's window cannot be restored with its database, and §6a.8 must say which; one that does not
+    # outlive it can, and §6a.8 must not warn of a window that does not exist (in any of the old warning's words).
+    caveat = f"only a set finished in the last {days} days"
+    if int(days) < int(sets):
+        assert caveat in text
+    else:
+        stale = ["only a set finished in the last", "no database to pair with it", "is not to be restored"]
+        assert [words for words in stale if words in text] == []
 
 
 def test_section_6a5_gives_one_s3_reads_cap_as_the_connector_holds_it() -> None:
@@ -141,3 +165,49 @@ def test_section_6a5_gives_one_s3_reads_cap_as_the_connector_holds_it() -> None:
     assert m
     cap = f"{int(m.group(1).replace('_', '')):,}"
     assert f"more than {cap} objects" in re.sub(r"\s+", " ", section(ADMIN, "### 6a.5"))
+
+
+# ---------------------------------------------------------------- what a backup set holds (§6a.8)
+
+
+def test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up() -> None:
+    """ADR-148 Amendment 13 decision 4: the shared claim's folders the deployment cannot make again join
+    the set's claims part. §6a.8 names, as the render has it in each shape, the folders in the set, the
+    shape whose Ingest root is a claim of its own, the claims run's shapes, and the shared volume's
+    folders left out of every set; each sentence held both ways, so the render changing either side
+    of it is red."""
+    from tests.harness.test_cloud_platform_render import _config, _values
+
+    standard = ["development", "production"]
+    values = {s: _values(_config(s)) for s in ["poc", *standard]}
+    parts = {s: [p["subPath"] for p in v["backups"].get("shared") or []] for s, v in values.items()}
+    claims = {s: [c["name"] for c in (v.get("storage") or {}).get("claims") or []] for s, v in values.items()}
+
+    def mounted(v: dict[str, Any]) -> set[str]:
+        return {m["subPath"] for w in v["workloads"] for m in w.get("shared") or [] if "claim" not in m}
+
+    def left_out(s: str) -> set[str]:
+        """The shared volume's top folders no part of the set lies in or under (`data` holds a part)."""
+        tops = {sub.split("/")[0] for sub in mounted(values[s])}
+        return {t for t in tops if not any(p == t or p.startswith(t + "/") for p in parts[s])}
+
+    text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.8"))
+    folders = sorted({f for found in parts.values() for f in found})
+
+    holds = re.search(r"cannot make again\*\*: (.*?); and, in the poc shape", text)
+    assert holds, "§6a.8's sentence naming the set's folders"
+    assert sorted(set(re.findall(r"\(`([^`]+)`", holds.group(1)))) == folders
+    every = all(parts.values())
+    assert ("The claims part holds, in every shape" in text) is every
+    assert ("`ospreyflow-backup-claims` (the claims part, in every shape" in text) is every
+    assert ("in the poc shape, `ospreyflow-backup-claims`" in text) is (not every)
+    poc_alone = bool(claims["poc"]) and not any(claims[s] for s in standard)
+    assert ("; and, in the poc shape, the Ingest root's claim" in text) is poc_alone
+
+    outside = re.search(r"\*\*Not in a set\*\*: (.*?) A restore leaves those", text)
+    assert outside, "§6a.8's sentence naming what no set holds"
+    named = {n.split(":")[0] for n in re.findall(r"\(`([^`]+)`", outside.group(1))}
+    assert named == left_out("poc") | {f for s in standard for f in left_out(s)}
+    in_standard_only = all("ingest" in left_out(s) for s in standard) and "ingest" not in left_out("poc")
+    assert ("in the standard shape, the Ingest root (`ingest`" in outside.group(1)) is in_standard_only
+    assert bool(re.search(r"`ospreyflow-shared`[^.]{0,40}is not backed up", text)) is (not folders)

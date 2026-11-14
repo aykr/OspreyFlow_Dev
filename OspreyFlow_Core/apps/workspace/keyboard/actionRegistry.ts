@@ -151,6 +151,15 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   // selection bar (reached by Tab like Remove from view and Clear) and from a selected node's menu.
   "save-selected-as-a-view-from-the-selection-bar",
   "save-selected-as-a-view-from-a-selected-nodes-menu",
+  // ADR-078 Amendment 1 (the owner's Part C, 13 November 2026): the menu is the selection's, opened by the
+  // ContextMenu key and Shift+F10 as by `\`, moved through by the arrows, Home and End, offering the bar's
+  // actions in its words, and folding the link types with no links into a line that opens in place.
+  "menu-opens-on-the-context-menu-key",
+  "menu-opens-on-shift-f10",
+  "menu-arrows-home-and-end-move-through-it",
+  "menu-offers-the-selections-actions-in-the-bars-words",
+  "menu-folds-types-with-no-links-and-opens-them-in-place",
+  "undo-select-what-is-lit-from-the-selections-menu",
   // 26 October 2026 (ADR-128 decision 2, B3): a window set by Set exact dates lights part of the
   // canvas; Select what is lit replaces the selection with it, Save as a view then keeps
   // only that slice, and one undo gives the earlier selection back.
@@ -383,6 +392,8 @@ export const LINK_NOTES_ACTIONS = defineActionRegistry("LINK_NOTES_ACTIONS", [
  */
 export const LINK_MENU_ACTIONS = defineActionRegistry("LINK_MENU_ACTIONS", [
   "backslash-opens-the-menu-of-a-selected-same-as-link",
+  // ADR-078 Amendment 1: the ContextMenu key and Shift+F10 open it too.
+  "context-menu-key-and-shift-f10-open-a-selected-links-menu",
   "collapse-folds-the-matched-nodes-into-one",
   "group-node-menu-expands-the-group",
   "confirm-asks-why-and-sends-the-reason",
@@ -432,6 +443,10 @@ export const SELECTION_ACTIONS = defineActionRegistry("SELECTION_ACTIONS", [
   "show-links-within-degrees-from-the-selection-bar",
   // ADR-098 decision 4.
   "ask-the-model-about-the-selected-documents-from-the-selection-bar",
+  // ADR-078 Amendment 1: the same actions from the selection's right-click menu, by keyboard.
+  "show-links-among-the-selection-from-its-menu",
+  "ask-the-model-about-the-selected-documents-from-its-menu",
+  "show-links-within-the-bars-degrees-from-its-menu",
   // ADR-115 E4.
   "clear-the-selection-with-escape-on-the-canvas",
 ] as const);
@@ -762,6 +777,9 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   // ADR-144 decision 4 (L3.2b): asked in a private view (*Ask the model about these*), and left for
   // the whole case by *Ask about the whole case instead*.
   "ask-in-a-view-then-about-the-whole-case-by-keyboard",
+  // ADR-098 Amendment 7: what to read from (Selected items, Everything on the graph; Whole case
+  // disabled with why) is chosen by arrow keys, and the question sends the choice.
+  "choose-what-to-read-from-by-keyboard",
 ] as const);
 
 /** Files added straight to a case (ADR-094 step 3): from the strip over the canvas, standing alone,
@@ -850,16 +868,20 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "help-from-the-rail-by-keyboard",
   // ADR-132: the skip link, under both brands.
   "skip-to-main-content-by-keyboard",
-  // ADR-145 decisions 1–3: the place switcher (both brands), the banner's cross-link and its
-  // sections, and Home's cards.
+  // ADR-145 decisions 1–3: the place switcher (both brands), the banner's cross-link, and Home's cards (the
+  // banner's sections left the Glass with Amendment 15).
   "switch-place-by-keyboard",
   "banner-cross-link-by-keyboard",
-  // ADR-145 Amendment 13: the sections are the mode toggle, Graph · Drawing board, with each mode's note.
-  "banner-sections-by-keyboard",
+  // ADR-145 Amendment 15 (the owner's navigation decision, replacing Amendment 13's mode toggle): the case line's
+  // Views in this case opens the Cases panel, focus returned to it.
+  "case-line-views-by-keyboard",
+  // ...and the case menu's All cases, which opens the same panel, focus returned to the menu's button.
+  "all-cases-by-keyboard",
   "home-place-cards-by-keyboard",
-  // ADR-145 Amendment 2 (variant B): the rail's More and each destination under it, More views, and a
-  // folded panel of the column opened with one keypress.
-  "rail-more-by-keyboard",
+  // ADR-145 Amendment 2 (variant B) and Amendment 15: each rail panel opened and closed, the view kept and focus
+  // returned to its opener (the rail's More left with Amendment 15), More views, and a folded panel of the column
+  // opened with one keypress.
+  "rail-panels-by-keyboard",
   "more-views-by-keyboard",
   "open-a-folded-panel-by-keyboard",
   // ADR-145 Amendment 4 and ADR-146 decision 2 (L2.9): Rules and Monitoring, the fourth place, in the
@@ -869,6 +891,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "back-to-the-glass-from-rules-and-monitoring-by-keyboard",
   "open-an-alert-from-home-by-keyboard",
   "open-rules-and-monitoring-from-home-by-keyboard",
+  // ADR-145 Amendment 15 (the owner's ruling, Q2): Build a report beside Reports, a link to Superset in a new tab.
+  "build-a-report-by-keyboard",
 ] as const);
 
 /** Rules and Monitoring (ADR-146 decisions 2 and 6, L2.9): its tabs, an alert opened at its own

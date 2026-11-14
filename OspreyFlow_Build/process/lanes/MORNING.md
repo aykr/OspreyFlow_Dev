@@ -4,13 +4,41 @@ Kept by the orchestrator through the night. The owner's words for the night: mer
 merges, sol lanes to ayan without the 80% limit, load B on the test server; page A ruled (strict ranking, groups
 count records).
 
+**v0.5.1 is tagged but not released (01:35 UTC).** The tag `v0.5.1` is pushed to the product repository
+(213d2c2, from 477a500) and to this one. The release workflow (aykr/OspreyFlow run 43541237293) then failed:
+the Superset image's scan found **CVE-2026-128089 in dnspython 2.7.0** (HIGH, excessive memory and CPU use;
+fixed in 2.9.2), published after the last scan. The other images were cancelled with it, so no release and no
+images exist, and nobody can have updated to it. Superset 6.1.0's image runs Python 3.10, which dnspython 2.9
+needs a newer Python than; the earlier dnspython finding (CVE-2026-114605) is already accepted in `.trivyignore`
+on exactly that ground (Superset doesn't import it, and the deployment sends no mail from Superset). I prepared
+the same entry for the new CVE, and my permission check refused it as weakening a security check, so it is
+yours. Your options:
+- **(a)** Accept CVE-2026-128089 in `.trivyignore` on the same ground as CVE-2026-114605 (expiry 2026-12-14), on
+  release/v0.5.1 and on main. Then move the `v0.5.1` tag to that commit in both repositories and push it again;
+  the workflow then builds and signs every image. Nothing was released, so moving the tag misleads no one.
+- **(b)** Remove dnspython from the Superset image, if nothing Superset runs needs it. That needs a build and a
+  check that Superset still starts and signs in. It is new work.
+- **(c)** Leave Superset out of v0.5.1's release images. Superset only reaches deployments in v0.5.2.
+Main's own CI will meet the same finding at its next image scan.
+
 ## Waiting on you
 
 1. **ci.yml for the index feed's live file (rules, step 3c).** The diff is on rules' branch:
    `process/lanes/rules/v052-index/v052-index_ci_yml.diff`. It adds an `opensearch:2.17.1` service (single
    node, security off, 512m heap) to the conformance job and runs `test_feed_live.py` there. Without it the
    test-file coverage check stays red on rules' branch, so 3c cannot merge to main. B does not wait on it: rules
-   loads from its branch head.
+   loads from its branch head. Until it lands, main also fails `test_worker_isolation.py` and `test_write_store_marks.py`, which read the ignore
+   lines and expect `test_feed_live.py` to exist. That red is the Makefile and ci.yml lines from last night,
+   waiting for the file they name.
+   **Studio's step 3d needs the same kind of change, on top of rules' diff:**
+   `process/lanes/studio/v052-search/makefile_live_ignore.diff` (one `--ignore` in the Makefile for
+   `test_search_leak_live.py`) and `ci_yml_live_listing.diff` (the same file in the test job's ignores and the
+   live-service job's list). With all three applied, the coverage check reads "1060 test file(s), 0 allowlisted,
+   no new drift". **Rules-b's Whole case (D(iii)) adds one more of the same kind:** `makefile-v052Diii.patch` and a
+   ci.yml patch on top of studio's, for `test_ask_whole_case_leak_live.py`. One yes covers all of them if you
+   agree. **Platform's POC seed path adds `process/lanes/platform/v052-seed/live_wiring.diff`** (ci.yml and the
+   Makefile: `test_seed_clickhouse_live.py` in the ClickHouse live job, `test_seed_poc_live.py` in the Postgres live
+   job, both in the test job's ignores). It is independent of the search diffs.
 
 2. **The POC seed path vs the poc's marking ceiling (platform, ADR-148 Am 14).** Spec 08's synthetic data holds
    SECRET items: HMP's network writes a SECRET conflict (`hmp_network.py:427`), and Fixture Corp writes a SECRET
@@ -40,7 +68,82 @@ count records).
    platform-b's window (or allow `stack_lease.sh acquire` for that lane), or run it yourself. 4c is otherwise built
    (A–E, ea0c7ba, red first). Every other lane's leases work.
 
+5. **The data-safety edge case (docs' finding, ADR-148 Am 13 decision 5).** The ADR says every kept backup set can
+   be met by RDS's point-in-time restore, with both at 35 days. At the edge that is optimistic: RDS's earliest
+   restorable point lags its retention by up to about a day, and S3 expiry rounds up to midnight UTC, so a set in
+   its last day may fall outside RDS's window. RDS cannot go above 35 days (AWS's maximum). Your choice:
+   (a) the sets expire at 34 days, so every kept set is always matched; (b) keep 35 and amend the ADR and the guide
+   to say a set in its last day may not be restorable with its database; (c) something else. The guide follows the
+   ADR as it stands until then.
+
+6. **A data-safety gap in the standard shape (audit ruling 3; found by docs, confirmed by platform).** Outside
+   poc, the Ingest root (uploads and the drop folder) is a folder of the shared volume and in **no backup set**. A
+   restore then brings back loads that cite uploads which are no longer there, or drop-folder files without the
+   loads that read them: exactly the disagreement ruling 3 exists to prevent. Am 13 decision 4 was written with
+   poc's own Ingest claim in view.
+   - **(a) platform's recommendation:** wherever the Ingest root is not a claim of its own, back up the shared
+     volume's `ingest` folder as a fourth shared part, read-only to the backup and put back by the restore. The cost
+     is that uploads can be large, so the backup's size and time grow with them.
+   - **(b)** Record it as a known limit of the standard shape, in the guide and the ADR.
+   Platform can build either once you rule.
+
+7. **The right-click menu with two items selected (case-b, Part C, ADR-078 Am 1 d4).** Part C lists "Link to"
+   and "Find paths to…" among one item's own actions, but each needs a second item. Should the menu offer them only
+   when exactly two are selected, headed "2 selected", leaving out the clicked item's other actions (Explain
+   cluster, View messages) there? **Recommended, and built:** yes.
+   - One selected: the item's own actions.
+   - Two selected: the pair's actions (Link to, Split from, Find paths to).
+   - Three or more: the selection's actions alone.
+   - The heading always says what the menu applies to.
+
+8. **Search's performance budgets, for step 4 on Mon 23 (platform's plan, lane/platform-v052-measure,
+   `process/lanes/platform/v052-measure/PLAN.md`).** The spec states no search budget beyond ADR-059's ~300 ms for a
+   suggestion. Proposed, each with its basis and the figure that fails it:
+   - suggestions p95 ≤ 300 ms at the Conduit (fail above, or any over 2 s); in the Glass ≤ 400 ms (fail above 600);
+   - a name search ≤ 1 s (fail above 2);
+   - full text with highlights and filters ≤ 1.5 s (fail above 3);
+   - an exact identifier ranked first every time;
+   - index lag ≤ 5 s (fail above 30);
+   - the rebuild measured, which then sets the restore's bound;
+   - the drift check inside its 4 GiB in ≤ 1 h;
+   - the fallback shown within 5 s;
+   - the leak test passed at scale;
+   - each container's peak ≤ 80% of its limit.
+
+   These would become a live test at step 6 and at each release, plus a CI regression gate on a 1M-name corpus.
+   Accept as proposed, or change any figure. Suggestions are measured on what B loads (your ruling of 13 Nov), not
+   at tens of millions.
+
+## Decided by the lanes, for you to overrule if you wish
+
+- **Case, Build a report for the Administrator (ADR-145 Am 15 decision 5):** a builder without the Reports
+  view follows their own view switch to it.
+- **Case, the search results page (Am 15 Part A item 6):**
+  - Show on graph leaves the results for the graph.
+  - Open keeps the results, hidden under the reader.
+  - Results come 20 to a page.
+  - The search box's own Filters shape its suggestions only, not the results page.
+- **Rules-b, Whole case (D(iii), planned):**
+  - A question over the search's 200 characters is refused in words for Whole case, never cut or reduced to
+    keywords. Questions elsewhere go to 2,000.
+  - One page of 50 is read, and the answer says when there were more.
+  - There is no timeline window for Whole case.
+- **Rules-b, Whole case (built offline):**
+  - A Document the search finds off the canvas is cited by the passage it matched, never read whole, because the
+    reader opens only Documents in the working set.
+  - [S-n] selects records already on the canvas but doesn't bring an off-canvas one onto it.
+  - Either can be widened by a patch to case's files if you want.
+- **Rules-b, Ask & Chat:**
+  - Ask stays enabled while the "Will read" summary loads, since the answer says what it read.
+  - A refusal's dataset names are scrubbed for a caller who may not see them.
+
 ## Done overnight
+
+- **v0.5.1's rehearsal found a missing CHANGELOG step**, and that held the publish. On v0.5.0, `ospreyflow`
+  itself cannot start ("No module named httpx"), so `ospreyflow update` couldn't be reached. Platform-b proved a
+  one-line repair (`uv tool install --force --editable --with httpx ./cli`). The CHANGELOG now gives it, on
+  release/v0.5.1 at 7d76022 (9197ea6 plus that fix), and is being rehearsed by its own words. Your demo's
+  `osprey-small` needs the same repair before its next update.
 
 - Landed and pushed: deps-opensearch, step 2 (the manifest), step 3a with data safety and docs' D2/D3/D8,
   platform-b hygiene, the ci.yml line for test_feed_live (your word, 5b894ff).

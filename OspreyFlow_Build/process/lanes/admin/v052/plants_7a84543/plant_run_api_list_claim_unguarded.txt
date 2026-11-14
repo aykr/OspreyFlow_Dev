@@ -1,0 +1,7 @@
+# plant: run_api_list_claim_unguarded (OspreyFlow_Core/services/api/service_identity.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '        if not named or not all(isinstance(c, str) for c in named) or len(set(named)) != 1:'
+# with: '        if len(set(named)) != 1:'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py -k 'list_is_refused'
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_a_client_claim_that_is_a_list_is_refused_on_the_run_api_not_an_error[azp]
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_a_client_claim_that_is_a_list_is_refused_on_the_run_api_not_an_error[appid]
+2 failed, 31 deselected in 1.77s

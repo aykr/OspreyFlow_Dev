@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 //
 // ADR-145 decision 4 and Amendment 2 (variant B, the owner's choice of 7 November 2026): the case
-// screen's chrome, counted on the real `App`. A keyboard user passes 24 controls before the canvas
-// (25 on the deployed page, whose brand frame adds the skip link first; part 1's harness, drawing
+// screen's chrome, counted on the real `App`. A keyboard user passes 25 controls before the canvas
+// (26 on the deployed page, whose brand frame adds the skip link first; part 1's harness, drawing
 // the mark without its Home button, counted one fewer for every variant), and the right-hand column
 // opens with the Inspector only. Red if a control returns before the canvas, or a panel opens by
 // default. The canvas, the map and the timeline need WebGL, which jsdom has none of: the canvas is a
@@ -22,6 +22,11 @@ vi.mock("./canvas/GlassCanvas", () => ({
 }));
 vi.mock("./map/MapView", () => ({ MapView: () => null }));
 vi.mock("./timeline/Timeline", () => ({ Timeline: () => null }));
+// Superset's address (`deploymentReportsUrl`), none unless a case sets one (the owner's "Build a report", Amendment 15).
+vi.mock("./auth/oidcConfig", async () => {
+  const actual = await vi.importActual<typeof import("./auth/oidcConfig")>("./auth/oidcConfig");
+  return { ...actual, deploymentReportsUrl: vi.fn(() => null) };
+});
 
 let App!: typeof AppComponent;
 beforeAll(async () => {
@@ -54,6 +59,7 @@ vi.mock("./map/providers", async () => {
   return { ...actual, fetchMapConfig: vi.fn(() => new Promise(() => undefined)) };
 });
 
+import * as oidcConfig from "./auth/oidcConfig";
 import * as userManager from "./auth/userManager";
 import * as ontologySchema from "./ontology/schema";
 
@@ -111,49 +117,23 @@ afterEach(() => {
 });
 
 describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
-  test("26 controls stand before the canvas, in this order", async () => {
+  test("25 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15)", async () => {
     render(<App />);
     const canvas = await screen.findByRole("application", { name: "Network canvas" });
-    await screen.findByRole("button", { name: "Open Prison intel in the Ingest Studio ↗" });
+    await screen.findByRole("button", { name: "Open this case's data in the Ingest Studio ↗" });
     const stops = before(canvas);
     expect(stops).toEqual([
       // ADR-146 decision 2: Rules and Monitoring, with the count that left the banner.
       "Osprey, go to Home", "The Glass", "Ingest Studio", "Rules and Monitoring 3 open", "Admin",
       expect.stringMatching(/Search entities/), "Add many from a list", "Filters",
-      "Graph", "Map", "More views▾", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
-      "Graph", "Drawing board", expect.stringMatching(/^Case: Kestrel/), "Open Prison intel in the Ingest Studio ↗",
-      // The rail, then the Graph's own toolbar over the canvas.
-      // ADR-145 Amendment 12: Ask & Chat and Dashboards on the rail, then its Explore Details.
-      "Cases", "Explore", "Ask & Chat", "Dashboards", "Explore Details", "Help", "Show names",
+      // Amendment 15: one view switch, Graph · Map · Drawing board · Reports, then More views.
+      "Graph", "Map", "Drawing board", "Reports", "More views▾", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
+      // The case line: Case ‹switcher› · Views in this case · reads …, then the cross-link.
+      expect.stringMatching(/^Case: Kestrel/), "Views in this case", "Open this case's data in the Ingest Studio ↗",
+      // The rail: the panel openers alone, then Help and the names toggle; then the Graph's own toolbar.
+      "Explore", "Ask & Chat", "History", "Help", "Show names",
       "Match strictness",
     ]); // prettier-ignore
-  });
-
-  test("the banner's Drawing board opens the case's drawing boards and is the current section (ADR-143, L3.3; ADR-145 Amendment 13)", async () => {
-    render(<App />);
-    const sections = await screen.findByRole("navigation", { name: "In the Glass" });
-    const boards = await within(sections).findByRole("button", { name: "Drawing board" });
-    expect(boards.getAttribute("aria-disabled")).toBeNull();
-    boards.focus();
-    fireEvent.click(boards);
-    await screen.findByRole("heading", { name: /^Drawing boards in case/ });
-    expect(boards.getAttribute("aria-current")).toBe("page");
-    expect(within(sections).getByRole("button", { name: "Graph" }).getAttribute("aria-current")).toBeNull();
-  });
-
-  // ADR-145 Amendment 13 (the owner, 13 November 2026): each mode says what it is in one line, inside the
-  // context region and as its description, so a screen reader reads it with the region.
-  test("each mode's one-line note is the context region's, and changes with the mode", async () => {
-    render(<App />);
-    const region = await screen.findByRole("region", { name: "You are in the Glass" });
-    expect(screen.getByRole("region", { name: "You are in the Glass", description: "Graph: the case's data. Saved views are under Views or Cases." })).toBe(region);
-    expect(within(region).getByText("Graph: the case's data. Saved views are under Views or Cases.")).toBeTruthy();
-    fireEvent.click(within(within(region).getByRole("navigation", { name: "In the Glass" })).getByRole("button", { name: "Drawing board" }));
-    await screen.findByRole("heading", { name: /^Drawing boards in case/ });
-    expect(screen.getByRole("region", { name: "You are in the Glass", description: "Drawing board: your sketch; it does not change the case's data." })).toBe(region);
-    expect(within(region).queryByText(/^Graph: the case's data/)).toBeNull();
-    fireEvent.click(within(within(region).getByRole("navigation", { name: "In the Glass" })).getByRole("button", { name: "Graph" }));
-    await vi.waitFor(() => expect(within(region).getByText("Graph: the case's data. Saved views are under Views or Cases.")).toBeTruthy());
   });
 
   test("the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name", async () => {
@@ -161,9 +141,10 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
     const places = await screen.findByRole("navigation", { name: "Places" });
     const rules = await within(places).findByRole("button", { name: "Rules and Monitoring 3 open" });
     expect(rules.querySelector(".place-switcher__count")?.textContent).toBe("3");
-    // ADR-146 decision 2: Monitoring left the Glass, its count with it.
-    const sections = await screen.findByRole("navigation", { name: "In the Glass" });
-    expect(within(sections).queryByRole("button", { name: /Monitoring/ })).toBeNull();
+    // ADR-146 decision 2: Monitoring left the Glass, its count with it; the Glass's row has no sections at all now
+    // (ADR-145 Amendment 15).
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    expect(within(region).queryByRole("button", { name: /Monitoring/ })).toBeNull();
   });
 
   test("the column opens with the Inspector only, the other panels folded in their order", async () => {
@@ -175,5 +156,370 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
         .find((b) => b.closest(".side-panel-header"));
     expect(headers("Inspector")?.getAttribute("aria-expanded")).toBe("true");
     for (const name of ["Metrics", "Query builder"]) expect(headers(name)?.getAttribute("aria-expanded")).toBe("false");
+  });
+});
+
+// ADR-145 Amendment 14 (the owner's screen fixes of 13 November 2026, v0.5.2 step 3e): the dataset named
+// once in the context row (its one place, one marker was replaced by Amendment 15's navigation).
+describe("the dataset named once (ADR-145 Amendment 14 decision 4)", () => {
+
+  test("the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it", async () => {
+    const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+      /\/v1\/investigations$/.test(String(input).split("?")[0]!)
+        ? Promise.resolve(new Response(JSON.stringify([{ id: "inv-1", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a", datasets: ["Prison intel"] }])))
+        : held(input, init),
+    ); // prettier-ignore
+    render(<App />);
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    await within(region).findByText("reads Prison intel");
+    await within(region).findByRole("button", { name: "Open this case's data in the Ingest Studio ↗" });
+    // The switcher has read the listing (its name is the case's), so a badge would be drawn by now.
+    await within(region).findByRole("button", { name: /^Case: Kestrel/ });
+    expect((region.textContent ?? "").match(/prison intel/gi)).toHaveLength(1);
+  });
+
+  // ADR-115 Amendment 1 point 5's two cases kept: a case reading no dataset is still marked (in the banner's
+  // words, "reads no dataset"), and the badge still names the scope when the case's datasets cannot be read.
+  for (const [what, listed, datasets] of [
+    ["a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it", [] as string[], "empty"],
+    ["the badge names the scope when the case's datasets cannot be read", ["Prison intel"], "refused"],
+  ] as const) {
+    test(what, async () => {
+      const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+      vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+        const path = String(input).split("?")[0]!;
+        if (/\/v1\/investigations$/.test(path))
+          return Promise.resolve(new Response(JSON.stringify([{ id: "inv-1", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a", datasets: listed }])));
+        if (/\/inv-1\/datasets$/.test(path))
+          return Promise.resolve(datasets === "empty" ? new Response("[]") : new Response("{}", { status: 403 }));
+        return held(input, init);
+      }); // prettier-ignore
+      render(<App />);
+      const region = await screen.findByRole("region", { name: "You are in the Glass" });
+      await within(region).findByRole("button", { name: /^Case: Kestrel/ });
+      if (datasets === "empty") {
+        expect(await within(region).findByText("reads no dataset")).toBeTruthy();
+        expect(within(region).queryByText("NO DATA")).toBeNull();
+      } else {
+        expect(await within(region).findByText("PRISON INTEL")).toBeTruthy();
+        expect(within(region).queryByText(/^reads /)).toBeNull();
+      }
+    });
+  }
+});
+
+describe("the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4)", () => {
+
+  for (const [place, region] of [[/^Rules and Monitoring/, "You are in Rules and Monitoring"], [/^Ingest Studio$/, "You are in the Ingest Studio"]] as const) {
+    test(`the scope badge stays where the banner names no dataset: ${region}`, async () => {
+      const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+      vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+        /\/v1\/investigations$/.test(String(input).split("?")[0]!)
+          ? Promise.resolve(new Response(JSON.stringify([{ id: "inv-1", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a", datasets: ["Prison intel"] }])))
+          : held(input, init),
+      ); // prettier-ignore
+      render(<App />);
+      await screen.findByRole("application", { name: "Network canvas" });
+      fireEvent.click(await within(screen.getByRole("navigation", { name: "Places" })).findByRole("button", { name: place }));
+      const there = await screen.findByRole("region", { name: region });
+      expect(await within(there).findByText("PRISON INTEL")).toBeTruthy();
+    });
+  }
+});
+
+// The owner's navigation decision of 13 November 2026 (process/lanes/NAVIGATION_2026-11-13.md, Part B; ADR-145
+// Amendment 15): one view switch in the top bar, a strip without modes, a rail of panel openers alone, and the
+// case line with its views and all cases.
+describe("the owner's navigation (ADR-145 Amendment 15)", () => {
+  const rail = () => screen.getByRole("navigation", { name: "Workspace" });
+  const viewGroup = () => screen.getByRole("group", { name: "View" });
+  const pressedViews = () => within(viewGroup()).queryAllByRole("button", { pressed: true }).map((b) => b.textContent);
+  const ready = async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+  };
+
+  test("the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current", async () => {
+    await ready();
+    expect(within(viewGroup()).getAllByRole("button").map((b) => b.textContent)).toEqual(["Graph", "Map", "Drawing board", "Reports"]);
+    expect(pressedViews()).toEqual(["Graph"]);
+    fireEvent.click(within(viewGroup()).getByRole("button", { name: "Reports" }));
+    await vi.waitFor(() => expect(pressedViews()).toEqual(["Reports"]));
+    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    const more = within(await screen.findByRole("group", { name: "More views" }).catch(() => screen.getByRole("dialog", { name: "More views" })));
+    expect(more.getAllByRole("button").map((b) => b.textContent)).toEqual(["Matrix", "Figures", "Ownership", "Connection strength"]);
+    fireEvent.click(more.getByRole("button", { name: "Ownership" }));
+    await vi.waitFor(() => expect(pressedViews()).toEqual([]));
+    expect(screen.getByRole("button", { name: /^Ownership/ }).className).toContain("menu-button--pressed");
+  });
+
+  test("Drawing board is a view: its own screen says it is a sketch that does not change the case's data", async () => {
+    await ready();
+    fireEvent.click(within(viewGroup()).getByRole("button", { name: "Drawing board" }));
+    await screen.findByRole("heading", { name: /^Drawing boards in case/ });
+    expect(pressedViews()).toEqual(["Drawing board"]);
+    expect(screen.getByText(/your sketch; it does not change the case's data/)).toBeTruthy();
+  });
+
+  test("the strip names no mode and says no mode's note", async () => {
+    await ready();
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    expect(within(region).queryByRole("navigation")).toBeNull();
+    expect(within(region).queryByText(/Graph: the case's data/)).toBeNull();
+    expect(region.getAttribute("aria-describedby")).toBeNull();
+  });
+
+  test("the rail holds the panel openers alone: Explore, Ask & Chat, History, then Help and the names toggle", async () => {
+    await ready();
+    expect(within(rail()).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Explore", "Ask & Chat", "History", "Help", "Show names"]);
+    for (const name of ["Explore", "Ask & Chat", "History"]) {
+      const opener = within(rail()).getByRole("button", { name });
+      expect(opener.getAttribute("aria-pressed")).toBeNull();
+      expect(opener.getAttribute("aria-expanded")).toBe("false");
+    }
+  });
+
+  for (const [name, title] of [["Explore", "Explore"], ["Ask & Chat", "Ask & Chat"], ["History", "History"]] as const) {
+    test(`${name} opens its panel without changing the view, a second press closes it, and closing returns focus to it`, async () => {
+      await ready();
+      fireEvent.click(within(viewGroup()).getByRole("button", { name: "Map" }));
+      await vi.waitFor(() => expect(pressedViews()).toEqual(["Map"]));
+      const opener = within(rail()).getByRole("button", { name });
+      opener.focus();
+      fireEvent.click(opener);
+      await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("true"));
+      expect(screen.getAllByRole("dialog", { name: new RegExp(title) }).length).toBeGreaterThan(0);
+      expect(pressedViews()).toEqual(["Map"]);
+      fireEvent.click(opener);
+      await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("false"));
+      expect(document.activeElement).toBe(opener);
+      fireEvent.click(opener);
+      await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("true"));
+      fireEvent.click(screen.getAllByRole("button", { name: new RegExp(`^Close ${title}`) })[0]!);
+      await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("false"));
+      expect(document.activeElement).toBe(opener);
+      expect(pressedViews()).toEqual(["Map"]);
+    });
+  }
+
+  test("the case line: You are in the Glass · Case ‹switcher› · Views in this case · reads …", async () => {
+    await ready();
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    await within(region).findByText("reads Prison intel");
+    const parts = [...region.querySelectorAll(":scope > *, .govuk-notification-banner__content > *")]
+      .filter((el) => !el.classList.contains("context-banner__sep") && !el.classList.contains("govuk-notification-banner__content"))
+      .map((el) => (el.textContent ?? "").trim().replace(/\s+/g, " "));
+    expect(parts.slice(0, 5)).toEqual(["You are in the Glass", "Case", expect.stringMatching(/^Case: Kestrel/), "Views in this case", "reads Prison intel"]);
+  });
+
+  test("Views in this case opens the Cases panel at its views list", async () => {
+    await ready();
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    fireEvent.click(within(region).getByRole("button", { name: "Views in this case" }));
+    const panel = await screen.findByRole("dialog", { name: "Cases" });
+    const views = await within(panel).findByRole("region", { name: "Views in this case" });
+    await vi.waitFor(() => expect(document.activeElement).toBe(views));
+  });
+
+  test("the case switcher's last entry is All cases, which opens the Cases panel", async () => {
+    await ready();
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    fireEvent.click(await within(region).findByRole("button", { name: /^Case: Kestrel/ }));
+    const menu = await screen.findByRole("dialog", { name: "Case menu" }).catch(() => screen.getByRole("group", { name: "Case menu" }));
+    const entries = within(menu).getAllByRole("button");
+    expect(entries.at(-1)?.textContent).toBe("All cases");
+    fireEvent.click(entries.at(-1)!);
+    expect(await screen.findByRole("dialog", { name: "Cases" })).toBeTruthy();
+  });
+});
+
+// The owner's ruling of 13 November 2026 (Q2; ADR-145 Amendment 15): "Build a report" beside Reports, opening Superset
+// in a new tab, for a holder of manage_dashboards on a deployment with Superset, and for no one else.
+describe("Build a report beside Reports (ADR-145 Amendment 15)", () => {
+  const SUPERSET = "https://bi.example.test";
+  const withRights = (rights: string[]) => {
+    const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+      /\/v1\/me\/rights$/.test(String(input).split("?")[0]!) ? Promise.resolve(new Response(JSON.stringify({ rights }))) : held(input, init),
+    );
+  };
+  const link = () => screen.queryByRole("link", { name: /^Build a report/ });
+
+  test("is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab", async () => {
+    vi.mocked(oidcConfig.deploymentReportsUrl).mockReturnValue(SUPERSET);
+    withRights([...RIGHTS, "manage_dashboards"]);
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    const found = await screen.findByRole("link", { name: "Build a report (opens in new tab)" });
+    expect(found.getAttribute("href")).toBe(SUPERSET);
+    expect(found.getAttribute("target")).toBe("_blank");
+    expect(found.getAttribute("rel")).toBe("noopener noreferrer");
+    const reports = within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Reports" });
+    expect(reports.compareDocumentPosition(found) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const more = screen.getByRole("button", { name: /^More views/ });
+    expect(found.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test("is not offered to a Reports Viewer, who holds no manage_dashboards, where Superset is deployed", async () => {
+    vi.mocked(oidcConfig.deploymentReportsUrl).mockReturnValue(SUPERSET);
+    withRights(RIGHTS);
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await within(screen.getByRole("group", { name: "View" })).findByRole("button", { name: "Reports" });
+    expect(link()).toBeNull();
+  });
+
+  test("is not offered, even to a builder, where there is no Superset", async () => {
+    vi.mocked(oidcConfig.deploymentReportsUrl).mockReturnValue(null);
+    withRights([...RIGHTS, "manage_dashboards"]);
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await within(screen.getByRole("group", { name: "View" })).findByRole("button", { name: "Reports" });
+    expect(link()).toBeNull();
+  });
+});
+
+// The lane-reviewer's findings on Part B (ADR-145 Amendment 15): All cases outside the Glass, focus after it, the switch's
+// rights, exactly one current view, and Views in this case as a toggle.
+describe("Part B after review (ADR-145 Amendment 15)", () => {
+  const withRights = (rights: string[]) => {
+    const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+      /\/v1\/me\/rights$/.test(String(input).split("?")[0]!) ? Promise.resolve(new Response(JSON.stringify({ rights }))) : held(input, init),
+    );
+  };
+  const switchOf = () => {
+    const group = screen.getByRole("group", { name: "View" });
+    return { main: within(group).getAllByRole("button").map((b) => b.textContent) };
+  };
+
+  test("in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(await within(screen.getByRole("navigation", { name: "Places" })).findByRole("button", { name: /^Ingest Studio$/ }));
+    const studio = await screen.findByRole("region", { name: "You are in the Ingest Studio" });
+    fireEvent.click(await within(studio).findByRole("button", { name: /^Case: Kestrel/ }));
+    const menu = await screen.findByRole("dialog", { name: "Case menu" }).catch(() => screen.getByRole("group", { name: "Case menu" }));
+    fireEvent.click(within(menu).getByRole("button", { name: "All cases" }));
+    expect(await screen.findByRole("heading", { level: 1 })).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Cases" })).toBeNull();
+  });
+
+  test("the Cases panel opened from All cases returns focus to the case menu's button when it closes", async () => {
+    render(<App />);
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    const caseButton = await within(region).findByRole("button", { name: /^Case: Kestrel/ });
+    caseButton.focus();
+    fireEvent.click(caseButton);
+    const menu = await screen.findByRole("dialog", { name: "Case menu" }).catch(() => screen.getByRole("group", { name: "Case menu" }));
+    const all = within(menu).getByRole("button", { name: "All cases" });
+    all.focus();
+    fireEvent.click(all);
+    const panel = await screen.findByRole("dialog", { name: "Cases" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Close Cases" }));
+    await vi.waitFor(() => expect(screen.queryByRole("dialog", { name: "Cases" })).toBeNull());
+    expect(document.activeElement).toBe(within(region).getByRole("button", { name: /^Case: Kestrel/ }));
+  });
+
+  test("Views in this case is a toggle: expanded while its panel is open, a second press closes it", async () => {
+    render(<App />);
+    const region = await screen.findByRole("region", { name: "You are in the Glass" });
+    const views = await within(region).findByRole("button", { name: "Views in this case" });
+    expect(views.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(views.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(views);
+    await screen.findByRole("dialog", { name: "Cases" });
+    expect(views.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(views);
+    await vi.waitFor(() => expect(screen.queryByRole("dialog", { name: "Cases" })).toBeNull());
+  });
+
+  test("a Reports Viewer's switch is Reports, with Figures under More views: no graph, map or drawing board", async () => {
+    withRights(["read_reports"]);
+    render(<App />);
+    await vi.waitFor(() => expect(screen.getByRole("group", { name: "View" })).toBeTruthy());
+    await vi.waitFor(() => expect(switchOf().main).toEqual(["Reports"]));
+    // A Reports Viewer lands on Figures, so More views is named after it (Amendment 2).
+    fireEvent.click(screen.getByRole("button", { name: /^(More views|Figures)/ }));
+    const more = within(await screen.findByRole("group", { name: "More views" }));
+    expect(more.getAllByRole("button").map((b) => b.textContent)).toEqual(["Figures"]);
+  });
+
+  test("an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views", async () => {
+    withRights(["investigate"]);
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await vi.waitFor(() => expect(switchOf().main).toEqual(["Graph", "Map", "Drawing board"]));
+    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    const more = within(await screen.findByRole("group", { name: "More views" }));
+    expect(more.getAllByRole("button").map((b) => b.textContent)).toEqual(["Matrix", "Connection strength"]);
+  });
+
+  test("a drawing board chosen before the rights arrive gives way when they say the person may not investigate", async () => {
+    // While the rights are unknown the Glass offers what it always offered (ADR-112), the drawing board among them.
+    let answer: (rights: string[]) => void = () => undefined;
+    const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+      /\/v1\/me\/rights$/.test(String(input).split("?")[0]!)
+        ? new Promise<Response>((resolve) => (answer = (rights) => resolve(new Response(JSON.stringify({ rights })))))
+        : held(input, init),
+    );
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Drawing board" }));
+    await screen.findByRole("heading", { name: /^Drawing boards in case/ });
+    answer(["read_reports"]);
+    await vi.waitFor(() => expect(screen.queryByRole("heading", { name: /^Drawing boards in case/ })).toBeNull());
+    await vi.waitFor(() => expect(switchOf().main).toEqual(["Reports"]));
+    expect(screen.getByRole("button", { name: /^Figures/ }).className).toContain("menu-button--pressed");
+  });
+
+  test("Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current", async () => {
+    let answer: (rights: string[]) => void = () => undefined;
+    const held = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+      /\/v1\/me\/rights$/.test(String(input).split("?")[0]!)
+        ? new Promise<Response>((resolve) => (answer = (rights) => resolve(new Response(JSON.stringify({ rights })))))
+        : held(input, init),
+    );
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    fireEvent.click(await within(await screen.findByRole("group", { name: "More views" })).findByRole("button", { name: "Ownership" }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: /^Ownership/ }).className).toContain("menu-button--pressed"));
+    answer(["investigate"]);
+    await vi.waitFor(() => expect(switchOf().main).toEqual(["Graph", "Map", "Drawing board"]));
+    await vi.waitFor(() =>
+      expect(within(screen.getByRole("group", { name: "View" })).queryAllByRole("button", { pressed: true }).map((b) => b.textContent)).toEqual(["Graph"]),
+    );
+  });
+
+  test("the built-in Administrator, offered Connection strength alone, has it in the switch and current", async () => {
+    // rights.py's Administrator: manage_dashboards and manage_strength_influencers, neither investigate nor read_reports.
+    withRights(["manage_dashboards", "manage_strength_influencers", "manage_people"]);
+    render(<App />);
+    await vi.waitFor(() => expect(switchOf().main).toEqual(["Connection strength"]));
+    await vi.waitFor(() =>
+      expect(within(screen.getByRole("group", { name: "View" })).queryAllByRole("button", { pressed: true }).map((b) => b.textContent)).toEqual([
+        "Connection strength",
+      ]),
+    );
+  });
+
+  test("exactly one view is current: one pressed in the switch, or none there and More views naming its own", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    const group = () => screen.getByRole("group", { name: "View" });
+    const pressed = () => within(group()).queryAllByRole("button", { pressed: true }).map((b) => b.textContent);
+    for (const name of ["Map", "Drawing board", "Reports", "Graph"]) {
+      fireEvent.click(within(group()).getByRole("button", { name }));
+      await vi.waitFor(() => expect(pressed()).toEqual([name]));
+      expect(screen.getByRole("button", { name: /^More views/ }).className).not.toContain("menu-button--pressed");
+    }
+    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    fireEvent.click(await within(await screen.findByRole("group", { name: "More views" })).findByRole("button", { name: "Matrix" }));
+    await vi.waitFor(() => expect(pressed()).toEqual([]));
+    expect(screen.getByRole("button", { name: /^Matrix/ }).className).toContain("menu-button--pressed");
   });
 });

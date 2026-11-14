@@ -1,0 +1,199 @@
+# v052-fixes jsdom reds at 4cf8163; each plant restored with `git checkout -- <file>`
+## 1. the cross-link names the dataset again (main's words)
+plant in src/shell/ContextBanner.tsx; npx vitest run src/App.chrome.test.tsx -t "names the case's one dataset once"; exit 1
+     × the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it 1130ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 2. the scope badge drawn beside the case in the Glass (main's)
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t "names the case's one dataset once"; exit 1
+     × the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it 130ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'PRISON INTEL', 'Prison intel' ] to have a length of 1 but got 2
+## 3. no words for a case reading no dataset (7b1fbca's banner)
+plant in src/shell/ContextBanner.tsx; npx vitest run src/App.chrome.test.tsx -t 'a case that reads no dataset says so once'; exit 1
+     × a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it 1138ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 4. the badge dropped in the Glass whatever the banner says (7b1fbca's)
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'cannot be read'; exit 1
+     × the badge names the scope when the case's datasets cannot be read 1129ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 5. CaseSwitcher ignores showScope
+plant in src/investigation/CaseSwitcher.tsx; npx vitest run src/investigation/CaseSwitcher.test.tsx -t 'is left out with showScope false'; exit 1
+     × is left out with showScope false, and drawn by default 69ms
+      Tests  1 failed | 5 skipped (6)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <span …(2)>…(1)</span> to be null
+## 6. the drawer at the stylesheet's top 0 (main's)
+plant in src/design/primitives/Drawer.tsx; npx vitest run src/design/primitives/Drawer.test.tsx -t 'opens under the top bar'; exit 1
+   × opens under the top bar, never over the navigation above it 57ms
+      Tests  1 failed | 11 skipped (12)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected '' to be '112px' // Object.is equality
+## 7. the drawer under the top bar alone, over the context row (7b1fbca's)
+plant in src/design/primitives/Drawer.tsx; npx vitest run src/design/primitives/Drawer.test.tsx -t 'opens under the context row too'; exit 1
+   × opens under the context row too, under GOV.UK's banner and OspreyFlow's alike 57ms
+      Tests  1 failed | 11 skipped (12)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected '112px' to be '153px' // Object.is equality
+## 8. the drawer measured once, never on resize or scroll
+plant in src/design/primitives/Drawer.tsx; npx vitest run src/design/primitives/Drawer.test.tsx -t 'is measured again'; exit 1
+   × is measured again when the window is resized and when the page scrolls 58ms
+      Tests  1 failed | 11 skipped (12)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected '112px' to be '152px' // Object.is equality
+## 9. the drawer announced as modal (main's aria-modal)
+plant in src/design/primitives/Drawer.tsx; npx vitest run src/design/primitives/Drawer.test.tsx -t 'is not announced as modal'; exit 1
+   × is not announced as modal 55ms
+      Tests  1 failed | 11 skipped (12)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'true' to be null
+## 10. the views' actions as full GOV.UK buttons (main's)
+plant in src/views/ViewsPanel.tsx; npx vitest run src/views/ViewsPanel.test.tsx -t 'is a GOV.UK summary list'; exit 1
+     × is a GOV.UK summary list with Private and Shared tags under the GOV.UK brand 70ms
+      Tests  1 failed | 7 skipped (8)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'govuk-button govuk-button--secondary …' to contain 'govuk-link'
+## 11. Reports not in the one view switch (main's switch of Graph and Map)
+plant in src/shell/railLayout.ts; npx vitest run src/App.chrome.test.tsx -t "the top bar's one view switch is Graph"; exit 1
+     × the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current 126ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'Graph', 'Map', 'Drawing board' ] to deeply equal [ 'Graph', 'Map', …(2) ]
+## 12. the strip keeps the Graph note (Amendment 13's)
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t "the strip names no mode and says no mode's note"; exit 1
+     × the strip names no mode and says no mode's note 127ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <span …(2)></span> to be null
+## 13. the board without its sketch line
+plant in src/boards/BoardsPlace.tsx; npx vitest run src/App.chrome.test.tsx -t 'Drawing board is a view'; exit 1
+     × Drawing board is a view: its own screen says it is a sketch that does not change the case's data 146ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 14. a panel's opener pressed (main's rail)
+plant in src/shell/railLayout.ts; npx vitest run src/App.chrome.test.tsx -t 'the rail holds the panel openers alone'; exit 1
+     × the rail holds the panel openers alone: Explore, Ask & Chat, History, then Help and the names toggle 123ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'false' to be null
+## 15. Explore only opens (main's setExploreOpen(true)): a second press leaves it open
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'Explore opens its panel without changing the view'; exit 1
+     × Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it 1153ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'true' to be 'false' // Object.is equality
+## 16. a drawer that leaves focus where it was on closing (main's)
+plant in src/design/primitives/Drawer.tsx; npx vitest run src/App.chrome.test.tsx -t 'History opens its panel without changing the view'; exit 1
+     × History opens its panel without changing the view, a second press closes it, and closing returns focus to it 160ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <body><div>…(1)</div></body> to be <button type="button" …(5)>…(1)</button> // Object.is equality
+## 17. no visible word Case before the switcher
+plant in src/shell/ContextBanner.tsx; npx vitest run src/App.chrome.test.tsx -t 'the case line: You are in the Glass'; exit 1
+     × the case line: You are in the Glass · Case ‹switcher› · Views in this case · reads … 125ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'You are in the Glass', …(4) ] to deeply equal [ Array(5) ]
+## 18. Views in this case opening the panel without taking it to the views
+plant in src/views/ViewsPanel.tsx; npx vitest run src/App.chrome.test.tsx -t 'Views in this case opens the Cases panel at its views list'; exit 1
+     × Views in this case opens the Cases panel at its views list 1153ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <div class="drawer" …(4)>…(2)</div> to be <section tabindex="-1" …(2)>…(2)</section> // Object.is equality
+## 19. no All cases in the switcher (its order before Part B is red in v052-navigation-app-reds.log)
+plant in src/investigation/CaseSwitcher.tsx; npx vitest run src/App.chrome.test.tsx -t "the case switcher's last entry is All cases"; exit 1
+     × the case switcher's last entry is All cases, which opens the Cases panel 1158ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'New case' to be 'All cases' // Object.is equality
+## 20. no Build a report at all (4599f58's)
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'is offered to a builder where Superset is deployed'; exit 1
+     × is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab 1106ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 21. Build a report offered without manage_dashboards
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'is not offered to a Reports Viewer'; exit 1
+     × is not offered to a Reports Viewer, who holds no manage_dashboards, where Superset is deployed 137ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <a …(4)></a> to be null
+## 22. Build a report offered where there is no Superset
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'is not offered, even to a builder, where there is no Superset'; exit 1
+     × is not offered, even to a builder, where there is no Superset 135ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <a …(4)></a> to be null
+## 23. All cases in the Ingest Studio opens the Glass's Cases panel (4c969b3's)
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t "in the Ingest Studio the case menu's All cases opens the case picker"; exit 1
+     × in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel 2161ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 24. the Cases panel names nowhere to return focus to (4c969b3's)
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t "the Cases panel opened from All cases returns focus to the case menu's button"; exit 1
+     × the Cases panel opened from All cases returns focus to the case menu's button when it closes 1208ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <body><div>…(1)</div></body> to be <button type="button" …(3)>…(2)</button> // Object.is equality
+## 25. Views in this case only opens (4c969b3's)
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'Views in this case is a toggle'; exit 1
+     × Views in this case is a toggle: expanded while its panel is open, a second press closes it 1155ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <div class="drawer" …(4)>…(2)</div> to be null
+## 26. Views in this case never says it is expanded
+plant in src/shell/ContextBanner.tsx; npx vitest run src/App.chrome.test.tsx -t 'Views in this case is a toggle'; exit 1
+     × Views in this case is a toggle: expanded while its panel is open, a second press closes it 145ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'false' to be 'true' // Object.is equality
+## 27. the drawing board offered without investigate
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t "a Reports Viewer's switch is Reports"; exit 1
+     × a Reports Viewer's switch is Reports, with Figures under More views: no graph, map or drawing board 1123ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'Drawing board', 'Reports' ] to deeply equal [ 'Reports' ]
+## 28. Reports offered without read_reports
+plant in src/rights/visibility.ts; npx vitest run src/App.chrome.test.tsx -t 'an investigator without read_reports or trace_ownership'; exit 1
+     × an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views 1125ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'Graph', 'Map', …(2) ] to deeply equal [ 'Graph', 'Map', 'Drawing board' ]
+## 29. Graph kept pressed under the drawing board (two current)
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'exactly one view is current'; exit 1
+     × exactly one view is current: one pressed in the switch, or none there and More views naming its own 1170ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'Graph', 'Drawing board' ] to deeply equal [ 'Drawing board' ]
+## 30. More views marked whatever is open (two current)
+plant in src/shell/TopBar.tsx; npx vitest run src/App.chrome.test.tsx -t 'exactly one view is current'; exit 1
+     × exactly one view is current: one pressed in the switch, or none there and More views naming its own 163ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'btn menu-button menu-button--pressed' not to contain 'menu-button--pressed'
+## 31. a kept drawing board never gives way (4c969b3's landing check)
+plant in src/App.tsx; npx vitest run src/App.chrome.test.tsx -t 'a drawing board chosen before the rights arrive gives way'; exit 1
+     × a drawing board chosen before the rights arrive gives way when they say the person may not investigate 1137ms
+      Tests  1 failed | 27 skipped (28)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <h2 id="boards-title" …(1)></h2> to be null
+## 32. the drawer never returns focus
+plant in src/design/primitives/Drawer.tsx; npx vitest run src/design/primitives/Drawer.test.tsx -t 'returns focus to its opener when it closes'; exit 1
+   × returns focus to its opener when it closes 65ms
+      Tests  1 failed | 11 skipped (12)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <body><div>…(2)</div></body> to be <button type="button"></button> // Object.is equality
+## 33. the drawer ignores its caller's returnFocusTo
+plant in src/design/primitives/Drawer.tsx; npx vitest run src/design/primitives/Drawer.test.tsx -t 'returns focus where its caller says when nothing focused opened it'; exit 1
+   × returns focus where its caller says when nothing focused opened it 63ms
+      Tests  1 failed | 11 skipped (12)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <body><div>…(2)</div></body> to be <button type="button"></button> // Object.is equality
+## 34. an open board without its sketch line (4c969b3's)
+plant in src/boards/BoardsPlace.tsx; npx vitest run src/boards/BoardsPlace.test.tsx -t 'an open board says it is a sketch'; exit 1
+   × an open board says it is a sketch that does not change the case's data 1018ms
+      Tests  1 failed (1)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+# 34 of 34 red

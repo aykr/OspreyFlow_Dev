@@ -1,0 +1,6 @@
+# plant: removal_revokes_nothing (OspreyFlow_Core/services/api/app.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '        for case in await investigations.revoke_everywhere(account, by=principal)\n'
+# with: '        for case in []\n'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_admin_routes.py -k 'revokes_every'
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_routes.py::test_removing_a_dashboard_revokes_every_case_grant_its_account_holds
+1 failed, 167 deselected in 4.35s

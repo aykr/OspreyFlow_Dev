@@ -1,0 +1,20 @@
+# levels row plant, 2026-11-13T22:41:46Z: the will-read row removed from test_investigation_levels.py, offline (closed ports). test_route_rights.py is live: its row's red is taken under the lease (live-rights-plant.txt).
+F....................................................................... [ 29%]
+........................................................................ [ 58%]
+........................................................................ [ 87%]
+................................                                         [100%]
+=================================== FAILURES ===================================
+_____ test_every_case_route_is_in_the_table_and_every_table_row_is_a_route _____
+
+    def test_every_case_route_is_in_the_table_and_every_table_row_is_a_route() -> None:
+>       assert set(_case_routes()) - set(OUTSIDE_CASE_LEVELS) == set(NEEDS)
+E       AssertionError: assert {('DELETE', '...rnally'), ...} == {('DELETE', '...rnally'), ...}
+E         
+E         Extra items in the left set:
+E         ('POST', '/v1/investigations/{investigation_id}/questions/will-read')
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_investigation_levels.py:375: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_investigation_levels.py::test_every_case_route_is_in_the_table_and_every_table_row_is_a_route
+1 failed, 247 passed in 2.23s

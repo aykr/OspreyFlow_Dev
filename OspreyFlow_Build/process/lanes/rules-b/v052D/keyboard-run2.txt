@@ -1,0 +1,49 @@
+
+Running 21 tests using 2 workers
+
+[1/21] keyboard/questions.spec.ts:68:1 › Ctrl+Enter in the question asks it, and the answer joins the conversation
+[2/21] keyboard/selection.spec.ts:41:1 › the selection bar says how many once, and its Clear empties the selection
+[3/21] keyboard/questions.spec.ts:79:1 › Tab from the question reaches Ask, and Enter asks
+[4/21] keyboard/questions.spec.ts:91:1 › a document the answer draws on opens to read by keyboard
+[5/21] keyboard/questions.spec.ts:99:1 › a proposal is accepted by keyboard, and its change reaches the view
+[6/21] keyboard/questions.spec.ts:109:1 › the drawer closes from its visible Close button, reached by keyboard
+[7/21] keyboard/questions.spec.ts:120:1 › a proposal is rejected by keyboard, and nothing reaches the view
+[WebServer] 22:25:12 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[8/21] keyboard/selection.spec.ts:56:1 › Escape on the canvas clears the selection, which the canvas describes, inside a visible focus ring
+[9/21] keyboard/questions.spec.ts:158:1 › asking, then reaching a [G-n] from the answer by Tab, selects what it stands for on the real canvas
+[WebServer] 22:25:14 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[10/21] keyboard/selection.spec.ts:72:1 › the selection bar's Remove from view takes the selected nodes out, through a real DELETE
+[11/21] keyboard/questions.spec.ts:190:1 › the model engine is reached from the question by Shift+Tab, changed by keyboard, and named in the question
+[12/21] keyboard/questions.spec.ts:226:1 › asked in a view, the questions go through it, and Ask about the whole case instead leaves it, by keyboard (ADR-144 decision 4)
+[WebServer] 22:25:15 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[WebServer] 22:25:15 [vite] (client) [Unhandled error] NotFoundGraphError: Graph.setNodeAttribute: could not find the "n0" node in the graph.
+[WebServer]  > findRelevantNodeData ../../node_modules/graphology/dist/graphology.mjs:506:12
+[WebServer]  > Class.<computed> [as setNodeAttribute] ../../node_modules/graphology/dist/graphology.mjs:604:32
+[WebServer]  > step ../../node_modules/sigma/dist/normalization-be445518.esm.js:78:37
+[WebServer] 
+
+[13/21] keyboard/selection.spec.ts:85:1 › the selection bar's Show links among these asks for the links among the selected nodes (ADR-098)
+[14/21] keyboard/questions.spec.ts:253:1 › what to read from is chosen by arrow keys, the Conduit says what will be read, and the question sends the choice (ADR-098 Amendment 7)
+[15/21] keyboard/questions.spec.ts:283:1 › every registered questions action has its own proving test case above
+[WebServer] 22:25:15 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[16/21] keyboard/selection.spec.ts:104:1 › the selection bar's degrees ask for the routes within them, by keyboard
+[WebServer] 22:25:16 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[17/21] keyboard/selection.spec.ts:131:1 › the selection bar's Ask the model about these… saves the selection as a private view, named for its items, and asks in it (ADR-098 Amendment 7, ADR-144)
+[WebServer] 22:25:17 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[18/21] keyboard/selection.spec.ts:165:1 › the selection bar's Expand asks to expand each selected node
+[WebServer] 22:25:18 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[19/21] keyboard/selection.spec.ts:177:1 › the list's name centres on that node and leaves the selection as it was
+[WebServer] 22:25:19 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[20/21] keyboard/selection.spec.ts:187:1 › the list's × takes that node out of the selection
+[WebServer] 22:25:20 [vite] (client) [console.error] Cannot update a component (`HarnessSelectionList`) while rendering a different component (`ForwardRef(GlassCanvas)`). To locate the bad setState() call inside `ForwardRef(GlassCanvas)`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+[21/21] keyboard/selection.spec.ts:195:1 › every registered selection action has its own proving test case above
+  21 passed (10.4s)

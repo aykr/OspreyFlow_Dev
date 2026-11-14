@@ -1,0 +1,35 @@
+# plant: the radios' onChange made a no-op (QuestionsPanel.tsx), branch head 94e49dd plus the review fixes, bar and registry patches applied
+
+Running 1 test using 1 worker
+
+[1/1] keyboard/questions.spec.ts:253:1 › what to read from is chosen by arrow keys, the Conduit says what will be read, and the question sends the choice (ADR-098 Amendment 7)
+  1) keyboard/questions.spec.ts:253:1 › what to read from is chosen by arrow keys, the Conduit says what will be read, and the question sends the choice (ADR-098 Amendment 7) 
+
+    Error: expect(locator).toBeChecked() failed
+
+    Locator:  getByRole('radio', { name: 'Everything on the graph' })
+    Expected: checked
+    Received: unchecked
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toBeChecked" getByRole('radio', { name: 'Everything on the graph' }) with timeout 5000ms
+      - waiting for getByRole('radio', { name: 'Everything on the graph' })
+        14 × locator resolved to <input type="radio" name="_r_0_" value="graph" id="_r_0_-graph"/>
+           - unexpected value "unchecked"
+
+
+      262 |   await selected.focus();
+      263 |   await page.keyboard.press("ArrowDown");
+    > 264 |   await expect(everything).toBeChecked();
+          |                            ^
+      265 |   await expect(everything).toBeFocused();
+      266 |   await expect(page.getByText("About: everything on the graph")).toBeVisible();
+      267 |   await expect.poll(() => willReads.at(-1)?.read_from).toBe("graph");
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/questions.spec.ts:264:28
+
+    Error Context: test-results/questions-what-to-read-fro-c587b-choice-ADR-098-Amendment-7-/error-context.md
+
+
+  1 failed
+    keyboard/questions.spec.ts:253:1 › what to read from is chosen by arrow keys, the Conduit says what will be read, and the question sends the choice (ADR-098 Amendment 7) 

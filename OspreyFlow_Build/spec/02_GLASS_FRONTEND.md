@@ -172,9 +172,9 @@ narrowed.
 ┌────────────────────────────────────────────────────────────────────────────────────┐
 │                     OFFICIAL — the highest marking in view                         │ strip, 20px
 ├────────────────────────────────────────────────────────────────────────────────────┤
-│ ◆ Osprey  The Glass|Ingest Studio|Admin  [ Search…  / ]  [Graph|Map]  Export  👤  │ top bar, 44px
+│ ◆ Osprey  Glass|Studio|Admin [Search… /] Graph·Map·Drawing board·Reports·More ▾ 👤 │ top bar, 44px
 ├────────────────────────────────────────────────────────────────────────────────────┤
-│ You are in the Glass · Case 4471 — layering ▾ · reads Prison intel   Open … ↗     │ banner, 32px
+│ You are in the Glass · Case 4471 ▾ · Views in this case · reads Prison intel  ↗    │ banner, 32px
 ├──┬───────────────────────────────────────────────────┬─────────────────────────────┤
 │▣ │ Resolution: ●Balanced            (view toolbar)   │ ▾ Inspector              ⋯  │ header, 28px
 │◷ ├───────────────────────────────────────────────────┤ ▸ Properties                │
@@ -191,14 +191,16 @@ narrowed.
 └────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 1) holds the places the
-analyst goes to most (ADR-145 Amendment 2's variant B, as ADR-145 Amendment 12 amends it): *Cases*,
-*Explore* (where to start in the case's data, ADR-100, §3.1), *Ask & Chat* (the case's questions to the
-model, ADR-098, §3.1; named *Questions* until Amendment 12) and *Dashboards* (ADR-111 Amendment 3), then
-**⋯ Explore Details**, a menu of the rest, one click away, in this order: *History*, *Ownership*
-(beneficial ownership and due diligence — ADR-109, §3.3) and *Connection strength* (ADR-139, a tab of
-Monitoring until Monitoring left the Glass). *Explore Details*'s name says which of them is open
-("Explore Details, History open"). The rail's **Help** (and `?`) opens the keys panel, with the user
+The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 1) holds the panels opened beside the
+current view, and only those (the owner's navigation decision of 13 November 2026, ADR-145 Amendment 15, amending
+Amendments 2 and 12): *Explore* (where to start in the case's data, ADR-100, §3.1), *Ask & Chat* (the case's questions
+to the model, ADR-098, §3.1; named *Questions* until Amendment 12) and *History*, then *Help* and *Show names*. *Cases*,
+*Dashboards* (now the view switch's *Reports*) and *⋯ Explore Details* (whose *Ownership* and *Connection strength* are
+now under *More views*) left it. An opener is never pressed: it is expanded while its panel is open (`aria-expanded`,
+`aria-haspopup="dialog"`), a second press closes it, and opening or closing a panel never changes the view
+(`shell/railLayout.ts`'s `railMark`). Closing a panel, by its opener, Escape or its *Close*, returns focus to the opener.
+Every drawer opens under the top bar and the context row, never over the navigation they carry (ADR-145 Amendment 14
+decision 2, `design/primitives/Drawer.tsx`). The rail's **Help** (and `?`) opens the keys panel, with the user
 guide's link, over whichever view is on screen, and a second press, Esc or its × closes it (Amendment
 12). Monitoring (the one alert queue, its rules, the watches, held rows and the rule
 audit — ADR-109, ADR-133, §3.3) is no longer the Glass's: it is *Rules and Monitoring*, a place of its
@@ -214,8 +216,9 @@ any other view (320px, 280 below 1100; a shadow, no hairline). It says what the 
 (each restored as the History drawer restores one) and the keys worth knowing (`/`, the arrows, Enter, F,
 Escape, `?`) and links the user guide. At sign-in it opens on the graph alone, until the person closes it
 once (by ×, Esc, Help or `?`; kept per person in this browser); `?` anywhere in the Glass but a text field
-or a list box opens or closes it (`keyboard/shell.spec.ts`, `App.help.test.tsx`). *Cases* opens a
-drawer with the open case's *Views in this case*, every case with its views (ADR-144 decision 5), and *Browse all cases*. The
+or a list box opens or closes it (`keyboard/shell.spec.ts`, `App.help.test.tsx`). The Cases panel, opened
+from the case line (§2.0a), is a drawer with the open case's *Views in this case*, every case with its views (ADR-144
+decision 5), and *Browse all cases*. The
 **view toolbar** above the canvas holds what belongs to that view alone: the resolution threshold on
 the Graph, *Add site* and *Draw boundary* on the Map. The **selection bar** at the foot of the canvas
 appears when anything is selected (ADR-097 step 1; `keyboard/selection.spec.ts`), on the inverse
@@ -363,7 +366,9 @@ One row, 40px. From the left:
   GOV.UK header instead, not in this bar.
 - **The case menu**, `<name> ▾` (its accessible name keeps `Case: <name>`; at least 240px wide, ADR-097
   step 3), now in the **context banner** under the bar (§2.0a): opens the cases the account can reach
-  (the open one marked), `All cases`, and `New case`. The name may be cut short with an ellipsis; its
+  (the open one marked), `New case`, and last `All cases`: in the Glass it opens the Cases panel, and closing that
+  panel returns focus to the case menu; in the Ingest Studio and Rules and Monitoring it opens the case picker, whose
+  choice keeps the place (ADR-145 Amendment 15). The name may be cut short with an ellipsis; its
   full text is the button's title. The Ingest Studio's own "Data loaded from this studio goes into"
   row uses the same menu.
 - **Search**, with its **Filters** control as an icon inside the box at its right-hand end (a small
@@ -376,11 +381,20 @@ One row, 40px. From the left:
   names, an organisation's name, a place's name, a document's title) and never at a sensitive
   property; it starts after two characters and says `Type at least 2 characters to search.` while
   there is one (ADR-074).
-- **The view switch**, a segmented group named *View*: Graph, Map, and Messages when a dossier is
-  open; then **More views ▾** (ADR-145 Amendment 2), a menu of Matrix and Reports, one click away,
-  named after the one of them that is open. A person offered neither Graph nor Map (a Reports Viewer)
-  has their views in the switch itself. The pressed one is drawn in primary text with a 2px underline, not in brass (ADR-097: brass is
+- **The view switch**, everything that replaces the main area, a segmented group named *View* (ADR-145
+  Amendment 15, the owner's navigation decision): *Graph · Map · Drawing board · Reports*, and Messages when a
+  dossier is open; then **More views ▾**, a menu of *Matrix, Figures, Ownership, Connection strength*, one click
+  away, named after the one of them that is open. *Reports* is the dashboards view (ADR-111 Amendment 3: Alert
+  monitoring first, then the Superset boards); *Figures* is ADR-145 Amendment 4's. Exactly one view is current.
+  What each person is offered is one list, `shell/railLayout.ts`'s `offeredViews`, read by `App.tsx` and the keyboard
+  harnesses alike; a view not offered gives way to the landing view, or the first offered, so one stays current even
+  when chosen before the rights arrived. A person offered none of the four (the built-in Administrator, offered
+  Connection strength alone) has their views in the switch itself. The pressed one is drawn in primary text with a 2px underline, not in brass (ADR-097: brass is
   for the primary action, focus and the selection).
+- **Build a report**, a link opening Superset in a new tab, straight after the view switch (after *Reports* where
+  it is offered), for a holder of `manage_dashboards` where the deployment names Superset's address (ADR-145
+  Amendment 15 decision 5). A builder offered no *Reports* (the built-in Administrator) has it after their own
+  switch, since the right to build is the test, not the right to read.
 - **Export**, for the whole case, on the Graph: one menu button, `Export ▾`, that opens the export panel
   (`aria-expanded`, not a pressed state; ADR-097 step 3).
 - **The theme** is an item of the account menu (ADR-097 step 3); a button of its own stands just left
@@ -395,7 +409,7 @@ One row, 40px. From the left:
 
 While the Ingest Studio is open the bar shows a brass line under it and drops what belongs only to
 the Glass (search, the view switch, Export). Rules and Monitoring is a place of the switcher (§2.0a);
-History, Ownership and Connection strength are under the rail's ⋯ Explore Details; the resolution threshold, named **Match strictness** for what
+Ownership and Connection strength are under *More views*, History is a panel of the rail; the resolution threshold, named **Match strictness** for what
 the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
 wide.
 
@@ -407,7 +421,7 @@ outside it, and when keyboard focus moves outside it, so it never traps a keyboa
 This replaces "there is no application switch" (ADR-097 step 1), which this section said until
 7 November 2026.
 
-**The places.** *The Glass* (analysis: Graph · Drawing board, ADR-145 Amendment 13; *Drawing board* the drawing boards, §2.0b),
+**The places.** *The Glass* (analysis: its views in the top bar's view switch, ADR-145 Amendment 15; *Drawing board* the drawing boards, §2.0b),
 *Ingest Studio* (data: 1 Model · 2 Sources · 3 Pipelines · 4 Runs), *Rules and Monitoring* (alerts:
 Alerts · What raises alerts · Held rows · Changes, the owner's M1) and *Admin*. One table,
 `apps/workspace/src/shell/places.json`, names them, the single rights that open each, and what a place's
@@ -470,13 +484,14 @@ the Glass's frame, not on the identity provider's sign-in page), styled on the h
 
 **The context banner.** One row under the top bar (`shell/ContextBanner.tsx`; 41 pixels at 1440 wide
 under the OspreyFlow brand, its controls 32), a region named by its first words:
-- in the Glass: "You are in the Glass · Graph · Drawing board · ‹case menu› · reads ‹the case's datasets› ·
-  ‹the mode's note›", the sections a navigation named *In the Glass* (*Graph* the case's data and its
-  views, *Drawing board* the case's drawing boards, §2.0b; ADR-145 Amendment 13 renamed them from *Case ·
-  Boards*), and the open mode's one line: "Graph: the case's data. Saved views are under Views or
-  Cases." or "Drawing board: your sketch; it does not change the case's data.", part of the region and its
-  description. It stays in the row at 1440 wide (GOV.UK's row 32 pixels, OspreyFlow's 41); at 1024 it is on
-  a line under the row, with the cross-link (GOV.UK 66, OspreyFlow 81);
+- in the Glass, the case line (ADR-145 Amendment 15, replacing Amendment 13's *Graph · Drawing board* and its note):
+  "You are in the Glass · Case ‹case menu› · Views in this case · reads ‹the case's datasets›", the word *Case*
+  visible (hidden from assistive technology, whose name for the menu begins "Case:"). The case menu's last entry,
+  *All cases*, opens the Cases panel (the open case's views, every case with its views, and *Browse all cases*);
+  *Views in this case* opens the same panel with its views list focused. "reads …" names the case's datasets once
+  in the row ("reads no dataset" for a case reading none): the case menu draws no scope badge beside it and the
+  cross-link does not name them (ADR-145 Amendment 14 decision 4); while the datasets are read or refused, "reads"
+  is not drawn and the badge stays. GOV.UK's row is one row at 1440 wide and at most two lines at 1024;
 - in the Studio: "You are in the Ingest Studio · for ‹case menu›";
 - in Rules and Monitoring: "You are in Rules and Monitoring · ‹case menu›";
 - in Admin: "You are in Admin".
@@ -486,7 +501,8 @@ in the Studio: decision 2's "Dataset ‹name› ▾" — the Studio chooses its 
 *Dataset* select, and naming it in the banner needs a hook in the Studio's screens (Lane 1's) — and that
 dataset's "feeds n cases": no route gives a dataset's cases as the reader may see them, and a count
 over cases they cannot see would break rule 7. A person
-holding both the Glass and the Studio gets the **cross-link**: *Open ‹dataset› in the Ingest Studio ↗*
+holding both the Glass and the Studio gets the **cross-link**: *Open this case's data in the Ingest Studio ↗*
+(it does not name the dataset: the row names it once, in "reads …", ADR-145 Amendment 14 decision 4)
 in the Glass, and *← Back to case ‹name› in the Glass* in the Studio, which returns to the open case
 and the Glass's view last open (this replaces the Studio rail's *Back to the investigation*). Choosing
 another case in the Studio reloads the page; the view to return to is kept in the tab's session
@@ -502,16 +518,17 @@ right, with **Proposed types** (`manage_ontology`) under *Data*: it left the Gla
 decided here until the Studio's Model tab shows proposed types (L3.5; ADR-090 Amendment 5). Its routes
 ask for the administrator role as well as `manage_ontology`.
 
-**The count (ADR-145 Amendment 2).** A keyboard user passes 24 controls before the canvas — 25 on the
+**The count (ADR-145 Amendments 2 and 15).** A keyboard user passes 25 controls before the canvas — 26 on the
 deployed page, whose brand frame adds the skip link first — in this order: the mark, the four places
 (Rules and Monitoring with its count), search with *Add many from a list* and *Filters*, Graph, Map,
-*More views*, *Export*, the theme, the account; the banner's Graph and Drawing board, the case menu and the
-cross-link; the rail's Cases,
-Explore, ⋯ More, Help and Show names; and the Graph's *Match strictness*. `App.chrome.test.tsx` counts
-them on the real `App` and fails if one returns.
+Drawing board, Reports, *More views*, *Export*, the theme, the account; the case menu, *Views in this case* and the
+cross-link; the rail's Explore, Ask & Chat, History, Help and Show names; and the Graph's *Match strictness* (25
+controls, ADR-145 Amendment 15; one more, *Build a report*, for a builder where Superset is deployed).
+`App.chrome.test.tsx` counts them on the real `App` and fails if one returns.
 
 **Keyboard and accessibility.** `keyboard/shell.spec.ts` proves the switcher (under both brands), the
-banner's cross-link (through the real case module and a reload), its sections and Home's cards end to
+banner's cross-link (through the real case module and a reload), the case line's *Views in this case* and *All
+cases*, the view switch and *More views*, each rail panel, *Build a report* and Home's cards end to
 end, each shown red with its handler or the kept view removed (rule 13); `a11y/every-harness.spec.ts` scans `keyboard/places-harness.html`
 in the dark, light and GOV.UK variants, in each place, the Admin place drawn in it.
 
@@ -538,7 +555,9 @@ offers *← Back to the alert*, which returns to the alert's address with the al
 
 ### 2.0b Boards: drawing on a case (ADR-143 decisions 4 to 7 and 13; Amendment 2 decision 5; L3.3)
 
-*Drawing board* (`apps/workspace/src/boards/`) lists the open case's boards this person may see, with *New
+*Drawing board* (`apps/workspace/src/boards/`) says first, on the list and above an open board alike, "Drawing board:
+your sketch; it does not change the case's data." (ADR-145 Amendment 15, the strip's note having left;
+`BoardsPlace.test.tsx`, `keyboard/boards.spec.ts`). It lists the open case's boards this person may see, with *New
 board* (blank, from one of the case's views this person may see, or from the selection on the canvas,
 its loaded items kept as live references) and
 *New drawing as a case of its own* (a name, the highest marking it may hold, a starter model: a drawn
@@ -719,11 +738,11 @@ the rest.
 
 | Requirement | Implementation |
 | --- | --- |
-| Expand a node's relationships | Context menu on right-click, headed with the node's type and name and closed by a click elsewhere or Escape (a list, so long edge-type names stay readable; the browser's own menu is suppressed); items generated from the ontology's edge types valid for the node's type, each with a live count, or `count unavailable` if the preview failed; actions with no count show none. A double-click on a node (or Enter on a focused one) expands its neighbours across every edge type, except on a Document, which opens to read (ADR-092; its right-click menu still expands it) |
+| Expand a node's relationships | Context menu on right-click, headed with the node's type and name and closed by a click elsewhere or Escape (a list, so long edge-type names stay readable; the browser's own menu is suppressed); items generated from the ontology's edge types valid for the node's type, each with a live count of its links the reader may see (ADR-098 Amendment 8), or `count unavailable` if the preview failed; actions with no count show none. A double-click on a node (or Enter on a focused one) expands its neighbours across every edge type, except on a Document, which opens to read (ADR-092; its right-click menu still expands it) |
 | Search Around | Multi-step, filtered traversal builder — `Person → uses → Endpoint → communicated with (≥5 events, in brush window) → Endpoint → used by → Person`. Preview count before committing to the canvas |
 | Pathfinder | Select two nodes, get k-shortest paths; paths render with the on-path node state (2px primary stroke, edges thickened), everything else dims to 32% |
 | Find connections | A side panel (ADR-116): From and To by search or from the selected node; the fewest degrees connecting them said in words, routes listed by degree and widened one degree at a time to eight, ten of more said as such; a route put on the canvas marks its nodes with their degree from From |
-| Subgraph isolation | Select nodes (by lasso, or by clicking with Shift, Ctrl or Cmd held to add one at a time; a plain click selects one node alone), then *Save as a view* on the selection bar, or *Save selected (n) as a view…* in any selected node's right-click menu (ADR-144 decision 4, ADR-097 step 1) — and the selection is kept as a private view of the case, listed in *Views in this case* and opened as a read-only lens (§3.1h); the case is untouched. A bounding-box selection has no implementation yet |
+| Subgraph isolation | Select nodes (by lasso, or by clicking with Shift, Ctrl or Cmd held to add one at a time; a plain click selects one node alone), then *Save as a view* on the selection bar or in the right-click menu's selection actions (ADR-144 decision 4 and Amendment 5, ADR-097 step 1) — and the selection is kept as a private view of the case, listed in *Views in this case* and opened as a read-only lens (§3.1h); the case is untouched. A bounding-box selection has no implementation yet |
 | Undo | Every canvas mutation is a step in an addressable history; the history panel is a list of named steps, not a stack of arrows |
 
 **Expansion budget.** Every expansion previews its cardinality before executing. Above 500 new
@@ -885,14 +904,22 @@ view." when the type was chosen, or "No links from this node." when nothing came
 message is a notice, not an error (no alert, no error colour) and `Escape` closes it. When the
 expansion brings in anything new, there is no message. `keyboard/keyboard.spec.ts` proves it.
 
-### 3.1d The right-click menu (ADR-078)
+### 3.1d The right-click menu (ADR-078, Amendment 1; ADR-098 Amendment 8)
 
-Right-click on a node (or `\`) opens a list headed by the node's type and name. The relationship
-types sit under a **Show links** heading, each with its count in a quieter tone at the right edge;
-everything else (link, split, find paths, explain cluster, view messages, mark for suppression) sits
-under **Actions**, below a hairline. The order in which the entries are reached by keyboard is
-unchanged; the headings are not focusable. The menu is drawn above the canvas's own layers, so none of
-its labels or nodes show through it. All colours and spacing are from the tokens.
+Right-click on a node (or `\`, the ContextMenu key, or Shift+F10 on a focused one) opens a list. A node
+not in the selection is selected first, so the menu is always the selection's, and its heading says what
+it applies to: "2 selected", or the node's name. It opens with **the selection's actions, the bottom
+bar's own, in its words and order** (`canvas/selectionActions.ts`; *Undo select what is lit* while it
+stands, *Expand*, *Show links* for two or more, *Ask the model about these…*,
+*Save as a view*, *Remove from view*, *Clear*). With one node selected, its own entries follow: **Expand by link type**, each type with
+the count of its links the reader may see (the preview's `link_count`) in a quieter tone at the right edge,
+the types with none folded into one line ("7 types with no links") that opens in place; then
+**Actions** (explain cluster, view messages, mark for suppression and the rest), below a hairline. With
+two selected, the pair's own (*Link to*, *Split from*, *Find paths to*) follow instead; with more, the
+selection's actions alone. In the menu the arrow keys step through the entries, Home and End go to the
+ends; the headings are not focusable. The menu never opens over the bottom bar: once drawn it moves up
+clear of it. It is drawn above the canvas's own layers, so none of its labels or nodes show through it;
+its heading is in the page's own face (ADR-097 Amendment 3). All colours and spacing are from the tokens.
 
 ### 3.1e Icons on nodes (ADR-079)
 
@@ -1088,9 +1115,9 @@ selection as it was, and × takes it out. Proved by keyboard in `keyboard/select
 (registry `SELECTION_ACTIONS`); the ring by painted pixels in `keyboard/selection-look.spec.ts`.
 
 The selection is built with the lasso, or by clicking nodes with Shift, Ctrl or Cmd held (each adds the
-node, or takes it out again). *Save as a view* is on the selection bar and, for any node that is in the
-selection, *Save selected (n) as a view…* is an entry in that node's own right-click menu; a node outside
-the selection does not offer it. Both open the same form; `keyboard/keyboard.spec.ts` proves each by
+node, or takes it out again). *Save as a view* is on the selection bar and, as one of the selection's
+actions, in the right-click menu (ADR-144 Amendment 5); a right-click on a node outside the selection
+selects it first. Both open the same form; `keyboard/keyboard.spec.ts` proves each by
 keyboard.
 
 **Opening one: a read-only lens (the owner's ruling of 8 November 2026, ADR-144 Amendment 2).** An
@@ -1122,7 +1149,8 @@ one open now marked current; choosing one is the drawer's own *Open* (`openLens`
 saved views yet. Select nodes and choose Save as a view."; a refused list is said in words. Sharing and
 deleting stay in the drawer.
 
-**Where views are listed (ADR-144 decision 5).** The left rail's **Cases** drawer shows, first, the open
+**Where views are listed (ADR-144 decision 5).** The **Cases** panel (opened by the case switcher's *All cases*, or
+at its views by the case line's *Views in this case*, ADR-145 Amendment 15) shows, first, the open
 case's **Views in this case**: each view the reader may see (their own, and those shared with the case)
 with its *Private* or *Shared* tag and *Open*; its creator alone is offered *Share with the case* (while
 it is private) and *Delete*, which asks once — "Delete this view? Nothing on the case is deleted with
@@ -1284,8 +1312,8 @@ alert…* (the query builder, on the selected items: title, severity, why, and *
 dataset*, refused in the Conduit's words for a drawn item). Each has its case in
 `keyboard/alerts.spec.ts` or `keyboard/watch-panels.spec.ts` (rule 13).
 
-**Ultimate beneficial ownership: the *Ownership* place (ADR-109 phase C).** After *Alerts* on the
-left rail. An organisation or account is found by name (the case's own suggest), and traced: a line
+**Ultimate beneficial ownership: the *Ownership* place (ADR-109 phase C).** Under the view switch's
+*More views* (ADR-145 Amendment 15). An organisation or account is found by name (the case's own suggest), and traced: a line
 naming the beneficial owners at the threshold (25% unless changed; a person holding control is one
 whatever the share; a person whose share is partly unknown is "possibly more"), a warning for each
 circle of cross-holdings ("traced once, not round and round"), and a table of every party with a
@@ -1382,15 +1410,16 @@ the view switch itself, never proved by keyboard before, in `keyboard/shell.spec
 **The Glass follows the person's rights (ADR-112).** It reads `GET /v1/me/rights` at sign-in and
 leaves out what it would only be refused — never in place of the Conduit's check
 (`rights/visibility.ts`): the rail shows no alerts (Rules and Monitoring is a place, §2.0a; ADR-146
-decision 2), *Connection strength* for investigate or manage_strength_influencers,
-*Ownership* for trace_ownership, *History* and *Explore* for investigate, *Questions* for ask_model,
-*Dashboards* for read_reports (the Ingest Studio, Admin and Proposed types are no longer on the rail:
-the place switcher offers the places, `shell/places.ts`, §2.0a); the view switch offers Graph and Map for
-investigate and Figures for read_reports, and a person who may not investigate (a Reports Viewer)
-lands on Figures; the Figures' download is offered only to holders of read_report_feed.
+decision 2), *History* and *Explore* for investigate, *Ask & Chat* for ask_model (the Ingest Studio,
+Admin and Proposed types are no longer on the rail: the place switcher offers the places,
+`shell/places.ts`, §2.0a); the view switch offers Graph, Map and Drawing board for investigate and
+*Reports* for read_reports, and its *More views* Matrix for investigate, Figures for read_reports,
+*Ownership* for trace_ownership and *Connection strength* for investigate or
+manage_strength_influencers (ADR-145 Amendment 15); a person who may not investigate (a Reports Viewer)
+has Reports in the switch with Figures under *More views*, and lands on Figures; the Figures' download is offered only to holders of read_report_feed.
 
 **Superset dashboards inside the Glass (ADR-111 Amendment 3; ADR-145 Amendment 4 decision 8).** The
-rail's *Dashboards* is the one door: the case's Figures have no *Dashboards* tab since L2.12. It lists
+view switch's *Reports* (the rail's *Dashboards* until ADR-145 Amendment 15) is the one door: the case's Figures have no *Dashboards* tab since L2.12. It lists
 only the boards the Conduit says this person may open
 (`GET /v1/reports/dashboards`) — those whose every figure they could count themselves — and draw the
 chosen one through Superset's embedded SDK (`@superset-ui/embedded-sdk` 0.4.0) in a frame, with a
@@ -1400,8 +1429,8 @@ Superset's theme generated from `tokens.css`, in the Glass's current mode and fo
 (ADR-111 Amendment 4); a refusal is said in words; with none to open, the panel says why one would
 appear (`reports/EmbeddedDashboards.tsx`; `keyboard/alert-figures.spec.ts`).
 
-**The *Alert monitoring* board (ADR-145 Amendment 4 decision 9, D2).** First among the boards on the rail's
-*Dashboards*, drawn by the Glass itself from the open case's report (no Superset token is asked for it):
+**The *Alert monitoring* board (ADR-145 Amendment 4 decision 9, D2).** First among the boards under the view
+switch's *Reports*, drawn by the Glass itself from the open case's report (no Superset token is asked for it):
 alerts raised each week and by rule, closed by outcome, time to close, hotlist matches, and the team view
 (unassigned, mine, older than seven days, and the share closed as not of interest, False positive or No
 further action), with the Alerts panel. *Rule* (every rule, or one rule group) and *Period* filter it;
@@ -1921,6 +1950,15 @@ threshold; edge rendering with level-of-detail so that below a zoom threshold on
 the strength filter draw; the working set streamed as deltas so the first meaningful frame does
 not wait for the whole payload.
 
+A unit test that times code — §5's budgets in jsdom, or a limit beside them such as
+`settledAnchors` over the fixture in under a second — is written in a `*.budget.test.*` file
+under `apps/workspace/src/`, which `npm test` runs after the rest, one file at a time. Timed in
+the parallel run, it measures its neighbours: `MatrixView`'s first frame read 3.2–3.4 s there
+against about 1.2 s alone, and `settledAnchors` 1535 ms against its 1000 ms in `make test` on a
+loaded server. Moving a timed case to the budget run never changes its limit.
+`src/testing/budgetRun.test.ts` fails for a timed case left in an ordinary test file under any
+folder the parallel run reads.
+
 ## 6. Accessibility floor
 
 Not negotiable and cheaper to build in than to retrofit.
@@ -1933,7 +1971,7 @@ Not negotiable and cheaper to build in than to retrofit.
   ring immediately, with no keypress needed after arriving. `Ctrl`/`Cmd`+`ArrowRight`/`Left`
   cycles the focused node through an already-built ring (needed for a lasso-selected set of
   non-adjacent nodes plain arrow-walk cannot reach); plain arrow keys walk edges, moving focus
-  only, never the ring itself; `Enter` expands; `\` opens the radial menu as a list; `Space`
+  only, never the ring itself; `Enter` expands; `\`, the ContextMenu key and Shift+F10 open the radial menu as a list (arrows, Home and End move in it; ADR-078 Amendment 1); `Space`
   toggles the focused node's own membership in the selection ring (added for manual link/split,
   the first action needing a keyboard-built multi-node selection at all). **`Ctrl`/`Cmd`+`Shift`+
   `ArrowRight`/`Left` walks every node in the working set, adjacency or not** — added after a real
@@ -1970,7 +2008,7 @@ since ADR-145 Amendment 2 — open to anyone who
   `src/matrix/MatrixView.test.tsx`, `src/App.matrix.test.tsx`, `src/matrix/MatrixView.budget.test.tsx`
   (timed alone, after the rest of `npm test`, by `vitest.budget.config.ts`: beside 369 other files it
   read 3.2–3.4 s where alone it reads about 1.2 s, a measure of its neighbours, not of the view;
-  `src/testing/budgetRun.test.ts` fails if a budget file is left in the parallel run or in neither)
+  `src/testing/budgetRun.test.ts` fails if a budget file is left in the parallel run or in neither, or a timed case is written in an ordinary test file)
   and `a11y/every-harness.spec.ts`'s scans of `keyboard/matrix-harness.html`. What the canvas alone
   holds — a folded group, a link hidden from the view, a type left out from the legend, the
   resolution clusters drawn as one — the Matrix does not reflect: it lists the working set.

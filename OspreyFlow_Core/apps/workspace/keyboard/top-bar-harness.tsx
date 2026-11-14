@@ -10,7 +10,7 @@ import { applyHarnessBrand } from "./brandHarness";
 import "../src/design/primitives.css";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { LeftRail } from "../src/shell/LeftRail";
-import { TopBar } from "../src/shell/TopBar";
+import { BuildAReportLink, TopBar } from "../src/shell/TopBar";
 import { AccountMenu } from "../src/auth/AccountMenu";
 import { Button } from "../src/design/primitives/Button";
 import { CaseSwitcher } from "../src/investigation/CaseSwitcher";
@@ -19,10 +19,17 @@ import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { createWorkingSet } from "../src/workingset/store";
 import { guideUrl } from "../src/home/guides";
-import { RAIL_LABELS, splitRail } from "../src/shell/railLayout";
+import { offeredViews, ON_THE_RAIL, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS } from "../src/shell/railLayout";
 import type { RailEntry } from "../src/rights/visibility";
 
-const RAIL_ENTRIES: RailEntry[] = ["cases", "explore", "questions", "dashboards", "history", "ownership", "strength"];
+// The rail and the view switch as `App.tsx` lays them out (the owner's navigation decision, ADR-145 Amendment 15).
+const RAIL_ENTRIES: readonly RailEntry[] = ON_THE_RAIL;
+// The views offered as `App.tsx` offers them (`offeredViews`): `?rights=` gives the person's rights, by default an
+// investigator who reads reports and traces ownership, offered every view.
+const harnessRights = new URLSearchParams(window.location.search).get("rights") ?? "investigate,read_reports,trace_ownership";
+const SWITCHED = splitViews(
+  offeredViews(new Set(harnessRights.split(","))).map((id) => ({ id, label: VIEW_LABELS[id], pressed: id === "graph", onSelect: () => window.__TOPBAR__!.views.push(id) })),
+);
 import { useHelpKey, WorkspaceWelcome } from "../src/welcome/WorkspaceWelcome";
 import type { OntologySchema } from "../../../packages/schemas/generated";
 
@@ -104,7 +111,7 @@ if (!container) throw new Error("#root not found");
 
 const rail = (id: string) => () => window.__TOPBAR__!.rail.push(id);
 
-/** The rail as `App.tsx` splits it (ADR-145 Amendment 12), and its Help toggling the real keys panel,
+/** The rail as `App.tsx` splits it (ADR-145 Amendment 15), and its Help toggling the real keys panel,
  * as `App.tsx` does: Help or `?` opens it, again closes it, and Esc or × closes it. */
 function RailWithHelp() {
   // `?help=1`: the keys panel open from the start, for the scans (`a11y/every-harness.spec.ts`).
@@ -119,7 +126,7 @@ function RailWithHelp() {
           toggle();
         }}
         // Split and ordered as `App.tsx` does it (`shell/railLayout.ts`), so these cases see its layout.
-        {...splitRail(RAIL_ENTRIES.map((id) => ({ id, label: RAIL_LABELS[id], icon: id, onSelect: rail(id) })))}
+        {...splitRail(RAIL_ENTRIES.map((id) => ({ id, label: RAIL_LABELS[id], icon: id, onSelect: rail(id), ...railMark(id, { view: "graph", open: new Set() }) })))}
       />
       {/* Beside the rail, never over it, as `App.tsx` places it in the column the views share. */}
       {helpOpen && (
@@ -167,15 +174,12 @@ createRoot(container).render(
       search={
         <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" investigationId="inv-1" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} onApplyDelta={(delta) => workingSet.store.getState().applyDelta(delta)} />
       }
-      views={[
-        { id: "graph", label: "Graph", pressed: true, onSelect: () => window.__TOPBAR__!.views.push("graph") },
-        { id: "map", label: "Map", pressed: false, onSelect: () => window.__TOPBAR__!.views.push("map") },
-      ]}
-      // ADR-145 Amendment 2: Matrix and Reports (ADR-111) under More views, as `App.tsx` offers them.
-      moreViews={[
-        { id: "matrix", label: "Matrix", pressed: false, onSelect: () => window.__TOPBAR__!.views.push("matrix") },
-        { id: "reports", label: "Figures", pressed: false, onSelect: () => window.__TOPBAR__!.views.push("reports") },
-      ]}
+      views={SWITCHED.main}
+      // ADR-145 Amendment 15: Matrix, Figures, Ownership and Connection strength under More views, as `App.tsx` offers them.
+      moreViews={SWITCHED.more}
+      // `?reports=1`: a builder on a deployment with Superset, *Build a report* beside Reports as `App.tsx` draws it
+      // (ADR-145 Amendment 15); the address is a stand-in, never followed.
+      besideViews={new URLSearchParams(window.location.search).get("reports") === "1" ? <BuildAReportLink href="https://bi.example.invalid" /> : undefined}
       actions={<Button>Export ⚙</Button>}
       account={
         <>

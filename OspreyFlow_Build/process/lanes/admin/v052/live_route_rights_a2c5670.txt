@@ -1,0 +1,7 @@
+head a4c7d56 (code at a2c5670)
+0.07s setup    tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.03s setup    tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+
+(4 durations < 0.005s hidden.  Use -vv to show these durations.)
+5 passed, 1 warning in 94.65s (0:01:34)
+Wall time: 100 s, exit 0 (stack b, the lease admin took at 2026-11-14T00:58:35Z; set-up before it 16 s)

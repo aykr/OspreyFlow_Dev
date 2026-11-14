@@ -1,0 +1,34 @@
+RED  | documents not narrowed to the scope | test_selected_items_reads_the_selection_its_links_and_their_documents
+    E       AssertionError: assert 'Far away' not in 'You answer ...estion: Who?'
+    E         
+RED  | whole case falls back to the graph | test_whole_case_is_refused_in_words_until_the_search_service_exists
+    E       Failed: DID NOT RAISE ReadFromUnavailableError
+RED  | selected counted from the request, not the view | test_a_hidden_document_and_item_are_not_counted_quoted_or_cited
+    E       assert ('MERCER, Dana' == 'MERCER, Dana'
+    E         
+RED  | a document with no text not counted | test_a_document_with_no_text_is_counted_apart
+    E       assert (0, 0) == (0, 1)
+    E         
+RED  | no documents still refused | test_with_no_document_the_model_answers_from_the_links_and_events_and_the_answer_says_so
+    E           services.api.questions.NothingToReadError: x
+RED  | will read names the engine chosen | test_will_read_names_the_engine_that_will_answer_not_the_one_chosen
+    E       assert ('gemini', 'Gemini') == ('local', "Th...'s own model")
+    E         
+RED  | handling reason dropped | test_will_read_lists_an_engine_the_materials_own_handling_code_may_not_reach
+    E       ValueError: not enough values to unpack (expected 1, got 0)
+RED  | read summary not kept | test_the_read_summary_is_kept_with_the_answer_and_read_back
+    E       AssertionError: assert (None is not None)
+    E        +  where None = QuestionAnswer(id='01M7BQQ512YRRFB180VZH8YVVE', author='analyst-1', author_name=None, question='Who?', answer='Rohan S...ids=['node-rohan-2e8d', 'node-dana-7f3a'], link_ids=['
+RED  | a selected link counted outside the window | test_a_selected_link_outside_the_window_is_not_counted
+    E       AssertionError: assert (ReadSummary(read_from='selection', documents=1, documents_without_text=0, items=3, links=2, events=0, selected=2, first_selected='MERCER, Dana') is not None and 2 == 1)
+    E        +  where ReadSummary(read_from='selection', documents=1, documents_without_text=0, items=3, links=2, events=0, selected=2, first_selected='MERCER, Dana') = QuestionAnswer(id='01M7BQQ8SMDZZ2DS
+RED  | will read's refusal names datasets to anyone | test_will_reads_refusal_names_no_dataset_to_a_caller_the_store_names_none_to
+    E       AssertionError: assert ('Open' not in 'The extract...use instead.'
+    E         
+RED  | ask's 409 names datasets to anyone | test_asks_refusal_names_no_dataset_to_a_caller_the_store_names_none_to
+    E       AssertionError: assert ('Open' not in 'The extract...use instead.'
+    E         
+RED  | About names the person as the brief does | test_the_read_summary_counts_the_items_links_events_and_names_the_first_selected
+    E       AssertionError: assert (3, 'Dana MERCER') == (3, 'MERCER, Dana')
+    E         
+CONTROL (unplanted, fresh cache): 29 passed, 2 warnings in 4.58s

@@ -1337,16 +1337,21 @@ one real token from the organisation's development tenant is to settle each:
 
 The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buckets) are the
 platform's, under its own snapshots and versioning. **The deployment backs up what it runs itself**
-(ADR-148 Amendment 7): ArcadeDB, ClickHouse and, in the poc shape, the Ingest root's claim. **The
-shared volume, `ospreyflow-shared`, is not backed up**: it holds the settings files, the recipes
-repository and, in the standard shape, uploads and staging, so a restore brings the stores back and
-leaves it as it is, and the two can disagree. The
+(ADR-148 Amendments 7 and 13): ArcadeDB, ClickHouse and the claims part. **The claims part holds, in
+every shape, the shared volume's folders the deployment cannot make again**: the published
+pipelines (`data/recipes`), the model settings (`model-settings`) and the map settings with the map
+key file (`map-settings`, ADR-147); and, in the poc shape, the Ingest root's claim. Each is
+read-only to the backup, and the pods that mount them are writers a restore refuses to run beside.
+**Not in a set**: the rest of the shared volume, `ospreyflow-shared`: the tiles (`tiles`), made
+again, and, in the standard shape, the Ingest root (`ingest`: uploads and the drop folder), which
+there is a folder of the shared volume, not a claim of its own. A restore leaves those as they are,
+so in the standard shape an upload can disagree with the stores it brings back. The
 recovery runbook that ships with the product, `deploy/RUNBOOK.md`, has the whole procedure under *The
 `cloud-platform` profile*, with every command; this section says what it does.
 
 **Nightly, at 02:15 UTC**, whatever the cluster's time zone: the CronJob `ospreyflow-backup` (ArcadeDB's
-`BACKUP DATABASE`, then ClickHouse's `BACKUP … TO S3`) and, in the poc shape, `ospreyflow-backup-claims`
-(each claim, read-only). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by
+`BACKUP DATABASE`, then ClickHouse's `BACKUP … TO S3`) and `ospreyflow-backup-claims` (the claims part,
+in every shape: each folder and claim, read-only). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by
 their slot, and `manifest.json` last, holding each part's size and checksum and the time the set
 finished. A set without its manifest is unfinished and is never restored from. Every object is
 encrypted by the backups bucket's own KMS key (`alias/<namespace>-backups`), whose deletion its

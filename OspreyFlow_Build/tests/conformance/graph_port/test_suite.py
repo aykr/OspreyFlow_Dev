@@ -52,6 +52,7 @@ from schemas.domain import (
     Provenance,
     ProvenanceState,
     SourceRef,
+    Subgraph,
 )
 from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory
 
@@ -3825,6 +3826,40 @@ async def test_unauthorised_degree_count_matches_a_graph_without_the_hidden_neig
 
         authorised_view = await adapter.neighbourhood_stats(hub, CLEARED)
         assert authorised_view.degree == 2  # proves the filter is real, not a no-op
+
+
+async def test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The expand preview's per-type `link_count` (ADR-098 Amendment 8; rule 3) is counted from this read: a
+    one-type expand at a node must carry no trace of a link of that type the principal may not see, whether
+    the link itself is above them (to a neighbour they can read) or its far end is. Its edges and nodes are
+    the same before and after both are written, and a principal cleared for them reads all three, so the
+    filter is real and not a read that returns nothing."""
+    async with factory.context() as adapter:
+        (hub, visible, also_visible), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL"), _node("Endpoint", classification="OFFICIAL"),
+                      _node("Endpoint", classification="OFFICIAL")], []
+        )
+        await _write(adapter, [], [_edge("USES", hub, visible, classification="OFFICIAL")])
+        asked = ExpandRequest(node_ids=[hub], depth=1, edge_types=["USES"])
+
+        def seen(subgraph: Subgraph) -> tuple[set[str], set[tuple[str, str, str]]]:
+            return {n.id for n in subgraph.nodes}, {(e.type, e.source, e.target) for e in subgraph.edges}
+
+        before = seen(await adapter.expand(asked, OFFICIAL))
+
+        (secret_neighbour,), _ = await _write(adapter, [_node("Endpoint", classification="SECRET")], [])
+        await _write(adapter, [], [
+            _edge("USES", hub, secret_neighbour, classification="OFFICIAL"),  # its far end is above them
+            _edge("USES", hub, also_visible, classification="SECRET"),  # the link itself is above them
+        ])
+        after = seen(await adapter.expand(asked, OFFICIAL))
+
+        assert before == after
+        assert len(after[1]) == 1
+        cleared = seen(await adapter.expand(asked, CLEARED))
+        assert len({e for e in cleared[1] if hub in e[1:]}) == 3
 
 
 async def test_unauthorised_path_length_matches_a_graph_without_the_hidden_hop(

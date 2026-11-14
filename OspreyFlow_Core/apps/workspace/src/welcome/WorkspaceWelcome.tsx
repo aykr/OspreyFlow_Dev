@@ -69,7 +69,17 @@ export interface WorkspaceWelcomeProps {
 export function WorkspaceWelcome({ apiBaseUrl, bearerToken, investigationId, nodeCount, onRestored, onClose, guide, takeFocus = false, now = new Date() }: WorkspaceWelcomeProps) {
   const dialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (takeFocus) dialog.current?.focus();
+    if (!takeFocus) return;
+    // ADR-145 Amendment 15: closing returns focus to the entry that opened it (the rail's Help), unless the person
+    // has moved it somewhere else first.
+    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    const panel = dialog.current;
+    panel?.focus();
+    return () => {
+      const now = document.activeElement;
+      const lost = now === null || now === document.body || (panel !== null && panel.contains(now));
+      if (lost && opener?.isConnected) opener.focus();
+    };
   }, [takeFocus]);
   const [guideSaid, setGuideSaid] = useState("");
   const [steps, setSteps] = useState<HistoryStepSummary[] | null>(null);

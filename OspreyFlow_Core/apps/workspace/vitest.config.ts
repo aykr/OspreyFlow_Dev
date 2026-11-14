@@ -39,12 +39,14 @@ export default defineConfig({
     // (`npm test`, the fast/no-infra tier) the same way Python's own
     // `make test` excludes its live-infra files; `npm run test:integration`
     // runs it explicitly, from `make test-all`/CI's `conformance` job.
-    // `*.budget.test.{ts,tsx}` times §5's first-frame budget (`02_GLASS_FRONTEND.md` §5, a CI gate by
-    // rule 10), so it runs alone: `npm test` runs it second, by `vitest.budget.config.ts`, with no
-    // other file sharing the machine. Inside this run it shared the CPU with 369 other files and
-    // read 3245–3428 ms where it reads ~1240 ms alone (13 November 2026, CI run 43426503300 and this
-    // Mac): a measure of the neighbours, not of the view. `src/testing/budgetRun.test.ts` fails if
-    // a budget file is in neither run.
+    // `*.budget.test.{ts,tsx}` holds every timed case under `src/`: §5's first-frame budget
+    // (`02_GLASS_FRONTEND.md` §5, a CI gate by rule 10) and the unit limits beside it. They run
+    // alone: `npm test` runs them second, by `vitest.budget.config.ts`, one file at a time. Inside
+    // this run the Matrix budget shared the CPU with 369 other files and read 3245–3428 ms where it
+    // reads ~1240 ms alone (13 November 2026, CI run 43426503300 and this Mac), and settledAnchors
+    // read 1535 ms against its 1000 (14 November 2026, `make test` on a loaded server): measures of
+    // the neighbours, not of the code. `src/testing/budgetRun.test.ts` fails if a budget file is in
+    // neither run, or a timed case is left in an ordinary test file.
     exclude: ["**/node_modules/**", "**/*.integration.test.ts", BUDGET_TESTS],
   },
 });

@@ -22,12 +22,13 @@ from __future__ import annotations
 import re
 import subprocess
 from pathlib import Path
+
 import pytest
 from harness.cloud_platform.runbooks import command_blocks
 from harness.cloud_platform_backups import BUCKET_SUFFIX, EXPIRE_DAYS
+from tools.cp_policy_check import _resolver
 
 from tests.harness.test_cloud_platform_render import _artefacts, _config, _values
-
 
 # ---- 1. the shared claim -----------------------------------------------------------------------
 
@@ -151,3 +152,75 @@ def test_step_8_s_check_is_told_the_choice() -> None:
     step = text[text.index("## 8.") : text.index("## 9.")]
     assert '--backups "$(cat "$WORK/backups")"' in step
     assert "keep or destroy" in text[text.index("## 7.") : text.index("## 8.")]
+
+
+# -- the claims run in every shape, as the chart renders it (docs' review of 6a8, 13 Nov) ------
+
+
+def _recovery_cloud_section() -> str:
+    from harness.render import REPO_ROOT
+
+    text = (REPO_ROOT / "deploy/RUNBOOK.md").read_text(encoding="utf-8")
+    section = text[text.index("## The `cloud-platform` profile") :]
+    intro = section[: section.index("**The restore below")]
+    found = intro + section[section.index("**The schedule.**") :][:900]
+    return " ".join(found.split())  # the prose as read, its line breaks aside
+
+
+def test_the_recovery_runbook_says_the_claims_run_is_every_shapes_and_what_it_holds() -> None:
+    """The chart renders `ospreyflow-backup-claims` wherever the set has a claims part
+    (backups.yaml's `if $parts`): every shape, holding the shared claim's parts (Amendment 13
+    decision 4) and, in the poc shape, the Ingest root's claim beside them. The recovery runbook
+    says so, naming each part as
+    the render names it (`cloud_platform_backups.SHARED_PARTS`), never 'in the poc shape' alone."""
+    from harness.cloud_platform_backups import SHARED_PARTS
+
+    section = _recovery_cloud_section()
+    schedule = section[section.index("**The schedule.**") :]
+    assert "proof-of-concept shape, `ospreyflow-backup-claims`" not in schedule
+    assert "in every shape" in schedule
+    for part in SHARED_PARTS:
+        assert f"`{part['subPath']}`" in section, part["subPath"]
+    assert "`ospreyflow-ingest`" in section  # the poc shape's own claim, beside them
+
+
+def test_the_manifest_lists_the_claims_jobs_whenever_the_chart_renders_them() -> None:
+    """The manifest's builder lists the claims run and its restore on the chart's own condition (a
+    claim of the shape's own or the shared parts), not on `storage.claims` alone."""
+    from harness.cloud_platform import manifest
+
+    for shape in ("poc", "development"):
+        config = _config(shape)
+        values = _values(config)
+        own = (values.get("storage") or {}).get("claims")
+        has_parts = bool(own or values["backups"].get("shared"))
+        jobs = manifest.rendered(config, resolver=_resolver)["jobs"]
+        assert has_parts and "ospreyflow-backup-claims" in jobs, shape
+        assert "ospreyflow-restore-claims-<set>" in jobs, shape
+
+
+def test_step_8_names_the_step_that_writes_each_listing_it_lacks(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Step 8's check needs three listings: the state and the buckets from its own first block, the
+    backups choice from step 7's. A missing one is named with the step that writes it, so an
+    operator resuming in a new shell goes back to the right block (searchkind's reviews)."""
+    import subprocess
+
+    from tests.harness.test_cloud_platform_render import _artefacts, _config
+
+    text = _artefacts(_config("poc"))["DECOMMISSION.md"]
+    loop = re.search(r"^for listing in .*?^done\n.*?\n", text, re.DOTALL | re.MULTILINE)
+    assert loop, "step 8's listing check"
+    (tmp_path / "state.txt").write_text("")
+    (tmp_path / "buckets.txt").write_text("")
+    run = ["bash", "-c", "set -e\n" + loop.group(0)]
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path)}
+    done = subprocess.run(run, capture_output=True, text=True, env=env, check=False)
+    assert done.returncode != 0
+    assert f"no {tmp_path}/backups: step 7's platform block writes it" in done.stdout
+    (tmp_path / "backups").write_text("keep\n")
+    (tmp_path / "state.txt").unlink()
+    run = ["bash", "-c", "set -e\n" + loop.group(0)]
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path)}
+    done = subprocess.run(run, capture_output=True, text=True, env=env, check=False)
+    said = f"no {tmp_path}/state.txt: step 8's first block (the platform's) writes it"
+    assert said in done.stdout

@@ -1,0 +1,34 @@
+# Part B's App tests before Part B, on 4a2f0f8's code with the new tests; npx vitest run src/App.chrome.test.tsx
+   ✓ the case screen's chrome, variant B (ADR-145 Amendment 2) (3)
+     ✓ 26 controls stand before the canvas, in this order 187ms
+     ✓ the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name 48ms
+     ✓ the column opens with the Inspector only, the other panels folded in their order 88ms
+   ✓ the dataset named once (ADR-145 Amendment 14 decision 4) (3)
+     ✓ the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it 46ms
+     ✓ a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it 47ms
+     ✓ the badge names the scope when the case's datasets cannot be read 47ms
+   ✓ the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) (2)
+     ✓ the scope badge stays where the banner names no dataset: You are in Rules and Monitoring 61ms
+     ✓ the scope badge stays where the banner names no dataset: You are in the Ingest Studio 54ms
+     × the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current 48ms
+     × Drawing board is a view: its own screen says it is a sketch that does not change the case's data 47ms
+     × the strip names no mode and says no mode's note 21ms
+     × the rail holds the panel openers alone: Explore, Ask & Chat, History, then Help and the names toggle 19ms
+     × Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it 47ms
+     × Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it 41ms
+     × History opens its panel without changing the view, a second press closes it, and closing returns focus to it 34ms
+     × the case line: You are in the Glass · Case ‹switcher› · Views in this case · reads … 21ms
+     × Views in this case opens the Cases panel at its views list 21ms
+     × the case switcher's last entry is All cases, which opens the Cases panel 1035ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'Graph', 'Map' ] to deeply equal [ 'Graph', 'Map', …(2) ]
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Drawing board"
+AssertionError: expected <nav …(2)>…(2)</nav> to be null
+AssertionError: expected [ 'Cases', 'Explore', …(5) ] to deeply equal [ 'Explore', 'Ask & Chat', …(3) ]
+AssertionError: expected <body><div>…(1)</div></body> to be <button type="button" …(5)>…(1)</button> // Object.is equality
+AssertionError: expected <body><div>…(1)</div></body> to be <button type="button" …(5)>…(1)</button> // Object.is equality
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "History"
+AssertionError: expected [ 'You are in the Glass', …(4) ] to deeply equal [ Array(5) ]
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Views in this case"
+AssertionError: expected 'New case' to be 'All cases' // Object.is equality
+      Tests  10 failed | 8 passed (18)

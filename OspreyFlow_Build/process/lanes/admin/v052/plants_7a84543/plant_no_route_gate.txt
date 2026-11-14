@@ -1,0 +1,6 @@
+# plant: no_route_gate (OspreyFlow_Core/services/api/app.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '    if identity.routes is not None:\n        route = request.scope.get("route")'
+# with: '    if False:\n        route = request.scope.get("route")'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_route_gate.py -k 'named_routes_is_refused'
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_gate.py::test_a_principal_admitted_to_named_routes_is_refused_every_other[dashboard identity]
+1 failed, 2 deselected in 6.47s

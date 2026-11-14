@@ -1,0 +1,135 @@
+# v052-fixes browser reds at 062e079; each plant restored with `git checkout -- <file>`
+## 1. the views' rows as on main (summary list, three GOV.UK buttons): red under GOV.UK
+plant in src/views/ViewsPanel.tsx, src/views/views.css; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/views.spec.ts -g "in the Cases drawer each view's name, tag and actions fit"; exit 1
+  ✓  1 keyboard/views.spec.ts:156:5 › ospreyflow dark: in the Cases drawer each view's name, tag and actions fit (206ms)
+  ✓  2 keyboard/views.spec.ts:156:5 › ospreyflow dark&long=1: in the Cases drawer each view's name, tag and actions fit (147ms)
+  ✓  3 keyboard/views.spec.ts:156:5 › ospreyflow dark&asking=delete: in the Cases drawer each view's name, tag and actions fit (147ms)
+  ✓  4 keyboard/views.spec.ts:156:5 › ospreyflow light: in the Cases drawer each view's name, tag and actions fit (139ms)
+  ✓  5 keyboard/views.spec.ts:156:5 › ospreyflow light&long=1: in the Cases drawer each view's name, tag and actions fit (137ms)
+  ✓  6 keyboard/views.spec.ts:156:5 › ospreyflow light&asking=delete: in the Cases drawer each view's name, tag and actions fit (130ms)
+  ✘  7 keyboard/views.spec.ts:156:5 › govuk light: in the Cases drawer each view's name, tag and actions fit (144ms)
+  ✘  8 keyboard/views.spec.ts:156:5 › govuk light&long=1: in the Cases drawer each view's name, tag and actions fit (156ms)
+  ✘  9 keyboard/views.spec.ts:156:5 › govuk light&asking=delete: in the Cases drawer each view's name, tag and actions fit (159ms)
+    Error: v-private
+    - Expected  - 2
+    + Received  + 2
+    Error: v-private
+    - Expected  - 2
+    + Received  + 2
+    Error: v-private
+    - Expected  - 1
+    + Received  + 1
+  3 failed
+  6 passed (3.1s)
+## 2. the drawer at the stylesheet's top 0 (main's)
+plant in src/design/primitives/Drawer.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts -g 'an open drawer starts under the top bar and the context row'; exit 1
+  ✘  1 keyboard/shell.spec.ts:695:3 › ospreyflow dark: an open drawer starts under the top bar and the context row, the navigation above it uncovered (5.2s)
+  ✘  2 keyboard/shell.spec.ts:695:3 › ospreyflow light: an open drawer starts under the top bar and the context row, the navigation above it uncovered (5.1s)
+  ✘  3 keyboard/shell.spec.ts:695:3 › govuk light: an open drawer starts under the top bar and the context row, the navigation above it uncovered (5.2s)
+    Error: expect(received).toMatchObject(expected)
+    - Expected  - 2
+    + Received  + 5
+    Error: expect(received).toMatchObject(expected)
+    - Expected  - 2
+    + Received  + 5
+    Error: expect(received).toMatchObject(expected)
+    - Expected  - 2
+    + Received  + 4
+  3 failed
+## 3. the drawer under the top bar alone, over the context row's cross-link (7b1fbca's)
+plant in src/design/primitives/Drawer.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts -g 'an open drawer starts under the top bar and the context row'; exit 1
+  ✘  1 keyboard/shell.spec.ts:695:3 › ospreyflow dark: an open drawer starts under the top bar and the context row, the navigation above it uncovered (5.2s)
+  ✘  2 keyboard/shell.spec.ts:695:3 › ospreyflow light: an open drawer starts under the top bar and the context row, the navigation above it uncovered (5.1s)
+  ✘  3 keyboard/shell.spec.ts:695:3 › govuk light: an open drawer starts under the top bar and the context row, the navigation above it uncovered (5.1s)
+    Error: expect(received).toMatchObject(expected)
+    - Expected  - 2
+    + Received  + 4
+    Error: expect(received).toMatchObject(expected)
+    - Expected  - 2
+    + Received  + 4
+    Error: expect(received).toMatchObject(expected)
+    - Expected  - 2
+    + Received  + 4
+  3 failed
+## 4. the drawer measured once, never on resize
+plant in src/design/primitives/Drawer.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts -g 'an open drawer starts under the top bar and the context row'; exit 1
+  ✘  1 keyboard/shell.spec.ts:695:3 › ospreyflow dark: an open drawer starts under the top bar and the context row, the navigation above it uncovered (5.2s)
+  ✘  2 keyboard/shell.spec.ts:695:3 › ospreyflow light: an open drawer starts under the top bar and the context row, the navigation above it uncovered (5.1s)
+  ✘  3 keyboard/shell.spec.ts:695:3 › govuk light: an open drawer starts under the top bar and the context row, the navigation above it uncovered (5.2s)
+    Error: expect(received).toMatchObject(expected)
+    - Expected  - 1
+    + Received  + 1
+    Error: expect(received).toMatchObject(expected)
+    - Expected  - 1
+    + Received  + 1
+    Error: expect(received).toMatchObject(expected)
+    - Expected  - 2
+    + Received  + 4
+  3 failed
+## 5. Reports not in the one view switch (main's switch)
+plant in src/shell/railLayout.ts; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts -g 'exactly one view is current'; exit 1
+  ✘  1 keyboard/shell.spec.ts:366:3 › ospreyflow dark: exactly one view is current, and a rail panel changes none of it (1.0m)
+  ✘  2 keyboard/shell.spec.ts:366:3 › ospreyflow light: exactly one view is current, and a rail panel changes none of it (1.0m)
+  ✘  3 keyboard/shell.spec.ts:366:3 › govuk light: exactly one view is current, and a rail panel changes none of it (1.0m)
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+  3 failed
+## 6. a drawer that leaves focus where it was on closing (main's)
+plant in src/design/primitives/Drawer.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts -g 'each rail panel is opened and closed by keyboard'; exit 1
+  ✘  1 keyboard/shell.spec.ts:106:1 › each rail panel is opened and closed by keyboard, the view kept and focus returned to its opener (5.4s)
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+  1 failed
+## 7. the case line without Views in this case
+plant in src/shell/ContextBanner.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts -g "the case line's Views in this case opens the Cases panel"; exit 1
+  ✘  1 keyboard/shell.spec.ts:324:1 › the case line's Views in this case opens the Cases panel by keyboard, and focus returns to it (5.3s)
+    Error: expect(locator).toContainText(expected) failed
+    Expected pattern: /You are in the Glass\s*·\s*Case\s*Case: Kestrel\s*▾\s*·\s*Views in this case\s*·\s*reads Prison intel/
+    Received string:  "You are in the Glass·reads Prison intel"
+  1 failed
+## 8. Build a report not drawn beside the switch (TopBar ignoring besideViews)
+plant in src/shell/TopBar.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts -g 'Build a report follows Reports by keyboard'; exit 1
+  ✘  1 keyboard/shell.spec.ts:740:3 › ospreyflow dark: Build a report follows Reports by keyboard, a link to Superset in a new tab (5.6s)
+  ✘  2 keyboard/shell.spec.ts:740:3 › ospreyflow light: Build a report follows Reports by keyboard, a link to Superset in a new tab (5.3s)
+  ✘  3 keyboard/shell.spec.ts:740:3 › govuk light: Build a report follows Reports by keyboard, a link to Superset in a new tab (5.3s)
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Error: element(s) not found
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Error: element(s) not found
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Error: element(s) not found
+  3 failed
+## 9. All cases opening nothing in the Glass (the harness's wiring, as App's before 4c969b3)
+plant in keyboard/places-harness.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts -g "the case menu's All cases opens the Cases panel by keyboard"; exit 1
+  ✘  1 keyboard/shell.spec.ts:345:1 › the case menu's All cases opens the Cases panel by keyboard, and focus returns to the case menu (5.4s)
+    Error: expect(locator).toBeVisible() failed
+    Expected: visible
+    Error: element(s) not found
+  1 failed
+## 10. the Cases panel naming nowhere to return focus to (4c969b3's)
+plant in keyboard/places-harness.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts -g "the case menu's All cases opens the Cases panel by keyboard"; exit 1
+  ✘  1 keyboard/shell.spec.ts:345:1 › the case menu's All cases opens the Cases panel by keyboard, and focus returns to the case menu (5.6s)
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+  1 failed
+## 11. the open board's line in the view's row, beside the board (0b5e031's fragment)
+plant in src/boards/BoardsPlace.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/boards.spec.ts -g 'a board is opened from the boards list by keyboard'; exit 1
+  ✘  1 keyboard/boards.spec.ts:39:1 › a board is opened from the boards list by keyboard (421ms)
+    Error: expect(received).toBeLessThanOrEqual(expected)
+    Expected: <= 21
+    Received:    1081
+  1 failed
+## 12. Help's keys panel leaving focus where it was on closing
+plant in src/welcome/WorkspaceWelcome.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts -g "the rail's Help opens and closes the keys panel by keyboard"; exit 1
+  ✘  1 keyboard/shell.spec.ts:189:1 › the rail's Help opens and closes the keys panel by keyboard, as ? and Esc do (5.5s)
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+  1 failed
+# 12 of 12 red

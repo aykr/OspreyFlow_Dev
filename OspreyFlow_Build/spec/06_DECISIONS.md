@@ -36731,6 +36731,191 @@ ADR-132 Amendment 8's one GOV.UK row is kept at 1440.
 is reprinted, as this step was asked (changing it needs that guide's own version and PDF); the marketing site's
 `three-places.html` names *Case · Boards* in two places (its owner's file, not changed here).
 
+### ADR-145, Amendment 14 (13 November 2026) — The Glass's screen fixes: drawers under the top navigation, the Views panel's rows fit, the dataset named once
+
+Status: as built by the case lane (v0.5.2 step 3e, `v052-fixes`) on the orchestrator's reservation, from the owner's
+four screen fixes of 13 November 2026, seen on the GOV.UK look, after the lane's own review and the orchestrator's
+independent one. The fourth fix (the strip's note on Alert monitoring, two rail items marked) was replaced the same
+evening by the owner's navigation decision and is recorded in Amendment 15, not here. Changes the words of three
+accepted texts, each named below: ADR-115 Amendment 1 point 5 (the scope badge, in the Glass), decision 2 of this ADR
+(the cross-link's words) and `02_GLASS_FRONTEND.md` §2.0a (the same). Fix 4's choice of which mention stays was the case
+lane's, accepted by the orchestrator for the owner, who may overrule it.
+
+1. **The Cases drawer's views fit.** In the 360 px drawer, under GOV.UK, the summary list drew a view's name, tag and
+   three full GOV.UK buttons in three columns: *Open* covered the *Private* tag and the buttons wrapped to four lines.
+   - Each row now has the name and the tag on one line, the tag at its end, and the actions on the line under them,
+     drawn as GOV.UK links (a summary list's actions are links in GOV.UK's own pattern). With the text enlarged the
+     actions wrap (WCAG 1.4.4) rather than overflow.
+   - The question before a delete keeps GOV.UK's buttons: it is the one place a choice is made.
+   - A long view name no longer widens the panel: the drawer's stack (`drawer-stack`), the panel and the case list each
+     have one `minmax(0, 1fr)` column. Before, a long name widened the 360 px drawer's content to 573 px and pushed its
+     tag out, in both looks. Found by this amendment's own long-name state.
+
+   Tests: `keyboard/views.spec.ts` *‹look›‹state›: in the Cases drawer each view's name, tag and actions fit*. It uses
+   the real drawer (`views-harness.html?in=drawer`), in dark, light and GOV.UK, by default, with a long name (`long=1`)
+   and while asking to delete (`asking=delete`). For each row it checks that the name and tag share a line, no action
+   lies over the tag, the actions are on one line, and all of it is inside the drawer; then a row is opened by
+   keyboard. It is red under GOV.UK with main's `ViewsPanel.tsx` and `views.css` planted, and red with the long name
+   before `drawer-stack`. `ViewsPanel.test.tsx` names the links and the question's buttons. `a11y/every-harness.spec.ts`
+   scans the three `in=drawer` states, and its `long=1` scan found the case list's own overflow (`case-tree__list`,
+   fixed the same way).
+2. **A drawer opens under the top navigation.** `.drawer` was fixed at `top: 0`, so every drawer covered the GOV.UK
+   header's places, the top bar and the context row with its case switcher and cross-link.
+   - The drawer (`design/primitives/Drawer.tsx`) now starts at the lowest bottom edge of the top bar and the context row
+     (`.top-bar`, `.context-banner`, `.context-banner--govuk`), never above the window.
+   - It is measured before the first paint, and again on resize, on the chrome's own resize and on scroll. Where none of
+     these exist (Admin's frame, a harness) it starts at the top as before.
+   - It is no longer announced as modal (`aria-modal` dropped): it neither traps focus nor makes the page inert, and
+     the navigation beside it stays usable.
+   - Closing it returns focus to whatever opened it, unless the person has moved focus elsewhere (Amendment 15).
+
+   Tests: `Drawer.test.tsx` *opens under the top bar…*, *…under the context row too…*, *is measured again when the
+   window is resized and when the page scrolls*, *is not announced as modal* and *starts at the top where there is no top
+   bar*. `keyboard/shell.spec.ts` *‹look›: an open drawer starts under the top bar and the context row, the navigation
+   above it uncovered* uses `shell-harness.html?drawer=1`, which now draws the context row. At 1440, and again after
+   narrowing to 900 where the row wraps, it checks the drawer's top against the chrome's bottom and that every header,
+   top-bar and row control in the drawer's columns is the topmost element at its own centre; Close is then reached by
+   Tab. It runs in dark, light and GOV.UK, red in all three with main's `Drawer.tsx` planted, and with the context row or
+   the resize listener left out.
+3. *(Replaced by Amendment 15 before merge: the strip and rail markers.)*
+4. **The dataset is named once.** The Glass's context row named the case's dataset three times: in the case switcher's
+   scope badge (ADR-115 Amendment 1 point 5), in "reads Prison intel" (decision 2) and in the cross-link "Open Prison
+   intel in the Ingest Studio ↗" (decision 2, spec 02 §2.0a).
+   - "reads …" stays, and a case reading none says "reads no dataset", where the badge said NO DATA.
+   - While the banner says what the case reads, the switcher draws no badge (`CaseSwitcher`'s `showScope`). While the
+     case's datasets are read or refused, the banner says nothing and the badge stays. In Rules and Monitoring and the
+     Studio, whose banners name no dataset, the badge stays.
+   - The cross-link reads *Open this case's data in the Ingest Studio ↗* for any number of datasets.
+
+   Tests: `App.chrome.test.tsx` on the real App:
+   - *the context row names the case's one dataset once*: red at the cross-link's name, and at the count with the badge
+     planted back;
+   - *a case that reads no dataset says so once, in the banner*;
+   - *the badge names the scope when the case's datasets cannot be read*;
+   - *the scope badge stays where the banner names no dataset* (Rules and Monitoring, the Studio).
+
+   `CaseSwitcher.test.tsx` *is left out with showScope false, and drawn by default*.
+5. **The record.** Every claimed red is on file, each a plant at the real call site, restored by `git checkout`:
+   - `process/lanes/case/gates/v052_fixes_unit_reds.py` and its log (jsdom, 34 of 34 red at 4cf8163, Amendment 15's
+     plants among them);
+   - `v052_fixes_browser_reds.py` and its logs (the keyboard cases, slot 2; all twelve plants in
+     `v052-fixes-browser-reds.062e079.log`);
+   - `v052-navigation-app-reds.log` (Amendment 15's App tests before Amendment 15).
+
+   The registry, `every-harness` and contrast-finding changes are the orchestrator's files, sent as one diff
+   (`process/lanes/case/shared-files-v052-navigation.diff`).
+
+**Not covered:** the user guide's screenshots of the context row and the Cases drawer; `DEMO_GUIDE.md`'s cross-link words
+(docs' files, after the freeze's sweep). Other overlays fixed to the viewport's top (`.view-over-cap`, the BPMN drawing)
+are dialogs, not drawers, and are left as they are.
+
+### ADR-145, Amendment 15 (13 November 2026) — The owner's navigation decision: one view switch, a rail of panels, the case line; and the search results layout
+
+Status: Part B as built by the case lane (v0.5.2 step 3e) on the orchestrator's reservation, from the owner's decision
+of 13 November 2026 (`process/lanes/NAVIGATION_2026-11-13.md`); Part A (step 3e′) recorded here when built. **Replaces
+Amendment 13** (the strip's *Graph · Drawing board* toggle and its note) and Amendment 14's third fix. **Changes
+Amendment 12** (the rail's layout) and **Amendment 2** (More views). The rule behind it, in the owner's words: every job
+has exactly one control. Everything that replaces the main area is in one view switch, the left rail only opens panels
+beside the current view, and there is one route to cases and one place to manage saved views.
+
+1. **One view switch.** The top bar's *View* group reads *Graph · Map · Drawing board · Reports*, then *More views* with
+   *Matrix, Figures, Ownership, Connection strength*, in those orders.
+   - *Reports* is the on-screen name of ADR-111 Amendment 3's dashboards view, unchanged inside (Alert monitoring
+     first, then the Superset boards). *Figures* keeps its name.
+   - Exactly one view is current: pressed in the group, or named on *More views* (`menu-button--pressed`) when it is
+     one of its own.
+   - Each view is offered by the rights that offered it before (`viewsFor`, `railEntries`). The drawing board is
+     offered by `investigate`, as its routes ask. Someone offered none of the four has theirs in the switch itself.
+   - The order and names are in `shell/railLayout.ts` (`VIEW_SWITCH`, `MORE_VIEWS`, `VIEW_LABELS`, `splitViews`),
+     which `App.tsx` and the keyboard harnesses read alike.
+2. **The strip names no mode.** The Glass's context row has no *Graph · Drawing board* links and no note, and the
+   region has no description. The drawing board's own screen says "Drawing board: your sketch; it does not change the
+   case's data." (`boards/BoardsPlace.tsx`).
+3. **The rail holds panel openers alone:** *Explore, Ask & Chat, History*, then *Help* and the names toggle. *Cases*,
+   *Dashboards* and *Explore Details* left it.
+   - An opener is never pressed. It is `aria-expanded` while its panel is open (`aria-haspopup="dialog"`), and a second
+     press closes it (`railMark`).
+   - Opening or closing a panel never changes the view.
+   - Closing a panel, by its opener, Escape or its *Close*, returns focus to the opener (`Drawer`).
+4. **The case line:** "You are in the Glass · Case ‹switcher› · Views in this case · reads …".
+   - The word *Case* is visible before the switcher. It is hidden from assistive technology, whose name for the switcher
+     already begins "Case:".
+   - The switcher's last entry is *All cases*, which opens the Cases panel. That panel's *Browse all cases* still opens
+     the full list.
+   - *Views in this case* opens the same panel with its *Views in this case* list focused (open, share, delete).
+   - The graph toolbar's *Views ▾* (ADR-144 Amendment 3) stays.
+   - Rules and Monitoring keeps its switcher without the word, and the Studio its "for ‹switcher›".
+5. ***Build a report*** (the owner's ruling of 13 November 2026, Q2). A link beside *Reports*, before *More views*: "Build
+   a report (opens in new tab)".
+   - It opens Superset's address, the deployment's `bi.` origin (`deploymentReportsUrl()` in `auth/oidcConfig.ts`,
+     platform-b's reader, taken as written so the two branches merge as one change), in a new tab
+     (`rel="noopener noreferrer"`).
+   - It is shown only where Superset is deployed and to a holder of `manage_dashboards`; Superset's builder role refuses
+     anyone else.
+   - It is a link out of the Glass, never a view, so it stands outside the switch's group (`TopBar`'s `besideViews`,
+     `BuildAReportLink`).
+   - A builder offered no *Reports* (the built-in Administrator: `manage_dashboards` without `read_reports`) has it
+     after their own switch: the right to build is the test, not the right to read (a gap the lane-reviewer found,
+     decided so by the lane under the never-stop rule, the owner free to overrule).
+
+   Tests:
+   - `App.chrome.test.tsx` *Build a report beside Reports*, on the real App: offered to a builder where Superset is
+     deployed, with its address, new tab and place; not offered to a Reports Viewer; not offered, even to a builder,
+     without Superset. Each is red by its plant (`v052-fixes-unit-reds.log`, plants 20 to 22).
+   - `keyboard/shell.spec.ts` *‹look›: Build a report follows Reports by keyboard, a link to Superset in a new tab*, in
+     dark, light and GOV.UK (registry `build-a-report-by-keyboard`).
+   - `every-harness` scans `top-bar-harness.html?reports=1`.
+6. **Tests**, each red first (`v052-navigation-app-reds.log`; plants 11 to 19 in `v052-fixes-unit-reds.log`; the browser
+   plants in `v052-fixes-browser-reds.log`).
+   - `App.chrome.test.tsx`'s *the owner's navigation* block, on the real App: the switch's order and its one current
+     view; the drawing board's line; the strip without modes; the rail's five buttons; each opener opening without
+     changing the view, closing on a second press and returning focus; the case line's parts in order; *Views in this
+     case* focusing the views; *All cases* last and opening the panel. Also *25 controls stand before the canvas*.
+   - `App.help.test.tsx`, `App.matrix.test.tsx`, `App.test.tsx` and `App.views.test.tsx` reach views through the switch
+     and the panel through the case line.
+   - `keyboard/shell.spec.ts`:
+     - *each rail entry is reached and pressed by keyboard* (none of the three that left);
+     - *each rail panel is opened and closed by keyboard, the view kept and focus returned to its opener* (registry
+       `rail-panels-by-keyboard`, replacing `rail-more-by-keyboard`);
+     - *each view is chosen by keyboard: Graph, Map, Drawing board and Reports, the rest under More views*;
+     - *the case line's Views in this case opens the Cases panel by keyboard* (registry `case-line-views-by-keyboard`,
+       replacing `banner-sections-by-keyboard`);
+     - *‹look›: exactly one view is current, and a rail panel changes none of it*, in dark, light and GOV.UK;
+     - GOV.UK's context row at 1440 and 1024 with the case line.
+   - `a11y/every-harness.spec.ts` scans the places harness with the Explore panel and the Cases panel open (`open=explore`,
+     `open=cases`). The contrast findings under the open *More views* are updated.
+   - The registry, `every-harness` and contrast-finding changes are the orchestrator's (one diff, Amendment 14 decision 5).
+
+7. **After the lane review (13 November 2026).** What the review of Part B found, each red first:
+   - *One offer list.* What a person is offered is `shell/railLayout.ts`'s `offeredViews`, read by `App.tsx` and both
+     keyboard harnesses (which copied every view before, whatever their `?rights=`). A view of the switch not offered
+     gives way to `viewToLandOn` (the landing view where offered, else the first offered), so exactly one view is
+     current for every person: `App.chrome.test.tsx`'s *Part B after review* block (a Reports Viewer's switch; an
+     investigator's; the built-in Administrator with Connection strength current; a drawing board, and Ownership,
+     chosen before the rights arrive giving way; exactly one current; *All cases* in the Studio opening the picker;
+     the Cases panel returning focus to the case menu; *Views in this case* a toggle), plants 23 to 34 of
+     `v052-fixes-unit-reds.log`.
+   - *Focus.* `Drawer.test.tsx`'s three focus cases (to its opener; left where the person moved it; to the caller's
+     `returnFocusTo` where the opener is gone). Help's keys panel returns focus to Help (`keyboard/shell.spec.ts`
+     *the rail's Help opens and closes the keys panel*). The drawer's `lost` guard has no plant of its own: React DOM
+     already puts back focus a commit moved off an element still in the page, so removing the guard changes nothing a
+     test can see (the reds script says so).
+   - *The board's line.* An open board says it is a sketch, above the board and across it, not as a column beside it
+     (`BoardsPlace.test.tsx`; `keyboard/boards.spec.ts` *a board is opened from the boards list by keyboard*, which
+     measures it).
+   - *The keyboard.* *the case menu's All cases opens the Cases panel by keyboard, and focus returns to the case menu*
+     (registry `all-cases-by-keyboard`). The registry check stands last in `shell.spec.ts`, read on one worker as CI
+     runs it; *Build a report*'s case stood after it, and the check was red for that reason in the c9ae729 run.
+   - The browser plants for each are in `v052-fixes-browser-reds.062e079.log`.
+
+**Not covered:** the user guide's and the architecture guide's pages on the places, the rail and the context row
+(docs', after the freeze's sweep); the rail's dead *Explore Details* menu (`LeftRail.tsx`'s `RailMore`,
+`railLayout.ts`'s empty `EXPLORE_DETAILS`, `shell.test.tsx`'s cases for it) and the banner's unused `sections` and
+`note` props, left for a later clean-up with their tests; `case-screen-options-harness.tsx`, L2.3's prototype of the old variants, left as the
+record it is.
+
+**Part A (step 3e′), the search results layout:** to be recorded here when built.
+
 ### ADR-144, Amendment 3 (13 November 2026) — *Views ▾* by the graph: the case's saved views one click from the canvas
 
 Status: as built by the platform-b lane (step modes) at the owner's ruling of 13 November 2026, on the
@@ -37168,3 +37353,358 @@ days in every fixture; step 7 refusing without the choice, and keep and destroy 
 left), and in Helm's own output `tests/cp_policy_check/test_cp_egress_order.py` (the claims backup's read-only shared
 mounts; the search Jobs refused our Secret whole). Red first: `process/lanes/platform/v052-opensearch/` and
 `v052-datasafety/`; the policy check's first run red on the server (`cp-policy-red.txt`), then green.
+
+**The domain on R1's kind cluster (v052-searchkind, the orchestrator's review).** The S3/STS stand-in
+(`tests/fixtures/cloud_platform/s3_standin.py`) answers as the domain, which install step 2's stand-in makes and
+decommission step 7's removes with its disk and name. It refuses what the poc domain refuses, each branch shown red
+by a plant at its own site (`process/lanes/platform/v052-searchkind/plants.py`). It refuses a request:
+- that is unsigned;
+- signed for another service or region;
+- carrying a token that is missing, wrong or expired;
+- whose signature is bad, including a body changed after signing;
+- from a role the access policy (read from the render) does not admit;
+- over five minutes of clock skew;
+- with a body over 10 MiB, answered 413.
+
+It signs paths as botocore does for `es` (normalised, then encoded again). R1's checks prove all of this from the
+namespace's own pods and the stand-in's log. Tests: `tests/test_r1_opensearch_standin.py` and
+`tests/test_r1_kind_standins.py`.
+
+**What the stand-in does not model** (each is a way a real domain may differ from it):
+- **Topology.** It is one node, so an index with replicas reads yellow where the domain's two nodes in two zones
+  read green. Nothing may require green.
+- **Restricted API.** OpenSearch Service refuses some APIs (cluster settings it manages, snapshots to a file system,
+  plugin installs) that the stand-in passes on.
+- **Plugins.** It has the stock image's plugins plus `analysis-phonetic`. The domain's other analysis plugins (for
+  example ICU) are absent.
+- **Security group.** The 443 ingress from the namespace's networks is enforced by the cluster's egress policy, not
+  by the domain.
+- **Limits and protocol.** Request-rate limits (429), the endpoint's TLS policy, presigned or chunked `es`
+  requests, and PATCH are not modelled.
+- **Its own configuration endpoint** (`/_standin/configure`) is unauthenticated, reachable inside the cluster
+  alone.
+
+### ADR-098, Amendment 7 (13 November 2026) — Ask & Chat reads from what the person chooses, and needs no document
+
+Status: written 13 November 2026 by the rules-b lane (step v052D, parts D(i) and D(ii)) under the
+orchestrator's reservation of the same day; the owner's Part D of 13 November
+(`process/lanes/NAVIGATION_2026-11-13.md`). Decision 4 and Amendment 2 point 2 ("the model reads every Document in the
+case's view that the asker can see") are superseded where this says so; nothing else in ADR-098 changes. Each
+point names the test that fails if it stops being true (rule 12); the plants are recorded with their output in
+`process/lanes/rules-b/v052D/` (`server-plants.txt`, `glass-plants.txt`).
+
+1. **Read from.** A question reads from *Selected items* (the selection, everything one link from it, and the
+   Documents among them), *Everything on the graph* (every item, link and Document in the asker's view, or in
+   the case view asked in), or *Whole case*. The request's `read_from` is `selection`, `graph` or `case`; none
+   is the selection when something is selected, else the graph. The documents and the evidence brief (ADR-129)
+   are drawn from the one scope.
+   - Test: `test_questions_read_from.py`, *selected items reads the selection, its links and their documents*.
+     Red: with every Document in the view read, as before, a Document two links away reaches the model.
+   - Test: *everything on the graph reads every document whatever is selected*; *with nothing selected the
+     default is everything on the graph*.
+2. **Whole case is not built yet.** Until the case's search is called (part D(iii)), `case` is refused 422
+   `read_from_unavailable` with the reason in words, by the question and by *will read* alike, and never
+   falls back to the graph. The panel offers it disabled, with the same reason beneath.
+   - Test: *whole case is refused in words until the search service exists*. Red with the refusal replaced
+     by a fall-back to the graph.
+   - Test: `QuestionsPanel.test.tsx`, *offers Whole case disabled, with why*. Red with it enabled.
+3. **No refusal for want of documents.** `no_documents` (422) is gone. With no Document with text in the
+   scope, the model is told there are none and answers from the graph facts (the links and events), and the
+   answer's `read` summary says no document was read. Nothing in scope is 422 `nothing_to_read` in words: a
+   selection the asker's view does not hold, or an empty graph. A selected id the asker may not see gets the
+   same words as one that does not exist (rule 3).
+   - Test: *with no document the model answers from the links and events and the answer says so*. Red with
+     the old refusal planted back.
+   - Test: `test_questions.py`, *a case with no document the analyst can see is answered from its links*.
+   - Test: `test_questions_graph_facts.py`, *selecting a hidden id is the same as selecting one that is not
+     there* (the same request, and the same refusal's words).
+4. **What was read is said.** Every answer carries `read`: the documents read, the Documents in scope with no
+   text (an image; counted, never read), the other items, the links, the events counted, how many of the
+   selected items the asker's view holds, and the first one's name as the canvas labels it by default
+   ("TARBUCK, Kyle": `canvas_label`, `labelChoices.ts`'s form; never an id). A selected link is counted only
+   when it is in the scope's links, so inside the timeline window. The summary is counted as the asker and
+   is kept with the answer (`case_questions.read`). It is shown to a later reader only as the answer is, so
+   only to a reader who may see every node, link and event it counted.
+   - Test: *the read summary counts the items, links, events and names the first selected* (red with the
+     brief's "Given FAMILY"); *about names the first selected as the canvas does, never by its id*.
+   - Test: *a selected link outside the window is not counted*. Red with the links counted from the view.
+   - Test: *a document with no text is counted apart*. Red with the count dropped.
+   - Test: *the read summary is kept with the answer and read back*. Red with it not kept.
+   - Test: `test_questions_store.py` (live), the round trip whole and an older row read back with `read` none.
+   - Test: *an answer whose summary counts a hidden document is not shown to a lower reader*.
+5. **Nothing the asker may not see is counted, quoted or cited (rules 3 and 4).** The summary, the prompt and
+   the citations for a case with a Document and an item above the asker equal those for the same case
+   without them, and a reader cleared for them is counted differently, so the comparison can fail.
+   - Test: *a hidden document and item are not counted, quoted or cited*. Red with the selected count taken
+     from the request rather than the view.
+   - Test: *the cleared reader is counted the hidden document and item*.
+6. **In the Glass** the choice is a radio group, *Read from*. *Selected items* is the default when something is
+   selected and is not offered when nothing is. "About: …" ("About: Tarbuck, Kyle and 1 other", "About:
+   everything on the graph") and "Will read: …" come from the Conduit (ADR-129 Amendment 4) and are never
+   counted in the Glass. Each answer says what it read, or that it read no document and came from the links
+   and events.
+   - Test: `QuestionsPanel.test.tsx`, *defaults to Selected items …*; *never counts in the Glass* (red with the
+     panel's own count); *choosing Everything on the graph asks the Conduit again and sends that choice* (red
+     with `read_from` not sent); *says under each answer what it read …*.
+   - Test: `keyboard/questions.spec.ts`, *what to read from is chosen by arrow keys …* (rule 13;
+     `choose-what-to-read-from-by-keyboard`): both choices sent, Selected items with the selected ids.
+   - The axe scan of the questions harness in dark, light and GOV.UK (`every-harness.spec.ts`).
+   - *Whole case*'s words are one wording, the server's (`ReadFromUnavailableError.words`), which the panel
+     shows before anything is asked. Test: *the panel says whole case in the server's own words*.
+
+### ADR-129, Amendment 4 (13 November 2026) — the brief's scope is the question's, and *will read* says it first
+
+Status: written 13 November 2026 by the rules-b lane (v052D) under the orchestrator's reservation. Decision 1's
+scope ("the analyst's selection and one link around it, or the whole view with no selection") stands for the
+brief; what changes is that the Documents now come from the same scope (ADR-098 Amendment 7), and that a
+dry run says what a question will read before it is asked.
+
+1. **One scope.** `QuestionsService._gather` builds the scope once (`evidence_brief.scope_of`) and takes the
+   documents and the brief from it, within the one budget (rule 2, unchanged). *Everything on the graph* with
+   something selected builds the brief over the whole view, not the selection.
+   - Test: `test_questions_read_from.py`, *everything on the graph reads every document whatever is selected*
+     (Eli WARD, outside the selection's hop, is in the brief).
+2. **`POST /v1/investigations/{id}/questions/will-read`.** It takes the question's body without the question and
+   answers the `read` summary the question would carry, counted the same way. It is refused the same way
+   (`nothing_to_read`, `read_from_unavailable`, the typed 409 `limit_exceeded`), at the same right (`ask_model`)
+   and case level (Editor), and is audited (`will_read_question`). Nothing is sent to a model.
+   - Test: *will read counts what the question then reads and sends nothing*.
+   - Test: *will read past the budget is the same typed limit*.
+   - Test: `test_route_rights.py` (`will_read_route`: `ask_model`), `test_investigation_levels.py` (Editor),
+     `test_audit_kinds.py` (with `audit-v052D.patch`), `route-coverage-check` (with `spec03-v052D.patch`),
+     each red without its row or patch.
+   - In a case view it is refused, as asking is, to anyone the view is private from. Test: `test_case_views.py`,
+     *will read in a private view is refused to another member* (red with the view check planted out).
+3. **When the panel asks it.** *Will read* is asked for the body the question would send. It is keyed on that
+   body (under *Everything on the graph* a click on the canvas sends nothing new, so asks nothing), debounced
+   by 300 ms, and asked again when the question box takes focus if the timeline window has moved since. While
+   it is being asked, the last answer is not shown. Ask stays open meanwhile: the answer's own `read` says what
+   was read. Each ask reads the scope's Documents and writes an audit row, at most once per settled change.
+   It is a call off the canvas's render path, so it adds nothing to the §5 frame budget.
+   - Test: `QuestionsPanel.test.tsx`, *asks nothing when the canvas's selection changes under Everything on the
+     graph* (red when keyed on the selection); *asks again when the timeline window has moved …* (red with no
+     refresh).
+
+### ADR-135, Amendment 12 (13 November 2026) — the engine that will answer, always named; those that cannot, with why
+
+Status: written 13 November 2026 by the rules-b lane (v052D) under the orchestrator's reservation. Decision 5
+(the choice offered for two or more engines, hidden below two) stands, and so do the rules on what may leave
+for a hosted engine: this only says what the routing will do.
+
+1. **Always named, by the routing's own decision.** *Will read* names the engine and model that will answer:
+   `RoutedModel.choose` on the question's own material (its shared handling and the case's datasets), the same
+   call asking makes. So an engine chosen but refused for this material is not named; the one that will
+   answer is. With no engine able to answer, *will read* gives the routing's refusal in words and names none.
+   The panel says "Will be answered by …" even when only one engine exists.
+   - Test: `test_questions_read_from.py`, *will read names the engine that will answer, not the one chosen*
+     (red with the chosen engine named); *names a hosted engine the material may reach*; *says in words when no
+     engine may answer*.
+   - Test: `QuestionsPanel.test.tsx`, *names the engine that will answer even when there is only one* (red with
+     the line drawn only when there is a choice); *says the routing's refusal when no engine may answer*.
+2. **Engines that cannot answer this question, with their reasons.** Every hosted engine with a key that cannot
+   answer is listed: one with no model for questions, one the case's data may not reach (as `GET
+   …/models/engines` judges it, so a dataset is named only to a caller the store names it to), and one this
+   question's handling may not reach. The panel shows them beneath the choice (`EnginePicker`'s `reasons`)
+   or, with no choice offered, on their own. While *will read* is pending or refused, the picker keeps the
+   case list's own reasons. When no engine may answer, the routing's refusal is said, but a caller the store
+   names no dataset to is told it without the datasets' names, by *will read* and by the question's own 409
+   alike; the decision is the routing's, unchanged.
+   - Test: *will read lists an engine the material's own handling code may not reach* (red with that reason
+     dropped); *lists an engine the material's handling may not reach*; *lists an engine with no model for
+     questions*.
+   - Test: `QuestionsPanel.test.tsx`, *lists the engines that cannot answer this question with their reasons,
+     even with no choice to make*; *asks the case's own engines … disables one with the reason in words*; *keeps
+     the case's own reasons beneath the engine choice while will read is refused* (red with `[]` passed).
+   - Test: `test_questions_read_from.py`, *will read's refusal names no dataset to a caller the store names
+     none to*, and *ask's refusal …* (each red with the names left in).
+3. **A failed list is said as failed.** When the engines cannot be read, `EngineChoice.failed` is set and the
+   panel says the list could not be loaded and the question goes to the default, never that there are none.
+   An answer with no list is a failure too, not a list of none.
+   - Test: `QuestionsPanel.test.tsx`, *says the engine list failed, never that there is none* (red with the
+     words removed); *… when the answer holds no list* (red with it read as none).
+
+### ADR-144, Amendment 4 (13 November 2026) — *Ask the model about these* for any selection
+
+Status: written 13 November 2026 by the rules-b lane (v052D) under the orchestrator's reservation. Decision 4
+stands (the selection saved as a private view, and the questions asked in it). Two things change with ADR-098
+Amendment 7. The selection bar offers *Ask the model about these…* whenever anything is selected, not only
+when the selection holds a Document. The view it saves is named for its items ("Questions on 3 items"), not
+its documents. In the view, *Read from* applies within what the view holds. The change is to the case lane's
+canvas files, sent as `process/lanes/rules-b/v052D/bar-v052D.patch`; it is built when that patch, or case-b's
+shared action list carrying it, is merged, and not before.
+
+- Test: `SelectionBar.test.tsx`, *offers Ask the model about these… whatever is selected, Document or not*.
+- Test: `keyboard/selection.spec.ts`, *the selection bar's Ask the model about these… saves the selection as a
+  private view, named for its items, and asks in it*.
+
+
+### ADR-078, Amendment 1 (13 November 2026) — the right-click menu acts on the whole selection, in the bottom bar's words
+
+Context. The owner's navigation decision of 13 November 2026 (`process/lanes/NAVIGATION_2026-11-13.md`, Part C, ruled
+the same evening): a right-click on a selected item should offer what the bottom bar offers for the selection, and
+say what it applies to.
+
+Decision.
+
+1. **One set of actions for the selection.** The menu on a selected item opens with the selection's actions, the
+   same actions in the same words and order as the bottom bar (ADR-097 step 1), on the bar's own conditions:
+   *Undo select what is lit* (while it stands), *Expand*, *Show links* (two or more; from the menu it looks as far
+   as the bar's stepper reads, one degree held by the canvas for both, the orchestrator's ruling of 14 Nov), *Ask the model about these…*, *Save as a view*,
+   *Remove from view*, *Clear*. Both read one table (`canvas/selectionActions.ts`), and a test reads the rendered
+   bar's buttons against the menu's entries, so the two cannot drift. *Ask* is offered whatever is selected, in the
+   bar and the menu alike (ADR-098 Amendment 7, rules-b's Part D, landed first).
+2. **A right-click on an unselected item selects it first**; so do `\`, the ContextMenu key and Shift+F10 on a
+   focused item. The menu is always the selection's.
+3. **The heading says what the menu applies to**: "2 selected", or the item's name (no longer its type before it).
+4. **One item's own actions follow its selection's**: *Expand by link type* (ADR-098 Amendment 8), then its
+   *Actions*. With two selected, the pair's own (*Link to*, *Split from*, *Find paths to*) follow instead; with
+   more, the selection's actions alone. **A reading for the owner to confirm:** Part C lists *Link to* and *Find
+   paths to…* among one item's own actions, but each needs a second item, so they are offered for two; and with
+   two, the clicked item's other actions (*Explain cluster*, *View messages*) are not, since the heading says the
+   menu is the pair's.
+5. **Link types with no links fold into one line**, "7 types with no links" ("1 type with no links" for one), once
+   their counts are known; it opens the list in place without closing the menu (a `keepsOpen` entry; focus stays in
+   the menu). A type whose count is still awaited or unavailable is shown, never folded.
+6. **The menu never opens over the bottom bar**: measured once drawn, it moves up by what it would overlap.
+7. **Every action is reachable by keyboard**: the ContextMenu key and Shift+F10 open the menu on the focused item
+   as `\` does, and in the menu the arrow keys step through the entries (wrapping), Home and End go to the ends.
+8. In a view, the lens allowlist holds: the selection's *Ask*, *Undo select what is lit* and *Clear* join it, and
+   what changes the case is absent as it is from the bar.
+9. **One exception to the order:** a Document's *Read full screen* stays at the very head of its menu, before the
+   selection's actions, as ADR-092 decision 4 put it (the owner, 6 October 2026); it is an entry of its own, in no
+   group.
+
+Consequences. Decision 2 of the original ("the order of the entries does not change") no longer holds for the
+first entries: the selection's actions now come first. Tests: `canvas/selectionActions.test.tsx` (the menu's words
+against the rendered bar, on four conditions), `design/primitives/RadialMenu.test.tsx` (arrows, Home and End in
+both layouts, the entry that keeps the menu open, the move clear of the bar), and `keyboard/keyboard.spec.ts`'s
+cases for the ContextMenu key, Shift+F10, the selection's actions under "2 selected" and the fold, each acting.
+
+### ADR-098, Amendment 8 (13 November 2026) — *Expand by link type*, with a real count of links per type
+
+Context. The menu's per-type figure was the working set's size after the expansion less its size now: what the
+expansion would add, not how many links of that type the item has. A type whose links were all drawn read 0, and
+the heading *Show links* said the same as the bar's *Show links* (the links among the selection), which is another
+action. The owner, 13 November 2026: "Expand by link type", with a real per-type link count.
+
+Decision.
+
+1. The menu's per-type heading is **Expand by link type**; the bar keeps *Show links* for the links among the
+   selection (Amendment 4).
+2. `POST /expand/preview` answers **`link_count`**: the links of the asked type at the asked node the reader may
+   see, counted in the Conduit (`working_set/service.py` `_links_at`) over what the adapter's own expand returned
+   (rule 3: access is in the traversal), a link counted only when its far end was returned too; one already drawn
+   counts. The two candidate counts and `would_breach` are unchanged, and the large-expansion prompt still asks
+   before a big expansion (rule 2).
+3. A stored item the reader may not read never moves it (ADR-124 decision 2): a link above them, or one to a node
+   above them, is absent from the read and so from the count.
+
+Consequences. Tests: `tests/services/api/working_set/test_preview_link_count.py` (equal with and without each kind
+of hidden stored item; a drawn link counted; the asked type at the asked node only; a link whose far end the read
+left out not counted; a cleared reader counted with what they see), red first; and the graph port's conformance
+case `test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links` (a one-type expand carries no trace
+of a hidden link of that type, either kind; a cleared principal reads all three), which is the proof the count holds
+rule 3: it runs on ArcadeDB only, under a lease, red first by two plants in the adapter's traversal
+(`process/lanes/case-b/v052-selection/live_run.sh`, its record beside it). The access step is the same
+`gremlin_has_step` every read uses, whose handling-code and dataset cases the suite already holds on other reads.
+**Why not `neighbourhood_stats(...).degree_by_type`**, which counts a node's visible links per type in one read:
+the menu already asks the preview once per type it shows, and the figure rides on that read; `degree_by_type`
+counts both directions with no time window, while the preview is the expansion the entry would make (its
+direction and the case's window, ADR-128), so the count is of what the click would follow.
+
+### ADR-144, Amendment 5 (13 November 2026) — saving the selection as a view is one of the selection's actions
+
+Amends decision 4. *Save selected (N) as a view…* on a selected node's own menu is replaced by the selection's
+*Save as a view*, in the bar's words (ADR-078 Amendment 1, which puts the bar's actions in the menu); the count is
+the heading's ("2 selected"). Its menu id, `save-selected-as-view`, and its place in the lens allowlist are kept.
+
+### ADR-097, Amendment 3 (13 November 2026) — a heading is in the page's own face, in both looks
+
+Context. The owner, 13 November 2026 (Part E): in the GOV.UK look, card headings ("Alerts", "Raised each week",
+"Team view") and the right-click menu's heading were in a monospace face. They were `<h3 className="value">`
+(`reports/figureParts.tsx` and 22 more), and `.value` is mono, which DESIGN.md §2 keeps for values to copy.
+
+Decision. One rule in `tokens.css`, for both looks: `:is(h1, h2, h3, h4, h5, h6).value { font-family: var(--ui); }`;
+and the right-click menu's heading in `var(--ui)`. Identifiers and values stay in mono.
+
+Consequences. Tests: `design/headingFace.test.ts` (every heading level classed `.value` computes to the page's face
+in the OspreyFlow and GOV.UK looks, a value that is not a heading stays mono; red first, all fourteen), and
+`RadialMenu.test.tsx` (the menu's heading not in mono).
+
+### ADR-148, Amendment 10 (13 November 2026) — Dashboard identities and the report sync on Entra ID
+
+Status: decided by the owner (13 November 2026, v0.5.2: Superset and report sync on the client's cloud-platform poc),
+the interface agreed with platform-b (Amendments 9 and 11) and platform (R1's stand-in) the same day; built by the
+admin lane. Amends Amendment 8 point 3, which refused dashboard identities on Entra ID.
+
+**The finding.** On Keycloak a dashboard identity is a confidential client OspreyFlow creates (ADR-111 decision 7), whose
+service account's attributes give its token the principal claims. On Entra ID the Conduit refused every app-only token
+(Amendment 6), so no dashboard could read the report feed, and Admin › Dashboards refused to register one.
+
+1. **One Entra app registration per dashboard identity**, made in Entra by the client's administrator, and registered in
+   Admin › Dashboards by its **application id** with the clearance and unit it reads with (no higher than the registering
+   administrator's own, as on Keycloak) and the handling code `P`. The registration holds its secret; OspreyFlow keeps
+   none and shows none. The deployment's store holds what it reads with (`entra_dashboards`, beside `entra_people`,
+   bound to the pinned tenant). Its account, which a case Author grants Viewer to, is its application id. Keycloak
+   refuses an application id in words; Entra refuses a registration without one.
+2. **The app role `Dashboard.Read`**: an application permission the API's registration defines, which the client's
+   administrator grants each dashboard identity's registration (with admin consent). Required from the start: a
+   dashboard is a new door, so it opens with the check (the orchestrator's ruling (b)).
+3. **Its token's principal.** An app-only token (`idtyp` `app`, or no `scp`) of the pinned tenant, its issuer and
+   audience checked as a person's, whose one client (`azp`, or `appid` in v1.0; the same if both) is an application id
+   neither the Glass's nor this API's, carrying `Dashboard.Read`, and registered: its registration's clearance, unit and
+   codes, the role `reports_viewer` alone, built where every principal is (`principal_from_claims`). Any other app-only
+   token is refused as before; the store unreadable is a 503, never a principal or a refusal.
+4. **Admitted to two routes alone**: `GET /v1/investigations` and `GET /v1/investigations/{investigation_id}/reports/feed`.
+   A principal may name the routes alone it is admitted to (`Principal.routes`); `get_principal` refuses any other with
+   403 `route_not_admitted` before anything is read for it. One mechanism: Superset's delegated sign-in (Amendment 9) is
+   its second kind.
+5. **A dashboard never submits runs**: the run API refuses a token whose client holds `Dashboard.Read`, and a client
+   Admin › Dashboards registered, whatever its token holds. **The run API's own app-role check stays carried**
+   (CARRIES row 202): dashboards check their role; the run API is the remaining door, until it is measured on the
+   client's tenant.
+6. **The report sync on Entra**: `REPORT_SYNC_SCOPE` (the API's `api://<application id>/.default`, rendered from
+   `cloud_platform.claims` by platform-b) is asked for in each client-credentials request at Entra's v2.0 token endpoint,
+   which refuses one without it; each dashboard's `client_id` is then its registration's application id, refused in words
+   otherwise. Without the scope, Keycloak's `osprey-dashboard-*` rule is unchanged.
+
+**Not measured, and carried:** that a real tenant's client-credentials token carries `Dashboard.Read` in `roles` once
+granted (shaped from Microsoft's documentation and R1's stand-in, as Amendment 6's other claims); the client's
+development tenant is Amendment 6's list.
+
+**Tests**, each red first (`process/lanes/admin/v052/`):
+- `tests/services/api/test_route_gate.py`: every route of the app taking a principal asked through the real
+  `get_principal`, one row a kind of principal admitted to named routes.
+- `tests/services/api/test_auth_entra_dashboards.py`: a registered dashboard's token is its narrow principal; no role,
+  another role, unregistered, another tenant, the Glass's or this API's client, not an application id, two clients:
+  each refused for its own reason; without the store every app-only token refused as before; the store unreadable a
+  503; a person's token never read as a dashboard. `test_auth_entra_claims.py`'s one-construction case holds.
+- `tests/services/api/test_entra_people.py` (Admin › Dashboards on Entra and Keycloak), `test_entra_people_live.py`
+  (the store, and the resolver with a real token, against PostgreSQL), `test_service_identity_entra.py` (the run API's
+  two refusals, through the real `get_service_identity`), `tests/services/report_sync/test_report_sync.py` (the scope,
+  the configuration, a pass), and the Glass's `DashboardsEntra.test.tsx`.
+
+**After the lane review of the build (13 November 2026)**, each red first (`process/lanes/admin/v052/review/`):
+- **Viewer and nothing more, on Entra too.** Who may hold a level in a case reads the registrations whenever the
+  grantee is no person the directory holds. Entra's names directory holds no people, so before this a registered
+  dashboard could be made a case's Owner. `test_admin_roles_routes.py`.
+- **Its name** (agreed with platform-b, whose Superset embedding matches a board on it): required, and the slug
+  Keycloak's `osprey-dashboard-<slug>` carries. One dashboard of a name in a tenant (`UNIQUE (tenant_id, name)`, refused
+  as 409 `dashboard_exists`). `DashboardIdentity.name` on both identity providers.
+- **Removing one revokes every case grant its account holds** (`InvestigationStore.revoke_everywhere`, each a recorded
+  revoke), so one registered again finds no level waiting. The grants go first, while the registration still names
+  the account: a failure leaves it registered, and removing it again revokes. The audit row counts the grants and
+  names no case.
+- **No case stream.** The delta socket asks no `get_principal`, so it refuses a principal admitted to named routes
+  before its case is read.
+- **The deployment's own applications** (the Glass's, the API's, from the claim mapping) are refused as registrations.
+- The run API's read of the registrations is bounded as a person's stored roles are; past it, a 503. A client claim not
+  a string (`azp`, `appid`) is a refusal, never a 500, in the resolver and the run API alike; an `aud` list is read as
+  its members. A dashboard store beside a Keycloak mapping is refused at the start.
+- **Admin › Dashboards asks its own route** which identity provider signs people in
+  (`GET /v1/admin/dashboards/sign-in`, behind `manage_dashboards`), so an administrator of dashboards alone is not
+  refused People's.
+- The resolver's own-client defences are each held alone: the Glass's id, the API's id (a case whose audience is its
+  `api://` URI) and the audience. The duplicate audience check is removed, so no defence stands only behind another.
+- **Access through the real `get_principal`** against the real case store (`test_investigation_access_store.py`):
+  granted Viewer on case A, a dashboard lists A alone and pulls A's feed, and B is refused as a case that does not exist.

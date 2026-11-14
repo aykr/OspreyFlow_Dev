@@ -1,0 +1,7 @@
+# plant: no_role_check (OspreyFlow_Core/packages/principal_auth/__init__.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '    if not isinstance(roles, list) or DASHBOARD_APP_ROLE not in roles:'
+# with: '    if False:'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py -k 'no_registered_dashboard and role'
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[no-role]
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_an_app_only_token_that_is_no_registered_dashboard_is_refused[another-role]
+2 failed, 17 deselected in 2.27s

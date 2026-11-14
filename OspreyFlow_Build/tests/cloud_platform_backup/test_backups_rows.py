@@ -83,13 +83,20 @@ def _docs() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     return helm_chart.template(yaml.safe_dump(values, sort_keys=False, width=4096), target.namespace), values
 
 
+#: P9's pods by name: its backup and claims runs and their restores. The render's other Jobs (the
+#: search index's rebuild and drift check, v0.5.2 step 3a) are not P9's and are held elsewhere
+#: (`tests/cp_policy_check/test_cp_egress_order.py`).
+P9_PODS = frozenset({"backup", "backup-claims", "restore", "restore-claims"})
+
+
 def _pods(docs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """P9's pods (its CronJobs' and Jobs'), by their `app.kubernetes.io/name`."""
     out = {}
     for doc in docs:
         pod = pod_spec(doc)
-        if pod is not None and doc["kind"] in ("Job", "CronJob"):
-            out[doc["metadata"]["labels"]["app.kubernetes.io/name"]] = pod
+        name = doc["metadata"]["labels"]["app.kubernetes.io/name"]
+        if pod is not None and doc["kind"] in ("Job", "CronJob") and name in P9_PODS:
+            out[name] = pod
     return out
 
 
@@ -152,7 +159,7 @@ def test_p9_s_pods_are_rows_by_their_own_names_under_their_own_account() -> None
     for name, pod in found.items():
         assert pod["serviceAccountName"] == backups.SERVICE_ACCOUNT, name
         assert pod["serviceAccountName"] not in {irsa.service_account, irsa.gateway_service_account}, name
-    assert set(found) == set(load_profile().egress.others) == {"backup", "backup-claims", "restore", "restore-claims"}
+    assert set(found) == P9_PODS and P9_PODS <= set(load_profile().egress.others)
     clickhouse = next(w for w in values["workloads"] if w["name"] == "clickhouse")
     assert clickhouse["serviceAccountName"] == backups.CLICKHOUSE_SERVICE_ACCOUNT
 

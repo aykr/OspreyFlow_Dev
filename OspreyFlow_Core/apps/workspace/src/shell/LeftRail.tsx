@@ -1,7 +1,8 @@
 // The left rail (ADR-097 step 1, design review item 1): 44px of icons, each named for assistive
-// technology and on hover, and expandable to show the names. The places the analyst goes to rather
-// than works in. ADR-145 Amendment 12 (amending Amendment 2's variant B): the rail keeps Cases,
-// Explore, Ask & Chat and Dashboards, and the rest are one click away under its ⋯ *Explore Details*.
+// technology and on hover, and expandable to show the names. ADR-145 Amendment 15 (the owner's navigation
+// decision of 13 November 2026): the rail only opens panels beside the view (Explore, Ask & Chat, History),
+// then Help and Show names. Its ⋯ *Explore Details* menu (Amendment 12) is drawn only when given entries,
+// and since Amendment 15 it is given none (`railLayout.ts`'s EXPLORE_DETAILS).
 // Monitoring left the Glass for Rules and Monitoring, a place of its own (ADR-146 decision 2).
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -15,6 +16,10 @@ export interface RailItem {
   onSelect: () => void;
   /** This place is the one open now. */
   pressed?: boolean;
+  /** For an item that opens a panel over the place (Cases, Explore, Ask & Chat, History): whether it is
+   * open. Such an item is never `pressed`: the rail marks the place alone, one place, one marker
+   * (ADR-145 Amendment 14 decision 3); the panel's state is `aria-expanded`. */
+  expanded?: boolean;
 }
 
 /** The rail's ⋯ *Explore Details*: a menu of the destinations not on the rail itself. It closes on Escape
@@ -36,7 +41,8 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
   // ADR-145 Amendment 12: named Explore Details, and, while one of its places is open, which
   // ("Explore Details, History open"); the destination open is marked inside the menu too.
   const name = "Explore Details";
-  const current = items.find((item) => item.pressed);
+  // ADR-145 Amendment 14 decision 3: the place first; a panel (History's drawer) only when no place of its own is open.
+  const current = items.find((item) => item.pressed) ?? items.find((item) => item.expanded);
   const label = current ? `${name}, ${current.label} open` : name;
   return (
     <div
@@ -59,6 +65,10 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
         type="button"
         className="left-rail__item"
         aria-label={label}
+        // ADR-145 Amendment 14 decision 3: when the place open is one of its own (Ownership, Connection strength),
+        // the trigger carries the rail's one marker, drawn as a pressed item's; its name says which. Not
+        // `aria-pressed`: it is a menu's button (`aria-expanded`), and its name already says the place.
+        data-current={current?.pressed ? "true" : undefined}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         title={expanded ? undefined : label}
@@ -74,7 +84,7 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
               key={item.id}
               type="button"
               className="menu-panel__item"
-              aria-current={item.pressed ? "page" : undefined}
+              aria-current={item === current ? "page" : undefined}
               onClick={() => {
                 setOpen(false);
                 item.onSelect();
@@ -108,7 +118,9 @@ export function LeftRail({
           type="button"
           className="left-rail__item"
           aria-label={item.label}
-          aria-pressed={item.pressed === undefined ? undefined : item.pressed}
+          aria-pressed={item.expanded !== undefined || item.pressed === undefined ? undefined : item.pressed}
+          aria-expanded={item.expanded}
+          aria-haspopup={item.expanded === undefined ? undefined : "dialog"}
           title={expanded ? undefined : item.label}
           onClick={item.onSelect}
         >

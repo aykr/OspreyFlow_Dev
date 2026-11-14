@@ -8,7 +8,8 @@ and admin's `test_refresh_silent_round_through_the_key.py` (ADR-050 Amendment 3,
 13 November 2026 imported it from the other's test file (CARRIES; POST_051's step B).
 
 Needs a `caddy` 2.11 binary: `OSPREY_TEST_CADDY`, else `caddy` on the PATH. A module using `proxy`
-sets `pytestmark = NEEDS_CADDY` and imports `proxy` by name (the fixture).
+sets `pytestmark = [NEEDS_CADDY]` (a list, which tools/write_store_marks.py can extend) and imports
+`proxy` by name (the fixture).
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ NAMES = (HOST, f"id.{HOST}", f"bi.{HOST}")
 KEY = "a long shared demonstration key"
 CADDY = os.environ.get("OSPREY_TEST_CADDY") or shutil.which("caddy")
 
-#: Each module using the fixture sets `pytestmark = NEEDS_CADDY`: skipped, in words, without the binary.
+#: Each module using the fixture sets `pytestmark = [NEEDS_CADDY]`: skipped, in words, without the binary.
 NEEDS_CADDY = pytest.mark.skipif(
     CADDY is None, reason="no caddy binary: set OSPREY_TEST_CADDY to a Caddy 2.11 binary"
 )

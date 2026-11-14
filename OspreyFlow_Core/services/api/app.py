@@ -907,12 +907,15 @@ from .promotions import (
 )
 from .questions import (
     AskRequest,
-    NoDocumentsError,
+    NothingToReadError,
     PostgresQuestionStore,
     QuestionAccepted,
     QuestionAnswer,
     QuestionsService,
     QuestionsTooLargeError,
+    ReadFromUnavailableError,
+    ScopeRequest,
+    WillRead,
 )
 from .recipe_run import (
     RecipeRunDeps,
@@ -3544,11 +3547,24 @@ async def _dataset_refused_handler(request: Request, exc: DatasetRefusedError) -
     )
 
 
-@app.exception_handler(NoDocumentsError)
-async def _no_documents_handler(request: Request, exc: NoDocumentsError) -> JSONResponse:
-    """ADR-098 decision 4: the case holds no Document the analyst can see to ask about."""
+@app.exception_handler(NothingToReadError)
+async def _nothing_to_read_handler(request: Request, exc: NothingToReadError) -> JSONResponse:
+    """ADR-098 Amendment 7: nothing selected that the asker's view holds, or an empty graph. There
+    is no refusal for want of documents: with none, the model answers from the links and events."""
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"error": "no_documents"}
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "nothing_to_read", "detail": exc.words},
+    )
+
+
+@app.exception_handler(ReadFromUnavailableError)
+async def _read_from_unavailable_handler(
+    request: Request, exc: ReadFromUnavailableError
+) -> JSONResponse:
+    """ADR-098 Amendment 7: *Whole case* asked for before the case's search is called (D(iii))."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "read_from_unavailable", "detail": exc.words},
     )
 
 
@@ -7571,6 +7587,7 @@ async def ask_question_route(
         engine=body.engine,
         view_id=body.view_id,
         view_node_ids=in_view,
+        read_from=body.read_from,
     )
     await audit.record(
         principal=principal,
@@ -7581,6 +7598,49 @@ async def ask_question_route(
     )
     names = await principal_names.display_names([answer.author])
     return answer.model_copy(update={"author_name": names.get(answer.author)})
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/questions/will-read",
+    dependencies=[Depends(require_right(Right.ASK_MODEL))],
+)
+async def will_read_route(
+    investigation: InvestigationEditorDep,
+    body: ScopeRequest,
+    principal: PrincipalDep,
+    questions: QuestionsDep,
+    audit: AuditDep,
+    views: CaseViewsDep,
+    working_set: WorkingSetDep,
+) -> WillRead:
+    """ADR-098 Amendment 7, ADR-135 Amendment 12: what a question asked with this scope would read,
+    counted as the asker (rule 3), and the engine that would answer it as the routing decides, with
+    the engines that cannot and why. Nothing is sent to a model. The same right and case level as
+    asking, the same refusals (`nothing_to_read`, `read_from_unavailable`, the typed
+    `limit_exceeded`), so what it says is what asking would do."""
+    in_view = (
+        await _view_node_ids(views, working_set, investigation.id, body.view_id, principal)
+        if body.view_id is not None
+        else None
+    )
+    will = await questions.will_read(
+        investigation.id,
+        principal,
+        selected_node_ids=body.selected_node_ids,
+        selected_link_ids=body.selected_link_ids,
+        window=body.window,
+        engine=body.engine,
+        view_node_ids=in_view,
+        read_from=body.read_from,
+    )
+    await audit.record(
+        principal=principal,
+        action="will_read_question",
+        investigation_id=investigation.id,
+        resolved_query={"read_from": will.read.read_from, "view_id": body.view_id},
+        result_cardinality=will.read.documents,
+    )
+    return will
 
 
 async def _view_node_ids(

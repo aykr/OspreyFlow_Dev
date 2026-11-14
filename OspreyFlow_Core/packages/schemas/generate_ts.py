@@ -43,6 +43,7 @@ from schemas.person_ownership import ALL_MODELS as OWNERSHIP_MODELS  # noqa: E40
 from schemas.profile import ALL_MODELS as PROFILE_MODELS  # noqa: E402
 from schemas.promotions import ALL_MODELS as PROMOTION_MODELS  # noqa: E402
 from schemas.provider_profile import ALL_MODELS as PROVIDER_PROFILE_MODELS  # noqa: E402
+from schemas.questions import ALL_MODELS as QUESTION_MODELS  # noqa: E402
 from schemas.release import ALL_MODELS as RELEASE_MODELS  # noqa: E402
 from schemas.release import DatasetRelease  # noqa: E402
 from schemas.rights import ALL_MODELS as RIGHTS_MODELS  # noqa: E402
@@ -94,6 +95,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *OWNERSHIP_MODELS,
     *OPERATIONS_MODELS,
     *RELEASE_MODELS,
+    *QUESTION_MODELS,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

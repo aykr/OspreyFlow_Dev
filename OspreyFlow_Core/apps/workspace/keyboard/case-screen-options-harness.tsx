@@ -149,7 +149,7 @@ function Harness() {
           </>
         }
         datasets={["Prison intel"]}
-        crossLink={{ label: "Open Prison intel in the Ingest Studio ↗", onFollow: () => undefined }}
+        crossLink={{ label: "Open this case's data in the Ingest Studio ↗", onFollow: () => undefined }}
       />
       <div role="toolbar" aria-label="Graph view" className="view-toolbar">
         <label className="label" style={{ display: "flex", alignItems: "center", gap: "var(--sp-6)" }}>

@@ -1,0 +1,6 @@
+# plant: dashboard_unrouted (OspreyFlow_Core/packages/principal_auth/__init__.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '        routes = sorted(DASHBOARD_ROUTES)\n'
+# with: ''
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py -k 'narrow_principal'
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_a_registered_dashboard_s_token_is_its_narrow_principal
+1 failed, 18 deselected in 1.79s

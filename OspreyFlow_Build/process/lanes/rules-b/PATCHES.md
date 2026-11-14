@@ -46,3 +46,16 @@ All four apply at the branch head (`git apply --check`); the audit patch was reg
 | `every-harness-guides.patch` | shared (`a11y/every-harness.spec.ts`) | The start harness's `guide=refused` state: Home with the administration guide refused, its words under its link, scanned in dark, light and GOV.UK | `start.spec.ts` *the harness's refused state … shows the refusal under its link* (red with a refusal's words dropped); 18 passed with it applied (`gates/02f3752.browser.txt`) |
 | `spec03-guides.patch` | spec (`spec/03_CONDUIT_MIDDLEWARE.md`, beside `/v1/me/rights`) | `GET /v1/guides/{guide}`'s row: who, the place check, 403 `place_required`, 404 `no_such_guide`, 503 `guide_not_carried`. **Needed at merge:** `route-coverage-check` is red without it | `make route-coverage-check`: red at the branch head, green with the patch applied (420 routes, no drift) |
 | `spec02-guides.patch` | spec (`spec/02_GLASS_FRONTEND.md`, Home) | The guides under the Glass's, the Studio's and Admin's cards: a link whose activation is handled, shown from a blob or saved under its name, failures in words (rule 11) | none: spec prose |
+
+## v052D (13 November 2026)
+
+Each applies at the branch head (`git apply --check`). The bar and registry patches were applied for the slot-9
+browser run (21/21 keyboard green) and then restored.
+
+| Patch | Owner | What | Its test, red first |
+| --- | --- | --- | --- |
+| `audit-v052D.patch` | admin (`services/api/audit_section.py`) | `will_read_question` classified with the reads. **The branch needs it at merge.** | `test_audit_kinds.py`: red at the branch head, green with the patch |
+| `spec03-v052D.patch` | orchestrator (`spec/03_CONDUIT_MIDDLEWARE.md`) | The questions route's row rewritten for `read_from`, the `read` summary, `nothing_to_read`, `read_from_unavailable` and no `no_documents`; the will-read route's row; the Editor table's `questions/will-read` (POST). **The branch needs it at merge.** | `route-coverage-check`: red without (names `POST …/questions/will-read`), green with |
+| `registry-v052D.patch` | shared (`keyboard/actionRegistry.ts`) | `QUESTIONS_ACTIONS` gains `choose-what-to-read-from-by-keyboard`. Goes with the merge (the spec registers it). | `questions.spec.ts`'s new case, red with the radios' handler a no-op (`keyboard-plant.txt`) |
+| `bar-v052D.patch` | case (`canvas/SelectionBar.tsx`, `SelectionBar.test.tsx`, `canvas/GlassCanvas.tsx`, `keyboard/selection.spec.ts`) | ADR-144 Am 4: *Ask the model about these…* whenever anything is selected (no `documentCount`); the view named "Questions on n items". Agreed with case-b (13 Nov): whichever branch lands second drops the `documentCount > 0` gate in both `SelectionBar.tsx` and `selectionActions.ts`; if case-b lands first, rules-b regenerates this patch against `selectionActions.ts`. | `SelectionBar.test.tsx`'s *whatever is selected*; `selection.spec.ts`'s Ask case (green applied) |
+| `user-guide-v052D.patch` | docs (`docs/user-guide.md` §6) | Read from, About, Will read, the engine, no-documents answers, Ask for any selection; "needs at least one document" removed | — (prose) |

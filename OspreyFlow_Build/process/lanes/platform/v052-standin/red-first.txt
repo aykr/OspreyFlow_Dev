@@ -1,0 +1,54 @@
+Step 8 (v0.5.2: the Entra stand-in signs), before the change: r1_kind_servers.py's entra mode served discovery and keys alone, signing nothing.
+ERROR tests/test_r1_entra_standin.py::test_the_key_is_made_at_start_and_never_the_same_twice
+ERROR tests/test_r1_entra_standin.py::test_a_glass_sign_in_by_code_and_pkce_is_the_conduits_person
+ERROR tests/test_r1_entra_standin.py::test_superset_signs_in_as_a_confidential_client_with_its_secret
+ERROR tests/test_r1_entra_standin.py::test_a_code_is_spent_once_by_its_own_client_redirect_and_verifier
+ERROR tests/test_r1_entra_standin.py::test_authorize_refuses_another_tenant_client_redirect_and_an_ungranted_scope
+ERROR tests/test_r1_entra_standin.py::test_the_report_sync_gets_an_app_only_token_with_its_roles_and_no_scp
+ERROR tests/test_r1_entra_standin.py::test_client_credentials_are_refused_as_entra_refuses_them[form0-401-invalid_client-AADSTS7000215]
+ERROR tests/test_r1_entra_standin.py::test_client_credentials_are_refused_as_entra_refuses_them[form1-400-invalid_client-AADSTS700016]
+ERROR tests/test_r1_entra_standin.py::test_client_credentials_are_refused_as_entra_refuses_them[form2-401-invalid_client-AADSTS7000218]
+ERROR tests/test_r1_entra_standin.py::test_client_credentials_are_refused_as_entra_refuses_them[form3-400-invalid_scope-AADSTS1002012]
+ERROR tests/test_r1_entra_standin.py::test_client_credentials_are_refused_as_entra_refuses_them[form4-400-invalid_resource-AADSTS500011]
+ERROR tests/test_r1_entra_standin.py::test_client_credentials_are_refused_as_entra_refuses_them[form5-400-unsupported_grant_type-AADSTS70003]
+12 errors in 0.49s
+
+Plant 1 (rule 15): the PKCE check removed (any verifier taken):
+1
+FAILED tests/test_r1_entra_standin.py::test_a_code_is_spent_once_by_its_own_client_redirect_and_verifier
+1 failed, 11 passed in 7.37s
+Plant 2: the granted-scope check removed (any API scope given):
+1
+FAILED tests/test_r1_entra_standin.py::test_authorize_refuses_another_tenant_client_redirect_and_an_ungranted_scope
+1 failed, 11 passed in 7.28s
+Plant 3: the client secret not compared (any secret taken):
+FAILED tests/test_r1_entra_standin.py::test_superset_signs_in_as_a_confidential_client_with_its_secret
+FAILED tests/test_r1_entra_standin.py::test_client_credentials_are_refused_as_entra_refuses_them[form0-401-invalid_client-AADSTS7000215]
+2 failed, 10 passed in 7.48s
+Restored:
+12 passed in 7.38s
+
+case-b's ask (one log line per token granted), before the change:
+FAILED tests/test_r1_entra_standin.py::test_each_grant_is_logged_once_and_no_refusal_is
+1 failed, 12 deselected in 1.29s
+After: 13 passed in 8.00s
+
+The RDS stand-in's max_connections from the render's constant (case-b, 13 Nov), before the change:
+E       AttributeError: module 'r1_kind' has no attribute 'standins_text'
+FAILED tests/test_r1_kind_standins.py::test_the_rds_stand_in_allows_what_the_parameter_group_sets
+1 failed in 0.23s
+After: 14 passed in 8.12s
+
+The OpenSearch domain stand-in (the orchestrator's yes, 13 Nov), before the change:
+ERROR tests/test_r1_opensearch_standin.py::test_a_request_signed_by_the_namespace_s_role_reaches_opensearch
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[unsigned-is not authorized]
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another secret-signature we calculated does not match]
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[signed for s3-Credential should be scoped to correct service: 'es']
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another region-eu-west-2]
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[no session token-security token included in the request is invalid]
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[the body changed after signing-signature we calculated does not match]
+ERROR tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another role's session-is not authorized to perform: es:ESHttpGet]
+ERROR tests/test_r1_opensearch_standin.py::test_an_expired_session_is_refused
+ERROR tests/test_r1_opensearch_standin.py::test_s3_on_the_same_stand_in_is_as_it_was
+10 errors in 0.40s
+After: tests/test_r1_opensearch_standin.py with tests/cloud_platform_backup: 181 passed, 51 skipped.

@@ -1,0 +1,6 @@
+# plant: dashboards_ask_people_s_sign_in (OspreyFlow_Core/apps/workspace/src/admin/api.ts): Admin › Dashboards asks People's GET /v1/admin/sign-in again, at 7a84543
+# run (from apps/workspace): npx vitest run src/admin/sections/DashboardsEntra.test.tsx
+     × registers by application id, shows no secret, and names the app role to grant 76ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/admin/sections/DashboardsEntra.test.tsx > Admin › Dashboards on Entra ID sign-in > registers by application id, shows no secret, and names the app role to grant
+      Tests  1 failed | 1 passed (2)

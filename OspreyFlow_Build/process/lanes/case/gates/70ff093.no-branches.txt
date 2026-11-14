@@ -1,0 +1,33 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/OspreyFlow_Build/), logged at osprey-runs/case.meta/runs/20261113T233839Z-5f46d213/log: sh -c make no-branches-check && cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider ../OspreyFlow_Build/tests/test_no_branches_check.py
+cd ../OspreyFlow_Core && PYTHONPATH=/root/osprey-runs/case/OspreyFlow_Build .venv/bin/python -m tools.no_branches_check
+no-branches-check: 1653 files, no branch named.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/case/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_branches_check.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 12 items
+
+../OspreyFlow_Build/tests/test_no_branches_check.py ............         [100%]
+
+============================= slowest 30 durations =============================
+0.77s setup    tests/test_no_branches_check.py::test_each_shape_the_code_used_is_flagged[apps/workspace/src/canvas/SelectionBar.tsx]
+0.56s call     tests/test_no_branches_check.py::test_the_tree_names_no_branch
+0.51s call     tests/test_no_branches_check.py::test_one_branch_word_planted_in_the_glass_fails_the_gate
+0.28s call     tests/test_no_branches_check.py::test_the_conduit_names_no_branch
+
+(26 durations < 0.005s hidden.  Use -vv to show these durations.)
+============================== 12 passed in 2.35s ==============================
+............                                                             [100%]
+============================= slowest 30 durations =============================
+0.58s setup    tests/test_no_branches_check.py::test_each_shape_the_code_used_is_flagged[apps/workspace/src/canvas/SelectionBar.tsx]
+0.53s call     tests/test_no_branches_check.py::test_the_tree_names_no_branch
+0.52s call     tests/test_no_branches_check.py::test_one_branch_word_planted_in_the_glass_fails_the_gate
+0.28s call     tests/test_no_branches_check.py::test_the_conduit_names_no_branch
+
+(26 durations < 0.005s hidden.  Use -vv to show these durations.)
+12 passed in 2.10s
+Wall time: 8 s, exit 0 (no stack, no lease; set-up before it 18 s)

@@ -1,0 +1,36 @@
+# make -k ci, offline on the server, at 4e83010 (on main 424e47a): exit 0.
+  34 passed (35.7s)
+licence-check: 94 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+licence-check: 355 packages, all allowed.
+licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
+design-check: no finding outside DESIGN.md §9, and Core's DESIGN.md is the contract
+colour-drift-check: every colour in the Glass is one DESIGN.md holds
+ui-words-check: no "target model" in the Glass's copy (tests/test_ui_words_check.py holds the proof)
+============================== 8 passed in 2.00s ===============================
+Success! 9 passed, 0 failed.
+Success! 11 passed, 0 failed.
+Success! 12 passed, 0 failed.
+Success! 11 passed, 0 failed.
+============================= 54 passed in 58.04s ==============================
+cp-policy-check: 0 violation(s)
+============ 391 passed, 6 skipped, 1 warning in 489.33s (0:08:09) =============
+schemas-check: 606 generated types match committed output.
+authorized-query-check: 165 files under services/api, no offenders.
+demo-guide-check: 12 registered demo(s), all documented.
+domain-model-coverage-check: 105 class(es), 0 allowlisted, no new drift.
+route-coverage-check: 423 route(s), 0 allowlisted, no new drift.
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allowlist shrinks to zero as the decision log's own prose is edited to state each constraint without the private pointer.
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+test-file-coverage-check: 1050 test file(s), 0 allowlisted, no new drift.
+doc-citations-check: 2749 file(s) scanned, every cited path exists.
+================ 17 passed, 2 skipped, 749 deselected in 2.06s =================
+======================== 203 passed in 75.48s (0:01:15) ========================
+adr-reservations-check: every heading above the baseline is reserved.
+============================= 10 passed in 16.66s ==============================
+no-branches-check: 1661 files, no branch named.
+============================== 12 passed in 1.51s ==============================
+no-langchain-check: no LangChain, spaCy or Laurium outside Laurium's own image (source).
+============================== 28 passed in 2.18s ==============================
+Wall time: 1296 s, exit 0 (no stack, no lease; set-up before it 11 s)
+ci exit 0

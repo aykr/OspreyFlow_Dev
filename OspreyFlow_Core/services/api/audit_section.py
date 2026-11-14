@@ -233,6 +233,8 @@ READS_AND_OTHER: tuple[str, ...] = (
     "read_alert_sources",
     # Rules-b's L2.11a (ADR-146 decision 3): a rule's .bpmn or .dmn exported.
     "export_rule_file",
+    # Rules-b's v052D (ADR-098 Amendment 7): what a question would read, before it is asked.
+    "will_read_question",
     # Rules' L2.11 (ADR-146 decision 3, Amendment 6): the rule editor's datasets read, a draft
     # saved, tested, made live or asked to go live; with the other rule actions.
     "read_rule_datasets", "rule_draft_saved", "rule_tested", "rule_made_live",
