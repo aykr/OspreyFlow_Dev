@@ -126,5 +126,28 @@ case's owning unit, `client_size_leaks` refusing a control outside the case's un
 `step4_stack.SUBJECTS` to match; M10 then has one short queue turn. The never-join rerun did not start (it refused
 while step 2 was still alive after the SSH drop), correctly.
 
+**M10 with rules' new subjects: no id leaked; the words check unproven.** Leaks run 20261114T155917Z-7f9f194b,
+15:59–16:16Z, then never-join, 16:16–16:29Z, under rules' lease of d, from rules-load at c7149b1 with cbb7ad9's
+runner; the files regenerated (leaks eligible 10,129, 1,997 SECRET/R unit-intel-covert kept out; never-join eligible
+18,115). Preflight said "m10-measure and m10-part open the case", and every leak case's control reached its record.
+Both files were "not met": leaks 500 of 500 failed, every one "the hidden record's words … are in the answer";
+never-join 122 of 500, 72 on words and 50 on an unreached control. No hidden id was in any of the 1,000 answers.
+Rules traced every failure to the check or the cases, none to the product:
+- **The query's echo** (platform's, `measure_search`): `SearchPageResponse` echoes `query`, and every string of the
+  answer was read, so each leak case, which asks its hidden document's own title as its `never_text`, failed on its
+  own echo, as did 7 cs-companies never-join cases. The fake Conduit had no echo, which is why the tests let it by
+  (rule 15: a fake models what the real one returns). Fixed at 4a836d9: the echo is left out only where it equals the
+  query sent, and the fake echoes as the real page does.
+- **Words visible records hold** (rules', `client_size_leaks`): 47 cs-calls, 16 cs-nominals and 2 cs-covert cases
+  whose `never_text` is in a visible record's own text. Rules' fix: drop such a word, case-folded, as a substring.
+- **Unreached controls** (50 never-join cases): the visible spelling as the query does not bring the partner onto the
+  control's page 1. The orchestrator ruled: reported apart as indeterminate, never a pass and never a leak, and a file
+  is measured only if at least 90% of its controls reach their record, else unmeasured. Built at 4a836d9
+  (`REACHED_AT_LEAST`; the live gate and `RESULTS.md` say how many reached); ADR-149 Amendment 2 says so.
+Red first: on cbb7ad9's `measure_search` the new and changed tests are 8 failed, 43 passed; at 4a836d9 test_measure_search,
+test_step4_dry_run and test_step4_stack are 80 passed, 2 skipped; `plants_m10.py` 7/7 red, `plants_step4.py` 16/16,
+`plants_tokens.py` 6/6 (its sixth re-anchored on the control-error line). M10 runs again in a later turn (about 30
+minutes) once rules' word fix is in.
+
 (To be filled in from rules' results: each run's id, start and end, the server's state before it, the runner's lines,
 pytest's summary, M9's agreement with its time, and what each figure means for v0.5.2.)

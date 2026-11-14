@@ -28,7 +28,7 @@ PLANTS = [
     ("the live gate measuring on past a 401", GATE,
      '            pytest.exit(f"step 4: {refused}", returncode=3)\n', "            raise\n", TIMER, "stops_the_whole_run"),
     ("a failed control's error hidden by its ids", MEASURE,
-     "{unreached if control is not None else error}", "{unreached or error}", TIMER, "errs"),
+     "answer does not name {error}, so", "answer does not name {leak['never_ids']}, so", TIMER, "errs"),
 ]
 env = {**os.environ, "ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "POSTGRES_PASSWORD": "throwaway",
        "VALKEY_PORT": "59993", "CLICKHOUSE_HTTP_PORT": "59994"}
