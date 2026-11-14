@@ -16,3 +16,4 @@ owner	2026-11-14	v0.5.1's release: Superset's dnspython CVE-2026-128089 (MORNING
 owner	2026-11-16	Promote to a batch job at the working-set cap: build for v0.5.2 or defer (MORNING item 10)	done
 orchestrator	2026-11-16	Will v0.5.2 be cut by Tue 17 (step 6 on Mon 16 from 08:00Z, the candidate by Sun 15 evening)? Tell the owner by Mon 16 evening if not, with Tue 17 to Thu 19 as step 6's spare days	open
 orchestrator	2026-11-14	Update osprey-small to main once admin's GOV.UK Admin pass merges (the owner's word, 14 Nov): backup, HANDOFF recipe, start --build, the demo checks	done
+owner	2026-11-15	Join the candidate? A Studio SQL step past its time limit while its rows are read shows a raw 'OSError: INTERRUPT' instead of the time limit's words; studio's fix (lane/studio-sql-interrupt 345c457, red first, 126 tests) says it in words. It also turns CI's intermittent conformance failure green	open
