@@ -1,0 +1,164 @@
+# The sites' publish checks red first after the lane review, at a123848 (lane/docs-sites2 on main 186144b): each branch of marketing_site/identifier_check.py and each guard of publish_pages.sh planted away at its call site, one at a time, the two test files run, the file restored from git; the script requires the tests that hold each plant to be red, and lists every test it turned red. It replaces, for these checks, sites-identifier-red-first.txt and sites-publish-red-first.txt, whose reds the review found shared one reason (the old rule's refusal of the Team page; main's script having no --site).
+# Found by this run and fixed before it was taken: the surname check had hidden the names' normalising, so the markup and invisible-character cases now take shapes only their own step reads; a name split inside a word by markup was not found, so a page is also read with its tags taken out.
+
+command: cd OspreyFlow_Build && python -m pytest -q -p no:cacheprovider tests/test_site_identifiers.py tests/test_publish_pages.py
+each run: closed ports 59991-59994, no OSPREY_LANE, a fresh PYTHONPYCACHEPREFIX; publish_pages.sh's tests run a copy of the script, through a checkout of their own where they need one, with git held to the file protocol
+
+== the client branch [identifier_check.py]
+   'if held and client_hashes.named(seen, held):'
+   -> 'if False:'
+   6 failed, 63 passed in 6.67s
+   red: test_a_clients_name_is_refused_without_printing_it, test_a_clients_name_in_a_comment_or_any_attribute_is_refused[<!-- Example Shire Constabulary -->], test_a_clients_name_in_a_comment_or_any_attribute_is_refused[<img src='x.png' alt='Example Shire Constabulary'>], test_a_clients_name_in_a_comment_or_any_attribute_is_refused[<span data-for=Example-Shire-Constabulary></span>], test_every_published_file_is_read_not_only_the_pages[assets/site.css-/* Example Shire Constabulary */\n-a client's name], test_the_identifier_check_stops_a_site_before_anything_is_fetched[<p>Example Shire Constabulary</p>-a client's name]
+
+== the absent hash file branch [identifier_check.py]
+   'if held is None:\n        found.append(client_hashes.ABSENT'
+   -> 'if False:\n        found.append(client_hashes.ABSENT'
+   2 failed, 67 passed in 18.52s
+   red: test_nothing_is_published_without_the_local_hash_file, test_nothing_is_published_without_the_hash_file
+
+== the empty hash file branch [identifier_check.py]
+   'elif not held:'
+   -> 'elif False:'
+   1 failed, 68 passed in 19.20s
+   red: test_an_empty_hash_file_publishes_nothing
+
+== the card comparison [identifier_check.py]
+   'if sorted(" ".join(n.split()) for n in cards.names) != sorted(names):'
+   -> 'if False:'
+   2 failed, 67 passed in 18.75s
+   red: test_a_seventh_person_card_is_refused, test_a_renamed_card_is_refused
+
+== the names' normalising (case, spacing, marks) [identifier_check.py]
+   'return f" {client_hashes.normalise(text)} "'
+   -> 'return f" {text} "'
+   10 failed, 59 passed in 36.11s
+   red: test_a_name_twice_on_the_team_page_is_refused, test_a_team_name_in_another_case_or_spacing_is_refused[MATTHEW COULDRIDGE], test_a_team_name_in_another_case_or_spacing_is_refused[Will&nbsp;Forbes], test_a_team_name_in_another_case_or_spacing_is_refused[Graham\nBurnside], test_a_team_name_split_by_markup_or_an_invisible_character_is_refused[Forb<span>es</span>], test_a_team_name_split_by_markup_or_an_invisible_character_is_refused[Graham Burn&shy;side], test_a_team_name_split_by_markup_or_an_invisible_character_is_refused[Lau\u200brence Rawl\u200bings], test_a_surname_alone_is_refused_on_another_page[Ask Mr Burnside.], test_a_surname_alone_outside_the_cards_is_refused_on_the_team_page, test_every_published_file_is_read_not_only_the_pages[assets/site.js-// by Will Forbes\n-a personal identifier]
+
+== a page read with its tags taken out [identifier_check.py]
+   '[spaced, joined, *comments, *values]'
+   -> '[spaced, *comments, *values]'
+   1 failed, 68 passed in 19.22s
+   red: test_a_team_name_split_by_markup_or_an_invisible_character_is_refused[Forb<span>es</span>]
+
+== each surname on its own [identifier_check.py]
+   'return [name.split()[-1] for name in names]'
+   -> 'return []'
+   5 failed, 64 passed in 19.18s
+   red: test_a_team_name_split_by_markup_or_an_invisible_character_is_refused[Forb<span>es</span>], test_a_surname_alone_is_refused_on_another_page[Ask Mr Burnside.], test_a_surname_alone_is_refused_on_another_page[W. Forbes wrote it.], test_a_surname_alone_is_refused_on_another_page[Rawlings], test_a_surname_alone_outside_the_cards_is_refused_on_the_team_page
+
+== a comment's text [identifier_check.py]
+   '[spaced, joined, *comments, *values]'
+   -> '[spaced, joined, *values]'
+   1 failed, 68 passed in 19.13s
+   red: test_a_clients_name_in_a_comment_or_any_attribute_is_refused[<!-- Example Shire Constabulary -->]
+
+== single-quoted and bare attribute values [identifier_check.py]
+   'values = [next(v for v in m.groups() if v is not None) for m in _ATTRIBUTE.finditer(source)]'
+   -> 'values = [m.group(1) or "" for m in _ATTRIBUTE.finditer(source)]'
+   2 failed, 67 passed in 18.94s
+   red: test_a_clients_name_in_a_comment_or_any_attribute_is_refused[<img src='x.png' alt='Example Shire Constabulary'>], test_a_clients_name_in_a_comment_or_any_attribute_is_refused[<span data-for=Example-Shire-Constabulary></span>]
+
+== the pages alone read (the old rglob) [identifier_check.py]
+   'folder.rglob("*") if p.is_file()'
+   -> 'folder.rglob("*.html") if p.is_file()'
+   5 failed, 64 passed in 11.47s
+   red: test_every_published_file_is_read_not_only_the_pages[assets/site.js-// by Will Forbes\n-a personal identifier], test_every_published_file_is_read_not_only_the_pages[assets/site.css-/* Example Shire Constabulary */\n-a client's name], test_every_published_file_is_read_not_only_the_pages[assets/notes.txt-built in /Users/someone/site\n-a path on this machine], test_every_published_file_is_read_not_only_the_pages[stray.md-Ayan Kar's draft\n-a personal identifier], test_an_images_metadata_is_read_byte_for_byte
+
+== a binary file's printable runs [identifier_check.py]
+   '"\\n".join(run.decode("ascii") for run in _PRINTABLE.findall(data)), False'
+   -> '"", False'
+   1 failed, 68 passed in 12.39s
+   red: test_an_images_metadata_is_read_byte_for_byte
+
+== the narrow local-path rule (the old one) [identifier_check.py]
+   'LOCAL_PATH = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\\\\\?Users|file://[^\\s\'\\"<>]", re.IGNORECASE)'
+   -> 'LOCAL_PATH = re.compile(r"/Users/|/home/")'
+   4 failed, 65 passed in 18.61s
+   red: test_an_images_metadata_is_read_byte_for_byte, test_a_local_path_in_each_shape_is_refused[C:\\Users\\someone\\site], test_a_local_path_in_each_shape_is_refused[/users/someone/site], test_a_local_path_in_each_shape_is_refused[file:///srv/site/index.html]
+
+== file:// counted without a path [identifier_check.py]
+   'file://[^\\s\'\\"<>]'
+   -> 'file://'
+   2 failed, 67 passed in 18.79s
+   red: test_the_other_sites_as_built_pass[deploy], test_the_scheme_named_in_prose_is_not_a_path
+
+== the owner's identifiers outside the cards [identifier_check.py]
+   'if OWNER.search(text) or OWNER.search(seen):'
+   -> 'if False:'
+   1 failed, 68 passed in 18.69s
+   red: test_the_owners_address_on_the_team_page_is_refused
+
+== the six outside their cards on the Team page [identifier_check.py]
+   'if _names_in(seen, [*names, *_surnames(names)]):'
+   -> 'if False:'
+   2 failed, 67 passed in 18.38s
+   red: test_a_name_twice_on_the_team_page_is_refused, test_a_surname_alone_outside_the_cards_is_refused_on_the_team_page
+
+== the six on any other page [identifier_check.py]
+   'or _names_in(seen, people):'
+   -> ':'
+   19 failed, 50 passed in 16.37s
+   red: test_each_team_name_on_another_page_is_refused[Matthew Couldridge], test_each_team_name_on_another_page_is_refused[Will Forbes], test_each_team_name_on_another_page_is_refused[Harrison Boyle-Thomas], test_each_team_name_on_another_page_is_refused[Graham Burnside], test_each_team_name_on_another_page_is_refused[Laurence Rawlings], test_the_command_exits_one_on_a_violation_and_nought_without, test_a_team_name_in_another_case_or_spacing_is_refused[MATTHEW COULDRIDGE], test_a_team_name_in_another_case_or_spacing_is_refused[Will&nbsp;Forbes], test_a_team_name_in_another_case_or_spacing_is_refused[Graham\nBurnside], test_a_team_name_split_by_markup_or_an_invisible_character_is_refused[Graham <em>Burnside</em>], test_a_team_name_split_by_markup_or_an_invisible_character_is_refused[Will</span> <span>Forbes], test_a_team_name_split_by_markup_or_an_invisible_character_is_refused[Forb<span>es</span>], test_a_team_name_split_by_markup_or_an_invisible_character_is_refused[Graham Burn&shy;side], test_a_team_name_split_by_markup_or_an_invisible_character_is_refused[Lau\u200brence Rawl\u200bings], test_a_surname_alone_is_refused_on_another_page[Ask Mr Burnside.], test_a_surname_alone_is_refused_on_another_page[W. Forbes wrote it.], test_a_surname_alone_is_refused_on_another_page[Rawlings], test_every_published_file_is_read_not_only_the_pages[assets/site.js-// by Will Forbes\n-a personal identifier], test_the_identifier_check_stops_a_site_before_anything_is_fetched[<p>Will Forbes</p>-a personal identifier]
+
+== the command's hash file argument [identifier_check.py]
+   'if len(argv) > 2 else'
+   -> 'if False else'
+   1 failed, 68 passed in 17.83s
+   red: test_the_command_exits_one_on_a_violation_and_nought_without
+
+== the identifier check's call [publish_pages.sh]
+   'if ! python3 "$HERE/identifier_check.py" "$DEPLOY"; then'
+   -> 'if false; then'
+   4 failed, 65 passed in 17.22s
+   red: test_the_identifier_check_stops_a_site_before_anything_is_fetched[<p>Will Forbes</p>-a personal identifier], test_the_identifier_check_stops_a_site_before_anything_is_fetched[<p>Example Shire Constabulary</p>-a client's name], test_the_identifier_check_stops_a_site_before_anything_is_fetched[<p>/Users/someone/site</p>-a path on this machine], test_nothing_is_published_without_the_hash_file
+
+== the push address check [publish_pages.sh]
+   '*) echo "STOP: $PRODUCT\'s origin pushes to \'$PUSH_URL\', not $EXPECTED.git." >&2; exit 1 ;;'
+   -> '*) ;;'
+   1 failed, 68 passed in 19.08s
+   red: test_a_push_address_other_than_the_sites_is_refused
+
+== the product's repository refused [publish_pages.sh]
+   'https://github.com/aykr/ospreyflow|https://github.com/solirius/ospreyflow)'
+   -> 'never-a-match)'
+   3 failed, 66 passed in 18.88s
+   red: test_the_products_own_repository_is_never_a_sites[https://github.com/aykr/OspreyFlow], test_the_products_own_repository_is_never_a_sites[https://github.com/AYKR/ospreyflow.git], test_the_products_own_repository_is_never_a_sites[https://github.com/solirius/OspreyFlow]
+
+== the address compared in lower case [publish_pages.sh]
+   "tr 'A-Z' 'a-z'"
+   -> 'cat'
+   4 failed, 65 passed in 19.70s
+   red: test_the_products_own_repository_is_never_a_sites[https://github.com/aykr/OspreyFlow], test_the_products_own_repository_is_never_a_sites[https://github.com/AYKR/ospreyflow.git], test_the_products_own_repository_is_never_a_sites[https://github.com/solirius/OspreyFlow], test_one_repository_for_both_sites_is_refused
+
+== one repository for both sites [publish_pages.sh]
+   '[ "$(canonical "$OTHER_ADDRESS")" = "$(canonical "$EXPECTED")" ]'
+   -> 'false'
+   1 failed, 68 passed in 19.63s
+   red: test_one_repository_for_both_sites_is_refused
+
+== the GitHub address guard [publish_pages.sh]
+   'https://github.com/*/*) ;;\n      *) echo "STOP: sites/REPOSITORIES gives no repository'
+   -> '*) ;;\n      x) echo "STOP: sites/REPOSITORIES gives no repository'
+   5 failed, 64 passed in 19.03s
+   red: test_a_site_with_no_repository_written_is_refused_in_words[org], test_a_site_with_no_repository_written_is_refused_in_words[net], test_an_address_not_on_github_is_refused[org], test_an_address_not_on_github_is_refused[net], test_the_push_can_come_first
+
+== the empty site's stop [publish_pages.sh]
+   '[ $# -ge 2 ] && [ -n "$2" ]'
+   -> '[ $# -ge 2 ]'
+   1 failed, 68 passed in 19.26s
+   red: test_site_takes_org_or_net[args2]
+
+== an unknown argument's stop [publish_pages.sh]
+   '*) echo "STOP: unknown argument \'$1\' (--site org|net, --push)." >&2; exit 1 ;;'
+   -> '*) shift ;;'
+   4 failed, 65 passed in 19.01s
+   red: test_an_unknown_argument_stops_before_anything_is_done[--Push], test_an_unknown_argument_stops_before_anything_is_done[push], test_an_unknown_argument_stops_before_anything_is_done[org], test_an_unknown_argument_stops_before_anything_is_done[--sites]
+
+== the site's own domain written [publish_pages.sh]
+   'echo "ospreyflow.$SITE" > "$WORK/CNAME"'
+   -> 'echo "ospreyflow.org" > "$WORK/CNAME"'
+   1 failed, 68 passed in 18.85s
+   red: test_a_site_is_published_whole_with_its_own_domain
+
+== restored: 69 passed in 19.28s
+each plant red in the tests that hold it: True
