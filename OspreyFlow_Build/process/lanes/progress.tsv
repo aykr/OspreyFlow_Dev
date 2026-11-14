@@ -153,7 +153,7 @@ platform	v052-startbuild-index	S	done	v0.5.2 fix (S9): ospreyflow start --build 
 rules	v052-search-from-rids	S	done	v0.5.2 fix (M9): The fallback name search under its 5 s budget at client size: search_nodes from record ids found by index, not a scan of the store (ADR-124 Am 21)	lane/rules-adr124-am21
 orchestrator	v052-candidate	S	todo	v0.5.2 step C: the candidate, remade after the owner's saved-views exception (V1–V5); ad2725f superseded
 case	v052-saved-views	S	building	v0.5.2 (the owner's exception, 14 Nov) (V1): "View" means a saved view only, and the way back to the whole case (ADR-145 Am 17, ADR-144 Am 6; the owner's exception, 14 Nov)
-case-b	v052-saved-views-panel	S	building	v0.5.2 (the owner's exception, 14 Nov) (V2): The saved views panel: its title, The whole case first, Open now, unnamed views told apart (the owner's exception)
+case-b	v052-saved-views-panel	S	done	v0.5.2 (the owner's exception, 14 Nov) (V2): The saved views panel: its title, The whole case first, Open now, unnamed views told apart (the owner's exception)	lane/case-b-saved-views-panel
 studio	v052-no-internal-notes	S	building	v0.5.2 (the owner's exception, 14 Nov) (V3): No internal note on screen: "(the client's)", "to be confirmed" removed, held by a guard (the owner's exception)
 admin	v052-panel-type-scale	S	building	v0.5.2 (the owner's exception, 14 Nov) (V4): Every panel and menu on the page's own type scale in both looks, by measurement (the owner's exception)
 docs	v052-guide-saved-views	S	building	v0.5.2 (the owner's exception, 14 Nov) (V5): The user guide follows the saved-views words; the sweep's navigation items re-run (the owner's exception)
