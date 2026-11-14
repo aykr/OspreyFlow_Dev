@@ -14,6 +14,12 @@ export interface PopoverProps {
    * it rather than each one re-solving it. */
   onClose: () => void;
   children: ReactNode;
+  /** A choice the canvas waits on (the expansion prompts): the popover is the named `alertdialog`
+   * itself, `aria-modal`, and Tab and Shift+Tab stay inside it. Left out, it is the unnamed dialog
+   * it always was, and Tab is the page's. */
+  role?: "dialog" | "alertdialog";
+  label?: string;
+  modal?: boolean;
 }
 
 /** A positioned overlay anchored at a page coordinate — the base every
@@ -21,7 +27,7 @@ export interface PopoverProps {
  * cards): `spec/02_GLASS_FRONTEND.md` §1.1: "Labels, hover cards and
  * context menus are DOM overlays positioned from Sigma's camera... The
  * rich parts stay in HTML where they are easy." */
-export function Popover({ x, y, onClose, children }: PopoverProps) {
+export function Popover({ x, y, onClose, children, role = "dialog", label, modal = false }: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
   // The latest `onClose`, read when Escape is pressed. A parent passes a new one on every render;
   // keyed on it, the effect below re-ran on each render and took focus to the popover's first
@@ -48,7 +54,34 @@ export function Popover({ x, y, onClose, children }: PopoverProps) {
 
   const style: CSSProperties = { position: "fixed", left: x, top: y, zIndex: 30 };
   return (
-    <div className="popover" style={style} role="dialog" ref={ref}>
+    <div
+      className="popover"
+      style={style}
+      role={role}
+      aria-label={label}
+      aria-modal={modal ? true : undefined}
+      ref={ref}
+      onKeyDown={
+        modal
+          ? (e) => {
+              if (e.key !== "Tab") return;
+              const controls = [...(ref.current?.querySelectorAll<HTMLElement>("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])") ?? [])].filter(
+                (c) => !c.hasAttribute("disabled"),
+              );
+              const first = controls[0];
+              const last = controls[controls.length - 1];
+              if (!first || !last) return;
+              if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+              } else if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+              }
+            }
+          : undefined
+      }
+    >
       {children}
     </div>
   );

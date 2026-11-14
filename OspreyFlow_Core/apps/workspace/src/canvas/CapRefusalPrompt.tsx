@@ -2,8 +2,8 @@ import { Popover } from "../design/primitives/Popover";
 import type { LimitExceeded } from "../workingset/models";
 import { figure as capFigure } from "../workingset/ViewOverCapDialog";
 import type { NarrowingOption } from "./expansionGate";
-import { linkTypeName, type NamedType } from "./linkLabel";
-import type { PreviewCount } from "./nodeGestures";
+import type { NamedType } from "./linkLabel";
+import { NarrowingChoices } from "./NarrowingChoices";
 
 export interface CapRefusalPromptProps {
   x: number;
@@ -22,10 +22,6 @@ export interface CapRefusalPromptProps {
   onCancel: () => void;
   /** The case's link types: a relationship is named by its label, never its stored id (rule 7). */
   edgeTypes?: readonly NamedType[];
-}
-
-function count(value: PreviewCount): string {
-  return value === "unavailable" ? "count unavailable" : value.toLocaleString("en-GB");
 }
 
 /**
@@ -47,12 +43,8 @@ export function CapRefusalPrompt({
   edgeTypes = [],
 }: CapRefusalPromptProps) {
   return (
-    <Popover x={x} y={y} onClose={onCancel}>
-      <div
-        role="alertdialog"
-        aria-label="Too large to expand"
-        style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)", minWidth: 280 }}
-      >
+    <Popover x={x} y={y} onClose={onCancel} role="alertdialog" label="Too large to expand" modal>
+      <div className="expansion-prompt">
         {subject && (
           <span>
             Expanding <strong>{subject}</strong> was refused.
@@ -60,12 +52,7 @@ export function CapRefusalPrompt({
         )}
         <strong className="value">{capFigure(refused)}</strong>
         <span>Nothing has been added.</span>
-        {options.length > 0 && <span>Expand by one relationship instead:</span>}
-        {options.map((option) => (
-          <button key={option.edgeType} type="button" className="radial-menu__item" onClick={() => onChooseType(option.edgeType)}>
-            {linkTypeName(option.edgeType, edgeTypes)} ({count(option.wouldAdd)})
-          </button>
-        ))}
+        <NarrowingChoices options={options} edgeTypes={edgeTypes} onChooseType={onChooseType} />
         {onSaveSmallerView && (
           <button type="button" className="radial-menu__item" onClick={onSaveSmallerView}>
             Save a smaller view…
