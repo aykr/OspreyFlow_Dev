@@ -3,8 +3,8 @@
 # leased stack's own host, with the Conduit and Vite there too, so nothing crosses the network from the Mac (the
 # orchestrator, 14 November 2026). Run from the worktree root:
 #   OspreyFlow_Build/scripts/stack_lease.sh remote case -- bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
-# The order is DEMO_GUIDE.md §3's: a token and its JWKS; the Conduit up to make the case; the Conduit down; Fixture
-# Corp seeded into that case (the seed makes the case read its dataset, ADR-099); the search index rebuilt from the
+# The order is DEMO_GUIDE.md §3's, less its first Conduit: a token and its JWKS; Fixture Corp seeded into a case the
+# seed makes (so the case reads its dataset, ADR-099); the search index rebuilt from the
 # graph (ADR-150 decision 4); the Conduit up again; the spec. The graph database is dropped and made again first, as
 # §3.1 says, because the throwaway stack may hold an earlier run's records. Neither the token nor a port is printed.
 set -uo pipefail
@@ -61,22 +61,22 @@ conduit_up() {
   done
   fail "the Conduit ($1) not healthy in 120 s"
 }
-conduit_down() { kill "$CPID" 2>/dev/null; wait "$CPID" 2>/dev/null; }
-
-echo "# step: the Conduit up, the case made"
-conduit_up first
-CASE=$(curl -sf -X POST "http://127.0.0.1:$CP/v1/investigations" -H "Authorization: Bearer $TOKEN" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["id"])') || fail "make the case"
+# The seed makes the case (`--case-name`) as analyst-1 of unit-1, the token's own account, so it is the case's first
+# Author and the case reads Fixture Corp's dataset (scripts/case_seed.py's scope_for). The Conduit's POST
+# /v1/investigations takes no empty body now (ADR-099 Amendment 12: a case names its one dataset).
+echo "# step: Fixture Corp seeded into a case the seed makes"
+"$PY" -m scripts.seed_fixture_corp --case-name "Live search check" --principal-id analyst-1 --org-unit unit-1 >"$W/seed.txt" 2>&1
+seeded=$?
+mask <"$W/seed.txt" | tail -8
+[ "$seeded" -eq 0 ] || fail "seed"
+CASE=$(sed -nE "s/^Case 'Live search check' is ([^ ]+)\.$/\1/p" "$W/seed.txt")
+[ -n "$CASE" ] || fail "no case id in the seed's output"
 echo "case: $CASE"
-conduit_down
-
-echo "# step: Fixture Corp seeded into the case"
-"$PY" -m scripts.seed_fixture_corp --investigation-scope "$CASE" 2>&1 | mask | tail -8
-[ "${PIPESTATUS[0]}" -eq 0 ] || fail "seed"
 echo "# step: the search index rebuilt from the graph"
 "$PY" -m scripts.rebuild_search_index 2>&1 | mask | tail -4
 [ "${PIPESTATUS[0]}" -eq 0 ] || fail "rebuild"
 
-echo "# step: the Conduit up again; the spec"
+echo "# step: the Conduit up; the spec"
 conduit_up second
 cd apps/workspace || exit 1
 OSPREY_TEST_LIVE_GLASS=1 OSPREY_LIVE_API_BASE_URL="http://127.0.0.1:$CP" OSPREY_LIVE_BEARER_TOKEN="$TOKEN" \
