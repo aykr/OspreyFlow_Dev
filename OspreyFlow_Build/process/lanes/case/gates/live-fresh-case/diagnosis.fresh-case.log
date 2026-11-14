@@ -1,0 +1,46 @@
+Running on ospreyflow-test (stack g, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T083816Z-d891bcb1/log: env LIVE_DIAG=1 bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: scripts.seed_fixture_corp into a case the seed makes
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+Case 'Live search check 20261114T083817Z' is 01M7CKA7EB7VXS4AZ127KQPBAY.
+  check: no id stored more than once (whole shared graph)
+Seeded 10 resolution Person nodes and 17 real SAME_AS edges.
+Seeded 21 community-ring nodes and 63 edges across 3 rings.
+Seeded the path-spoke hub 'corp-path-hub' with spokes of length [1, 2, 3, 4, 5, 6, 7, 8], including a SECRET shortcut on the length-3 spoke.
+case: 01M7CKA7EB7VXS4AZ127KQPBAY
+# step: the search index rebuilt from the graph
+search index rebuilt: 68 documents from 68 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t083823651406
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+QQ118439C: {'total': 1, 'counts_exact': True, 'source': 'index', 'limited': False, 'limited_reason': None, 'detail': None} [['corp-res-identical-1']]
+Volkov: {'total': 6, 'counts_exact': True, 'source': 'index', 'limited': False, 'limited_reason': None, 'detail': None} [['corp-res-close-given-1', 'corp-res-close-given-2', 'corp-res-distinct-2', 'corp-res-identical-1', 'corp-res-identical-2'], ['corp-res-distinct-1']]
+corp-res-identical-1: {'total': 0, 'counts_exact': True, 'source': 'index', 'limited': False, 'limited_reason': None, 'detail': None} []
+{'value': 65, 'relation': 'eq'}
+{"kind": "node", "id": "corp-res-identical-1", "node_id": "corp-res-identical-1", "type": "Person", "datasets": ["fixture-corp"], "handling_classification": "OFFICIAL", "handling_code": "P", "owning_unit": "fixture-corp", "originator": "fixture-corp", "identifiers": ["QQ118439C"], "names": ["Volkov", "Mikhail"], "names_phonetic": ["FLKF", "MKL"], "date": "2026-11-14T08:38:19.499479+00:00"}
+{"kind": "node", "id": "corp-res-close-given-1", "node_id": "corp-res-close-given-1", "type": "Person", "datasets": ["fixture-corp"], "handling_classification": "OFFICIAL", "handling_code": "P", "owning_unit": "fixture-corp", "originator": "fixture-corp", "identifiers": ["QQ869828B"], "names": ["Volkov", "Mikael"], "names_phonetic": ["FLKF", "MKL"], "date": "2026-11-14T08:38:19.499519+00:00"}
+== a fresh case naming the seeded case's one dataset, as live.ts's freshInvestigation makes it
+fresh case reads: [{"id":"fixture-corp","name":"Fixture Corp","owning_unit":"unit-1","created_at":"2026-11-14T07:12:51.836442Z","created_by":"analyst-1","egress":"none","kind":"source","members":[],"layer_of":null,"highest_marking":null,"promotion_policy":"author_promotes"}]
+fresh search QQ118439C: {"nodes":[{"id":"corp-res-identical-1","type":"Person","properties":{"nino":"QQ118439C","family_name":"Volkov","given_names":"Mikhail","date_of_birth":"1975-03-12"},"provenance":{"state":"asserted","sources":[{"document_id":"fixture-corp","locator":"person:corp-res-identical-1","excerpt_hash":""}],"
+fresh suggest QQ118439C: {"nodes":[{"id":"corp-res-identical-1","type":"Person","properties":{"nino":"QQ118439C","family_name":"Volkov","given_names":"Mikhail","date_of_birth":"1975-03-12"},"provenance":{"state":"asserted","sources":[{"document_id":"fixture-corp","locator":"person:corp-res-identical-1","excerpt_hash":""}],"sources_withheld":false,"extracted_by":null,"extraction_confidence":null,"first_seen":"2026-11-14T08
+seeded suggest QQ118439C: {"nodes":[{"id":"corp-res-identical-1","type":"Person","properties":{"nino":"QQ118439C","family_name":"Volkov","given_names":"Mikhail","date_of_birth":"1975-03-12"},"provenance":{"state":"asserted","sources":[{"document_id":"fixture-corp","locator":"person:corp-res-identical-1","excerpt_hash":""}],"sources_withheld":false,"extracted_by":null,"extraction_confidence":null,"first_seen":"2026-11-14T08
+fresh search QQ1184: {"nodes":[],"query":"QQ1184","source":"index","limited":false,"limited_reason":null,"total":0,"counts_exact":true,"groups":[],"filters":{"datasets":[],"dates":{"earliest":null,"latest":null}},"page":1,"page_size":20,"more":false,"results":[]}
+fresh suggest QQ1184: {"nodes":[{"id":"corp-res-identical-1","type":"Person","properties":{"nino":"QQ118439C","family_name":"Volkov","given_names":"Mikhail","date_of_birth":"1975-03-12"},"provenance":{"state":"asserted","sources":[{"document_id":"fixture-corp","locator":"person:corp-res-identical-1","excerpt_hash":""}],"sources_withheld":false,"extracted_by":null,"extraction_confidence":null,"first_seen":"2026-11-14T08
+seeded suggest QQ1184: {"nodes":[{"id":"corp-res-identical-1","type":"Person","properties":{"nino":"QQ118439C","family_name":"Volkov","given_names":"Mikhail","date_of_birth":"1975-03-12"},"provenance":{"state":"asserted","sources":[{"document_id":"fixture-corp","locator":"person:corp-res-identical-1","excerpt_hash":""}],"sources_withheld":false,"extracted_by":null,"extraction_confidence":null,"first_seen":"2026-11-14T08
+== the case's datasets
+[{"id":"fixture-corp","name":"Fixture Corp","owning_unit":"unit-1","created_at":"2026-11-14T07:12:51.836442Z","created_by":"analyst-1","egress":"none","kind":"source","members":[],"layer_of":null,"highest_marking":null,"promotion_policy":"author_promotes"}]
+== the index asked directly for the identifier
+{'value': 1, 'relation': 'eq'} ['corp-res-identical-1']
+{"ospreyflow-default-20261114t083823651406":{"mappings":{"dynamic":"strict","_meta":{"mapping_fingerprint":"30e6dd418647893cd1dad6b3c7e6552b0bb22dd8d1b82c8ee95f47ec9b4830ce"},"properties":{"datasets":{"type":"keyword","similarity":"boolean"},"date":{"type":"date"},"handling_classification":{"type":"keyword","similarity":"boolean"},"handling_code":{"type":"keyword","similarity":"boolean"},"id":{"type":"keyword","similarity":"boolean"},"identifiers":{"type":"keyword","ignore_above":8191,"similarity":"boolean","fields":{"prefix":{"type":"text","analyzer":"prefix_index","search_analyzer":"prefix_search","similarity":"boolean"}}},"kind":{"type":"keyword","similarity":"boolean"},"names":{"type":"keyword","ignore_above":8191,"similarity":"boolean","normalizer":"folded","fields":{"prefix":{"type":"text","analyzer":"prefix_index","search_analyzer":"prefix_search","similarity":"boolean"},"tri":{"type":"text","analyzer":"tri","similarity":"boolean"},"words":{"type":"text","analyzer":"words","similarity":"boolean"}}},"names_phonetic":{"type":"keyword","similarity":"boolean"},"node_id":{"type":"keyword","similarity":"boolean"},"originator":{"type":"keyword","similarity":"boolean"},"owning_unit":{"type":"keyword","similarity":"boolean"},"text":{"type":"text","index_options":"offsets","analyzer":"words","similarity":"boolean"},"text_owning_unit":{"type":"keyword","similarity":"boolean"},"type":{"type":"keyword","similarity":"boolean"}}}}}
+== the case's own record
+{"id":"01M7CKA7EB7VXS4AZ127KQPBAY","name":"Live search check 20261114T083817Z","created_at":"2026-11-14T08:38:19.339319Z","created_by":"analyst-1","owning_unit":"unit-1","domains":[]}
+INFO:     127.0.0.1:35788 - "POST /v1/investigations/01M7CKA7EB7VXS4AZ127KQPBAY/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36774 - "POST /v1/investigations/01M7CKA7EB7VXS4AZ127KQPBAY/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36778 - "POST /v1/investigations/01M7CKA7EB7VXS4AZ127KQPBAY/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36790 - "POST /v1/investigations/01M7CKA7EB7VXS4AZ127KQPBAY/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36804 - "POST /v1/investigations/01M7CKA7EB7VXS4AZ127KQPBAY/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36832 - "POST /v1/investigations/01M7CKAKTRVGGNY4564NNTMH00/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36854 - "POST /v1/investigations/01M7CKAKTRVGGNY4564NNTMH00/search HTTP/1.1" 200 OK
+Wall time: 16 s, exit 0 (stack g, the lease case took at 2026-11-14T08:19:24Z; set-up before it 7 s)

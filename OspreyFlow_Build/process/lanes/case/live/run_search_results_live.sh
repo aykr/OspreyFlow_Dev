@@ -112,6 +112,22 @@ if [ "${LIVE_DIAG:-}" = 1 ]; then
   done
   curl -s "http://127.0.0.1:${OPENSEARCH_PORT}/ospreyflow-default/_search?q=type:Person&size=2" |
     "$PY" -c 'import json,sys; b=json.load(sys.stdin); print(b["hits"]["total"]); [print(json.dumps(h["_source"])[:900]) for h in b["hits"]["hits"]]'
+  echo "== a fresh case naming the seeded case's one dataset, as live.ts's freshInvestigation makes it"
+  DS=$(curl -s "http://127.0.0.1:$CP/v1/investigations/$CASE/datasets" -H "Authorization: Bearer $TOKEN" | "$PY" -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')
+  FRESH=$(curl -s -X POST "http://127.0.0.1:$CP/v1/investigations" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+    -d "{\"dataset_ids\":[\"$DS\"]}" | "$PY" -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+  echo "fresh case reads: $(curl -s "http://127.0.0.1:$CP/v1/investigations/$FRESH/datasets" -H "Authorization: Bearer $TOKEN" | head -c 300)"
+  for q in QQ118439C QQ1184; do
+    printf 'fresh search %s: ' "$q"
+    curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$FRESH/search" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+      -d "{\"query\":\"$q\",\"page\":1,\"page_size\":20}" | head -c 300; echo
+    printf 'fresh suggest %s: ' "$q"
+    curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$FRESH/suggest" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+      -d "{\"query\":\"$q\"}" | head -c 400; echo
+    printf 'seeded suggest %s: ' "$q"
+    curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$CASE/suggest" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+      -d "{\"query\":\"$q\"}" | head -c 400; echo
+  done
   echo "== the case's datasets"
   curl -s "http://127.0.0.1:$CP/v1/investigations/$CASE/datasets" -H "Authorization: Bearer $TOKEN" | head -c 900; echo
   echo "== the index asked directly for the identifier"

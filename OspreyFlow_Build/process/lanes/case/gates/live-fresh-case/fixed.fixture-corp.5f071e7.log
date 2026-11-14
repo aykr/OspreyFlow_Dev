@@ -1,0 +1,634 @@
+Running on ospreyflow-test (stack g, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T083352Z-a8aeb1cd/log: env LIVE_SPECS=live/fixture-corp.spec.ts bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: scripts.seed_fixture_corp into a case the seed makes
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+Case 'Live search check 20261114T083352Z' is 01M7CK24KVWZ8G285Q1D30YS9Q.
+  check: no id stored more than once (whole shared graph)
+Seeded 10 resolution Person nodes and 17 real SAME_AS edges.
+Seeded 21 community-ring nodes and 63 edges across 3 rings.
+Seeded the path-spoke hub 'corp-path-hub' with spokes of length [1, 2, 3, 4, 5, 6, 7, 8], including a SECRET shortcut on the length-3 spoke.
+case: 01M7CK24KVWZ8G285Q1D30YS9Q
+# step: the search index rebuilt from the graph
+search index rebuilt: 68 documents from 68 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t083358205091
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 4.09 5.53 8.35
+[warm-up +0.8 s] loaded
+[warm-up +1.1 s] console warning: [.WebGL-0x348c048eba00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] console warning: [.WebGL-0x348c048e9000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] console warning: [.WebGL-0x348c07a75a00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] search box drawn
+[warm-up +1.2 s] console error: [ECharts] Component toolbox is used but not imported.
+import { ToolboxComponent } from 'echarts/components';
+echarts.use([ToolboxComponent]);
+[warm-up +1.3 s] console warning: [.WebGL-0x348c048eba00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+# warm-up: the Glass drew its search box after 7 s
+
+Running 5 tests using 1 worker
+
+[1/5] live/fixture-corp.spec.ts:140:1 › the query builder finds Fixture Corp entities and reports how many matched
+  1) live/fixture-corp.spec.ts:140:1 › the query builder finds Fixture Corp entities and reports how many matched 
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.selectOption: Test timeout of 120000ms exceeded.
+    Call log:
+      - waiting for getByRole('combobox', { name: 'Entity type' })
+
+
+      131 |   await page
+      132 |     .getByRole("combobox", { name: "Entity type" })
+    > 133 |     .selectOption("Person");
+          |      ^
+      134 |   await page.getByRole("button", { name: "Add variable" }).click();
+      135 |   await expect(
+      136 |     page.getByRole("list", { name: "Pattern nodes" }).getByRole("listitem"),
+        at addPersonVariable (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:133:6)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:149:9
+
+    Error Context: test-results/fixture-corp-the-query-bui-994cc-nd-reports-how-many-matched/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/fixture-corp-the-query-bui-994cc-nd-reports-how-many-matched/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/fixture-corp-the-query-bui-994cc-nd-reports-how-many-matched/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[2/5] live/fixture-corp.spec.ts:155:1 › moving the resolution threshold live reports what merged and what split
+  2) live/fixture-corp.spec.ts:155:1 › moving the resolution threshold live reports what merged and what split 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText(/Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/)
+    Expected: visible
+    Timeout: 30000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByText(/Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/) with timeout 30000ms
+      - waiting for getByText(/Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/)
+
+
+      179 |       /Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/,
+      180 |     ),
+    > 181 |   ).toBeVisible();
+          |     ^
+      182 |
+      183 |   // And the control names the detent it committed rather than a raw number — the "never an
+      184 |   // interpolated value" half of the same behaviour.
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:181:5
+
+    Error Context: test-results/fixture-corp-moving-the-re-8a1ef--what-merged-and-what-split/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/fixture-corp-moving-the-re-8a1ef--what-merged-and-what-split/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/fixture-corp-moving-the-re-8a1ef--what-merged-and-what-split/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[3/5] live/fixture-corp.spec.ts:188:1 › a Fixture Corp entity is reachable from the search box by its nino
+  3) live/fixture-corp.spec.ts:188:1 › a Fixture Corp entity is reachable from the search box by its nino 
+
+    Error: no search result for QQ118439C (corp-res-identical-1) after three attempts. The identifier resolves through POST /v1/search — if it does here too, this is the Glass, not the data; before owner ruling R4 it returned nothing for every Fixture Corp entity, because the fixture carried no identifier search could match.
+
+      76 |     }
+      77 |   }
+    > 78 |   throw new Error(
+         |         ^
+      79 |     `no search result for ${identifier} (${expectedId}) after three attempts. The identifier ` +
+      80 |       "resolves through POST /v1/search — if it does here too, this is the Glass, not the data; " +
+      81 |       "before owner ruling R4 it returned nothing for every Fixture Corp entity, because the " +
+        at seedFromSearch (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:78:9)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:196:3
+
+    Error Context: test-results/fixture-corp-a-Fixture-Cor-ea818--the-search-box-by-its-nino/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/fixture-corp-a-Fixture-Cor-ea818--the-search-box-by-its-nino/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/fixture-corp-a-Fixture-Cor-ea818--the-search-box-by-its-nino/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[4/5] live/fixture-corp.spec.ts:209:1 › explain on a merged cluster names the pair's real resolution score
+  4) live/fixture-corp.spec.ts:209:1 › explain on a merged cluster names the pair's real resolution score 
+
+    Error: no search result for QQ118439C (corp-res-identical-1) after three attempts. The identifier resolves through POST /v1/search — if it does here too, this is the Glass, not the data; before owner ruling R4 it returned nothing for every Fixture Corp entity, because the fixture carried no identifier search could match.
+
+      76 |     }
+      77 |   }
+    > 78 |   throw new Error(
+         |         ^
+      79 |     `no search result for ${identifier} (${expectedId}) after three attempts. The identifier ` +
+      80 |       "resolves through POST /v1/search — if it does here too, this is the Glass, not the data; " +
+      81 |       "before owner ruling R4 it returned nothing for every Fixture Corp entity, because the " +
+        at seedFromSearch (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:78:9)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:230:3
+
+    Error Context: test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[5/5] live/fixture-corp.spec.ts:296:1 › the pathfinder finds a path between two ring members, and reports its length
+  5) live/fixture-corp.spec.ts:296:1 › the pathfinder finds a path between two ring members, and reports its length 
+
+    Error: no search result for QQ789396A (corp-ring0-member0) after three attempts. The identifier resolves through POST /v1/search — if it does here too, this is the Glass, not the data; before owner ruling R4 it returned nothing for every Fixture Corp entity, because the fixture carried no identifier search could match.
+
+      76 |     }
+      77 |   }
+    > 78 |   throw new Error(
+         |         ^
+      79 |     `no search result for ${identifier} (${expectedId}) after three attempts. The identifier ` +
+      80 |       "resolves through POST /v1/search — if it does here too, this is the Glass, not the data; " +
+      81 |       "before owner ruling R4 it returned nothing for every Fixture Corp entity, because the " +
+        at seedFromSearch (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:78:9)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:305:3
+
+    Error Context: test-results/fixture-corp-the-pathfinde-acccc-bers-and-reports-its-length/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/fixture-corp-the-pathfinde-acccc-bers-and-reports-its-length/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/fixture-corp-the-pathfinde-acccc-bers-and-reports-its-length/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  5 failed
+    live/fixture-corp.spec.ts:140:1 › the query builder finds Fixture Corp entities and reports how many matched 
+    live/fixture-corp.spec.ts:155:1 › moving the resolution threshold live reports what merged and what split 
+    live/fixture-corp.spec.ts:188:1 › a Fixture Corp entity is reachable from the search box by its nino 
+    live/fixture-corp.spec.ts:209:1 › explain on a merged cluster names the pair's real resolution score 
+    live/fixture-corp.spec.ts:296:1 › the pathfinder finds a path between two ring members, and reports its length 
+# playwright exit 1
+== Vite's log
+  VITE v8.3.4  ready in 138 ms
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+== test-results/fixture-corp-a-Fixture-Cor-ea818--the-search-box-by-its-nino/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: fixture-corp.spec.ts >> a Fixture Corp entity is reachable from the search box by its nino
+- Location: live/fixture-corp.spec.ts:188:1
+
+# Error details
+
+```
+Error: no search result for QQ118439C (corp-res-identical-1) after three attempts. The identifier resolves through POST /v1/search — if it does here too, this is the Glass, not the data; before owner ruling R4 it returned nothing for every Fixture Corp entity, because the fixture carried no identifier search could match.
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e5]:
+    - note "Protective marking" [ref=e6]: PUBLIC
+    - banner [ref=e7]:
+      - button "Osprey, go to Home" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: Osprey
+      - navigation "Places" [ref=e13]:
+        - list [ref=e14]:
+          - listitem [ref=e15]:
+            - button "The Glass" [ref=e16] [cursor=pointer]
+          - listitem [ref=e17]:
+            - button "Rules and Monitoring" [ref=e18] [cursor=pointer]
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - combobox "Search entities, identifiers, documents" [expanded] [active] [ref=e23]: QQ118439C
+          - listbox [ref=e24]:
+            - 'option "Person: Volkov, Mikhail" [ref=e25] [cursor=pointer]'
+        - button "Add many from a list" [ref=e26] [cursor=pointer]
+        - button "Filters" [ref=e29] [cursor=pointer]
+      - group "View" [ref=e32]:
+        - button "Graph" [pressed] [ref=e33] [cursor=pointer]
+        - button "Map" [ref=e34] [cursor=pointer]
+        - button "Drawing board" [ref=e35] [cursor=pointer]
+        - button "Reports" [ref=e36] [cursor=pointer]
+      - button "More views" [ref=e38] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e40]: ▾
+      - button "Export" [ref=e41] [cursor=pointer]: Export ▾
+      - button "Switch to the light theme" [ref=e43] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e44]: ☀
+    - region [ref=e45]:
+      - heading "You are in the Glass" [level=2] [ref=e46]
+      - generic [aria-hidden] [ref=e47]: ·
+      - generic [aria-hidden] [ref=e48]: Case
+      - 'button "Case: Untitled case" [ref=e50] [cursor=pointer]':
+        - generic [ref=e51]:
+          - generic [ref=e52]: "Case:"
+          - generic [ref=e53]: Untitled case
+        - generic [aria-hidden] [ref=e54]: ▾
+      - generic [aria-hidden] [ref=e55]: ·
+      - button "Views in this case" [ref=e56] [cursor=pointer]
+      - generic [aria-hidden] [ref=e57]: ·
+      - generic [ref=e58]: reads Fixture Corp
+    - generic [ref=e59]:
+      - navigation "Workspace" [ref=e60]:
+        - button "Explore" [ref=e61] [cursor=pointer]
+        - button "Ask & Chat" [ref=e64] [cursor=pointer]
+        - button "History" [ref=e67] [cursor=pointer]
+        - button "Help" [ref=e70] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e71]: "?"
+        - button "Show names" [ref=e72] [cursor=pointer]
+      - generic [ref=e76]:
+        - toolbar "Graph view" [ref=e77]:
+          - generic [ref=e78]:
+            - generic [ref=e79]: Match strictness
+            - generic [ref=e80]: Balanced
+            - slider "Match strictness" [ref=e81]: "1"
+        - generic [ref=e82]:
+          - generic [ref=e83]:
+== test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: fixture-corp.spec.ts >> explain on a merged cluster names the pair's real resolution score
+- Location: live/fixture-corp.spec.ts:209:1
+
+# Error details
+
+```
+Error: no search result for QQ118439C (corp-res-identical-1) after three attempts. The identifier resolves through POST /v1/search — if it does here too, this is the Glass, not the data; before owner ruling R4 it returned nothing for every Fixture Corp entity, because the fixture carried no identifier search could match.
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e5]:
+    - note "Protective marking" [ref=e6]: PUBLIC
+    - banner [ref=e7]:
+      - button "Osprey, go to Home" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: Osprey
+      - navigation "Places" [ref=e13]:
+        - list [ref=e14]:
+          - listitem [ref=e15]:
+            - button "The Glass" [ref=e16] [cursor=pointer]
+          - listitem [ref=e17]:
+            - button "Rules and Monitoring" [ref=e18] [cursor=pointer]
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - combobox "Search entities, identifiers, documents" [expanded] [active] [ref=e23]: QQ118439C
+          - listbox [ref=e24]:
+            - 'option "Person: Volkov, Mikhail" [ref=e25] [cursor=pointer]'
+        - button "Add many from a list" [ref=e26] [cursor=pointer]
+        - button "Filters" [ref=e29] [cursor=pointer]
+      - group "View" [ref=e32]:
+        - button "Graph" [pressed] [ref=e33] [cursor=pointer]
+        - button "Map" [ref=e34] [cursor=pointer]
+        - button "Drawing board" [ref=e35] [cursor=pointer]
+        - button "Reports" [ref=e36] [cursor=pointer]
+      - button "More views" [ref=e38] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e40]: ▾
+      - button "Export" [ref=e41] [cursor=pointer]: Export ▾
+      - button "Switch to the light theme" [ref=e43] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e44]: ☀
+    - region [ref=e45]:
+      - heading "You are in the Glass" [level=2] [ref=e46]
+      - generic [aria-hidden] [ref=e47]: ·
+      - generic [aria-hidden] [ref=e48]: Case
+      - 'button "Case: Untitled case" [ref=e50] [cursor=pointer]':
+        - generic [ref=e51]:
+          - generic [ref=e52]: "Case:"
+          - generic [ref=e53]: Untitled case
+        - generic [aria-hidden] [ref=e54]: ▾
+      - generic [aria-hidden] [ref=e55]: ·
+      - button "Views in this case" [ref=e56] [cursor=pointer]
+      - generic [aria-hidden] [ref=e57]: ·
+      - generic [ref=e58]: reads Fixture Corp
+    - generic [ref=e59]:
+      - navigation "Workspace" [ref=e60]:
+        - button "Explore" [ref=e61] [cursor=pointer]
+        - button "Ask & Chat" [ref=e64] [cursor=pointer]
+        - button "History" [ref=e67] [cursor=pointer]
+        - button "Help" [ref=e70] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e71]: "?"
+        - button "Show names" [ref=e72] [cursor=pointer]
+      - generic [ref=e76]:
+        - toolbar "Graph view" [ref=e77]:
+          - generic [ref=e78]:
+            - generic [ref=e79]: Match strictness
+            - generic [ref=e80]: Balanced
+            - slider "Match strictness" [ref=e81]: "1"
+        - generic [ref=e82]:
+          - generic [ref=e83]:
+== test-results/fixture-corp-moving-the-re-8a1ef--what-merged-and-what-split/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: fixture-corp.spec.ts >> moving the resolution threshold live reports what merged and what split
+- Location: live/fixture-corp.spec.ts:155:1
+
+# Error details
+
+```
+Error: expect(locator).toBeVisible() failed
+
+Locator: getByText(/Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/)
+Expected: visible
+Timeout: 30000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" getByText(/Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/) with timeout 30000ms
+  - waiting for getByText(/Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/)
+
+```
+
+```yaml
+- link "Skip to main content":
+  - /url: "#main-content"
+- note "Protective marking": PUBLIC
+- banner:
+  - button "Osprey, go to Home": Osprey
+  - navigation "Places":
+    - list:
+      - listitem:
+        - button "The Glass"
+      - listitem:
+        - button "Rules and Monitoring"
+  - combobox "Search entities, identifiers, documents"
+  - button "Add many from a list"
+  - button "Filters"
+  - group "View":
+    - button "Graph" [pressed]
+    - button "Map"
+    - button "Drawing board"
+    - button "Reports"
+  - button "More views"
+  - button "Export"
+  - button "Switch to the light theme"
+- region "You are in the Glass":
+  - heading "You are in the Glass" [level=2]
+  - 'button "Case: Untitled case"'
+  - button "Views in this case"
+  - text: reads Fixture Corp
+- navigation "Workspace":
+  - button "Explore"
+  - button "Ask & Chat"
+  - button "History"
+  - button "Help"
+  - button "Show names"
+- toolbar "Graph view":
+  - text: Match strictness Broad
+  - slider "Match strictness": "2"
+- dialog "Welcome back":
+  - heading "Welcome back" [level=2]
+  - button "Close the welcome panel": ×
+  - paragraph: The canvas is empty. Search, or open Explore to find where to start.
+  - paragraph:
+    - link "Read the user guide (PDF)":
+      - /url: http://127.0.0.1:59813/v1/guides/user
+  - heading "Keys worth knowing" [level=3]
+  - list "Keys worth knowing":
+    - listitem: / Search entities, identifiers, documents
+    - listitem: ←→ Move between nodes on the canvas
+    - listitem: Enter Expand the focused node by one hop
+    - listitem: F Fit the graph to the window
+    - listitem: Esc Clear the selection
+    - listitem: "? Open or close this panel"
+- application "Network canvas"
+== test-results/fixture-corp-the-pathfinde-acccc-bers-and-reports-its-length/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: fixture-corp.spec.ts >> the pathfinder finds a path between two ring members, and reports its length
+- Location: live/fixture-corp.spec.ts:296:1
+
+# Error details
+
+```
+Error: no search result for QQ789396A (corp-ring0-member0) after three attempts. The identifier resolves through POST /v1/search — if it does here too, this is the Glass, not the data; before owner ruling R4 it returned nothing for every Fixture Corp entity, because the fixture carried no identifier search could match.
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e5]:
+    - note "Protective marking" [ref=e6]: PUBLIC
+    - banner [ref=e7]:
+      - button "Osprey, go to Home" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: Osprey
+      - navigation "Places" [ref=e13]:
+        - list [ref=e14]:
+          - listitem [ref=e15]:
+            - button "The Glass" [ref=e16] [cursor=pointer]
+          - listitem [ref=e17]:
+            - button "Rules and Monitoring" [ref=e18] [cursor=pointer]
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - combobox "Search entities, identifiers, documents" [expanded] [active] [ref=e23]: QQ789396A
+          - listbox [ref=e24]:
+            - 'option "Person: Ring0Member0, Test" [ref=e25] [cursor=pointer]'
+        - button "Add many from a list" [ref=e26] [cursor=pointer]
+        - button "Filters" [ref=e29] [cursor=pointer]
+      - group "View" [ref=e32]:
+        - button "Graph" [pressed] [ref=e33] [cursor=pointer]
+        - button "Map" [ref=e34] [cursor=pointer]
+        - button "Drawing board" [ref=e35] [cursor=pointer]
+        - button "Reports" [ref=e36] [cursor=pointer]
+      - button "More views" [ref=e38] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e40]: ▾
+      - button "Export" [ref=e41] [cursor=pointer]: Export ▾
+      - button "Switch to the light theme" [ref=e43] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e44]: ☀
+    - region [ref=e45]:
+      - heading "You are in the Glass" [level=2] [ref=e46]
+      - generic [aria-hidden] [ref=e47]: ·
+      - generic [aria-hidden] [ref=e48]: Case
+      - 'button "Case: Untitled case" [ref=e50] [cursor=pointer]':
+        - generic [ref=e51]:
+          - generic [ref=e52]: "Case:"
+          - generic [ref=e53]: Untitled case
+        - generic [aria-hidden] [ref=e54]: ▾
+      - generic [aria-hidden] [ref=e55]: ·
+      - button "Views in this case" [ref=e56] [cursor=pointer]
+      - generic [aria-hidden] [ref=e57]: ·
+      - generic [ref=e58]: reads Fixture Corp
+    - generic [ref=e59]:
+      - navigation "Workspace" [ref=e60]:
+        - button "Explore" [ref=e61] [cursor=pointer]
+        - button "Ask & Chat" [ref=e64] [cursor=pointer]
+        - button "History" [ref=e67] [cursor=pointer]
+        - button "Help" [ref=e70] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e71]: "?"
+        - button "Show names" [ref=e72] [cursor=pointer]
+      - generic [ref=e76]:
+        - toolbar "Graph view" [ref=e77]:
+          - generic [ref=e78]:
+            - generic [ref=e79]: Match strictness
+            - generic [ref=e80]: Balanced
+            - slider "Match strictness" [ref=e81]: "1"
+        - generic [ref=e82]:
+          - generic [ref=e83]:
+== test-results/fixture-corp-the-query-bui-994cc-nd-reports-how-many-matched/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: fixture-corp.spec.ts >> the query builder finds Fixture Corp entities and reports how many matched
+- Location: live/fixture-corp.spec.ts:140:1
+
+# Error details
+
+```
+Test timeout of 120000ms exceeded.
+```
+
+```
+Error: locator.selectOption: Test timeout of 120000ms exceeded.
+Call log:
+  - waiting for getByRole('combobox', { name: 'Entity type' })
+
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e5]:
+    - note "Protective marking" [ref=e6]: PUBLIC
+    - banner [ref=e7]:
+      - button "Osprey, go to Home" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: Osprey
+      - navigation "Places" [ref=e13]:
+        - list [ref=e14]:
+          - listitem [ref=e15]:
+            - button "The Glass" [ref=e16] [cursor=pointer]
+          - listitem [ref=e17]:
+            - button "Rules and Monitoring" [ref=e18] [cursor=pointer]
+      - generic [ref=e21]:
+        - combobox "Search entities, identifiers, documents" [ref=e23]
+        - button "Add many from a list" [ref=e24] [cursor=pointer]
+        - button "Filters" [ref=e27] [cursor=pointer]
+      - group "View" [ref=e30]:
+        - button "Graph" [pressed] [ref=e31] [cursor=pointer]
+        - button "Map" [ref=e32] [cursor=pointer]
+        - button "Drawing board" [ref=e33] [cursor=pointer]
+        - button "Reports" [ref=e34] [cursor=pointer]
+      - button "More views" [ref=e36] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e38]: ▾
+      - button "Export" [ref=e39] [cursor=pointer]: Export ▾
+      - button "Switch to the light theme" [ref=e41] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e42]: ☀
+    - region [ref=e43]:
+      - heading "You are in the Glass" [level=2] [ref=e44]
+      - generic [aria-hidden] [ref=e45]: ·
+      - generic [aria-hidden] [ref=e46]: Case
+      - 'button "Case: Untitled case" [ref=e48] [cursor=pointer]':
+        - generic [ref=e49]:
+          - generic [ref=e50]: "Case:"
+          - generic [ref=e51]: Untitled case
+        - generic [aria-hidden] [ref=e52]: ▾
+      - generic [aria-hidden] [ref=e53]: ·
+      - button "Views in this case" [ref=e54] [cursor=pointer]
+      - generic [aria-hidden] [ref=e55]: ·
+      - generic [ref=e56]: reads Fixture Corp
+    - generic [ref=e57]:
+      - navigation "Workspace" [ref=e58]:
+        - button "Explore" [ref=e59] [cursor=pointer]
+        - button "Ask & Chat" [ref=e62] [cursor=pointer]
+        - button "History" [ref=e65] [cursor=pointer]
+        - button "Help" [ref=e68] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e69]: "?"
+        - button "Show names" [ref=e70] [cursor=pointer]
+      - generic [ref=e74]:
+        - toolbar "Graph view" [ref=e75]:
+          - generic [ref=e76]:
+            - generic [ref=e77]: Match strictness
+== the last of the Conduit's log
+INFO:     127.0.0.1:37344 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/counts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37330 - "POST /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/compute/degree HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37360 - "WebSocket /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/stream?ticket=<masked>" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:37330 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/most-connected?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37344 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/busiest-links?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37330 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37312 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37344 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/starter-questions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37354 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37344 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37354 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37344 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/starter-questions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37344 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37344 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37354 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37354 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37344 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37346 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/busiest-links?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37354 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/starter-questions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37328 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/most-connected?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37346 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37344 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37354 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37354 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37312 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37328 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37344 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/busiest-links?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37354 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/most-connected?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37346 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37312 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37354 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37344 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37328 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37330 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37328 - "GET /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37328 - "OPTIONS /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37330 - "POST /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50090 - "POST /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50094 - "POST /v1/investigations/01M7CK8J6HD0SVR8F21T2BH0CK/suggest HTTP/1.1" 200 OK
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T083352Z-a8aeb1cd).
+Wall time: 234 s, exit 1 (stack g, the lease case took at 2026-11-14T08:19:24Z; set-up before it 8 s)
