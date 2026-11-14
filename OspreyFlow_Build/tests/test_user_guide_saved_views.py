@@ -119,7 +119,9 @@ def test_the_canvas_notice_and_the_toolbar() -> None:
     # ADR-144 Amendment 6: the toolbar's Views menu, its file and its slot, removed.
     assert not (SRC / "views/ViewsMenu.tsx").exists() and "viewsMenu" not in canvas
     actions = screen("canvas/ViewActions.tsx")
-    assert "Clear the graph" in actions and 'aria-label="Clear the graph"' in actions
+    # The toolbar's button, by its word, and its confirmation, by its name.
+    assert "onClick={() => setConfirming(true)} > Clear the graph </button>" in actions
+    assert 'role="alertdialog" aria-label="Clear the graph"' in actions
     two = fold(section(USER, "### 5.2"))
     assert "**Remove from view** and **Clear the graph** take nodes off" in two
     assert "In a saved view, the menu offers only what changes nothing in the case." in two
