@@ -18,7 +18,7 @@ is made from the deployment's own schema, and is checked against it on every cha
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.96 | 2026-11-13 | §6a.8: what a backup set holds, as ADR-148 Amendment 13 decision 4 and the render have it: the claims part holds, in every shape, the shared volume's published pipelines, model settings and map settings with the map key file, beside the poc shape's Ingest root, and `ospreyflow-backup-claims` runs in every shape; "the shared volume is not backed up" struck. Held by `tests/test_guides_cloud_platform.py`, which reads the rendered values. PDF made by the orchestrator at merge. |
+| 1.96 | 2026-11-13 | §6a.8: what a backup set holds, as ADR-148 Amendment 13 decision 4 and the render have it: the claims part holds, in every shape, the shared volume's published pipelines, model settings and map settings with the map key file, beside the poc shape's Ingest root, and `ospreyflow-backup-claims` runs in every shape; what is not in a set, the tiles and, in the standard shape, the Ingest root on the shared volume; "the shared volume is not backed up" struck. Held by `tests/test_guides_cloud_platform.py`, which reads the rendered values. PDF made by the orchestrator at merge. |
 | 1.95 | 2026-11-13 | §6a.8: RDS's point-in-time restore of 35 days, as the Terraform renders it since ADR-148 Amendment 13, the same as the sets' 35, so every set still kept can be restored with its database; the 7 days and the older set's warning struck. Held by `tests/test_guides_cloud_platform.py`, which reads the rendered Terraform. PDF made by the orchestrator at merge. |
 | 1.94 | 2026-11-13 | The `cloud-platform` profile against the ADR-148 audit of 13 November (docs' v0.5.2 sweep, part one). §6a.7: nothing acts as its owner on Entra ID, so loads are started by hand: a pipeline's schedule and watched folder, *Run now* in Operations, `ospreyflow run`, a scheduled rule, the daily check for lapsing KYC documents, a list's refresh schedule, a watch's runs and anyone else's rules, hotlists and watches at a load, each as built, with the scheduler's own words and why they never pause a schedule; §6a.10's "marked stopped" struck, as untrue. §6a.5: one S3 read's 1,000 objects, no SSE-KMS bucket, Athena's default catalog alone. §6a.8: RDS's point-in-time restore of 7 days against the sets' 35. §6a.11: two app registrations, not one; volume encryption by the storage class, a new question. §8, §9.5, §9.11: the same Entra limit where each runs as its owner. §9: *People and roles* on Entra ID, each refusal in its own words, no administrator's fallback for clearance or unit. §10a: on a shared platform, a proxied map provider added in Admin has no way out. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 1.93 | 2026-11-13 | §6a: the least connections counted from the copies each shape renders (the owner's ruling: one Superset and one report sync in poc and development), 834 there and 918 in production, so the 1000 leaves 166 and 82 to spare. PDF reprinted alone. |
@@ -1606,10 +1606,12 @@ platform's, under its own snapshots and versioning. **The deployment backs up wh
 (ADR-148 Amendments 7 and 13): ArcadeDB, ClickHouse and the claims part. **The claims part holds, in
 every shape, the shared volume's folders the deployment cannot make again**: the published
 pipelines (`data/recipes`), the model settings (`model-settings`) and the map settings with the map
-key file (`map-settings`, ADR-147), each read-only to the backup; and, in the poc shape, the Ingest
-root's claim. The pods that mount them are writers a restore refuses to run beside. The rest of the
-shared volume, `ospreyflow-shared` (the tiles, and the uploads' scratch), is made again or is the
-Ingest's, and a restore leaves it as it is. The
+key file (`map-settings`, ADR-147); and, in the poc shape, the Ingest root's claim. Each is
+read-only to the backup, and the pods that mount them are writers a restore refuses to run beside.
+**Not in a set**: the rest of the shared volume, `ospreyflow-shared`: the tiles (`tiles`), made
+again, and, in the standard shape, the Ingest root (`ingest`: uploads and the drop folder), which
+there is a folder of the shared volume, not a claim of its own. A restore leaves those as they are,
+so in the standard shape an upload can disagree with the stores it brings back. The
 recovery runbook that ships with the product, `deploy/RUNBOOK.md`, has the whole procedure under *The
 `cloud-platform` profile*, with every command; this section says what it does.
 
