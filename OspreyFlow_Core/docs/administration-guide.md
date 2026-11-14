@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.06** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.07** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.07 | 2026-11-14 | §6a.7: a token of the other version than `token_version` is refused in words naming `requestedAccessTokenVersion` and the setting, and INSTALL step 6's check shows them after the first sign-in (ADR-148 Amendment 18). |
 | 2.06 | 2026-11-14 | §6a.7, the administrator fallback on the poc shape (ADR-148 Amendment 15): `{administrator: true}` as the source of a person's clearance, unit or handling codes, set in *Admin › People* with Access (none above the setter's own), a person with none set unable to sign in until set, the first administrators' values at install (`first_administrator_access`), refused on any other shape; Appendix A's three claim sources and `first_administrator_access`. PDF reprinted alone. |
 | 2.05 | 2026-11-14 | §6a.8: the Ingest root in the set in every shape (ADR-148 Amendment 13 point 4, amended 14 November): in the standard shape the shared volume's `ingest` folder is a part of its own, so it is no longer among what no set holds, and an upload no longer disagrees with a restore's stores. Held by `tests/test_guides_cloud_platform.py`, reading the render both ways. PDF made by the orchestrator at merge. |
 | 2.04 | 2026-11-14 | §6a.7 and §16's table of what to do when something is wrong: a stopped hotlist or watch says why beside *Stopped*, in the Conduit's words for its owner (ADR-044 Amendment 1). PDF made by the orchestrator at merge. |
@@ -1502,6 +1503,14 @@ from `https://login.microsoftonline.com/<tenant>/discovery/v2.0/keys` (or `…/d
 1.0), with `?appid=<api_client_id>` added when `claims_mapping_policy` is true. The Glass signs in
 at `https://login.microsoftonline.com/<tenant>/v2.0` whatever the version, by the authorisation code
 with PKCE, returning to the deployment's own address with a trailing `/`.
+
+**A token of the other version is refused in words** (ADR-148 Amendment 18). If the API registration
+issues the other version than `token_version` (with 2.0, its manifest's `requestedAccessTokenVersion`
+must be 2; left at null or 1, Entra issues v1.0), every sign-in is refused, and the Conduit says which
+version the registration issues and what to set, on the sign-in page and once in its log. Its words are
+read only from a token the tenant signed, and never let it in. INSTALL step 6's token-version check,
+run after the first administrator's first sign-in, shows the same words, or says no sign-in has been
+refused for it so far.
 
 `groups_claim` names the token claim that lists the person's Entra group ids; every `{groups: …}`
 table is read from it. Leave it at `groups` unless the app registration emits the groups under

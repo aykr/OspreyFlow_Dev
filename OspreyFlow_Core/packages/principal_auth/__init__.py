@@ -1116,6 +1116,58 @@ def out_of_date_next(error: PrincipalAccessOutOfDate, *, by_hand: bool = False) 
     return RUN_AGAIN_WORDS if by_hand else NEXT_SLOT_WORDS
 
 
+#: ADR-148 Amendment 18: how the Conduit's log begins its one line about a token-version mismatch,
+#: which INSTALL step 6's check reads (`harness/cloud_platform/runbooks.py`).
+TOKEN_VERSION_LOG = "token version: "
+
+
+class TokenVersionMismatch(PrincipalResolutionError):
+    """ADR-148 Amendment 18: an Entra access token signed by the tenant, but of the other version
+    than the deployment expects (`cloud_platform.claims.token_version`), so its issuer and audience
+    can never match. Refused in words that name the API registration's
+    `requestedAccessTokenVersion` and the setting, rather than a bare issuer or audience
+    mismatch."""
+
+    def __init__(self, got: str, want: str, issuer: str) -> None:
+        manifest = "2" if want == "2.0" else "1 (or null)"
+        super().__init__(
+            f"the API's app registration issues v{got} access tokens (issuer {issuer}), and this "
+            f"deployment expects v{want} (cloud_platform.claims.token_version: \"{want}\"): set "
+            f"requestedAccessTokenVersion to {manifest} in the API registration's manifest, or set "
+            f"token_version to \"{got}\" in osprey.yaml and render again"
+        )
+        self.got, self.want, self.issuer = got, want, issuer
+
+
+def entra_issuers(tenant_id: str) -> dict[str, str]:
+    """An Entra tenant's two access-token issuers, by token version, as `EntraSignInConfig.issuer`
+    renders them."""
+    return {
+        "1.0": f"https://sts.windows.net/{tenant_id}/",
+        "2.0": f"https://login.microsoftonline.com/{tenant_id}/v2.0",
+    }
+
+
+def token_version_mismatch(
+    claims: Mapping[str, Any], tenant_id: str, expected_issuer: str | None
+) -> TokenVersionMismatch | None:
+    """The mismatch a token signed by the tenant shows, or None. Only this tenant's own issuer in
+    the other version's form, with a `ver` that agrees with it when present, counts: anything
+    else is no version question and keeps the plain refusal. `claims` must already be
+    signature-checked."""
+    issuers = entra_issuers(tenant_id)
+    want = next((v for v, i in issuers.items() if i == expected_issuer), None)
+    issuer = claims.get("iss")
+    got = next((v for v, i in issuers.items() if i == issuer), None)
+    if want is None or got is None or got == want:
+        return None
+    ver = claims.get("ver")
+    if ver is not None and str(ver) != got:
+        return None
+    assert isinstance(issuer, str)
+    return TokenVersionMismatch(got, want, issuer)
+
+
 def _access_token_of(response: httpx.Response, what: str) -> str:
     """The `access_token` of a token endpoint's 200, or `PrincipalExchangeUnavailable`. A body that
     is not JSON, is not an object, or carries no non-empty string token is a malformed answer, not
@@ -1183,6 +1235,8 @@ class PrincipalResolver:
         self._role_source = role_source
         self._dashboard_source = dashboard_source
         self._role_lookup_timeout = role_lookup_timeout_seconds
+        #: ADR-148 Amendment 18: the token-version mismatch is logged once per process.
+        self._version_said = False
         self._config = config
         self._claim_mapping = mapping
         self._keys = SigningKeys(config.oidc_jwks_url, config.oidc_jwks_ttl_seconds)
@@ -1556,9 +1610,33 @@ class PrincipalResolver:
             raise PrincipalLookupUnavailable("the store answered something not a dashboard")
         return principal_from_claims(claims, mapping, stored)
 
+    def _version_mismatch(self, token: str, signing_key: Any) -> TokenVersionMismatch | None:
+        """ADR-148 Amendment 18: why a refused Entra token was refused, when the reason is its
+        version. Its signature is checked again with the tenant's own key, issuer and audience
+        aside, so only a token the tenant signed reaches the words; the token is never admitted by
+        this. The words are logged once per process, for INSTALL step 6's check to find."""
+        mapping = self._claim_mapping
+        if not mapping.is_entra or mapping.tenant_id is None:
+            return None
+        try:
+            claims = jwt.decode(
+                token, signing_key, algorithms=self._algorithms, leeway=LEEWAY_SECONDS,
+                options={"verify_aud": False, "verify_iss": False},
+            )  # fmt: skip
+        except jwt.PyJWTError:
+            return None
+        mismatch = token_version_mismatch(claims, mapping.tenant_id, self._config.oidc_issuer)
+        if mismatch is not None and not self._version_said:
+            self._version_said = True
+            _log.warning("%s%s", TOKEN_VERSION_LOG, mismatch)
+        return mismatch
+
     def _verified_claims(self, token: str) -> dict[str, Any]:
         try:
             signing_key = self._keys.key_for(token)
+        except jwt.PyJWTError as exc:
+            raise PrincipalResolutionError(f"token rejected: {exc}") from exc
+        try:
             claims = jwt.decode(
                 token,
                 signing_key,
@@ -1573,6 +1651,9 @@ class PrincipalResolver:
                 },
             )
         except jwt.PyJWTError as exc:
+            mismatch = self._version_mismatch(token, signing_key)
+            if mismatch is not None:
+                raise mismatch from exc
             raise PrincipalResolutionError(f"token rejected: {exc}") from exc
 
         # A missing clearance or unit is refused, not defaulted to "": defaulting would still fail

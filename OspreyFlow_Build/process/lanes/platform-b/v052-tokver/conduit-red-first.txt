@@ -1,0 +1,40 @@
+# ADR-148 Amendment 18, the token-version refusal: each plant at its own site in principal_auth, a fresh PYTHONPYCACHEPREFIX per run
+unplanted: exit 0: 9 passed in 6.96s
+== the version refusal not raised (the bare refusal, as before)
+  planted: exit 1: 3 failed, 6 passed in 6.46s
+    test_auth_entra_token_version.py::test_a_v1_token_where_v2_is_expected_is_refused_in_words
+    test_auth_entra_token_version.py::test_a_v2_token_where_v1_is_expected_is_refused_in_words
+    test_auth_entra_token_version.py::test_the_mismatch_is_logged_once_for_install_step_6
+== the signature not checked again before the words
+  planted: exit 1: 2 failed, 7 passed in 6.41s
+    test_auth_entra_token_version.py::test_a_token_the_tenant_did_not_sign_as_that_version_never_reaches_the_words[another-key]
+    test_auth_entra_token_version.py::test_a_token_the_tenant_did_not_sign_as_that_version_never_reaches_the_words[expired]
+== any tenant's issuer counted
+  planted: exit 1: 1 failed, 8 passed in 6.10s
+    test_auth_entra_token_version.py::test_a_token_the_tenant_did_not_sign_as_that_version_never_reaches_the_words[another-tenant]
+== ver not held to the issuer's form
+  planted: exit 1: 1 failed, 8 passed in 6.22s
+    test_auth_entra_token_version.py::test_a_token_the_tenant_did_not_sign_as_that_version_never_reaches_the_words[ver-disagrees-with-issuer]
+== the words logged at every refusal
+  planted: exit 1: 1 failed, 8 passed in 6.12s
+    test_auth_entra_token_version.py::test_the_mismatch_is_logged_once_for_install_step_6
+restored: exit 0: 9 passed in 6.44s
+
+# INSTALL step 6's token-version check, its plants in runbooks.py, a fresh PYTHONPYCACHEPREFIX per run.
+# Found first by the test itself: the block's first form ended its refusal with `false` inside an `if` and then
+# printed the all-clear, so it exited 0 with both messages; red in test_the_check_stops..., fixed with if/else.
+unplanted: exit 0: 3 passed in 3.68s
+== the block looking for its own copy of the prefix, not the Conduit's
+  planted: exit 1: 1 failed, 2 passed in 4.56s
+    test_cloud_platform_token_version.py::test_the_check_stops_with_the_conduit_s_own_words_after_a_refused_sign_in
+== the block saying the words but not stopping
+  planted: exit 1: 1 failed, 2 passed in 5.73s
+    test_cloud_platform_token_version.py::test_the_check_stops_with_the_conduit_s_own_words_after_a_refused_sign_in
+restored: exit 0: 3 passed in 4.47s
+
+# Against R1's Entra stand-in issuing v1.0 (standin_v1.diff applied to a copy of platform's r1_kind_servers.py): a real Glass
+# sign-in's access token given to the Conduit's resolver as the poc render configures it, a fresh PYTHONPYCACHEPREFIX per run
+== the Conduit's version refusal removed
+FAILED test_standin_v1.py::test_the_stand_in_at_v1_is_refused_in_the_version_s_own_words
+1 failed, 1 passed in 2.75s
+restored: 2 passed in 2.80s

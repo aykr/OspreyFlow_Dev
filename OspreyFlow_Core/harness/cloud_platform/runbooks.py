@@ -40,6 +40,7 @@ from harness.cloud_platform.decommission_check import DISK_NAMESPACE_TAG, KINDS
 from harness.cloud_platform.settings import PlatformSettings
 from harness.cloud_platform.terraform import BUCKETS, RDS_INSTANCE_CLASS, ecr_repositories
 from harness.cloud_platform_backups import BUCKET_SUFFIX, EXPIRE_DAYS, KEPT_AT_DECOMMISSION
+from principal_auth import TOKEN_VERSION_LOG
 from schemas.deployment import OspreyConfig, SearchBackend, generated_folder
 
 RELEASE = "ospreyflow"
@@ -329,6 +330,22 @@ Entra's settings:
 kubectl -n "$NS" exec deploy/api -- printenv OSPREY_IDENTITY_PROVIDER OIDC_ISSUER
 ```
 
+**The token version** (ADR-148 Amendment 18). The Conduit expects v{claims.token_version} access tokens
+(`cloud_platform.claims.token_version`). If the API registration issues the other version, every sign-in is
+refused, and the Conduit says why, once, in its log: which version the registration issues and what to set
+(`requestedAccessTokenVersion` in the API registration's manifest, or `token_version`). Run this after the
+first administrator's first sign-in (section 8, item 2). Before anyone has signed in it can only say that no
+sign-in has been refused for this so far.
+
+```bash
+said="$(kubectl -n "$NS" logs deploy/api --since=24h 2>/dev/null | grep -m1 -F "{TOKEN_VERSION_LOG}" || true)"
+if [ -n "$said" ]; then
+  echo "$said"; echo "sign-in is refused for the token version: fix it as said, render again (step 4) and install"; false
+else
+  echo "no sign-in refused for its token version so far"
+fi
+```
+
 **If no administrator is left** (nobody enabled who has signed in can manage people): add the Entra
 object id of a person who is not disabled here to `cloud_platform.claims.first_administrators` in
 `osprey.yaml`, render again (step 4) and install the new values: the list is in the deployment's
@@ -363,7 +380,8 @@ stop and raise it with the client's Entra administrator before anyone else is to
 
 1. **Token version.** With `token_version` 2.0, the API registration's manifest has
    `requestedAccessTokenVersion` set to 2. Without it, Entra issues v1.0 tokens with another issuer,
-   and every sign-in is refused.
+   and every sign-in is refused, in words that say so: step 6's token-version check, run after this
+   first sign-in, shows them.
 2. **The first administrator.** One of {", ".join(claims.first_administrators)} signs in at
    `https://{glass}`. Admin › People lists them with Admin, and their clearance (for example
    OFFICIAL-SENSITIVE), unit and handling codes are the ones their groups give. If they are not, the
