@@ -1,0 +1,25 @@
+# Step 4's runner on stack f (the orchestrator's slot), under the lease platform took at 2026-11-14T09:09:20Z; runner_proof.sh
+# through stack_lease.sh remote. Tokens and ports are not in the output. Five runs; the first four each found a gap, fixed:
+# 1. 091020Z-0f15af13: OSPREY_RUN_TAG a folder, refused in a container name (2d22adf).
+# 2. 091409Z-3b92da36: the Conduit not ready in 240 s, its log lost with it (829c584: the log shown, masked).
+# 3. the Conduit opened DuckDB in a folder it could not write: no poc settings (c9d7064: the poc render's environment).
+# 4. the Conduit read osprey.yaml and found none (f2d0449: each workload's files and plain settings from the render).
+# 5. green, at f2d0449, output below:
+Running on ospreyflow-test (stack f, osprey-runs/platform/), logged at osprey-runs/platform.meta/runs/20261114T095039Z-139394a5/log: bash OspreyFlow_Build/process/lanes/platform/v052-measure/runner_proof.sh
+# red: a case m10-measure is not granted
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight refused: m10-measure is not granted the case (HTTP 404): nothing to measure as; the command was not run
+# red: the runner's exit 2 (2 is the preflight's refusal)
+# green: a case seeded for m10-measure
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure reads the case; a subject granted nothing is refused
+OSPREY_MEASURE_BASE
+OSPREY_MEASURE_CASE
+OSPREY_MEASURE_CONTROLS
+OSPREY_MEASURE_PART_TOKEN
+OSPREY_MEASURE_TOKEN
+# green: the runner's exit 0
+# containers of this lane left after both runs: 0
+Wall time: 80 s, exit 0 (stack f, the lease platform took at 2026-11-14T09:09:20Z; set-up before it 14 s)

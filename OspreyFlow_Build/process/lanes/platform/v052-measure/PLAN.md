@@ -48,6 +48,17 @@ proposals.
 4. Two principals, as B's accounts allow: one cleared for everything loaded, and one for a part. The leak test
    (requirement a) runs at this scale as the second.
 
+## A known difference from the client's poc
+
+Step 4 runs the Conduit with the poc's own settings against the leased stack's stores on the host's loopback: OpenSearch
+unsigned, no TLS, no network between them (`step4_stack.py`). The poc signs every OpenSearch call (SigV4 for `es`), uses
+TLS, and crosses the VPC to its endpoint. So step 4's figures leave out:
+- SigV4: 35 µs p50, 38 µs p95 per signature with the Conduit's own signer (`sigv4_cost.py`, 14 Nov, arm64), about
+  0.01% of M1's 300 ms; up to 0.1 ms on a slower CPU.
+- TLS: unmeasured; paid per connection with a kept-alive pool, then only record encryption per request.
+- The network to the endpoint: unmeasured and likely the largest; seen in step 6 on the poc. A step 4 figure near its
+  budget is read as possibly over it on the poc.
+
 ## What is measured, how, and the proposed budgets
 
 Each latency is measured at the Conduit, by `scripts/measure_search.py` (to be written; below), as a p50, p95, p99

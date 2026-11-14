@@ -38663,6 +38663,21 @@ before it is wired (rule 15). M2 is to become a `perf/` case beside glass-perf. 
 and the drift check's bounds and memory, held by the render tests. M11 changes the manifest and the profile together.
 Those not yet written are built with step 4's results, not before: this amendment fixes the figures they will hold.
 
+**A known difference: step 4 measures without the poc's signing, TLS and network.** Step 4's runner
+(`process/lanes/platform/v052-measure/step4_stack.py`) gives the Conduit the poc render's own settings, but its stores
+are the leased stack's on the host's loopback: OpenSearch unsigned (no SigV4) and every store without TLS. The client's
+poc signs every OpenSearch call for `es`, sends it over TLS, and reaches a VPC endpoint across the network. So M1 to
+M6's figures leave out three costs the poc pays on each search:
+- **SigV4 signing:** measured by `v052-measure/sigv4_cost.py` with the Conduit's own signer (opensearch-py's
+  `AWSV4SignerAsyncAuth` over botocore, synthetic credentials, a 1.4 KB search body): **35 µs at p50, 38 µs at p95**
+  per signature on an arm64 development machine (14 November 2026). A suggestion or a search makes one OpenSearch call,
+  so against M1's 300 ms it is about 0.01%; on a slower cluster CPU, take it as up to 0.1 ms.
+- **TLS:** not measured. With the client's pool kept alive the handshake is paid per connection, not per request; per
+  request it is the record encryption of a few KB.
+- **The network to the endpoint:** not measured, and likely the largest of the three (an in-VPC round trip, against a
+  loopback one). Step 6's run on the poc itself is where it is seen; until then a figure close to its budget is read as
+  possibly over it on the poc.
+
 **Consequences.** A result is read against a figure fixed before the run, and the timer cannot be handed a laxer one.
 A figure changed later is an amendment to this table, and the timer's constants follow it in the same change, or the
 test above is red. What B's load cannot answer (M1 at tens of millions) is said beside the figure it limits, never
