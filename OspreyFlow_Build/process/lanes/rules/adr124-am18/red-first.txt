@@ -1,0 +1,2167 @@
+ADR-124 Amendment 18, red first: the offline graph adapter tests, the CountingStore stand-in refusing an unlabelled lookup by id (g.V().has("id"...) or g.E().hasLabel(...).has("id"...)), against the write path as it was at 90442ba (lane/rules-adr124-am18), on this Mac, test_sources_withheld_live.py (a live file) left out.
+...........................FFFF.F...FF.....................F...FFFFFFFFF [ 22%]
+FFFFFFFFFFFFFF...FF....F................................................ [ 44%]
+.....................................F......FFF.FF...................... [ 66%]
+........................................................................ [ 89%]
+...................................                                      [100%]
+=================================== FAILURES ===================================
+________ test_the_row_carries_what_upsert_would_store_for_a_single_edge ________
+
+    def test_the_row_carries_what_upsert_would_store_for_a_single_edge() -> None:
+        """Catches the bulk path storing a single edge differently from `upsert_edges` (one and many
+        must give the same stored result): the same properties, with weight and components computed
+        from the same counts."""
+        from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter
+    
+        edge = _edge("a", "b", 1, 3)
+        transport = _store("a", "b")
+        _load(transport, [edge])
+        (row,) = transport.written
+    
+        store = CountingStore()
+>       asyncio.run(make_adapter(store).upsert_edges([edge], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py:514: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+____ test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert[1] _____
+
+weights_version = 1
+
+    @pytest.mark.parametrize("weights_version", [1, 2, 3])
+    def test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert(
+        weights_version: int,
+    ) -> None:
+        """ADR-120 Amendment 4. Catches a path that counts a self-loop's occurrences once in its
+        node's degree (the store reads it back twice through `bothE`), or weighs it with a
+        mutual-information term: the same loop, at a node with other occurrences, must store the same
+        components and the same weight by either path. Both counts are 7 + 2 x 3 = 13 at the node.
+    
+        ADR-123: the term is zero from version 2, so only version 1 (pinned by index, not "latest")
+        can show a path that weighs the loop with it. The version 1 case proves that: the loop's
+        weight with the term left in is another number, so a path that did that would fail here."""
+        from adapters.graph_arcadedb.weight import compute_weight
+        from ontology.weights import load_weight_history
+        from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter
+    
+        rules = load_weight_history()[weights_version - 1]
+        assert rules.version == weights_version
+    
+        other, loop = _edge("a", "b", 1, 7), _edge("a", "a", 2, 3)
+        transport = _store("a", "b")
+        asyncio.run(
+            BulkEdgeLoader(transport, rules, handling_scheme=load_uk_le_scheme()).load(
+                SCHEMA, [other, loop]
+            )
+        )
+        bulk = {row["p"]["id"]: row["p"] for row in transport.written}["edge-2"]
+    
+        store = CountingStore()
+        graph = make_adapter(store, rules)
+>       asyncio.run(graph.upsert_edges([other], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py:557: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+____ test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert[2] _____
+
+weights_version = 2
+
+    @pytest.mark.parametrize("weights_version", [1, 2, 3])
+    def test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert(
+        weights_version: int,
+    ) -> None:
+        """ADR-120 Amendment 4. Catches a path that counts a self-loop's occurrences once in its
+        node's degree (the store reads it back twice through `bothE`), or weighs it with a
+        mutual-information term: the same loop, at a node with other occurrences, must store the same
+        components and the same weight by either path. Both counts are 7 + 2 x 3 = 13 at the node.
+    
+        ADR-123: the term is zero from version 2, so only version 1 (pinned by index, not "latest")
+        can show a path that weighs the loop with it. The version 1 case proves that: the loop's
+        weight with the term left in is another number, so a path that did that would fail here."""
+        from adapters.graph_arcadedb.weight import compute_weight
+        from ontology.weights import load_weight_history
+        from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter
+    
+        rules = load_weight_history()[weights_version - 1]
+        assert rules.version == weights_version
+    
+        other, loop = _edge("a", "b", 1, 7), _edge("a", "a", 2, 3)
+        transport = _store("a", "b")
+        asyncio.run(
+            BulkEdgeLoader(transport, rules, handling_scheme=load_uk_le_scheme()).load(
+                SCHEMA, [other, loop]
+            )
+        )
+        bulk = {row["p"]["id"]: row["p"] for row in transport.written}["edge-2"]
+    
+        store = CountingStore()
+        graph = make_adapter(store, rules)
+>       asyncio.run(graph.upsert_edges([other], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py:557: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+____ test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert[3] _____
+
+weights_version = 3
+
+    @pytest.mark.parametrize("weights_version", [1, 2, 3])
+    def test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert(
+        weights_version: int,
+    ) -> None:
+        """ADR-120 Amendment 4. Catches a path that counts a self-loop's occurrences once in its
+        node's degree (the store reads it back twice through `bothE`), or weighs it with a
+        mutual-information term: the same loop, at a node with other occurrences, must store the same
+        components and the same weight by either path. Both counts are 7 + 2 x 3 = 13 at the node.
+    
+        ADR-123: the term is zero from version 2, so only version 1 (pinned by index, not "latest")
+        can show a path that weighs the loop with it. The version 1 case proves that: the loop's
+        weight with the term left in is another number, so a path that did that would fail here."""
+        from adapters.graph_arcadedb.weight import compute_weight
+        from ontology.weights import load_weight_history
+        from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter
+    
+        rules = load_weight_history()[weights_version - 1]
+        assert rules.version == weights_version
+    
+        other, loop = _edge("a", "b", 1, 7), _edge("a", "a", 2, 3)
+        transport = _store("a", "b")
+        asyncio.run(
+            BulkEdgeLoader(transport, rules, handling_scheme=load_uk_le_scheme()).load(
+                SCHEMA, [other, loop]
+            )
+        )
+        bulk = {row["p"]["id"]: row["p"] for row in transport.written}["edge-2"]
+    
+        store = CountingStore()
+        graph = make_adapter(store, rules)
+>       asyncio.run(graph.upsert_edges([other], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py:557: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+______ test_a_second_write_of_the_same_self_loop_counts_both_writes_twice ______
+
+    def test_a_second_write_of_the_same_self_loop_counts_both_writes_twice() -> None:
+        """ADR-120 Amendment 4. Catches an upsert that counts a stored self-loop twice but a new write
+        of it once (or the reverse): with 7 at the node from another link, a self-loop written at 3
+        and again at 2 leaves 7 + 2 x 3 + 2 x 2 = 17 in its node's degree, the pair at 5, and the
+        type's total at 12."""
+        from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter
+    
+        store = CountingStore()
+        graph = make_adapter(store)
+>       asyncio.run(graph.upsert_edges([_edge("a", "b", 1, 7)], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py:611: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_ test_the_gremlin_the_upsert_path_sends_for_counts_leaves_out_superseded_links _
+
+    def test_the_gremlin_the_upsert_path_sends_for_counts_leaves_out_superseded_links() -> None:
+        """ADR-120 Amendment 5, decision 1. Catches `upsert_edges` weighing a link against a degree
+        or total query that filters only `reverted`: every query the write sends that sums occurrences
+        must also exclude `superseded_by`. This tests `upsert_edges` only; `supersede_edge`'s own
+        weighing (it marks the old link before weighing the replacement) is proven by the conformance
+        case `test_a_superseded_link_does_not_count_in_the_corpus`, which needs a live store."""
+        from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter
+    
+        store = CountingStore()
+        graph = make_adapter(store)
+>       asyncio.run(graph.upsert_edges([_edge("a", "b", 1, 3)], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py:705: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_ test_the_counting_store_leaves_a_superseded_link_out_only_when_the_query_asks _
+
+    def test_the_counting_store_leaves_a_superseded_link_out_only_when_the_query_asks() -> None:
+        """ADR-120 Amendment 5, decision 1. Catches the in-memory store behind the upsert-path tests
+        counting a link with `superseded_by` whatever the query says: a query with
+        `hasNot("superseded_by")` must not see it, one without must (so a production query that forgot
+        the step still shows the superseded link's occurrences, as the real store would)."""
+        from tests.adapters.graph_arcadedb.edge_store import CountingStore
+    
+        store = CountingStore()
+        store.edges[("a", "b")] = {"id": "e1", "occurrences": 5, "superseded_by": "e2"}
+        store.edges[("a", "c")] = {"id": "e3", "occurrences": 2}
+        base_degree = "g.V().has(\"id\",'a').bothE('x').has(\"reverted\",false)"
+        base_total = "g.V().outE('x').has(\"reverted\",false)"
+        tail = '.values("occurrences").sum()'
+        excluded = '.hasNot("superseded_by")'
+    
+        async def ask(query: str) -> int:
+            return int((await store.gremlin(query))[0]["result"])
+    
+>       assert asyncio.run(ask(base_degree + excluded + tail)) == 2
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py:731: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py:729: in ask
+    return int((await store.gremlin(query))[0]["result"])
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').bothE(\'x\').has("reverted",false).hasNot("superseded_by").values("occurrences").sum()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').bothE('x').has("reverted",false).hasNot("superseded_by").values("occurrences").sum()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+______________ test_more_rows_than_the_old_default_all_come_back _______________
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+>           yield
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+.venv/lib/python3.12/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {<class 'TimeoutError'>: <class 'httpcore.ConnectTimeout'>, <class 'OSError'>: <class 'httpcore.ConnectError'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ConnectError'>}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -> typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: All connection attempts failed
+
+.venv/lib/python3.12/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+    async def test_more_rows_than_the_old_default_all_come_back() -> None:
+>       async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as graph:
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_client_row_limit.py:58: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/contextlib.py:210: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/testing.py:107: in arcadedb_adapter
+    await client.drop_database()
+packages/adapters/graph_arcadedb/client.py:270: in drop_database
+    await self.drop_database_named(self._config.database)
+packages/adapters/graph_arcadedb/client.py:279: in drop_database_named
+    databases = await self._server_command("list databases")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:284: in _server_command
+    resp = await self._post("/api/v1/server", json={"command": command})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:235: in _post
+    return await self._send(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:256: in _send
+    return await self._http.post(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: All connection attempts failed
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:118: ConnectError
+___________________ test_a_batch_reads_the_corpus_total_once ___________________
+
+    def test_a_batch_reads_the_corpus_total_once() -> None:
+        """Catches the corpus total being asked for once per edge: forty writes would cost forty
+        whole-corpus traversals, the quadratic load that took 17 hours projected on Enron."""
+        store = CountingStore()
+>       asyncio.run(make_adapter(store).upsert_edges(_batch(), "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_corpus_total_read_once_per_call.py:43: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'n0\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'n0').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+__________ test_a_batch_weighs_each_edge_as_if_written_one_at_a_time ___________
+
+    def test_a_batch_weighs_each_edge_as_if_written_one_at_a_time() -> None:
+        """Catches the carried-forward total drifting from the stored one: skipping the call's own
+        delta, adding it twice, or not adding it for a merge into an existing pair would each change a
+        stored component (and the weight, under version 1 only), so the batch and the one-at-a-time
+        loads would disagree."""
+        batched = CountingStore()
+>       asyncio.run(make_adapter(batched).upsert_edges(_batch(), "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_corpus_total_read_once_per_call.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'n0\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'n0').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+______________ test_nothing_is_carried_from_one_call_to_the_next _______________
+
+    def test_nothing_is_carried_from_one_call_to_the_next() -> None:
+        """Catches the total being kept on the adapter between calls: a second call must read the
+        store again, because anything else may have written or reverted since the first."""
+        store = CountingStore()
+        graph = make_adapter(store)
+>       asyncio.run(graph.upsert_edges(_batch()[:5], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_corpus_total_read_once_per_call.py:69: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'n0\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'n0').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_________ test_the_counting_store_counts_a_self_loop_twice_like_bothE __________
+
+    def test_the_counting_store_counts_a_self_loop_twice_like_bothE() -> None:
+        store = CountingStore()
+        store.edges[("a", "b")] = {"occurrences": 7}
+        store.edges[("a", "a")] = {"occurrences": 3}
+>       assert _degree(store, "a") == 7 + 2 * 3
+               ^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_counting_store_self_loop.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_counting_store_self_loop.py:20: in _degree
+    (answer,) = asyncio.run(store.gremlin(query))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').bothE(\'L\').has("reverted",false).values("occurrences").sum()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').bothE('L').has("reverted",false).values("occurrences").sum()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_________________ test_every_type_indexes_its_datasets_by_item _________________
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+>           yield
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+.venv/lib/python3.12/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {<class 'TimeoutError'>: <class 'httpcore.ConnectTimeout'>, <class 'OSError'>: <class 'httpcore.ConnectError'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ConnectError'>}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -> typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: All connection attempts failed
+
+.venv/lib/python3.12/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+    async def test_every_type_indexes_its_datasets_by_item() -> None:
+>       async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/contextlib.py:210: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/testing.py:107: in arcadedb_adapter
+    await client.drop_database()
+packages/adapters/graph_arcadedb/client.py:270: in drop_database
+    await self.drop_database_named(self._config.database)
+packages/adapters/graph_arcadedb/client.py:279: in drop_database_named
+    databases = await self._server_command("list databases")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:284: in _server_command
+    resp = await self._post("/api/v1/server", json={"command": command})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:235: in _post
+    return await self._send(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:256: in _send
+    return await self._http.post(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: All connection attempts failed
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:118: ConnectError
+________ test_the_index_and_a_scan_agree_after_a_rewrite_adds_a_dataset ________
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+>           yield
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+.venv/lib/python3.12/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {<class 'TimeoutError'>: <class 'httpcore.ConnectTimeout'>, <class 'OSError'>: <class 'httpcore.ConnectError'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ConnectError'>}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -> typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: All connection attempts failed
+
+.venv/lib/python3.12/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+    async def test_the_index_and_a_scan_agree_after_a_rewrite_adds_a_dataset() -> None:
+>       async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py:67: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/contextlib.py:210: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/testing.py:107: in arcadedb_adapter
+    await client.drop_database()
+packages/adapters/graph_arcadedb/client.py:270: in drop_database
+    await self.drop_database_named(self._config.database)
+packages/adapters/graph_arcadedb/client.py:279: in drop_database_named
+    databases = await self._server_command("list databases")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:284: in _server_command
+    resp = await self._post("/api/v1/server", json={"command": command})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:235: in _post
+    return await self._send(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:256: in _send
+    return await self._http.post(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: All connection attempts failed
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:118: ConnectError
+__ test_a_merge_that_leaves_a_span_open_leaves_no_flattened_end_in_the_store ___
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+>           yield
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+.venv/lib/python3.12/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {<class 'TimeoutError'>: <class 'httpcore.ConnectTimeout'>, <class 'OSError'>: <class 'httpcore.ConnectError'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ConnectError'>}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -> typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: All connection attempts failed
+
+.venv/lib/python3.12/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+    async def test_a_merge_that_leaves_a_span_open_leaves_no_flattened_end_in_the_store() -> None:
+        """The stored link keeps its interval nested and its ends flattened (the flattened end only when
+        there is one). A closed link merged with an open write must lose the flattened `valid_to` the
+        closed write left, in the store itself: it reads back open, and the raw record has no end. A
+        merge that stays closed keeps it."""
+        start = datetime(2026, 3, 1, 9, 0, tzinfo=UTC)
+>       async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py:128: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/contextlib.py:210: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/testing.py:107: in arcadedb_adapter
+    await client.drop_database()
+packages/adapters/graph_arcadedb/client.py:270: in drop_database
+    await self.drop_database_named(self._config.database)
+packages/adapters/graph_arcadedb/client.py:279: in drop_database_named
+    databases = await self._server_command("list databases")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:284: in _server_command
+    resp = await self._post("/api/v1/server", json={"command": command})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:235: in _post
+    return await self._send(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:256: in _send
+    return await self._http.post(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: All connection attempts failed
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:118: ConnectError
+___________ test_the_operator_script_closes_only_old_paysim_instants ___________
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+>           yield
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+.venv/lib/python3.12/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {<class 'TimeoutError'>: <class 'httpcore.ConnectTimeout'>, <class 'OSError'>: <class 'httpcore.ConnectError'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ConnectError'>}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -> typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: All connection attempts failed
+
+.venv/lib/python3.12/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+    async def test_the_operator_script_closes_only_old_paysim_instants() -> None:
+        """`scripts.close_paysim_instants` on real ArcadeDB (ADR-127 decision 11): of the endless links,
+        only a `TRANSACTED` link whose every source is `paysim-dataset`, written before the cutoff and
+        not changed by an analyst, is closed at its start (nested interval and flattened end). Left
+        open: a PaySim link written after the cutoff, a PaySim link an analyst changed, another source's
+        `TRANSACTED`, an open span of another link type (as the PID's custody links are), and a
+        reverted one. A dry run writes nothing; a rerun
+        closes nothing."""
+        from scripts.close_paysim_instants import close_paysim_instants
+    
+        start = datetime(2026, 1, 2, 9, 0, tzinfo=UTC)
+        cutoff = datetime(2026, 3, 1, tzinfo=UTC)
+        long_ago, later = datetime(2026, 1, 5, tzinfo=UTC), datetime(2026, 4, 1, tzinfo=UTC)
+        open_span = Interval(valid_from=start, valid_to=None)
+>       async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py:174: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/contextlib.py:210: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/testing.py:107: in arcadedb_adapter
+    await client.drop_database()
+packages/adapters/graph_arcadedb/client.py:270: in drop_database
+    await self.drop_database_named(self._config.database)
+packages/adapters/graph_arcadedb/client.py:279: in drop_database_named
+    databases = await self._server_command("list databases")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:284: in _server_command
+    resp = await self._post("/api/v1/server", json={"command": command})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:235: in _post
+    return await self._send(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/client.py:256: in _send
+    return await self._http.post(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: All connection attempts failed
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:118: ConnectError
+_____ test_two_writes_with_one_marking_make_one_link_with_two_occurrences ______
+
+    def test_two_writes_with_one_marking_make_one_link_with_two_occurrences() -> None:
+>       store, ids = _store_after(_write(1), _write(2))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:46: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+__________________ test_a_stricter_write_is_a_link_of_its_own __________________
+
+    def test_a_stricter_write_is_a_link_of_its_own() -> None:
+>       store, ids = _store_after(_write(1), _write(2, classification="SECRET"))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_________________ test_a_laxer_write_is_a_link_of_its_own_too __________________
+
+    def test_a_laxer_write_is_a_link_of_its_own_too() -> None:
+>       store, ids = _store_after(_write(1, classification="SECRET"), _write(2))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:59: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_____________ test_a_different_handling_code_is_a_link_of_its_own ______________
+
+    def test_a_different_handling_code_is_a_link_of_its_own() -> None:
+>       store, _ = _store_after(_write(1), _write(2, handling_code="C"))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:64: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_____________ test_writes_under_two_restricted_units_are_two_links _____________
+
+    def test_writes_under_two_restricted_units_are_two_links() -> None:
+>       store, ids = _store_after(
+            _write(1, handling_code="R", owning_unit="unit-1", originator="unit-1"),
+            _write(2, handling_code="R", owning_unit="unit-2", originator="unit-2"),
+            _write(3, handling_code="R", owning_unit="unit-1", originator="unit-1"),
+        )
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:69: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_________ test_two_unrestricted_codes_with_different_units_still_merge _________
+
+    def test_two_unrestricted_codes_with_different_units_still_merge() -> None:
+        for code in ("P", "C"):
+>           store, ids = _store_after(
+                _write(1, handling_code=code, owning_unit="unit-1"),
+                _write(2, handling_code=code, owning_unit="unit-2", originator="unit-3"),
+            )
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:84: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+__________________ test_writes_in_two_datasets_are_two_links ___________________
+
+    def test_writes_in_two_datasets_are_two_links() -> None:
+>       store, ids = _store_after(
+            _write(1, datasets=["enron"]),
+            _write(2, datasets=["fixture"]),
+            _write(3, datasets=["enron"]),
+            _write(4, datasets=["fixture", "enron"]),
+        )
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_____ test_a_write_merges_into_the_link_of_its_own_audience_among_several ______
+
+    def test_a_write_merges_into_the_link_of_its_own_audience_among_several() -> None:
+>       store, ids = _store_after(
+            _write(1), _write(2, classification="SECRET"), _write(3), _write(4, classification="SECRET")
+        )
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:105: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+______ test_a_merge_still_never_lowers_the_parts_that_decide_no_audience _______
+
+    def test_a_merge_still_never_lowers_the_parts_that_decide_no_audience() -> None:
+        from schemas.domain import Handling
+    
+        first = _write(1)
+        stricter_action = first.model_copy(
+            update={"handling": Handling(**{**first.handling.model_dump(), "action_code": "A2"})}
+        )
+>       store, _ = _store_after(stricter_action, _write(2))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_ test_a_fixed_id_write_in_another_audience_is_a_link_of_its_own_under_a_new_id _
+
+    def test_a_fixed_id_write_in_another_audience_is_a_link_of_its_own_under_a_new_id() -> None:
+>       store, ids = _store_after(
+            _write(1, id="doc:held-by:a"), _write(2, id="doc:held-by:a", classification="SECRET")
+        )
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:134: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+______ test_a_fixed_id_write_in_the_same_audience_merges_and_keeps_its_id ______
+
+    def test_a_fixed_id_write_in_the_same_audience_merges_and_keeps_its_id() -> None:
+>       store, ids = _store_after(_write(1, id="doc:held-by:a"), _write(2, id="doc:held-by:a"))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:142: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_______ test_a_fixed_id_write_after_the_link_was_reverted_gets_a_new_id ________
+
+    def test_a_fixed_id_write_after_the_link_was_reverted_gets_a_new_id() -> None:
+        """A reverted link is not merged into, but it still holds its id."""
+>       store, _ = _store_after(_write(1, id="doc:held-by:a"))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:149: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+__________________ test_a_superseded_link_is_not_merged_into ___________________
+
+    def test_a_superseded_link_is_not_merged_into() -> None:
+>       store, _ = _store_after(_write(1))
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:157: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_ test_with_two_links_of_one_audience_a_write_merges_into_the_newest_by_revision_then_creation _
+
+    def test_with_two_links_of_one_audience_a_write_merges_into_the_newest_by_revision_then_creation() -> None:
+        """`supersede_edge` can put a replacement beside a live link of the same audience, so the pair
+        holds two. The write goes to one of them deterministically: the higher revision, then the later
+        creation, then the id; never whichever the store happens to return first."""
+        for order in ((0, 1), (1, 0)):
+            store = CountingStore()
+            graph = make_adapter(store)
+>           older = _link_of(1, revision=1, created="2026-01-01T00:00:00+00:00")
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:179: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:166: in _link_of
+    store, _ = _store_after(_write(n))
+               ^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_ test_a_new_links_id_is_checked_against_the_types_unique_index_not_by_a_scan __
+
+    def test_a_new_links_id_is_checked_against_the_types_unique_index_not_by_a_scan() -> None:
+        """The adapter asks whether an id is held for every link it creates, so the question must be
+        answered by the type's unique `id` index (`SELECT id FROM <type> WHERE id IN :ids`, as the
+        by-id reads are) and not by a Gremlin traversal that may scan the type."""
+>       store, _ = _store_after(_write(1), _write(2, classification="SECRET"))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:204: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py:41: in _store_after
+    ids.extend(asyncio.run(graph.upsert_edges([write], "tx")))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+______________ test_a_link_created_with_writes_n_holds_revision_n ______________
+
+    def test_a_link_created_with_writes_n_holds_revision_n() -> None:
+        """Catches `upsert_edges` storing a new link at revision 1 whatever `writes` says."""
+        store = CountingStore()
+>       asyncio.run(make_adapter(store).upsert_edges([_writes(1, count=3)], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_write_count.py:44: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_______________ test_a_merge_adds_writes_to_the_stored_revision ________________
+
+    def test_a_merge_adds_writes_to_the_stored_revision() -> None:
+        """Catches a merge adding 1 whatever `writes` says: 2, then 4, then a plain write is 7."""
+        store = CountingStore()
+        graph = make_adapter(store)
+        for write in (_writes(1, count=2), _writes(2, count=4)):
+>           asyncio.run(graph.upsert_edges([write], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_write_count.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+________ test_a_combined_write_leaves_the_revision_one_at_a_time_gives _________
+
+    def test_a_combined_write_leaves_the_revision_one_at_a_time_gives() -> None:
+        """The invariant the engine relies on, through the adapter: five writes sent one at a time and
+        the same five combined to one carrying `writes=5` leave one link with one revision."""
+        singles = [_writes(n) for n in range(1, 6)]
+        per_row = CountingStore()
+        graph = make_adapter(per_row)
+        for write in singles:
+>           asyncio.run(graph.upsert_edges([write], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_write_count.py:110: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_____ test_the_aggregate_is_what_one_at_a_time_upserts_leave_in_the_store ______
+
+    def test_the_aggregate_is_what_one_at_a_time_upserts_leave_in_the_store() -> None:
+        """Catches the aggregator and `upsert_edges` disagreeing about a repeated pair: occurrences,
+        provenance sources, interval, edge id, endpoints and revision must all match what the store
+        holds after the same writes went in one at a time."""
+        store = CountingStore()
+        graph = make_adapter(store)
+        for write in _writes():
+>           asyncio.run(graph.upsert_edges([write], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py:70: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_____________ test_both_paths_leave_an_open_and_a_closed_span_open _____________
+
+    def test_both_paths_leave_an_open_and_a_closed_span_open() -> None:
+        """The ordinary path (`upsert_edges`, one write at a time) and the bulk aggregate end with the
+        same stored interval, in either order: open."""
+        open_ = _with_interval(make_edge("a", "b", 1), 3, None)
+        closed = _with_interval(make_edge("a", "b", 2), 1, 9)
+        for order in ([open_, closed], [closed, open_]):
+            store = CountingStore()
+            graph = make_adapter(store)
+            for write in order:
+>               asyncio.run(graph.upsert_edges([write], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py:182: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+____ test_a_merge_that_leaves_the_span_open_removes_the_stale_flattened_end ____
+
+    def test_a_merge_that_leaves_the_span_open_removes_the_stale_flattened_end() -> None:
+        """ADR-127 decision 11, the ordinary path: a link is stored with its interval nested and its
+        ends flattened (`valid_from`, `valid_to`), the flattened end only when there is one. A closed
+        link merged with an open write reads open from its nested interval; the flattened `valid_to`
+        the first write left must go in the same update, or the store holds a wrong end for the next
+        reader. Nothing is removed when the merge stays closed, and a fresh open link never has one."""
+        closed = _with_interval(make_edge("a", "b", 1), 1, 9)
+        open_ = _with_interval(make_edge("a", "b", 2), 3, None)
+        store = CountingStore()
+        graph = make_adapter(store)
+>       asyncio.run(graph.upsert_edges([closed], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py:201: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+______________ test_both_paths_split_a_repeated_pair_by_audience _______________
+
+    def test_both_paths_split_a_repeated_pair_by_audience() -> None:
+        """ADR-102 Amendment 3: a pair written SECRET then OFFICIAL, or the other way round, is two
+        links on both paths (it was one, kept at SECRET, before the ruling): the aggregate and the
+        stored links agree, each with its own classification and its own occurrence."""
+    
+        def at(classification: str, n: int) -> EdgeWrite:
+            write = make_edge("a", "b", n)
+            handling = write.handling.model_copy(update={"classification": classification})
+            return write.model_copy(update={"handling": handling})
+    
+        for order in (["SECRET", "OFFICIAL"], ["OFFICIAL", "SECRET"]):
+            writes = [at(c, i) for i, c in enumerate(order)]
+            store = CountingStore()
+            graph = make_adapter(store)
+            for write in writes:
+>               asyncio.run(graph.upsert_edges([write], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py:237: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_____ test_an_inferred_write_never_lowers_an_asserted_pair_on_either_path ______
+
+    def test_an_inferred_write_never_lowers_an_asserted_pair_on_either_path() -> None:
+        """`01_DOMAIN_MODEL.md` §2.1: only an analyst changes provenance state. Catches a model's write
+        to an analyst-confirmed pair (a resolution run over a manual link) replacing the stored state,
+        confirmation or properties — the latest-write-wins rule turning `asserted` back into `inferred`
+        and the analyst's score into the model's. Its sources and occurrences are still kept."""
+        confirmed = _confirmed(make_edge("a", "b", 1))
+        model = _inferred(make_edge("a", "b", 2), 0.4)
+    
+        store = CountingStore()
+        graph = make_adapter(store)
+        for write in (confirmed, model):
+>           asyncio.run(graph.upsert_edges([write], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py:303: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+_________ test_a_later_inferred_write_over_an_inferred_pair_still_wins _________
+
+    def test_a_later_inferred_write_over_an_inferred_pair_still_wins() -> None:
+        """Catches the guard above reaching further than it should: between two model writes (a
+        resolution run re-scoring its own earlier link) the latest still wins, so a pair the model now
+        scores lower is stored at the lower score."""
+        first = _inferred(make_edge("a", "b", 1), 0.9)
+        later = _inferred(make_edge("a", "b", 2), 0.4)
+        store = CountingStore()
+        graph = make_adapter(store)
+        for write in (first, later):
+>           asyncio.run(graph.upsert_edges([write], "tx"))
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py:328: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:592: in upsert_edges
+    source_type = await self._node_type(write.source, session_id=tx)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/graph_arcadedb/adapter.py:417: in _node_type
+    results = await self._client.gremlin(
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:107: in gremlin
+    refuse_scans(query)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+query = 'g.V().has("id",\'a\').label()'
+
+    def refuse_scans(query: str) -> None:
+        if _SCANS.match(query):
+>           raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",'a').label()
+
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/edge_store.py:50: AssertionError
+---------------------- 5 unmarked test(s) reached a store ----------------------
+tests/adapters/graph_arcadedb/test_client_row_limit.py::test_more_rows_than_the_old_default_all_come_back: ArcadeDB on port 59991
+tests/adapters/graph_arcadedb/test_datasets_index.py::test_a_merge_that_leaves_a_span_open_leaves_no_flattened_end_in_the_store: ArcadeDB on port 59991
+tests/adapters/graph_arcadedb/test_datasets_index.py::test_every_type_indexes_its_datasets_by_item: ArcadeDB on port 59991
+tests/adapters/graph_arcadedb/test_datasets_index.py::test_the_index_and_a_scan_agree_after_a_rewrite_adds_a_dataset: ArcadeDB on port 59991
+tests/adapters/graph_arcadedb/test_datasets_index.py::test_the_operator_script_closes_only_old_paysim_instants: ArcadeDB on port 59991
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py::test_the_row_carries_what_upsert_would_store_for_a_single_edge
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py::test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert[1]
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py::test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert[2]
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py::test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert[3]
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py::test_a_second_write_of_the_same_self_loop_counts_both_writes_twice
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py::test_the_gremlin_the_upsert_path_sends_for_counts_leaves_out_superseded_links
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py::test_the_counting_store_leaves_a_superseded_link_out_only_when_the_query_asks
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_client_row_limit.py::test_more_rows_than_the_old_default_all_come_back
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_corpus_total_read_once_per_call.py::test_a_batch_reads_the_corpus_total_once
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_corpus_total_read_once_per_call.py::test_a_batch_weighs_each_edge_as_if_written_one_at_a_time
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_corpus_total_read_once_per_call.py::test_nothing_is_carried_from_one_call_to_the_next
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_counting_store_self_loop.py::test_the_counting_store_counts_a_self_loop_twice_like_bothE
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py::test_every_type_indexes_its_datasets_by_item
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py::test_the_index_and_a_scan_agree_after_a_rewrite_adds_a_dataset
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py::test_a_merge_that_leaves_a_span_open_leaves_no_flattened_end_in_the_store
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py::test_the_operator_script_closes_only_old_paysim_instants
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_two_writes_with_one_marking_make_one_link_with_two_occurrences
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_stricter_write_is_a_link_of_its_own
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_laxer_write_is_a_link_of_its_own_too
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_different_handling_code_is_a_link_of_its_own
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_writes_under_two_restricted_units_are_two_links
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_two_unrestricted_codes_with_different_units_still_merge
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_writes_in_two_datasets_are_two_links
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_write_merges_into_the_link_of_its_own_audience_among_several
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_merge_still_never_lowers_the_parts_that_decide_no_audience
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_fixed_id_write_in_another_audience_is_a_link_of_its_own_under_a_new_id
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_fixed_id_write_in_the_same_audience_merges_and_keeps_its_id
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_fixed_id_write_after_the_link_was_reverted_gets_a_new_id
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_superseded_link_is_not_merged_into
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_with_two_links_of_one_audience_a_write_merges_into_the_newest_by_revision_then_creation
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_new_links_id_is_checked_against_the_types_unique_index_not_by_a_scan
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_write_count.py::test_a_link_created_with_writes_n_holds_revision_n
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_write_count.py::test_a_merge_adds_writes_to_the_stored_revision
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_write_count.py::test_a_combined_write_leaves_the_revision_one_at_a_time_gives
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py::test_the_aggregate_is_what_one_at_a_time_upserts_leave_in_the_store
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py::test_both_paths_leave_an_open_and_a_closed_span_open
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py::test_a_merge_that_leaves_the_span_open_removes_the_stale_flattened_end
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py::test_both_paths_split_a_repeated_pair_by_audience
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py::test_an_inferred_write_never_lowers_an_asserted_pair_on_either_path
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py::test_a_later_inferred_write_over_an_inferred_pair_still_wins
+40 failed, 283 passed in 40.50s

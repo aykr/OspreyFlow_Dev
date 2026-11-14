@@ -36,6 +36,20 @@ RESERVED_PARAMETER_NAMES = frozenset(
 )  # fmt: skip
 
 
+#: A Gremlin lookup by our `id` property that starts the traversal from the whole store: ArcadeDB
+#: answers it by scanning every element, labelled or not (ADR-124 Amendment 2 measured 3.6 s for
+#: 1,000 ids at 200,000 vertices), so a load that sends one per item grows with the graph's square.
+#: The stand-in refuses it (rule 15: what the real store does badly enough to fail a load at size,
+#: it refuses), so the write path must resolve ids through each type's unique `id` index by SQL
+#: and start from record ids (ADR-124 Amendment 18).
+_SCANS = re.compile(r'^g\.(V|E)\(\)(\.hasLabel\([^)]*\))?\.has\("id"')
+
+
+def refuse_scans(query: str) -> None:
+    if _SCANS.match(query):
+        raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
+
+
 def refuse_reserved_parameters(command: str) -> None:
     for name in re.findall(r"(?<![\w:]):(\w+)", command):
         if name.lower() in RESERVED_PARAMETER_NAMES:
@@ -54,6 +68,18 @@ class CountingStore:
         #: several (ADR-102 Amendment 3: one link per audience).
         self.edges: dict[tuple[str, str], dict[str, Any]] = {}
         self.links: list[dict[str, Any]] = []
+        #: Every vertex id asked for is a vertex of `NODE_TYPE` (the stand-in stores no vertices),
+        #: each with a record id of its own, as ArcadeDB gives one.
+        self._vertex_rids: dict[str, str] = {}
+
+    def vertex_rid(self, node_id: str) -> str:
+        return self._vertex_rids.setdefault(node_id, f"#1:{len(self._vertex_rids)}")
+
+    def vertex_id(self, rid: str) -> str:
+        found = [i for i, r in self._vertex_rids.items() if r == rid]
+        if not found:
+            raise AssertionError(f"no vertex at {rid!r}: a record id the store never gave")
+        return found[0]
 
     @staticmethod
     def _counts(edge: dict[str, Any], query: str) -> bool:
@@ -77,6 +103,21 @@ class CountingStore:
                 if link["id"] == params["id"]:
                     link.pop("valid_to", None)
             return []
+        if command == "SELECT name, type, indexes FROM schema:types":
+            unique_id = [{"unique": True, "properties": ["id"]}]
+            return [
+                {"name": physical_type_name(NODE_TYPE), "type": "vertex", "indexes": unique_id},
+                {"name": physical_type_name(EDGE_TYPE), "type": "edge", "indexes": unique_id},
+            ]
+        lookup = re.fullmatch(r"SELECT @rid AS rid, id FROM `(\w+)` WHERE id IN :ids", command)
+        if lookup is not None and params is not None:
+            if lookup.group(1) == physical_type_name(NODE_TYPE):
+                return [{"rid": self.vertex_rid(i), "id": i} for i in params["ids"]]
+            return [
+                {"rid": f"#2:{n}", "id": link["id"]}
+                for n, link in enumerate(self.links)
+                if link["id"] in params["ids"]
+            ]
         match = re.fullmatch(r"SELECT id FROM `(\w+)` WHERE id IN :ids", command)
         if match is None or params is None:
             raise AssertionError(f"unexpected SQL: {command}")
@@ -90,14 +131,15 @@ class CountingStore:
         self, query: str, *, params: dict[str, Any] | None = None, session_id: Any = None
     ) -> list[Any]:
         self.queries.append(query)
+        refuse_scans(query)
         if query.endswith(".label()"):
             return [{"result": physical_type_name(NODE_TYPE)}]
         if query.startswith("g.V().outE("):  # the corpus total, one whole-corpus traversal
             seen = [e for e in self.edges.values() if self._counts(e, query)]
             return [{"result": sum(e["occurrences"] for e in seen)}]
-        if ".elementMap()" in query:  # an existing edge for this pair
-            quoted = literals(query)  # id, source, label, reverted, superseded_by, id, target
-            src, tgt = quoted[1], quoted[-1]
+        if ".elementMap()" in query:  # an existing edge for this pair, from its source's record
+            quoted = literals(query)  # source's record id, label, reverted, superseded_by, id, target
+            src, tgt = self.vertex_id(quoted[0]), quoted[-1]
             # As the real store answers it: a link marked reverted or superseded is left out only if
             # the query says so, so a query that forgot the step would still find it.
             return [
@@ -109,7 +151,7 @@ class CountingStore:
             ]
 
         if ".values(" in query and ".sum()" in query:  # one vertex's own weighted degree
-            vertex = literals(query)[1]
+            vertex = self.vertex_id(literals(query)[0])
             # `bothE()` reads a link from a node to itself back twice, so it counts twice here.
             return [
                 {
@@ -126,16 +168,19 @@ class CountingStore:
             if any(link["id"] == record["id"] for link in self.links):
                 # Edge `id` is UNIQUE per type (`schema.py`): the real store refuses the write.
                 raise AssertionError(f"duplicate edge id {record['id']!r}: the unique index refuses")
-            record["_src"], record["_tgt"] = params["src"], params["tgt"]
+            src, tgt = self.vertex_id(params["src"]), self.vertex_id(params["tgt"])
+            record["_src"], record["_tgt"] = src, tgt
             self.links.append(record)
-            self.edges.setdefault((params["src"], params["tgt"]), record)
+            self.edges.setdefault((src, tgt), record)
             return []
-        # A merge into an existing edge, its own type named (ADR-110 Amendment 18).
-        if query.startswith("g.E().hasLabel(") and '.has("id",' in query:
+        # A merge into an existing edge, by the record id its own type's index gave (ADR-110
+        # Amendment 18, ADR-124 Amendment 18).
+        merge = re.match(r"g\.E\('#2:(\d+)'\)", query)
+        if merge is not None:
             assert params is not None
-            for record in self.links:
-                if record["id"] == params["prop_id"]:
-                    record.update({k.removeprefix("prop_"): v for k, v in params.items()})
+            record = self.links[int(merge.group(1))]
+            assert record["id"] == params["prop_id"], "the record id names another link"
+            record.update({k.removeprefix("prop_"): v for k, v in params.items()})
             return []
         raise AssertionError(f"unexpected query: {query}")
 

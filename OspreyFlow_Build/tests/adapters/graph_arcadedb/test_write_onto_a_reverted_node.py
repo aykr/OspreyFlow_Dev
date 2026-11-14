@@ -15,6 +15,8 @@ lookup that forgot the filter would still report it."""
 
 from __future__ import annotations
 
+from tests.adapters.graph_arcadedb.edge_store import refuse_scans
+
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -66,6 +68,11 @@ class NodeStore:
                 }
             ]
         assert params is not None
+        lookup = re.fullmatch(r"SELECT @rid AS rid, id FROM `(\w+)` WHERE id IN :ids", command)
+        if lookup is not None:
+            # A record id for each stored row (ADR-124 Amendment 18: the write path's lookup).
+            order = list(self.rows)
+            return [{"rid": f"#1:{order.index(i)}", "id": i} for i in params["ids"] if i in self.rows]
         found = _IDS.fullmatch(command)
         if found is not None:
             filtered = found.group(2) is not None
@@ -104,9 +111,11 @@ class NodeStore:
     async def gremlin(
         self, query: str, *, params: dict[str, Any] | None = None, session_id: Any = None
     ) -> list[Any]:
+        refuse_scans(query)
         if ".elementMap()" in query:
-            node_id = query.split("'")[1] if "'" in query else query.split('"')[1]
-            return [self.rows[node_id]] if node_id in self.rows else []
+            rid = re.fullmatch(r"g\.V\('#1:(\d+)'\)\.elementMap\(\)", query)
+            assert rid is not None, f"not read from a record id: {query}"
+            return [self.rows[list(self.rows)[int(rid.group(1))]]]
         raise AssertionError(f"unexpected query: {query}")
 
 

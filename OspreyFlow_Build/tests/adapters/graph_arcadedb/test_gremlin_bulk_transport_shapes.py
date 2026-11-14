@@ -32,6 +32,12 @@ class _RecordingClient:
         self, command: str, *, params: Any = None, session_id: Any = None
     ) -> list[dict[str, Any]]:
         self.sql_sent.append((command, dict(params or {})))
+        if command == "SELECT name, type, indexes FROM schema:types":
+            return [{"name": "mx_Endpoint", "type": "vertex",
+                     "indexes": [{"unique": True, "properties": ["id"]}]}]  # fmt: skip
+        if command.startswith("SELECT @rid AS rid, id FROM "):
+            # Every id asked for is a vertex, each with a record id of its own.
+            return [{"rid": f"#1:{n}", "id": i} for n, i in enumerate((params or {})["ids"])]
         return []
 
 
@@ -62,10 +68,38 @@ def test_every_lookup_passes_its_ids_as_parameters() -> None:
         await transport.degrees(LABEL, ["id-1", "id-2"])
 
     asyncio.run(run())
-    assert len(client.sent) == 3
+    # vertex_labels is SQL alone now (ADR-124 Amendment 18); the other two start from record ids.
+    assert len(client.sent) == 2
     for script, params in client.sent:
         assert "id-1" not in script and "id-2" not in script
         assert params, script
+    for command, params in client.sql_sent:
+        assert "id-1" not in command and "id-2" not in command
+
+
+def test_no_lookup_scans_the_store_by_id() -> None:
+    """ADR-124 Amendment 18: every lookup of the bulk path resolves ids by SQL through each vertex
+    type's unique `id` index, then starts Gremlin from the record ids; none starts from the whole
+    store by `id` (which ArcadeDB answers by scanning every vertex), the per-row write included."""
+    from tests.adapters.graph_arcadedb.edge_store import refuse_scans
+
+    client = _RecordingClient()
+    transport = GremlinBulkTransport(client)  # type: ignore[arg-type]
+
+    async def run() -> None:
+        await transport.vertex_labels(["id-1", "id-2"])
+        await transport.stored_links(LABEL, [("id-1", "id-2")], directed=True)
+        await transport.degrees(LABEL, ["id-1", "id-2"])
+        await transport.write_chunk(LABEL, _rows("w"), "tx")
+
+    asyncio.run(run())
+    for script, _ in client.sent:
+        refuse_scans(script)
+        # Nothing starts from the whole store by `id`, the per-row write's two ends included (a
+        # `where` among a vertex's own neighbours reads no other vertex, so it may match by `id`).
+        assert 'g.V().has("id"' not in script and '.V().has("id", r.' not in script, script
+    (write, params) = client.sent[-1]
+    assert params["rows"][0]["sr"].startswith("#1:") and params["rows"][0]["tr"].startswith("#1:")
 
 
 def test_an_undirected_type_is_looked_for_from_either_end() -> None:

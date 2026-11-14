@@ -39107,3 +39107,40 @@ rollouts, and a failed one failing the step naming it). The behaviour they wire 
 `tests/services/search_index/test_upgrade_rebuild.py`: a v0.5.1 index with no fingerprint holds the indexer
 (`MappingOutOfDate`, the outbox kept) until a rebuild, then it drains. That test passes on main as it stood
 before this amendment, because the mechanism was there and no path ran it; the three wiring tests above are its red.
+
+### ADR-124, Amendment 18 (14 November 2026) — The write path looks items up through each type's `id` index, not by a scan of the store
+
+*Reserved for the rules lane on 13 November (the owner: before the client-size load, ROUTE_052 step B). Amends
+Amendment 2's last point ("the same scan affects every other Gremlin read that starts from our ids… fixing those
+reads is its own record") for the write path.*
+
+1. **What was wrong.** Every write of a load started its Gremlin from the whole store by our `id` property, which
+   ArcadeDB 26.10.1 answers by scanning every element, labelled or not (Amendment 2's measure: 3.6 s for 1,000 ids
+   at 200,000 vertices). `upsert_nodes` did so once per node (its existing node); `upsert_edges` up to five times per
+   link (each end's type, the existing link, each end's degree, the `addE` from both ends, and a merge's
+   `g.E().hasLabel(…).has("id", …)`); the bulk loader once per chunk for its labels, stored links and degrees, and
+   twice per row in its write script. A load of n items into a graph of N therefore cost n × N, and a client-size
+   load grew with its square.
+2. **What is built.** Each call resolves the ids it touches once, by SQL through every vertex type's unique `id`
+   index (`SELECT @rid AS rid, id FROM <type> WHERE id IN :ids`, one query per type per 1,000 ids, run together,
+   in the write's own transaction), and every traversal starts from those record ids: `GraphArcadeDBAdapter.
+   _vertex_records` for `upsert_nodes` and `upsert_edges`, `GremlinBulkTransport._vertices` for the bulk loader. A
+   link to merge into is found by its record id from its own type's index (`_edge_record`); a target is still
+   matched by `id` among its source's own neighbours, which reads no other vertex. An id written earlier in the same
+   call is resolved again, since its record is new. A bulk row whose end is not in the graph is refused in words
+   (it was dropped unsaid: the `addE` from an empty start wrote nothing). Unfiltered by design, as the lookups it
+   replaces were: an internal lookup during a trusted write; no record id leaves the adapter.
+3. **What it does not change.** The per-call corpus total (`g.V().outE(<type>)…sum()`, read once per call and type,
+   ADR-056 Amendment 22) is a whole-corpus traversal by design, not a lookup by id; the reads outside the write path
+   that still start by `has("id")` (supersede and clone, `shared_contacts`) are not a load's, and stay as they are.
+4. **Held by** (rule 12):
+   - offline, every stand-in of the store refuses a traversal that starts from the whole store by `id`
+     (`tests/adapters/graph_arcadedb/edge_store.refuse_scans`, used by `CountingStore`, the node store of
+     `test_write_onto_a_reverted_node.py` and the stray-records store), and `test_gremlin_bulk_transport_shapes.py`'s
+     `test_no_lookup_scans_the_store_by_id` holds the bulk path's four lookups and its write: red first, 40 offline
+     tests on the old write path (`process/lanes/rules/adr124-am18/red-first.txt`);
+   - live, `tests/conformance/graph_port/test_write_path_scale.py`: the same load (200 nodes, 200 links, 200 more in
+     bulk) in a graph padded with 2,000 vertices and then with 22,000 takes less than three times as long (a scan
+     takes about ten), its times printed;
+   - plants A1 to A8 (`process/lanes/rules/adr124-am18/plants.py`), each lookup put back to its scanning shape, each
+     red (`PLANTS_RECORD.txt`).

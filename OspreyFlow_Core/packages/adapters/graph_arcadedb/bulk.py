@@ -19,6 +19,8 @@ cannot prove that a Groovy script runs. The spike sends exactly these shapes, fr
 
 from __future__ import annotations
 
+import asyncio
+import re
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,12 +35,14 @@ from ports.graph import BulkEdgeResult
 from schemas.domain import AuditStub, EdgeWrite, OntologySchema, WeightComponents
 from schemas.merge import AggregatedEdge, aggregate_edge_writes
 
-from .builders import render_existing_ids_sql
+from .builders import render_existing_ids_sql, render_record_id_and_id_lookup_sql
 from .client import ArcadeDBClient
 from .gremlin_literals import groovy_identifier
 from .naming import logical_type_name, physical_type_name
 from .serialization import edge_write_to_properties
 from .weight import compute_weight
+
+_RECORD_ID = re.compile(r"^#\d+:\d+$")
 
 #: How many ids go into one batched lookup. Bounded so a script's parameter list stays small.
 LOOKUP_BATCH = 500
@@ -377,12 +381,42 @@ class GremlinBulkTransport:
     def __init__(self, client: ArcadeDBClient) -> None:
         self._client = client
 
+    async def _vertices(self, ids: Sequence[str]) -> dict[str, tuple[str, str]]:
+        """Each id's vertex as (record id, stored type), by SQL through every vertex type's unique
+        `id` index (ADR-124 Amendment 18): Gremlin's `has("id", within(…))` scans every vertex, so a
+        load that asked it per chunk grew with the graph's square. One query per type, together."""
+        wanted = sorted({str(i) for i in ids})
+        if not wanted:
+            return {}
+        types = await self._client.sql("SELECT name, type, indexes FROM schema:types")
+        vertex_types = [
+            str(t["name"])
+            for t in types
+            if t.get("type") == "vertex"
+            and any(
+                i.get("unique") is True and i.get("properties") == ["id"]
+                for i in t.get("indexes") or []
+            )
+        ]
+        found: dict[str, tuple[str, str]] = {}
+        for start in range(0, len(wanted), 1000):
+            chunk = wanted[start : start + 1000]
+            answers = await asyncio.gather(
+                *(
+                    self._client.sql(render_record_id_and_id_lookup_sql(t), params={"ids": chunk})
+                    for t in vertex_types
+                )
+            )
+            for type_name, rows in zip(vertex_types, answers, strict=True):
+                for row in rows:
+                    rid = row.get("rid")
+                    if not isinstance(rid, str) or not _RECORD_ID.match(rid):
+                        raise ValueError(f"not an ArcadeDB record id: {rid!r}")
+                    found[str(row["id"])] = (rid, type_name)
+        return found
+
     async def vertex_labels(self, ids: Sequence[str]) -> dict[str, str]:
-        rows = await self._client.gremlin(
-            'g.V().has("id", within(ids)).project("id","label").by(values("id")).by(label())',
-            params={"ids": list(ids)},
-        )
-        return {str(r["id"]): str(r["label"]) for r in rows}
+        return {i: type_name for i, (_, type_name) in (await self._vertices(ids)).items()}
 
     async def edge_type_is_empty(self, label: str) -> bool:
         rows = await self._client.gremlin(f'g.E().hasLabel("{label}").limit(1).count()')
@@ -399,8 +433,14 @@ class GremlinBulkTransport:
         # link. Each link comes back with what decides who may see it (ADR-102 Amendment 3); one
         # with no `datasets` property reads as having none, and does not drop out of the answer.
         step, other = ("outE", "inV") if directed else ("bothE", "otherV")
+        found = await self._vertices(sources)
+        source_rids = [found[s][0] for s in sources if s in found]
+        if not source_rids:
+            return []
+        # From the sources' record ids (ADR-124 Amendment 18); the targets are matched among their
+        # neighbours, which reads no other vertex.
         rows = await self._client.gremlin(
-            f'g.V().has("id", within(sources)).{step}("{label}").has("reverted", false)'
+            f'g.V(sources).{step}("{label}").has("reverted", false)'
             '.hasNot("superseded_by")'
             f'.where({other}().has("id", within(targets)))'
             '.project("s","t","c","h","o","u","d")'
@@ -408,7 +448,7 @@ class GremlinBulkTransport:
             '.by(values("handling_classification")).by(values("handling_code"))'
             '.by(values("originator")).by(values("owning_unit"))'
             '.by(coalesce(values("datasets"), constant("")))',
-            params={"sources": sources, "targets": targets},
+            params={"sources": source_rids, "targets": targets},
         )
         wanted = set(pairs)
         allowed = wanted if directed else wanted | {(t, s) for s, t in wanted}
@@ -447,11 +487,15 @@ class GremlinBulkTransport:
         return int(rows[0].get("result") or 0) if rows else 0
 
     async def degrees(self, label: str, ids: Sequence[str]) -> dict[str, int]:
+        found = await self._vertices(ids)
+        rids = [rid for rid, _ in found.values()]
+        if not rids:
+            return {}
         rows = await self._client.gremlin(
-            'g.V().has("id", within(ids)).project("id","d").by(values("id"))'
+            'g.V(rids).project("id","d").by(values("id"))'
             '.by(coalesce(bothE("' + label + '").has("reverted", false)'
             '.hasNot("superseded_by").values("occurrences").sum(), constant(0)))',
-            params={"ids": list(ids)},
+            params={"rids": rids},
         )
         return {str(r["id"]): int(r["d"]) for r in rows}
 
@@ -465,9 +509,16 @@ class GremlinBulkTransport:
         await self._client.rollback_transaction(tx)
 
     async def write_chunk(self, label: str, rows: Sequence[Mapping[str, Any]], tx: str) -> None:
+        # Each end by its record id (ADR-124 Amendment 18), resolved once per chunk by SQL: the
+        # rows' `s` and `t` stay as given, `sr` and `tr` are added.
+        ends = await self._vertices([i for r in rows for i in (r["s"], r["t"])])
+        missing = sorted({i for r in rows for i in (r["s"], r["t"])} - set(ends))
+        if missing:
+            raise OntologyError(f"a link's end is not in the graph: {missing[:5]}")
+        rows = [{**r, "sr": ends[r["s"]][0], "tr": ends[r["t"]][0]} for r in rows]
         script = (
             "rows.each { r ->"
-            ' def t = g.V().has("id", r.s).as("a").V().has("id", r.t).addE("' + label + '")'
+            ' def t = g.V(r.sr).as("a").V(r.tr).addE("' + label + '")'
             '.from("a");'
             " r.p.each { k, v -> t = t.property(k, dates.contains(k) ? new Date(v) : v) };"
             " t.iterate() }"

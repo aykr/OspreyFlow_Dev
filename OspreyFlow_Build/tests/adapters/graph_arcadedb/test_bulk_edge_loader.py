@@ -673,6 +673,15 @@ class _RecordingClient:
         self.scripts.append(script)
         return []
 
+    async def sql(self, command: str, *, params: Any = None, **_: Any) -> list[Any]:
+        """The record-id lookups of the bulk path (ADR-124 Amendment 18): every id a vertex."""
+        if command == "SELECT name, type, indexes FROM schema:types":
+            return [{"name": "mx_Endpoint", "type": "vertex",
+                     "indexes": [{"unique": True, "properties": ["id"]}]}]  # fmt: skip
+        if command.startswith("SELECT @rid AS rid, id FROM "):
+            return [{"rid": f"#1:{n}", "id": i} for n, i in enumerate(params["ids"])]
+        raise AssertionError(f"unexpected SQL: {command}")
+
 
 def test_the_gremlin_the_bulk_transport_sends_leaves_out_superseded_links() -> None:
     """ADR-120 Amendment 5, decision 1. Catches `GremlinBulkTransport.degrees` or `corpus_total`
@@ -720,7 +729,7 @@ def test_the_counting_store_leaves_a_superseded_link_out_only_when_the_query_ask
     store = CountingStore()
     store.edges[("a", "b")] = {"id": "e1", "occurrences": 5, "superseded_by": "e2"}
     store.edges[("a", "c")] = {"id": "e3", "occurrences": 2}
-    base_degree = "g.V().has(\"id\",'a').bothE('x').has(\"reverted\",false)"
+    base_degree = f"g.V('{store.vertex_rid('a')}').bothE('x').has(\"reverted\",false)"
     base_total = "g.V().outE('x').has(\"reverted\",false)"
     tail = '.values("occurrences").sum()'
     excluded = '.hasNot("superseded_by")'

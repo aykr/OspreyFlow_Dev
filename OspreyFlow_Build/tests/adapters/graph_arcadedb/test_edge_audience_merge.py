@@ -202,8 +202,9 @@ def test_a_new_links_id_is_checked_against_the_types_unique_index_not_by_a_scan(
     answered by the type's unique `id` index (`SELECT id FROM <type> WHERE id IN :ids`, as the
     by-id reads are) and not by a Gremlin traversal that may scan the type."""
     store, _ = _store_after(_write(1), _write(2, classification="SECRET"))
-    assert store.sql_sent, "an id check was sent"
-    for command, params in store.sql_sent:
+    checks = [(c, p) for c, p in store.sql_sent if c.startswith("SELECT id FROM ")]
+    assert checks, "an id check was sent"
+    for command, params in checks:
         assert command == "SELECT id FROM `mx_TRANSACTED` WHERE id IN :ids"
         assert set(params) == {"ids"} and len(params["ids"]) == 1
     assert not [q for q in store.queries if 'has("id"' in q and "count()" in q]
