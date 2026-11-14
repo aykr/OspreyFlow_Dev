@@ -424,3 +424,28 @@ def test_a_token_version_entra_does_not_issue_is_refused_in_words(monkeypatch) -
     monkeypatch.setenv("R1_ENTRA_TOKEN_VERSION", "3.0")
     with pytest.raises(SystemExit, match="R1_ENTRA_TOKEN_VERSION"):
         r1_kind.entra_config()
+
+
+def test_the_entra_command_re_applies_the_entra_stand_in_alone(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Step 6's row 11b' sets the token version for one run mid-deployment: `py entra` re-applies the
+    Entra stand-in alone, never the deployment's namespace or CoreDNS (whose rewrite by `platform`
+    would leave out the search domain's name the deployment in progress needs)."""
+    r1_kind = _r1_kind()
+    applied: list[dict] = []
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(r1_kind, "apply", lambda docs: applied.extend(docs))
+    monkeypatch.setattr(r1_kind, "kubectl", lambda *a, **_k: calls.append(a) or "")
+    monkeypatch.setattr(r1_kind, "state", lambda: {"standin_image": "localhost:5001/r1-standin:x"})
+    monkeypatch.setattr(r1_kind, "record", lambda name: tmp_path / f"{name}.txt")
+    monkeypatch.setattr(r1_kind, "coredns", lambda *a, **k: calls.append(("coredns",)))
+    monkeypatch.setenv("R1_ENTRA_TOKEN_VERSION", "1.0")
+    r1_kind.entra()
+    assert {(d["kind"], d["metadata"]["name"], d["metadata"]["namespace"]) for d in applied} == {
+        ("ConfigMap", "entra-standin", r1_kind.MANAGED),
+        ("Deployment", "entra-standin", r1_kind.MANAGED),
+        ("Service", "entra-standin", r1_kind.MANAGED),
+    }
+    config = json.loads(next(d for d in applied if d["kind"] == "ConfigMap")["data"]["config.json"])
+    assert config["api"]["access_token_version"] == "1.0"
+    assert ("coredns",) not in calls and not any(r1_kind.NS in c for c in calls)
+    assert calls == [("-n", r1_kind.MANAGED, "rollout", "status", "deployment/entra-standin", "--timeout=300s")]
