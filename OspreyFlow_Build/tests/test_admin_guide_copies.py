@@ -10,11 +10,16 @@ everything else is the same. Without this case the specification's copy drifted 
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 BUILD = Path(__file__).resolve().parents[1]
-SHIPPED = (BUILD.parent / "OspreyFlow_Core" / "docs" / "administration-guide.md").read_text(encoding="utf-8")
-SPEC = (BUILD / "spec" / "10_ADMINISTRATION_GUIDE.md").read_text(encoding="utf-8")
+SHIPPED_PATH = BUILD.parent / "OspreyFlow_Core" / "docs" / "administration-guide.md"
+SPEC_PATH = BUILD / "spec" / "10_ADMINISTRATION_GUIDE.md"
+SHIPPED = SHIPPED_PATH.read_text(encoding="utf-8")
+SPEC = SPEC_PATH.read_text(encoding="utf-8")
+#: How to bring spec/10 level after changing the shipped guide: its own opening kept, the rest written.
+MIRROR = "from OspreyFlow_Build: python -m tests.test_admin_guide_copies --write"
 FIRST = "## 1. Choosing a mode\n"
 #: A screenshot on a line of its own, and the blank line after it: the shipped guide's alone.
 SCREENSHOT = re.compile(r"^!\[[^\n]*\]\(images/[^)\n]*\)\n\n?", re.MULTILINE)
@@ -25,8 +30,13 @@ def numbered(text: str) -> str:
     return text[text.index(FIRST) :]
 
 
+def mirrored(spec: str, shipped: str) -> str:
+    """spec/10 with its own opening kept and the shipped guide's sections 1 onwards, screenshots out."""
+    return spec[: spec.index(FIRST)] + SCREENSHOT.sub("", numbered(shipped))
+
+
 def test_the_specification_s_copy_is_the_shipped_guide_from_section_1() -> None:
-    shipped = SCREENSHOT.sub("", numbered(SHIPPED))
+    shipped = numbered(mirrored(SPEC, SHIPPED))
     spec = numbered(SPEC)
     if spec != shipped:
         a, b = spec.splitlines(), shipped.splitlines()
@@ -34,10 +44,19 @@ def test_the_specification_s_copy_is_the_shipped_guide_from_section_1() -> None:
         raise AssertionError(
             f"spec/10 differs from the shipped guide at section 1's line {first + 1}:\n"
             f"  spec:    {a[first] if first < len(a) else '<end>'}\n"
-            f"  shipped: {b[first] if first < len(b) else '<end>'}"
+            f"  shipped: {b[first] if first < len(b) else '<end>'}\n"
+            f"Change the shipped guide (docs/administration-guide.md), then mirror it: {MIRROR}"
         )
 
 
 def test_the_specification_s_copy_shows_no_screenshot_and_keeps_no_document_control() -> None:
     assert not SCREENSHOT.search(SPEC), "a screenshot in spec/, where images/ is not"
     assert "<!-- document-control:begin -->" not in SPEC
+
+
+if __name__ == "__main__":
+    # The mirror, written: run from OspreyFlow_Build after changing the shipped guide.
+    if sys.argv[1:] != ["--write"]:
+        sys.exit(f"usage: {MIRROR}")
+    SPEC_PATH.write_text(mirrored(SPEC, SHIPPED), encoding="utf-8")
+    print(f"{SPEC_PATH.relative_to(BUILD)}: level with {SHIPPED_PATH.relative_to(BUILD.parent)} from section 1")
