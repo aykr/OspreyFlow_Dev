@@ -23,7 +23,7 @@ cd "$CORE" || exit 1
 PY=$CORE/.venv/bin/python
 export PYTHONPATH=.:packages
 free_port() { "$PY" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
-mask() { sed "s#${TOKEN:-no-token-yet}#<token>#g"; }
+mask() { sed -E "s#${TOKEN:-no-token-yet}#<token>#g; s#ticket=[A-Za-z0-9_-]+#ticket=<masked>#g"; }
 fail() {
   echo "FAILED: $1"
   for f in "$W"/conduit.*.log; do [ -f "$f" ] && { echo "== the last of ${f##*/}"; tail -40 "$f" | mask; }; done

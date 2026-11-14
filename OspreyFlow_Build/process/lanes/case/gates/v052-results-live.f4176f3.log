@@ -1,0 +1,65 @@
+# v052-results' live check at f4176f3 (main 136b7d6 beneath), stack g on ospreyflow-test, the lease case took at 2026-11-14T07:10:14Z (the orchestrator's grant), released after; run by OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh through stack_lease.sh remote. Two runs, back to back. The runs before them, at 50591ee to eb8a4ed, are in the commits that fix each: the runner's setup five times, and one product defect (the keys panel over the results, fixed in 3ea0c53). At 3ea0c53 and 49093b4 the first tests drew nothing for 120 s with the host's load at 49 and 23; the warm-up through the results page came between; whether it or the lower load (3 to 4 here) cured it is not known.
+
+## run 1
+Running on ospreyflow-test (stack g, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T074644Z-59408dd0/log: bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: Fixture Corp seeded into a case the seed makes
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+Case 'Live search check 20261114T074645Z' is 01M7CGBVDRTTVBGP9XFJVYSEET.
+  check: no id stored more than once (whole shared graph)
+Seeded 10 resolution Person nodes and 17 real SAME_AS edges.
+Seeded 21 community-ring nodes and 63 edges across 3 rings.
+Seeded the path-spoke hub 'corp-path-hub' with spokes of length [1, 2, 3, 4, 5, 6, 7, 8], including a SECRET shortcut on the length-3 spoke.
+case: 01M7CGBVDRTTVBGP9XFJVYSEET
+# step: the search index rebuilt from the graph
+search index rebuilt: 68 documents from 68 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t074651016056
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 2.62 13.36 19.56
+# warm-up: the Glass drew its search box after 8 s
+
+Running 4 tests using 1 worker
+
+[1/4] live/search-results.spec.ts:38:1 › Enter opens the results, and the total on screen is the route's own
+[2/4] live/search-results.spec.ts:53:1 › every body the page sends is one the route accepts
+[3/4] live/search-results.spec.ts:75:1 › Show on graph sends the result's records to the case's working set, and the Conduit takes them
+[4/4] live/search-results.spec.ts:95:1 › a query longer than the route takes is refused on screen with the limit named, never cut (rule 2)
+  4 passed (8.2s)
+# playwright exit 0
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T074644Z-59408dd0).
+Wall time: 35 s, exit 0 (stack g, the lease case took at 2026-11-14T07:10:14Z; set-up before it 6 s)
+
+## run 2
+Running on ospreyflow-test (stack g, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T074738Z-5e644833/log: bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: Fixture Corp seeded into a case the seed makes
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+Case 'Live search check 20261114T074739Z' is 01M7CGDFQQ16BCQCEC1K32D8R5.
+  check: no id stored more than once (whole shared graph)
+Seeded 10 resolution Person nodes and 17 real SAME_AS edges.
+Seeded 21 community-ring nodes and 63 edges across 3 rings.
+Seeded the path-spoke hub 'corp-path-hub' with spokes of length [1, 2, 3, 4, 5, 6, 7, 8], including a SECRET shortcut on the length-3 spoke.
+case: 01M7CGDFQQ16BCQCEC1K32D8R5
+# step: the search index rebuilt from the graph
+search index rebuilt: 68 documents from 68 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t074744131393
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 3.49 11.90 18.74
+# warm-up: the Glass drew its search box after 7 s
+
+Running 4 tests using 1 worker
+
+[1/4] live/search-results.spec.ts:38:1 › Enter opens the results, and the total on screen is the route's own
+[2/4] live/search-results.spec.ts:53:1 › every body the page sends is one the route accepts
+[3/4] live/search-results.spec.ts:75:1 › Show on graph sends the result's records to the case's working set, and the Conduit takes them
+[4/4] live/search-results.spec.ts:95:1 › a query longer than the route takes is refused on screen with the limit named, never cut (rule 2)
+  4 passed (8.3s)
+# playwright exit 0
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T074738Z-5e644833).
+Wall time: 35 s, exit 0 (stack g, the lease case took at 2026-11-14T07:10:14Z; set-up before it 8 s)
