@@ -26,7 +26,12 @@ GRAPH_SCALE = 0.01
 @pytest.fixture(scope="module")
 def folder(tmp_path_factory: pytest.TempPathFactory) -> Path:
     out = tmp_path_factory.mktemp("client-size-leaks")
-    gen.generate(out, seed=11, scale=SCALE, graph_scale=GRAPH_SCALE, say=lambda *_a: None)
+    manifest = gen.generate(
+        out, seed=11, scale=SCALE, graph_scale=GRAPH_SCALE, say=lambda *_a: None
+    )
+    # The load's ledger names each source's case, as the loader's cases stage records it.
+    cases = {s["key"]: f"case-{s['key']}" for s in manifest["sources"]}
+    (out / "load_state.json").write_text(json.dumps({"cases": cases}), encoding="utf-8")
     return out
 
 
@@ -70,9 +75,16 @@ def test_each_never_join_case_joins_a_visible_record_to_another_datasets(
 ) -> None:
     case_records, people = _world(folder)
     assert made["never_join"], "the set plants SAME_AS across the intelligence reports' dataset"
+    others = leaks.records(folder, only={c["hidden"] for c in made["never_join"]})
     for case in made["never_join"]:
-        assert case["hidden"] not in case_records and case["control"] is None
+        partner = others[case["hidden"]]
+        assert case["hidden"] not in case_records
         assert leaks.may_read(people[leaks.PART], case_records[case["visible"]])
+        # The control reads the partner in the partner's own case, so the query's reach is shown.
+        assert case["partner_case"] == leaks.partner_cases(folder)[partner.dataset]
+        assert partner.dataset != "cs-intel"
+        assert leaks.may_read(leaks.in_dataset(people[case["control"]], partner.dataset), partner)
+        assert not leaks.may_read(people[leaks.PART], partner)
 
 
 def test_the_counts_name_every_eligible_case(made: dict[str, Any]) -> None:
@@ -101,6 +113,21 @@ def test_a_control_that_cannot_read_its_record_is_refused(folder: Path) -> None:
 def test_a_never_join_pair_inside_one_dataset_is_refused(folder: Path) -> None:
     case_records, people = _world(folder)
     two = [r.id for r in case_records.values() if leaks.may_read(people[leaks.PART], r)][:2]
-    case = {"name": "planted", "visible": two[0], "hidden": two[1]}
+    case = {"name": "planted", "visible": two[0], "hidden": two[1],
+            "control": "m10-cleared-unit-fiu"}  # fmt: skip
     with pytest.raises(leaks.LeakCaseRefused, match="both records"):
-        leaks.check_never_join([case], case_records, people)
+        leaks.check_never_join([case], case_records, people, case_records)
+
+
+def test_a_never_join_control_that_cannot_read_the_partner_in_its_case_is_refused(
+    folder: Path, made: dict[str, Any]
+) -> None:
+    """Red first: a control of the wrong unit for a restricted partner shows no reach."""
+    case_records, people = _world(folder)
+    others = leaks.records(folder, only={c["hidden"] for c in made["never_join"]})
+    restricted = next(
+        c for c in made["never_join"] if others[c["hidden"]].handling.handling_code == "R"
+    )
+    wrong = next(n for n in people if n.startswith("m10-cleared") and n != restricted["control"])
+    with pytest.raises(leaks.LeakCaseRefused, match="cannot read it in its own case"):
+        leaks.check_never_join([{**restricted, "control": wrong}], case_records, people, others)

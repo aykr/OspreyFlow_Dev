@@ -15,8 +15,10 @@ case (the source `--case` names; the intelligence reports by default, where `m10
 - **`never_join.jsonl`**: each planted SAME_AS candidate that truly joins (`truth` `same`) a record
   the part-cleared principal reads in the measure case to a record of another dataset. Searched by
   the visible record's name, the other's id (and its spelling, where no visible record has it) must
-  never be returned nor merged in (ADR-099 Amendment 2: no join across cases). No control: no
-  principal searching this case reaches the other dataset.
+  never be returned nor merged in (ADR-099 Amendment 2: no join across cases). Its control is in
+  the other record's own case (`partner_case`, from the load's ledger): the cleared subject of the
+  other record's owning unit (the first that may read it, where its code is not restricted) must
+  find it there by the same query, or the case shows no reach and proves nothing.
 
 Visibility is the product's own rule (`ontology.handling.principal_may_read`, the three axes),
 asked of the principals the subjects stand for (`SUBJECTS`, as granted on stack d,
@@ -160,8 +162,23 @@ def leak_cases(
     return cases
 
 
+def in_dataset(principal: Principal, dataset: str) -> Principal:
+    """The same subject reading another case: its datasets that case's."""
+    return principal.model_copy(update={"datasets": [dataset]})
+
+
+def partner_cases(folder: Path) -> dict[str, str]:
+    """Each dataset's case id, from the load's ledger (`load_state.json`) and the manifest."""
+    manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+    ledger = json.loads((folder / "load_state.json").read_text(encoding="utf-8"))
+    return {s["dataset"]: ledger["cases"][s["key"]] for s in manifest["sources"]}
+
+
 def never_join_cases(
-    folder: Path, case_records: Mapping[str, Record], people: Mapping[str, Principal]
+    folder: Path,
+    case_records: Mapping[str, Record],
+    people: Mapping[str, Principal],
+    cases_by_dataset: Mapping[str, str],
 ) -> list[dict[str, Any]]:
     part = people[PART]
     visible = {i: r for i, r in case_records.items() if may_read(part, r)}
@@ -179,15 +196,20 @@ def never_join_cases(
             if other_id not in case_records:  # both in the case's dataset is not across cases
                 pairs.append((row["id"], mine[0], other_id))
     others = records(folder, only={other for _p, _m, other in pairs})
+    cleared = {n: p for n, p in people.items() if n != PART}
     cases = []
     for pair_id, mine_id, other_id in pairs:
         other = others[other_id]
+        there = {n: in_dataset(p, other.dataset) for n, p in cleared.items()}
+        control = control_for(other, there)
+        if control is None:
+            continue  # nobody granted reads it there: no reach can be shown
         cases.append({
             "name": f"never joined: {mine_id} and {other_id} ({pair_id})",
             "route": "search", "query": visible[mine_id].words, "never_ids": [other_id],
             "never_text": [] if other.words in seen_words else [other.words],
-            "control": None, "visible": mine_id, "hidden": other_id,
-            "other_dataset": other.dataset,
+            "control": control, "partner_case": cases_by_dataset[other.dataset],
+            "visible": mine_id, "hidden": other_id, "other_dataset": other.dataset,
         })  # fmt: skip
     return cases
 
@@ -210,8 +232,14 @@ def check_leaks(cases: Iterable[dict[str, Any]], case_records: Mapping[str, Reco
 
 
 def check_never_join(cases: Iterable[dict[str, Any]], case_records: Mapping[str, Record],
-                     people: Mapping[str, Principal]) -> None:  # fmt: skip
+                     people: Mapping[str, Principal],
+                     others: Mapping[str, Record]) -> None:  # fmt: skip
     for case in cases:
+        partner = others[case["hidden"]]
+        if not may_read(in_dataset(people[case["control"]], partner.dataset), partner):
+            raise LeakCaseRefused(
+                f"{case['name']}: its control {case['control']} cannot read it in its own case"
+            )
         if case["hidden"] in case_records:
             raise LeakCaseRefused(f"{case['name']}: both records are in the measure case's dataset")
         if not may_read(people[PART], case_records[case["visible"]]):
@@ -235,9 +263,11 @@ def main(argv: list[str] | None = None) -> int:
     dataset = next(iter(case_records.values())).dataset
     people = subjects(dataset)
     leaks = leak_cases(case_records, people)
-    joins = never_join_cases(args.folder, case_records, people)
+    joins = never_join_cases(args.folder, case_records, people, partner_cases(args.folder))
     check_leaks(leaks, case_records, people)
-    check_never_join(joins, case_records, people)
+    check_never_join(
+        joins, case_records, people, records(args.folder, only={c["hidden"] for c in joins})
+    )
     args.out.mkdir(parents=True, exist_ok=True)
     _write(args.out / "leaks.jsonl", _sample(leaks, "hidden", args.limit))
     _write(args.out / "never_join.jsonl", _sample(joins, "hidden", args.limit))
@@ -246,6 +276,8 @@ def main(argv: list[str] | None = None) -> int:
         "leaks_eligible": len(leaks), "never_join_eligible": len(joins),
         "leaks_by_control": {c: sum(1 for x in leaks if x["control"] == c)
                              for c in sorted({x["control"] for x in leaks})},
+        "never_join_by_control": {c: sum(1 for x in joins if x["control"] == c)
+                                  for c in sorted({x["control"] for x in joins})},
     }  # fmt: skip
     (args.out / "counts.json").write_text(json.dumps(counts, indent=1) + "\n", encoding="utf-8")
     print(json.dumps(counts))
