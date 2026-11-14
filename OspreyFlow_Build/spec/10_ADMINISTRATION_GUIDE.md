@@ -33,6 +33,37 @@ A fifth shape, **`cloud-platform`**, is for an organisation's own shared Kuberne
 is rendered into a namespace its platform team made, for pull requests to that platform, and is not
 installed by `ospreyflow install` (section 6a).
 
+### HTTP or HTTPS
+
+- **Lite serves plain HTTP** at a `localhost` address: `http://ospreyflow.localhost`, or a named
+  deployment's `http://<name>.localhost:<port>` (section 1a.1). That is deliberate. Lite is for one
+  computer, its traffic is meant to stay on that machine, and browsers treat `localhost` as a secure
+  context, so sign-in works without a certificate.
+- **Lite has no HTTPS option.** The install, the guided page and every starter give it an
+  `http://…localhost` address, and Lite is not built or tested with a certificate.
+- **Lite answers on this computer only.** Every port a Lite deployment publishes — the front proxy's,
+  the graph store's and, when `network.expose_conduit` is on, the Conduit's — is bound to this
+  computer's own address (`127.0.0.1`), so other machines on a network cannot reach it, whatever
+  the firewall allows. A deployment kept by name (section 1a.1) is Lite, so the same holds. Use
+  Small or Enterprise for anything other people reach.
+- **Small and Enterprise serve HTTPS** at `https://<your domain>`, and must: `osprey.yaml` refuses a
+  Small or Enterprise deployment whose `network.public_origin` is not an `https://` address, and
+  `ospreyflow apply`, the guided page and the Set-up console say so and change nothing. The front
+  proxy (Caddy) obtains the certificate for your domain and renews it automatically. Port 80 is
+  open only for the certificate's challenge and to send a request for your domain on to HTTPS
+  (443); any other request on port 80 gets "not found", apart from the proxy's own health check. On
+  Enterprise, the cluster's load balancer passes 80 and 443 to the proxy.
+- **Small on your own server serves HTTPS with your organisation's own certificate** (section 5a):
+  the front proxy is given the certificate and key, obtains nothing and calls nothing; it publishes
+  port 443 alone (80 only if you ask, and then only to send people to 443). The certificate is
+  checked before anything starts.
+- **The managed services behind Small and Enterprise are reached over TLS:** PostgreSQL always
+  (`sslmode` is `require` at least), the object store always over HTTPS, and the cache and the
+  mail server over TLS unless you turn it off (`external.*` and `mail.starttls`, Appendix A).
+- **A service on a gov.uk domain must be served over HTTPS,** the GOV.UK theme included, so it is
+  Small or Enterprise, never Lite: `osprey.yaml` refuses a Lite deployment at a gov.uk address. The
+  GOV.UK theme on a `localhost` address stays available for a demonstration on one computer.
+
 ## 1a. Choosing a starter
 
 A **starter** is a theme and a domain, chosen at install. It only fills in answers the install
@@ -88,6 +119,11 @@ ticked, to change if you wish.
 
 **In an answers file** (section 7): `starter: govuk-aml`, with `appearance.service_name`,
 `appearance.organisation` and `appearance.phase`.
+
+**On a deployment with no demo accounts** — Small, on a cloud server or your own — a starter's demo
+packs still load, each into its own case, with the first administrator (`admin`) as its Author, in
+the administrator's own unit, and no Editor. The first administrator holds the Analyst role as well
+as Admin (section 9.2), so the case opens for them; they can share it from there.
 
 ### 1a.1 Several deployments side by side
 
@@ -464,12 +500,24 @@ nothing from the CA. It runs as the account that owns the key, so the key stays 
 
 **Who may reach it** is set in front of the server: the organisation's firewall or security group,
 or the `DOCKER-USER` chain. A port Docker publishes is **not** filtered by `ufw`'s rules.
+In the `DOCKER-USER` chain, match only connections that **arrive** at 443, with `--ctdir ORIGINAL`;
+without it the rule also drops the replies to the server's own outbound HTTPS (to the releases, the
+images and cosign's transparency log), and the install fails with a time-out. For example, to let
+one network reach the service through the interface `eth0`:
+
+```
+iptables -I DOCKER-USER -i eth0 -p tcp -m conntrack --ctdir ORIGINAL --ctorigdstport 443 \
+  ! -s 192.0.2.0/24 -j DROP
+```
+
+The chain is emptied when Docker restarts, so put the rule in a unit that runs after
+`docker.service`.
 
 **The first administrator.** The install makes an account `admin` with the Admin and Analyst roles
 and the highest clearance, and prints its **one-time code once**, on the terminal; there are no demo
 accounts. At their first sign-in they choose their own password, then invite everyone else from the
-Admin area (section 9). The install's own tools reach the three names on the server itself and
-trust the deployment's certificate (and `ca`), so they work before the organisation's DNS does.
+Admin area (section 9). The answers' `demo_packs` are loaded after the administrator is made, each
+into its own case with `admin` as its Author (section 1a says what that means for opening it).
 
 **The extraction model.** Once every service is healthy, the install waits for the deployment's
 extraction model (`models.extraction`; on a GPU, the 14b) to finish downloading and pass its digest
@@ -479,6 +527,14 @@ installed, so Ask works from the start. A download that is refused stops the ins
 `models`, naming `ospreyflow logs ollama-models`; run the install again once it can be fetched.
 `ospreyflow update`, `start --build` and `apply` fetch a model whose choice has changed before
 anything that uses it starts again (section 5a.4).
+
+**The installing account's umask.** A server hardened to `umask 077` or `027` is fine: every file
+the deployment's containers read from its folder is written readable by every account whatever the
+umask, and `deployment.env`, which holds the secrets, stays readable by its owner alone. The
+organisation's root, `ca`, is mounted into the identity provider, which runs as another account:
+`doctor`, `install` and `apply` refuse one that not every account can read (`chmod 644` it; it holds
+no secret). The key stays `600`. The install's own tools reach the three names on the server itself and
+trust the deployment's certificate (and `ca`), so they work before the organisation's DNS does.
 
 **The upload folder.** Files an analyst uploads in the Ingest Studio, and the demo packs' own
 files, are written to `uploaded/` inside `server.ingest` by the Conduit, which runs as uid 10001.
@@ -1128,6 +1184,12 @@ have the platform team apply the Terraform."). With nothing declared, every S3 o
 is refused. The workers share the namespace's role, so they hold these reads by IAM, though no way out
 to them.
 
+**What these reads do not do yet.** One S3 read takes no more than 1,000 objects under its folder: a
+folder holding more than 1,000 objects is refused whole, and nothing is written. A bucket whose
+objects are encrypted by a KMS key of its own (SSE-KMS) cannot be read, since the role is given no
+`kms:Decrypt`; one under S3's own encryption can. An Athena connection reads the default catalog,
+`AwsDataCatalog`, alone.
+
 **Narrow the managed networks.** The platform's file names its whole shared VPC, `172.20.0.0/16`, as
 the managed stores' network, so every pod that reaches the stores may reach every address in it on
 those ports, other tenants' managed stores included. Narrow it to our stores' own subnets once the
@@ -1312,9 +1374,29 @@ assigned in *Admin › People*, which keeps them in the deployment's own Postgre
   pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
   registration.
 
-**Not available on Entra yet**: a scheduled run acting as its owner (the owner cannot be resolved
-without Keycloak's users), and reporting (Superset and the report sync are refused at render on
-this profile until Superset signs in through Entra ID).
+**Nothing acts as its owner on Entra yet, so loads are started by hand.** The Conduit acts as a
+person who is not present only through Keycloak's token exchange, which Entra ID does not have, so
+on this profile everything that runs as its owner is refused:
+
+- **a pipeline's schedule and its watched folder** (developer guide, §6.3), and **Run now** in
+  *Admin › Operations*, which runs as the schedule's owner (section 9.11). Each slot is refused and
+  recorded in the scheduler's words, "the identity provider could not be reached to act as the
+  schedule's owner": here that means no owner can be acted as, while Entra itself may be answering.
+  Such a refusal says nothing about the owner, so it never counts toward the three that pause a
+  schedule, and the schedule is refused again at every slot until it is set to run by hand;
+- **`ospreyflow run`**, an orchestrator's trigger (section 8), which runs as the pipeline's owner: it
+  is refused, in words, and recorded;
+- **a rule that runs on a schedule** (user guide, §7.11), and **the daily check for KYC documents
+  that lapse**, which runs each KYC rule as the person who deployed it;
+- **a screening list's refresh schedule** (section 9.5): **Refresh now** still works;
+- **a watch's own runs**: the watch is tried again each minute and does nothing, with a warning in
+  the Conduit's log;
+- **at a load, anyone else's rules, hotlists and watches**: only those of the person who started the
+  load are judged.
+
+A load started by hand in the Ingest Studio (**Run now**, developer guide §3.9) runs as the person
+who starts it, and is not affected. Reporting is not available either: Superset and the report sync
+are refused at render on this profile until Superset signs in through Entra ID.
 
 **Not yet tried against a real tenant.** The token shapes above are as Microsoft documents them, and
 one real token from the organisation's development tenant is to settle each:
@@ -1388,7 +1470,9 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
 2. **The managed database with the stores.** PostgreSQL must agree with the stores, or anything
    withdrawn or deleted since the set comes back under today's grants. The platform team restores RDS
    to the set's finish time by its own point-in-time procedure; the deployment is pointed at it only
-   once nothing that writes runs (step 4).
+   once nothing that writes runs (step 4). **RDS keeps its point-in-time restore for 35 days**, as the
+   Terraform renders it (`backup_retention_period`), against the sets' 35: every set still kept can
+   be restored with its database.
 3. **No backup during the restore**: both CronJobs suspended, and any backup still running left to
    finish.
 4. **Everything that writes stopped**: the render's own list, `backups.writers` in `values.yaml`, each
@@ -1563,8 +1647,8 @@ first install:
 
 ### 6a.10 Coming
 
-- **On Entra ID**: a scheduled run acting as its owner (until then such a run is marked stopped),
-  reporting (Superset and the report sync signing in through Entra ID), display names (a person is
+- **On Entra ID**: anything that runs as its owner, a scheduled run among them (until then each is
+  refused, section 6a.7), reporting (Superset and the report sync signing in through Entra ID), display names (a person is
   shown by object id until then), and one real token from the organisation's tenant to settle the
   shapes section 6a.7 lists as untried.
 - **The backups' alert** on a failed or missing run, the production shape's restore, the restore
@@ -1619,7 +1703,11 @@ Added in this guide, beyond ADR-148's own list:
     each as a sensitive variable with no default, and its state then holds it (section 6a.3).
 11. **The app registrations**: who in the organisation registers the Glass (a single-page
     application, returning to the deployment's address with a trailing `/`) and this API (exposing
-    its scope), and makes the extension attributes or groups the claims name (section 6a.7).
+    its scope), and makes the extension attributes or groups the claims name (section 6a.7). They are
+    two registrations, `client_id` and `api_client_id`, not one.
+12. **Volume encryption**: whether the platform's storage class, `gp2-expand`, encrypts its volumes.
+    ArcadeDB's and ClickHouse's data, the shared volume and, in the poc shape, the Ingest root are
+    encrypted at rest only if it does; the render does not check.
 
 ## 7. The answers file, `install.yaml`
 
@@ -1670,7 +1758,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow open` | Opens the Glass in your browser |
 | `ospreyflow logs [service] [--follow] [--tail N]` | The services' logs (the last 200 lines by default) |
 | `ospreyflow apply` | Applies a changed `osprey.yaml` to the installed deployment (section 8.3): renders it again, keeps every password and key, asks for a newly enabled provider's key (from `OSPREY_MODEL_KEY_<NAME>` or a hidden prompt), and restarts only the services whose settings changed. It makes no account, adds no demo pack and touches no data |
-| `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`; a Small deployment installed without them never gets them), the workspace's own client (which is given no refresh token), and the organisation's identity provider with its client secret, its first sign-in (refusing, or joining by email when `trust_email` is on) and the record of refused sign-ins Admin → People lists (section 5a.1); safe to run again, and prints no secret |
+| `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`; a Small deployment installed without them never gets them), the Conduit's own client secret from the deployment's settings, which a wiped or re-imported identity provider no longer holds, the workspace's own client (which is given no refresh token), and the organisation's identity provider with its client secret, its first sign-in (refusing, or joining by email when `trust_email` is on) and the record of refused sign-ins Admin → People lists (section 5a.1); safe to run again, and prints no secret |
 | `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
 | `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; writes it to `deployment.env` alone and restarts the model gateway (and the Conduit when the key's presence changes) |
 | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
@@ -1678,7 +1766,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
 | `ospreyflow release export <dataset> --name <name> --release-version <version> --out <folder>` | Writes the dataset's release as a YAML bundle into a new, empty folder: `release.yaml` (`apiVersion: ospreyflow.io/v1`, `kind: DatasetRelease`, checked by `packages/schemas/release.schema.json`), the domain model, each published pipeline and each reference list's definition, and a small list's rows as a CSV named by its checksum. Never a credential, loaded data, case membership, an owner or a licensed screening list's rows. Does what Studio › Releases' *Export* does, as you: set `OSPREY_TOKEN` to your own sign-in token (and `OSPREY_API_URL` for another deployment's address). A pipeline marked above what you may view is left out, and the command says how many |
 | `ospreyflow release import <folder> --dataset <id> [--dry-run]` | Reads a bundle whole (every file's SHA-256, nothing it does not list) and lands the model, the pipelines and the lists as drafts in the dataset, each pipeline through the Studio's own save gates; with `--dry-run`, says what it would write and writes nothing. A refusal writes nothing. Nothing goes live: make the model live in the Studio |
-| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words |
+| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Refused where people sign in with Entra ID (`cloud-platform`): nothing acts as its owner there (section 6a.7) |
 | `ospreyflow map list` | Lists the map providers, each with its tier, whether its key is set (never the key) and its state; the local basemap, the place-name fonts and the prefetch areas |
 | `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
 | `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |
@@ -1699,15 +1787,18 @@ makes keep a volume even when its claim is deleted).
 
 One front proxy is the deployment's only door. Under the address in `network.public_origin`:
 
-- the **Glass** — with the Ingest Studio and the Admin area inside it — at the name itself;
+- the **Glass** — with its four places, the Ingest Studio, Rules and Monitoring and Admin among them — at the name itself;
 - **sign-in** (Keycloak) at `id.`;
 - **dashboards** (Superset) at `bi.`, when dashboards are on.
 
-Lite publishes port 80 and, on this computer only, `127.0.0.1:2480` for the graph store's own
-tools. Small publishes 80 (for the certificate) and 443. Small on your own server publishes 443
-alone (80 only with `redirect_http`, and then only to redirect), and 2480 and the Conduit's door on
-the server only (section 5a). The Conduit's own port is published only
-with `network.expose_conduit: true`.
+Lite publishes port 80 (or its own address's port) and `2480` for the graph store's own tools, both
+on this computer only (`127.0.0.1`): other machines cannot reach a Lite deployment. Small publishes
+80 (for the certificate and the move to HTTPS) and 443 on every network interface, because other
+people reach it. Small on your own server publishes 443 alone (80 only with
+`redirect_http`, and then only to redirect), and 2480 and the Conduit's door on the server only
+(section 5a). Which of them is plain HTTP and which HTTPS: the note **HTTP or HTTPS** in
+section 1. The Conduit's own port is published only with `network.expose_conduit: true` — on Lite,
+on this computer only.
 
 ### 8.2 Where things are
 
@@ -1751,6 +1842,18 @@ one.
 Everyone signs in through the deployment's identity provider; the password is only ever typed on
 its own sign-in page. What a person may do is their **roles**; what they may see is their
 **clearance**, unit and handling codes, and the cases they are given.
+
+**Where people sign in with Entra ID** (`cloud-platform`, section 6a.7), Entra holds their accounts,
+and *People and roles* gives them roles, adds them by object id before they first sign in, and
+disables them. What Entra holds is refused here, in words, each followed by "On this deployment
+Entra ID holds people's accounts…": inviting ("People are not invited here."), access ("A person's
+clearance, unit and handling codes are changed in Entra ID."), a sign-in's reset ("A sign-in is
+reset in Entra ID."), removing ("A person is not removed here: they would return, with no roles, at
+their next sign-in. Disable them instead, or remove them in Entra ID."), joining ("There is no
+organisation account to join.") and a dashboard identity ("Dashboard identities are not registered
+on this deployment yet."). No administrator can give a missing clearance or unit instead: a person
+whose token carries neither is refused at sign-in (section 6a.7). A person is shown by object id,
+not by name.
 
 ### 9.1 The Admin place
 
@@ -2033,7 +2136,8 @@ A rule can also run **when a screening list refreshes** (user guide, section 7).
 - **A scheduled refresh runs as the person who saved the schedule**, resolved afresh each time —
   never as the system. If they can no longer sign in or no longer hold `load_screening_lists`, that
   refresh is refused, recorded under **Latest refreshes** in words, and nothing is read; save the
-  schedule again as someone who holds the right.
+  schedule again as someone who holds the right. Where people sign in with Entra ID, nobody can be
+  acted as, so every scheduled refresh is refused there: refresh by hand (section 6a.7).
 - Each scheduled time runs once, whichever Conduit replica takes it; after downtime only the latest
   runs. A refresh that ran on its schedule says so under **Latest refreshes**.
 - Put each new download in the list's location before the scheduled hour: the schedule reads the file
@@ -2174,7 +2278,8 @@ dry run first.
 ### 9.11 Operations and Audit
 
 **Operations** (`operate_schedules`) has the schedules (pipeline, case, schedule, owner, next and last
-run; **Pause**, **Resume**, **Run now**, **Save schedule**) and **Promotions waiting for review**:
+run; **Pause**, **Resume**, **Run now**, **Save schedule**; **Run now** runs as the schedule's owner,
+so where people sign in with Entra ID it is refused, as every scheduled run is: section 6a.7) and **Promotions waiting for review**:
 the load, the dataset it goes into, who sent it, when, and how long it has waited. **Alert the
 reviewers and administrators after N days** (1 to 90) sets when a waiting promotion is overdue; an
 overdue one alerts the dataset's Authors who hold `review_promotions`, and administrators of its unit.
@@ -2328,10 +2433,23 @@ line (section 8).
   adds one. A key is kept the way a model key is: never shown back, and never given to the browser.
   Where more than one provider is drawable, analysts choose between them with the map's **Basemap**
   switch.
-- **The local basemap**: choose the **Region to build** and **Build the basemap**; **Verify the
-  providers** checks each one answers.
+- **The local basemap**: choose the **Region to build**, the **Unit the place names are held by**
+  (empty: your own) and **Build the basemap**; **Verify the providers** checks each one answers. The
+  build also makes the region's gazetteer dataset, held by that unit. A dataset takes a gazetteer of
+  its own unit (`PUT`, `DELETE /v1/datasets/{dataset_id}/gazetteers/{gazetteer_id}`, with `run_pipelines`):
+  its places are copied into the dataset, so a case still reads one dataset; removing it deletes
+  nothing ("…its places stay in this dataset as its own, and the map's place search no longer offers
+  them…"). On screen, the case's map shows **Gazetteers in this case's dataset** beside its place
+  search, each "added" or "not added", with **Add** and **Remove** for holders of `run_pipelines`; a
+  case reading a composite dataset or a drawing takes none.
 - **Prefetch areas**: areas whose tiles are fetched ahead of use, and **Fetch every area** by hand
   only, every 6 hours, every day or every week.
+
+**On a shared platform** (`cloud-platform`), a provider whose tiles the Conduit fetches (its proxy)
+is reached only through a way out the render made from `osprey.yaml`'s `map:` section (section
+6a.5). One added here is given none, so its tiles cannot be fetched until it is declared there, the
+deployment rendered again and the new values installed. **Build the basemap** is not available
+there (section 6a.1).
 
 Changes are in **History** and the audit log.
 
@@ -2339,9 +2457,11 @@ Changes are in **History** and the audit log.
 
 | Id | What it shows | How it arrives |
 | --- | --- | --- |
-| `hmp` | Organised crime: a prison's people, phones, calls, visits and places (synthetic) | Generated |
+| `hmp` | Prison intelligence: a prison's people and places, cell shares, co-defendants, conflicts, incidents, visits in person and by video, phones, calls and payments (synthetic) | Generated |
 | `fixture-corp` | Network shapes, and duplicate records matched without being merged (synthetic) | Generated |
 | `operation-ledger` | Preventive AML: a structuring ring, onboarding screened before it commits, ownership through a trust (synthetic) | Generated |
+| `prison-intelligence` | Prison intelligence, end to end: a fictional jail's records as an intelligence team receives them, loaded through the Ingest Studio from source files, each with its own marking (synthetic) | Generated |
+| `prison-intelligence-scale` | The same estate at scale: 3,000 prisoners and 30,000 links across six establishments, to show a large network grouped by community (synthetic) | Generated |
 | `cyber-intrusion` | Cyber threat analysis in STIX 2.1: a fictional threat actor's campaign against a water company — its backdoor, two command-and-control servers, the indicators that find them and the traffic observed; its case is set to STIX (synthetic) | Generated |
 | `paysim` | Mobile-money fraud: 6.36 million simulated transactions with fraud labels | Downloaded by you |
 | `enron` | **Real data**: about 150 people's real email at Enron, 1998–2002 — who wrote to whom, when, and about what | Downloaded by you; accepted before it loads; never by an install |
@@ -2351,19 +2471,31 @@ set to its domain's packs. A **public dataset** of your own choosing, such as a 
 dataset, is added with `ospreyflow demo add public` (section 1a.2).
 
 Choose them at install (`demo_packs`), or later: `ospreyflow demo list`, `ospreyflow demo add
-<id>`. Each loads into its own case, with the installing administrator as Author. **PaySim** is a
+<id>`. Each loads into its own case, with the installing administrator as Author: the demo
+administrator where there are demo accounts (the demo analyst its Editor), and otherwise the first
+administrator, `admin`, in their own unit, with no Editor (section 1a); they hold the Analyst role
+as well as Admin, so the case opens for them. Adding **HMP**
+again is safe: a deployment that loaded it before v0.2.0 gains only its prison network, in the same
+case, and one that already has the network is left as it is. **PaySim** is a
 download: get `PS_20174392719_1491204439457_log.csv` from its Kaggle page and pass it with
 `ospreyflow demo add paysim --file <path>`; it is checked by size and checksum before anything
 starts. PaySim is CC BY-SA 4.0 (E. A. Lopez-Rojas, A. Elmir and S. Axelsson, 2016); its licence and
 attribution travel with it.
 
-**Prison Intelligence** (`prison-intelligence`) needs `components.post_ingest_resolution` off
-(appendix A), or a live load in the demonstration adds automatic "same as" links and every rehearsal
-reset then refuses. An install whose `demo_packs` names it (the `crime` starter's does) writes the
-setting off itself (section 1a). Added later, on a deployment where it is on, `ospreyflow demo add
-prison-intelligence` refuses, in words, with nothing added: set `post_ingest_resolution: false` under
-`components:` in the deployment's `osprey.yaml`, run `ospreyflow apply`, then add it again.
-Resolution is the whole deployment's setting; no case or dataset can turn it off on its own.
+**Prison Intelligence** seeds its case through the Ingest Studio's own pipelines, as a data engineer
+would, and has commands for rehearsing a demonstration: `--reset-live` between rehearsals, and two
+for the session itself (`DEMO_GUIDE.md` in the repository gives each, in full). It needs
+`components.post_ingest_resolution` off (appendix A), or a live load in the demonstration adds
+automatic "same as" links and every rehearsal reset then refuses. An install whose `demo_packs`
+names it (the `crime` starter's does) writes the setting off itself (section 1a). Added later, on a
+deployment where it is on, `ospreyflow demo add prison-intelligence` refuses, in words, with nothing
+added: set `post_ingest_resolution: false` under `components:` in the deployment's `osprey.yaml`, run
+`ospreyflow apply`, then add it again. Resolution is the whole deployment's setting; no case or
+dataset can turn it off on its own. Its **scale cohort** (`prison-intelligence-scale`) is
+written straight into the graph in a case of its own, with no pipeline runs, so the rehearsal reset
+does not touch it; adding it again changes nothing, and a run that stopped part-way says so rather
+than finishing it. `python -m scripts.write_pid_files --out <folder> --profile scale` writes its
+3,000 prison numbers as `scale_cohort_list.txt`, to paste into *Add many from a list*.
 
 **Enron** is the one pack of **real personal data**: the email of real people, released during the
 US regulator's investigation and distributed by Carnegie Mellon University. OspreyFlow never carries
@@ -2388,7 +2520,7 @@ download — with a record of the acceptance beside it, and loads into its own c
 
 With dashboards on, **report sync** pulls each case's figures into a reporting database every 15
 minutes (`reporting.sync_interval_seconds`), and **Superset** shows them at `bi.`, signing people in
-through the deployment's identity provider. A business intelligence tool (Power BI, Tableau, Qlik)
+through the deployment's identity provider (below). A business intelligence tool (Power BI, Tableau, Qlik)
 reads the same figures:
 
 1. register the dashboard in Admin → Dashboards and copy its secret (shown once);
@@ -2407,14 +2539,19 @@ database's `figures` table, beside `raised`, `open_by_age` and `outcome`:
 | `section` | `label` | What it counts |
 | --- | --- | --- |
 | `raised_by_rule` | `typology` (with its `typology`), `hotlists` or `monitors` | alerts raised each week, by rule |
-| `closed` | `true_positive`, `false_positive` or `closed` (taken back, no outcome) | alerts closed each week, by outcome |
+| `closed` | the closing reason as stored: `true_positive` (True match), `false_positive` (False positive), `duplicate`, `no_further_action` or `referred`; or `closed` (taken back, no outcome) | alerts closed each week, by outcome |
 | `time_to_close` | `under a day`, `1 to 7 days`, `7 to 30 days`, `over 30 days` | alerts closed in the period, by how long they took |
 | `hotlist_matches` | `hotlists` | hotlist matches each week |
 
 A typology rule is named by its typology, never by its own name, which an analyst writes and the
 feed does not carry. Every figure is counted as the dashboard's account may see it; a hotlist kept
-"only me" is counted for its owner alone, so never on a dashboard. No board ships as a file: build
-the monitoring board in Superset from the `figures` table, filtered on these sections — for
+"only me" is counted for its owner alone, so never on a dashboard.
+
+**In the Glass**, the rail's **Dashboards** draws an **Alert monitoring** board itself, first among the
+boards, from the same figures counted as the person reading it: raised each week and by rule, closed
+by outcome, time to close, hotlist matches and the team view. A Reports Viewer's *Open the dashboard*
+opens it filtered to an alert's rule and period. It needs
+no Superset set-up. For a board of your own in Superset, none ships as a file: build it from the `figures` table, filtered on these sections — for
 example a stacked bar of `raised_by_rule` by `week_start` and `label`, a bar of `closed` by
 `label`, a table of `time_to_close`, and a line of `hotlist_matches` — with a filter on
 `case_name`. Report sync fills it on its next pull; nothing else needs to change.
@@ -2452,7 +2589,9 @@ never in it. Schedule it with a cron line, for example
 organisation's identity provider is restored still linked to it. OpenSearch is not in the set, as
 on Lite (below).
 
-**Where the stores keep their data** (Lite, and Small on your own server). In Docker named volumes
+**A fresh deployment** has no published recipes and no analytics events yet: its first set records
+them as **empty** (the manifest's `empty` list, and the backup's last lines say so), and a restore
+of it restores nothing for them. **Where the stores keep their data** (Lite, and Small on your own server). In Docker named volumes
 of the deployment's own: `<project>_postgres-data` (every PostgreSQL database — the Conduit's
 records, the accounts, the audit log), `<project>_arcadedb-databases` and `<project>_arcadedb-config`
 (the graph and its server's settings), `<project>_valkey-data` (the working sets and job queues),
@@ -2467,9 +2606,10 @@ running server, so it is the same wherever the data is kept. **Not in a backup:*
 sets and queues, and OpenSearch, which holds no index of OspreyFlow's yet — so there is nothing of it
 to restore or rebuild, and a restore starts it empty.
 
-**A backup that fails** removes the set it had started, and says so. If it cannot remove all of it,
-it says what it could not remove, renames the set `<set>.incomplete` with a file `INCOMPLETE` in it,
-and `ospreyflow restore` refuses it; remove it as root (`sudo rm -rf <set>.incomplete`).
+**A backup that fails** removes the set it had started, and says
+so, so no half-written set is left beside the good ones. If it cannot remove all of it, it says what
+it could not remove, renames the set `<set>.incomplete` with a file `INCOMPLETE` in it, and
+`ospreyflow restore` refuses it; remove it as root (`sudo rm -rf <set>.incomplete`).
 
 **Where sets are, and cleaning them up.** A backup is never written inside the OspreyFlow
 folder (the checkout: the folder holding `OspreyFlow_Core`, and everything in it).
@@ -2646,14 +2786,15 @@ Admin → Schedules and runs lists every one.
 | A service is not healthy | `ospreyflow status`, then `ospreyflow logs <service>` |
 | The page does not open | `ospreyflow status`; that port 80 (Lite) or the DNS records (Small) are right |
 | Nobody can sign in | `ospreyflow logs keycloak`; that the address in `osprey.yaml` is the one in the browser; then `ospreyflow repair-sign-in` |
-| `doctor`, `install` or `apply` says "the certificate is refused" | Each reason is named, and nothing was changed. "does not match": the key is another certificate's. "encrypted with a passphrase": write the key unencrypted (`openssl pkey -in <encrypted> -out <key>`), mode 600. "does not cover id.…": a wildcard for the parent domain covers one label only; ask for `id.<host>` and `bi.<host>`, or `*.<host>` (section 5a). "expired" or "not valid until": a new certificate, or the server's clock. "does not reach the organisation's root": put the intermediates after the server certificate. Then run the command again |
-| Nobody can sign in through the organisation (Small on your own server) | The organisation's page says the redirect URI is not registered: register exactly the address `ospreyflow doctor --mode small --config install.yaml` prints (section 5a.1). The sign-in comes back with "Unexpected error when authenticating with identity provider": the client secret is wrong (put the right one in `deployment.env`, then `ospreyflow repair-sign-in`) or the server cannot reach the provider (`login.microsoftonline.com` for Entra ID). `repair-sign-in` says "could not read the organisation's sign-in settings": the issuer is wrong, the provider cannot be reached, or — for a provider on the organisation's own certificates — `server.ca` is missing |
+| Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped**, or a list refresh re-screens 0 customers — typically after the stores were wiped; Admin → System's **Acting for people** says "The Conduit cannot act for people" | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again. The System line turns green within half a minute |
 | Someone signing in through the organisation is told "This email address already belongs to an OspreyFlow account" | An account you made holds their email, and OspreyFlow does not join the two by itself (section 5a.1). Join them in Admin → People and roles' *Refused organisation sign-ins*, or remove that account and they arrive again, or they sign in with that account (section 9.7) |
 | *Refused organisation sign-ins* does not list someone who was refused | It lists the last seven days, from a deployment updated to the release after v0.4.10 and repaired since (`ospreyflow repair-sign-in`, which also makes the identity provider record the refusals). Someone refused before that, or more than seven days ago, is not listed: ask them to sign in through the organisation once more, then look again. Someone already joined to an account is not listed either |
 | Admin → People and roles says "the identity provider refused the Conduit — its account needs manage-users, manage-clients and view-events" | Run `ospreyflow repair-sign-in`, which grants the Conduit's account what it needs |
 | Removing someone is refused: "the only enabled person who can manage people" | Give someone else the Admin role (or the `manage_people` right) first, so the deployment is never left with no administrator. Your own account cannot be removed either: another administrator removes it |
 | `doctor`, the install or `repair-sign-in` warns "Sign-in through the organisation joins by email" | `sign_in.organisation.trust_email` is on (section 5a.1). Keep it only with the security officer's written sign-off; otherwise set `trust_email: false` in `osprey.yaml` and run `ospreyflow apply` |
 | Windows ask people to sign in again after about half an hour away | As intended: a window renews its sign-in only after the person has done something, so one left alone ends at the identity provider's idle limit (Keycloak's default, 30 minutes). The page is kept; they sign in again in a small window |
+| `doctor`, `install` or `apply` says "the certificate is refused" | Each reason is named, and nothing was changed. "does not match": the key is another certificate's. "encrypted with a passphrase": write the key unencrypted (`openssl pkey -in <encrypted> -out <key>`), mode 600. "does not cover id.…": a wildcard for the parent domain covers one label only; ask for `id.<host>` and `bi.<host>`, or `*.<host>` (section 5a). "expired" or "not valid until": a new certificate, or the server's clock. "does not reach the organisation's root": put the intermediates after the server certificate. "the identity provider … cannot" read the root: `chmod 644` the `ca` file. Then run the command again |
+| Nobody can sign in through the organisation (Small on your own server) | The organisation's page says the redirect URI is not registered: register exactly the address `ospreyflow doctor --mode small --config install.yaml` prints (section 5a.1). The sign-in comes back with "Unexpected error when authenticating with identity provider": the client secret is wrong (put the right one in `deployment.env`, then `ospreyflow repair-sign-in`) or the server cannot reach the provider (`login.microsoftonline.com` for Entra ID). `repair-sign-in` says "could not read the organisation's sign-in settings": the issuer is wrong, the provider cannot be reached, or — for a provider on the organisation's own certificates — `server.ca` is missing |
 | Someone signed in through the organisation and sees nothing | As intended until an administrator grants them roles and access in Admin → People and roles (section 5a.1) |
 | `doctor` says too little disk where backups are written | Give `server.backups` more room, or name another folder; remove old sets |
 | People on the network cannot connect to Small on your own server | Port 443 is open in front of the server — its firewall or security group, or the `DOCKER-USER` chain; `ufw` does not filter a port Docker publishes — and the three names resolve to the server in the organisation's DNS |
