@@ -1,0 +1,9 @@
+scripts/client_size_leaks.py's plants (rule 15), offline on this Mac, a fresh bytecode cache per run, each put back after:
+L1 the generator lets a visible record through as hidden (a visible-visible pair): 3 passed, 4 errors in 1.44s
+L2 a control chosen without asking whether it reads the record: 3 passed, 4 errors in 1.42s
+L3 the never-join check lets a pair inside one dataset through: 1 failed, 6 passed in 1.41s
+L4 the check lets a hidden-nothing case through: 1 failed, 6 passed in 1.49s
+restored: 7 passed in 1.41s
+L5 a never-join control chosen in the measure case, not the partner's: 2 failed, 6 passed in 1.44s
+L6 the never-join check lets a control that cannot read the partner through: 1 failed, 7 passed in 1.51s
+restored: 8 passed in 1.50s

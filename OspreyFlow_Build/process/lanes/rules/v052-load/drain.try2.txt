@@ -1,0 +1,29 @@
+[mem 06:29:54Z] available 39 GB
+== before (2026-11-14T06:29:54Z): graph 759044 text 72000
+2026-11-14T06:30:26Z +31s: graph 731044 text 44000
+2026-11-14T06:30:57Z +62s: graph 702044 text 15000
+2026-11-14T06:31:28Z +93s: graph 653044 text 0
+2026-11-14T06:31:59Z +124s: graph 582544 text 0
+2026-11-14T06:32:29Z +154s: graph 510544 text 0
+2026-11-14T06:33:00Z +185s: graph 435044 text 0
+2026-11-14T06:33:31Z +216s: graph 359044 text 0
+2026-11-14T06:34:02Z +247s: graph 283044 text 0
+2026-11-14T06:34:33Z +278s: graph 229044 text 0
+[mem 06:34:54Z] available 43 GB
+2026-11-14T06:35:04Z +309s: graph 167544 text 0
+2026-11-14T06:35:35Z +340s: graph 117544 text 0
+2026-11-14T06:36:05Z +370s: graph 59044 text 0
+2026-11-14T06:36:36Z +401s: graph 4544 text 0
+2026-11-14T06:37:07Z +432s: graph 0 text 0
+== drained in 432 s
+worker exit=0
+INFO:__main__:worker worker-gpu-1: feeding the search index ospreyflow-default
+== drift check (2026-11-14T06:37:09Z)
+[mem 06:39:54Z] available 33 GB
+[mem 06:44:54Z] available 29 GB
+search index drift: none (570460 nodes in the graph, 642460 documents in the index)
+drift: 711.33 s wall, 169096 KB max
+drift exit=0
+drain exit=0
+Reaped 1 process(es) the run left behind (/root/osprey-runs/rules.meta/runs/20261114T062953Z-83fb5d52).
+Wall time: 1150 s, exit 0 (stack d, the lease rules took at 2026-11-14T03:27:42Z; set-up before it 18 s)

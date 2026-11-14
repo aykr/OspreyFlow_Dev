@@ -1,0 +1,143 @@
+Stack d's ArcadeDB recreated at 9 GiB of heap (the poc's: 12 GiB limit x arcadedb_heap_fraction 0.75, by harness.cloud_platform.arcadedb_heap_gib_from_limit), 14 November, under the rules lane's lease of stack d, after the host's out-of-memory killer stopped B's run 1. recreate_arcadedb.py's output (passwords redacted), then the graph's vertices counted on the new container before the old one was removed: 570,460 (DESIGN.md's 570,000 distinct of 650,000 written), Person 281,000. The old container osprey-test-d-arcadedb-old removed after the count.
+Mem:              62          19          35           0           9          42
+== before
+{
+ "name": "osprey-test-d-arcadedb",
+ "image": "arcadedata/arcadedb:26.10.1",
+ "state": {
+  "Status": "exited",
+  "ExitCode": 137,
+  "OOMKilled": true,
+  "StartedAt": "2026-11-14T03:27:43.530663728Z"
+ },
+ "env": [
+  "ARCADEDB_OPTS_GC=-XX:+UseZGC -XX:+ZGenerational",
+  "ARCADEDB_JMX=-Dcom.sun.management.jmxremote=true     -Dcom.sun.management.jmxremote.local.only=false     -Dcom.sun.management.jmxremote.authenticate=false     -Dcom.sun.management.jmxremote.ssl=false     -Dcom.sun.management.jmxremote.port=9999     -Dcom.sun.management.jmxremote.rmi.port=9998",
+  "ARCADEDB_OPTS_MEMORY=-Xms2G -Xmx2G",
+  "JAVA_OPTS=-Darcadedb.server.rootPassword=<redacted> -Darcadedb.gremlin.engine=groovy",
+  "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+  "JAVA_HOME=/opt/java/openjdk",
+  "LANG=en_US.UTF-8",
+  "LANGUAGE=en_US:en",
+  "LC_ALL=en_US.UTF-8",
+  "JAVA_VERSION=jdk-21.0.12.1+1"
+ ],
+ "cmd": [
+  "./bin/server.sh"
+ ],
+ "ports": {
+  "2480/tcp": [
+   {
+    "HostIp": "127.0.0.1",
+    "HostPort": "2494"
+   }
+  ]
+ },
+ "networks": [
+  "bridge"
+ ],
+ "restart": {
+  "Name": "no",
+  "MaximumRetryCount": 0
+ },
+ "mounts": [
+  [
+   "volume",
+   "2c8a8a57dc3c4e288dbf0cdb58cfc6675eb6529af6724cca444ee4f5154ebfc5",
+   "/home/arcadedb/backups"
+  ],
+  [
+   "volume",
+   "5859b26618f2f16945dba04857565d9f89ca6c88f3f02788bd4c3e99d1806e85",
+   "/home/arcadedb/config"
+  ],
+  [
+   "volume",
+   "0fb9a98e5df776f967957d24fff5e7dc81cee4811c85a85550fb182e4c596061",
+   "/home/arcadedb/databases"
+  ],
+  [
+   "volume",
+   "236c6f36b1019e7bcea5980e8bd517eb47e3e716da626bed80a1a3975ba5fc74",
+   "/home/arcadedb/log"
+  ],
+  [
+   "volume",
+   "bfb85689dcd99fe1b5903db8c02fad6d9a4cbc80defeaf5b2db7b4d64e51b88f",
+   "/home/arcadedb/replication"
+  ]
+ ],
+ "memory_limit": 0
+}
+== after
+{
+ "name": "osprey-test-d-arcadedb",
+ "image": "arcadedata/arcadedb:26.10.1",
+ "state": {
+  "Status": "running",
+  "ExitCode": 0,
+  "OOMKilled": false,
+  "StartedAt": "2026-11-14T04:44:34.17393821Z"
+ },
+ "env": [
+  "ARCADEDB_OPTS_GC=-XX:+UseZGC -XX:+ZGenerational",
+  "ARCADEDB_JMX=-Dcom.sun.management.jmxremote=true     -Dcom.sun.management.jmxremote.local.only=false     -Dcom.sun.management.jmxremote.authenticate=false     -Dcom.sun.management.jmxremote.ssl=false     -Dcom.sun.management.jmxremote.port=9999     -Dcom.sun.management.jmxremote.rmi.port=9998",
+  "JAVA_OPTS=-Darcadedb.server.rootPassword=<redacted> -Darcadedb.gremlin.engine=groovy",
+  "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+  "LANGUAGE=en_US:en",
+  "JAVA_VERSION=jdk-21.0.12.1+1",
+  "ARCADEDB_OPTS_MEMORY=-Xms9G -Xmx9G",
+  "JAVA_HOME=/opt/java/openjdk",
+  "LANG=en_US.UTF-8",
+  "LC_ALL=en_US.UTF-8"
+ ],
+ "cmd": [
+  "./bin/server.sh"
+ ],
+ "ports": {
+  "2480/tcp": [
+   {
+    "HostIp": "127.0.0.1",
+    "HostPort": "2494"
+   }
+  ]
+ },
+ "networks": [
+  "bridge"
+ ],
+ "restart": {
+  "Name": "no",
+  "MaximumRetryCount": 0
+ },
+ "mounts": [
+  [
+   "volume",
+   "2c8a8a57dc3c4e288dbf0cdb58cfc6675eb6529af6724cca444ee4f5154ebfc5",
+   "/home/arcadedb/backups"
+  ],
+  [
+   "volume",
+   "5859b26618f2f16945dba04857565d9f89ca6c88f3f02788bd4c3e99d1806e85",
+   "/home/arcadedb/config"
+  ],
+  [
+   "volume",
+   "0fb9a98e5df776f967957d24fff5e7dc81cee4811c85a85550fb182e4c596061",
+   "/home/arcadedb/databases"
+  ],
+  [
+   "volume",
+   "236c6f36b1019e7bcea5980e8bd517eb47e3e716da626bed80a1a3975ba5fc74",
+   "/home/arcadedb/log"
+  ],
+  [
+   "volume",
+   "bfb85689dcd99fe1b5903db8c02fad6d9a4cbc80defeaf5b2db7b4d64e51b88f",
+   "/home/arcadedb/replication"
+  ]
+ ],
+ "memory_limit": 0
+}
+== changed env: ["ARCADEDB_OPTS_MEMORY=-Xms9G -Xmx9G"]
+exit=0
+== vertices after the recreate: mx_Device 30,000; mx_Document 72,000; mx_Endpoint 116,000; mx_Location 41,060; mx_Organisation 30,400; mx_Person 281,000; total 570,460
