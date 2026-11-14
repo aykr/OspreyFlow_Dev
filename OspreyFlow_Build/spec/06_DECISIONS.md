@@ -38067,11 +38067,13 @@ By platform-b. An access step: two review rounds, listed for the owner (round 1'
 6. **Admin › People on Entra** is told which values it sets (`GET /v1/admin/sign-in`'s `administrator_sets`), says so
    in words, and offers **Access** for those alone, sending only them. Tests:
    `apps/workspace/src/admin/PeopleEntraAdministrator.test.tsx`. Record: `stepE-red-first.txt`.
-7. **What only the real table shows is `test_entra_people_live.py`'s Amendment 15 section, not yet run**: the
-   columns, a sign-in never overwriting what was set, the transaction's limits from the setter's own row, the audit
-   row on the store's connection, the tenant clause (another tenant's rows never read or written), the first
-   administrator resolving on a fresh store and a later change surviving a restart, and a person with none set
-   recorded and refused until set. It needs a stack lease, refused in this session's permissions; it is on the
-   owner's list (MORNING.md). Until it runs, the route tests' tenant cases show the route's handling, not the store's
-   SQL. Not shown by any test: two transactions racing (`FOR SHARE`/`FOR UPDATE` is by design). The administration
-   guide 1.98, §6a.7 and Appendix A, says the rest.
+7. **What only the real table shows is `test_entra_people_live.py`'s Amendment 15 section, run on 14 November 2026
+   on test stack b under platform-b's lease** (`process/lanes/platform-b/4c/am15-live.txt`): the whole live file passed,
+   32 of 32. It covers the columns, a sign-in never overwriting what was set, the transaction's limits from the
+   setter's own row, the audit row on the store's connection, and the tenant clause (another tenant's rows never read
+   or written). It also covers the first administrator resolving on a fresh store, through the start itself, and a
+   later change surviving a restart; a recorded person never seeded past the role gate; and a person with none set
+   recorded and refused until set. Three live plants each went red for their own test: the seed's values given past
+   its role gate, the Access write's audit row after its transaction commits, and the store's clearance limit
+   removed. Not shown by any test: two transactions racing (`FOR SHARE`/`FOR UPDATE` is by design). The
+   administration guide 2.00, §6a.7 and Appendix A, says the rest.

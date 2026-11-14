@@ -26,9 +26,12 @@ lane-reviewer briefed without the lane's own conclusions.
 
 ## Open
 
-- **The live section** (`test_entra_people_live.py`, am15, 32 collected) has not run. It needs a stack
-  lease, and `stack_lease.sh acquire` was refused by this session's permission check; the owner holds
-  it (`MORNING.md` item 4).
+- **The live section: run** on 14 November on test stack b under platform-b's lease. The owner acquired, brought up,
+  ran, brought down and released it from this worktree's window. The whole live file passed, 32 of 32, and three
+  live plants each went red for their own test, with 11 passing again once restored (`am15-live.txt`).
+- **Found by the rebase onto main (Amendment 16):** a run acting as its owner reads the token's columns, never the
+  administrator's, so under the fallback every run is refused as "out of date". This went to the orchestrator with a
+  fix proposed (14 November).
 - **Round 2's could 9** is carried: the stale-access words (`STALE_ACCESS_WORDS`) advise "sign in
   again", where the fix for a person with a value unset is an administrator setting it. The words are
   shared by three refusals and their tests.

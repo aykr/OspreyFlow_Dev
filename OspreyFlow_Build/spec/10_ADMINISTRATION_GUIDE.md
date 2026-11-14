@@ -1394,6 +1394,22 @@ assigned in *Admin › People*, which keeps them in the deployment's own Postgre
   Viewer (never Owner or Editor, refused). Removing it in *Admin › Dashboards* takes away every case
   grant it held; registering the same application id again starts with none.
 
+**Where Entra cannot send a clearance, a unit or handling codes: the administrator sets them (the poc
+shape alone; ADR-148 Amendment 15).** In `cloud_platform.claims`, name `{administrator: true}` as
+the source of `clearance`, `org_unit` or `handling_codes` in place of a claim or a group table. The
+token is then never read for that value: an administrator sets it for each person in *Admin ›
+People* with **Access**, which on Entra ID offers those values alone and shows the others as Entra
+sends them. Nobody can be given a clearance above, or a handling code beyond, what the
+administrator setting it holds as this deployment holds them; the change is audited
+(`set_person_access`, before and after), and a person's open live updates close and reconnect
+with it. **Until it is set, the person cannot sign in**, and is told so in words; they appear in
+People at that first sign-in, for you to set. A sign-in never changes it, and a token carrying a
+claim for it is not read. **The first administrators are given theirs at install**, from
+`cloud_platform.claims.first_administrator_access` (`{clearance: ..., org_unit: ..., handling_codes:
+[...]}`, each value the administrator sets), which the render requires; a restart never overwrites
+a value an administrator has since changed. The render refuses `{administrator: true}` on any shape
+but `poc`: a production namespace reads every value from Entra ID.
+
 **A run acts as its owner as Admin › People holds them** (ADR-148 Amendment 16). Entra ID has no
 way for the Conduit to sign in as a person who is not present, so whatever runs as its owner uses
 what this deployment holds of them: their roles, and whether they are disabled, read from
