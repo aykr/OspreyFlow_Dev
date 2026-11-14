@@ -224,6 +224,20 @@ PLANTS = [
         f"{T_S}::test_the_fallback_offers_a_next_page_only_when_it_holds_records",
     ),
     Plant(
+        "exactly the depth matched, said as cut (docs' review, 14 Nov)",
+        S,
+        "    reached = len(found) > FALLBACK_DEPTH\n",
+        "    reached = len(found) >= FALLBACK_DEPTH\n",
+        f"{T_S}::test_exactly_the_depth_matched_and_nothing_was_cut",
+    ),
+    Plant(
+        "the depth's words sending the reader to the filters",
+        S,
+        "listed, and the filters apply to those alone.\"",
+        "listed: narrow the search to see others.\"",
+        f"{T_S}::test_the_depths_words_never_send_the_reader_to_the_filters",
+    ),
+    Plant(
         "the list stopped by the fallback's depth without saying so",
         S,
         "    if reached and not more:\n        reason += DEPTH_REACHED.format(depth=FALLBACK_DEPTH)\n",
