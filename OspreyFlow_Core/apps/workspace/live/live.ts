@@ -104,7 +104,9 @@ export async function freshWorkspaceUrl(
  * other live regions come before it, and `getByRole("status").first()` read one of them, or waited
  * the whole test out where none was drawn yet (14 November 2026). Waits 30 seconds for it. */
 export async function workingSetCounts(page: Page): Promise<{ nodes: number; edges: number }> {
-  const bar = page.getByRole("status").filter({ hasText: /\bnodes\b/ }).first();
+  // Its text content runs the pairs together ("0 nodes0 edges0 dimmed by filter"), so no word
+  // boundary after "nodes": a number then "nodes" is what is asked for.
+  const bar = page.getByRole("status").filter({ hasText: /\d\s*nodes/ }).first();
   const drawn = await bar.waitFor({ state: "visible", timeout: 30_000 }).then(() => true, () => false);
   if (!drawn) {
     throw new Error(`the status bar's counts were not drawn. The page: ${await page.locator("body").ariaSnapshot()}`);
