@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.64** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.65** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.65 | 2026-11-14 | "View" means a saved view alone (ADR-145 Amendment 17, ADR-144 Amendment 6). §3: the case line's **Saved views (n)**, and "› Saved view: ‹name›" while one is open. §4 and §5: **More** in place of More views, and **Clear the graph**. §5.13, *Saved views*: the strip's **Back to the whole case** and its words, the list's **The whole case** row and *Open now*, a saved view without a name told apart by its first item and when it was saved, and the graph toolbar's Views menu gone. Held by `tests/test_user_guide_navigation.py` and `tests/test_guide_navigation_words.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.64 | 2026-11-14 | §5.2: a batch result, and a view, up to the view's limit saved and opened with its links, and *Show links among all* on a large canvas, since the links among a set are found a thousand records at a time (ADR-124 Amendment 20). Held by `tests/test_user_guide_am20.py`. PDF made by the orchestrator at merge. |
 | 1.63 | 2026-11-14 | A watch whose owner is not held in *People and roles* quotes the stopped reason's new words ("Its owner is not held in Admin › People and roles.", ADR-148 Amendment 19). Version set at merge. PDF made by the orchestrator at merge. |
 | 1.62 | 2026-11-14 | §7.5: a watch stays active through two unreachable evaluations in a row, with a note saying so, and stops at the third (ADR-044 Amendment 2). |
@@ -193,10 +194,11 @@ The OspreyFlow mark at the top left always brings you back.
 
 **Moving between places.** The **place switcher** in the top bar lists the same places; under the
 GOV.UK theme it sits inside the GOV.UK header. Under it, a **context banner** says where you are. In
-the Glass it is the **case line**: "You are in the Glass · Case ‹name› ▾ · Views in this case · reads
+the Glass it is the **case line**: "You are in the Glass · Case ‹name› ▾ · Saved views (n) · reads
 ‹dataset›". The case switcher lists your cases, and its last entry, **All cases**, opens the **Cases**
-panel; **Views in this case** opens the same panel at the case's views (section 5.13); and the line
-names the dataset the case reads, or says "reads no dataset". Graph, Map, Drawing board and Reports are
+panel; **Saved views (n)**, n being how many saved views you may see, opens the **Saved views** panel
+(section 5.13); and the line names the dataset the case reads, or says "reads no dataset". While a saved
+view is open, the line shows it after the case's name: "› Saved view: ‹name›". Graph, Map, Drawing board and Reports are
 in the top bar's view switch, not here (section 5). Elsewhere it says "You are in the Ingest Studio",
 "You are in Rules and Monitoring" or "You are in Admin". If you can open both the Glass and the Ingest
 Studio, the banner offers **Open this case's data in the Ingest Studio ↗**, and from there **← Back to
@@ -255,7 +257,7 @@ each to a member (**Give to**) or sets it aside with **Suppress until…**. *Com
 given to a team.
 
 The case switcher on the case line (section 3) lists your cases. Its last entry, **All cases**, opens
-the **Cases** panel, which lists them too, with the case's **views** (section 5.13), **Browse all
+the **Cases** panel, which lists them too, with the case's **saved views** (section 5.13), **Browse all
 cases**, and **Who can open this case**, which the Author manages. A link to a case opens it directly.
 
 **The case brief.** The **Cases** panel also holds the case's **Brief**: what the case is for.
@@ -303,8 +305,8 @@ added from outside, such as a VAST Challenge dataset, is a case of its own named
 
 | Part | What it is |
 | --- | --- |
-| **Top bar** | The place switcher, search, the view switch (**Graph**, **Map**, **Drawing board** and **Reports**, with **Matrix**, **Figures**, **Ownership** and **Connection strength** under **More views**, those your rights allow), **Build a report (opens in new tab)** (section 9), Export, and your account |
-| **Context banner** | The case line: the case switcher, **Views in this case** and the dataset the case reads (section 3) |
+| **Top bar** | The place switcher, search, the view switch (**Graph**, **Map**, **Drawing board** and **Reports**, with **Matrix**, **Figures**, **Ownership** and **Connection strength** under **More**, those your rights allow), **Build a report (opens in new tab)** (section 9), Export, and your account |
+| **Context banner** | The case line: the case switcher, **Saved views (n)**, the open saved view when there is one, and the dataset the case reads (section 3) |
 | **Left rail** | **Explore**, **Ask & Chat** and **History**, those your rights allow, each opening its panel beside the view and closing it again with a second press; **Help** (**?**), which opens the keys and the user guide over any view and closes again with a second press or Esc; and **Show names** |
 | **Canvas** | The graph, the map, the Matrix or the case's figures |
 | **Right column** | The Inspector, Metrics, the query builder and Find connections, stacked; **Full width** and **Hide** |
@@ -329,7 +331,7 @@ selection bar then offers **Expand**, **Show links** (for two or more, with how 
 or "within 2" to "within 6", stepped by − and +), **Ask the model about these…** (section 6), **Save as
 a view** (section 5.13), **Remove from view** and **Clear** (Esc), and **Undo select what is lit**
 after a selection made by what is lit. Past one degree, **Show links** draws the routes between the
-selected nodes, says which pairs are not connected, and says when the routes are already drawn. **Remove from view** and **Clear view** take nodes off the canvas; a node you put back brings
+selected nodes, says which pairs are not connected, and says when the routes are already drawn. **Remove from view** and **Clear the graph** take nodes off the canvas; a node you put back brings
 its links in the view back with it.
 
 **Expanding.** Double-click, or press Enter, to draw a node's links. Right-click (or `\`, the menu
@@ -345,8 +347,8 @@ case. An expansion that would add more than
 past the working set's own limit is refused; reduce what is drawn, save a smaller view, or **Run as a
 batch job**. A batch job runs the same expansion on the server as you, reading only what you may see,
 and saves what it finds as a private view of the case; nothing is added to the case's own graph. When
-it is done, its result opens as your private view; if it cannot be opened, it stays in *Views in this
-case*. A result too large for a view to show, more than **50,000** nodes or **250,000** links, is
+it is done, its result opens as your private view; if it cannot be opened, it stays in
+**Saved views**. A result too large for a view to show, more than **50,000** nodes or **250,000** links, is
 refused with its figures and saves nothing: narrow it by link type, depth or dates. The links among
 the records are found a thousand records at a time, so a result up to that limit is saved with its links and its
 view opens with them, and **Show links among all** on a large canvas keeps working as it grows. A batch job needs the Editor level on the case, since its result is saved as a view of it, and the right to
@@ -767,7 +769,7 @@ compare the two on the same case, and back.
   it is drawn at. With two people selected, **What these two share** does the same for them.
 
 **Who changes influencers.** An installation-wide set is proposed in the Glass's **Connection
-strength** (under **More views**) by someone holding the right to manage influencers, and takes effect only when **another**
+strength** (under **More**) by someone holding the right to manage influencers, and takes effect only when **another**
 person with that right approves it; the proposer can withdraw it but never approve it, and every
 version is kept; a version may also choose the composition and the rarity measure. A case's **Author**
 may add influencers for that case, switch off installation-wide ones in it, or choose its composition
@@ -781,24 +783,27 @@ client parity has: under the standard composition such a rule raises nothing). I
 any other, and judged as its author, on what its author may see: it never raises an alert on evidence
 its author could not read.
 
-### 5.13 Case views
+### 5.13 Saved views
 
-A **view** is a saved lens on the case: what was drawn, its filters and its period. It is never a
-copy: there are no branches, and nothing in a view changes the case.
+A **saved view** is a saved lens on the case: what was drawn, its filters and its period. It is never a
+copy: there are no branches, and nothing in a saved view changes the case.
 
 - **Saving.** Select what matters and choose **Save as a view** in the selection bar; name it under
-  **View name** and **Save view**. A new view is yours alone.
-- **Finding them.** **Views ▾**, in the graph's toolbar beside *Clear view*, lists the views you may
-  see, each marked *Private* or *Shared*, the one open now marked too; choose one to open it. Before
-  you have any it says "No saved views yet. Select nodes and choose Save as a view." **Views in this
-  case**, on the case line, opens the **Cases** panel at them: each view's name and its *Private* or
-  *Shared* tag, the one open now marked "open now", and under them **Open**, **Share with the case**
-  and **Delete** ("Delete this view? Nothing on the case is deleted
-  with it."). Only the person who saved a view shares or deletes it. Before you have any it says "No
-  views yet. Select nodes on the canvas and choose *Save as a view*."
-- **Opening one** reads the case through it, read-only. A banner says "View: ‹name›", whether it is
-  shared or private, and "Nothing in a view changes the case.", with **Back to the case**. A view
-  opened from an alert also says "Opened from an alert" and offers **← Back to the alert**.
+  **View name** and **Save view**. A new saved view is yours alone.
+- **Finding them.** **Saved views (n)**, on the case line, opens the **Saved views** panel. Its list starts
+  with **The whole case**, marked *Open now* when no saved view is open; choosing it does what **Back to
+  the whole case** does. Then each saved view you may see: its name and its *Private* or *Shared* tag, and
+  for one saved without a name, its first item's name and when it was saved, so that two are told apart.
+  The one open now is marked *Open now* and offers no **Open**; the others offer **Open**, and to the
+  person who saved them **Share with the case** and **Delete** ("Delete this view? Nothing on the case is
+  deleted with it."). Before you have any it says "No views yet. Select nodes on the canvas and choose
+  *Save as a view*."
+- **Opening one** reads the case through it, read-only. The strip above the graph starts with **Back to the
+  whole case** (the GOV.UK back link in that look) and says "Saved view: ‹name›", whether it is shared or
+  private, and "Nothing in a saved view changes the case."; the case line shows "› Saved view: ‹name›".
+  Focus moves to the strip, and **Back to the whole case** returns it to **Saved views**. With no saved
+  view open the strip says "You are looking at the whole case." A saved view opened from an alert also
+  says "Opened from an alert" and offers **← Back to the alert**.
 
 ### 5.14 Drawing boards
 
@@ -975,7 +980,7 @@ none open, it says "Open a case to see its alerts and what raises them." Its tab
 - **Held rows**: the rows a rule held before they loaded. You see it as an Editor or Author of the case;
 - **Changes**: the rule audit. You see it as an Author of the case, or as an administrator.
 
-**Connection strength** is not here: it is a view of the Glass, under **More views** (section 5).
+**Connection strength** is not here: it is a view of the Glass, under **More** (section 5).
 
 **One queue holds every alert you may see.** **Kind** names its five kinds:
 
@@ -1450,7 +1455,7 @@ audit.
 
 ![Ownership: who stands behind an organisation, and its due diligence](images/user/10-ownership-due-diligence.png)
 
-**Ownership**, under **More views** in the Glass, traces who stands behind an organisation or account: every beneficial owner
+**Ownership**, under **More** in the Glass, traces who stands behind an organisation or account: every beneficial owner
 at or above the threshold (25% by default), their cumulative share through each chain, and anyone
 holding control whatever their share. A circle of cross-holdings is traced once, and said so. **Due
 diligence** gives the verification status, risk band and score with each factor's weight, and the
@@ -1461,7 +1466,7 @@ verifying documents. All of it is worked out as you read, from what you can see,
 
 ![The case's Figures](images/user/07-reports-figures.png)
 
-**Figures** (under **More views** in the view switch)
+**Figures** (under **More** in the view switch)
 shows the case's own counts over a **Period** of the last 4, 12, 26 or 52 weeks: an **Alerts** panel
 (open alerts by source and age, and the newest), alerts raised each week, open alerts by age,
 outcomes (open, claimed, each closing reason, and closed with no outcome), customers by KYC status, a
