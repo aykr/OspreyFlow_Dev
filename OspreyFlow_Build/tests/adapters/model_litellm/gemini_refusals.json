@@ -1,0 +1,51 @@
+{
+ "_measured": "14 November 2026, litellm 1.101.0 (the pinned image's version) run with uvx, through the real LiteLLMClient (process/lanes/studio/model-words/). gemini-bad-key: a real call to Google with a made-up key. gemini-429, gemini-403, gemini-503: LiteLLM's own gemini provider against a local stub answering Gemini's documented error bodies. Each is the gateway's first answer, word for word.",
+ "gemini-bad-key": {
+  "status": 401,
+  "body": {
+   "error": {
+    "message": "litellm.AuthenticationError: GeminiException - {\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"API key not valid. Please pass a valid API key.\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.ErrorInfo\",\n        \"reason\": \"API_KEY_INVALID\",\n        \"domain\": \"googleapis.com\",\n        \"metadata\": {\n          \"service\": \"generativelanguage.googleapis.com\"\n        }\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.LocalizedMessage\",\n        \"locale\": \"en-US\",\n        \"message\": \"API key not valid. Please pass a valid API key.\"\n      }\n    ]\n  }\n}\n. Received Model Group=gemini-bad-key\nAvailable Model Group Fallbacks=None",
+    "type": "authentication_error",
+    "param": null,
+    "code": "401"
+   }
+  },
+  "gateway_answers_seen_by_client": 1
+ },
+ "gemini-429": {
+  "status": 429,
+  "body": {
+   "error": {
+    "message": "litellm.RateLimitError: litellm.RateLimitError: GeminiException - {\"error\": {\"code\": 429, \"message\": \"You exceeded your current quota, please check your plan and billing details.\", \"status\": \"RESOURCE_EXHAUSTED\"}}. Received Model Group=gemini-429\nAvailable Model Group Fallbacks=None",
+    "type": "throttling_error",
+    "param": null,
+    "code": "429"
+   }
+  },
+  "gateway_answers_seen_by_client": 1
+ },
+ "gemini-403": {
+  "status": 403,
+  "body": {
+   "error": {
+    "message": "litellm.BadRequestError: GeminiException BadRequestError - {\"error\": {\"code\": 403, \"message\": \"Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API.\", \"status\": \"PERMISSION_DENIED\"}}. Received Model Group=gemini-403\nAvailable Model Group Fallbacks=None",
+    "type": "permission_error",
+    "param": null,
+    "code": "403"
+   }
+  },
+  "gateway_answers_seen_by_client": 1
+ },
+ "gemini-503": {
+  "status": 500,
+  "body": {
+   "error": {
+    "message": "litellm.InternalServerError: litellm.InternalServerError: geminiException - {\"error\": {\"code\": 503, \"message\": \"The model is overloaded. Please try again later.\", \"status\": \"UNAVAILABLE\"}}. Received Model Group=gemini-503\nAvailable Model Group Fallbacks=None",
+    "type": "internal_server_error",
+    "param": null,
+    "code": "500"
+   }
+  },
+  "gateway_answers_seen_by_client": 3
+ }
+}

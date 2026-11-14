@@ -2,6 +2,7 @@
 // a time. `GET .../links/{edge}/events` answers only to someone who can see the link, with the one
 // `link_not_found` refusal for a hidden and a missing link alike.
 import type { EventRecord, Node } from "../../../../packages/schemas/generated";
+import { modelDeadline, unreachedWords } from "../models/modelDeadline";
 
 export const EVENTS_PAGE_SIZE = 50;
 
@@ -111,16 +112,18 @@ export interface EmailAccept {
   delta: unknown;
 }
 
-async function post<T>(url: string, bearerToken: string, body: unknown): Promise<T> {
+async function post<T>(url: string, bearerToken: string, body: unknown, waitsForModel = false): Promise<T> {
   let response: Response;
   try {
     response = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      // ADR-135 Amendment 13 (a): a call that waits for a model is never left endless.
+      ...(waitsForModel ? { signal: modelDeadline() } : {}),
     });
-  } catch {
-    throw new LinkEventsError("failed", "The server could not be reached.");
+  } catch (thrown) {
+    throw new LinkEventsError("failed", unreachedWords(thrown, "The server could not be reached."));
   }
   if (!response.ok) {
     let parsed: { error?: string; detail?: string } = {};
@@ -149,7 +152,7 @@ export async function extractEmail(
   const url =
     `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/links/` +
     `${encodeURIComponent(edgeId)}/events/${encodeURIComponent(eventId)}/extract`;
-  return post<EmailExtraction>(url, bearerToken, { using });
+  return post<EmailExtraction>(url, bearerToken, { using }, true);
 }
 
 /** Accepts one finding: an inferred node linked to the email, both into the working set. */

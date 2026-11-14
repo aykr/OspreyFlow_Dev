@@ -1,0 +1,40 @@
+Red first, 14 November 2026, lane/studio-model-words.
+
+== Python (tests/adapters/model_litellm/test_engine_refusals.py), with the Conduit's handler added and the client and routing as on main:
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_a_key_the_provider_refuses_is_said_as_the_key_and_asked_once
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_a_permission_the_provider_refuses_is_said_as_the_key
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_the_provider_s_own_quota_is_busy_not_a_limit_set_here
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_a_provider_failure_the_gateway_passed_on_is_asked_once
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_the_gateway_resting_the_engine_after_a_failure_is_unavailable
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_no_key_at_all_is_said_as_the_key
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_a_hosted_engine_is_stopped_at_its_own_bound_and_a_local_model_keeps_its_own
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_the_hosted_bound_is_the_deployment_s_to_set
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_the_routing_names_the_engine_that_refused[busy]
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_the_routing_names_the_engine_that_refused[key]
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_the_routing_names_the_engine_that_refused[unavailable]
+FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_engine_refusals.py::test_the_routing_names_the_engine_that_refused[timed_out]
+12 failed, 6 passed in 13.76s
+
+== Glass (apps/workspace/src/models/modelDeadline.test.ts), the four call sites as on main:
+     × a document's extraction is given the deadline 0ms
+     × a document's extraction says the deadline in words when it fires 0ms
+     × an email's extraction is given the deadline 0ms
+     × an email's extraction says the deadline in words when it fires 0ms
+     × Ask is given the deadline 13ms
+     × Ask says the deadline in words when it fires 2ms
+     × patterns/ask is given the deadline 0ms
+     × patterns/ask says the deadline in words when it fires 1ms
+     × patterns/ask shows an engine's refusal in the Conduit's words 0ms
+     × patterns/ask still says an unreachable server as before 0ms
+      Tests  10 failed | 6 passed (16)
+ FAIL  apps/workspace/src/models/modelDeadline.test.ts > a call that waits for a model > a document's extraction is given the deadline
+ FAIL  apps/workspace/src/models/modelDeadline.test.ts > a call that waits for a model > a document's extraction says the deadline in words when it fires
+ FAIL  apps/workspace/src/models/modelDeadline.test.ts > a call that waits for a model > an email's extraction is given the deadline
+ FAIL  apps/workspace/src/models/modelDeadline.test.ts > a call that waits for a model > an email's extraction says the deadline in words when it fires
+ FAIL  apps/workspace/src/models/modelDeadline.test.ts > a call that waits for a model > Ask is given the deadline
+ FAIL  apps/workspace/src/models/modelDeadline.test.ts > a call that waits for a model > Ask says the deadline in words when it fires
+ FAIL  apps/workspace/src/models/modelDeadline.test.ts > a call that waits for a model > patterns/ask is given the deadline
+ FAIL  apps/workspace/src/models/modelDeadline.test.ts > a call that waits for a model > patterns/ask says the deadline in words when it fires
+ FAIL  apps/workspace/src/models/modelDeadline.test.ts > a call that waits for a model > patterns/ask shows an engine's refusal in the Conduit's words
+ FAIL  apps/workspace/src/models/modelDeadline.test.ts > a call that waits for a model > patterns/ask still says an unreachable server as before
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯

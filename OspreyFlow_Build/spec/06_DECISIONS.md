@@ -39721,3 +39721,89 @@ two lines, at 1,440 wide on Linux; a client's Windows or smaller screen would se
   folded link and a folded place by keyboard (rule 13), and the open drawer measured again under the two-line chrome
   at 700 (at 900 the folded bar fits on one line on macOS). The red record is
   `process/lanes/case/gates/topbar-fold-reds.<head>.log`.
+
+### ADR-135, Amendment 13 (14 November 2026) — a hosted engine's refusals and its slowness said in words, a hosted engine's own time bound, and the Glass's backstop
+
+Status: written 14 November 2026 by the studio lane under the orchestrator's reservation (route D2, v0.5.2). It
+follows the demo sign-ins proposal (`process/lanes/studio/demo-signins/PROPOSAL.md` §5). Amendment 3's limits
+stand, and so does its rule that no call carries who asked. This amendment says what a person is told when the
+engine itself refuses or is slow, and how long a hosted engine is waited for.
+
+Context, measured first (`process/lanes/studio/model-words/`, 14 November 2026: litellm 1.101.0, the pinned
+image's version, run through the real `LiteLLMClient`; one real call to Google with a made-up key, and
+LiteLLM's own gemini provider answering against a stub of Gemini's documented error bodies):
+- Gemini's "API key not valid" (its own 400) arrives as 401 `authentication_error`;
+- its quota (429 RESOURCE_EXHAUSTED) arrives as 429 `throttling_error`, the type the gateway's own key limits
+  use, but in different words, so Amendment 3's `limit_refusal` rightly leaves it alone;
+- its PERMISSION_DENIED arrives as 403 `permission_error`;
+- its 503 arrives as 500 `internal_server_error`;
+- a slow engine raises `httpx.ReadTimeout` out of the client.
+
+Before this amendment, each of these reached a person as "The model answered, but not in the shape asked for",
+and a slow engine as an unhandled 500 after up to 900 seconds. The gateway tried the provider three times
+before passing on each refusal, and the client tried a 5xx three more times, so an overloaded provider was
+asked nine times. The gateway's own refusals (a key it does not know, a model the key may not use) read
+"Authentication Error, …" or carry its own type (litellm 1.101.0 `proxy/auth/auth_checks.py`); a provider's
+always begins `litellm.<its class>:`.
+
+1. **An engine's refusal is `ModelEngineRefused`, in four kinds.** `usage.provider_refusal` reads the status,
+   the type and the class the words begin with, never the rest of the words, which can carry part of a key.
+   - `key`: a provider's `AuthenticationError` or `PermissionDeniedError` at any status (no key at all is a
+     500, measured 8 November), or 401/403 `authentication_error`, `permission_error` or
+     `permission_denied_error` passed on;
+   - `busy`: a 429 `litellm.RateLimitError` (the provider's own quota or rate limit), asked after
+     `limit_refusal`, so a limit set in *Admin › Models* is still `ModelLimitReached`;
+   - `unavailable`: a 5xx passed on (`litellm.`), or the gateway's cooldown after a failure (429 "No deployments
+     available for selected model", measured 8 November);
+   - `timed_out`: no answer within the call's bound (decision 2).
+   Anything else, the gateway's own refusals included, keeps the path it had. The routing names the engine,
+   as it does for a limit, and the Conduit answers `model_engine_refused` with the kind and the words
+   (busy 429, key 502, unavailable 503, timed_out 504). The words name the engine and what to do, never the
+   provider's own, and end "Nothing was recorded." It is a subclass of `ExtractionFailedError`, so every caller
+   that handled a failed model call still does.
+   - **The retry choice.** A refusal the gateway passed on is not asked again: the gateway has already tried
+     the provider three times (measured), so the 503 path asks it three times, not nine. A 5xx without the
+     gateway's `litellm.` words (the gateway's own fault) is still tried three times, as before.
+   - **Test:** `tests/adapters/model_litellm/test_engine_refusals.py`, replaying the measured answers word for
+     word (`gemini_refusals.json`):
+     - *a key the provider refuses is said as the key and asked once*;
+     - *the provider's own quota is busy, not a limit set here*;
+     - *a provider failure the gateway passed on is asked once*;
+     - *the gateway resting the engine after a failure is unavailable*;
+     - *no key at all is said as the key*;
+     - *the gateway's own refusal keeps its old path*;
+     - *a server fault without the gateway's words is still retried*;
+     - *the routing names the engine that refused*, for each kind;
+     - *what a person is told for each kind, and never a 500*.
+     Red first: `process/lanes/studio/model-words/RED_FIRST.txt`.
+2. **A hosted engine's calls have their own time bound.** `OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS`, 120 seconds
+   unless the deployment sets it, bounds each call the routing sends to a hosted engine. The deployment's own
+   model keeps `OSPREY_MODEL_TIMEOUT_SECONDS` (900 by default; ADR-095), since a CPU-only model may truly
+   need minutes. A call past its bound is `timed_out`, said with the bound, and is not asked again.
+   - **Where it is set.** Both are the Conduit's environment, set in the deployment's env file. The render did
+     not pass either to the Conduit before this amendment, so `OSPREY_MODEL_TIMEOUT_SECONDS` was never settable
+     on an installed deployment, only its default. The render's two lines and their test
+     (`test_the_conduit_is_told_the_engines_the_defaults_and_key_presence_never_a_key`, red without them) are
+     `process/lanes/studio/model-words/render-timeouts.diff`, for the lane that owns `harness/render.py`.
+     Until that lands, an installed deployment runs on the defaults (120 and 900).
+   - **Test:** *a hosted engine is stopped at its own bound and a local model keeps its own* (a real socket
+     answering after 0.6 seconds: the hosted call, bounded at 0.2, is stopped before the answer, and the local
+     call gets it); *the hosted bound is the deployment's to set*.
+3. **The Glass's backstop.** Each Glass call that waits for a model gives its fetch a 960-second deadline
+   (`models/modelDeadline.ts`): Ask, *Ask to search*, a document's extraction and an email's extraction. That
+   is the longest Conduit bound and a minute more, so it fires only when no answer at all comes back. Its words
+   promise nothing about what the server did: "No answer came back within 16 minutes, so this stopped waiting.
+   The server may still finish: look again in a moment before asking again." *Ask to search* now shows an
+   engine's refusal in the Conduit's words, as the other three already showed any `detail`.
+   - **Test:** `models/modelDeadline.test.ts`, for each of the four calls:
+     - *is given the deadline*;
+     - *says the deadline in words when it fires*, with the rejection a fetch aborted by
+       `AbortSignal.timeout` really gives, a `TimeoutError` DOMException;
+     - *still says an unreachable server as before*;
+     - *shows an engine's refusal in the Conduit's words*.
+     Red first: ten of the sixteen cases, with the call sites as on main.
+
+Left, in CARRIES (post-cut):
+- `transcribe()` and `embed()` keep their old paths. Both default to the deployment's own models.
+- The provider's 429 is measured through a stub answering Gemini's documented body, not a real exhausted
+  quota. The bad-key refusal is a real Google answer.

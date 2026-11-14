@@ -93,5 +93,60 @@ class ModelLimitReached(ExtractionFailedError):
         )
 
 
+class ModelEngineRefused(ExtractionFailedError):
+    """The engine behind the gateway refused or failed the call, or gave no answer in time
+    (ADR-135 Amendment 13). Each kind is a refusal measured through the pinned gateway
+    (`usage.provider_refusal`):
+
+    - `busy`: the provider's own rate limit or quota, not a limit set in *Admin › Models*;
+    - `key`: the provider refused the engine's key, or that key may not use the model;
+    - `unavailable`: the provider failed after the gateway's own retries, or the gateway is
+      resting the engine after a failure (its cooldown);
+    - `timed_out`: no answer within the deployment's bound for this engine.
+
+    Built from the kind alone, never the refusal's words, which can carry part of a key. A
+    subclass of `ExtractionFailedError`, so every caller that already handles a failed model call
+    still does; the Conduit says it to a person in `words`."""
+
+    def __init__(
+        self, kind: str, *, engine_label: str | None = None, timeout_seconds: float | None = None
+    ) -> None:
+        self.kind = kind
+        self.engine_label = engine_label
+        self.timeout_seconds = timeout_seconds
+        super().__init__(self.words)
+
+    @property
+    def words(self) -> str:
+        engine = self.engine_label or "The model"
+        if self.kind == "busy":
+            said = (
+                f"{engine} is refusing more requests just now: its provider's own rate limit or "
+                "quota was reached, not a limit set on this deployment. Try again in a few "
+                "minutes; if it goes on, ask someone who manages models to check the provider's "
+                "quota."
+            )
+        elif self.kind == "key":
+            said = (
+                f"{engine}'s provider refused this deployment's key for it, or that key may not "
+                "use this model. Ask someone who manages models to check the engine's key in "
+                "Admin › Models."
+            )
+        elif self.kind == "timed_out":
+            bound = f" ({self.timeout_seconds:g} seconds)" if self.timeout_seconds else ""
+            said = (
+                f"{engine} did not answer within the time this deployment allows{bound}, so the "
+                "request was stopped. Try again, or with less text."
+            )
+        else:
+            said = f"{engine}'s provider could not answer just now. Try again in a minute."
+        return f"{said} Nothing was recorded."
+
+    def for_engine(self, label: str) -> ModelEngineRefused:
+        return ModelEngineRefused(
+            self.kind, engine_label=label, timeout_seconds=self.timeout_seconds
+        )
+
+
 class UsageUnavailableError(ModelPortError):
     """The gateway's usage records could not be read, in fixed words (never the gateway's)."""

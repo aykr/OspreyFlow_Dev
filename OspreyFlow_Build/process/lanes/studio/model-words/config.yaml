@@ -1,0 +1,27 @@
+model_list:
+- model_name: gemini-bad-key
+  litellm_params:
+    model: gemini/gemini-2.5-flash
+    api_key: '<a made-up key: AIza followed by filler>'
+- model_name: gemini-429
+  litellm_params:
+    model: gemini/gemini-2.5-flash
+    api_key: measurement-not-a-key
+    api_base: http://127.0.0.1:59881
+- model_name: gemini-403
+  litellm_params:
+    model: gemini/gemini-2.5-flash
+    api_key: measurement-not-a-key
+    api_base: http://127.0.0.1:59882
+- model_name: gemini-503
+  litellm_params:
+    model: gemini/gemini-2.5-flash
+    api_key: measurement-not-a-key
+    api_base: http://127.0.0.1:59883
+- model_name: gemini-slow
+  litellm_params:
+    model: gemini/gemini-2.5-flash
+    api_key: measurement-not-a-key
+    api_base: http://127.0.0.1:59884
+general_settings:
+  master_key: sk-measurement-only

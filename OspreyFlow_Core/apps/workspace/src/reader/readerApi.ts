@@ -1,6 +1,7 @@
 // The full-screen reader's text (ADR-092): `GET .../documents/{id}/reader` answers only to someone
 // who can see the Document in the case, with one `document_not_found` for hidden and missing alike.
 import type { MessageSpan } from "../dossier/models";
+import { modelDeadline, unreachedWords } from "../models/modelDeadline";
 
 /** `services/api/document_reader.py`'s `DocumentReaderView`. */
 export interface DocumentReaderView {
@@ -51,16 +52,18 @@ export interface DocumentFinding {
   status: "pending" | "accepted" | "rejected";
 }
 
-async function postJson<T>(url: string, bearerToken: string, body: unknown = {}): Promise<T> {
+async function postJson<T>(url: string, bearerToken: string, body: unknown = {}, waitsForModel = false): Promise<T> {
   let response: Response;
   try {
     response = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      // ADR-135 Amendment 13 (a): a call that waits for a model is never left endless.
+      ...(waitsForModel ? { signal: modelDeadline() } : {}),
     });
-  } catch {
-    throw new Error("The server could not be reached.");
+  } catch (thrown) {
+    throw new Error(unreachedWords(thrown, "The server could not be reached."));
   }
   if (response.status === 403) throw new Error("This needs Editor access to the case.");
   if (response.status === 404) throw new Error("This document is not in your view.");
@@ -87,7 +90,7 @@ export function extractDocument(
   documentId: string,
   using: "recogniser" | "model" = "recogniser",
 ): Promise<{ document_id: string; text: string; candidates: DocumentFinding[] }> {
-  return postJson(`${documentUrl(apiBaseUrl, investigationId, documentId)}/extract`, bearerToken, { using });
+  return postJson(`${documentUrl(apiBaseUrl, investigationId, documentId)}/extract`, bearerToken, { using }, true);
 }
 
 export function acceptDocumentFinding(

@@ -1,0 +1,34 @@
+diff --git a/OspreyFlow_Build/tests/harness/test_model_engines.py b/OspreyFlow_Build/tests/harness/test_model_engines.py
+index e5ba36a..9717436 100644
+--- a/OspreyFlow_Build/tests/harness/test_model_engines.py
++++ b/OspreyFlow_Build/tests/harness/test_model_engines.py
+@@ -207,6 +207,12 @@ def test_the_conduit_is_told_the_engines_the_defaults_and_key_presence_never_a_k
+     # until the keys are moved into the gateway, after which the models file says.
+     assert environment["OSPREY_MODEL_KEY_PRESENT_GEMINI"] == "${OSPREY_MODEL_KEY_GEMINI:+yes}"
+     assert environment["OSPREY_MODEL_SETTINGS_DIR"] == "/run/osprey/model-settings"
++    # ADR-135 Amendment 13: both model time bounds reach the Conduit, settable in the env file.
++    assert environment["OSPREY_MODEL_TIMEOUT_SECONDS"] == "${OSPREY_MODEL_TIMEOUT_SECONDS:-900}"
++    assert (
++        environment["OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS"]
++        == "${OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS:-120}"
++    )
+     assert "model-settings:/run/osprey/model-settings" in api["volumes"]
+     assert environment["LITELLM_API_KEY"].startswith("${OSPREY_LITELLM_MASTER_SECRET:?")
+ 
+diff --git a/OspreyFlow_Core/harness/render.py b/OspreyFlow_Core/harness/render.py
+index a579134..eb52cb7 100644
+--- a/OspreyFlow_Core/harness/render.py
++++ b/OspreyFlow_Core/harness/render.py
+@@ -1059,6 +1059,12 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
+             api_environment["LITELLM_API_KEY"] = "${" + GATEWAY_MASTER + ":?set in the env file}"
+             # ADR-135 Amendment 2 decision 2: the models file, on its own volume.
+             api_environment["OSPREY_MODEL_SETTINGS_DIR"] = MODEL_SETTINGS_PATH
++            # ADR-135 Amendment 13: how long a model call is waited for, the deployment's own model
++            # (ADR-095) and a hosted engine's, each the operator's to set in the env file.
++            api_environment["OSPREY_MODEL_TIMEOUT_SECONDS"] = "${OSPREY_MODEL_TIMEOUT_SECONDS:-900}"
++            api_environment["OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS"] = (
++                "${OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS:-120}"
++            )
+             # ADR-095 Amendment 2: where to ask whether the models have arrived (`/v1/readiness`).
+             api_environment["OSPREY_OLLAMA_URL"] = "http://ollama:11434"
+             # ADR-098 decision 2: the fast recogniser. Not in `depends_on` below: without it the

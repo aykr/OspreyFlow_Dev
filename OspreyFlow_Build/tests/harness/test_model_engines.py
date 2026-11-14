@@ -207,6 +207,12 @@ def test_the_conduit_is_told_the_engines_the_defaults_and_key_presence_never_a_k
     # until the keys are moved into the gateway, after which the models file says.
     assert environment["OSPREY_MODEL_KEY_PRESENT_GEMINI"] == "${OSPREY_MODEL_KEY_GEMINI:+yes}"
     assert environment["OSPREY_MODEL_SETTINGS_DIR"] == "/run/osprey/model-settings"
+    # ADR-135 Amendment 13: both model time bounds reach the Conduit, settable in the env file.
+    assert environment["OSPREY_MODEL_TIMEOUT_SECONDS"] == "${OSPREY_MODEL_TIMEOUT_SECONDS:-900}"
+    assert (
+        environment["OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS"]
+        == "${OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS:-120}"
+    )
     assert "model-settings:/run/osprey/model-settings" in api["volumes"]
     assert environment["LITELLM_API_KEY"].startswith("${OSPREY_LITELLM_MASTER_SECRET:?")
 

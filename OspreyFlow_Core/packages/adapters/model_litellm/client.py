@@ -58,10 +58,18 @@ from .errors import (
     EmbeddingFailedError,
     ExtractionFailedError,
     InvalidExtractionSchemaError,
+    ModelEngineRefused,
     ModelUnavailableError,
     TranscriptionFailedError,
 )
-from .usage import LOCAL, current_call, engine_key, limit_refusal, usage_tag
+from .usage import (
+    LOCAL,
+    current_call,
+    engine_key,
+    limit_refusal,
+    provider_refusal,
+    usage_tag,
+)
 
 _MAX_ATTEMPTS = 3
 
@@ -78,6 +86,10 @@ class LiteLLMConfig:
     #: How long one model call may take (ADR-095): a 7B model on a CPU-only Docker host reads a
     #: long email and writes its answer in minutes, not seconds. A deployment may set it.
     timeout_seconds: float = 900.0
+    #: How long a hosted engine's call may take (ADR-135 Amendment 13): a provider answers in
+    #: seconds, so a person is not left fifteen minutes on a hosted engine that has stopped. The
+    #: deployment's own model keeps `timeout_seconds`.
+    hosted_timeout_seconds: float = 120.0
 
     @property
     def base_url(self) -> str:
@@ -90,6 +102,9 @@ class LiteLLMConfig:
             port=int(os.environ.get("LITELLM_PORT", "4000")),
             api_key=os.environ.get("LITELLM_API_KEY", "sk-ospreyflow-dev"),
             timeout_seconds=float(os.environ.get("OSPREY_MODEL_TIMEOUT_SECONDS", "900")),
+            hosted_timeout_seconds=float(
+                os.environ.get("OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS", "120")
+            ),
         )
 
 
@@ -98,6 +113,8 @@ class LiteLLMClient:
         self, config: LiteLLMConfig, *, transport: httpx.AsyncBaseTransport | None = None
     ) -> None:
         self._master = config.api_key
+        self._timeout = config.timeout_seconds
+        self._hosted_timeout = config.hosted_timeout_seconds
         self._http = httpx.AsyncClient(
             base_url=config.base_url,
             headers={"Authorization": f"Bearer {config.api_key}"},
@@ -119,6 +136,12 @@ class LiteLLMClient:
         if call.engine == LOCAL:
             return {}
         return {"Authorization": f"Bearer {engine_key(self._master, call.engine)}"}
+
+    def _bound(self) -> float:
+        """The current call's time bound: a hosted engine's own, or the deployment's model's."""
+        call = current_call()
+        hosted = call is not None and call.engine != LOCAL
+        return self._hosted_timeout if hosted else self._timeout
 
     async def extract_json(
         self,
@@ -149,11 +172,20 @@ class LiteLLMClient:
             except (json.JSONDecodeError, ValidationError) as exc:
                 last_error = exc
                 continue
+            except httpx.ReadTimeout:
+                # ADR-135 Amendment 13: measured as the client meets a slow engine. Not asked
+                # again: a second wait as long helps no one.
+                raise ModelEngineRefused("timed_out", timeout_seconds=self._bound()) from None
             except httpx.HTTPStatusError as exc:
                 last_error = exc
                 limit = limit_refusal(exc.response)
                 if limit is not None:
                     raise limit from None
+                # ADR-135 Amendment 13: the engine's own refusal, passed on by the gateway, which
+                # has already tried it three times (measured), so it is not asked again.
+                refused = provider_refusal(exc.response)
+                if refused is not None:
+                    raise refused from None
                 if exc.response.status_code == 404:
                     raise ModelUnavailableError(
                         f"model {model!r} is not available from the model proxy: not routed, "
@@ -199,7 +231,9 @@ class LiteLLMClient:
             },
         }
         headers = self._routed(body)
-        resp = await self._http.post("/chat/completions", json=body, headers=headers)
+        resp = await self._http.post(
+            "/chat/completions", json=body, headers=headers, timeout=self._bound()
+        )
         resp.raise_for_status()
         body = resp.json()
         return str(body["choices"][0]["message"]["content"])

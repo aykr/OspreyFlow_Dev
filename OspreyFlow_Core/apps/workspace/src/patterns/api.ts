@@ -4,6 +4,7 @@
 // (ADR-099); saved patterns are the analyst's, not a case's. `06_DECISIONS.md` ADR-032/036/040: save/load/list only —
 // no share endpoint exists, since ADR-040 (pattern sharing) is Proposed, not accepted.
 import type { PatternQuery, SavedPattern, Subgraph } from "../../../../packages/schemas/generated";
+import { modelDeadline, unreachedWords } from "../models/modelDeadline";
 
 export interface PatternPreview {
   estimated_count: number;
@@ -44,7 +45,9 @@ async function failure(response: Response, fallback: string): Promise<Error> {
     if (
       (body.error === "pattern_condition_refused" ||
         body.error === "engine_refused" ||
-        body.error === "model_limit_reached") &&
+        body.error === "model_limit_reached" ||
+        // ADR-135 Amendment 13: the engine refused, failed or did not answer in time.
+        body.error === "model_engine_refused") &&
       typeof body.detail === "string"
     ) {
       return new Error(body.detail);
@@ -109,11 +112,18 @@ export async function askToSearch(
   engine: string | null = null,
 ): Promise<PatternProposal> {
   // ADR-135: the engine the analyst chose; absent, the role's default. The Conduit decides.
-  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/patterns/ask`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ question, selected_node_ids: selectedNodeIds, ...(engine ? { engine } : {}) }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/patterns/ask`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ question, selected_node_ids: selectedNodeIds, ...(engine ? { engine } : {}) }),
+      // ADR-135 Amendment 13 (a): the answer waits for a model, so it is never left endless.
+      signal: modelDeadline(),
+    });
+  } catch (thrown) {
+    throw new Error(unreachedWords(thrown, "The server could not be reached."));
+  }
   if (!response.ok) {
     throw await failure(response, `POST .../patterns/ask failed: ${response.status}`);
   }

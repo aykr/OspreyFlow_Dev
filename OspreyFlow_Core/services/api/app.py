@@ -114,6 +114,7 @@ from adapters.model_litellm.adapter import ModelLiteLLMAdapter
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from adapters.model_litellm.errors import (
     ExtractionFailedError,
+    ModelEngineRefused,
     ModelLimitReached,
     ModelUnavailableError,
     UsageUnavailableError,
@@ -3765,6 +3766,21 @@ async def _model_limit_reached_handler(request: Request, exc: ModelLimitReached)
         status_code=429,
         content={"error": "model_limit_reached", "detail": exc.words},
         headers=headers,
+    )
+
+
+#: ADR-135 Amendment 13: each kind of an engine's refusal, as an HTTP status.
+_ENGINE_REFUSED_STATUS = {"busy": 429, "key": 502, "unavailable": 503, "timed_out": 504}
+
+
+@app.exception_handler(ModelEngineRefused)
+async def _model_engine_refused_handler(request: Request, exc: ModelEngineRefused) -> JSONResponse:
+    """ADR-135 Amendment 13: the engine refused, failed or gave no answer in time. Said in the
+    Conduit's own words naming the engine, never the provider's (which can carry part of a key),
+    and never as a server fault."""
+    return JSONResponse(
+        status_code=_ENGINE_REFUSED_STATUS.get(exc.kind, 503),
+        content={"error": "model_engine_refused", "kind": exc.kind, "detail": exc.words},
     )
 
 

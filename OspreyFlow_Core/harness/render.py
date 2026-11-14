@@ -1059,6 +1059,12 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             api_environment["LITELLM_API_KEY"] = "${" + GATEWAY_MASTER + ":?set in the env file}"
             # ADR-135 Amendment 2 decision 2: the models file, on its own volume.
             api_environment["OSPREY_MODEL_SETTINGS_DIR"] = MODEL_SETTINGS_PATH
+            # ADR-135 Amendment 13: how long a model call is waited for, the deployment's own model
+            # (ADR-095) and a hosted engine's, each the operator's to set in the env file.
+            api_environment["OSPREY_MODEL_TIMEOUT_SECONDS"] = "${OSPREY_MODEL_TIMEOUT_SECONDS:-900}"
+            api_environment["OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS"] = (
+                "${OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS:-120}"
+            )
             # ADR-095 Amendment 2: where to ask whether the models have arrived (`/v1/readiness`).
             api_environment["OSPREY_OLLAMA_URL"] = "http://ollama:11434"
             # ADR-098 decision 2: the fast recogniser. Not in `depends_on` below: without it the

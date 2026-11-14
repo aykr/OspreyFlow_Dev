@@ -5,6 +5,7 @@
 import type { EmailCandidate } from "../inspector/linkEventsApi";
 import type { ReadSummary, UnusableEngine, WillRead } from "../../../../packages/schemas/generated";
 import type { GraphCitation, SearchCitation } from "./graphFacts";
+import { modelDeadline, unreachedWords } from "../models/modelDeadline";
 
 export type { GraphCitation, SearchCitation };
 
@@ -61,8 +62,8 @@ async function send(url: string, bearerToken: string, init: RequestInit = {}): P
       ...init,
       headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
     });
-  } catch {
-    throw new Error("The server could not be reached.");
+  } catch (thrown) {
+    throw new Error(unreachedWords(thrown, "The server could not be reached."));
   }
 }
 
@@ -165,6 +166,8 @@ export async function askQuestion(
   const response = await send(questionsUrl(apiBaseUrl, investigationId), bearerToken, {
     method: "POST",
     body: JSON.stringify({ question, ...scopeBody(scope) }),
+    // ADR-135 Amendment 13 (a): the answer waits for a model, so it is never left endless.
+    signal: modelDeadline(),
   });
   if (response.ok) return (await response.json()) as QuestionAnswer;
   const body = await detailOf(response);
