@@ -1,0 +1,9 @@
+ADR-135 Am 13's model timeouts as tunables in the cluster and cloud-platform renders (the orchestrator, 14 Nov 2026; chart-check on main and CI run 43615299420's four failures). Red first at 7d4adcb (2026-11-14T17:43:26Z), offline on 59991-59994, OSPREY_LANE unset, a fresh pycache prefix each run.
+
+On main af55fe2's harness/{cluster,render}.py: the four tests CI failed, plus the two new cases, red (6 failed, 87 passed across test_cloud_platform_poc, test_r1_kind_standins, test_cluster_render). With the fix: 63 passed in test_cloud_platform_poc and test_r1_kind_standins, no expectation edited; 740 passed, 273 skipped across test_cluster*, test_cloud_platform*, test_render*, test_helm*, test_r1_*, test_refresh, cp_policy_check, adapters/model_litellm. helm lint not run here (chart-check's first line; no chart files changed).
+
+plant 1: the timeouts left out of the cluster's environment (main's behaviour)
+  5 tests, 5 expected red: RED (5 failed in 1.72s)
+plant 2: the hosted timeout's default not the adapter's
+  2 tests, 2 expected red: RED (2 failed in 0.94s)
+2/2 red
