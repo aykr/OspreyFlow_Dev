@@ -43,7 +43,7 @@ def _lock(digest: str, *, arcadedb: str = OLD) -> str:
     return "# GENERATED\n" + yaml.safe_dump({"images": rows}, sort_keys=False)
 
 
-def _compose(digest: str, *, build: bool = False) -> dict[str, Any]:
+def _compose(digest: str, *, build: bool = False, opensearch: bool = False) -> dict[str, Any]:
     services: dict[str, Any] = {
         s: {"image": f"{REG}/{s}@{digest}"} for s in ("workspace", "api", "ingest", "ner")
     }
@@ -52,17 +52,23 @@ def _compose(digest: str, *, build: bool = False) -> dict[str, Any]:
     services["keycloak-db"] = {"image": "postgres:16", "restart": "no"}
     if build:
         services["api"]["build"] = {"context": "../../.."}
+    if opensearch:  # v0.5.2's search (ADR-149): rendered where the deployment searches with it
+        services["opensearch"] = {"image": "opensearchproject/opensearch:2.19.1"}
     return {"name": "osprey-test", "services": services}
 
 
 class _Host:
     """Docker, git, cosign, backup and restore, as far as `update` can tell."""
 
-    def __init__(self, tmp: Path, *, release: str = NEW, version: str = "v0.4.1") -> None:
+    def __init__(
+        self, tmp: Path, *, release: str = NEW, version: str = "v0.4.1", opensearch: bool = False
+    ) -> None:
         self.directory = tmp / "deploy" / "generated" / "local-lite"
         self.directory.mkdir(parents=True)
         self.repo = tmp
-        (self.directory / "compose.yaml").write_text("# banner\n" + yaml.safe_dump(_compose(OLD)))
+        (self.directory / "compose.yaml").write_text(
+            "# banner\n" + yaml.safe_dump(_compose(OLD, opensearch=opensearch))
+        )
         (self.directory / "versions.lock").write_text(_lock(OLD))
         (self.directory / "deployment.env").write_text(
             f"OSPREY_RELEASE_VERSION={version}\nOSPREY_X_PASSWORD=s3cret\n"
@@ -92,6 +98,8 @@ class _Host:
         self.fetch_fails = False
         self.started_with_models: list[str] = []
         self.new_pull_command: list[str] | None = None
+        #: The search index's rebuild in the Conduit (`scripts.rebuild_search_index`): its answer.
+        self.rebuild_fails = False
 
     # -- the command runner ------------------------------------------------------------------
     def run(self, argv: Sequence[str]) -> tuple[int, str]:
@@ -168,6 +176,10 @@ class _Host:
             return 0, ""
         if args[0] == "restart":
             return 0, ""
+        if args == update.search_rebuild.REBUILD:  # the shared rebuild command, as compose runs it
+            if self.rebuild_fails:
+                return 1, "search index: the graph could not be read"
+            return 0, "search index rebuilt: 12 nodes"
         if args[0] == "exec" and args[2] == "ollama-models":
             # Waits until the step's pulls are done; a refused pull exits it, and the exec fails.
             if self.fetch == "fetching":
@@ -1057,3 +1069,40 @@ def test_the_lock_is_held_for_the_whole_update(tmp_path: Path) -> None:
     assert _update(fake) == 0
     assert seen == {"backup": False, "up": False}
     assert _free_to_another(fake.directory)  # and let go after
+
+
+_REBUILD = "compose exec -T api python -m scripts.rebuild_search_index"
+
+
+def test_an_update_where_opensearch_is_rendered_rebuilds_the_index_from_the_graph(
+    tmp_path: Path,
+) -> None:
+    """The CARRIES row "an upgrade must rebuild when the mapping changes" (ADR-150 decision 4): an
+    index made before v0.5.2 has no mapping fingerprint, so the indexer stops on it and search
+    stays on the fallback. The update rebuilds the index from the graph once the release is up and
+    verified, before it says it is done."""
+    fake = _Host(tmp_path, opensearch=True)
+    assert _update(fake) == 0
+    assert _REBUILD in fake.actions
+    rebuilt = fake.actions.index(_REBUILD)
+    started = max(i for i, a in enumerate(fake.actions) if a.startswith("compose up"))
+    verified = max(i for i, a in enumerate(fake.actions) if a.startswith("compose ps"))
+    assert started < verified < rebuilt, "after the release is up and verified"
+
+
+def test_an_update_without_opensearch_has_no_index_to_rebuild(tmp_path: Path) -> None:
+    fake = _Host(tmp_path)
+    assert _update(fake) == 0
+    assert _REBUILD not in fake.actions
+
+
+def test_a_rebuild_that_fails_rolls_the_update_back_in_words(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = _Host(tmp_path, opensearch=True)
+    fake.rebuild_fails = True
+    assert _update(fake) == 1
+    said = capsys.readouterr().err
+    assert "rebuild the search index" in said and "rolled back" in said
+    assert set(fake.running.values()) == {OLD}
+

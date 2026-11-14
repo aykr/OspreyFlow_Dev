@@ -1,0 +1,44 @@
+# v052-rebuild (route step U, the orchestrator, 14 November 2026): ADR-150 Amendment 2, every path that brings v0.5.2 up rebuilds
+# the search index from the graph; and INSTALL.md's Entra count held to the manifest. Offline on closed ports 59991-59994, OSPREY_LANE
+# unset, a fresh PYTHONPYCACHEPREFIX each run. Red first, against main's code:
+## update (tests/harness/test_update_apply.py -k rebuild):
+E       AssertionError: assert 'compose exec -T api python -m scripts.rebuild_search_index' in ['find None', 'verify the lock', 'git fetch --tags origin', 'git status --porcelain', 'git rev-parse HEAD
+E       assert 0 == 1
+FAILED tests/harness/test_update_apply.py::test_an_update_where_opensearch_is_rendered_rebuilds_the_index_from_the_graph
+FAILED tests/harness/test_update_apply.py::test_a_rebuild_that_fails_rolls_the_update_back_in_words
+2 failed, 1 passed, 40 deselected in 1.67s
+## install (tests/harness/test_apply_search_rebuild.py):
+E       assert 0 == 1
+E       assert 0 != 0
+FAILED tests/harness/test_apply_search_rebuild.py::test_an_install_that_searches_with_opensearch_rebuilds_the_index_once_up
+FAILED tests/harness/test_apply_search_rebuild.py::test_a_rebuild_that_fails_fails_the_install_in_words
+2 failed, 1 passed in 1.10s
+## cloud-platform INSTALL step 5 (tests/harness/test_cloud_platform_search_rebuild.py):
+E       assert (0 == 1)
+E       assert 0 != 0
+FAILED tests/harness/test_cloud_platform_search_rebuild.py::test_step_5_rebuilds_the_index_after_the_rollouts
+FAILED tests/harness/test_cloud_platform_search_rebuild.py::test_a_rebuild_that_fails_fails_step_5_naming_the_job
+2 failed in 2.56s
+## the Entra count (tests/harness/test_cloud_platform_entra_count.py; reporting on said 'two'):
+FAILED tests/harness/test_cloud_platform_entra_count.py::test_install_says_as_many_app_registrations_as_the_manifest_lists_for_it[True-False]
+FAILED tests/harness/test_cloud_platform_entra_count.py::test_install_says_as_many_app_registrations_as_the_manifest_lists_for_it[True-True]
+2 failed, 2 passed in 1.55s
+
+The behaviour (tests/services/search_index/test_upgrade_rebuild.py, against FakeOpenSearch): a v0.5.1 index with no fingerprint holds
+the indexer (MappingOutOfDate, the outbox kept) until the rebuild, then it drains. It passes on main too: the mechanism was there,
+and no path ran it; the wiring tests above are its red.
+
+Then one plant per path at its real line (plants.py), each main's state, each restored:
+plant 1: install's rebuild removed (main's)
+  tests/harness/test_apply_search_rebuild.py: RED (2 failed, 1 passed in 1.24s)
+plant 2: update's rebuild removed (main's)
+  tests/harness/test_update_apply.py: RED (2 failed, 41 passed in 1.39s)
+plant 3: step 5's rebuild removed (main's)
+  tests/harness/test_cloud_platform_search_rebuild.py: RED (2 failed in 3.16s)
+plant 4: the Entra count typed as two (main's)
+  tests/harness/test_cloud_platform_entra_count.py: RED (2 failed, 2 passed in 3.28s)
+4/4 red
+
+Green: tests/harness/test_cloud_platform*.py, cp_policy_check (less its two docker files), the guides, the R1 kind suites, update,
+install, the secrets case, tests/services/search_index (less its live files), tests/cli, the ADR checks and the coverage check:
+1080 passed, 43 skipped. doc-citations-check: every cited path exists. make test and make -k ci on the server: waiting for the slot.

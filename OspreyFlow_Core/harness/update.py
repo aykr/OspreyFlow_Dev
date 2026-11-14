@@ -38,7 +38,7 @@ from typing import Any
 
 import yaml
 
-from harness import ingest_uploads, model_downloads, store_volumes
+from harness import ingest_uploads, model_downloads, search_rebuild, store_volumes
 from harness.atomic import replace_whole
 from harness.keycloak_theme import clear_theme_cache
 from harness.release import (
@@ -611,6 +611,11 @@ def _apply_update(
         # now so an update killed before its restarts leaves them owed (ADR-114 Amendment 39).
         (directory / "state" / PENDING_RESTARTS).unlink(missing_ok=True)
         verify_running(host, directory, prepared.lock, prepared.image_ids)
+        # The CARRIES row "an upgrade must rebuild when the mapping changes" (ADR-150 decision 4):
+        # where it searches with OpenSearch, the index made again from the graph, or the update
+        # fails and is rolled back.
+        if search_rebuild.renders_opensearch(directory / "compose.yaml"):
+            _ok(host, search_rebuild.rebuild_argv(compose), "rebuild the search index")
     except store_volumes.StoresNotMoved as failed:
         print(
             f"ospreyflow: the update to {tag} failed at 'move the stores to named volumes': "

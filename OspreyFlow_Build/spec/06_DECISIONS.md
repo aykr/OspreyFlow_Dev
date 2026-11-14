@@ -39049,3 +39049,39 @@ for its reason (`plants.log`).
 
 `actionRegistry.ts` is the orchestrator's file: its change is sent as
 `process/lanes/admin/govuk_admin/registry-govuk.diff`. The `every-harness.spec.ts` state is changed in the branch.
+
+### ADR-150, Amendment 2 (14 November 2026) — every path that brings v0.5.2 up rebuilds the index from the graph
+
+**Context.** Decision 4's rebuild ran only after a restore. But an index made before v0.5.2 has no mapping fingerprint,
+so the indexer writes nothing to it (`MappingOutOfDate`) and search stays on the fallback; and a domain new to a
+deployment that already holds a graph gets an empty index (`ensure_index`'s `-initial`), which the indexer fills only
+from the outbox, never with what the graph already held. So an upgrade, or an install over an existing graph, left
+search on the fallback or incomplete until someone rebuilt it by hand (the CARRIES row "an upgrade must rebuild when the
+mapping changes"; the route step U, the orchestrator, 14 November 2026).
+
+**Decision.** Wherever the deployment searches with OpenSearch, every path that brings v0.5.2's Conduit up runs the
+rebuild once the Conduit is up, before the path says it is done, and fails in its own words if the rebuild fails:
+- `ospreyflow install` (`harness.apply`, step 4d): after every service is healthy, before any seed or verify, where the
+  compose file runs an `opensearch` service;
+- `ospreyflow update` (`harness.update`): after the release is up and verified; a failed rebuild fails the update, which
+  is rolled back as any other failure is;
+- `ospreyflow restore`: as decision 4 already says;
+- the cloud-platform profile's INSTALL.md, step 5, on a fresh install and on every upgrade (the runbook is run in order
+  for both): after the rollouts, the `ospreyflow-search-rebuild` Job, five minutes to start and 30 to finish, deleted
+  and named when it does not succeed, failing the step.
+
+The three compose paths share one command (`harness/search_rebuild.py`), the rebuild in the Conduit's own container.
+The indexer needs no restart: its loop checks the index again and drains once the rebuild has moved the alias.
+
+**Consequences.** An upgrade's search is the index's as soon as the path ends. The cost is the rebuild's time on every
+install and update: on a large graph it is step 4's M7 (ADR-149 Amendment 2), and the cloud-platform Job's 30-minute
+bound is to be set from M7, as the restore's is. A deployment without OpenSearch is unchanged.
+
+**Tests that fail if it is violated:** `tests/harness/test_apply_search_rebuild.py` (an install with OpenSearch rebuilds
+once, after up; without it, never; a failed rebuild fails the install in words), `tests/harness/test_update_apply.py`
+(an update with OpenSearch rebuilds after the release is up and verified; without, never; a failed rebuild rolls the
+update back), and `tests/harness/test_cloud_platform_search_rebuild.py` (step 5 run as written: the Job after the
+rollouts, and a failed one failing the step naming it). The behaviour they wire is held by
+`tests/services/search_index/test_upgrade_rebuild.py`: a v0.5.1 index with no fingerprint holds the indexer
+(`MappingOutOfDate`, the outbox kept) until a rebuild, then it drains. That test passes on main as it stood
+before this amendment, because the mechanism was there and no path ran it; the three wiring tests above are its red.
