@@ -77,6 +77,9 @@ async function measure(page: Page) {
       rowLink: px(place.querySelector(".admin-row-actions__link")),
       comingWhat: px(place.querySelector(".admin-nav__coming-what")),
       // One heading level per job: the section's h1, h2 beneath it (the side list's groups, People's parts).
+      // Every h2 drawn smaller than the one h1, so the levels read as they are marked.
+      h2sNotSmaller: [...place.querySelectorAll("h2")].filter((h) => px(h) >= px(place.querySelector("h1"))).map((h) =>
+        `${(h.textContent ?? "").trim()} ${px(h)}px`),
       headingLevels: [...new Set([...place.querySelectorAll("h1, h2, h3, h4, h5, h6")].map((h) => Number(h.tagName[1])))].sort(),
     };
   });
@@ -89,6 +92,7 @@ for (const [look, brand] of LOOKS) {
     if (process.env.ADMIN_LOOK_PRINT) console.log(JSON.stringify({ look, ...m, actions: undefined }));
     expect(m.h1s.map((h) => h.text)).toEqual(["People and roles"]);
     expect(m.headingLevels).toEqual([1, 2]);
+    expect(m.h2sNotSmaller).toEqual([]);
     expect(m.caption).toBe("Admin");
     expect(m.nameFont).not.toMatch(/mono/i);
     expect(m.caseNameFonts).toHaveLength(1); // the harness's Op Wren
