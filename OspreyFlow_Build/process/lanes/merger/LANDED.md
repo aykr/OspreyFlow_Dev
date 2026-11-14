@@ -98,3 +98,4 @@ fd96c11 d8971cd platform-b v052-sheet
 4116841 252df74 admin audit1 (ruling 1, option A), three guide PDFs reprinted
 296ab81 a46e2ee rules v052-index (step 3c), with v052-index_ci_yml.diff (the owner's word)
 c1373da 7ba5f37 studio v052-search (step 3d), with its two diffs (the owner's word)
+822a2fb 859ca7d case-b install-pending (spec 08 halves; CI's over-the-wire job proves the seeded halves)
