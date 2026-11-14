@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.51** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.52** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.52 | 2026-11-14 | §6, Ask & Chat, as v0.5.2's Part D built it (ADR-098 Amendment 7, rules-b's wording): **Read from** (*Selected items*, *Everything on the graph*, *Whole case* not available yet), the *About* and *Will read* lines and the engine before anything is sent, an answer from links and events when there is no document; *Ask the model about these…* on any selection saves a private view and asks there; asking needs Editor, no longer a document. Held by `tests/test_user_guide_ask_chat.py`. PDF made by the orchestrator at merge. |
 | 1.51 | 2026-11-13 | §7.5 and §7.11: where people sign in with Entra ID (a shared platform), a load judges only its starter's rules, hotlists and watches, a watch's own runs do not happen, and a scheduled rule is refused (administration guide §6a.7; docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
 | 1.50 | 2026-11-13 | §3, §4, §5 and §5.13–5.14: the Glass's mode toggle is **Graph · Drawing board** (it was *Case · Boards*), with a line saying what each mode is (ADR-145 Amendment 13); **Views ▾** by the graph lists the case's saved views and opens one, the Cases drawer keeping its list (ADR-144 Amendment 3). PDF reprinted alone. |
 | 1.49 | 2026-11-13 | §5 and §6: the rail as the owner ruled (ADR-145 Amendment 12): Cases, Explore, *Ask & Chat* (Questions renamed) and Dashboards on the rail; *⋯ More* is *⋯ Explore Details*, holding History, Ownership and Connection strength; Help (and **?**) opens the keys, with the user guide's link, over any view, and closes again. PDF reprinted alone. |
@@ -785,11 +786,17 @@ the case's analyst layer.
 
 ![Ask & Chat (named Questions in this picture): ask about the documents in this case](images/user/12-questions.png)
 
-**Ask & Chat** (on the rail; it was named *Questions*) asks the deployment's model about the documents in this case that you can see, and about
-**graph facts**. It answers from those only, citing each — **Draws on** opens a document. What it
+**Ask & Chat** (on the rail; it was named *Questions*) asks the deployment's model about what you choose
+under **Read from**: **Selected items** (what you have selected, everything one link from it, and the
+documents among them; the choice when something is selected), **Everything on the graph** (every item,
+link and document you can see), or **Whole case** (not available yet, and it says why). Above the
+question it says what that is about ("About: Tarbuck, Kyle and 1 other"), what will be read ("Will read:
+1 document, 3 items and 2 links") and which engine will answer, before anything is sent. It answers
+from the documents and **graph facts** only, citing each — **Draws on** opens a document. With no
+document to read it answers from the links and events, and says so under the answer. What it
 proposes, you **Accept** or **Reject**; an accepted proposal enters the graph as *inferred*.
-**Ask the model about these…** on a selection of documents starts a case of its own for them. Asking
-needs Editor, and at least one document you can see in the case.
+**Ask the model about these…** on any selection saves it as a private view and asks there. Asking
+needs Editor.
 
 **Graph facts.** Along with the documents, the model is given a numbered, plain account of the graph
 around what you have selected and one link beyond it (the whole view when nothing is selected). A
