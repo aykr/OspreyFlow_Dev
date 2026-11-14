@@ -877,10 +877,9 @@ shape, which a development namespace alone may take ("cloud_platform.shape: poc 
 namespace's (one copy of each store); a production namespace takes the standard shape"). The poc
 shape runs one copy of each store, ClickHouse with its own Keeper inside it rather than ClickHouse
 Keeper beside it, no disruption budgets, a CPU limit on every container (section 6a.2), and the
-Ingest root (uploads and the drop folder) on a claim of its own, `ospreyflow-ingest`. It makes no
-OpenSearch domain, and refuses a render that would use one ("the poc shape makes no OpenSearch
-domain (ADR-148 Amendment 5), so its Conduit would reach for one that is not there: set
-components.search: postgres-fulltext"): name `components.search: postgres-fulltext` with it.
+Ingest root (uploads and the drop folder) on a claim of its own, `ospreyflow-ingest`. Like the
+standard shape, it makes the platform's OpenSearch domain when `components.search` is `opensearch`
+(the default; ADR-148 Amendment 13), and `components.search: postgres-fulltext` makes none.
 
 Then, in `OspreyFlow_Core`:
 
@@ -967,9 +966,11 @@ own file is `client.yaml`.
 in the standard shape) run in the namespace as StatefulSets on the platform's `gp2-expand` class;
 in the standard shape each has a disruption budget allowing one copy down at a time, and two minutes
 for ArcadeDB to close its databases. Postgres is RDS PostgreSQL 16 and Valkey is ElastiCache
-(Redis 7), each reached over TLS; SeaweedFS is S3. In the standard shape the platform's OpenSearch
-2.x domain is made by default (`components.search` defaults to `opensearch`), but no pod is given its
-address yet, so it is unused. Caddy is not rendered: the platform's NGINX ingress is the front door,
+(Redis 7), each reached over TLS; SeaweedFS is S3. In every shape the platform's OpenSearch 2.x
+domain is made by default (`components.search` defaults to `opensearch`), and the pods that read the
+stores, the Conduit (`api`), the workers (`worker`) and the index's rebuild and drift check
+(`ospreyflow-search-rebuild`, `ospreyflow-search-drift`), are given its address (`OPENSEARCH_URL`).
+Caddy is not rendered: the platform's NGINX ingress is the front door,
 with ModSecurity on and the IP allow-list from `allow_from`. Local models and Whisper are not
 rendered, since the platform has no GPU. The model gateway (LiteLLM) is rendered always, with or
 without an engine (section 6a.3 says which identity it runs as; section 6a.9 is the model
@@ -1006,8 +1007,8 @@ group 0.
 
 **The shared folders** are one ReadWriteOnce volume, `ospreyflow-shared`, on the platform's class,
 and every pod that mounts it is placed on the same node. In the poc shape the Ingest root is on its
-own claim instead. Moving tiles, the settings files and, in the standard shape, uploads and staging
-off it, and the recipes repository off the shared disk, is *coming*.
+own claim instead. Moving tiles, the settings files and, in the standard shape, the Ingest root
+(`ingest`: uploads and the drop folder) off it, and the recipes repository off the shared disk, is *coming*.
 
 ### 6a.2 What the namespace asks for
 
@@ -1017,7 +1018,7 @@ bursts. So a LimitRange in the namespace with a default CPU limit puts that limi
 container, and a ResourceQuota counting `limits.cpu` refuses every pod that names none: both are
 questions for the platform's team (section 6a.11). **The poc shape names a CPU limit on every
 container** (0.5 by default; the Glass 0.5, the Conduit 2, the workers 2, named-entity extraction 1,
-ArcadeDB 2, ClickHouse 2), for a namespace whose quota counts them. ArcadeDB's Java heap is three
+ArcadeDB 2, ClickHouse 2, the search index's rebuild and drift check 2), for a namespace whose quota counts them. ArcadeDB's Java heap is three
 quarters of its memory limit. **These sizes are proposals, not measurements**: no load has yet run
 on the platform.
 
@@ -1036,6 +1037,7 @@ on the platform.
 | Laurium, when it is the extraction engine | 1 | 1 | 0.25 | 1 GiB | 2 GiB |
 | The backups' and the restore's Jobs | — | — | 0.5 | 2 GiB | 4 GiB |
 | The restore's ArcadeDB step | — | — | 1 | 12 GiB | 12 GiB |
+| The search index's rebuild and drift check, when OpenSearch is used | — | — | 0.5 | 2 GiB | 4 GiB |
 | Every init container, and any container not named above | — | — | 0.1 | 256 MiB | 512 MiB |
 
 From renders of the repository's synthetic deployments, counting each running copy:
@@ -1064,7 +1066,7 @@ leaves it unchanged and `tofu validate` accepts it.
 | `variables.tf` | What the platform gives the namespace: `namespace`, `vpc_id`, `subnet_ids`, `eks_oidc_provider_arn` and `eks_oidc_issuer`. The providers, the backend and the tags are the namespace folder's own |
 | `rds.tf` | RDS PostgreSQL 16, encrypted, reached over TLS, and the secret `rds-postgresql-instance-output` |
 | `elasticache.tf` | ElastiCache (Redis 7), TLS and a token, and the secret `elasticache-redis` |
-| `opensearch.tf` | The standard shape alone, when `components.search` is `opensearch`: the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
+| `opensearch.tf` | Every shape, when `components.search` is `opensearch` (the default): the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
 | `s3.tf` | The buckets, private and encrypted, named from a prefix, and the secret `s3-bucket-output` |
 | `irsa.tf` | The service account `ospreyflow` and its IAM role, given the buckets, so no S3 key exists anywhere |
 | `connector_sources.tf` | Only when S3 buckets or Athena workgroups are declared (section 6a.5): the reads on them, attached to `irsa.tf`'s role |
@@ -1159,6 +1161,7 @@ single ports, never a range:
 | ArcadeDB; ClickHouse Keeper | Their own copies |
 | ClickHouse | Its own copies and, in the standard shape, ClickHouse Keeper; S3 and STS, for its backups |
 | The backups' runs and the restore | S3 and STS; ArcadeDB and ClickHouse, or the cluster's API, as each needs (section 6a.8) |
+| The search index's rebuild and drift check, when OpenSearch is used | ArcadeDB; the managed stores' networks (OpenSearch on 443); S3 and STS |
 | The Glass | The Conduit |
 | Superset, when reporting is on | The Conduit (who signed in); the managed stores' networks (its database and the mart, its rate limits); Entra ID's sign-in host |
 | The report sync, when reporting is on | The Conduit; the managed stores' networks (the mart); S3 and STS; Entra ID's sign-in host (its token) |
@@ -1558,8 +1561,13 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
 5. **The restore's Jobs**, rendered for the set by its own name (never `latest`, never by
    `helm upgrade`) and applied, then each waited on.
 6. **Everything started again**, ArcadeDB first, at the copy counts noted, each waited on until it
-   is ready (the door answers), and the CronJobs resumed. A healthy restore's logs end in plain
+   is ready (the door answers), and the backups' CronJobs (`ospreyflow-backup`,
+   `ospreyflow-backup-claims`) resumed. A healthy restore's logs end in plain
    words, with no stack trace: the runbook's *A healthy restore* quotes each step's last line.
+7. **The search index rebuilt**, where the deployment searches with OpenSearch: the index is not in a
+   set (it is rebuilt from the graph, ADR-150), so the restore ends with its rebuild, then the drift
+   check between the graph and the index, each a Job started from its CronJob, held suspended
+   (`ospreyflow-search-rebuild`, then `ospreyflow-search-drift`), and each waited on.
 
 **It refuses, touching nothing**, while anything that writes still runs, while it cannot see what
 runs, or while any part of the set is missing, changed or another set's. Each store is replaced only
@@ -2681,8 +2689,10 @@ removed container, so a restart, `ospreyflow apply`, an update and `uninstall --
 earlier kept PostgreSQL and ArcadeDB in unnamed volumes, and Valkey and OpenSearch inside their
 containers; its data is moved into the named volumes once (section 14). A backup reads each store through its own
 running server, so it is the same wherever the data is kept. **Not in a backup:** Valkey's working
-sets and queues, and OpenSearch, which holds no index of OspreyFlow's yet — so there is nothing of it
-to restore or rebuild, and a restore starts it empty.
+sets and queues, and OpenSearch's search index, which is rebuilt from the graph instead: a restore's
+last step, once the graph and the texts are back, runs `python -m scripts.rebuild_search_index` in the
+Conduit's container, in a deployment that runs an OpenSearch (`components.search: opensearch`, the
+default). With `postgres-fulltext` there is no index to rebuild.
 
 **A backup that fails** removes the set it had started, and says
 so, so no half-written set is left beside the good ones. If it cannot remove all of it, it says what

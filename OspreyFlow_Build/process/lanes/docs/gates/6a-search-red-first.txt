@@ -1,0 +1,206 @@
+# test_guides_cloud_platform_search.py, red first
+Branch lane/docs-6a-search at f8ebc3c (from main 3b03b31); offline, closed ports, on the Mac, no stack.
+Command: cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 POSTGRES_PASSWORD=throwaway VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py
+The merge state: this branch with lane/docs-6a8-shared's two §6a.8 paragraphs (it merges first) and rules' two index modules from lane/rules-v052-index at a879b3c (6a-search merges after rules), in the working tree only. Runs 3 onwards plant one change on that state, shown as < before and > after, and restore it; render plants are at the render's own call sites. Each assertion line is red at least once, on its own.
+
+## 1. The branch as committed (main's tree): two reds expected until 6a8-shared and rules land
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:132: AssertionError
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:143: AssertionError
+2 failed, 3 passed in 2.19s
+
+## 2. The merge state: green
+5 passed in 1.47s
+
+## 3. main's guide in the merge state
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:79: AssertionError
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:92: AssertionError
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:104: AssertionError
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:118: AssertionError
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:140: AssertionError
+5 failed in 2.03s
+
+## 4. Render: the poc shape refusing OpenSearch again
+>     if config.components.search is SearchBackend.OPENSEARCH and config.cloud_platform.shape == "poc":
+>         raise ValueError("the poc shape makes no OpenSearch domain (planted), set components.search: postgres-fulltext")
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:77: AssertionError
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:98: 
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:55: AssertionError
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:112: 
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:55: AssertionError
+3 failed, 2 passed in 1.02s
+
+## 5. Guide: §6a.1 no longer says the poc shape makes the domain
+< standard shape, it makes the platform's OpenSearch domain when `components.search` is `opensearch`
+> standard shape, it has the platform's OpenSearch domain when `components.search` is `opensearch`
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:80: AssertionError
+1 failed, 4 passed in 1.44s
+
+## 6. Guide: the old refusal planted back, capitalised
+< (the default; ADR-148 Amendment 13), and `components.search: postgres-fulltext` makes none.
+> (the default; ADR-148 Amendment 13). The poc shape makes no OpenSearch domain of its own, and `components.search: postgres-fulltext` makes none.
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:79: AssertionError
+1 failed, 4 passed in 2.11s
+
+## 7. Guide: §6a.3's opensearch.tf row gone
+< | `opensearch.tf` | Every shape, when `components.search` is `opensearch` (the default): the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
+> | `opensearch-domain.tf` | Every shape, when `components.search` is `opensearch` (the default): the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:83: AssertionError
+1 failed, 4 passed in 1.39s
+
+## 8. Render: opensearch.tf made in the standard shape alone
+<     if config.components.search is SearchBackend.OPENSEARCH:
+>     if config.components.search is SearchBackend.OPENSEARCH and config.cloud_platform.shape != "poc":
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:85: AssertionError
+1 failed, 4 passed in 1.45s
+
+## 9. Render: the standard shape alone, the row saying neither
+<     if config.components.search is SearchBackend.OPENSEARCH:
+>     if config.components.search is SearchBackend.OPENSEARCH and config.cloud_platform.shape != "poc":
+< | `opensearch.tf` | Every shape, when `components.search` is `opensearch` (the default): the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
+> | `opensearch.tf` | Some shapes, when `components.search` is `opensearch` (the default): the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:86: AssertionError
+1 failed, 4 passed in 1.45s
+
+## 10. Guide: §6a.1's 'In every shape' sentence narrowed
+< (Redis 7), each reached over TLS; SeaweedFS is S3. In every shape the platform's OpenSearch 2.x
+> (Redis 7), each reached over TLS; SeaweedFS is S3. In the standard shape the platform's OpenSearch 2.x
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:87: AssertionError
+1 failed, 4 passed in 1.33s
+
+## 11. Render: postgres-fulltext making the domain too
+<     if config.components.search is SearchBackend.OPENSEARCH:
+>     if True:
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:92: AssertionError
+1 failed, 4 passed in 1.07s
+
+## 12. Guide: 'no pod is given its address' planted back
+< (`ospreyflow-search-rebuild`, `ospreyflow-search-drift`), are given its address (`OPENSEARCH_URL`).
+> (`ospreyflow-search-rebuild`, `ospreyflow-search-drift`), are given its address (`OPENSEARCH_URL`). Before, no pod is given its address.
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:104: AssertionError
+1 failed, 4 passed in 1.36s
+
+## 13. Guide: the address sentence reworded so its anchor is gone
+< (`ospreyflow-search-rebuild`, `ospreyflow-search-drift`), are given its address (`OPENSEARCH_URL`).
+> (`ospreyflow-search-rebuild`, `ospreyflow-search-drift`), receive its address (`OPENSEARCH_URL`).
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:106: AssertionError
+1 failed, 4 passed in 1.45s
+
+## 14. Guide: the index's Jobs left out of the address sentence (the sentence as first written)
+< stores, the Conduit (`api`), the workers (`worker`) and the index's rebuild and drift check
+< (`ospreyflow-search-rebuild`, `ospreyflow-search-drift`), are given its address (`OPENSEARCH_URL`).
+> stores, the Conduit (`api`) and the workers (`worker`), are given its address (`OPENSEARCH_URL`).
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:108: AssertionError
+1 failed, 4 passed in 1.39s
+
+## 15. Render: the index's Jobs no longer given the address
+<             copy.deepcopy(address),
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:108: AssertionError
+1 failed, 4 passed in 1.33s
+
+## 16. Guide: the restore's step 7 gone
+< 7. **The search index rebuilt**, where the deployment searches with OpenSearch: the index is not in a
+> 7. **The index**, where the deployment searches with OpenSearch: the index is not in a
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:118: AssertionError
+1 failed, 4 passed in 1.32s
+
+## 17. Guide: step 6 resuming the index's CronJobs too
+<    `ospreyflow-backup-claims`) resumed. A healthy restore's logs end in plain
+>    `ospreyflow-backup-claims`, `ospreyflow-search-rebuild`) resumed. A healthy restore's logs end in plain
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:121: AssertionError
+1 failed, 4 passed in 1.39s
+
+## 18. Render: the index's two Jobs in the other order
+<     "ospreyflow-search-rebuild": ("search-rebuild", "scripts.rebuild_search_index"),
+>     "ospreyflow-search-rebuild": ("search-rebuild", "scripts.rebuild_search_index"),
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:124: AssertionError
+1 failed, 4 passed in 1.29s
+
+## 19. Render: the drift check's CronJob dropped, the guide still naming it
+<     "ospreyflow-search-drift": ("search-drift", "scripts.search_index_drift"),
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:108: AssertionError
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:124: AssertionError
+2 failed, 3 passed in 1.30s
+
+## 20. Render: the index put into the set (a part of the claims part)
+>     {"name": "shared-search-index", "subPath": "search-index"},
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:125: AssertionError
+1 failed, 4 passed in 1.32s
+
+## 21. Guide: step 7 without 'the index is not in a set'
+< 7. **The search index rebuilt**, where the deployment searches with OpenSearch: the index is not in a
+<    set (it is rebuilt from the graph, ADR-150), so the restore ends with its rebuild, then the drift
+> 7. **The search index rebuilt**, where the deployment searches with OpenSearch: the index is rebuilt
+>    (it is rebuilt from the graph, ADR-150), so the restore ends with its rebuild, then the drift
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:125: AssertionError
+1 failed, 4 passed in 1.43s
+
+## 22. The tree without rules' two modules (the merge state otherwise)
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:132: AssertionError
+1 failed, 4 passed in 1.29s
+
+## 23. Guide: §6a.1's shared-folders paragraph losing its anchor
+< **The shared folders** are one ReadWriteOnce volume, `ospreyflow-shared`, on the platform's class,
+> The shared folders are one ReadWriteOnce volume, `ospreyflow-shared`, on the platform's class,
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:139: AssertionError
+1 failed, 4 passed in 1.27s
+
+## 24. Guide: the standard shape's Ingest root no longer named
+< own claim instead. Moving tiles, the settings files and, in the standard shape, the Ingest root
+< (`ingest`: uploads and the drop folder) off it, and the recipes repository off the shared disk, is *coming*.
+> own claim instead. Moving tiles, the settings files and, in the standard shape, uploads off it, and the recipes repository off the shared disk, is *coming*.
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:140: AssertionError
+1 failed, 4 passed in 1.29s
+
+## 25. Guide: staging put back on the shared volume, in §6a.8
+< **Not in a set**: the rest of the shared volume, `ospreyflow-shared`: the tiles (`tiles`), made
+> **Not in a set**: the rest of the shared volume, `ospreyflow-shared`, with staging: the tiles (`tiles`), made
+../OspreyFlow_Build/tests/test_guides_cloud_platform_search.py:143: AssertionError
+1 failed, 4 passed in 1.41s
+
+## 26. The merge state again: green
+5 passed in 1.28s
+
+== The three carries after the rebase onto main (rules 3c, studio 3d), 14 Nov: offline, closed ports 59991-59994
+Green on the fix: tests/test_guides_cloud_platform_search.py 8 passed. Each plant below, then restored:
+== the render's size changed (../OspreyFlow_Core/harness/cloud_platform/__init__.py: '"resources": copy.deepcopy(api["resources"]),' -> '"resources": {"requests": {"cpu": "1", "memory": "4Gi"}, "limits": {"memory": "8Gi"}},')
+E           AssertionError: poc
+E           assert ['—', '—', '0...GiB', '4 GiB'] == ['—', '—', '1...GiB', '8 GiB']
+E             
+E             At index 2 diff: '0.5' != '1'
+== the guide's size row struck (../OspreyFlow_Core/docs/administration-guide.md: '| The search index's rebuild and drift check, when OpenSearch is used | — | — | 0.5 | 2 GiB | 4 GiB |
+' -> '')
+E       AssertionError: §6a.2's row for the index's Jobs
+E       assert False is True
+E        +  where False = bool([])
+E        +  and   True = any(<generator object test_section_6a2_sizes_the_index_jobs_as_rendered.<locals>.<genexpr> at 0x10813cb80>)
+== the poc CPU limit struck from the guide (../OspreyFlow_Core/docs/administration-guide.md: ', the search index's rebuild and drift check 2)' -> ')')
+E       assert ("the search index's rebuild and drift check 2)" in '### 6a.2 What the namespace asks for Each container asks for its CPU and memory and has a memory limit. **In the stan...st be larger, or pods are left unscheduled; in the standard shape one on `limits.cpu` refuses them whatever its size. ') is True
+E        +  where True = bool('2')
+1 failed, 7 deselected in 1.40s
+== profile.yaml gives the rebuild ClickHouse (../OspreyFlow_Core/harness/cloud_platform/profile.yaml: '    search-rebuild: [arcadedb]' -> '    search-rebuild: [arcadedb, clickhouse]')
+E               AssertionError: ('poc', {'name': 'ospreyflow-search-rebuild', 'label': 'search-rebuild', 'command': ['/app/.venv/bin/python', '-m', 'scripts.rebuild_search_index']})
+E               assert {'ArcadeDB', ...es' networks"} == {'ArcadeDB', ...es' networks"}
+E                 
+E                 Extra items in the left set:
+== the guide's way-out row loses S3 and STS (../OspreyFlow_Core/docs/administration-guide.md: '(OpenSearch on 443); S3 and STS |' -> '(OpenSearch on 443) |')
+E               AssertionError: ('poc', {'name': 'ospreyflow-search-rebuild', 'label': 'search-rebuild', 'command': ['/app/.venv/bin/python', '-m', 'scripts.rebuild_search_index']})
+E               assert {'ArcadeDB', ...es' networks"} == {'ArcadeDB', ...es' networks"}
+E                 
+E                 Extra items in the left set:
+== the restore never rebuilds (../OspreyFlow_Core/harness/restore.py: '    if not isinstance(services, dict) or "opensearch" not in services:
+        return' -> '    if True:
+        return')
+E       assert ("runs `python -m scripts.rebuild_search_index` in the Conduit's container" in '## 13. Backup and restore **Every install.** `ospreyflow backup` writes a set to `<backups folder>/<deployment>/<time....** The audit log is in the same PostgreSQL as everything else, so it is in the same backup and shares its retention. ') is False
+E        +  where False = <function test_section_13_says_a_local_restore_rebuilds_the_index_last_where_there_is_one.<locals>.rebuilds at 0x1076680e0>(<SearchBackend.OPENSEARCH: 'opensearch'>)
+E        +    where <SearchBackend.OPENSEARCH: 'opensearch'> = <enum 'SearchBackend'>.OPENSEARCH
+1 failed, 7 deselected in 0.32s
+== the guide's old §13 sentence (../OspreyFlow_Core/docs/administration-guide.md: 'sets and queues, and OpenSearch's search index, which is rebuilt from the graph instead: a restore's' -> 'sets and queues, and OpenSearch, which holds no index of OspreyFlow's yet; a restore's')
+E       assert "holds no in...eyFlow's yet" not in '## 13. Back... retention. '
+E         
+E         "holds no index of OspreyFlow's yet" is contained here:
+E           ch, which holds no index of OspreyFlow's yet; a restore's last step, once the graph and the texts are back, runs `python -m scripts.rebuild_search_index` in the Conduit's container, in a deployment that runs an OpenSearch (`components.search: opensearch`, the default). With `postgres-fulltext` there is no index to rebuild. **A backup that fails** removes the set it had started, and says so, so no half-written set is left beside the good ones. If it cannot remove all of it, it says what it could not remove, renames...
+== the rebuild moved before the maps step (restore.py's run_restore)
+E       assert ("a restore's last step" in '## 13. Backup and restore **Every install.** `ospreyflow backup` writes a set to `<backups folder>/<deployment>/<time....** The audit log is in the same PostgreSQL as everything else, so it is in the same backup and shares its retention. ') is ('restore_maps...e, maps_file)' == 'rebuild_sear...compose_file)'
+E         
+E         - rebuild_search_index(compose_file)
+E         + restore_maps_file(compose_file, maps_file))
