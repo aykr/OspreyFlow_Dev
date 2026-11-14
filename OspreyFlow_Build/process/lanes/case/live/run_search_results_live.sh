@@ -65,11 +65,15 @@ conduit_up() {
 # Author and the case reads Fixture Corp's dataset (scripts/case_seed.py's scope_for). The Conduit's POST
 # /v1/investigations takes no empty body now (ADR-099 Amendment 12: a case names its one dataset).
 echo "# step: Fixture Corp seeded into a case the seed makes"
-"$PY" -m scripts.seed_fixture_corp --case-name "Live search check" --principal-id analyst-1 --org-unit unit-1 >"$W/seed.txt" 2>&1
+# A case of its own each run: the seed reuses a case of the same name, and the stack's Postgres keeps cases and their
+# working sets between runs, so a second run's Show on graph found its records already there and sent nothing (the run
+# at eb8a4ed). The graph is dropped above; the case's working set is not.
+NAME="Live search check $(date -u +%Y%m%dT%H%M%SZ)"
+"$PY" -m scripts.seed_fixture_corp --case-name "$NAME" --principal-id analyst-1 --org-unit unit-1 >"$W/seed.txt" 2>&1
 seeded=$?
 mask <"$W/seed.txt" | tail -8
 [ "$seeded" -eq 0 ] || fail "seed"
-CASE=$(sed -nE "s/^Case 'Live search check' is ([^ ]+)\.$/\1/p" "$W/seed.txt")
+CASE=$(sed -nE "s/^Case '$NAME' is ([^ ]+)\.$/\1/p" "$W/seed.txt")
 [ -n "$CASE" ] || fail "no case id in the seed's output"
 echo "case: $CASE"
 echo "# step: the search index rebuilt from the graph"
