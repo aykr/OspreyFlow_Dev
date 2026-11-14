@@ -1,0 +1,25 @@
+AS IT MUST BE (red in the App, for its reason): the stage's words 1:1 against the panel, in the App's layout only
+    +   ".batch-expansion__status: 1.00:1 < 4.5:1 (axe: equalRatio) (\"Expanding from 1 node.\")",
+    the panel's own harness scan, same plant: 1 passed (2.0s)
+AS IT MUST BE (red in the App, for its reason): the failure's words faint, in the App's GOV.UK layout only
+    +   ".batch-expansion__message: 1.47:1 < 4.5:1 (axe: elmPartiallyObscuring) (\"The batch expansion could not finish, an\")",
+    the same state in the App, dark, same plant: green (the plant is the govuk look's)
+    the panel's own harness scan, same plant: 1 passed (2.7s)
+AS IT MUST BE (red in the App, for its reason): the job's words faint, in the App's light layout only
+    +   ".batch-expansion__status: 1.24:1 < 4.5:1 (axe: elmPartiallyObscuring) (\"Saved 6,210 nodes and 9,004 links as you\")",
+    the same state in the App, dark, same plant: green (the plant is the light look's)
+    the panel's own harness scan, same plant: 1 passed (2.1s)
+AS IT MUST BE (red in the App, for its reason): the panel drawn under the App's page, in the App's layout only
+    Error: Batch job: the whole expansion is covered by the App's layout
+    the panel's own harness scan, same plant: 1 passed (2.1s)
+AS IT MUST BE (red in the App, for its reason): an opaque App overlay the pointer passes through, over the panel's foot
+    Error: Batch job: the whole expansion is covered by the App's layout
+    the panel's own harness scan, same plant: 1 passed (2.1s)
+AS IT MUST BE (red in the App, for its reason): the panel hidden from assistive technology by the App's markup around it
+    Error: expect(locator).toBeFocused() failed
+    the panel's own harness scan, same plant: 1 passed (2.1s)
+AS IT MUST BE (red in the App, for its reason): the panel named by another element of the App's (its heading's id taken first)
+    Error: expect(locator).toBeFocused() failed
+    the panel's own harness scan, same plant: 1 passed (1.5s)
+unplanted: 9 passed (36.7s)
+every plant red in the App for its reason, its control and the harness green, unplanted green
