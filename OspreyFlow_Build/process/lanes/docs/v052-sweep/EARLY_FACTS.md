@@ -1,4 +1,4 @@
-# Step 5's sweep, the early part: what the code said
+# Step 5's sweep: what the code said
 
 The docs lane, 14 November 2026, on `lane/docs-v052-sweep-early`, at the orchestrator's word: the parts of
 `STEP5_CHECKLIST.md` that wait on neither the last features nor the cut, which are sections 3, 4, 7, 8 and 9. Checked
@@ -157,3 +157,45 @@ Left as they are:
 contradicting itself on the administrator fallback, and three weaker checks (the match's own link, the sites' search
 phrases, and the fallback). All are fixed, the record is taken again, and the f-string refusal's field names are carried
 for admin.
+
+## The whole sweep, after the freeze (the orchestrator's word, 14 November)
+
+### 1. The freeze's last features
+
+- **3f and 3f′, the batch job**, were written by their own lane: user guide 1.60, `test_user_guide_batch_expansion.py`.
+- **3g, the administrator fallback**, was written by its own lane: administration guide 2.06. §9's "No administrator
+  can give a missing clearance or unit" is now qualified by it (the re-check's finding B).
+- **U, the index rebuilt on install, update and restore** (ADR-150 Amendment 2, merge 022bb57):
+  - `harness/search_rebuild.py`'s `renders_opensearch` and `rebuild_argv`, called by `harness/apply.py`'s step 4d
+    (after the start, before the seed: a failed rebuild fails the install) and by `harness/update.py` (or the update
+    fails and is rolled back);
+  - the cloud-platform `INSTALL.md`, `runbooks.py`'s `_SEARCH_REBUILD`, appended to the rollouts wherever the values
+    carry `searchIndex`: a Job from `cronjob/ospreyflow-search-rebuild`, five minutes to start and 30 to finish,
+    deleted and named if it does not.
+  - The same merge made `INSTALL.md` count its Entra registrations, `2 + superset + sync`
+    (`entra_registrations`), so §6a.11's question 11 said two where there may be four.
+- **3h, clusters on entry** (ADR-124 Amendment 19, merge 041533f):
+  - `services/api/working_set/service.py`'s `_reader_clusters`, sent as `resolution_on_entry` on a seed's or an
+    expansion's own answer;
+  - `_without_cluster` on every shared read;
+  - another reader's threshold reaches a canvas at its next sync or expand.
+  - User guide §5.2 now says so.
+- **The install test's date**: §6a.1 said 25 November, but the route gives step 6 as 16 November (main's
+  `route.tsv`). The test reads the route, so it is red on a branch whose `route.tsv` is older, and green once
+  rebased.
+- **ADR-124 Amendment 20** (`edges_among` in chunks): reserved, not merged when this was written. It goes in when it
+  lands.
+
+### 5. The D-items and R7
+
+- **D5:** `python -m harness.cloud_platform.manifest tables` exists and prints the poc tables from
+  `poc_manifest.yaml`.
+  - §6a.2 now carries that output between `manifest:begin` and `manifest:end`, put in by
+    `python -m tests.test_guide_poc_manifest --write` and held to it byte for byte.
+  - The per-shape table stays, held by the sizing tests: the manifest covers the poc shape alone.
+- **D7:** waits for step 6 (the install test).
+- **D1 to D4, D6 and D8:** done, as the checklist gives them.
+- **R7:** step 1 is built. `GlassCanvas.tsx`'s *Mark for suppression* and *Remove suppression mark*; marks in their
+  own table, never a graph write (`services/api/suppression.py`); listed in Explore with who, when and why.
+  - Step 2, the suppression taking effect through ingest, is not built: nothing in `services/ingest` suppresses.
+  - User guide §5.2 says so. The ruling's three questions went to the orchestrator for the owner.
