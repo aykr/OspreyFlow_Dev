@@ -1,0 +1,3 @@
+make -k test on the test server at a13e9c1 (stack_lease.sh offline platform, no stack, no lease), run 20261114T001803Z-836d8353: exit 2.
+pytest: 3 failed, 13314 passed, 36 skipped, each main's own: test_guides_cloud_platform 6a8 (docs'), test_worker_isolation and test_write_store_marks (test_feed_live.py named before rules lands it; the orchestrator's and platform-b's). tests/cloud_platform_backup and tests/harness all passed.
+vitest: 377 files passed; the budget suite 1 failed, case's MatrixView.budget (opened in 2519 ms, limit 2500, under make test's load; the Matrix cases passed alone on the server earlier, run 20261114T000512Z-c10c3108).
