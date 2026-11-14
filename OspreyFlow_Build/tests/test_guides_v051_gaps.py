@@ -80,7 +80,9 @@ def test_section_14_says_how_a_shared_platform_namespace_moves_to_a_new_release(
     assert "**Moving to a new release (poc shape).** There is no separate upgrade runbook." in admin
     runbook = (CORE / "harness" / "cloud_platform" / "runbooks.py").read_text(encoding="utf-8")
     install = runbook[runbook.index("def render_install(") : runbook.index("def _seed_section(")]
-    assert 'helm upgrade --install "$RELEASE" "$CHART"' in install, "INSTALL.md moves the release with helm upgrade --install"
+    step = install[install.index("## 5. The deployment") :]
+    block = step[step.index("```bash") : step.index("```", step.index("```bash") + 7)]
+    assert 'helm upgrade --install "$RELEASE" "$CHART"' in block, "INSTALL.md's deployment step moves it with helm upgrade --install"
     assert "- **The standard shape's runbooks**, as the poc shape has." in admin, "§6a.10 still lists them as coming"
     row = "| A namespace on a shared platform (`cloud-platform`), the poc shape | As section 6a.1's *Moving to a new release* says"
     section = admin[admin.index("## 14. Updates") : admin.index("**Checking for a newer release.**")]
