@@ -1,46 +1,46 @@
-# v052-am20 (user guide 1.62, ADR-124 Amendment 20's line) red first at 89e01cd, on main 627e01e: main's guide against the branch's test, then six plants at the adapter's chunking, the query builder, the batch job's and a view's reads, and the guide's own sentence, each red in the test that holds it, then green. Each run with a fresh PYTHONPYCACHEPREFIX. The script is beside this record.
+# v052-am20 (user guide 1.63 at this branch's numbering, the orchestrator's at merge; ADR-124 Amendment 20's line) red first at 8c7b9ea, rebased on main 7407e41 (S9 landed): main's guide against the branch's test, then six plants at the adapter's chunking, the query builder, the batch job's and a view's reads, and the guide's own sentence, each red in the test that holds it, then green. Each run with a fresh PYTHONPYCACHEPREFIX. The script is beside this record.
 
 command: cd OspreyFlow_Build && python -m pytest -q -p no:cacheprovider tests/test_user_guide_am20.py
 each run: closed ports 59991-59994, no OSPREY_LANE, a fresh PYTHONPYCACHEPREFIX
 
-== main's four guides and the sites' build.py, before this branch: 1 failed, 1 passed in 1.35s
+== main's four guides and the sites' build.py, before this branch: 1 failed, 1 passed in 0.57s
    red: test_what_a_user_sees_reads_edges_among
 
 == the chunk made 50,000 [adapter.py]
    - '_ID_CHUNK = 1000'
    + '_ID_CHUNK = 50000'
-   1 failed, 1 passed in 0.62s
+   1 failed, 1 passed in 0.64s
    red: test_the_links_among_are_found_a_thousand_records_at_a_time
 
 == the ids written into the query again [adapter.py]
    - 'query = render_edges_among_gremlin(rids, self._access, principal, edge_types)'
    + 'query = render_edges_among_gremlin(chunk, self._access, principal, edge_types)'
-   1 failed, 1 passed in 0.58s
+   1 failed, 1 passed in 0.57s
    red: test_the_links_among_are_found_a_thousand_records_at_a_time
 
 == the builder's literal id list back [builders.py]
    - 'has_access = access.gremlin_has_step(principal)'
    + 'has_access = access.gremlin_has_step(principal) + f\'.has("id", within({list(record_ids)}))\''
-   1 failed, 1 passed in 0.55s
+   1 failed, 1 passed in 0.52s
    red: test_the_links_among_are_found_a_thousand_records_at_a_time
 
 == the batch job's links read another way [batch_expansion.py]
    - 'links = await graph.edges_among(node_ids, scoped) if len(node_ids) > 1 else []'
    + 'links = []'
-   1 failed, 1 passed in 0.78s
+   1 failed, 1 passed in 0.53s
    red: test_what_a_user_sees_reads_edges_among
 
 == a view's links read another way [case_views.py]
    - 'edges = await graph.edges_among([n.id for n in nodes], principal) if len(nodes) > 1 else []'
    + 'edges = []'
-   1 failed, 1 passed in 0.82s
+   1 failed, 1 passed in 0.51s
    red: test_what_a_user_sees_reads_edges_among
 
 == guide: the line struck [user-guide.md]
    - 'The links among the records are found a thousand records at a time,'
    + 'The links among the records are found,'
-   1 failed, 1 passed in 1.64s
+   1 failed, 1 passed in 0.52s
    red: test_what_a_user_sees_reads_edges_among
 
-== restored: 2 passed in 0.67s
+== restored: 2 passed in 0.50s
 each plant red in the tests that hold it: True
