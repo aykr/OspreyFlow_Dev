@@ -7,7 +7,10 @@ which nothing held, so the 1.54 rewrite left them behind (rule 12):
   Ownership, Connection strength, Matrix, Figures) puts it where `VIEW_SWITCH` or `MORE_VIEWS` does;
 - the questions panel is called by its label (`RAIL_LABELS.questions`, *Ask & Chat*), never by a name it had before
   Amendment 12 ("Questions", "Ask the case");
-- an Admin section is named as `sections.json` labels it ("Admin → Operations", never "Schedules and runs").
+- an Admin section is named as `sections.json` labels it ("Admin → Operations", never "Schedules and runs");
+- "view" means a saved view alone (ADR-145 Amendment 17, ADR-144 Amendment 6): no guide, the user guide among them,
+  names *More views*, *Views in this case*, the graph toolbar's withdrawn *Views* menu or *Clear view*, and nor does
+  the Glass, held both ways.
 """
 
 from __future__ import annotations
@@ -20,12 +23,20 @@ CORE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core"
 DOCS = CORE / "docs"
 SRC = CORE / "apps" / "workspace" / "src"
 LAYOUT = (SRC / "shell" / "railLayout.ts").read_text(encoding="utf-8")
+TOPBAR = (SRC / "shell" / "TopBar.tsx").read_text(encoding="utf-8")
+USER_GUIDE = DOCS / "user-guide.md"
 SITES_BUILD = Path(__file__).resolve().parents[1] / "marketing_site" / "sites" / "build.py"
 #: Every place held here, by name.
 GUIDES = {name: DOCS / f"{name}-guide.md" for name in ("administration", "developer", "architecture")}
 #: The names the questions panel had before Amendment 12 renamed it (ADR-145 Amendment 12: "Questions renamed").
 OLD_QUESTIONS_NAMES = ("Ask the case", "Questions panel", "Questions and Ask", "<strong>Questions.</strong>",
                        "Questions: an answer")  # the last, the questions figure's caption and alternative text
+#: The names "view" had before ADR-145 Amendment 17 kept it for saved views: the other ways to show the case, the case
+#: line's button, the graph toolbar's menu (withdrawn, ADR-144 Amendment 6) and the selection's clearing.
+OLD_VIEW_NAMES = ("More views", "Views in this case", "**Views ▾**", "**Views** menu", "Clear view",
+                  "Nothing in a view changes the case", "**Back to the case**")
+#: The same, as the Glass would draw them: a label or text on screen.
+OLD_VIEW_WORDS = ("More views", "Views in this case", "Clear view", "Nothing in a view changes the case")
 
 
 def _list(name: str) -> list[str]:
@@ -41,6 +52,8 @@ def _labels(name: str) -> dict[str, str]:
 
 
 ON_THE_RAIL = _list("ON_THE_RAIL")
+_more = re.search(r'label=\{moreOpen \? moreOpen\.label : "([^"]+)"\}', TOPBAR)
+MORE = _more.group(1) if _more else "(TopBar.tsx's More button, not found)"
 VIEW_SWITCH, MORE_VIEWS = _list("VIEW_SWITCH"), _list("MORE_VIEWS")
 RAIL_LABELS, VIEW_LABELS = _labels("RAIL_LABELS"), _labels("VIEW_LABELS")
 ADMIN_SECTIONS = [
@@ -91,6 +104,27 @@ def old_question_names(texts: dict[str, str]) -> list[str]:
     return [f"{name}: {old!r}" for name, text in places(texts).items() for old in OLD_QUESTIONS_NAMES if old in text]
 
 
+def old_view_names(texts: dict[str, str]) -> list[str]:
+    return [f"{name}: {old!r}" for name, text in places(texts).items() for old in OLD_VIEW_NAMES if old in text]
+
+
+def _screen_text(source: str) -> str:
+    """A source file without its comments: what it can put on screen, not what it says about itself."""
+    source = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
+    source = re.sub(r"\{/\*.*?\*/\}", " ", source, flags=re.DOTALL)
+    return re.sub(r"(?m)(^|[^:\"'`])//.*$", r"\1", source)
+
+
+def old_view_words_on_screen(sources: dict[str, str]) -> list[str]:
+    return [f"{name}: {old!r}" for name, source in sources.items() for old in OLD_VIEW_WORDS
+            if old in re.sub(r"\s+", " ", _screen_text(source))]  # fmt: skip
+
+
+def glass_sources() -> dict[str, str]:
+    return {p.relative_to(SRC).as_posix(): p.read_text(encoding="utf-8") for p in sorted(SRC.rglob("*.ts*"))
+            if ".test." not in p.name and "/test" not in p.as_posix()}  # fmt: skip
+
+
 def admin_sections_misnamed(texts: dict[str, str]) -> list[str]:
     """Each "Admin → X" or "Admin › X" that names no section by its label: what follows the arrow, a name (a capital
     first), must begin with one of `sections.json`'s labels. A mention inside a quotation is the code's own words,
@@ -128,6 +162,15 @@ def test_the_questions_panel_is_called_by_its_label() -> None:
     assert old_question_names(read_all()) == []
 
 
+def test_view_means_a_saved_view_in_every_guide_and_in_the_glass() -> None:
+    texts = {**read_all(), "user": USER_GUIDE.read_text(encoding="utf-8")}
+    assert old_view_names(texts) == []
+    assert old_view_words_on_screen(glass_sources()) == []
+    # The toolbar's Views menu is withdrawn: nothing draws it.
+    drawn = [n for n, s in glass_sources().items() if n != "views/ViewsMenu.tsx" and re.search(r"<ViewsMenu\b", s)]
+    assert drawn == [], drawn
+
+
 def test_each_admin_section_is_named_as_admin_labels_it() -> None:
     assert admin_sections_misnamed(read_all()) == []
 
@@ -137,10 +180,10 @@ def test_the_views_the_guides_name_are_where_the_layout_puts_them() -> None:
     text = prose(read_all()["administration"])
     assert ("dashboards" in VIEW_SWITCH) and f"the **{VIEW_LABELS['dashboards']}** view (the top bar's view switch)" in text
     assert ("strength" in MORE_VIEWS) and (
-        f"**{VIEW_LABELS['strength']}** view (the top bar's view switch, under **More views**, or in the switch itself "
+        f"**{VIEW_LABELS['strength']}** view (the top bar's view switch, under **{MORE}**, or in the switch itself "
         "for someone offered no other view, as the built-in Administrator is)" in text
     )
-    # splitViews: someone offered none of the switch's views has More views' in the switch itself.
+    # splitViews: someone offered none of the switch's views has More's in the switch itself.
     assert "return main.length > 0 ? { main, more } : { main: more, more: [] };" in LAYOUT
 
 
@@ -163,6 +206,22 @@ def test_a_panel_opener_on_the_rail_is_not_flagged() -> None:
 def test_an_old_name_for_the_questions_panel_is_flagged() -> None:
     planted = {"administration": "which also answers Ask the case and Ask to search on the local engine"}
     assert old_question_names(planted) == ["administration: 'Ask the case'"]
+
+
+def test_an_old_name_for_view_is_flagged_in_a_guide() -> None:
+    """The user guide's own words before ADR-145 Amendment 17 (§3, §5.2, §5.13)."""
+    planted = {"user": "· Views in this case · reads ‹dataset›. **Remove from view** and **Clear view** take nodes off. "
+               "**Views ▾** in the graph's toolbar, beside *Clear view*. **Ownership**, under **More views** in the Glass."}  # fmt: skip
+    assert old_view_names(planted) == ["user: 'More views'", "user: 'Views in this case'", "user: '**Views ▾**'", "user: 'Clear view'"]
+
+
+def test_an_old_name_for_view_on_screen_is_flagged_and_a_comment_is_not() -> None:
+    """Main's own code before Amendment 17: `TopBar.tsx`'s button and `ViewLensBanner.tsx`'s note."""
+    planted = {"shell/TopBar.tsx": '// under More views\n          label={moreOpen ? moreOpen.label : "More views"}',
+               "views/ViewLensBanner.tsx": '{/* Views in this case */}<span>Nothing in a view changes the case.</span>',
+               "views/ViewsPanel.tsx": "/* *Views in this case* (ADR-144) */ const x = 1;"}  # fmt: skip
+    assert old_view_words_on_screen(planted) == [
+        "shell/TopBar.tsx: 'More views'", "views/ViewLensBanner.tsx: 'Nothing in a view changes the case'"]  # fmt: skip
 
 
 def test_an_admin_section_under_an_old_name_is_flagged() -> None:
