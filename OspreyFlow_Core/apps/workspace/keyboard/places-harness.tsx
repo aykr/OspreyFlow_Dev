@@ -114,7 +114,7 @@ function Harness() {
       <TopBar
         app={place === "ingest" ? "ingest" : place === "rules" ? "rules" : "glass"}
         // `?badge=1`: Rules and Monitoring with its open count, as `App.tsx` draws it (ADR-146 decision 2).
-        places={<PlaceSwitcher places={places} current={place} onChoose={choose} counts={{ rules: params.has("badge") ? 3 : undefined }} />}
+        places={(folded) => <PlaceSwitcher folded={folded} places={places} current={place} onChoose={choose} counts={{ rules: params.has("badge") ? 3 : undefined }} />}
         // The owner's navigation decision (ADR-145 Amendment 15): the one view switch and its More views, laid out by
         // the same `splitViews` as `App.tsx`; Messages after them, as `App.tsx` adds it for a node.
         views={

@@ -421,10 +421,9 @@
    gives its colour and focus. */
 .top-bar__out { display: inline-flex; align-items: center; min-height: 24px; white-space: nowrap; font-size: var(--fs-13); color: var(--text-primary); text-decoration: underline; text-underline-offset: 2px; }
 .top-bar__out:hover { color: var(--text-primary); text-decoration-thickness: 2px; }
-/* Narrow windows (ADR-115 Amendment 2): the two lines get room above and below. */
-@media (max-width: 1099px) {
-  .top-bar { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
-}
+/* When whole items wrap even with all that folds folded (`TopBar`, `BAR_FOLD_ORDER`; ADR-115 Amendment 2), the two
+   lines get room above and below. A narrow window alone no longer means two lines: the bar folds first. */
+.top-bar--wrapped { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 .brand-mark { display: inline-flex; align-items: center; gap: var(--sp-6); flex: none; }
 .brand-mark__name { font-weight: 700; font-size: var(--fs-14); color: var(--text-primary); }
 /* A segmented control: one choice of several, current shown as current (ADR-097, review item 7). */
