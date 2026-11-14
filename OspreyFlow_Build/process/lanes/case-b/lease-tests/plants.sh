@@ -8,8 +8,10 @@ D=process/lanes/case-b/lease-tests
 T=tests/test_stack_lease.py
 ok=1
 py() { (cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q "../OspreyFlow_Build/$T" "$@" 2>&1); }
+# OspreyFlow_Core/osprey-runs/ is stack_lease.sh's own: its npm step writes <lane>.meta/npm.lock relative to the
+# copy's OspreyFlow_Core, not $HOME (reported to the orchestrator, 14 November 2026), so it is there before any step.
 stray() { # what a step left in the copy outside its own plant: nothing, or it is named
-  local left; left="$(git status --short -- .. | grep -vE ' (OspreyFlow_Build/)?(tests/test_stack_lease.py|scripts/stack_lease.sh)$' || true)"
+  local left; left="$(git status --short -- .. | grep -vE ' (OspreyFlow_Build/)?(tests/test_stack_lease.py|scripts/stack_lease.sh)$' | grep -vxF '?? ../OspreyFlow_Core/osprey-runs/' || true)"
   [ -z "$left" ] || { echo "LEFT IN THE COPY after $1:"; echo "$left"; ok=0; }
 }
 verdict() { # name, want, log, for red: the pattern every named case's failure must show
