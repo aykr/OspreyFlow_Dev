@@ -9,6 +9,11 @@
 set -uo pipefail
 HERE=../OspreyFlow_Build/process/lanes/rules/v052-load
 export PYTHONPATH=.:packages OSPREY_ANALYTICS_ENGINE=clickhouse
+# A lane stack has no identity provider, and the worker takes the API's whole config, which refuses to
+# start without a JWKS URL though the indexer never resolves a principal. A deployment always has one;
+# here a placeholder on a closed port (the orchestrator's ruling, 14 November): test-environment
+# configuration, never fetched by the indexer. The product change is a CARRIES row.
+export OIDC_JWKS_URL="${OIDC_JWKS_URL:-http://127.0.0.1:9/jwks}"
 count() { .venv/bin/python "$HERE/outbox_count.py"; }
 echo "== before ($(date -u +%FT%TZ)): $(count)"
 .venv/bin/python -m services.api.worker_main > "$HOME/osprey-load/worker.log" 2>&1 &
