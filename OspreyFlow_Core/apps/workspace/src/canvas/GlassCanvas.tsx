@@ -2446,6 +2446,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       depth = 1,
     ): Promise<void> {
       if (refusedInLens()) return;
+      // What the canvas holds as the expansion is asked for: the case's stream can draw the expansion's own
+      // add before its answer lands (the Conduit publishes as it answers), so "nothing new" is judged against
+      // this, never against the canvas as the answer finds it (found live, 14 November 2026).
+      const drawnBefore = { nodes: new Set(graph.nodes()), edges: new Set(graph.edges()) };
       let response: Response;
       try {
         response = await fetch(
@@ -2498,8 +2502,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         rootId: nodeId,
         nodeIds: (delta?.nodes ?? []).map((n) => n.id),
         edgeIds: (delta?.edges ?? []).map((e) => e.id),
-        hasNode: (id) => graph.hasNode(id),
-        hasEdge: (id) => graph.hasEdge(id),
+        hasNode: (id) => drawnBefore.nodes.has(id),
+        hasEdge: (id) => drawnBefore.edges.has(id),
         edgeType,
         edgeTypes: edgeTypesRef.current,
       });

@@ -61,6 +61,9 @@ PLANTS = [
     ("a reader's own clusters taken for a change of the resolution (the folds opened)",
      [("OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx", '      if (lastReproject?.reason === "resolution_on_entry") return;\n', "")],
      "browser", "keyboard/canvas-clusters-on-entry.spec.ts", "a fold made from a same-as link stays folded"),
+    ("'nothing new' judged against the canvas as the answer finds it (the stream drew it first; found live)",
+     [("OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx", "        hasNode: (id) => drawnBefore.nodes.has(id),\n", "        hasNode: (id) => graph.hasNode(id),\n")],
+     "browser", "keyboard/canvas-expand-stream-first.spec.ts", "nodes the stream drew first are still the expansion's own"),
 ]
 
 

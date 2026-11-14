@@ -28595,7 +28595,9 @@ rule 3), not a new choice, and told the owner it was decided. Built by the case 
   - the clusters are on the reader's own answer, never the shared stream or store;
   - an expansion that brings the other member joins them;
   - another reader's threshold move gives no cluster id through a member this one may not see, in the delta and in their
-    snapshot (the leak, planted back and shown red);
+    snapshot (the leak, planted back and shown red). Its first version moved Balanced to Strict at 0.999991, which changes
+    no cluster, so it stayed green with the old path planted back and proved nothing (rule 15). It now moves from apart at
+    Strict to merged at Balanced, and asserts the move joined them, so it cannot go vacuous again;
   - a cluster id stored before the amendment reaches no reader.
 - `tests/services/api/working_set/test_delta_projection.py`: a stored reproject reaches every reader as a marker.
 - `tests/services/api/working_set/test_resolution_threshold.py` and `test_manual_resolution.py`: each reader's clusters
@@ -28605,7 +28607,13 @@ rule 3), not a new choice, and told the owner it was decided. Built by the case 
   - *Explain cluster* is offered on a pair already merged;
   - its members are drawn on its anchor;
   - a fold stays folded.
-- The live check: `live/fixture-corp.spec.ts`'s explain case.
+- `keyboard/canvas-expand-stream-first.spec.ts`: an expansion whose add the case's stream draws before its answer
+  lands is still that expansion's own. Found by the live check: the canvas said "Nothing new" and the notice held its
+  keys, so the next menu never opened. *Nothing new* is judged against what the canvas held when the expansion was
+  asked for.
+- `test_explain_cluster_access_control.py` (against ArcadeDB): the pair is joined by a real SAME_AS. The cleared reader
+  explains both; to the reader not cleared for one, the other is in no cluster, refused as one that never existed.
+- The live check: `live/fixture-corp.spec.ts`'s explain case, which says what the Glass was sent when it fails.
 - The reds: `process/lanes/case/gates/merged_clusters_reds.py`.
 
 ### ADR-112, Amendment 6 (8 November 2026) — a right to edit a dataset's domain model, edit_target_model (D8), held by the data engineer, behind the dataset's own gate
