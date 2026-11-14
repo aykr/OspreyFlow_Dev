@@ -150,6 +150,33 @@ def test_section_9_quotes_each_entra_people_refusal() -> None:
     assert [w for w in entra_refusals() if w not in re.sub(r"\s+", " ", people)] == []
 
 
+def guide_entra_refusals(people: str) -> list[str]:
+    """The refusals §9 lists as Entra's, each quoted in brackets in its one sentence ("What Entra holds is refused
+    here, in words, …")."""
+    m = re.search(r"What Entra holds is refused here, in words, each followed by \"([^\"]+)\": (.*?)\. \*\*", people)
+    assert m, "§9's sentence listing what Entra holds"
+    return re.findall(r'\("([^"]+)"\)', m.group(2))
+
+
+def test_section_9_quotes_no_entra_refusal_the_code_does_not_raise() -> None:
+    """The other way round: a refusal the code dropped must leave the guide too (the v0.5.0 survey's gap: a
+    dashboard identity's refusal stayed in §9 after the code stopped raising it)."""
+    people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People"))
+    source = re.sub(r"\s+", " ", (CORE / "services/api/entra_people.py").read_text(encoding="utf-8"))
+    quoted = guide_entra_refusals(people)
+    assert len(quoted) >= 4
+    assert [q for q in quoted if q not in entra_refusals()] == []
+    lead = re.search(r'each followed by "([^"]+)…"', people)
+    assert lead and lead.group(1) in source, "the words each refusal opens with"
+
+
+def test_the_people_check_flags_a_refusal_the_code_no_longer_raises() -> None:
+    people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People"))
+    planted = people.replace('and joining ("', 'dashboards ("Dashboard identities are not registered on this deployment yet."), and joining ("', 1)
+    assert [q for q in guide_entra_refusals(planted) if q not in entra_refusals()] == [
+        "Dashboard identities are not registered on this deployment yet."]
+
+
 def test_the_people_check_flags_a_refusal_left_out() -> None:
     first = entra_refusals()[0]
     people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People")).replace(first, "")
