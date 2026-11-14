@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.95** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.96** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.96 | 2026-11-13 | §6a.8: what a backup set holds, as ADR-148 Amendment 13 decision 4 and the render have it: the claims part holds, in every shape, the shared volume's published pipelines, model settings and map settings with the map key file, beside the poc shape's Ingest root, and `ospreyflow-backup-claims` runs in every shape; what is not in a set, the tiles and, in the standard shape, the Ingest root on the shared volume; "the shared volume is not backed up" struck. Held by `tests/test_guides_cloud_platform.py`, which reads the rendered values. PDF made by the orchestrator at merge. |
 | 1.95 | 2026-11-13 | §6a.8: RDS's point-in-time restore of 35 days, as the Terraform renders it since ADR-148 Amendment 13, the same as the sets' 35, so every set still kept can be restored with its database; the 7 days and the older set's warning struck. Held by `tests/test_guides_cloud_platform.py`, which reads the rendered Terraform. PDF made by the orchestrator at merge. |
 | 1.94 | 2026-11-13 | The `cloud-platform` profile against the ADR-148 audit of 13 November (docs' v0.5.2 sweep, part one). §6a.7: nothing acts as its owner on Entra ID, so loads are started by hand: a pipeline's schedule and watched folder, *Run now* in Operations, `ospreyflow run`, a scheduled rule, the daily check for lapsing KYC documents, a list's refresh schedule, a watch's runs and anyone else's rules, hotlists and watches at a load, each as built, with the scheduler's own words and why they never pause a schedule; §6a.10's "marked stopped" struck, as untrue. §6a.5: one S3 read's 1,000 objects, no SSE-KMS bucket, Athena's default catalog alone. §6a.8: RDS's point-in-time restore of 7 days against the sets' 35. §6a.11: two app registrations, not one; volume encryption by the storage class, a new question. §8, §9.5, §9.11: the same Entra limit where each runs as its owner. §9: *People and roles* on Entra ID, each refusal in its own words, no administrator's fallback for clearance or unit. §10a: on a shared platform, a proxied map provider added in Admin has no way out. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 1.93 | 2026-11-13 | §6a: the least connections counted from the copies each shape renders (the owner's ruling: one Superset and one report sync in poc and development), 834 there and 918 in production, so the 1000 leaves 166 and 82 to spare. PDF reprinted alone. |
@@ -1602,16 +1603,21 @@ one real token from the organisation's development tenant is to settle each:
 
 The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buckets) are the
 platform's, under its own snapshots and versioning. **The deployment backs up what it runs itself**
-(ADR-148 Amendment 7): ArcadeDB, ClickHouse and, in the poc shape, the Ingest root's claim. **The
-shared volume, `ospreyflow-shared`, is not backed up**: it holds the settings files, the recipes
-repository and, in the standard shape, uploads and staging, so a restore brings the stores back and
-leaves it as it is, and the two can disagree. The
+(ADR-148 Amendments 7 and 13): ArcadeDB, ClickHouse and the claims part. **The claims part holds, in
+every shape, the shared volume's folders the deployment cannot make again**: the published
+pipelines (`data/recipes`), the model settings (`model-settings`) and the map settings with the map
+key file (`map-settings`, ADR-147); and, in the poc shape, the Ingest root's claim. Each is
+read-only to the backup, and the pods that mount them are writers a restore refuses to run beside.
+**Not in a set**: the rest of the shared volume, `ospreyflow-shared`: the tiles (`tiles`), made
+again, and, in the standard shape, the Ingest root (`ingest`: uploads and the drop folder), which
+there is a folder of the shared volume, not a claim of its own. A restore leaves those as they are,
+so in the standard shape an upload can disagree with the stores it brings back. The
 recovery runbook that ships with the product, `deploy/RUNBOOK.md`, has the whole procedure under *The
 `cloud-platform` profile*, with every command; this section says what it does.
 
 **Nightly, at 02:15 UTC**, whatever the cluster's time zone: the CronJob `ospreyflow-backup` (ArcadeDB's
-`BACKUP DATABASE`, then ClickHouse's `BACKUP … TO S3`) and, in the poc shape, `ospreyflow-backup-claims`
-(each claim, read-only). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by
+`BACKUP DATABASE`, then ClickHouse's `BACKUP … TO S3`) and `ospreyflow-backup-claims` (the claims part,
+in every shape: each folder and claim, read-only). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by
 their slot, and `manifest.json` last, holding each part's size and checksum and the time the set
 finished. A set without its manifest is unfinished and is never restored from. Every object is
 encrypted by the backups bucket's own KMS key (`alias/<namespace>-backups`), whose deletion its
