@@ -1,10 +1,17 @@
+head 23007ac (tree clean: 0 changes), on Darwin arm64, vitest only
 AS IT MUST BE (red): guard: main's timed cases in the parallel run
 +   "src/canvas/communityLinks.test.ts",
 +   "src/canvas/settledAnchor.test.ts",
 AS IT MUST BE (red): plant: settledAnchors 1.1 s slower, budget run alone
-AssertionError: expected 1134.887875 to be less than 1000
+AssertionError: expected 1139.306959 to be less than 1000
 AS IT MUST BE (red): plant: packBubbles 2.1 s slower, budget run alone
-AssertionError: expected 2131.797791 to be less than 2000
+AssertionError: expected 2134.3389589999997 to be less than 2000
+AS IT MUST BE (red): plant: settledAnchor.budget.test.ts deleted
+AS IT MUST BE (red): plant: communityLinks.budget.test.ts deleted
+AS IT MUST BE (red): plant: the guard's timing shape 0 left out
+AS IT MUST BE (red): plant: the guard's timing shape 1 left out
+AS IT MUST BE (red): plant: the guard's timing shape 2 left out
+AS IT MUST BE (red): plant: the guard's timing shape 3 left out
 AS IT MUST BE (green): unplanted: the guard and the two ordinary files
 AS IT MUST BE (green): unplanted: the budget run
  Test Files  3 passed (3)

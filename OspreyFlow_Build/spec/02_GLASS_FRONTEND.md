@@ -1950,6 +1950,15 @@ threshold; edge rendering with level-of-detail so that below a zoom threshold on
 the strength filter draw; the working set streamed as deltas so the first meaningful frame does
 not wait for the whole payload.
 
+A unit test that times code — §5's budgets in jsdom, or a limit beside them such as
+`settledAnchors` over the fixture in under a second — is written in a `*.budget.test.*` file
+under `apps/workspace/src/`, which `npm test` runs after the rest, one file at a time. Timed in
+the parallel run, it measures its neighbours: `MatrixView`'s first frame read 3.2–3.4 s there
+against about 1.2 s alone, and `settledAnchors` 1535 ms against its 1000 ms in `make test` on a
+loaded server. Moving a timed case to the budget run never changes its limit.
+`src/testing/budgetRun.test.ts` fails for a timed case left in an ordinary test file under any
+folder the parallel run reads.
+
 ## 6. Accessibility floor
 
 Not negotiable and cheaper to build in than to retrofit.
@@ -1999,7 +2008,7 @@ since ADR-145 Amendment 2 — open to anyone who
   `src/matrix/MatrixView.test.tsx`, `src/App.matrix.test.tsx`, `src/matrix/MatrixView.budget.test.tsx`
   (timed alone, after the rest of `npm test`, by `vitest.budget.config.ts`: beside 369 other files it
   read 3.2–3.4 s where alone it reads about 1.2 s, a measure of its neighbours, not of the view;
-  `src/testing/budgetRun.test.ts` fails if a budget file is left in the parallel run or in neither)
+  `src/testing/budgetRun.test.ts` fails if a budget file is left in the parallel run or in neither, or a timed case is written in an ordinary test file)
   and `a11y/every-harness.spec.ts`'s scans of `keyboard/matrix-harness.html`. What the canvas alone
   holds — a folded group, a link hidden from the view, a type left out from the legend, the
   resolution clusters drawn as one — the Matrix does not reflect: it lists the working set.

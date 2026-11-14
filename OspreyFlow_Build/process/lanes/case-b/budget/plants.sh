@@ -15,6 +15,7 @@ verdict() { # name, want (red|green), log, the line that makes it red
 }
 run() { (cd $W && npx vitest run "$@" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'); }
 L=$(mktemp)
+echo "head $(git rev-parse --short HEAD) (tree clean: $(git status --short $W | wc -l | tr -d ' ') changes), on $(uname -sm), vitest only"
 
 # 1. The guard, against main's tree: the two timed cases back in their ordinary files.
 git show main:$W/src/canvas/settledAnchor.test.ts > $W/src/canvas/settledAnchor.test.ts
@@ -27,7 +28,8 @@ git checkout -q HEAD -- $W/src/canvas/settledAnchor.test.ts $W/src/canvas/commun
 # 2. settledAnchors made slow (1.1 s more than it takes): its budget file red, run alone in the budget run.
 python3 - "$W/src/canvas/settledAnchor.ts" <<'PY'
 import sys; p=sys.argv[1]; s=open(p).read()
-s=s.replace("  const anchors = new Map<string, string>();", "  const anchors = new Map<string, string>();\n  for (const t = performance.now(); performance.now() - t < 1100; );", 1)
+a="  const anchors = new Map<string, string>();"; assert a in s, "settledAnchors anchor not found"
+s=s.replace(a, a+"\n  for (const t = performance.now(); performance.now() - t < 1100; );", 1)
 open(p,"w").write(s)
 PY
 run --config vitest.budget.config.ts src/canvas/settledAnchor.budget.test.ts > $L
@@ -46,6 +48,29 @@ run --config vitest.budget.config.ts src/canvas/communityLinks.budget.test.ts > 
 verdict "plant: packBubbles 2.1 s slower, budget run alone" red $L "expected .* to be less than 2000"
 grep -m1 -E "expected .* to be less than" $L
 git checkout -q HEAD -- $W/src/canvas/layoutModes.ts
+
+# 3b. A budget file deleted: the case naming every budget file red (its timed case left both runs).
+for f in settledAnchor communityLinks; do
+  rm $W/src/canvas/$f.budget.test.ts
+  run src/testing/budgetRun.test.ts > $L
+  verdict "plant: $f.budget.test.ts deleted" red $L "FAIL .*names every budget file under src/"
+  git checkout -q HEAD -- $W/src/canvas/$f.budget.test.ts
+done
+
+# 3c. Each shape the guard reads as timing removed in turn: the shapes case red by its own assertion.
+for i in 0 1 2 3; do
+  python3 - "$W/src/testing/budgetRun.test.ts" $i <<'PY'
+import sys,re; p,i=sys.argv[1],int(sys.argv[2]); s=open(p).read()
+a=s.index("const TIMES_SOMETHING = ["); b=s.index("];",a)
+lines=s[a:b].split("\n"); pats=[k for k,l in enumerate(lines) if l.strip().startswith("/")]
+assert len(pats)==4, pats
+lines[pats[i]]="  /(?!)/,"
+s=s[:a]+"\n".join(lines)+s[b:]; open(p,"w").write(s)
+PY
+  run src/testing/budgetRun.test.ts > $L
+  verdict "plant: the guard's timing shape $i left out" red $L "FAIL .*finds a timed case in an ordinary test file"
+  git checkout -q HEAD -- $W/src/testing/budgetRun.test.ts
+done
 
 # 4. Unplanted: both runs green.
 run src/testing/budgetRun.test.ts src/canvas/settledAnchor.test.ts src/canvas/communityLinks.test.ts > $L
