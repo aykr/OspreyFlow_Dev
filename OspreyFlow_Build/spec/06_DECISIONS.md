@@ -5331,6 +5331,14 @@ subject to revisiting after their own usability walkthrough, and it is written d
 state deliberately rather than held back until it firms up, because a ruling that lives only in a
 conversation is lost by the next session (standing rule 11).**
 
+**Confirmed, 14 November 2026 (the owner, at v0.5.2's step 5 wording sweep): R7 is no longer tentative.**
+- **Step 1, the mark, stays as built:** *Mark for suppression* in the node menu, reversible, with its reason, never a
+  graph write. The user guide says what it does in plain words (§5.2: a mark hides nothing and changes no record, and
+  the suppression itself is not built), held by `tests/test_guides_step5_freeze.py`.
+- **Step 2 is not in v0.5.2.** The suppression taking effect when its evidence arrives through the Ingest Studio gets
+  an ADR of its own after the cut, which makes the two decisions this addendum names below first: ingest made able to
+  supersede a record, and the retraction record's type.
+
 **What produced it.** Running Scenario A against a rendered deployment through the analyst's own
 door for the first time (`tests/scenarios/test_phase8_exit_over_the_wire.py`, owner ruling R5)
 found a composition neither rule showed on its own:
