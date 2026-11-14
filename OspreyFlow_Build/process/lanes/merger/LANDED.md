@@ -1,6 +1,9 @@
 # Merges the merger prepared (ADR-142 Amendment 7)
 
-One line per merge commit the merger built, written inside that commit: `<main parent> <lane head> <lane> <step>`.
+One line per merge commit the merger built, written inside that commit: `<main parent> <lane head> <lane> <step>`,
+and, when the merge finishes the step, `done` after it (the step exactly as progress.tsv names it; tab-separated
+where the step has a space). The heartbeat reads a step as done from such a line (lanes_heartbeat.sh read_git);
+a part's merge, without `done`, is not read.
 A commit cannot hold its own hash, so the merge is named by its two parents. `git log --first-parent main`
 shows it as the one merge commit whose parents are exactly these; the merger's "land" message gives its hash.
 
@@ -163,3 +166,9 @@ eb7ae78 f5999bf
 41c17fd 84a0a07 platform v052-fallback-words
 02c874e 356c932 case-b v052-batch-panel v052-suppress-words v052-group-counts
 c1b5d0d bcd7215 studio v052-suggest
+bb8bf66 0d8c586 platform-b v052-signin-words
+579af5d 9e827ab rules v052-measure-m10
+d01fb5e 0730d56 case v052-tidy
+e4f322c 4703c3e platform-b v052-attribution
+41428c0 415ec6b case-b v052-batch-panel v052-help-everywhere
+20546e1 e508055 platform-b v052-version

@@ -1,0 +1,11 @@
+# plants.py at 544b737, 2026-11-14T15:02:12Z, offline on the Mac (closed ports, slot 9, no stack)
+built: GREEN - 12 passed in 1.74s
+S1 the part-cleared's unit not checked against the measure case's (m10-part of unit-records let through): RED - FAILED ../OspreyFlow_Build/tests/test_client_size_leaks.py::test_a_part_cleared_subject_of_another_unit_than_the_case_is_refused | 1 failed in 1.05s
+S2 a leak control's unit not checked against the case's (unit-fiu on the unit-intel case let through): RED - FAILED ../OspreyFlow_Build/tests/test_client_size_leaks.py::test_a_leak_control_of_another_unit_than_the_case_is_refused | 1 failed in 1.10s
+S3 a never-join control's unit not checked against the partner case's: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_leaks.py::test_a_never_join_control_of_another_unit_than_the_partners_case_is_refused | 1 failed in 1.08s
+S4 the control drawn as before: the first cleared subject who may read the record, of any unit (red at the build: the check refuses the case before anything is written): RED - 1 error in 1.02s
+S5 a record no one who opens the case reads given no count (kept out silently): RED - FAILED ../OspreyFlow_Build/tests/test_client_size_leaks.py::test_a_restricted_record_of_another_unit_is_kept_out_and_counted | 1 failed in 1.10s
+S6 m10-part of unit-records as before, not the measure case's unit (red at the build, as S4): RED - 1 error in 1.01s
+restored: GREEN - 12 passed in 1.75s
+exit=0
+# S4 and S6 error at the module's 'made' fixture: client_size_leaks.main raises LeakCaseRefused ("... is of unit-border/unit-records, and the case it searches is unit-intel's: the case is opened only to its own unit ..."), so the generator's old shape is refused before anything is written.

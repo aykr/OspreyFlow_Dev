@@ -1,0 +1,14 @@
+--- a/OspreyFlow_Build/process/lanes/merger/BRIEF.md
++++ b/OspreyFlow_Build/process/lanes/merger/BRIEF.md
+@@ -40,7 +40,10 @@
+ 5. In the same commit, update `process/lanes/progress.tsv` (column 4 exactly `done`, the hash in the description),
+    `estimates.tsv` (rewrite its `# as of` line) and `CARRIES.md` (the step's carries). Commit as
+    `merge(lane/<lane>): <step>, <summary> (<head>)`.
+-6. Append a line to `process/lanes/merger/LANDED.md` in the commit: `<merge commit> <main parent> <lane> <step>`.
++6. Append a line to `process/lanes/merger/LANDED.md` in the commit: `<merge commit> <main parent> <lane> <step>`,
++   with `done` after the step when this merge finishes it. The step is progress.tsv's own id, and the line is
++   tab-separated where that id has a space. The heartbeat reads the step as done from it (lanes_heartbeat.sh
++   read_git).
+ 7. Message the orchestrator (uds:/tmp/cc-socks/14277.sock): "land <merge commit> on <main parent>, <lane> <step>".
+    If it says main has moved, rebuild on the new main. Re-run `make -k ci` on the server only if the new main
+    commits touch more than `spec/` and `process/`.

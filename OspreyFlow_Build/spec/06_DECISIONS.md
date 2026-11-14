@@ -37234,6 +37234,46 @@ at or above each shape's least, the runbook's `db_parameter` line and headroom).
 Superset's term or the upgrade's term dropped from `connections.py`: `process/lanes/platform/poc-rds/red-1000.txt`. Not run against a real RDS: R1's PostgreSQL was a
 stand-in on kind.
 
+### ADR-114, Amendment 47 (14 November 2026) — The version a deployment shows is the code's own
+
+*v0.5.2 (the orchestrator's assignment V, 14 November; design approved the same day). By platform-b. CARRIES 218.*
+
+**Context.** The demo rebuild of 12 November copied main's code into `/opt/ospreyflow`, whose `.git` still sat on
+v0.5.0's tag (2be985a). Every version the deployment shows came from that `.git`, not from the code: glass.json's
+`version` (the welcome page's footer, `harness.site.deployment_version`, `git_sha()[:7]`), and
+`OSPREY_RELEASE_VERSION` (Admin › System, the OpenAPI document and the update check, `harness.release.checkout_version`,
+the tag HEAD sits on). So a copy of newer code named itself v0.5.0. The source tree carried no version of its own
+(`pyproject.toml` and `package.json` say 0.0.0).
+
+**Decisions.**
+1. **The code carries its version**: `OspreyFlow_Core/VERSION`, one line, the release this code is (`v0.5.2`) or
+   the release it is heading to (`v0.5.2-dev`). Main lands at `v0.5.2-dev`.
+2. **The shown version is read from it before `.git`** (`checkout_version`, which glass.json's `version` and
+   `OSPREY_RELEASE_VERSION` now both use, from the same code folder, `components.source_path` when declared): a
+   release in VERSION is that release; a `-dev` VERSION with `.git`'s tree the code's (no tracked file under the
+   code changed since HEAD; untracked files, a deployment's own, do not count) is the tag HEAD sits on, else
+   `dev-<short commit>`, as before; otherwise VERSION's own text (`v0.5.2-dev`), never the older `.git`'s commit.
+   A tree with no VERSION file (an older release's checkout) is read from `.git` alone, as before. A malformed
+   VERSION is never shown; it is read as absent.
+3. **Image tags and `versions.lock` are unchanged**: they keep `git_sha()`, the commit CI built the images from,
+   which a pull-mode render must match. Backup set names keep it too (point 6).
+4. **The cut sets VERSION to the tag in the candidate commit**, and main moves to the next `-dev` afterwards.
+   `release.yml` refuses a tag that differs from VERSION; that file is the owner's, so the change is a diff
+   (`process/lanes/platform-b/v052-codeversion/release_yml.diff`), its check shown red and green in bash.
+5. **The committed VERSION is held well formed by `tests/test_version_file.py`**, which CI's test job runs: one
+   line, a release or a `-dev`. (Not a `make ci` target: a Makefile change is outside the owner's standing word.)
+6. **Not changed: backup set names** (`<stamp>-<deployment>-<commit>`). `harness.backup.SET_NAME` and
+   `ospreyflow doctor`'s copy read the last dash-separated part as the commit, so a version with a dot or a dash
+   there would misread the deployment's name, and existing sets must keep parsing. Carried on CARRIES 218.
+
+**Tests** (rule 12; `process/lanes/platform-b/v052-codeversion/red-first.txt` has every plant red):
+`tests/harness/test_code_version.py`, each a real git checkout: a v0.5.0 `.git` under newer code (a release and a
+`-dev`) shows the code's version in `checkout_version`, glass.json's `deployment_version` and the render's
+`release_version`, never the tag or the commit; a release checkout is its release; a clean `-dev` checkout is
+`dev-<commit>`; changed code is VERSION's `-dev`; on a `-dev` checkout untracked files leave the commit believed;
+no `.git` is VERSION; no VERSION is `.git`'s answer; a malformed VERSION is never shown.
+`tests/test_version_file.py`: a malformed VERSION is flagged; the repository's own is well formed.
+
 ### ADR-148, Amendment 10 (13 November 2026) — Dashboard identities and the report sync on Entra ID
 
 Status: decided by the owner (13 November 2026, v0.5.2: Superset and report sync on the client's cloud-platform poc),
@@ -38945,7 +38985,9 @@ audience check, in no words a person could act on, and INSTALL's section 8 left 
 1. **The Conduit says the mismatch in words** (`principal_auth.TokenVersionMismatch`, a `PrincipalResolutionError`, 401):
    "the API's app registration issues v1.0 access tokens (issuer …), and this deployment expects v2.0
    (cloud_platform.claims.token_version: "2.0"): set requestedAccessTokenVersion to 2 in the API registration's
-   manifest, or set token_version to "1.0" in osprey.yaml and render again", and the reverse.
+   manifest, or set token_version to "1.0" in osprey.yaml and render again", and the reverse. The words are in
+   the 401's `detail` and the Conduit's log, and the Glass's sign-in page shows them (point 6). *(Edited by point 6:
+   this said the page did not show them, carried as a defect a user can see.)*
 2. **Only a token the tenant signed reaches the words, and none is let in by them.** When an Entra token is
    refused, its signature is checked again with the tenant's key, issuer and audience aside, and the words are given
    only for this tenant's own issuer in the other version's form (`https://sts.windows.net/<tid>/` for v1.0,
@@ -38959,6 +39001,14 @@ audience check, in no words a person could act on, and INSTALL's section 8 left 
 5. **R1's Entra stand-in can issue v1.0 access tokens** (`api.access_token_version: "1.0"`, as Entra does for a
    registration at null or 1: issuer sts.windows.net, `ver` 1.0, the application id URI as audience, `appid`).
    This is platform's file, sent as a diff (`process/lanes/platform-b/v052-tokver/standin_v1.diff`).
+6. **The Glass's sign-in page shows the Conduit's words for the three refusals a person can act on** (added 14
+   November, the orchestrator's assignment, v0.5.2): this one, a value the administrator has not set yet (Amendment
+   15) and a guest while guests are not admitted (Amendment 17). Each `PrincipalResolutionError` of those kinds
+   carries a stable tag (`TokenVersionMismatch.error = "token_version"`, `AccessNotSet`'s `"access_not_set"`,
+   `GuestNotAdmitted`'s `"guest_not_admitted"`), and the Conduit's 401 for it is `{"detail": …, "error": <tag>}`.
+   The Glass (`apps/workspace/src/auth/refusalWords.ts`) shows `detail` for a 401 carrying one of those tags and no
+   other; every other refusal keeps the general words, and the disabled account its own (Amendment 8), its 401
+   unchanged. Before this the page showed the general words for all three.
 
 **Tests** (rule 12; `process/lanes/platform-b/v052-tokver/conduit-red-first.txt` has every plant red):
 - `tests/services/api/test_auth_entra_token_version.py`: both directions refused in words; each version's own
@@ -38969,6 +39019,12 @@ audience check, in no words a person could act on, and INSTALL's section 8 left 
   refusal; this test found it.
 - `process/lanes/platform-b/v052-tokver/test_standin_v1.py`: the stand-in, patched, issuing v1.0, with a real
   Glass sign-in's token refused in the words and the same sign-in at v2.0 resolving.
+- Point 6: `tests/services/api/test_sign_in_refusal_tags.py` (each refusal, the real resolver's through the real
+  app's `/v1/me`, carries its tag; another key's token and a disabled account carry none; the Glass's list of tags
+  equals the Conduit's), `apps/workspace/src/auth/refusalWords.test.ts` (each tag's words; none for an untagged 401,
+  an unknown tag, another status, no words or no readable body; the body left for the disabled check) and
+  `App.test.tsx` (each tag's words on the sign-in page, not the general ones; the same words untagged are not
+  shown). Red first and planted per tag on each side: `process/lanes/platform-b/v052-signinwords/red-first.txt`.
 
 **Consequences.**
 - Not measured: whether Entra serves a v1.0 token's signing key in the v2.0 key set the Conduit reads. In practice

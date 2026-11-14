@@ -4,8 +4,11 @@ Offline, on a tiny generated set: every leak case hides a record from the part-c
 that its control reads, by the product's own rule (`principal_may_read`); a case that would pass by
 proving nothing (a visible record called hidden, a control that cannot read it) is refused before
 anything is written; every never-join case joins a visible record of the measure case to a record
-of another dataset. Red first (rule 15): a generator letting a visible-visible pair through, or a
-control of the wrong unit, is refused by the check.
+of another dataset; and every subject is of the unit of the case it searches, since the Conduit
+opens a case only to its own unit (`services/api/investigations.py`). Red first (rule 15): a
+generator letting a visible-visible pair through, a control that cannot read its record, or a
+subject of another unit than its case's (step 4's first M10 run on stack d: every case refused 404),
+is refused by the check.
 """
 
 from __future__ import annotations
@@ -48,7 +51,10 @@ def made(folder: Path, tmp_path_factory: pytest.TempPathFactory) -> dict[str, An
 
 def _world(folder: Path) -> tuple[dict[str, leaks.Record], dict[str, Any]]:
     case_records = leaks.records(folder, "intel")
-    return case_records, leaks.subjects(next(iter(case_records.values())).dataset)
+    return case_records, leaks.subjects("cs-intel", leaks.case_units(folder))
+
+
+INTEL = leaks.cleared_name("unit-intel")
 
 
 def test_each_leak_case_hides_its_record_from_the_part_cleared_and_its_control_reads_it(
@@ -63,13 +69,34 @@ def test_each_leak_case_hides_its_record_from_the_part_cleared_and_its_control_r
         assert case["never_ids"] == [record.id] and case["query"]
 
 
-def test_a_restricted_records_control_is_its_own_units(folder: Path, made: dict[str, Any]) -> None:
+def test_every_subject_is_of_the_unit_of_the_case_it_searches(
+    folder: Path, made: dict[str, Any]
+) -> None:
+    _case_records, people = _world(folder)
+    units = leaks.case_units(folder)
+    assert units["cs-intel"] == "unit-intel" and people[leaks.PART].org_unit == "unit-intel"
+    assert {c["control"] for c in made["leaks"]} == {INTEL}
+    others = leaks.records(folder, only={c["hidden"] for c in made["never_join"]})
+    for case in made["never_join"]:
+        assert people[case["control"]].org_unit == units[others[case["hidden"]].dataset]
+    subjects = made["counts"]["subjects"]
+    assert subjects[leaks.PART] == {"clearance": "OFFICIAL-SENSITIVE", "org_unit": "unit-intel",
+                                    "codes": ["P", "C"]}  # fmt: skip
+    controls = {c["control"] for c in (*made["leaks"], *made["never_join"])}
+    assert set(subjects) == {leaks.PART, *controls}
+
+
+def test_a_restricted_record_of_another_unit_is_kept_out_and_counted(
+    folder: Path, made: dict[str, Any]
+) -> None:
+    """The intelligence reports' SECRET/R reports are unit-intel-covert's: nobody who opens the
+    unit-intel case reads them, so they are no case, and the count says so."""
     case_records, _people = _world(folder)
-    restricted = [
-        c for c in made["leaks"] if case_records[c["hidden"]].handling.handling_code == "R"
-    ]
+    assert not [c for c in made["leaks"] if case_records[c["hidden"]].handling.handling_code == "R"]
+    restricted = sum(1 for r in case_records.values()
+                     if r.handling.handling_code == "R" and r.words)  # fmt: skip
     assert restricted, "the set has SECRET/R reports of unit-intel-covert"
-    assert {c["control"] for c in restricted} == {"m10-cleared-unit-intel-covert"}
+    assert made["counts"]["leaks_kept_out"] == {"SECRET/R unit-intel-covert": restricted}
 
 
 def test_each_never_join_case_joins_a_visible_record_to_another_datasets(
@@ -99,37 +126,81 @@ def test_a_visible_visible_pair_is_refused(folder: Path) -> None:
     proving nothing; the check refuses it."""
     case_records, people = _world(folder)
     visible = next(r for r in case_records.values() if leaks.may_read(people[leaks.PART], r))
-    case = {"name": "planted", "hidden": visible.id, "control": "m10-cleared-unit-fiu"}
+    case = {"name": "planted", "hidden": visible.id, "control": INTEL}
     with pytest.raises(leaks.LeakCaseRefused, match="hides nothing"):
-        leaks.check_leaks([case], case_records, people)
+        leaks.check_leaks([case], case_records, people, "unit-intel")
 
 
 def test_a_control_that_cannot_read_its_record_is_refused(folder: Path) -> None:
     case_records, people = _world(folder)
     covert = next(r for r in case_records.values() if r.handling.handling_code == "R")
-    case = {"name": "planted", "hidden": covert.id, "control": "m10-cleared-unit-fiu"}
+    case = {"name": "planted", "hidden": covert.id, "control": INTEL}
     with pytest.raises(leaks.LeakCaseRefused, match="cannot read it"):
-        leaks.check_leaks([case], case_records, people)
+        leaks.check_leaks([case], case_records, people, "unit-intel")
 
 
 def test_a_never_join_pair_inside_one_dataset_is_refused(folder: Path) -> None:
     case_records, people = _world(folder)
     two = [r.id for r in case_records.values() if leaks.may_read(people[leaks.PART], r)][:2]
-    case = {"name": "planted", "visible": two[0], "hidden": two[1],
-            "control": "m10-cleared-unit-fiu"}  # fmt: skip
+    case = {"name": "planted", "visible": two[0], "hidden": two[1], "control": INTEL}
     with pytest.raises(leaks.LeakCaseRefused, match="both records"):
-        leaks.check_never_join([case], case_records, people, case_records)
+        leaks.check_never_join(
+            [case], case_records, people, case_records, leaks.case_units(folder), "cs-intel"
+        )
 
 
 def test_a_never_join_control_that_cannot_read_the_partner_in_its_case_is_refused(
     folder: Path, made: dict[str, Any]
 ) -> None:
-    """Red first: a control of the wrong unit for a restricted partner shows no reach."""
+    """Red first: a control of the partner's case's unit not cleared for its code shows no reach."""
     case_records, people = _world(folder)
     others = leaks.records(folder, only={c["hidden"] for c in made["never_join"]})
     restricted = next(
         c for c in made["never_join"] if others[c["hidden"]].handling.handling_code == "R"
     )
-    wrong = next(n for n in people if n.startswith("m10-cleared") and n != restricted["control"])
+    control = people[restricted["control"]]
+    uncleared = {
+        **people,
+        control.id: control.model_copy(update={"receivable_handling_codes": ["P", "C"]}),
+    }
     with pytest.raises(leaks.LeakCaseRefused, match="cannot read it in its own case"):
-        leaks.check_never_join([{**restricted, "control": wrong}], case_records, people, others)
+        leaks.check_never_join(
+            [restricted], case_records, uncleared, others, leaks.case_units(folder), "cs-intel"
+        )
+
+
+def test_a_leak_control_of_another_unit_than_the_case_is_refused(
+    folder: Path, made: dict[str, Any]
+) -> None:
+    """Red first, the shape the generator emitted before: a SECRET/C report of the unit-intel case
+    controlled by unit-fiu's cleared subject, which may read the record but cannot open the case."""
+    case_records, people = _world(folder)
+    case = {**made["leaks"][0], "control": leaks.cleared_name("unit-fiu")}
+    assert leaks.may_read(people[case["control"]], case_records[case["hidden"]])
+    with pytest.raises(leaks.LeakCaseRefused, match="opened only to its own unit"):
+        leaks.check_leaks([case], case_records, people, "unit-intel")
+
+
+def test_a_never_join_control_of_another_unit_than_the_partners_case_is_refused(
+    folder: Path, made: dict[str, Any]
+) -> None:
+    """Red first: a cs-calls partner (unit-comms' case) controlled by unit-fiu, as before."""
+    case_records, people = _world(folder)
+    others = leaks.records(folder, only={c["hidden"] for c in made["never_join"]})
+    calls = next(c for c in made["never_join"] if others[c["hidden"]].dataset == "cs-calls")
+    planted = {**calls, "control": leaks.cleared_name("unit-fiu")}
+    with pytest.raises(leaks.LeakCaseRefused, match="opened only to its own unit"):
+        leaks.check_never_join(
+            [planted], case_records, people, others, leaks.case_units(folder), "cs-intel"
+        )
+
+
+def test_a_part_cleared_subject_of_another_unit_than_the_case_is_refused(
+    folder: Path, made: dict[str, Any]
+) -> None:
+    """Red first: m10-part of unit-records, as before, cannot open the unit-intel case."""
+    case_records, people = _world(folder)
+    part = people[leaks.PART].model_copy(update={"org_unit": "unit-records"})
+    with pytest.raises(leaks.LeakCaseRefused, match="the part-cleared m10-part is of unit-records"):
+        leaks.check_leaks(made["leaks"][:1], case_records, {**people, leaks.PART: part},
+                          "unit-intel")  # fmt: skip

@@ -34,6 +34,7 @@ import { installUnauthorisedWatch } from "./auth/unauthorised";
 import { SessionPrompt } from "./auth/SessionPrompt";
 import { createTokenRenewal, type RenewedUser, type TokenRenewal, watchActivity } from "./auth/tokenRenewal";
 import { DISABLED_ACCOUNT_WORDS, isDisabledRefusal } from "./auth/disabledAccount";
+import { actionableRefusalWords } from "./auth/refusalWords";
 import { SignInScreen } from "./auth/SignInScreen";
 import { deploymentMarking, deploymentReportsUrl, deploymentWelcome } from "./auth/oidcConfig";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
@@ -243,6 +244,21 @@ const GEO_BIN_PRECISION = 8;
 
 // Precedence logic (URL param → sessionStorage → create new) lives in
 // `investigation/investigationId.ts`, not here — see that module's own docstring.
+
+/** Asks again, waiting longer each time (1 s, then twice as long, at most 30 s), until `ask` answers or
+ * `stopped()`; `undefined` once stopped. A read the session cannot do without (the ontology) is never
+ * given up on after one failure. */
+async function untilAnswered<T>(ask: () => Promise<T>, stopped: () => boolean): Promise<T | undefined> {
+  for (let wait = 1000; ; wait = Math.min(wait * 2, 30_000)) {
+    if (stopped()) return undefined;
+    try {
+      return await ask();
+    } catch {
+      // Asked again after the wait.
+    }
+    await new Promise((resolve) => setTimeout(resolve, wait));
+  }
+}
 
 export function App() {
   const workingSetRef = useRef(createWorkingSet());
@@ -525,11 +541,14 @@ export function App() {
     if (isDevBypass) return false;
     // ADR-148 Amendment 8: disabled in this deployment, said only when the Conduit says so; no
     // renewal is tried, since Entra would sign them in again to the same refusal.
-    if (refusal && (await isDisabledRefusal(refusal))) {
+    // ADR-148 Amendments 15, 17, 18: a refusal tagged as one the person can act on, in the Conduit's words.
+    const words = refusal ? ((await actionableRefusalWords(refusal)) ??
+      ((await isDisabledRefusal(refusal)) ? DISABLED_ACCOUNT_WORDS : null)) : null;
+    if (words !== null) {
       unauthenticatedHandledRef.current = true;
       setBearerToken("");
       setSession(null);
-      setSignInReason(DISABLED_ACCOUNT_WORDS);
+      setSignInReason(words);
       return false;
     }
     if (!hasResolvedAPrincipalOnceRef.current) {
@@ -1188,25 +1207,29 @@ export function App() {
     // supplies it), and every effect below that reaches `/v1` is gated on it for exactly that
     // reason — this one first, since it is the earliest bootstrap call in the component.
     if (!bearerToken) return;
-    void fetchOntologyRegistry(API_BASE_URL, bearerToken).then((registry) => {
-      setOntology(registry);
+    // The case's ontology is asked again until it answers: read once, a failed read (a dropped
+    // connection, a Conduit restarting or busy) left the Query builder panel and the canvas's link
+    // types absent for the whole session (found live, 14 November 2026; `App.ontologyRetry.test.tsx`).
+    let stopped = false;
+    void untilAnswered(() => fetchOntologyRegistry(API_BASE_URL, bearerToken), () => stopped).then((registry) => {
+      if (registry && !stopped) setOntology(registry);
     });
-    void fetch(`${API_BASE_URL}/v1/ontology`, {
-      headers: { Authorization: `Bearer ${bearerToken}` },
-    })
-      .then((r) => {
-        if (r.status === 401) {
-          handleUnauthenticatedResponse();
-          return null;
-        }
-        hasResolvedAPrincipalOnceRef.current = true;
-        return r.json();
-      })
-      .then((schema: OntologySchema | null) => {
-        if (!schema) return;
-        setEdgeTypes(schema.edge_types);
-        setOntologySchema(schema);
+    void untilAnswered(async () => {
+      const r = await fetch(`${API_BASE_URL}/v1/ontology`, {
+        headers: { Authorization: `Bearer ${bearerToken}` },
       });
+      if (r.status === 401) {
+        handleUnauthenticatedResponse();
+        return null;
+      }
+      if (!r.ok) throw new Error(`GET /v1/ontology failed: ${r.status}`);
+      hasResolvedAPrincipalOnceRef.current = true;
+      return (await r.json()) as OntologySchema;
+    }, () => stopped).then((schema) => {
+      if (!schema || stopped) return;
+      setEdgeTypes(schema.edge_types);
+      setOntologySchema(schema);
+    });
     void fetchMapConfig(API_BASE_URL, bearerToken).then(setMapConfig);
     fetchHandlingScheme(API_BASE_URL, bearerToken)
       .then((scheme) => {
@@ -1214,6 +1237,9 @@ export function App() {
         setHandlingScheme(scheme);
       })
       .catch(() => setClassificationOrder([]));
+    return () => {
+      stopped = true;
+    };
   }, [bearerToken, handleUnauthenticatedResponse]);
 
   useEffect(() => {
@@ -2685,10 +2711,12 @@ export function App() {
         />
       )}
       {/* ADR-151, spec 02 §3.1h: the batch job's panel is at the canvas's foot, on the Graph alone. Elsewhere in the case
-          (Reports, the Studio, the Map) it is hidden, not taken away, so it goes on following its job, and is there
-          again, as it was, on the way back to the canvas; the job itself runs on the server either way. */}
+          (Reports, the Studio, the Map, the search results, a document read full screen) it is hidden, not taken
+          away, so it goes on following its job, and is there again on the way back to the canvas. Where the App
+          draws another tree (Home, Admin, All cases) the panel goes, and the job it started is kept here, so the
+          panel drawn again follows it rather than starting another; the job runs on the server either way. */}
       {bearerToken && batchExpansion.asked && (
-        <div hidden={view !== "graph"}>
+        <div hidden={view !== "graph" || searching !== null || readerDocumentId !== null}>
           <BatchExpansion
             key={batchExpansion.asked.n}
             request={batchExpansion.asked.request}
@@ -2697,6 +2725,8 @@ export function App() {
             investigationId={batchExpansion.asked.caseId}
             // *Try the batch job again* only where a batch job may be chosen: not while a view is open.
             mayStartAgain={lens === null}
+            startedJob={batchExpansion.asked.job ?? null}
+            onJobStarted={(job) => batchExpansion.started(batchExpansion.asked!.n, job)}
             // Opened as any view is (`openLens`: the latest view asked for wins); a problem is the panel's to say.
             onOpenView={async (viewId) => {
               setViewsRead((n) => n + 1);

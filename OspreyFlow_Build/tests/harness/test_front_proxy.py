@@ -29,11 +29,13 @@ from __future__ import annotations
 
 import json
 import socket
+from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
 from harness import site
+from harness.release import checkout_version
 from harness.render import render
 
 from schemas.deployment import OspreyConfig
@@ -203,7 +205,8 @@ def test_the_welcome_page_learns_its_sign_in_about_and_links_from_the_deployment
     assert settings["welcome"] == {"about": False, "links": {"account_help": "https://help.acme.test/osprey"}}
     with pytest.raises(ValueError, match="privacy"):
         _render(welcome={"privacy": "javascript:alert(1)"})
-    assert len(site.deployment_version()) >= 7
+    # The code's version (ADR-114 Amendment 47): a release ("v0.5.2", six characters) is as good as a commit.
+    assert site.deployment_version() == checkout_version(Path(site.__file__).resolve().parents[1])
 
 
 def test_superset_origins_are_the_derived_names() -> None:

@@ -1,0 +1,33 @@
+case-b, the orchestrator's go (14 Nov 2026): one batch job on a lite Conduit, stack b, branch head 00a18b8
+
+Test stack b's Postgres (osprey-test-b-pg): max_connections 400.
+Test stack b up for case-b: osprey-test-b-arcadedb osprey-test-b-pg osprey-test-b-valkey osprey-test-b-objectstore osprey-test-b-clickhouse osprey-test-b-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+
+Running on ospreyflow-test (stack b, osprey-runs/case-b/), logged at osprey-runs/case-b.meta/runs/20261114T150841Z-7fc6f77d/log: bash -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p tests.conftest -p no:cacheprovider -s -q ../OspreyFlow_Build/process/lanes/case-b/batch-lite-live/test_batch_job_on_a_lite_conduit.py 2>&1 | tail -40
+127.0.0.1 - - [14/Nov/2026 15:08:57] "GET /jwks.json HTTP/1.1" 200 -
+POST batch-expansions: 202 {"id":"01M7D9NJZSEK0TPGQEEJZSR1QY","state":"queued","words":"Waiting for the batch expansion to start.","view":null,"nodes":null,"links":null,"refusal":null}
+  0.0s queued: Waiting for the batch expansion to start.
+  2.0s queued: Waiting for the batch expansion to start.
+  4.1s queued: Waiting for the batch expansion to start.
+  6.1s queued: Waiting for the batch expansion to start.
+  8.2s done: Saved 2 nodes and 1 link as your private view “Expanded from 1 node, 14 Nov 2026 15:09”. (refusal: None)
+GET views/01M7D9NTP2R6QFMR64YQ4G683Q: 200, view 'Expanded from 1 node, 14 Nov 2026 15:09', nodes ['01M7D9NGVNSGK1FN6MM1WNBY99', '01M7D9NGVNSGK1FN6MM1WNBY9B'], missing 0
+.
+=============================== warnings summary ===============================
+process/lanes/case-b/batch-lite-live/test_batch_job_on_a_lite_conduit.py::test_a_batch_job_runs_to_done_on_a_lite_conduit_and_its_view_opens
+  /root/osprey-runs/case-b/OspreyFlow_Build/process/lanes/case-b/batch-lite-live/test_batch_job_on_a_lite_conduit.py:77: ConduitStartTime: a Conduit came up in 15.3 s (http://127.0.0.1:43395)
+    conduit = _ConduitInstance(jwks_url, extra_env={"OSPREY_JOB_WORKER": "conduit"})
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+---------------------- 1 unmarked test(s) reached a store ----------------------
+process/lanes/case-b/batch-lite-live/test_batch_job_on_a_lite_conduit.py::test_a_batch_job_runs_to_done_on_a_lite_conduit_and_its_view_opens: ArcadeDB on port 2492
+============================= slowest 30 durations =============================
+26.35s call     process/lanes/case-b/batch-lite-live/test_batch_job_on_a_lite_conduit.py::test_a_batch_job_runs_to_done_on_a_lite_conduit_and_its_view_opens
+0.14s setup    process/lanes/case-b/batch-lite-live/test_batch_job_on_a_lite_conduit.py::test_a_batch_job_runs_to_done_on_a_lite_conduit_and_its_view_opens
+0.03s teardown process/lanes/case-b/batch-lite-live/test_batch_job_on_a_lite_conduit.py::test_a_batch_job_runs_to_done_on_a_lite_conduit_and_its_view_opens
+1 passed, 1 warning in 31.36s
+Wall time: 32 s, exit 0 (stack b, the lease case-b took at 2026-11-14T15:08:00Z; set-up before it 29 s)
+
+Lease on stack b released by case-b.
+
+[exited with code 0]

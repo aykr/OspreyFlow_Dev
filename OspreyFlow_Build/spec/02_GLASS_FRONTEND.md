@@ -641,7 +641,11 @@ suggestions alone: the results start at *All* with no filter. They read `POST /v
 - **The heading**, "Search results for '…'", takes focus on opening, and again when the same words are searched again;
   under it the total in records, the Conduit's (the chosen group's own count once one is chosen), with "(counts may be
   incomplete)" where it says so; a status line announces each load. Every count is the latest answer's.
-- **Groups:** *All*, then each group the Conduit sends with its count; choosing one asks again for it.
+- **Groups:** *All*, then each group the Conduit sends with its count; choosing one asks again for it. The counts are
+  each group's own, by design: a record can be in two groups (a Document, and Mentioned in documents), so *All* need
+  not be the groups added up. Where there are two groups or more, a line under them says so: "Each group counts its own
+  records, and a record can be in more than one, so All need not be the groups added up." With one group it is not
+  shown, since *All* and that group count the same records (`search/SearchResults.test.tsx`).
 - **Filters**, beside the list: the datasets and the date span the response offers (GOV.UK's date input under that
   brand), and *Clear filters*. *Next page* and *Previous page* (GOV.UK's pagination under that brand) and *Clear
   filters* take focus to the heading of the new answer.
@@ -1217,8 +1221,12 @@ Opening another case from the drawer reloads the page, as every case switch does
 expansion, the refusal on the canvas offers *Run as a batch job* beside expanding by one relationship
 and saving a smaller view. Choosing it sends exactly the refused expansion to the Conduit
 (`POST …/batch-expansions`), and a panel at the canvas's foot, `workingset/BatchExpansion.tsx`, follows
-the job. It is drawn on the Graph alone: elsewhere in the case (Reports, Figures, the Map, the Studio) it is
-hidden, not closed, so it goes on following its job and is there again on the way back to the canvas. The panel
+the job. It is drawn on the Graph alone: elsewhere in the case (Reports, Figures, the Map, the Studio, the search
+results, a document read full screen) it is hidden, not closed, so it goes on following its job and is there again on
+the way back to the canvas, showing where the job is then. While hidden it announces nothing: a job that ends meanwhile
+is said when the panel is next on screen. Where the App draws another page altogether (Home, Admin, All cases) the
+panel goes, and the App keeps the job it started, so the panel drawn again follows that job and never starts it a
+second time (`App.batchExpand.test.tsx`). The panel
 starts one job, whatever it is given later, until *Try again*, and sends one POST
 under React's StrictMode, which runs its start twice on one mount. It is not modal, so
 the analyst can go on working while the job runs. It asks where the job is every two seconds, with
@@ -1249,8 +1257,7 @@ While the job runs, the panel says that closing it does not stop the job, and th
 expansion in the case again follows it while it runs (the Conduit's 409 names the running job). A
 state the Glass does not know is said as a failure, never read as progress.
 
-The jsdom cases are in `workingset/BatchExpansion.test.tsx`, and their red-first record is
-`process/lanes/case-b/batch/plants.sh`. The panel's three actions (*Open the view*, *Try the batch job
+The jsdom cases are in `workingset/BatchExpansion.test.tsx`. The panel's three actions (*Open the view*, *Try the batch job
 again*, *Close*) are proved by keyboard in
 `keyboard/batch-expansion.spec.ts` (registry `BATCH_EXPANSION_ACTIONS`), and so is each of its states
 under axe in the three looks. Starting the job from the cap refusal is proved by keyboard where that
@@ -1260,7 +1267,7 @@ refused `/expand` body, and again under StrictMode. The App holds each choice wi
 it was made in and for, and drops it when either changes, so a panel never follows one case's job in
 another nor shows one person's figure to the next (`workingset/useBatchExpansion.ts` and its test). A
 second choice gets its own panel, and no batch job is offered while a view is open
-(`App.batchExpand.test.tsx`; red-first record `process/lanes/case-b/batch/plants-app.sh`).
+(`App.batchExpand.test.tsx`).
 
 ### 3.2 Social network analysis
 

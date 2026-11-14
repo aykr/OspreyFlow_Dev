@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Core/docs/user-guide.md b/OspreyFlow_Core/docs/user-guide.md
-index f0a92e4..75cbb84 100644
+index f0a92e4..41b2347 100644
 --- a/OspreyFlow_Core/docs/user-guide.md
 +++ b/OspreyFlow_Core/docs/user-guide.md
 @@ -325,7 +325,8 @@ it first. The selection's own actions come first, in the bar's words. **Expand b
@@ -7,8 +7,19 @@ index f0a92e4..75cbb84 100644
  fold into one line ("7 types with no links") that opens in place. **Actions** holds what the item
  offers, as its type allows: Explain cluster, View messages, Expand group, Read full screen, Add files
 -held by this…, Set picture… and Mark for suppression; with two selected, only the pair's own: Link
-+held by this…, Set picture… and Mark for suppression (hides nothing yet), which records a mark and a reason
-+and hides nothing yet; with two selected, only the pair's own: Link
++held by this…, Set picture… and Mark for suppression (hides nothing yet), which records that you marked
++the item, as marked from the canvas, and hides nothing until the suppression's evidence comes in; with two selected, only the pair's own: Link
  to…, Split from… and Find paths to…. In a view, the menu offers only what changes nothing in the
  case. An expansion that would add more than
  **500** nodes asks first, offering one relationship at a time, all of them, or nothing. An expansion
+@@ -455,7 +456,9 @@ fill the main area over the view you were on, which waits beneath them as it was
+ until you leave them; a suggestion moved to with the arrow keys is still chosen by Enter. The page is
+ headed "Search results for '…'", with the number of records under it as the Conduit counts them: the
+ total, or a group's own count once you choose one, and "(counts may be incomplete)" when the Conduit
+-cannot be sure. **All**, then each group with its count, narrows the list. Beside it, under the page's
++cannot be sure. **All**, then each group with its count, narrows the list. Each group counts its own
++records, and a record can be in more than one (a document is in Documents and in Mentioned in documents),
++so **All** need not be the groups added up; the page says so under them when there are two or more. Beside it, under the page's
+ own filters, **Datasets** and **Dates** narrow it again to what the search offers, and **Clear filters**
+ undoes them. The search box's **Filters** shape its suggestions alone: the page starts at **All** with
+ no filter. Results come 20 a page, with **Next page** and **Previous page**. Each gives its name as the

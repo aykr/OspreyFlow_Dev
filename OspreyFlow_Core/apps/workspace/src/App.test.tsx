@@ -1146,6 +1146,40 @@ describe("a person disabled in this deployment is told so (ADR-148 Amendment 8)"
   });
 });
 
+// ADR-148 Amendments 15, 17 and 18 (signinwords): a refusal the person can act on is shown in the Conduit's
+// own words, and only when its 401 carries one of the three tags; an untagged refusal keeps the general words.
+describe("a refusal the person can act on is shown in its own words", () => {
+  beforeEach(() => {
+    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
+    vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue({
+      access_token: "a-token", profile: { sub: "pairwise-sub", preferred_username: "ana" },
+    } as never);
+  });
+
+  test.each([
+    ["access_not_set", "your clearance has not been set in this deployment: ask an administrator to set it in Admin › People"],
+    ["token_version", "this deployment's app registration issues version 1 access tokens: set requestedAccessTokenVersion to 2"],
+    ["guest_not_admitted", "guest accounts are not admitted to this deployment: ask an administrator"],
+  ])("%s: the sign-in page shows the Conduit's words, not the general ones", async (error, detail) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ detail, error }), { status: 401 })),
+    );
+    render(<App />);
+    expect(await screen.findByText(detail)).toBeTruthy();
+    expect(screen.queryByText(/could not be used to reach the workspace/i)).toBeNull();
+  });
+
+  test("the same words with no tag are never shown", async () => {
+    const detail = "your clearance has not been set in this deployment: ask an administrator to set it in Admin › People";
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ detail }), { status: 401 })),
+    );
+    render(<App />);
+    expect(await screen.findByText(/could not be used to reach the workspace/i)).toBeTruthy();
+    expect(screen.queryByText(detail)).toBeNull();
+  });
+});
+
 // The orchestrator's review of P10 part 2, item 3: a /v1/me that does not answer once never strands the
 // person: words, Try again (which reads it afresh) and Sign out, with nothing role-gated offered meanwhile.
 describe("when the Conduit cannot say who you are (ADR-148 Amendment 8)", () => {

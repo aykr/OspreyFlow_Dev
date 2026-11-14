@@ -2172,6 +2172,17 @@ def people_directory(resources: Any, config: ApiConfig) -> PeopleDirectory:
     )
 
 
+class SignInRefused(Exception):
+    """A sign-in refused with words the person can act on, and their stable tag
+    (`principal_auth`'s `PrincipalResolutionError.error`: access_not_set, token_version,
+    guest_not_admitted): answered as a 401 whose body carries both, so the Glass shows these
+    words and no others."""
+
+    def __init__(self, words: str, error: str) -> None:
+        super().__init__(words)
+        self.words, self.error = words, error
+
+
 async def get_principal(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
@@ -2183,6 +2194,8 @@ async def get_principal(
     try:
         identity = await resolver.resolve_principal(credentials.credentials)
     except PrincipalResolutionError as exc:
+        if exc.error is not None:
+            raise SignInRefused(str(exc), exc.error) from exc
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except SigningKeysUnavailable as exc:
         # ADR-148 Amendment 8: the identity provider's keys could not be read; said so, never as a
@@ -19856,6 +19869,12 @@ async def _identity_admin_refused(request: Request, exc: IdentityAdminRefused) -
     return JSONResponse(
         status_code=502, content={"error": "identity_provider_refused", "detail": str(exc)}
     )
+
+
+@app.exception_handler(SignInRefused)
+async def _sign_in_refused(request: Request, exc: SignInRefused) -> JSONResponse:
+    """A 401 with the refusal's words and its tag (ADR-148 Amendments 15, 17 and 18)."""
+    return JSONResponse(status_code=401, content={"detail": exc.words, "error": exc.error})
 
 
 @app.exception_handler(NoSuchPerson)

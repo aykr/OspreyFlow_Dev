@@ -1,0 +1,44 @@
+# heartbeat plants at ed7c2e0
+== no view reads git: the typed rows stand (must fail at /assert " done" in _row\(out, "3c"\)/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:472: assert " done" in _row(out, "3c") and "running" not in _row(out, "3c")
+== the route alone reads git (the first version's shape) (must fail at /assert "OVERALL: 5 of 11 steps done"/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:581: assert "OVERALL: 5 of 11 steps done" in gitroute(16, progress, None, "--overview")
+== --lanes and show read the typed table (must fail at /now\.startswith\("  now v052-load"\)/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:511: assert "1 of 2 done" in rules and now.startswith("  now v052-load"), lanes  # 3c done: rules is on B
+== watch reads git once, not at each pass (must fail at /assert "4 of 11 steps merged" in watched/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:515: assert "4 of 11 steps merged" in watched
+== a merged head counted whatever its merge's subject names (a branch cut afresh at a lane's merged head) (must fail at /lane/rules-next/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:524: assert " not started" in _row(gitroute(16, _branch(PROGRESS, "v052-load", "lane/rules-next")), "B")
+== the branch matched anywhere in the subject, not as a word (the second review's finding 1) (must fail at /assert "docs: sites" in/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:491: assert "docs: sites" in "\n".join(_section(out, "OUTSIDE THIS ROUTE"))
+== a bare lane/<lane> read as a step's branch (must fail at /"lane/rules"\)\), "3c"\)/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:484: assert " running" in _row(gitroute(16, _branch(PROGRESS, "v052-index", "lane/rules")), "3c")
+== the merger's name read with its hyphens (must fail at /lane/rules-b-v052batch/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:497: assert " done" in _row(gitroute(16, _branch(PROGRESS, "v052-index", "lane/rules-b-v052batch")), "3c")
+== git's output read as bytes (a branch outside ASCII never matches): neither its layer nor -CSD's default (must fail at /lane/case-3f′/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:498: assert " done" in _row(gitroute(16, _branch(PROGRESS, "v052-index", "lane/case-3f′")), "3c")
+== main's merges passed to perl through the environment (must fail at /lane/studio-big/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:503: assert " done" in _row(gitroute(16, _branch(PROGRESS, "v052-index", "lane/studio-big")), "3c")
+== a branch guessed from the lane and step's names where the row names none (must fail at /assert " running" in _row\(gitroute\(16\), "3c"\)/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:534: assert " running" in _row(gitroute(16), "3c")
+== a LANDED line counted without `done` (a part's merge, named by its step) (must fail at /assert " running" in _row\(out, "3c"\) and " not started" in _row\(out, "B"\)/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:546: assert " running" in _row(out, "3c") and " not started" in _row(out, "B")
+== a LANDED line's `done` with a note after it not read (must fail at /"platform: P5b rows" not in/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:542: assert "platform: P5b rows" not in "\n".join(_section(out, "OUTSIDE THIS ROUTE"))
+== a LANDED line split on spaces alone (a step with a space never read) (must fail at /"platform: P5b rows" not in/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:542: assert "platform: P5b rows" not in "\n".join(_section(out, "OUTSIDE THIS ROUTE"))
+== an empty middle field collapsed (the branch read from the wrong column) (must fail at /assert "docs" not in/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:592: assert "docs" not in "\n".join(_section(out, "OUTSIDE THIS ROUTE"))
+== no step shown ready (must fail at /assert " ready, 2 days ahead/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:556: assert " ready, 2 days ahead of its start" in _row(out, "B") and "after 3c" not in _row(out, "B")
+== ready without the days it could gain (must fail at /assert " ready, 2 days ahead/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:556: assert " ready, 2 days ahead of its start" in _row(out, "B") and "after 3c" not in _row(out, "B")
+== ready when any `after` step is done, not every one (must fail at /assert " not started" in _row\(out, "4"\)/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:557: assert " not started" in _row(out, "4") and "after 3c,3d,B" in _row(out, "4")
+== an `after` naming no route step taken as done (must fail at /assert "ready" not in _row\(gitroute\(14, progress\), "3d"\)/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:567: assert "ready" not in _row(gitroute(14, progress), "3d")
+== a step under way shown ready (must fail at /assert " running" in _row\(gitroute\(14, progress\), "B"\)/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:571: assert " running" in _row(gitroute(14, progress), "B")
+== an `after` list split on commas alone (must fail at /assert " ready" in _row/): RED at its assertion, 1 failed
+   stopped at tests/test_lanes_heartbeat_route.py:603: assert " ready" in _row(gitroute(14, _branch(PROGRESS, "v052-index", "lane/rules-index")), "B")
+plants: 21, missed: 0
