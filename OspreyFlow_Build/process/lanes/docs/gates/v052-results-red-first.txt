@@ -1,0 +1,78 @@
+v052-results (user guide 1.57, §5.5's search results page), red first at 8e0678b on main 1d360dd: each plant made at its real call site in turn, the test run, the file restored from git.
+
+command: cd OspreyFlow_Build && python -m pytest -q -p no:cacheprovider tests/test_user_guide_search_results.py (closed ports 59991-59994, no OSPREY_LANE, PYTHONDONTWRITEBYTECODE=1 so a same-size plant restored within a second is never read from a stale .pyc)
+
+== main's guide, before the results page
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_quotes_the_page_s_heading_empty_line_and_ask_line_as_the_page_words_them
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_says_the_ask_line_is_only_for_someone_offered_ask_and_chat
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_names_the_page_s_controls_as_the_page_labels_them
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_gives_the_page_size_the_page_asks_for
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_says_show_on_graph_takes_you_to_the_graph_and_open_is_for_a_document
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_conduit_and_page_do
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_quotes_the_fallback_s_line_as_the_conduit_words_it
+7 failed in 0.23s
+
+planted in OspreyFlow_Core/apps/workspace/src/search/SearchResults.tsx: "{`Search results for '${query}'`}" -> "{`Results for '${query}'`}"
+== the page's heading reworded
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_quotes_the_page_s_heading_empty_line_and_ask_line_as_the_page_words_them
+1 failed, 6 passed in 0.22s
+
+planted in OspreyFlow_Core/apps/workspace/src/search/SearchResults.tsx: 'export const RESULTS_PAGE_SIZE = 20;' -> 'export const RESULTS_PAGE_SIZE = 25;'
+== the page asks 25 a page
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_gives_the_page_size_the_page_asks_for
+1 failed, 6 passed in 0.23s
+
+planted in OspreyFlow_Core/packages/schemas/search.py: 'MAX_QUERY_CHARS = 200' -> 'MAX_QUERY_CHARS = 150'
+== the schema's limit at 150
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_conduit_and_page_do
+1 failed, 6 passed in 0.24s
+
+planted in OspreyFlow_Core/apps/workspace/src/search/SearchResults.tsx: 'a search can be at most ${entry.ctx.max_length} characters, and this one' -> 'a search is too long, and this one'
+== the refusal no longer names the limit
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_conduit_and_page_do
+1 failed, 6 passed in 0.22s
+
+planted in OspreyFlow_Core/services/api/search_service.py: '"Search is limited to exact identifiers: this deployment has no search index."' -> '"Search is limited: there is no search index."'
+== the no-index line reworded
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_quotes_the_fallback_s_line_as_the_conduit_words_it
+1 failed, 6 passed in 0.22s
+
+planted in OspreyFlow_Core/services/api/search_service.py: 'DATES_NOT_APPLIED = " The date filter is not applied."' -> 'DATES_NOT_APPLIED = " Dates are ignored."'
+== the dates line reworded
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_quotes_the_fallback_s_line_as_the_conduit_words_it
+1 failed, 6 passed in 0.22s
+
+planted in OspreyFlow_Core/apps/workspace/src/App.tsx: 'results.leave();\n            setView("graph");' -> 'results.leave();'
+== Show on graph no longer goes to the graph
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_says_show_on_graph_takes_you_to_the_graph_and_open_is_for_a_document
+1 failed, 6 passed in 0.22s
+
+planted in OspreyFlow_Core/apps/workspace/src/App.tsx: 'onAsk={railEntries(rights).includes("questions") ? (words) => {' -> 'onAsk={true ? (words) => {'
+== the Ask line given to everyone
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_says_the_ask_line_is_only_for_someone_offered_ask_and_chat
+1 failed, 6 passed in 0.27s
+
+planted in OspreyFlow_Core/apps/workspace/src/search/SearchResults.tsx: 'Open' -> 'Read'
+== Open renamed Read
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_names_the_page_s_controls_as_the_page_labels_them
+1 failed, 6 passed in 0.22s
+
+planted in OspreyFlow_Core/docs/user-guide.md: 'Results come 20 a page' -> 'Results come 25 a page'
+== the guide says 25 a page
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_gives_the_page_size_the_page_asks_for
+1 failed, 6 passed in 0.22s
+
+planted in OspreyFlow_Core/docs/user-guide.md: 'and is never cut short: shorten' -> 'and is shortened: shorten'
+== the guide drops never cut short
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_conduit_and_page_do
+1 failed, 6 passed in 0.22s
+
+planted in OspreyFlow_Core/docs/user-guide.md: '"Search is limited to exact identifiers: this\ndeployment has no search index."' -> '"Search is limited: there is\nno search index."'
+== the guide's fallback line reworded
+FAILED tests/test_user_guide_search_results.py::test_section_5_5_quotes_the_fallback_s_line_as_the_conduit_words_it
+1 failed, 6 passed in 0.23s
+
+each plant red: True
+== restored, green
+7 passed in 0.25s
+
