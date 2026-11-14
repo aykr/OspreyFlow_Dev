@@ -1,0 +1,1 @@
+Test stack f down for rules-b: osprey-test-f-arcadedb osprey-test-f-pg osprey-test-f-valkey osprey-test-f-objectstore osprey-test-f-clickhouse osprey-test-f-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)

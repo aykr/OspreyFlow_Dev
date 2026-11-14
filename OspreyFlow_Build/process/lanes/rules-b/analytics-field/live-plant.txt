@@ -1,0 +1,454 @@
+# the plant on stack f (rules-b's lease): ClickHouse's _safe_field_name raising the bare ValueError it raised before this change, then restored
+Running on ospreyflow-test (stack f, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261114T050948Z-ebb22dd1/log: sh -c cd OspreyFlow_Core && PYTHONPYCACHEPREFIX=$(mktemp -d) .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py -k "clickhouse and (field_name or smuggle)"
+FFFFFFFFFF                                                               [100%]
+=================================== FAILURES ===================================
+_ test_event_filter_value_filters_cannot_smuggle_sql_through_a_field_name[analytics_clickhouse] _
+
+factory = AnalyticsAdapterFactory(label='analytics_clickhouse', context=<function _analytics_clickhouse_factories.<locals>._context at 0x784d24173d80>)
+
+    async def test_event_filter_value_filters_cannot_smuggle_sql_through_a_field_name(
+        factory: AnalyticsAdapterFactory,
+    ) -> None:
+        """**The field name is interpolated into SQL; the values are parameterised.**
+    
+        A value filter is the first place a caller names a *column*, so the identifier guard
+        `cross_filter`'s dimensions already rely on has to hold here too. Asserted as a refusal rather
+        than trusted: a name that is not a plain identifier must not reach the query at all.
+        """
+        now = datetime(2026, 1, 1, tzinfo=UTC)
+        async with factory.context([_event(occurred_at=now)]) as adapter:
+            req = HistogramRequest(
+                filter=_filter(value_filters={"item_type'); DROP TABLE events; --": ["x"]}),
+                bucketing=HistogramBucketing.FIXED_INTERVAL,
+                interval_seconds=3600,
+            )
+            with pytest.raises(AnalyticsFieldRefused):
+>               await adapter.histogram(req, CLEARED)
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py:372: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/analytics_clickhouse/adapter.py:327: in histogram
+    predicate = self._predicate(req.filter, principal)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:311: in _predicate
+    filter_pred = self._event_filter_predicate(event_filter)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:306: in _event_filter_predicate
+    clauses.append(f"{_field_expression(field)} IN ({placeholders})")
+                      ^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:116: in _field_expression
+    name = _safe_field_name(field)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+field = "item_type'); DROP TABLE events; --"
+
+    def _safe_field_name(field: str) -> str:
+        """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+        words (`AnalyticsFieldRefused`), which never carry the name sent."""
+        if not field.replace("_", "").isalnum() or not field:
+>           raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+E           ValueError: not a safe field name for a SQL literal: "item_type'); DROP TABLE events; --"
+
+packages/adapters/analytics_clickhouse/adapter.py:101: ValueError
+_ test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[account_activity amount_property-analytics_clickhouse] _
+
+factory = AnalyticsAdapterFactory(label='analytics_clickhouse', context=<function _analytics_clickhouse_factories.<locals>._context at 0x784d24173d80>)
+call = 'account_activity amount_property'
+
+    @pytest.mark.parametrize("call", sorted(_FIELD_CALLS))
+    async def test_a_field_name_that_is_not_one_is_refused_in_the_ports_words(
+        factory: AnalyticsAdapterFactory, call: str
+    ) -> None:
+        """spec 08's A7: a caller's field name is refused in words, never answered as a bare error and
+        never echoed. Every adapter raises the port's own `AnalyticsFieldRefused`, whose words name the
+        rule (`FIELD_NAME_RULE`) and not what was sent, so the routes answer each the same way."""
+        now = datetime(2026, 4, 2, tzinfo=UTC)
+        events = [_event(occurred_at=now, source_id="acct-a", properties={"item_type": "x"})]
+        async with factory.context(events) as adapter:
+            with pytest.raises(AnalyticsFieldRefused) as refused:
+>               await _FIELD_CALLS[call](adapter, CLEARED)
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py:2911: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/analytics_clickhouse/adapter.py:855: in account_activity
+    amount = _decimal_amount(req.amount_property)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:131: in _decimal_amount
+    return f"toDecimal128OrNull(toString(round(toFloat64OrNull({_field_expression(field)}), 9)), 9)"
+                                                                ^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:116: in _field_expression
+    name = _safe_field_name(field)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+field = "item_type'); DROP TABLE events; --"
+
+    def _safe_field_name(field: str) -> str:
+        """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+        words (`AnalyticsFieldRefused`), which never carry the name sent."""
+        if not field.replace("_", "").isalnum() or not field:
+>           raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+E           ValueError: not a safe field name for a SQL literal: "item_type'); DROP TABLE events; --"
+
+packages/adapters/analytics_clickhouse/adapter.py:101: ValueError
+_ test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[cross_filter dimension field-analytics_clickhouse] _
+
+factory = AnalyticsAdapterFactory(label='analytics_clickhouse', context=<function _analytics_clickhouse_factories.<locals>._context at 0x784d24173d80>)
+call = 'cross_filter dimension field'
+
+    @pytest.mark.parametrize("call", sorted(_FIELD_CALLS))
+    async def test_a_field_name_that_is_not_one_is_refused_in_the_ports_words(
+        factory: AnalyticsAdapterFactory, call: str
+    ) -> None:
+        """spec 08's A7: a caller's field name is refused in words, never answered as a bare error and
+        never echoed. Every adapter raises the port's own `AnalyticsFieldRefused`, whose words name the
+        rule (`FIELD_NAME_RULE`) and not what was sent, so the routes answer each the same way."""
+        now = datetime(2026, 4, 2, tzinfo=UTC)
+        events = [_event(occurred_at=now, source_id="acct-a", properties={"item_type": "x"})]
+        async with factory.context(events) as adapter:
+            with pytest.raises(AnalyticsFieldRefused) as refused:
+>               await _FIELD_CALLS[call](adapter, CLEARED)
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py:2911: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/analytics_clickhouse/adapter.py:732: in cross_filter
+    result[dimension.name] = await self._categorical_histogram(
+packages/adapters/analytics_clickhouse/adapter.py:527: in _categorical_histogram
+    expr = _field_expression(field)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:116: in _field_expression
+    name = _safe_field_name(field)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+field = "item_type'); DROP TABLE events; --"
+
+    def _safe_field_name(field: str) -> str:
+        """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+        words (`AnalyticsFieldRefused`), which never carry the name sent."""
+        if not field.replace("_", "").isalnum() or not field:
+>           raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+E           ValueError: not a safe field name for a SQL literal: "item_type'); DROP TABLE events; --"
+
+packages/adapters/analytics_clickhouse/adapter.py:101: ValueError
+_ test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[cross_filter value_filters-analytics_clickhouse] _
+
+factory = AnalyticsAdapterFactory(label='analytics_clickhouse', context=<function _analytics_clickhouse_factories.<locals>._context at 0x784d24173d80>)
+call = 'cross_filter value_filters'
+
+    @pytest.mark.parametrize("call", sorted(_FIELD_CALLS))
+    async def test_a_field_name_that_is_not_one_is_refused_in_the_ports_words(
+        factory: AnalyticsAdapterFactory, call: str
+    ) -> None:
+        """spec 08's A7: a caller's field name is refused in words, never answered as a bare error and
+        never echoed. Every adapter raises the port's own `AnalyticsFieldRefused`, whose words name the
+        rule (`FIELD_NAME_RULE`) and not what was sent, so the routes answer each the same way."""
+        now = datetime(2026, 4, 2, tzinfo=UTC)
+        events = [_event(occurred_at=now, source_id="acct-a", properties={"item_type": "x"})]
+        async with factory.context(events) as adapter:
+            with pytest.raises(AnalyticsFieldRefused) as refused:
+>               await _FIELD_CALLS[call](adapter, CLEARED)
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py:2911: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/analytics_clickhouse/adapter.py:721: in cross_filter
+    predicate = self._predicate(req.filter, principal)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:311: in _predicate
+    filter_pred = self._event_filter_predicate(event_filter)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:306: in _event_filter_predicate
+    clauses.append(f"{_field_expression(field)} IN ({placeholders})")
+                      ^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:116: in _field_expression
+    name = _safe_field_name(field)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+field = "item_type'); DROP TABLE events; --"
+
+    def _safe_field_name(field: str) -> str:
+        """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+        words (`AnalyticsFieldRefused`), which never carry the name sent."""
+        if not field.replace("_", "").isalnum() or not field:
+>           raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+E           ValueError: not a safe field name for a SQL literal: "item_type'); DROP TABLE events; --"
+
+packages/adapters/analytics_clickhouse/adapter.py:101: ValueError
+_ test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[event_frequency amount_property-analytics_clickhouse] _
+
+factory = AnalyticsAdapterFactory(label='analytics_clickhouse', context=<function _analytics_clickhouse_factories.<locals>._context at 0x784d24173d80>)
+call = 'event_frequency amount_property'
+
+    @pytest.mark.parametrize("call", sorted(_FIELD_CALLS))
+    async def test_a_field_name_that_is_not_one_is_refused_in_the_ports_words(
+        factory: AnalyticsAdapterFactory, call: str
+    ) -> None:
+        """spec 08's A7: a caller's field name is refused in words, never answered as a bare error and
+        never echoed. Every adapter raises the port's own `AnalyticsFieldRefused`, whose words name the
+        rule (`FIELD_NAME_RULE`) and not what was sent, so the routes answer each the same way."""
+        now = datetime(2026, 4, 2, tzinfo=UTC)
+        events = [_event(occurred_at=now, source_id="acct-a", properties={"item_type": "x"})]
+        async with factory.context(events) as adapter:
+            with pytest.raises(AnalyticsFieldRefused) as refused:
+>               await _FIELD_CALLS[call](adapter, CLEARED)
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py:2911: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/analytics_clickhouse/adapter.py:777: in event_frequency
+    amount = _decimal_amount(req.amount_property)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:131: in _decimal_amount
+    return f"toDecimal128OrNull(toString(round(toFloat64OrNull({_field_expression(field)}), 9)), 9)"
+                                                                ^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:116: in _field_expression
+    name = _safe_field_name(field)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+field = "item_type'); DROP TABLE events; --"
+
+    def _safe_field_name(field: str) -> str:
+        """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+        words (`AnalyticsFieldRefused`), which never carry the name sent."""
+        if not field.replace("_", "").isalnum() or not field:
+>           raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+E           ValueError: not a safe field name for a SQL literal: "item_type'); DROP TABLE events; --"
+
+packages/adapters/analytics_clickhouse/adapter.py:101: ValueError
+_ test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[geocode_events property-analytics_clickhouse] _
+
+factory = AnalyticsAdapterFactory(label='analytics_clickhouse', context=<function _analytics_clickhouse_factories.<locals>._context at 0x784d24173d80>)
+call = 'geocode_events property'
+
+    @pytest.mark.parametrize("call", sorted(_FIELD_CALLS))
+    async def test_a_field_name_that_is_not_one_is_refused_in_the_ports_words(
+        factory: AnalyticsAdapterFactory, call: str
+    ) -> None:
+        """spec 08's A7: a caller's field name is refused in words, never answered as a bare error and
+        never echoed. Every adapter raises the port's own `AnalyticsFieldRefused`, whose words name the
+        rule (`FIELD_NAME_RULE`) and not what was sent, so the routes answer each the same way."""
+        now = datetime(2026, 4, 2, tzinfo=UTC)
+        events = [_event(occurred_at=now, source_id="acct-a", properties={"item_type": "x"})]
+        async with factory.context(events) as adapter:
+            with pytest.raises(AnalyticsFieldRefused) as refused:
+>               await _FIELD_CALLS[call](adapter, CLEARED)
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py:2911: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/analytics_clickhouse/adapter.py:589: in geocode_events
+    prop = _safe_field_name(req.property)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+field = "item_type'); DROP TABLE events; --"
+
+    def _safe_field_name(field: str) -> str:
+        """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+        words (`AnalyticsFieldRefused`), which never carry the name sent."""
+        if not field.replace("_", "").isalnum() or not field:
+>           raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+E           ValueError: not a safe field name for a SQL literal: "item_type'); DROP TABLE events; --"
+
+packages/adapters/analytics_clickhouse/adapter.py:101: ValueError
+_ test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[histogram field-analytics_clickhouse] _
+
+factory = AnalyticsAdapterFactory(label='analytics_clickhouse', context=<function _analytics_clickhouse_factories.<locals>._context at 0x784d24173d80>)
+call = 'histogram field'
+
+    @pytest.mark.parametrize("call", sorted(_FIELD_CALLS))
+    async def test_a_field_name_that_is_not_one_is_refused_in_the_ports_words(
+        factory: AnalyticsAdapterFactory, call: str
+    ) -> None:
+        """spec 08's A7: a caller's field name is refused in words, never answered as a bare error and
+        never echoed. Every adapter raises the port's own `AnalyticsFieldRefused`, whose words name the
+        rule (`FIELD_NAME_RULE`) and not what was sent, so the routes answer each the same way."""
+        now = datetime(2026, 4, 2, tzinfo=UTC)
+        events = [_event(occurred_at=now, source_id="acct-a", properties={"item_type": "x"})]
+        async with factory.context(events) as adapter:
+            with pytest.raises(AnalyticsFieldRefused) as refused:
+>               await _FIELD_CALLS[call](adapter, CLEARED)
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py:2911: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/analytics_clickhouse/adapter.py:333: in histogram
+    return await self._categorical_histogram(predicate, req.field)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:527: in _categorical_histogram
+    expr = _field_expression(field)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:116: in _field_expression
+    name = _safe_field_name(field)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+field = "item_type'); DROP TABLE events; --"
+
+    def _safe_field_name(field: str) -> str:
+        """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+        words (`AnalyticsFieldRefused`), which never carry the name sent."""
+        if not field.replace("_", "").isalnum() or not field:
+>           raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+E           ValueError: not a safe field name for a SQL literal: "item_type'); DROP TABLE events; --"
+
+packages/adapters/analytics_clickhouse/adapter.py:101: ValueError
+_ test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[list_events value_filters-analytics_clickhouse] _
+
+factory = AnalyticsAdapterFactory(label='analytics_clickhouse', context=<function _analytics_clickhouse_factories.<locals>._context at 0x784d24173d80>)
+call = 'list_events value_filters'
+
+    @pytest.mark.parametrize("call", sorted(_FIELD_CALLS))
+    async def test_a_field_name_that_is_not_one_is_refused_in_the_ports_words(
+        factory: AnalyticsAdapterFactory, call: str
+    ) -> None:
+        """spec 08's A7: a caller's field name is refused in words, never answered as a bare error and
+        never echoed. Every adapter raises the port's own `AnalyticsFieldRefused`, whose words name the
+        rule (`FIELD_NAME_RULE`) and not what was sent, so the routes answer each the same way."""
+        now = datetime(2026, 4, 2, tzinfo=UTC)
+        events = [_event(occurred_at=now, source_id="acct-a", properties={"item_type": "x"})]
+        async with factory.context(events) as adapter:
+            with pytest.raises(AnalyticsFieldRefused) as refused:
+>               await _FIELD_CALLS[call](adapter, CLEARED)
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py:2911: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/analytics_clickhouse/adapter.py:740: in list_events
+    predicate = self._predicate(req.filter, principal)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:311: in _predicate
+    filter_pred = self._event_filter_predicate(event_filter)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:306: in _event_filter_predicate
+    clauses.append(f"{_field_expression(field)} IN ({placeholders})")
+                      ^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:116: in _field_expression
+    name = _safe_field_name(field)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+field = "item_type'); DROP TABLE events; --"
+
+    def _safe_field_name(field: str) -> str:
+        """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+        words (`AnalyticsFieldRefused`), which never carry the name sent."""
+        if not field.replace("_", "").isalnum() or not field:
+>           raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+E           ValueError: not a safe field name for a SQL literal: "item_type'); DROP TABLE events; --"
+
+packages/adapters/analytics_clickhouse/adapter.py:101: ValueError
+_ test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[trend group_by-analytics_clickhouse] _
+
+factory = AnalyticsAdapterFactory(label='analytics_clickhouse', context=<function _analytics_clickhouse_factories.<locals>._context at 0x784d24173d80>)
+call = 'trend group_by'
+
+    @pytest.mark.parametrize("call", sorted(_FIELD_CALLS))
+    async def test_a_field_name_that_is_not_one_is_refused_in_the_ports_words(
+        factory: AnalyticsAdapterFactory, call: str
+    ) -> None:
+        """spec 08's A7: a caller's field name is refused in words, never answered as a bare error and
+        never echoed. Every adapter raises the port's own `AnalyticsFieldRefused`, whose words name the
+        rule (`FIELD_NAME_RULE`) and not what was sent, so the routes answer each the same way."""
+        now = datetime(2026, 4, 2, tzinfo=UTC)
+        events = [_event(occurred_at=now, source_id="acct-a", properties={"item_type": "x"})]
+        async with factory.context(events) as adapter:
+            with pytest.raises(AnalyticsFieldRefused) as refused:
+>               await _FIELD_CALLS[call](adapter, CLEARED)
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py:2911: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/analytics_clickhouse/adapter.py:345: in trend
+    series = "NULL" if req.group_by is None else _field_expression(req.group_by)
+                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:116: in _field_expression
+    name = _safe_field_name(field)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+field = "item_type'); DROP TABLE events; --"
+
+    def _safe_field_name(field: str) -> str:
+        """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+        words (`AnalyticsFieldRefused`), which never carry the name sent."""
+        if not field.replace("_", "").isalnum() or not field:
+>           raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+E           ValueError: not a safe field name for a SQL literal: "item_type'); DROP TABLE events; --"
+
+packages/adapters/analytics_clickhouse/adapter.py:101: ValueError
+_ test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[trend measure_field-analytics_clickhouse] _
+
+factory = AnalyticsAdapterFactory(label='analytics_clickhouse', context=<function _analytics_clickhouse_factories.<locals>._context at 0x784d24173d80>)
+call = 'trend measure_field'
+
+    @pytest.mark.parametrize("call", sorted(_FIELD_CALLS))
+    async def test_a_field_name_that_is_not_one_is_refused_in_the_ports_words(
+        factory: AnalyticsAdapterFactory, call: str
+    ) -> None:
+        """spec 08's A7: a caller's field name is refused in words, never answered as a bare error and
+        never echoed. Every adapter raises the port's own `AnalyticsFieldRefused`, whose words name the
+        rule (`FIELD_NAME_RULE`) and not what was sent, so the routes answer each the same way."""
+        now = datetime(2026, 4, 2, tzinfo=UTC)
+        events = [_event(occurred_at=now, source_id="acct-a", properties={"item_type": "x"})]
+        async with factory.context(events) as adapter:
+            with pytest.raises(AnalyticsFieldRefused) as refused:
+>               await _FIELD_CALLS[call](adapter, CLEARED)
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py:2911: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/analytics_clickhouse/adapter.py:359: in trend
+    number = f"toFloat64OrNull({_field_expression(req.measure_field)})"
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/adapters/analytics_clickhouse/adapter.py:116: in _field_expression
+    name = _safe_field_name(field)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+field = "item_type'); DROP TABLE events; --"
+
+    def _safe_field_name(field: str) -> str:
+        """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+        words (`AnalyticsFieldRefused`), which never carry the name sent."""
+        if not field.replace("_", "").isalnum() or not field:
+>           raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+E           ValueError: not a safe field name for a SQL literal: "item_type'); DROP TABLE events; --"
+
+packages/adapters/analytics_clickhouse/adapter.py:101: ValueError
+--------------------- 10 unmarked test(s) reached a store ----------------------
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[account_activity amount_property-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[cross_filter dimension field-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[cross_filter value_filters-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[event_frequency amount_property-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[geocode_events property-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[histogram field-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[list_events value_filters-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[trend group_by-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[trend measure_field-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_event_filter_value_filters_cannot_smuggle_sql_through_a_field_name[analytics_clickhouse]: ClickHouse on port 18128
+============================= slowest 30 durations =============================
+0.23s call     tests/conformance/analytics_port/test_suite.py::test_event_filter_value_filters_cannot_smuggle_sql_through_a_field_name[analytics_clickhouse]
+0.20s call     tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[trend group_by-analytics_clickhouse]
+0.16s call     tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[account_activity amount_property-analytics_clickhouse]
+0.15s call     tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[cross_filter value_filters-analytics_clickhouse]
+0.15s call     tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[trend measure_field-analytics_clickhouse]
+0.14s call     tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[event_frequency amount_property-analytics_clickhouse]
+0.13s call     tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[histogram field-analytics_clickhouse]
+0.13s call     tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[cross_filter dimension field-analytics_clickhouse]
+0.13s call     tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[list_events value_filters-analytics_clickhouse]
+0.13s call     tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[geocode_events property-analytics_clickhouse]
+0.12s setup    tests/conformance/analytics_port/test_suite.py::test_event_filter_value_filters_cannot_smuggle_sql_through_a_field_name[analytics_clickhouse]
+
+(19 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_event_filter_value_filters_cannot_smuggle_sql_through_a_field_name[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[account_activity amount_property-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[cross_filter dimension field-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[cross_filter value_filters-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[event_frequency amount_property-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[geocode_events property-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[histogram field-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[list_events value_filters-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[trend group_by-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[trend measure_field-analytics_clickhouse]
+10 failed, 280 deselected in 4.62s
+Wall time: 6 s, exit 1 (stack f, the lease rules-b took at 2026-11-14T05:08:05Z; set-up before it 10 s)
+exit=1
