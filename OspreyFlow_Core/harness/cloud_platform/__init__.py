@@ -309,7 +309,9 @@ def seed_values(config: OspreyConfig, workloads: Sequence[dict[str, Any]]) -> di
     reads the first administrator's own from the people store at the run."""
     api = next(w for w in workloads if w["name"] == "api")
     # The case store's, as the Conduit is given them: the platform's RDS secret's variables alone.
-    postgres = {name for name, (secret, _key) in managed_variables(config).items() if secret == "postgres"}
+    postgres = {
+        name for name, (secret, _key) in managed_variables(config).items() if secret == "postgres"
+    }
     return {
         "name": SEED_JOB,
         "label": "seed",

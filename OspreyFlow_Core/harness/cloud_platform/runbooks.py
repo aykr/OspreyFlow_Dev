@@ -465,13 +465,13 @@ def _seed_section(values: dict[str, Any]) -> str:
     if "seed" not in values:
         return ""
     rebuild = _SEED_REBUILD if "searchIndex" in values else ""
-    return f"""
+    return """
 ## 9. Optional: spec 08's acceptance data (a POC alone)
 
 **Not part of the order, and never on a deployment holding real data.** For a proof of concept that is
 to be shown with spec 08's synthetic acceptance data: the HMP fixture, Fixture Corp and the acceptance
 scenarios, into one case named *Acceptance scenarios (spec 08)* whose first Author is the first
-administrator ({{first}}), in that administrator's own unit. Run it after step 7, once, after the first
+administrator ({first}), in that administrator's own unit. Run it after step 7, once, after the first
 administrator has signed in (step 6): the seed is refused before it writes anything if they have not.
 Spec 08's data holds SECRET items (HMP's and Fixture Corp's), above this profile's default ceiling of
 OFFICIAL-SENSITIVE. So a POC shown with it declares `deployment.highest_marking: SECRET` in its
@@ -482,9 +482,11 @@ minutes; the door answers 503 meanwhile), puts them all back whether or not it s
 naming what failed, if anything. A seed Job that did not finish is deleted before the Conduit is back.
 
 ```bash later
-{{block}}```
-""".format(first="the first of `cloud_platform.claims.first_administrators`",
-           block=_SEED_BLOCK.replace("<rebuild>", rebuild))
+{block}```
+""".format(
+        first="the first of `cloud_platform.claims.first_administrators`",
+        block=_SEED_BLOCK.replace("<rebuild>", rebuild),
+    )
 
 
 def render_decommission(
