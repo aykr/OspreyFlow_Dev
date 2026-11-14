@@ -90,8 +90,8 @@ class PublicDatasetManifest(BaseModel):
     file: PublicDatasetFile
     recipe: str = Field(
         min_length=1,
-        description="The Ingest Studio recipe that loads it: a file beside the manifest, or a "
-        "shipped recipe's file name.",
+        description="The Ingest Studio pipeline that loads it: a file beside the manifest, or a "
+        "shipped pipeline's file name.",
     )
     domains: list[DomainPack] = Field(
         default_factory=list, description="ADR-126: the domain packs its case is set to."
@@ -118,7 +118,7 @@ class PublicDatasetManifest(BaseModel):
     @classmethod
     def _a_recipe_file(cls, value: str) -> str:
         if not value.endswith((".yaml", ".yml")) or value.startswith("/") or ".." in value:
-            raise ValueError("recipe is a .yaml file beside the manifest, named without a folder")
+            raise ValueError("`recipe` names a .yaml file beside the manifest, without a folder")
         return value
 
     @model_validator(mode="after")

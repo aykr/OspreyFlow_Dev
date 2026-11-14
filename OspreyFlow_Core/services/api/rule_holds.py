@@ -230,8 +230,8 @@ async def release_held_rows(
         raise ReleaseRefused("held rows from different loads are released one load at a time")
     if any(h.recipe_id != recipe.id or h.recipe_version != recipe.version for h in held):
         raise ReleaseRefused(
-            "the recipe has been published again since these rows were held; run it again over "
-            "the source instead, so the rows are read by the recipe as it now stands"
+            "the pipeline has been published again since these rows were held; run it again over "
+            "the source instead, so the rows are read by the pipeline as it now stands"
         )
     ordered = sorted(held, key=lambda h: h.row_index)
     report, events, _ = await load_with_rules(

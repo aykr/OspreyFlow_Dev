@@ -10028,7 +10028,7 @@ async def set_site_grid(
         await graph.rollback_transaction(tx)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="grid cells were rejected by the recipe engine",
+            detail="grid cells were rejected by the pipeline engine",
         )
     await graph.commit_transaction(tx)
 

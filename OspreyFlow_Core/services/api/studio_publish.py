@@ -152,8 +152,8 @@ class RecipeNotRunnableError(Exception):
         self.recipe_id = recipe_id
         self.status = status
         super().__init__(
-            f"recipe {recipe_id!r} is {status.value!r}, not published — "
-            "only a published recipe can be run"
+            f"pipeline {recipe_id!r} is {status.value!r}, not published — "
+            "only a published pipeline can be run"
         )
 
 
@@ -168,7 +168,7 @@ def pack_versions_for(
     for pack in recipe_packs(pipeline, row_template, ontology):
         if pack not in ontology.packs:
             raise ValueError(
-                f"the recipe needs the pack {pack!r}, which the loaded ontology does not carry"
+                f"the pipeline needs the pack {pack!r}, which the loaded ontology does not carry"
             )
         pins[pack] = ontology.packs[pack]
     return pins
@@ -330,11 +330,11 @@ def _open_repository(repo_root: Path) -> Repo:
         # repository's. Checked after the open, so a link put there by a first use's rival is
         # seen too.
         repo.close()
-        raise GitCommitError("the recipe repository's .git is not a directory of its own")
+        raise GitCommitError("the pipeline repository's .git is not a directory of its own")
     if repo.bare or Path(repo.path).resolve() != repo_root.resolve():
         repo.close()
         raise GitCommitError(
-            "the recipe repository is bare or its config names another working tree"
+            "the pipeline repository is bare or its config names another working tree"
         )
     return repo
 
@@ -371,8 +371,8 @@ def _initialise(repo_root: Path) -> Repo:
 
 def _held_off() -> GitCommitError:
     return GitCommitError(
-        f"another publish has held the recipe repository for over {PUBLISH_LOCK_WAIT_SECONDS:g} s; "
-        "publish again"
+        "another publish has held the pipeline repository for over "
+        f"{PUBLISH_LOCK_WAIT_SECONDS:g} s; publish again"
     )
 
 
@@ -385,7 +385,7 @@ def _publish_lock(repo: Repo, deadline: float) -> Iterator[None]:
         fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o666)
     except OSError as exc:
         raise GitCommitError(
-            f"the recipe repository's {PUBLISH_LOCK_NAME} is a symbolic link or cannot be opened"
+            f"the pipeline repository's {PUBLISH_LOCK_NAME} is a symbolic link or cannot be opened"
         ) from exc
     try:
         while True:
@@ -419,7 +419,7 @@ def _write_recipe_file(repo_root: Path, relative_path: str, data: bytes) -> os.s
         else:
             if not stat.S_ISREG(existing.st_mode):
                 raise GitCommitError(
-                    f"{relative_path!r} in the recipe repository is a symbolic link or not a "
+                    f"{relative_path!r} in the pipeline repository is a symbolic link or not a "
                     "file, so it is not written"
                 )
         # A temporary file a crash left behind (under the lock, so it is no live publish's).
@@ -469,7 +469,7 @@ def _open_recipe_directory(repo_root: Path, relative_path: str, *, make: bool) -
                 inner = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
             except OSError as exc:
                 raise GitCommitError(
-                    f"{directory!r} in the recipe repository is a symbolic link or not a "
+                    f"{directory!r} in the pipeline repository is a symbolic link or not a "
                     f"directory, so {relative_path!r} is not written"
                 ) from exc
             os.close(fd)
@@ -537,7 +537,7 @@ def _refuse_a_head_that_is_no_commit(repo: Repo) -> None:
     except KeyError:
         return
     if not isinstance(repo[head_id], Commit):
-        raise GitCommitError("the recipe repository's HEAD is not a commit")
+        raise GitCommitError("the pipeline repository's HEAD is not a commit")
 
 
 def _put_back_as_head_holds(repo: Repo, repo_root: Path, relative_path: str) -> None:
@@ -604,7 +604,7 @@ def _stage_and_commit(
     if head is not None:
         found = repo[head]
         if not isinstance(found, Commit):
-            raise GitCommitError("the recipe repository's HEAD is not a commit")
+            raise GitCommitError("the pipeline repository's HEAD is not a commit")
         parent = found
     parent_tree = parent.tree if parent is not None else None
 
@@ -638,7 +638,7 @@ def _stage_and_commit(
             committer=_COMMIT_IDENTITY, message=b"commit: " + message.encode("utf-8"),
         ):  # fmt: skip
             raise GitCommitError(
-                f"the recipe repository's HEAD moved while {path.decode()!r} was being "
+                f"the pipeline repository's HEAD moved while {path.decode()!r} was being "
                 "committed; publish again"
             )
 
@@ -677,11 +677,11 @@ async def commit_recipe_file(
     synchronous; the repository it writes is an ordinary git repository, which `git log` reads."""
     if _RECIPE_ID.fullmatch(recipe_id) is None:
         raise GitCommitError(
-            f"the recipe id {recipe_id!r} is not one file name the recipe repository can hold"
+            f"the pipeline id {recipe_id!r} is not one file name the pipeline repository can hold"
         )
     relative_path = recipe_git_relative_path(recipe_id)
     if not validate_path(relative_path.encode("utf-8")):  # dulwich's own check, as git's fsck
-        raise GitCommitError(f"{relative_path!r} is not a path the recipe repository can hold")
+        raise GitCommitError(f"{relative_path!r} is not a path the pipeline repository can hold")
     message = f"ingest: publish {recipe_id} v{version}"
     try:
         await asyncio.to_thread(_commit_file, repo_root, relative_path, data, message)

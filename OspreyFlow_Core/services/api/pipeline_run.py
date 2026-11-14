@@ -541,7 +541,10 @@ async def _run_staged_branch(
     recipe = await asyncio.to_thread(load_published_recipe, draft, repo_root)
     if not recipe.staging:
         raise RecipeRuleError(
-            [f"Recipe {recipe.id!r} has staging steps on its pipeline but none in its file."]
+            [
+                f"Pipeline {recipe.id!r} has staging steps in the Studio but none in its "
+                "published file."
+            ]
         )
     # ADR-140 Amendment 13: the dataset's own lists and the deployment-wide ones it subscribes to.
     # ADR-148 decision 10: what can be judged without rows (a marking no column sets) is refused

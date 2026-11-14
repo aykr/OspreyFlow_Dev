@@ -52,7 +52,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   source_unreadable: "The source couldn't be read — check it's still at the location Connect recorded.",
   source_handling_incomplete: "This source's handling marking is incomplete — go back to Connect.",
   ontology_violation:
-    "This recipe doesn't match the active ontology — open it in Map and check the affected element's type and properties.",
+    "This pipeline doesn't match the active ontology — open it in Map and check the affected element's type and properties.",
 };
 
 function friendlyError(err: unknown): string {
@@ -263,7 +263,7 @@ export function VerifyScreen({ apiBaseUrl,
             <WouldRaisePanel report={report} />
           </Panel>
 
-          <Panel title="The graph this recipe would produce">
+          <Panel title="The graph this pipeline would produce">
             <div style={{ height: 480 }}>
               {workingSet && registry ? (
                 <GlassCanvas

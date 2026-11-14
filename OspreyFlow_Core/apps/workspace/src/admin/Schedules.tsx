@@ -136,7 +136,7 @@ export function Schedules({ api }: { api: AdminApi }) {
   return (
     <>
       <p className="label" style={{ margin: 0 }}>
-        Every scheduled recipe in this deployment. A scheduled run acts as its owner, in the case the schedule was set
+        Every scheduled pipeline in this deployment. A scheduled run acts as its owner, in the case the schedule was set
         in. A run&apos;s counts are shown only where its source is within your clearance.
       </p>
       {problem && <p role="alert">{problem}</p>}

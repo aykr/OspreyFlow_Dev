@@ -168,7 +168,7 @@ def _stage(
     may_read: Callable[[StagedRef], bool] | None = None,
 ) -> StagingResult:
     if not recipe.staging:
-        raise StagingError([f"recipe {recipe.id!r} has no staging steps"])
+        raise StagingError([f"pipeline {recipe.id!r} has no staging steps"])
     return run_staging(
         recipe.staging,
         sources=sources,

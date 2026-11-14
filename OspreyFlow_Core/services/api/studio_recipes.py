@@ -185,11 +185,11 @@ def check_seeded_recipe(recipe: Recipe, ontology: OntologySchema, scheme: Handli
       neither names nor writes, which the engine ignores and a publish never stamps, is refused."""
     if not (recipe.defaults.legal_basis or "").strip():
         raise SeededRecipeNoLegalBasis(
-            f"recipe {recipe.id!r} v{recipe.version} declares no legal basis in its defaults"
+            f"pipeline {recipe.id!r} v{recipe.version} declares no legal basis in its defaults"
         )
     if recipe.ontology_version != ontology.version:
         raise StaleRecipeError(
-            f"recipe {recipe.id!r} targets ontology version {recipe.ontology_version}, but the "
+            f"pipeline {recipe.id!r} targets ontology version {recipe.ontology_version}, but the "
             f"loaded ontology is version {ontology.version}"
         )
     # The source's marking against each element's own first: `check_recipe_rules` refuses a
@@ -209,8 +209,8 @@ def check_seeded_recipe(recipe: Recipe, ontology: OntologySchema, scheme: Handli
     pins = pack_versions_for(recipe.pipeline, recipe.row_template, ontology)
     if (recipe.pack_versions or {}) != pins:
         raise SeededRecipePinsDiffer(
-            f"recipe {recipe.id!r} v{recipe.version} pins {recipe.pack_versions!r}, but its types "
-            f"call for {pins!r}"
+            f"pipeline {recipe.id!r} v{recipe.version} pins {recipe.pack_versions!r}, but its "
+            f"types call for {pins!r}"
         )
 
 
@@ -300,7 +300,7 @@ async def _existing_seeded_row(
         )
         if differing:
             raise SeededRecipeContentDiffers(
-                f"recipe {recipe.id!r} v{recipe.version} is already in the registry and "
+                f"pipeline {recipe.id!r} v{recipe.version} is already in the registry and "
                 f"differs in {', '.join(differing)}; it is left as it is, and a changed "
                 "file needs a new version"
             )
@@ -314,7 +314,7 @@ async def _existing_seeded_row(
     )
     if live is not None:
         raise SeededRecipeAnotherPublished(
-            f"recipe {recipe.id!r} already has version {live} published; a recipe has "
+            f"pipeline {recipe.id!r} already has version {live} published; a pipeline has "
             f"one live version, so v{recipe.version} is not entered"
         )
     return None
@@ -758,7 +758,9 @@ class StudioRecipeStore:
         fresh publish can never store "not pinned" and be mistaken for a legacy row by the next
         start's backfill."""
         if pack_versions is None:
-            raise ValueError("pack_versions is required to publish; pass {} for a recipe with none")
+            raise ValueError(
+                "pack_versions is required to publish; pass {} for a pipeline with none"
+            )
         draft = await self.get_authorized(recipe_id, principal)
         if draft.status is not StudioRecipeStatus.DRAFT:
             raise StudioRecipeNotADraftError(recipe_id)
@@ -1134,7 +1136,7 @@ class StudioRecipeStore:
         and a declaration the source cannot hold (`check_source_declarations`)."""
         if not (recipe.defaults.legal_basis or "").strip():
             raise SeededRecipeNoLegalBasis(
-                f"recipe {recipe.id!r} v{recipe.version} declares no legal basis in its defaults"
+                f"pipeline {recipe.id!r} v{recipe.version} declares no legal basis in its defaults"
             )
         content = _seeded_content(recipe, source_location)
         check_source_declarations(dict(content["handling"]))  # type: ignore[call-overload]
