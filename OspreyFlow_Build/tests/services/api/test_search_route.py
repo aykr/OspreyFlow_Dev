@@ -93,9 +93,9 @@ def test_search_returns_hits_from_the_graph_port(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert [n["id"] for n in response.json()["nodes"]] == ["hit-1"]
-    # Its whole depth, so the fallback counts its groups and knows when there is more (ADR-149
-    # decision 9).
-    assert client.graph.calls == [("AB123456C", PRINCIPAL, 100)]  # type: ignore[attr-defined]
+    # One past its depth, so the fallback counts its groups and knows whether its depth cut the list
+    # (ADR-149 decision 10, Amendment 4).
+    assert client.graph.calls == [("AB123456C", PRINCIPAL, 101)]  # type: ignore[attr-defined]
     assert client.audit.records[-1]["action"] == "search"  # type: ignore[attr-defined]
 
 

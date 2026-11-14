@@ -67,10 +67,13 @@ LIMITED_REASONS: dict[FallbackWhy, str] = {
 PENDING_LIMIT = 10_000
 #: Added when the fallback cannot apply the date filter: today's search knows no dates.
 DATES_NOT_APPLIED = " The date filter is not applied."
-#: Added on the page where the fallback's list stops because today's search stopped at its depth,
-#: and on any page past it: the list ends there because of the fallback, not because nothing else
-#: matches (rule 2). `{depth}` is `FALLBACK_DEPTH`.
-DEPTH_REACHED = " Only the first {depth} matches are listed: narrow the search to see others."
+#: Added on the page where the fallback's list stops because more matched than today's search's
+#: depth, and on any page past it: the list ends there because of the fallback, not because nothing
+#: else matches (rule 2). It sends the reader to nothing the page cannot do: the dataset and group
+#: filters apply to the listed matches alone, so they cannot reach one past the cut, and today's
+#: search is an exact match, so a different query is no narrowing of it. `{depth}` is
+#: `FALLBACK_DEPTH`.
+DEPTH_REACHED = " Only the first {depth} matches are listed, and the filters apply to those alone."
 
 #: Today's search returns at most this many, so the fallback lists no deeper, and says when it
 #: reached it.
@@ -440,10 +443,12 @@ async def _from_graph(
     where its depth stops the list, the line says so (`DEPTH_REACHED`)."""
     size = _page_size(request)
     start = (request.page - 1) * size
-    found = (
-        await search(graph, SearchRequest(query=request.query, limit=FALLBACK_DEPTH), principal)
-    ).nodes
-    reached = len(found) >= FALLBACK_DEPTH
+    one_past = SearchRequest.model_construct(query=request.query, limit=FALLBACK_DEPTH + 1)
+    found = (await search(graph, one_past, principal)).nodes
+    # Asked one past the depth, so a cut is known: exactly `FALLBACK_DEPTH` matches is a whole list.
+    # `model_construct`: the request's own bound (100) is the box's, not this internal read's.
+    reached = len(found) > FALLBACK_DEPTH
+    found = found[:FALLBACK_DEPTH]
     wanted = set(request.filters.datasets or ())
     if wanted:
         found = [n for n in found if wanted.intersection(n.datasets)]
