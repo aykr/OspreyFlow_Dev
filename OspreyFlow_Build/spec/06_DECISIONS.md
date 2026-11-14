@@ -39199,8 +39199,12 @@ runs, with the inventory note corrected there (the orchestrator's ruling of 14 N
   is not seen until the view is next opened. The open re-reads under the reader's current principal, so the
   view never shows more than its reader may see. The node ids saved were chosen under the old clearance, and
   `missing` counts them (`test_a_batch_view_opened_after_a_clearance_drop_hides_what_was_lost`).
-- **`edges_among` over up to 50,000 ids has not been measured.** It is measured on the lease, and the ten-minute
-  bound is set from what it shows.
+- **`edges_among` at 50,000 ids is still not measured.** On stack e (14 November 2026), expand from one seed over
+  4,001 nodes took 1.1 s, and `edges_among` over those 4,001 had not answered within the run's remaining seconds.
+  Writing them by the ordinary path took 417 s, so the run never reached 50,000 (`process/lanes/rules-b/v052batch/live.txt`).
+  The ten-minute bound is a guess, and its failure is a safe one: a batch too slow to count is refused
+  `took_too_long` in words, and saves nothing, never a cut. A measurement at 50,000 needs the bulk loader to set up,
+  as a run of its own.
 - **Not durable past 24 hours.** A job's record lives 24 hours (`JOB_TTL_SECONDS`), and the view it saved is
   durable.
 - **No cancel.** A job runs to done, refused or its ten minutes.

@@ -30,3 +30,23 @@ Wall time: 480 s, exit 0 (stack e, the lease rules-b took at 2026-11-14T10:27:23
 Test stack e down for rules-b: osprey-test-e-arcadedb osprey-test-e-pg osprey-test-e-valkey osprey-test-e-objectstore osprey-test-e-clickhouse osprey-test-e-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
 Lease on stack e released by rules-b.
 No figures: stdout was block-buffered and the 480 s timeout killed the process before it flushed. Not a measurement; rerun with python -u on a new grant.
+
+== run 3, the orchestrator's second grant (lease taken 10:49:12Z), at 466fcd0
+== live
+batch of 3 written, 2 visible: 0.22s
+tests/services/api/test_worker.py::test_a_failing_handler_rolls_back_and_marks_the_job_failed: Valkey on port 6383
+0.01s call     tests/services/api/test_worker.py::test_a_failing_handler_rolls_back_and_marks_the_job_failed
+6 passed in 5.14s
+== measure
+written: 4,001 nodes and 4,000 links in 416.7s
+expand from the seed: 1.1s
+expand found 4,001 nodes, 4,000 links
+measure exit=124
+Wall time: 426 s, exit 0 (stack e, the lease rules-b took at 2026-11-14T10:49:12Z; set-up before it 14 s)
+Test stack e down for rules-b: osprey-test-e-arcadedb osprey-test-e-pg osprey-test-e-valkey osprey-test-e-objectstore osprey-test-e-clickhouse osprey-test-e-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Lease on stack e released by rules-b.
+
+Live: test_batch_expansion_live.py 2 passed and test_worker.py 4 passed: 6 passed, test_worker on the leased Valkey (6383) for the first time.
+Timing: not a measurement at 50,000. The ordinary write path (upsert_nodes and upsert_edges in chunks of 2,000) took 416.7 s for 4,001 nodes and 4,000 links, so the five-minute write budget ended at 4,001.
+expand from the seed over them took 1.1 s; edges_among over 4,001 ids had not answered when the 420 s timeout fell. get_nodes and the view row were not reached.
+What it does show: writing is not what a batch does. A 50,000 figure needs the bulk loader (BulkGraphLoader) to set up, which is a run of its own.
