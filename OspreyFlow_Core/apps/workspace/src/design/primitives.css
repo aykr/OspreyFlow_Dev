@@ -147,6 +147,10 @@
   display: flex; flex-direction: column;
 }
 .drawer > .panel__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* A drawer's stack of sections (the Cases drawer's views and cases): one column, the drawer's width at most, never
+   its content's. With a grid's implicit `auto` column a long view name widened it to 573 px in the 360 px drawer
+   and pushed the view's tag out (ADR-145 Amendment 14 decision 1, `views.spec.ts`). */
+.drawer-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-8); min-width: 0; }
 .drawer__title { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-8); }
 
 .popover {
@@ -410,6 +414,11 @@
    case's name and its scope badge as well as the window, so it is not a breakpoint. */
 .top-bar { box-sizing: border-box; min-height: var(--h-top-bar); flex: none; flex-wrap: wrap; padding-top: 0; padding-bottom: 0; }
 .top-bar__search { flex: 1 1 280px; min-width: 280px; max-width: 480px; }
+/* The owner's *Build a report* beside the view switch (ADR-145 Amendment 15): a link out to Superset, in a new tab,
+   underlined as a link and never drawn as a view; 24 px tall at least (WCAG 2.2, 2.5.8). Under GOV.UK `govuk-link`
+   gives its colour and focus. */
+.top-bar__out { display: inline-flex; align-items: center; min-height: 24px; white-space: nowrap; font-size: var(--fs-13); color: var(--text-primary); text-decoration: underline; text-underline-offset: 2px; }
+.top-bar__out:hover { color: var(--text-primary); text-decoration-thickness: 2px; }
 /* Narrow windows (ADR-115 Amendment 2): the two lines get room above and below. */
 @media (max-width: 1099px) {
   .top-bar { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
@@ -437,7 +446,7 @@
   font: inherit; font-size: var(--fs-12); cursor: pointer; text-align: left;
 }
 .left-rail__item:hover, .left-rail__item:focus-visible { background: var(--surface-hover); color: var(--text-primary); }
-.left-rail__item[aria-pressed="true"] { background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 2px 0 0 var(--text-primary); }
+.left-rail__item[aria-pressed="true"], .left-rail__item[data-current="true"] { background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 2px 0 0 var(--text-primary); }
 .left-rail__help { margin-top: auto; }
 .left-rail__help + .left-rail__toggle { margin-top: 0; }
 .left-rail__toggle { margin-top: auto; }
@@ -812,8 +821,10 @@
 
 /* The cases, each once, with each case's views beneath it (ADR-144 decision 5), in the case menu and
    the Cases drawer alike. */
-.case-tree__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
-.case-tree__row { display: grid; gap: var(--sp-4); }
+/* One column, never wider than the list's box (`minmax(0, 1fr)`): a long view name otherwise widened the Cases drawer's
+   list past its 360 px and out of the window (ADR-145 Amendment 14 decision 1, the views harness's `long=1` scan). */
+.case-tree__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+.case-tree__row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
 .case-tree__row--view { padding-left: var(--sp-16); }
 .case-tree__line { display: flex; align-items: center; gap: var(--sp-8); min-height: var(--h-control-28); }
 .case-tree__name {

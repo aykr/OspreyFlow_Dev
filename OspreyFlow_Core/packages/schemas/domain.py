@@ -681,6 +681,10 @@ class Principal(BaseModel):
     #: unlimited and only the Conduit's own background work reads so; the Conduit's principal for a
     #: request always carries a list, empty outside a case, and an empty list sees nothing.
     datasets: list[str] | None = None
+    #: ADR-148 Amendment 10: the routes alone this principal is admitted to, each
+    #: `"<METHOD> <path template>"` (a dashboard identity on Entra ID: the case list and the report
+    #: feed); `None`, every route its rights allow. `get_principal` refuses any other with 403.
+    routes: list[str] | None = None
 
 
 # --- GraphPort request/response types (00_ARCHITECTURE.md §2.1) --------

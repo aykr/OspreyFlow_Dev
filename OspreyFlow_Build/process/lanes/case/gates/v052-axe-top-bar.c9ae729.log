@@ -1,0 +1,17 @@
+# at c9ae729 with the shared diff applied
+# OSPREY_PORTS_SLOT=2 npx playwright test --config a11y/playwright.config.ts a11y/every-harness.spec.ts -g 'top-bar-harness|contrast finding|scan found'
+  ✓   1 a11y/every-harness.spec.ts:364:1 › the scan found the harness pages (2ms)
+  ✓   2 a11y/every-harness.spec.ts:389:7 › top-bar-harness.html (dark) has no automated WCAG 2.2 A or AA violations (1.0s)
+  ✓   3 a11y/every-harness.spec.ts:389:7 › top-bar-harness.html (light) has no automated WCAG 2.2 A or AA violations (883ms)
+  ✓   4 a11y/every-harness.spec.ts:389:7 › top-bar-harness.html (govuk) has no automated WCAG 2.2 A or AA violations (951ms)
+  ✓   5 a11y/every-harness.spec.ts:425:5 › top-bar-harness.html: every labelled field's name contains its visible label (2.5.3) (604ms)
+  ✓   6 a11y/every-harness.spec.ts:389:7 › top-bar-harness.html help=1 (dark) has no automated WCAG 2.2 A or AA violations (904ms)
+  ✓   7 a11y/every-harness.spec.ts:389:7 › top-bar-harness.html help=1 (light) has no automated WCAG 2.2 A or AA violations (898ms)
+  ✓   8 a11y/every-harness.spec.ts:389:7 › top-bar-harness.html help=1 (govuk) has no automated WCAG 2.2 A or AA violations (981ms)
+  ✓   9 a11y/every-harness.spec.ts:425:5 › top-bar-harness.html help=1: every labelled field's name contains its visible label (2.5.3) (596ms)
+  ✓  10 a11y/every-harness.spec.ts:389:7 › top-bar-harness.html reports=1 (dark) has no automated WCAG 2.2 A or AA violations (873ms)
+  ✓  11 a11y/every-harness.spec.ts:389:7 › top-bar-harness.html reports=1 (light) has no automated WCAG 2.2 A or AA violations (868ms)
+  ✓  12 a11y/every-harness.spec.ts:389:7 › top-bar-harness.html reports=1 (govuk) has no automated WCAG 2.2 A or AA violations (952ms)
+  ✓  13 a11y/every-harness.spec.ts:425:5 › top-bar-harness.html reports=1: every labelled field's name contains its visible label (2.5.3) (602ms)
+  ✓  14 a11y/every-harness.spec.ts:435:1 › every listed contrast finding names a look this file scans (0ms)
+  14 passed (11.2s)

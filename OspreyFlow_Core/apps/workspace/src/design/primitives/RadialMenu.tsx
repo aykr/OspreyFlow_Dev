@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 export interface RadialMenuItem {
   id: string;
@@ -16,6 +16,9 @@ export interface RadialMenuItem {
   /** The heading this entry sits under in the list layout (ADR-078). Entries that follow one another
    * with the same heading share it; entries with none are listed flat. Never changes the order. */
   group?: string;
+  /** Acts without closing the menu (ADR-078 Amendment 1: "7 types with no links" opens in place). Focus
+   * stays in the menu, on the first entry. */
+  keepsOpen?: boolean;
 }
 
 /** `…` only while a preview is in flight; `count unavailable` when it failed; nothing at all for
@@ -52,15 +55,78 @@ export interface RadialMenuProps {
    * a different feature. Mouse-invoked (right-click) defaults to the
    * radial layout; keyboard-invoked (`\`) defaults to the list. */
   layout: "radial" | "list";
-  /** Whose menu this is, shown at its head (for example `Endpoint: someone@example.test`), so that
-   * with several nodes in view the analyst can tell which one it belongs to. */
+  /** What the menu applies to, shown at its head ("2 selected", or the item's name; ADR-078 Amendment 1), so
+   * that with several nodes in view the analyst can tell which one it belongs to. */
   title?: string;
+  /** ADR-078 Amendment 1: the menu never opens over the bottom bar. The page y the menu's last entry must
+   * stay above (the bar's top), or null when nothing is there; the menu moves up to clear it. */
+  keepAbove?: () => number | null;
 }
 
 const RADIUS = 96;
 
-export function RadialMenu({ x, y, items, onClose, layout, title }: RadialMenuProps) {
+const CLEARANCE = 8;
+
+/** Arrow keys step through the entries (wrapping), Home and End go to the ends: every entry is
+ * reachable by keyboard in either layout (ADR-078 Amendment 1; the radial one is a ring, so its order
+ * is the order given). */
+function moveFocus(e: ReactKeyboardEvent<HTMLUListElement>) {
+  const entries = Array.from(e.currentTarget.querySelectorAll<HTMLElement>("[role='menuitem']"));
+  if (entries.length === 0) return;
+  const at = entries.indexOf(document.activeElement as HTMLElement);
+  const next =
+    e.key === "ArrowDown" || e.key === "ArrowRight"
+      ? (at + 1) % entries.length
+      : e.key === "ArrowUp" || e.key === "ArrowLeft"
+        ? (at - 1 + entries.length) % entries.length
+        : e.key === "Home"
+          ? 0
+          : e.key === "End"
+            ? entries.length - 1
+            : null;
+  if (next === null) return;
+  e.preventDefault();
+  e.stopPropagation(); // the canvas's own arrow keys move between nodes; not while its menu is open
+  entries[next]?.focus();
+}
+
+export function RadialMenu({ x, y, items, onClose, layout, title, keepAbove }: RadialMenuProps) {
   const ref = useRef<HTMLUListElement>(null);
+  // Where it was moved to, for the `y` it was measured at: a menu opened somewhere else starts at its own y.
+  const [placed, setPlaced] = useState({ y, top: y });
+  const top = placed.y === y ? placed.top : y;
+
+  // Measured once drawn: the lowest edge of the menu or any entry (the ring's entries sit outside the
+  // list's own box) is kept above `keepAbove`'s line, moving the whole menu up by what it overlaps.
+  useLayoutEffect(() => {
+    const line = keepAbove?.();
+    const menu = ref.current;
+    if (line == null || !menu) return;
+    const boxes = [menu, ...Array.from(menu.querySelectorAll<HTMLElement>("[role='menuitem']"))];
+    const bottom = Math.max(...boxes.map((el) => el.getBoundingClientRect().bottom));
+    const over = bottom + CLEARANCE - line;
+    if (over > 0) setPlaced({ y, top: Math.max(CLEARANCE, top - over) });
+    // Measured on open and when the entries change (a count arriving, a fold opening).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length, y]);
+
+  // An entry that had focus can leave the menu as its entries change (a fold, an answer arriving): focus
+  // then stays in the menu, on its first entry, so the arrow keys keep working.
+  const entryIds = items.map((i) => i.id).join("\n");
+  useLayoutEffect(() => {
+    const menu = ref.current;
+    if (menu && (document.activeElement === document.body || document.activeElement === null))
+      menu.querySelector<HTMLElement>("[role='menuitem']")?.focus();
+  }, [entryIds]);
+
+  const choose = (item: RadialMenuItem) => {
+    item.onSelect();
+    if (item.keepsOpen) {
+      requestAnimationFrame(() => ref.current?.querySelector<HTMLElement>("[role='menuitem']")?.focus());
+      return;
+    }
+    onClose();
+  };
 
   // **Focus the first item once, on open — not on every render.** These were one effect keyed on
   // `[onClose]` until round 12d. `onClose` is an inline arrow at the call site, so its identity
@@ -103,7 +169,8 @@ export function RadialMenu({ x, y, items, onClose, layout, title }: RadialMenuPr
         padding: "var(--sp-4) var(--sp-8)",
         color: "var(--text-secondary)",
         borderBottom: "1px solid var(--border-subtle)",
-        fontFamily: "var(--mono)",
+        // ADR-097 Amendment 3: a heading is in the page's own face; mono is for values.
+        fontFamily: "var(--ui)",
         whiteSpace: "nowrap",
       }}
     >
@@ -124,10 +191,7 @@ export function RadialMenu({ x, y, items, onClose, layout, title }: RadialMenuPr
             width: "100%",
             textAlign: "left",
           }}
-          onClick={() => {
-            item.onSelect();
-            onClose();
-          }}
+          onClick={() => choose(item)}
         >
           <ItemBody item={item} />
         </button>
@@ -147,7 +211,8 @@ export function RadialMenu({ x, y, items, onClose, layout, title }: RadialMenuPr
         role="menu"
         aria-label={title}
         ref={ref}
-        style={{ position: "fixed", left: x, top: y }}
+        onKeyDown={moveFocus}
+        style={{ position: "fixed", left: x, top }}
       >
         {heading}
         {runs.map((run, i) =>
@@ -174,10 +239,11 @@ export function RadialMenu({ x, y, items, onClose, layout, title }: RadialMenuPr
       role="menu"
       aria-label={title}
       ref={ref}
+      onKeyDown={moveFocus}
       style={{
         position: "fixed",
         left: x,
-        top: y,
+        top,
         listStyle: "none",
         margin: 0,
         padding: 0,
@@ -201,10 +267,7 @@ export function RadialMenu({ x, y, items, onClose, layout, title }: RadialMenuPr
               role="menuitem"
               type="button"
               className="radial-menu__item"
-              onClick={() => {
-                item.onSelect();
-                onClose();
-              }}
+              onClick={() => choose(item)}
             >
               <ItemBody item={item} />
             </button>

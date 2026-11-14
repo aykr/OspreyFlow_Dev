@@ -1,0 +1,44 @@
+# plant: run_api_admits_a_registered_dashboard (OspreyFlow_Core/services/api/app.py)
+# replaced: '        if registered is not None:\n            raise HTTPException(status_code=403, detail=DASHBOARD_IS_NO_SERVICE_IDENTITY)'
+# with: '        pass'
+# run: pytest -k 'registered_as_a_dashboard'
+
+F.                                                                       [100%]
+=================================== FAILURES ===================================
+_ test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity[registered-dashboard] _
+
+jwks_url = 'http://127.0.0.1:49661/jwks.json'
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x13744caf0>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x13744cab0>)
+registered = True
+
+    @pytest.mark.parametrize("registered", [True, False], ids=["registered-dashboard", "not-a-dashboard"])
+    def test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity(
+        jwks_url, keypair, registered
+    ) -> None:
+        """Through the real `get_service_identity`: a client Admin › Dashboards registered is refused
+        before anything is read, though its token holds no dashboard role; any other gets past this
+        door (to whatever the route's own dependencies then answer, here without the app's start)."""
+        from fastapi.testclient import TestClient
+        from services.api.app import app
+    
+        before = {k: getattr(app.state, k, None) for k in ("service_identities", "people_store")}
+        app.state.service_identities = _verifier(jwks_url)
+        app.state.people_store = _Dashboards() if registered else None
+        try:
+            answered = TestClient(app, raise_server_exceptions=False).post(
+                "/v1/runs", json={}, headers={"Authorization": f"Bearer {_app_token(keypair)}"}
+            )
+        finally:
+            for key, value in before.items():
+                setattr(app.state, key, value)
+        refused = answered.status_code == 403 and "dashboard identity" in answered.text
+>       assert refused is registered, (answered.status_code, answered.text)
+E       AssertionError: (500, 'Internal Server Error')
+E       assert False is True
+
+../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:336: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [13/Nov/2026 20:47:58] "GET /jwks.json HTTP/1.1" 200 -
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_service_identity_entra.py::test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity[registered-dashboard]
+1 failed, 1 passed, 108 deselected in 2.96s

@@ -1,0 +1,6 @@
+# plant: entra_registers_without_an_id (OspreyFlow_Core/services/api/entra_people.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '        if application_id is None:\n            raise UnknownRoleError('
+# with: '        if application_id is None:\n            application_id = "ffffffff-0000-4111-8222-333333333333"\n        if False:\n            raise UnknownRoleError('
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_entra_people.py -k 'without_its_application_id'
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_on_entra_a_dashboard_is_refused_in_words_without_its_application_id
+1 failed, 59 deselected in 4.48s

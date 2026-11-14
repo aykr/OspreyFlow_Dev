@@ -1,0 +1,66 @@
+# ADR-148 Amendment 9, Superset on Entra (step 4): red first, each pytest with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a). Mac, offline, on v052-gate.
+
+== main 84c1b27's superset_config.py (everyone Gamma, Keycloak's provider only):
+FAILED test_the_provider_is_the_tenant_s_own_v2_endpoints_asking_for_the_api_s_scope
+FAILED test_an_entra_setting_left_out_stops_superset_starting[SUPERSET_ENTRA_TENANT]
+FAILED test_an_entra_setting_left_out_stops_superset_starting[SUPERSET_OIDC_CLIENT_ID]
+FAILED test_an_entra_setting_left_out_stops_superset_starting[SUPERSET_ENTRA_API_SCOPE]
+FAILED test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[admin]
+FAILED test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[admin-without-reports]
+FAILED test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[reports]
+FAILED test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[builder]
+FAILED test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[builder-without-reports]
+FAILED test_a_token_s_own_roles_are_never_read
+FAILED test_neither_right_is_no_account
+FAILED test_any_refusal_or_failure_of_the_conduit_refuses_the_sign_in[unresolved-token]
+FAILED test_any_refusal_or_failure_of_the_conduit_refuses_the_sign_in[rights-refused]
+FAILED test_any_refusal_or_failure_of_the_conduit_refuses_the_sign_in[conduit-down]
+FAILED test_any_refusal_or_failure_of_the_conduit_refuses_the_sign_in[no-token]
+FAILED test_the_rate_limits_go_to_the_managed_cache_over_tls_with_its_password
+FAILED test_a_builder_is_superset_s_alpha_and_a_reports_viewer_stays_read_only
+17 failed, 3 passed in 6.41s
+
+== plant (a): the username from the ID token, not the Conduit's principal:
+FAILED test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[admin]
+FAILED test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[admin-without-reports]
+FAILED test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[reports]
+FAILED test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[builder]
+FAILED test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[builder-without-reports]
+5 failed, 15 passed in 6.30s
+
+== plant (b): none of the rights falls back to Gamma, not refused:
+FAILED test_neither_right_is_no_account
+1 failed, 19 passed in 6.31s
+
+== plant (c): a Conduit failure swallowed into Gamma:
+FAILED test_any_refusal_or_failure_of_the_conduit_refuses_the_sign_in[unresolved-token]
+FAILED test_any_refusal_or_failure_of_the_conduit_refuses_the_sign_in[rights-refused]
+FAILED test_any_refusal_or_failure_of_the_conduit_refuses_the_sign_in[conduit-down]
+3 failed, 17 passed in 6.31s
+
+== plant (d): the multi-tenant endpoint, not the tenant's own:
+FAILED test_the_provider_is_the_tenant_s_own_v2_endpoints_asking_for_the_api_s_scope
+1 failed, 19 passed in 6.32s
+
+== plant (e): a token's roles read when it carries them:
+FAILED test_a_token_s_own_roles_are_never_read
+1 failed, 19 passed in 6.37s
+
+== green:
+20 passed in 6.29s
+
+== Flask-AppBuilder answers an exception from oauth_user_info as a refused sign-in: read in the pinned image
+   (apache/superset@sha256:16b50bbe…, Flask-AppBuilder 5.0.2, flask_appbuilder/security/views.py:692-714, on the
+   test server by `docker run --rm` of the image, stack_lease.sh offline):
+        try:
+            self.appbuilder.sm.set_oauth_session(provider, resp)
+            userinfo = self.appbuilder.sm.oauth_user_info(provider, resp)
+        except Exception as e:
+            log.error("Error returning OAuth user info: %s", e)
+            user = None
+        ...
+        if user is None:
+            flash(as_unicode(self.invalid_login_message), "warning")
+            return redirect(self.appbuilder.get_url_for_login)
+   So NotForReports, and any refusal or failure of the Conduit's /v1/me or /v1/me/rights, is no account (fails closed).
+   The live proof, a person without read_reports refused at Superset's sign-in, is the v0.5.2 R1 dashboards check.

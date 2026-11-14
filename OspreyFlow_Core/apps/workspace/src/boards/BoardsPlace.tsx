@@ -77,19 +77,26 @@ export function BoardsPlace({
 
   useEffect(() => setOpen(initialBoard), [initialBoard, caseId]);
 
+  // The owner's navigation decision (ADR-145 Amendment 15): the strip's note left, so the drawing board's own screen
+  // says what a board is, on the list and on an open board alike.
+  const sketch = "Drawing board: your sketch; it does not change the case's data.";
   if (caseId && open) {
     return (
-      <BoardEditor
-        apiBaseUrl={apiBaseUrl}
-        bearerToken={bearerToken}
-        caseId={caseId}
-        boardId={open}
-        entityTypes={entityTypes}
-        onBack={() => {
-          setOpen(null);
-          void reload();
-        }}
-      />
+      // One column, the line above the board and across it: the view's row lays its children side by side.
+      <div className="board-open">
+        <p className="caption board__sketch">{sketch}</p>
+        <BoardEditor
+          apiBaseUrl={apiBaseUrl}
+          bearerToken={bearerToken}
+          caseId={caseId}
+          boardId={open}
+          entityTypes={entityTypes}
+          onBack={() => {
+            setOpen(null);
+            void reload();
+          }}
+        />
+      </div>
     );
   }
 
@@ -102,7 +109,8 @@ export function BoardsPlace({
       </h2>
       <p className="caption">
         {caseId
-          ? "Everything drawn is kept in this case's analyst layer. Deleting a board never deletes what was drawn."
+          ? // The owner's navigation decision (ADR-145 Amendment 15): the strip's note left; the board says it here.
+            `${sketch} Everything drawn is kept in this case's analyst layer. Deleting a board never deletes what was drawn.`
           : "Open a case to see its boards, or start a drawing as a case of its own."}
       </p>
       {problem && (

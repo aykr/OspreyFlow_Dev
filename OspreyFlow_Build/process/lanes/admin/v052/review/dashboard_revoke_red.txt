@@ -1,0 +1,15 @@
+        grants = _Grants()
+        app.dependency_overrides[get_investigations] = lambda: grants
+        _as(ADMIN)
+        assert client.delete("/v1/admin/dashboards/osprey-dashboard-board").status_code == 204
+        assert ("deleted", "osprey-dashboard-board") in client.identity.made
+>       assert grants.revoked == [("sa-1", ADMIN.id)]
+E       AssertionError: assert [] == [('sa-1', 'admin-1')]
+E         
+E         Right contains one more item: ('sa-1', 'admin-1')
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_admin_routes.py:690: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_routes.py::test_removing_a_dashboard_revokes_every_case_grant_its_account_holds
+1 failed, 166 deselected in 1.69s

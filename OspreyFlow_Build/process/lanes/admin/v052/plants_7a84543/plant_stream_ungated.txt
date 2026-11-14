@@ -1,0 +1,6 @@
+# plant: stream_ungated (OspreyFlow_Core/services/api/app.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '    if raw.routes is not None:\n        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)\n        return\n'
+# with: ''
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_route_gate.py -k 'stream'
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_gate.py::test_a_principal_admitted_to_named_routes_never_opens_a_case_stream[dashboard identity]
+1 failed, 2 deselected in 6.94s

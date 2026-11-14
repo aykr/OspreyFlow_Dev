@@ -145,3 +145,48 @@ test("another member of the case is shown nothing of a private view, and no shar
 test("every registered case view action has its own proving test case above", () => {
   assertAllCovered("VIEW_ACTIONS", VIEW_ACTIONS);
 });
+
+// ADR-145 Amendment 14 decision 1 (the owner, 13 November 2026, on the GOV.UK look: "Open covers the Private
+// tag, and the buttons wrap to four lines"): in the real 360 px Cases drawer each view's name and tag share a line
+// and its actions fit. Nothing overlaps the tag, the actions are on one line, and all of it is inside the drawer.
+// Also with a long view name, and while asking "Delete this view?" (whose question and buttons may wrap, but
+// stay inside and off the tag). In each look the scans use, and a row's Open still chosen by keyboard.
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  for (const state of ["", "&long=1", "&asking=delete"] as const) {
+    test(`${brand} ${theme}${state}: in the Cases drawer each view's name, tag and actions fit`, async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(`/keyboard/views-harness.html?in=drawer&brand=${brand}${state}`);
+      await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+      const drawer = page.getByRole("dialog", { name: "Cases" });
+      await expect(drawer.getByRole("button", { name: /^Open Alice's own/ }).or(drawer.getByRole("button", { name: "Delete view" }))).toBeVisible();
+      if (state === "&asking=delete") await expect(drawer.getByRole("button", { name: "Delete view" })).toBeVisible();
+      const rows = await page.evaluate(() => {
+        const box = (el: Element) => el.getBoundingClientRect();
+        const frame = box(document.querySelector("[role='dialog']")!);
+        return [...document.querySelectorAll("[data-view-id]")].map((row) => {
+          const tag = row.querySelector(".govuk-tag, .view-tag")!;
+          const name = row.querySelector(".govuk-summary-list__key, .case-views__name")!;
+          const asking = row.querySelector(".case-views__confirm") !== null;
+          const actions = [...row.querySelectorAll("button")];
+          const overlaps = (a: DOMRect, b: DOMRect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+          const t = box(tag);
+          const n = box(name);
+          return {
+            id: row.getAttribute("data-view-id"),
+            nameBesideTag: t.top < n.bottom && n.top < t.bottom && t.left >= n.right - 0.5,
+            tagCovered: actions.some((b) => overlaps(box(b), t)),
+            actionLines: asking ? 1 : new Set(actions.map((b) => Math.round(box(b).top))).size,
+            outside: [tag, name, ...actions].filter((el) => box(el).right > frame.right + 0.5 || box(el).left < frame.left - 0.5).length,
+          };
+        });
+      });
+      expect(rows.map((r) => r.id)).toEqual(["v-private", "v-shared"]);
+      for (const row of rows) expect(row, row.id!).toEqual({ id: row.id, nameBesideTag: true, tagCovered: false, actionLines: 1, outside: 0 });
+      if (state !== "&asking=delete") {
+        await drawer.getByRole("button", { name: /^Open Alice's own/ }).focus();
+        await page.keyboard.press("Enter");
+        await expect.poll(() => page.evaluate(() => window.__VIEWS__?.opened)).toBe("v-private");
+      }
+    });
+  }
+}

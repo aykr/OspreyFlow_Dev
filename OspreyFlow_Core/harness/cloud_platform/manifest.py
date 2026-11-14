@@ -99,7 +99,10 @@ def rendered(config: Any, *, resolver: Any = None) -> dict[str, Any]:
     backups = values.get("backups")
     if backups:
         own = {"image": _repository(backups["image"], registry), **_sizes(backups["resources"])}
-        claims = [c for c in (values.get("storage") or {}).get("claims") or []]
+        # The chart's own condition (backups.yaml's `if $parts`): a claim of the shape's own, or the
+        # shared claim's parts, which every shape's sets hold (ADR-148 Amendment 13 decision 4).
+        of_its_own = (values.get("storage") or {}).get("claims") or []
+        claims = [*of_its_own, *(backups.get("shared") or [])]
         jobs["ospreyflow-backup"] = {"kind": "CronJob", "schedule": backups["schedule"], **own}
         if claims:
             jobs["ospreyflow-backup-claims"] = {
@@ -157,6 +160,10 @@ def rendered(config: Any, *, resolver: Any = None) -> dict[str, Any]:
     for key in init:
         if key.endswith("-db"):  # a database made by its service's own step on the instance
             databases[key.split("/", 1)[1].removesuffix("-db")] = {}
+    if any(w["name"] == "superset" for w in values["workloads"]):
+        # Superset makes its own settings database at its first start (`osprey_entrypoint.py`), as
+        # on Small (ADR-148 Amendment 11), named by its environment or its default.
+        databases[values["environment"].get("SUPERSET_METADATA_DB", "superset")] = {}
     parameter = re.search(r'name\s*=\s*"max_connections"\s*\n\s*value\s*=\s*"(\d+)"', terraform)
     backups_bucket = 'resource "aws_s3_bucket" "backups"' in terraform
     managed: dict[str, Any] = {

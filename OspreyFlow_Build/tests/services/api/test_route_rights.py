@@ -196,6 +196,8 @@ ROUTE_RIGHTS = {
     "accept_document_candidates_route": "extract_files",
     "reject_document_candidate_route": "extract_files",
     "ask_question_route": "ask_model",
+    # ADR-098 Amendment 7: what a question would read, and the engine that would answer it.
+    "will_read_route": "ask_model",
     "list_questions_route": "investigate",
     "accept_question_candidate_route": "extract_files",
     "reject_question_candidate_route": "extract_files",
@@ -435,6 +437,7 @@ ROUTE_RIGHTS = {
     # ADR-148 Amendment 8: on Entra ID sign-in, a person added by object id.
     "add_person_by_object_id_route": "manage_people",
     "sign_in_kind_route": "manage_people",
+    "dashboards_sign_in_kind_route": "manage_dashboards",
     "set_person_access_route": "manage_people",
     "disable_person_route": "manage_people",
     "enable_person_route": "manage_people",

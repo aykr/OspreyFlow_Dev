@@ -53,7 +53,7 @@ describe("SelectionBar", () => {
 
   it("in a view offers Save as a view, Ask and Clear, and nothing that changes the case", () => {
     // The owner's ruling of 8 November 2026 (ADR-144 Amendment 2): an opened view is read-only.
-    render(<SelectionBar count={2} onSaveView={vi.fn()} onAsk={vi.fn()} documentCount={1} onClear={vi.fn()} />);
+    render(<SelectionBar count={2} onSaveView={vi.fn()} onAsk={vi.fn()} onClear={vi.fn()} />);
     const names = screen.getAllByRole("button").map((b) => b.textContent?.trim());
     expect(names).toEqual(["Ask the model about these…", "Save as a view", "Clear Esc"]);
   });
@@ -111,13 +111,9 @@ describe("SelectionBar: Show links among these", () => {
     expect(screen.queryByRole("button", { name: "Show links among these" })).toBeNull();
   });
 
-  it("offers Ask the model about these… only while the selection holds a Document (ADR-098 decision 4)", () => {
+  it("offers Ask the model about these… whatever is selected, Document or not (ADR-098 Amendment 7)", () => {
     const ask = vi.fn();
-    const { rerender } = render(
-      <SelectionBar count={2} onAsk={ask} documentCount={0} onRemove={() => {}} onClear={() => {}} />,
-    );
-    expect(screen.queryByRole("button", { name: "Ask the model about these…" })).toBeNull();
-    rerender(<SelectionBar count={2} onAsk={ask} documentCount={1} onRemove={() => {}} onClear={() => {}} />);
+    render(<SelectionBar count={2} onAsk={ask} onRemove={() => {}} onClear={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Ask the model about these…" }));
     expect(ask).toHaveBeenCalledTimes(1);
   });

@@ -1,0 +1,8 @@
+# plant: revoke_everywhere_deletes_nothing (OspreyFlow_Core/services/api/investigations.py), at a2c5670, the plant uncommitted
+# replaced: "DELETE FROM investigation_grants WHERE account_id = $1 "
+# with: "DELETE FROM investigation_grants WHERE account_id = $1 AND false "
+# run: cd OspreyFlow_Core && PYTHONPYCACHEPREFIX=$(mktemp -d) .venv/bin/python -m pytest -q -p no:cacheprovider -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py -k 'removed_everywhere'
+E       AssertionError: assert [] == ['01M7BS49N6R...PTPFEWTMB3DQ']
+../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py:154: AssertionError
+FAILED ../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py::test_an_account_removed_everywhere_holds_no_level_in_any_case
+1 failed, 43 deselected in 2.07s

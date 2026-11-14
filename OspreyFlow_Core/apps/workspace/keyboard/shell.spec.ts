@@ -82,64 +82,75 @@ test("the marking strip and the top bar take 20 and 44 pixels, and the rail 48 w
   expect(Math.round(strip.height)).toBe(20);
   expect(Math.round(bar.height)).toBe(44);
   expect(Math.round(railBox.width)).toBe(48);
-  const item = (await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Cases" }).boundingBox())!;
+  const item = (await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Explore" }).boundingBox())!;
   expect([Math.round(item.width), Math.round(item.height)]).toEqual([36, 36]);
   await expect(page.getByRole("note", { name: "Protective marking" })).toHaveText("OFFICIAL");
 });
 
 test("each rail entry is reached and pressed by keyboard", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
-  // ADR-145 Amendment 12: the rail keeps Cases, Explore, Ask & Chat (Questions renamed) and Dashboards.
-  // Monitoring is no longer the Glass's at all: Rules and Monitoring is a place of its own (ADR-146
-  // decision 2).
-  for (const name of ["Cases", "Explore", "Ask & Chat", "Dashboards"]) {
-    // Exact: "Explore" is also the start of "Explore Details" (ADR-145 Amendment 12).
-    await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name, exact: true }).focus();
+  // The owner's navigation decision (ADR-145 Amendment 15): the rail holds the panel openers alone, Explore, Ask & Chat
+  // and History; Cases, Dashboards and Explore Details left it. Monitoring is a place of its own (ADR-146 decision 2).
+  const rail = page.getByRole("navigation", { name: "Workspace" });
+  for (const name of ["Explore", "Ask & Chat", "History"]) {
+    await rail.getByRole("button", { name, exact: true }).focus();
     await page.keyboard.press("Enter");
   }
-  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["cases", "explore", "questions", "dashboards"]);
-  // Watches are with the rules in Rules and Monitoring (ADR-146 decision 4), not the rail.
-  await expect(page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Watches" })).toHaveCount(0);
-  await expect(page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: /Monitoring/ })).toHaveCount(0);
+  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["explore", "questions", "history"]);
+  for (const name of ["Cases", "Dashboards", /^Explore Details/, "Watches", /Monitoring/]) await expect(rail.getByRole("button", { name })).toHaveCount(0);
   registerCovered(REGISTRY, "rail-entries-by-keyboard");
 });
 
-// ADR-145 Amendment 12 (rule 13): each destination under the rail's ⋯ Explore Details, in its order,
-// opened and chosen by keyboard, and Escape closes the menu back onto it.
-test("each destination under the rail's Explore Details is reached and chosen by keyboard", async ({ page }) => {
-  await page.goto("/keyboard/top-bar-harness.html");
+// ADR-145 Amendment 15 (rule 13): each panel opener opens its panel by keyboard without changing the view, a second
+// Enter closes it, and Escape or the panel's Close returns focus to the opener.
+test("each rail panel is opened and closed by keyboard, the view kept and focus returned to its opener", async ({ page }) => {
+  await page.goto("/keyboard/places-harness.html?rights=investigate,ask_model");
   const rail = page.getByRole("navigation", { name: "Workspace" });
-  for (const name of ["History", "Ownership", "Connection strength"]) {
-    await rail.getByRole("button", { name: "Explore Details" }).focus();
-    await page.keyboard.press("Enter");
-    const menu = rail.getByRole("group", { name: "Explore Details" });
-    await expect(menu.getByRole("button")).toHaveText(["History", "Ownership", "Connection strength"]);
-    await menu.getByRole("button", { name }).focus();
-    await page.keyboard.press("Enter");
-    await expect(rail.getByRole("group", { name: "Explore Details" })).toHaveCount(0);
-  }
-  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["history", "ownership", "strength"]);
-  await rail.getByRole("button", { name: "Explore Details" }).focus();
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Map", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await page.keyboard.press("Escape");
-  await expect(rail.getByRole("group", { name: "Explore Details" })).toHaveCount(0);
-  await expect(rail.getByRole("button", { name: "Explore Details" })).toBeFocused();
-  registerCovered(REGISTRY, "rail-more-by-keyboard");
+  await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
+  for (const name of ["Explore", "Ask & Chat", "History"]) {
+    const opener = rail.getByRole("button", { name, exact: true });
+    await opener.focus();
+    await page.keyboard.press("Enter");
+    const panel = page.getByRole("dialog", { name });
+    await expect(panel).toBeVisible();
+    await expect(opener).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    await page.keyboard.press("Enter");
+    await panel.getByRole("button", { name: `Close ${name}` }).focus();
+    await page.keyboard.press("Enter");
+    await expect(panel).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    await expect(opener).toHaveAttribute("aria-expanded", "false");
+  }
+  await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
+  registerCovered(REGISTRY, "rail-panels-by-keyboard");
 });
 
-test("each view is chosen by keyboard, Matrix and Figures under More views", async ({ page }) => {
+test("each view is chosen by keyboard: Graph, Map, Drawing board and Reports, the rest under More views", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
-  await page.getByRole("button", { name: "Map", exact: true }).focus();
-  await page.keyboard.press("Enter");
-  for (const name of ["Figures", "Matrix"]) {
-    await page.getByRole("button", { name: "More views" }).focus();
-    await page.keyboard.press("Enter");
-    await page.getByRole("group", { name: "More views" }).getByRole("button", { name }).focus();
+  const group = page.getByRole("group", { name: "View" });
+  // ADR-145 Amendment 15: the one view switch, in its order.
+  await expect(group.getByRole("button")).toHaveText(["Graph", "Map", "Drawing board", "Reports"]);
+  for (const name of ["Map", "Drawing board", "Reports"]) {
+    await group.getByRole("button", { name, exact: true }).focus();
     await page.keyboard.press("Enter");
   }
-  await page.getByRole("button", { name: "Graph", exact: true }).focus();
+  for (const name of ["Matrix", "Figures", "Ownership", "Connection strength"]) {
+    await page.getByRole("button", { name: "More views" }).focus();
+    await page.keyboard.press("Enter");
+    const more = page.getByRole("group", { name: "More views" });
+    await expect(more.getByRole("button")).toHaveText(["Matrix", "Figures", "Ownership", "Connection strength"]);
+    await more.getByRole("button", { name }).focus();
+    await page.keyboard.press("Enter");
+  }
+  await group.getByRole("button", { name: "Graph", exact: true }).focus();
   await page.keyboard.press("Enter");
-  expect(await page.evaluate(() => window.__TOPBAR__?.views)).toEqual(["map", "reports", "matrix", "graph"]);
+  expect(await page.evaluate(() => window.__TOPBAR__?.views)).toEqual(["map", "boards", "dashboards", "matrix", "reports", "ownership", "strength", "graph"]);
   registerCovered(REGISTRY, "views-chosen-by-keyboard");
   registerCovered(REGISTRY, "more-views-by-keyboard");
 });
@@ -192,6 +203,8 @@ test("the rail's Help opens and closes the keys panel by keyboard, as ? and Esc 
   await expect(panel).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
+  // ADR-145 Amendment 15: closing returns focus to the entry that opened it.
+  await expect(help).toBeFocused();
   await page.locator("body").focus();
   await page.keyboard.press("?");
   await expect(panel).toBeVisible();
@@ -259,18 +272,25 @@ test("Rules and Monitoring carries the count, and the Glass is returned to its l
   registerCovered(REGISTRY, "back-to-the-glass-from-rules-and-monitoring-by-keyboard");
 });
 
+/** Another case from the real case menu (`CaseSwitcher`), by keyboard: the menu opened, the case chosen. */
+async function chooseCase(page: import("@playwright/test").Page, name: string): Promise<void> {
+  await page.getByRole("button", { name: /^Case: Kestrel/ }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name, exact: true }).focus();
+  await page.keyboard.press("Enter");
+}
+
 // ADR-145 decision 2 (rule 13): the banner's cross-link, there and back, keeping the case and the view.
 test("the banner's cross-link goes to the Studio and back to the same case and view by keyboard", async ({ page }) => {
   await page.goto("/keyboard/places-harness.html?rights=investigate,edit_pipelines");
   await page.getByRole("button", { name: "Map", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
-  await page.getByRole("button", { name: "Open Prison intel in the Ingest Studio ↗" }).focus();
+  await page.getByRole("button", { name: "Open this case's data in the Ingest Studio ↗" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("ingest, ingest, on case kestrel")).toBeVisible();
   // Another case, chosen in the Studio: the real `openCase`, which reloads the page.
-  await page.getByRole("button", { name: "Case: Kestrel" }).focus();
-  await page.keyboard.press("Enter");
+  await chooseCase(page, "Harrier");
   await expect(page.getByText("ingest, ingest, on case harrier")).toBeVisible();
   await page.getByRole("button", { name: "← Back to case Harrier in the Glass" }).focus();
   await page.keyboard.press("Enter");
@@ -289,44 +309,82 @@ test("from Messages, the cross-link and a case change in the Studio come Back to
     await page.keyboard.press("Enter");
   }
   await expect(page.getByText("glass, dossier, on case kestrel")).toBeVisible();
-  await page.getByRole("button", { name: "Open Prison intel in the Ingest Studio ↗" }).focus();
+  await page.getByRole("button", { name: "Open this case's data in the Ingest Studio ↗" }).focus();
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "Case: Kestrel" }).focus();
-  await page.keyboard.press("Enter");
+  await chooseCase(page, "Harrier");
   await expect(page.getByText("ingest, ingest, on case harrier")).toBeVisible();
   await page.getByRole("button", { name: "← Back to case Harrier in the Glass" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("glass, map, on case harrier")).toBeVisible();
 });
 
-// ADR-145 decision 1 and Amendment 13 (rule 13): the Glass's mode toggle in the banner, Graph · Drawing board,
-// each chosen by keyboard, and the open mode's one-line note the region's own, read with it (its
-// description). Monitoring left for Rules and Monitoring (ADR-146 decision 2).
-test("the banner's toggle is Graph and Drawing board, each chosen by keyboard, its note read with the region", async ({ page }) => {
+// The owner's navigation decision (ADR-145 Amendment 15, rule 13): the case line, "You are in the Glass · Case ‹switcher›
+// · Views in this case · reads …", the word Case visible, no mode toggle and no note; Views in this case opens the
+// Cases panel by keyboard, and Escape returns focus to it.
+test("the case line's Views in this case opens the Cases panel by keyboard, and focus returns to it", async ({ page }) => {
   await page.goto("/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts");
   const region = page.getByRole("region", { name: "You are in the Glass" });
-  const sections = region.getByRole("navigation", { name: "In the Glass" });
-  await expect(sections.getByRole("button")).toHaveText(["Graph", "Drawing board"]);
-  const GRAPH = "Graph: the case's data. Saved views are under Views or Cases.";
-  const BOARD = "Drawing board: your sketch; it does not change the case's data.";
-  await expect(region).toHaveAccessibleDescription(GRAPH);
-  await expect(region).toContainText(GRAPH);
-  await page.getByRole("button", { name: "Map", exact: true }).focus();
+  await expect(region.getByRole("navigation")).toHaveCount(0);
+  await expect(region).not.toHaveAttribute("aria-describedby");
+  await expect(region).toContainText(/You are in the Glass\s*·\s*Case\s*Case: Kestrel\s*▾\s*·\s*Views in this case\s*·\s*reads Prison intel/);
+  const views = region.getByRole("button", { name: "Views in this case" });
+  await views.focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
-  await sections.getByRole("button", { name: "Drawing board" }).focus();
-  await page.keyboard.press("Enter");
-  await expect(page.getByText("glass, boards, on case kestrel")).toBeVisible();
-  await expect(sections.getByRole("button", { name: "Drawing board" })).toHaveAttribute("aria-current", "page");
-  await expect(region).toHaveAccessibleDescription(BOARD);
-  await expect(region).not.toContainText(GRAPH);
-  await sections.getByRole("button", { name: "Graph" }).focus();
-  await page.keyboard.press("Enter");
-  await expect(page.getByText("glass, graph, on case kestrel")).toBeVisible();
-  await expect(sections.getByRole("button", { name: "Graph" })).toHaveAttribute("aria-current", "page");
-  await expect(region).toHaveAccessibleDescription(GRAPH);
-  registerCovered(REGISTRY, "banner-sections-by-keyboard");
+  const panel = page.getByRole("dialog", { name: "Cases" });
+  await expect(panel).toBeVisible();
+  await expect(views).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(views).toBeFocused();
+  await expect(views).toHaveAttribute("aria-expanded", "false");
+  registerCovered(REGISTRY, "case-line-views-by-keyboard");
 });
+
+// ADR-145 Amendment 15 (rule 13; the lane-reviewer's item 3): the case menu's last entry, All cases, opens the Cases panel
+// in the Glass by keyboard, and closing it returns focus to the case menu's button, the entry itself gone with its menu.
+test("the case menu's All cases opens the Cases panel by keyboard, and focus returns to the case menu", async ({ page }) => {
+  await page.goto("/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts");
+  const region = page.getByRole("region", { name: "You are in the Glass" });
+  const menuButton = region.getByRole("button", { name: /^Case: Kestrel/ });
+  await menuButton.focus();
+  await page.keyboard.press("Enter");
+  const all = page.getByRole("button", { name: "All cases", exact: true });
+  await all.focus();
+  await page.keyboard.press("Enter");
+  const panel = page.getByRole("dialog", { name: "Cases" });
+  await expect(panel).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(menuButton).toBeFocused();
+  registerCovered(REGISTRY, "all-cases-by-keyboard");
+});
+
+// ADR-145 Amendment 15 (the owner's navigation decision): exactly one view is current at any time, in the dark, light
+// and GOV.UK looks: one pressed in the switch, or More views naming the one under it; a panel opened from the rail
+// changes none of it.
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  test(`${brand} ${theme}: exactly one view is current, and a rail panel changes none of it`, async ({ page }) => {
+    await page.goto(`/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts,read_reports,trace_ownership&brand=${brand}`);
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    const group = page.getByRole("group", { name: "View" });
+    const pressed = group.locator('[aria-pressed="true"]');
+    await expect(pressed).toHaveText(["Graph"]);
+    await group.getByRole("button", { name: "Reports", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(pressed).toHaveText(["Reports"]);
+    await page.getByRole("button", { name: "More views" }).focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("group", { name: "More views" }).getByRole("button", { name: "Ownership" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(pressed).toHaveCount(0);
+    await expect(page.locator(".menu-button--pressed")).toHaveText(/^Ownership/);
+    await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Explore", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog", { name: "Explore" })).toBeVisible();
+    await expect(page.getByText("glass, ownership, on case kestrel")).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Workspace" }).locator('[aria-pressed="true"]')).toHaveCount(0);
+  });
+}
 
 // ADR-146 decision 6 (rule 13): Home's Needs your attention opens the alert, not its case.
 test("an alert on Home, focused, is opened at its address by Enter", async ({ page }) => {
@@ -440,37 +498,31 @@ for (const place of ["glass", "ingest", "rules", "admin"] as const) {
     const rowSize = await region.evaluate((e) => getComputedStyle(e.querySelector(".govuk-notification-banner__content") ?? e).fontSize);
     expect.soft(await heading.evaluate(size), "the title at the row's size").toBe(rowSize);
     if (place === "glass") {
+      // ADR-145 Amendment 15: the case line, its Views in this case on the title's row and at its size (Graph left the row).
       const title = await heading.boundingBox();
-      const caseSection = await region.getByRole("button", { name: "Graph", exact: true }).boundingBox();
-      expect.soft(Math.abs(title!.y + title!.height / 2 - (caseSection!.y + caseSection!.height / 2)), "on the same row as Graph").toBeLessThan(6);
-      expect.soft(title!.x, "at the row's start").toBeLessThan(caseSection!.x);
-      expect.soft(await region.getByRole("button", { name: "Graph", exact: true }).evaluate(size), "Graph at the row's size").toBe(rowSize);
+      const views = region.getByRole("button", { name: "Views in this case", exact: true });
+      const caseLine = await views.boundingBox();
+      expect.soft(Math.abs(title!.y + title!.height / 2 - (caseLine!.y + caseLine!.height / 2)), "on the same row as Views in this case").toBeLessThan(6);
+      expect.soft(title!.x, "at the row's start").toBeLessThan(caseLine!.x);
+      expect.soft(await views.evaluate(size), "Views in this case at the row's size").toBe(rowSize);
     }
   });
 }
 
-// ADR-145 Amendment 13 against ADR-132 Amendment 8's slim row: at 1440 the open mode's note is in the row,
-// which stays one row (32 px measured); at 1024 it does not fit there and is on the line under it, still in
-// the region (66 px measured, the cross-link on that line too). Each mode's note, as each is a different length.
-for (const [width, most, inRow] of [[1440, 40, true], [1024, 72, false]] as const) {
-  for (const mode of ["Graph", "Drawing board"] as const) {
-    test(`govuk ${width}: the context row with ${mode}'s note is ${inRow ? "one row" : "at most two lines, the note under the row"}`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 1000 });
-      await page.goto("/keyboard/places-harness.html?banner=1&brand=govuk");
-      const region = page.getByRole("region", { name: "You are in the Glass" });
-      await region.getByRole("button", { name: mode, exact: true }).focus();
-      await page.keyboard.press("Enter");
-      const note = region.locator(".context-banner__note");
-      await expect(note).toHaveText(mode === "Graph" ? /^Graph: the case's data/ : /^Drawing board: your sketch/);
-      const box = (await region.boundingBox())!;
-      const title = (await region.getByRole("heading", { level: 2 }).boundingBox())!;
-      const line = (await note.boundingBox())!;
-      expect.soft(box.height, "the region's height").toBeLessThanOrEqual(most);
-      expect.soft(line.y >= box.y && line.y + line.height <= box.y + box.height, "the note inside the region").toBe(true);
-      if (inRow) expect.soft(Math.abs(line.y + line.height / 2 - (title.y + title.height / 2)), "the note on the title's row").toBeLessThan(6);
-      else expect.soft(line.y, "the note under the title's row").toBeGreaterThanOrEqual(title.y + title.height);
-    });
-  }
+// ADR-132 Amendment 8's slim row with the owner's case line (ADR-145 Amendment 15, replacing Amendment 13's note): at
+// 1440 GOV.UK's context row is one row; at 1024 at most two lines, the case line inside the region.
+for (const [width, most] of [[1440, 40], [1024, 72]] as const) {
+  test(`govuk ${width}: the context row with the case line is at most ${most} px, its parts inside the region`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/keyboard/places-harness.html?banner=1&brand=govuk");
+    const region = page.getByRole("region", { name: "You are in the Glass" });
+    const views = region.getByRole("button", { name: "Views in this case" });
+    await expect(views).toBeVisible();
+    const box = (await region.boundingBox())!;
+    const line = (await views.boundingBox())!;
+    expect.soft(box.height, "the region's height").toBeLessThanOrEqual(most);
+    expect.soft(line.y >= box.y && line.y + line.height <= box.y + box.height, "Views in this case inside the region").toBe(true);
+  });
 }
 
 for (const theme of ["dark", "light"] as const) {
@@ -570,10 +622,6 @@ test("govuk on gov.uk: the full footer, Crown copyright reached by Tab", async (
   expect(await page.evaluate(() => document.activeElement?.textContent?.trim())).toBe("© Crown copyright");
 });
 
-test("every registered shell action has its own proving test case above", () => {
-  assertAllCovered("SHELL_ACTIONS", SHELL_ACTIONS);
-});
-
 // ADR-132 Amendment 4: GOV.UK's own chrome keeps GOV.UK's link styling. The Glass gives every link a
 // bottom border (`tokens.css`), which drew a rule under the logo at rest, where GOV.UK draws none
 // (found 1 November 2026 against www.gov.uk). The service name it also checked is gone (Amendment 5).
@@ -637,3 +685,76 @@ for (const shown of GOVUK_PAGES) {
     });
   }
 }
+
+// ADR-145 Amendment 14 decision 2 (the owner, 13 November 2026: "the Cases panel covers the top navigation"):
+// a drawer opens under the top bar and the context row, so the places, the top bar's controls, the GOV.UK header's
+// navigation and the row's case switcher and cross-link stay in view and can be clicked while it is open. In each
+// look the scans use, at 1440 and again after the window narrows to 900, where the bar and the row wrap and the
+// drawer is measured again.
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  test(`${brand} ${theme}: an open drawer starts under the top bar and the context row, the navigation above it uncovered`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/keyboard/shell-harness.html?brand=${brand}&drawer=1`);
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    const drawer = page.getByRole("dialog", { name: "Cases" });
+    await expect(drawer).toBeVisible();
+    // What the case asserts, returned rather than thrown, so `expect.poll` can wait for the frame after a resize.
+    const measure = async () => {
+      const row = (await page.getByRole("region", { name: "You are in the Glass" }).boundingBox())!;
+      const bar = (await page.locator(".top-bar").boundingBox())!;
+      const box = (await drawer.boundingBox())!;
+      // Every control above the drawer's top and inside its columns is the topmost thing at its own centre.
+      const covered = await page.evaluate(() => {
+        const top = document.querySelector<HTMLElement>("[role='dialog']")!.getBoundingClientRect();
+        return [...document.querySelectorAll<HTMLElement>("header a, header button, .top-bar a, .top-bar button, [aria-labelledby='context-banner-title'] button")]
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && r.right > top.left;
+          })
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+            return !(hit && (hit === el || el.contains(hit)));
+          })
+          .map((el) => el.getAttribute("aria-label") ?? el.textContent?.trim());
+      });
+      return { underTheChrome: box.y >= Math.floor(Math.max(bar.y + bar.height, row.y + row.height)), covered, top: box.y, chrome: row.y + row.height };
+    };
+    await expect.poll(measure).toMatchObject({ underTheChrome: true, covered: [] });
+    const wide = await measure();
+    await page.setViewportSize({ width: 900, height: 900 });
+    // At 900 the row wraps, so the chrome is deeper; the drawer is measured again and follows it.
+    await expect.poll(async () => (await measure()).chrome).toBeGreaterThan(wide.chrome);
+    await expect.poll(measure).toMatchObject({ underTheChrome: true, covered: [] });
+    // Its own way out is reached by keyboard: the drawer takes focus as it opens, and Tab reaches Close.
+    await drawer.focus();
+    await page.keyboard.press("Tab");
+    await expect(drawer.getByRole("button", { name: "Close Cases" })).toBeFocused();
+  });
+}
+
+// The owner's ruling of 13 November 2026 (Q2; ADR-145 Amendment 15): *Build a report*, beside Reports and before More
+// views, is reached by Tab from Reports and is a link to Superset in a new tab, said so in its words; in the dark, light
+// and GOV.UK looks. (Who is offered it is `App.chrome.test.tsx`'s, on the real App.)
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  test(`${brand} ${theme}: Build a report follows Reports by keyboard, a link to Superset in a new tab`, async ({ page }) => {
+    await page.goto(`/keyboard/top-bar-harness.html?reports=1&brand=${brand}`);
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Reports" }).focus();
+    await page.keyboard.press("Tab");
+    const link = page.getByRole("link", { name: "Build a report (opens in new tab)" });
+    await expect(link).toBeFocused();
+    await expect(link).toHaveAttribute("href", "https://bi.example.invalid");
+    await expect(link).toHaveAttribute("target", "_blank");
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "More views" })).toBeFocused();
+    const box = (await link.boundingBox())!;
+    expect(box.height).toBeGreaterThanOrEqual(24);
+    registerCovered(REGISTRY, "build-a-report-by-keyboard");
+  });
+}
+
+// Last in the file: the check reads the cases above it, run in order on one worker (CI's two-core runner).
+test("every registered shell action has its own proving test case above", () => {
+  assertAllCovered("SHELL_ACTIONS", SHELL_ACTIONS);
+});

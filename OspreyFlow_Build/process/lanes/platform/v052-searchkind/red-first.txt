@@ -1,0 +1,157 @@
+Red first (offline on the Mac, closed ports 59991-59994, no OSPREY_LANE), before the driver changed:
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_kind_deployment_searches_with_the_domain_as_the_poc_does
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_domains_host_answers_at_the_stand_in_inside_the_cluster
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_terraform_stand_in_answers_the_domains_url
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_domain_admits_the_namespaces_role_alone_and_proxies_to_its_opensearch
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_opensearch_behind_the_domain_is_the_poc_manifests_engine
+FAILED ../OspreyFlow_Build/tests/test_r1_kind_standins.py::test_the_decommissions_terraform_removal_takes_the_domain_with_it
+6 failed, 1 passed in 0.45s
+
+Green at the change (offline on the Mac, closed ports): tests/test_r1_kind_standins.py 7 passed.
+The kind config (r1_kind_osprey.yaml) rendered offline on the kind platform settings: terraform/opensearch.tf, OPENSEARCH_URL from opensearch-output/proxy_url, searchIndex rebuild and drift Jobs, egress managedPorts [443, 5432, 6379].
+
+The reviews of 6998234 (my lane-reviewer's and the orchestrator's), round 1, red first (offline, closed ports):
+
+Decommission step 7's stand-in (it never wrote $WORK/backups, so step 8's last block refused):
+FAILED tests/test_r1_kind_standins.py::test_decommission_step_7_records_the_backups_choice_step_8_reads
+FAILED tests/test_r1_kind_standins.py::test_decommission_step_7_refuses_what_its_block_refuses[None-30-no default]
+FAILED tests/test_r1_kind_standins.py::test_decommission_step_7_refuses_what_its_block_refuses[maybe-30-no default]
+FAILED tests/test_r1_kind_standins.py::test_decommission_step_7_refuses_what_its_block_refuses[keep-None-retention]
+FAILED tests/test_r1_kind_standins.py::test_decommission_step_7_refuses_what_its_block_refuses[keep-0-retention]
+FAILED tests/test_r1_kind_standins.py::test_decommission_step_7_refuses_what_its_block_refuses[destroy-None-destroy]
+FAILED tests/test_r1_kind_standins.py::test_the_operator_brings_r1s_choice_to_the_decommission
+7 failed, 7 passed
+
+The domain's limits beyond the signature:
+        whoever signed it, never passed on to OpenSearch."""
+        """opensearch-py's `http_compress` sends gzip with `content-encoding: gzip`: passed on with it."""
+FAILED tests/test_r1_opensearch_standin.py::test_paths_botocore_signs_for_es_are_admitted[/ospreyflow-*/_search]
+FAILED tests/test_r1_opensearch_standin.py::test_paths_botocore_signs_for_es_are_admitted[/a,b/_search]
+FAILED tests/test_r1_opensearch_standin.py::test_paths_botocore_signs_for_es_are_admitted[/ospreyflow/_doc/person:123]
+FAILED tests/test_r1_opensearch_standin.py::test_paths_botocore_signs_for_es_are_admitted[/ospreyflow/_doc/a%2Fb]
+FAILED tests/test_r1_opensearch_standin.py::test_paths_botocore_signs_for_es_are_admitted[/ospreyflow/./_search]
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_allows_five_minutes_of_clock_skew_not_s3s_fifteen[6-False]
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_allows_five_minutes_of_clock_skew_not_s3s_fifteen[-6-False]
+FAILED tests/test_r1_opensearch_standin.py::test_a_body_over_the_poc_domains_ten_mib_is_refused_413[10485761-False]
+FAILED tests/test_r1_opensearch_standin.py::test_a_refusal_names_the_account_and_the_domain
+FAILED tests/test_r1_opensearch_standin.py::test_a_compressed_body_reaches_opensearch_with_its_encoding
+10 failed, 14 passed in 21.09s
+
+The admitted roles read from the render (the two tests restating r1_kind.py removed); passed at once, as the code was right, so planted:
+Plant (the domain admits the backup role too):
+FAILED tests/test_r1_kind_standins.py::test_the_terraform_stand_in_makes_the_domains_secret_and_admits_what_its_policy_admits
+1 failed, 12 passed in 0.59s
+
+Green: tests/test_r1_kind_standins.py and tests/test_r1_opensearch_standin.py 37 passed; with tests/cloud_platform_backup and tests/test_r1_entra_standin.py, 199 passed, 51 skipped (the stand-in's other users, after the canonical-path change).
+
+The recovery runbook's search step (a 6 h wait on condition=complete, which a failed Job never reaches), run as written against a stub kubectl:
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_the_restores_search_jobs_are_bounded_in_minutes
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_a_search_job_that_never_starts_stops_the_restore_by_name
+FAILED tests/harness/test_cloud_platform_opensearch.py::test_a_search_job_that_fails_stops_the_restore_by_name_at_once
+3 failed, 7 passed in 3.32s
+Green: tests/harness/test_cloud_platform_opensearch.py 10 passed; every test reading RUNBOOK.md 267 passed, 21 skipped.
+
+The run's domain check and the stand-in's log line, red first:
+E       AssertionError: assert [] == ['domain: vpc...03 anonymous']
+E         
+E         Right contains 3 more items, first extra item: 'domain: vpc-ospreyflow-poc-search-abc123.eu-west-2.es.amazonaws.com GET /_cluster/health 200 arn:aws:iam::123456789012:role/ospreyflow-poc-service'
+E         Use -v to get more diff
+E                                     AttributeError: module 'r1_kind' has no attribute 'DOMAIN_PROBE'
+FAILED tests/test_r1_opensearch_standin.py::test_each_domain_request_is_logged_with_who_and_the_answer
+FAILED tests/test_r1_opensearch_standin.py::test_r1s_domain_probe_signs_as_a_pod_does_and_reports_both_answers
+2 failed, 1 passed, 37 deselected in 2.62s
+(the 9200 egress test passed at once, the render being right: planted below)
+
+One plant per refusal branch, each at its own site, by OspreyFlow_Build/process/lanes/platform/v052-searchkind/plants.py (run from OspreyFlow_Core with the repository as its argument; each file restored after):
+Plant: role (the domain's access policy):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another role's session-is not authorized to perform: es:ESHttpGet]
+FAILED tests/test_r1_opensearch_standin.py::test_a_refusal_names_the_account_and_the_domain
+FAILED tests/test_r1_opensearch_standin.py::test_each_domain_request_is_logged_with_who_and_the_answer
+FAILED tests/test_r1_opensearch_standin.py::test_r1s_domain_probe_signs_as_a_pod_does_and_reports_both_answers
+4 failed, 36 passed in 22.81s
+
+Plant: service (signed for another service):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[signed for s3-Credential should be scoped to correct service: 'es']
+1 failed, 39 passed in 23.14s
+
+Plant: region:
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another region-eu-west-2]
+1 failed, 39 passed in 22.67s
+
+Plant: session token:
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[no session token-security token included in the request is invalid]
+1 failed, 39 passed in 23.21s
+
+Plant: unsigned (the domain's own refusal):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[unsigned-is not authorized]
+1 failed, 39 passed in 22.64s
+
+Plant: skew (five minutes for es):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_allows_five_minutes_of_clock_skew_not_s3s_fifteen[6-False]
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_allows_five_minutes_of_clock_skew_not_s3s_fifteen[-6-False]
+2 failed, 38 passed in 22.77s
+
+Plant: size (10 MiB):
+        whoever signed it, never passed on to OpenSearch."""
+FAILED tests/test_r1_opensearch_standin.py::test_a_body_over_the_poc_domains_ten_mib_is_refused_413[10485761-False]
+1 failed, 39 passed in 23.59s
+
+Plant: egress (9200 among the managed ports):
+FAILED tests/test_r1_kind_standins.py::test_the_namespaces_pods_never_reach_the_opensearch_pod_past_the_domain
+1 failed, 39 passed in 23.23s
+
+Green: tests/test_r1_opensearch_standin.py and tests/test_r1_kind_standins.py 40 passed.
+
+The domain's lifecycle (made by install step 2's stand-in, gone whole with decommission step 7's):
+Plant (the domain's engine and name not made by install step 2's stand-in, as before: made by platform()):
+FAILED tests/test_r1_kind_standins.py::test_the_terraform_stand_in_makes_the_domains_secret_and_admits_what_its_policy_admits
+1 failed, 13 passed in 0.68s
+
+Step 8's missing-listing message, red first (it named step 8 for the backups choice step 7 writes):
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_step_8_names_the_step_that_writes_each_listing_it_lacks
+Green: the kind and domain tests 40 passed; tests/harness and tests/cp_policy_check 1685 passed, 453 skipped.
+
+=== After the round-1 fixes ===
+
+The Entra stand-in's people by login_hint (platform-b's v052-r1 dashboards check), red first (fresh PYTHONPYCACHEPREFIX):
+FAILED tests/test_r1_entra_standin.py::test_the_person_signed_in_is_the_one_the_hint_names[reader@r1.test-50000000-0000-4000-8000-0000000000b1]
+FAILED tests/test_r1_entra_standin.py::test_the_person_signed_in_is_the_one_the_hint_names[Reader@R1.test-50000000-0000-4000-8000-0000000000b1]
+FAILED tests/test_r1_entra_standin.py::test_an_unknown_hint_is_refused_on_entras_own_page
+FAILED tests/test_r1_entra_standin.py::test_r1s_tenant_has_the_four_people_the_dashboards_check_signs_in
+4 failed, 2 passed, 13 deselected in 4.06s
+Green: tests/test_r1_entra_standin.py and tests/test_r1_kind_standins.py 33 passed.
+
+The engine's base pinned by digest (sha256:1193b7c2...bcc4c, AWS's mirror's multi-platform index, 13 Nov 2026); its licence Apache-2.0 named beside it; in no product manifest (the poc's domain is AWS's).
+
+Found by make test at 7d1a074 on the server (gates/, below): seven Helm-backed tests of tests/cloud_platform_backup, red since data safety and 3a merged (main's state, my own steps' defect: their gates ran cp-policy-check on the server but not these, which skip on the Mac). The tests' P9 pods met the search index's Jobs, and the claims run and its restore now mount the shared claim (in every shape, ruling 3). The tests held to the design, P9's pods named; to be shown green on the server.
+
+The per-branch plants re-run at dcfe98b with a fresh PYTHONPYCACHEPREFIX for each pytest (the orchestrator's rule of 13 Nov; the earlier record above was made without it), the same reds:
+Plant: role (the domain's access policy):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another role's session-is not authorized to perform: es:ESHttpGet]
+FAILED tests/test_r1_opensearch_standin.py::test_a_refusal_names_the_account_and_the_domain
+FAILED tests/test_r1_opensearch_standin.py::test_each_domain_request_is_logged_with_who_and_the_answer
+FAILED tests/test_r1_opensearch_standin.py::test_r1s_domain_probe_signs_as_a_pod_does_and_reports_both_answers
+4 failed, 36 passed in 23.99s
+Plant: service (signed for another service):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[signed for s3-Credential should be scoped to correct service: 'es']
+1 failed, 39 passed in 24.14s
+Plant: region:
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[another region-eu-west-2]
+1 failed, 39 passed in 22.58s
+Plant: session token:
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[no session token-security token included in the request is invalid]
+1 failed, 39 passed in 24.61s
+Plant: unsigned (the domain's own refusal):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_refuses_what_it_refuses_and_opensearch_never_sees_it[unsigned-is not authorized]
+1 failed, 39 passed in 23.64s
+Plant: skew (five minutes for es):
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_allows_five_minutes_of_clock_skew_not_s3s_fifteen[6-False]
+FAILED tests/test_r1_opensearch_standin.py::test_the_domain_allows_five_minutes_of_clock_skew_not_s3s_fifteen[-6-False]
+2 failed, 38 passed in 23.77s
+Plant: size (10 MiB):
+        whoever signed it, never passed on to OpenSearch."""
+FAILED tests/test_r1_opensearch_standin.py::test_a_body_over_the_poc_domains_ten_mib_is_refused_413[10485761-False]
+1 failed, 39 passed in 24.72s
+Plant: egress (9200 among the managed ports):
+FAILED tests/test_r1_kind_standins.py::test_the_namespaces_pods_never_reach_the_opensearch_pod_past_the_domain
+1 failed, 39 passed in 24.85s

@@ -25,7 +25,8 @@ describe("the places' table", () => {
       ["rules", "Rules and Monitoring"],
       ["admin", "Admin"],
     ]);
-    // ADR-146 decision 2: Monitoring left the Glass. ADR-145 Amendment 13: the toggle is Graph · Drawing board.
+    // ADR-146 decision 2: Monitoring left the Glass. The Glass's sections are not drawn since ADR-145 Amendment 15
+    // (its views are the top bar's view switch); the list stays for the places that still draw theirs.
     expect(PLACES[0]!.sections).toEqual(["Graph", "Drawing board"]);
     expect(PLACES[1]!.sections).toEqual(["1 Model", "2 Sources", "3 Pipelines", "4 Runs"]);
     // The owner's M1: the place's tabs.
@@ -185,9 +186,9 @@ describe("the cross-link", () => {
     expect(crossLinkFor("admin", ["glass", "ingest", "admin"], "Kestrel", null, go)).toBeNull();
   });
 
-  it("goes from the Glass to the Studio on the case's data, and back to the case it came from", () => {
+  it("goes from the Glass to the Studio on the case's data without naming it again (ADR-145 Amendment 14), and back to the case it came from", () => {
     const there = crossLinkFor("glass", ["glass", "ingest"], "Kestrel", ["Prison intel"], go)!;
-    expect(there.label).toBe("Open Prison intel in the Ingest Studio ↗");
+    expect(there.label).toBe("Open this case's data in the Ingest Studio ↗");
     const back = crossLinkFor("ingest", ["glass", "ingest"], "Kestrel", ["Prison intel"], go)!;
     expect(back.label).toBe("← Back to case Kestrel in the Glass");
     render(<ContextBanner place="ingest" crossLink={back} />);

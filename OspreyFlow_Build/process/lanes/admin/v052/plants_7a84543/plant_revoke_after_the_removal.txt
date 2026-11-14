@@ -1,0 +1,8 @@
+# plant: revoke_after_the_removal (OspreyFlow_Core/services/api/app.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '    revoked = [\n        case\n        for account in accounts\n        for case in await investigations.revoke_everywhere(account, by=principal)\n    ]\n    await identity_admin.delete_dashboard(client_id)'
+# with: '    await identity_admin.delete_dashboard(client_id)\n    revoked = [\n        case\n        for account in accounts\n        for case in await investigations.revoke_everywhere(account, by=principal)\n    ]'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_admin_routes.py -k 'revoke'
+        failed = TestClient(app, raise_server_exceptions=False).delete(
+        assert failed.status_code == 500
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_routes.py::test_a_failed_revoke_keeps_the_registration_so_a_retry_still_revokes
+1 failed, 1 passed, 166 deselected in 4.43s

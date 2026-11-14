@@ -2,6 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type ClientId = string;
 export type AccountId = string;
+export type Name = string | null;
 export type Clearance = string | null;
 export type OrgUnit = string | null;
 export type ReceivableHandlingCodes = string[];
@@ -9,16 +10,17 @@ export type LastPulled = string | null;
 export type LastFailure = string | null;
 export type FailedAt = string | null;
 export type CasesPulled = number;
-export type Secret = string;
+export type Secret = string | null;
 
 export interface RegisteredDashboard {
   dashboard: DashboardIdentity;
-  secret: Secret;
+  secret?: Secret;
   [k: string]: unknown;
 }
 export interface DashboardIdentity {
   client_id: ClientId;
   account_id: AccountId;
+  name?: Name;
   clearance?: Clearance;
   org_unit?: OrgUnit;
   receivable_handling_codes?: ReceivableHandlingCodes;

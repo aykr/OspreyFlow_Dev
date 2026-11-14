@@ -132,8 +132,11 @@ def render_terraform(
     nets = "[" + ", ".join(_q(n) for n in platform.egress.managed_nets) + "]"
     pg = secrets.postgres.keys
     files["rds.tf"] = _file(
-        "Decision 4: RDS PostgreSQL 16, the application's database (Keycloak's and the gateway's\n"
-        "are made on it at start, as on a cluster), encrypted, reached over TLS.",
+        "Decision 4: RDS PostgreSQL 16, the application's database `ospreyflow` (the report\n"
+        "mart a schema in it, osprey_reports, as on Small), encrypted, reached over TLS. The\n"
+        "gateway's `litellm` and, with Superset on, Superset's `superset` are made on it at\n"
+        "start by their own start-up, as on a cluster (ADR-148 Amendment 11): three databases\n"
+        "on the one instance.",
         [
             (
                 'resource "aws_db_subnet_group" "postgres"',

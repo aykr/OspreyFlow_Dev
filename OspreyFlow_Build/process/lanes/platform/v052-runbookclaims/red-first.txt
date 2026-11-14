@@ -1,0 +1,6 @@
+Red first (offline on the Mac, closed ports, fresh PYTHONPYCACHEPREFIX), at main 3b03b31:
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_the_recovery_runbook_says_the_claims_run_is_every_shapes_and_what_it_holds
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_the_manifest_lists_the_claims_jobs_whenever_the_chart_renders_them
+2 failed, 13 deselected in 1.58s
+
+Green: tests/harness, tests/cp_policy_check, tests/cloud_platform_backup 1859 passed, 504 skipped; mypy harness/cloud_platform clean.

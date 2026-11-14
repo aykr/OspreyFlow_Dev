@@ -1,0 +1,15 @@
+diff --git a/OspreyFlow_Core/apps/workspace/src/design/tokens.css b/OspreyFlow_Core/apps/workspace/src/design/tokens.css
+index 2c16a3c..6c379c8 100644
+--- a/OspreyFlow_Core/apps/workspace/src/design/tokens.css
++++ b/OspreyFlow_Core/apps/workspace/src/design/tokens.css
+@@ -239,6 +239,10 @@ p { margin: 0; text-wrap: pretty; }
+ /* Every identifier, hash, timestamp and account number is set in mono.
+    Mono means: this is a value you can copy. */
+ .value, .identifier, td.numeric { font-family: var(--mono); font-variant-numeric: tabular-nums; }
++/* ADR-097 Amendment 3 (the owner, 13 November 2026): a heading is never a value to copy. A heading
++   classed `.value` (a card's title, a section's) is in the page's own face, in both looks; its figures
++   stay tabular. */
++:is(h1, h2, h3, h4, h5, h6).value { font-family: var(--ui); }
+ 
+ /* Graph node states — implement once, in the Sigma node program.
+    These declarations document the contract; the renderer is the implementation. */

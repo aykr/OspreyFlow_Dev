@@ -77,7 +77,7 @@ test("the large-expansion prompt's buttons can be clicked with the mouse", async
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ candidate_node_count: 1200, candidate_edge_count: 0 }),
+      body: JSON.stringify({ candidate_node_count: 1200, candidate_edge_count: 0, link_count: 1194 }),
     });
   });
   await page.route("**/*/expand", async (route) => {

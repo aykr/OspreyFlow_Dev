@@ -1,0 +1,6 @@
+# plant: dashboard_read_unbounded (OspreyFlow_Core/packages/principal_auth/__init__.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '                timeout=self._role_lookup_timeout,\n            )\n        except Exception as exc:  # noqa: BLE001 - every failure of the read is the one 503\n            raise PrincipalLookupUnavailable(\n                f"the dashboard identity'
+# with: '                timeout=None,\n            )\n        except Exception as exc:  # noqa: BLE001 - every failure of the read is the one 503\n            raise PrincipalLookupUnavailable(\n                f"the dashboard identity'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py -k 'too_slow'
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_dashboards.py::test_a_store_too_slow_to_answer_is_a_503_within_the_bound
+1 failed, 18 deselected in 31.30s

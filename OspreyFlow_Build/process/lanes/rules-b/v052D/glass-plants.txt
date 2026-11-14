@@ -1,0 +1,44 @@
+# glass plants, 2026-11-13T22:40:57Z: branch head 94e49dd plus the review fixes; script below
+RED | engine named only with a choice | names the engine that will answer even when there is only one
+    TestingLibraryElementError: Unable to find an element with the text: Will be answered by This deployment's own model (qwen2.5:7b-instruct). This could be because the text is broken up by multiple elem
+RED | Whole case enabled | offers Whole case disabled
+    AssertionError: expected false to be true // Object.is equality
+RED | read_from not sent | sends that choice with the question
+    AssertionError: expected false to be true // Object.is equality
+RED | failed list unsaid | says the engine list failed
+    TestingLibraryElementError: Unable to find an element with the text: /The list of model engines could not be loaded/. This could be because the text is broken up by multiple elements. In this case, yo
+    TestingLibraryElementError: Unable to find an element with the text: /The list of model engines could not be loaded/. This could be because the text is broken up by multiple elements. In this case, yo
+RED | client counts the selection (nodeIds.length) | never counts in the Glass
+    TestingLibraryElementError: Unable to find an element with the text: About: Tarbuck, Kyle. This could be because the text is broken up by multiple elements. In this case, you can provide a function fo
+RED | reasons always given, [] while pending | keeps the case's own reasons
+    TestingLibraryElementError: Unable to find an element with the text: Gemini: Not available for this case: kept in.. This could be because the text is broken up by multiple elements. In this case, you 
+RED | keyed on the canvas's selection, not the body sent | asks nothing when the canvas's selection changes
+    AssertionError: expected 2 to be 1 // Object.is equality
+RED | no refresh when the window has moved | asks again when the timeline window has moved
+    AssertionError: expected [ { selected_node_ids: [], …(3) } ] to have a length of 2 but got 1
+RED | a 200 with no list read as none | the answer holds no list
+    TestingLibraryElementError: Unable to find an element with the text: /The list of model engines could not be loaded/. This could be because the text is broken up by multiple elements. In this case, yo
+
+--- plant_ts.py
+import subprocess
+plants=[
+ ("src/questions/QuestionsPanel.tsx","engine named only with a choice","{will.engine_label !== null ? (","{will.engine_label !== null && engineChoice.chosen !== null ? (","names the engine that will answer even when there is only one"),
+ ("src/questions/QuestionsPanel.tsx","Whole case enabled",'const unavailable = choice.value === "case" || (choice.value === "selection" && !hasSelection);','const unavailable = choice.value === "selection" && !hasSelection;',"offers Whole case disabled"),
+ ("src/questions/questionsApi.ts","read_from not sent","    ...(scope.readFrom ? { read_from: scope.readFrom } : {}),\n","","sends that choice with the question"),
+ ("src/questions/QuestionsPanel.tsx","failed list unsaid","        {engineChoice.failed && (","        {false && (","says the engine list failed"),
+ ("src/questions/QuestionsPanel.tsx","client counts the selection (nodeIds.length)","<p style={{ margin: 0 }}>{aboutWords(will.read)}</p>","<p style={{ margin: 0 }}>{aboutWords({ ...will.read, selected: nodeIds.length })}</p>","never counts in the Glass"),
+ ("src/questions/QuestionsPanel.tsx","reasons always given, [] while pending","reasons={will?.unusable} />","reasons={will?.unusable ?? []} />","keeps the case's own reasons"),
+ ("src/questions/QuestionsPanel.tsx","keyed on the canvas's selection, not the body sent","[readFrom, sentNodeIds, sentLinkIds, timelineWindow,","[readFrom, nodeIds, linkIds, timelineWindow,","asks nothing when the canvas's selection changes"),
+ ("src/questions/QuestionsPanel.tsx","no refresh when the window has moved","if (JSON.stringify(getTimelineWindow?.() ?? null) !== askedWindow.current) setWillAsked((n) => n + 1);","void askedWindow;","asks again when the timeline window has moved"),
+ ("src/models/engines.tsx","a 200 with no list read as none","  if (!Array.isArray(body.engines)) throw new Error(\"The model engines could not be read.\");\n  return body.engines as OfferedEngine[];","  return Array.isArray(body.engines) ? (body.engines as OfferedEngine[]) : [];","the answer holds no list"),
+]
+for f,name,a,b,t in plants:
+    orig=open(f).read(); assert orig.count(a)==1,(name,orig.count(a))
+    open(f,'w').write(orig.replace(a,b))
+    try:
+        r=subprocess.run(["npx","vitest","run","src/questions/QuestionsPanel.test.tsx","-t",t],capture_output=True,text=True,env=dict(__import__("os").environ, NO_COLOR="1"))
+        lines=[l.strip() for l in (r.stdout + r.stderr).splitlines() if ("AssertionError" in l or "Error:" in l or "Unable to find" in l)][:2]
+        print(("RED " if r.returncode else "GREEN?! ")+"| "+name+" | "+t)
+        for l in lines: print("    "+l[:200])
+    finally:
+        open(f,'w').write(orig)

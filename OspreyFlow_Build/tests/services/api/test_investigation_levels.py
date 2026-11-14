@@ -289,6 +289,7 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("DELETE", P + "/nodes/{node_id}/suppression-mark"): E,
     # ADR-098 decision 4: a question writes pending findings; its conversation is the case's.
     ("POST", P + "/questions"): E,
+    ("POST", P + "/questions/will-read"): E,  # ADR-098 Amendment 7: as asking
     ("GET", P + "/questions"): V,
     ("POST", P + "/questions/candidates/{candidate_id}/accept"): E,
     ("POST", P + "/questions/candidates/{candidate_id}/reject"): E,

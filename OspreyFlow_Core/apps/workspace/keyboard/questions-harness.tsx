@@ -9,6 +9,10 @@ import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { Drawer } from "../src/design/primitives/Drawer";
 import { QuestionsPanel } from "../src/questions/QuestionsPanel";
+import { applyHarnessBrand } from "./brandHarness";
+
+// The every-harness axe scan reads this call to scan GOV.UK too (`?brand=govuk`, ADR-132).
+await applyHarnessBrand();
 
 declare global {
   interface Window {
@@ -37,7 +41,7 @@ const inView = new URLSearchParams(window.location.search).get("view") === "1";
 
 function Panel() {
   const [view, setView] = useState<{ id: string; name: string } | null>(
-    inView ? { id: "v-q", name: "Questions on 1 document" } : null,
+    inView ? { id: "v-q", name: "Questions on 2 items" } : null,
   );
   return (
     <QuestionsPanel

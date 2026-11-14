@@ -1,0 +1,17 @@
+# v052-fixes browser reds at c9ae729; each plant restored with `git checkout -- <file>`
+## 8. Build a report not drawn beside the switch (TopBar ignoring besideViews)
+plant in src/shell/TopBar.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/shell.spec.ts -g 'Build a report follows Reports by keyboard'; exit 1
+  ✘  1 keyboard/shell.spec.ts:715:3 › ospreyflow dark: Build a report follows Reports by keyboard, a link to Superset in a new tab (5.5s)
+  ✘  2 keyboard/shell.spec.ts:715:3 › ospreyflow light: Build a report follows Reports by keyboard, a link to Superset in a new tab (5.2s)
+  ✘  3 keyboard/shell.spec.ts:715:3 › govuk light: Build a report follows Reports by keyboard, a link to Superset in a new tab (5.2s)
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Error: element(s) not found
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Error: element(s) not found
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Error: element(s) not found
+  3 failed
+# 1 of 1 red

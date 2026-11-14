@@ -101,22 +101,24 @@ admin	refresh	M	done	A refresh keeps the person signed in and where they were (A
 admin	pg	S	done	A deployment's Postgres allows its services' connections at rest (ADR-114 Am 43) (merged 6aa02ff)
 demo	fixes-13nov	S	done	osprey-small, 13 Nov: banner, footer, Home x2, key prompt, one prompt, rail + Help, compact header (orchestrator's deploys from HANDOFF after the lane closed)
 platform	part3	L	building	Part 3: ospreyflow.app beside the GOV.UK demo on one server (ADR-114 Am 44; after v0.5.1's candidate)
-platform-b	v052-superset	M	todo	v0.5.2: Superset on Entra ID, embedded dashboards, the render (ADR-148 Am 9, 11)
-admin	v052-identities	M	todo	v0.5.2: dashboard identities and report sync on Entra ID (ADR-148 Am 10)
-platform	v052-standin	M	todo	v0.5.2: R1's Entra stand-in signs (token, authorize)
+platform-b	v052-superset	M	done	v0.5.2: Superset on Entra ID, embedded dashboards, the render (ADR-148 Am 9, 11)
+admin	v052-identities	M	done	v0.5.2: dashboard identities and report sync on Entra ID (ADR-148 Am 10)
+platform	v052-standin	M	done	v0.5.2: R1's Entra stand-in signs (token, authorize)
 platform-b	v052-r1	L	todo	v0.5.2: R1 on kind with a dashboards check (with platform)
 platform	v052-manifest	M	done	v0.5.2 step 2: the poc manifest and its render test
 platform	v052-opensearch	M	done	v0.5.2 step 3a: OpenSearch on poc
-rules	v052-index	L	todo	v0.5.2 step 3c: the index feed, rebuild, drift check
+rules	v052-index	L	review	v0.5.2 step 3c: the index feed, rebuild, drift check
 rules	v052-load	M	todo	v0.5.2 B: client-size synthetic data, loaded once
-studio	v052-search	L	todo	v0.5.2 step 3d: the search service
-case	v052-fixes	S	todo	v0.5.2 step 3e: the Glass's screen fixes
-case	v052-results	M	todo	v0.5.2 step 3e′: the search results layout
+studio	v052-search	L	review	v0.5.2 step 3d: the search service
+case	v052-fixes	S	done	v0.5.2 step 3e: the Glass's screen fixes
+case	v052-results	M	review	v0.5.2 step 3e′: the search results layout
 platform	v052-measure	S	todo	v0.5.2 step 4: the measurement session
 docs	v052-sweep	S	todo	v0.5.2 step 5: the wording sweep
 admin	v052-heartbeat	M	done	The heartbeat's route view (the owner, 13 Nov) (merged ee440c1)
-case-b	v052-r1-driver	M	todo	v0.5.2 step 6's driver: the manifest verifier and spec 08 runner, built ahead
+case-b	v052-r1-driver	M	done	v0.5.2 step 6's driver: the manifest verifier and spec 08 runner, built ahead
 docs	v052-sweep-draft	S	todo	v0.5.2 step 5 drafted ahead: the non-search wording
 rules-b	v052-ask	L	todo	v0.5.2 Part D: Ask & Chat (panel, server, Whole case)
-case-b	v052-selection	M	todo	v0.5.2 Parts C and E: one set of actions for the selection; the typeface
+case-b	v052-selection	M	done	v0.5.2 Parts C and E: one set of actions for the selection; the typeface
 orchestrator	v051-cut	S	building	v0.5.1 cut: CI at the candidate, the upgrade rehearsal, the CHANGELOG, publish when green (the owner's word)
+platform	v052-searchkind	M	done	v0.5.2: the OpenSearch domain on R1's kind (stand-in wired, its limits, the run's domain check)
+platform-b	v052-4c	M	building	The administrator fallback on Entra, poc alone (ADR-148 Am 15; audit 4c)

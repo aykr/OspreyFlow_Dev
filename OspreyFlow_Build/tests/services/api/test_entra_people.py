@@ -79,6 +79,7 @@ class _Store:
             (OTHER_TENANT, NEW): _row(NEW, ["osprey-admin"]),
         }
         self.down = False
+        self.dashboard_rows: dict[tuple[str, str], Any] = {}
 
     async def ping(self) -> None:
         if self.down:
@@ -103,6 +104,34 @@ class _Store:
             raise PersonExistsError(oid)
         self.people[(self.tenant_id, oid)] = _row(oid, [])
         return self.people[(self.tenant_id, oid)]
+
+    # ADR-148 Amendment 10: dashboard identities, refused as the real store refuses
+    # (`test_entra_people_live.py`): a second registration of one id, and only this tenant's rows.
+    async def register_dashboard(
+        self, application_id: str, name: str, *, clearance: str, org_unit: str
+    ) -> Any:
+        from services.api.identity_admin import DashboardExistsError
+
+        from principal_auth import StoredDashboard
+
+        rows = self.dashboard_rows
+        if (self.tenant_id, application_id) in rows:
+            raise DashboardExistsError(application_id)
+        # UNIQUE (tenant_id, name), as the real table refuses a second board of one name.
+        if any(t == self.tenant_id and d.name == name for (t, _), d in rows.items()):
+            raise DashboardExistsError(name)
+        rows[(self.tenant_id, application_id)] = StoredDashboard(
+            application_id, clearance, org_unit, ("P",), name
+        )
+        return rows[(self.tenant_id, application_id)]
+
+    async def dashboards(self) -> list[Any]:
+        rows = self.dashboard_rows
+        return [d for (t, _), d in rows.items() if t == self.tenant_id]
+
+    async def remove_dashboard(self, application_id: str) -> bool:
+        rows = self.dashboard_rows
+        return rows.pop((self.tenant_id, application_id), None) is not None
 
 
 class _Audit:
@@ -507,10 +536,8 @@ def test_the_stream_asks_the_store_before_its_first_send() -> None:
     [
         (lambda a: a.remove_person(OID), "is not removed here"),
         (lambda a: a.link_organisation(OID, "subject"), "no organisation account"),
-        (lambda a: a.create_dashboard("Reports", clearance="OFFICIAL", org_unit="u"), "Dashboard"),
-        (lambda a: a.delete_dashboard("osprey-dashboard-reports"), "Dashboard"),
     ],
-    ids=["remove", "organisation-link", "register-dashboard", "delete-dashboard"],
+    ids=["remove", "organisation-link"],
 )
 async def test_the_rest_of_what_entra_holds_is_refused_in_words(call, words) -> None:
     """Amendment 8 point 3's other refusals, each 409 `entra_holds_accounts` through the route's
@@ -645,3 +672,113 @@ async def test_a_bearer_whose_roles_cannot_be_read_is_closed_try_again_later(rai
     socket = _Socket(_Resolver())
     await stream(socket, "case-1")  # type: ignore[arg-type]
     assert socket.closed == [code]
+
+
+# --- ADR-148 Amendment 10: dashboard identities on Entra ID, registered by application id ------
+
+DASHBOARD = "dddddddd-eeee-4fff-8000-111111111111"
+
+
+async def test_a_dashboard_identity_is_registered_listed_and_removed_by_application_id() -> None:
+    """Entra holds the registration and its secret; Admin › Dashboards holds what it reads with. The
+    identity's account (what a case Author grants Viewer to) is its application id."""
+    store = _Store()
+    admin = EntraPeopleAdmin(store)  # type: ignore[arg-type]
+    made = await admin.create_dashboard(
+        "Compliance board", clearance="OFFICIAL", org_unit="unit-2", application_id=DASHBOARD
+    )
+    assert made.secret is None  # Entra keeps it; nothing to show once
+    assert (made.dashboard.client_id, made.dashboard.account_id) == (DASHBOARD, DASHBOARD)
+    assert (made.dashboard.clearance, made.dashboard.org_unit) == ("OFFICIAL", "unit-2")
+    assert made.dashboard.receivable_handling_codes == ["P"]
+    assert [d.client_id for d in await admin.list_dashboards()] == [DASHBOARD]
+    await admin.delete_dashboard(DASHBOARD)
+    assert await admin.list_dashboards() == []
+
+
+async def test_on_entra_a_dashboard_is_named_as_keycloak_names_one_and_once_a_tenant() -> None:
+    """The name Superset's embedding matches a board on (platform-b's agreement): required, the
+    slug Keycloak's `osprey-dashboard-<slug>` carries, one dashboard of a name in a tenant."""
+    from services.api.identity_admin import DashboardExistsError, UnknownRoleError
+
+    store = _Store()
+    admin = EntraPeopleAdmin(store)  # type: ignore[arg-type]
+    made = await admin.create_dashboard(
+        "Compliance board", clearance="OFFICIAL", org_unit="u", application_id=DASHBOARD
+    )
+    assert made.dashboard.name == "compliance-board"
+    assert [d.name for d in await admin.list_dashboards()] == ["compliance-board"]
+    with pytest.raises(DashboardExistsError):
+        await admin.create_dashboard("COMPLIANCE  Board!", clearance="OFFICIAL", org_unit="u",
+                                     application_id="ffffffff-0000-4111-8222-333333333333")  # fmt: skip
+    with pytest.raises(UnknownRoleError, match="name"):
+        await admin.create_dashboard("!!!", clearance="OFFICIAL", org_unit="u",
+                                     application_id="ffffffff-0000-4111-8222-333333333333")  # fmt: skip
+    assert len(await admin.list_dashboards()) == 1
+
+
+async def test_on_entra_a_dashboard_is_refused_in_words_without_its_application_id() -> None:
+    from services.api.identity_admin import (
+        DashboardExistsError,
+        PersonActionRefused,
+        UnknownRoleError,
+    )
+
+    store = _Store()
+    admin = EntraPeopleAdmin(store)  # type: ignore[arg-type]
+    with pytest.raises(UnknownRoleError, match="application id"):
+        await admin.create_dashboard("Board", clearance="OFFICIAL", org_unit="u")
+    assert await store.dashboards() == []
+    await admin.create_dashboard("Board", clearance="OFFICIAL", org_unit="u",
+                                 application_id=DASHBOARD)  # fmt: skip
+    with pytest.raises(DashboardExistsError):
+        await admin.create_dashboard("Again", clearance="OFFICIAL", org_unit="u",
+                                     application_id=DASHBOARD)  # fmt: skip
+    with pytest.raises(PersonActionRefused) as refused:
+        await admin.delete_dashboard("ffffffff-0000-4111-8222-333333333333")
+    assert refused.value.error == "no_such_dashboard"
+
+
+GLASS_APP = "aaaaaaaa-1111-4222-8333-444444444444"
+API_APP = "bbbbbbbb-1111-4222-8333-444444444444"
+
+
+@pytest.mark.parametrize("own", [GLASS_APP, API_APP, API_APP.upper()], ids=["glass", "api", "api-upper"])
+async def test_the_deployment_s_own_applications_are_never_registered_as_dashboards(own: str) -> None:
+    """The resolver would refuse their tokens as a dashboard's, so a registration of either is a
+    mistake, refused in words before anything is written (the lane review of 009a889)."""
+    from services.api.identity_admin import UnknownRoleError
+
+    store = _Store()
+    admin = EntraPeopleAdmin(store, own_clients=[GLASS_APP, API_APP, None])  # type: ignore[arg-type]
+    with pytest.raises(UnknownRoleError, match="own"):
+        await admin.create_dashboard("Board", clearance="OFFICIAL", org_unit="u", application_id=own)
+    assert await store.dashboards() == []
+
+
+async def test_on_keycloak_an_application_id_is_refused_in_words() -> None:
+    """Keycloak registers its own client for a dashboard; an application id is Entra's."""
+    from services.api.identity_admin import IdentityAdmin, UnknownRoleError
+
+    admin = IdentityAdmin.__new__(IdentityAdmin)
+    with pytest.raises(UnknownRoleError, match="Entra"):
+        await admin.create_dashboard(
+            "Board", clearance="OFFICIAL", org_unit="u", application_id=DASHBOARD
+        )
+
+
+def test_the_app_tells_the_entra_admin_its_own_applications() -> None:
+    """The call site the app starts with (`people_directory`): on Entra ID the admin is given the
+    claim mapping's Glass and API ids, so the refusal above holds in the running app (the lane
+    review of 2b42dea)."""
+    from types import SimpleNamespace
+
+    from services.api.app import people_directory
+
+    mapping = SimpleNamespace(client_id=GLASS_APP, api_client_id=API_APP)
+    resources = SimpleNamespace(
+        people_store=_Store(), principal_resolver=SimpleNamespace(claim_mapping=mapping)
+    )
+    admin = people_directory(resources, config=None)  # type: ignore[arg-type]
+    assert isinstance(admin, EntraPeopleAdmin)
+    assert admin.own_clients == {GLASS_APP, API_APP}

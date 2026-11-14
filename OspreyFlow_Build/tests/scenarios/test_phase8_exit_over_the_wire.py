@@ -955,10 +955,10 @@ def test_scenario_b_over_the_wire(analyst: httpx.Client) -> None:
     # === B12: add an identifier to a hotlist — the hotlist records owner and review date.
     identifier = _synthetic_nino("corp-path-hub")
     created = analyst.post(
-        "/v1/hotlists", json={"identifier": identifier, "review_date": "2027-01-01"}
+        _in_case("/v1/hotlists"), json={"identifier": identifier, "review_date": "2027-01-01"}
     )
     assert created.status_code == 201, created.text
-    listed = analyst.get("/v1/hotlists")
+    listed = analyst.get(_in_case("/v1/hotlists"))
     assert listed.status_code == 200, listed.text
     mine = [h for h in listed.json()["hotlists"] if h["identifier"] == identifier]
     assert mine, f"the hotlist just created is not in the analyst's own list: {listed.text}"
@@ -992,9 +992,9 @@ def test_scenario_b_over_the_wire(analyst: httpx.Client) -> None:
     # `pattern_id` is the stable identity across saves; `id` identifies this one save
     # (ADR-032/036/040). A monitor watches the pattern, not one version of it.
     pattern_id = saved.json()["pattern_id"]
-    monitor = analyst.post("/v1/monitors", json={"pattern_id": pattern_id})
+    monitor = analyst.post(_in_case("/v1/monitors"), json={"pattern_id": pattern_id})
     assert monitor.status_code == 201, monitor.text
-    monitors = analyst.get("/v1/monitors")
+    monitors = analyst.get(_in_case("/v1/monitors"))
     assert monitors.status_code == 200, monitors.text
     assert any(m["pattern_id"] == pattern_id for m in monitors.json()["monitors"])
 
@@ -1750,10 +1750,18 @@ def seizure_alert() -> dict:
             writes `rule_id=f"hotlist:{hotlist.id}"`, namespacing it so a hotlist and a saved
             pattern cannot collide on a rule identifier. Filtering on the bare id found nothing
             while the alert was sitting there correctly formed, which cost this round an hour and
-            two applies before I read the producer instead of assuming the shape."""
-            listed = client.get("/v1/alerts")
+            two applies before I read the producer instead of assuming the shape.
+
+            Read from the case's alert queue (ADR-133 decision 5), every status: `GET /v1/alerts`
+            is gone, and the queue is the one list. An alert any of whose evidence the reader cannot
+            see is left out of it, not flagged (ADR-146 decision 10)."""
+            listed = client.get(_in_case("/v1/alert-queue"), params={"status": "all"})
             assert listed.status_code == 200, listed.text
-            return [a for a in listed.json()["alerts"] if a["rule_id"] == f"hotlist:{hotlist_id}"]
+            return [
+                row["alert"]
+                for row in listed.json()
+                if row["alert"]["rule_id"] == f"hotlist:{hotlist_id}"
+            ]
 
         # **The precondition, asserted rather than left to fail obscurely.** B13 is a "new data
         # arrives" row: a hotlist watches *incoming* data and does not retro-fire against what is
@@ -1773,7 +1781,7 @@ def seizure_alert() -> dict:
 
         # 1. Something is watching, before anything arrives.
         created = client.post(
-            "/v1/hotlists",
+            _in_case("/v1/hotlists"),
             json={"identifier": SIM_B_IMSI, "review_date": "2026-12-31"},
         )
         assert created.status_code == 201, created.text
@@ -1847,15 +1855,14 @@ def test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule(
     alerts = seizure_alert["alerts"]
     assert alerts, (
         "the ingest fired no alert against a hotlist on an identifier it loads — B13's whole "
-        f"claim. Run report: {seizure_alert['run_after_hotlist']}"
+        f"claim. Run report: {seizure_alert['run']}"
     )
     alert = alerts[0]
 
     # The rule — namespaced, so a hotlist and a saved pattern cannot collide on an identifier.
     assert alert["rule_id"] == f"hotlist:{seizure_alert['hotlist']['id']}"
-    assert alert["evidence_available"] is True, (
-        "the alert's evidence is not readable by the analyst it fired for"
-    )
+    # Its evidence readable by the analyst it fired for: the queue leaves out an alert whose evidence
+    # the reader cannot see (ADR-146 decision 10), so being listed at all is that check.
     assert alert["referent_node_ids"], "the alert names no referent, so it names no evidence"
 
     # The matched identifier, read through the referent.

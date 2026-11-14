@@ -1,0 +1,18 @@
+tests/cloud_platform_backup on the test server through stack_lease.sh offline platform (no stack, no lease; Helm present), fresh PYTHONPYCACHEPREFIX, from main da9e716:
+== main da9e716 as is ==
+Running on ospreyflow-test (stack offline, osprey-runs/platform/), logged at osprey-runs/platform.meta/runs/20261113T234343Z-aaa4b062/log
+FAILED tests/cloud_platform_backup/test_backups_chart.py::test_the_standard_shape_has_no_claims_run
+FAILED tests/cloud_platform_backup/test_backups_chart.py::test_the_claims_run_is_beside_the_shared_pods_on_the_same_schedule_read_only
+FAILED tests/cloud_platform_backup/test_backups_chart.py::test_a_restore_with_claims_puts_them_back_in_a_job_of_its_own
+FAILED tests/cloud_platform_backup/test_backups_chart.py::test_each_of_p9s_pods_runs_as_its_own_account_with_its_token
+FAILED tests/cloud_platform_backup/test_backups_rows.py::test_p9_s_pods_are_rows_by_their_own_names_under_their_own_account
+FAILED tests/cloud_platform_backup/test_backups_rows.py::test_only_the_backup_s_own_container_holds_a_key_of_our_secret
+FAILED tests/cloud_platform_backup/test_backups_rows.py::test_each_container_holds_the_secret_keys_its_command_calls_for_and_no_more
+7 failed, 215 passed in 676.47s (0:11:16)
+Wall time: 682 s, exit 0 (no stack, no lease; set-up before it 17 s)
+== with the fix ==
+Running on ospreyflow-test (stack offline, osprey-runs/platform/), logged at osprey-runs/platform.meta/runs/20261113T235536Z-e584663c/log
+222 passed in 504.05s (0:08:24)
+Wall time: 510 s, exit 0 (no stack, no lease; set-up before it 29 s)
+
+Cause: missed, not the merge. These Helm-backed cases skip on the Mac; data safety's and 3a's gates ran cp-policy-check on the server, never make test, so the tests that predate data safety (the shared claim in the claims run and its restore, in every shape) and 3a (the search index's CronJobs among the render's Jobs) never ran against them. Found by searchkind's server make test at 7d1a074.

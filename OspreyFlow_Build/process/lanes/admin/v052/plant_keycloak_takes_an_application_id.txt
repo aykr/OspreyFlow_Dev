@@ -1,0 +1,48 @@
+# note: the test builds the Keycloak admin without its connection; with the refusal planted out it goes on toward creating a client and fails there (AttributeError: _settings), which is the refusal's absence showing.
+# plant: keycloak_takes_an_application_id (OspreyFlow_Core/services/api/identity_admin.py)
+# replaced: '        if application_id is not None:\n            raise UnknownRoleError(\n                "an application id names'
+# with: '        if False:\n            raise UnknownRoleError(\n                "an application id names'
+# run: pytest -k 'keycloak_an_application_id'
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_on_keycloak_an_application_id_is_refused_in_words ____________
+
+    async def test_on_keycloak_an_application_id_is_refused_in_words() -> None:
+        """Keycloak registers its own client for a dashboard; an application id is Entra's."""
+        from services.api.identity_admin import IdentityAdmin, UnknownRoleError
+    
+        admin = IdentityAdmin.__new__(IdentityAdmin)
+        with pytest.raises(UnknownRoleError, match="Entra"):
+>           await admin.create_dashboard(
+                "Board", clearance="OFFICIAL", org_unit="u", application_id=DASHBOARD
+            )
+
+../OspreyFlow_Build/tests/services/api/test_entra_people.py:724: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <services.api.identity_admin.IdentityAdmin object at 0x12dbb41d0>
+name = 'Board', clearance = 'OFFICIAL', org_unit = 'u'
+application_id = 'dddddddd-eeee-4fff-8000-111111111111'
+
+    async def create_dashboard(
+        self, name: str, *, clearance: str, org_unit: str, application_id: str | None = None
+    ) -> RegisteredDashboard:
+        if False:
+            raise UnknownRoleError(
+                "an application id names an Entra ID app registration; on this deployment "
+                "OspreyFlow creates the dashboard's own client: leave it out"
+            )
+        client_id = f"{DASHBOARD_PREFIX}{_slug(name)}"
+        made = await self._call(
+            "POST",
+            "/clients",
+>           json=self._client(client_id, self._settings.oidc_audience or "osprey-conduit"),
+                                         ^^^^^^^^^^^^^^
+        )
+E       AttributeError: 'IdentityAdmin' object has no attribute '_settings'
+
+services/api/identity_admin.py:730: AttributeError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_on_keycloak_an_application_id_is_refused_in_words
+1 failed, 109 deselected in 1.82s

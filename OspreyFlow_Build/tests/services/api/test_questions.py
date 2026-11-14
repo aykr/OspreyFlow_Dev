@@ -9,7 +9,9 @@ here would do, and the case that catches it:
   (`test_documents_past_what_the_model_can_read_are_refused_not_cut`, rule 2);
 - a proposed entity would reach the graph without a person (`..._are_pending_until_accepted`,
   rule 5);
-- a proposal would be placed in a document where its words are not (`..._not_in_the_text_...`).
+- a proposal would be placed in a document where its words are not (`..._not_in_the_text_...`);
+- a Document above the analyst would be counted when none they can see is there
+  (`test_a_case_with_no_document_the_analyst_can_see_is_answered_from_its_links`).
 """
 
 from __future__ import annotations
@@ -164,13 +166,16 @@ async def test_a_hidden_document_is_never_sent_to_the_model_nor_cited() -> None:
     assert [c.document_id for c in answered.citations] == [email_document_id("ev-1")]
 
 
-async def test_a_case_with_no_document_the_analyst_can_see_is_refused_before_the_model() -> None:
-    from services.api.questions import NoDocumentsError
-
+async def test_a_case_with_no_document_the_analyst_can_see_is_answered_from_its_links() -> None:
+    """ADR-098 Amendment 7: no refusal for want of documents. A Document above the analyst is still
+    neither read nor counted (rule 3): the answer says it read none."""
     service, model, _, _, _ = await _service([_document("secret-doc", "SECRET", event_id="ev-1")])
-    with pytest.raises(NoDocumentsError):
-        await service.ask("inv-1", "What?", ANALYST)
-    assert model.requests == []
+    answered = await service.ask("inv-1", "What?", ANALYST)
+    (request,) = model.requests
+    assert "There are no documents to read" in request.text and TEXT not in request.text
+    assert answered.read is not None
+    assert (answered.read.documents, answered.read.documents_without_text) == (0, 0)
+    assert answered.citations == [] and answered.candidates == []
 
 
 async def test_documents_past_what_the_model_can_read_are_refused_not_cut() -> None:

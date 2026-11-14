@@ -3,6 +3,10 @@
 export type Name = string;
 export type Clearance = string;
 export type OrgUnit = string;
+/**
+ * On Entra ID: the dashboard's app registration's application id, lower case
+ */
+export type ApplicationId = string | null;
 
 /**
  * A dashboard identity to register: a name, and the clearance and unit it reads with — no
@@ -12,5 +16,6 @@ export interface DashboardInput {
   name: Name;
   clearance: Clearance;
   org_unit: OrgUnit;
+  application_id?: ApplicationId;
   [k: string]: unknown;
 }

@@ -1,0 +1,6 @@
+# plant: review_reads_running (scripts/lanes_heartbeat.sh)
+# replaced:   my $state = $st eq "done" ? "done" : $st eq "review" ? "built, waiting to merge"
+# with:   my $state = $st eq "done" ? "done" : $st eq "review" ? "running"
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_each_step_s_state_is_its_lane_s_own_and_done_only_when_merged
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_review_rows_are_built_waiting_to_merge_and_the_headline_counts_them
+2 failed, 20 passed in 19.03s

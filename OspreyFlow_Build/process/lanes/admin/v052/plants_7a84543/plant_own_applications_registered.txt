@@ -1,0 +1,8 @@
+# plant: own_applications_registered (OspreyFlow_Core/services/api/entra_people.py), at 7a84543, re-run with a fresh PYTHONPYCACHEPREFIX
+# replaced: '        if application_id.lower() in self.own_clients:'
+# with: '        if False:'
+# run (from OspreyFlow_Core, closed ports): pytest -q -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_entra_people.py -k 'own_applications'
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_the_deployment_s_own_applications_are_never_registered_as_dashboards[glass]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_the_deployment_s_own_applications_are_never_registered_as_dashboards[api]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_the_deployment_s_own_applications_are_never_registered_as_dashboards[api-upper]
+3 failed, 1 passed, 56 deselected in 4.49s

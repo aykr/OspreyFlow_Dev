@@ -1,0 +1,625 @@
+# live_run.sh at c75886a on stack g, the lease case-b took at 2026-11-14T01:05:53Z (the orchestrator's grant), the run's own log whole
+Running on ospreyflow-test (stack g, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261114T010707Z-37d6d422/log: env ARCADEDB_HTTP_PORT=2497 POSTGRES_PORT=55439 VALKEY_PORT=6385 MINIO_ENDPOINT=localhost:9012 CLICKHOUSE_HTTP_PORT=18129 OPENSEARCH_PORT=19206 POSTGRES_PASSWORD=throwaway OSPREY_LANE=case-b CLICKHOUSE_USER=osprey CLICKHOUSE_PASSWORD=throwaway bash process/lanes/case-b/v052-selection/live_run.sh
+
+=== 1. the new conformance case on ArcadeDB, unplanted (01:07:07Z)
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py .         [100%]
+
+==================================== PASSES ====================================
+---------------------- 1 unmarked test(s) reached a store ----------------------
+tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+============================= slowest 30 durations =============================
+4.46s call     tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+0.42s setup    tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+============================== 1 passed in 7.47s ===============================
+AS IT MUST BE: unplanted (exit 0)
+
+=== plant: the link's own access step left out (01:07:17Z)
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py F         [100%]
+
+=================================== FAILURES ===================================
+_ test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x7c8fb5a7b740>)
+
+    async def test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        """The expand preview's per-type `link_count` (ADR-098 Amendment 8; rule 3) is counted from this read: a
+        one-type expand at a node must carry no trace of a link of that type the principal may not see, whether
+        the link itself is above them (to a neighbour they can read) or its far end is. Its edges and nodes are
+        the same before and after both are written, and a principal cleared for them reads all three, so the
+        filter is real and not a read that returns nothing."""
+        async with factory.context() as adapter:
+            (hub, visible, also_visible), _ = await _write(
+                adapter, [_node("Person", classification="OFFICIAL"), _node("Endpoint", classification="OFFICIAL"),
+                          _node("Endpoint", classification="OFFICIAL")], []
+            )
+            await _write(adapter, [], [_edge("USES", hub, visible, classification="OFFICIAL")])
+            asked = ExpandRequest(node_ids=[hub], depth=1, edge_types=["USES"])
+    
+            def seen(subgraph: Subgraph) -> tuple[set[str], set[tuple[str, str, str]]]:
+                return {n.id for n in subgraph.nodes}, {(e.type, e.source, e.target) for e in subgraph.edges}
+    
+            before = seen(await adapter.expand(asked, OFFICIAL))
+    
+            (secret_neighbour,), _ = await _write(adapter, [_node("Endpoint", classification="SECRET")], [])
+            await _write(adapter, [], [
+                _edge("USES", hub, secret_neighbour, classification="OFFICIAL"),  # its far end is above them
+                _edge("USES", hub, also_visible, classification="SECRET"),  # the link itself is above them
+            ])
+            after = seen(await adapter.expand(asked, OFFICIAL))
+    
+>           assert before == after
+E           AssertionError: assert ({'01M7BSGHND...RBD3Y1QHYJ')}) == ({'01M7BSGHND...RBD3Y1QHYK')})
+E             
+E             At index 0 diff: {'01M7BSGHNDXH2VVCRBD3Y1QHYH', '01M7BSGHNDXH2VVCRBD3Y1QHYJ'} != {'01M7BSGHNDXH2VVCRBD3Y1QHYJ', '01M7BSGHNDXH2VVCRBD3Y1QHYH', '01M7BSGHNDXH2VVCRBD3Y1QHYK'}
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:3859: AssertionError
+---------------------- 1 unmarked test(s) reached a store ----------------------
+tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+============================= slowest 30 durations =============================
+1.74s call     tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+0.27s setup    tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+============================== 1 failed in 4.08s ===============================
+AS IT MUST BE: planted: the link's own access step left out (exit 1)
+
+=== plant: the far end's access step left out (01:07:24Z)
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py F         [100%]
+
+=================================== FAILURES ===================================
+_ test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x79d43b097740>)
+
+    async def test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        """The expand preview's per-type `link_count` (ADR-098 Amendment 8; rule 3) is counted from this read: a
+        one-type expand at a node must carry no trace of a link of that type the principal may not see, whether
+        the link itself is above them (to a neighbour they can read) or its far end is. Its edges and nodes are
+        the same before and after both are written, and a principal cleared for them reads all three, so the
+        filter is real and not a read that returns nothing."""
+        async with factory.context() as adapter:
+            (hub, visible, also_visible), _ = await _write(
+                adapter, [_node("Person", classification="OFFICIAL"), _node("Endpoint", classification="OFFICIAL"),
+                          _node("Endpoint", classification="OFFICIAL")], []
+            )
+            await _write(adapter, [], [_edge("USES", hub, visible, classification="OFFICIAL")])
+            asked = ExpandRequest(node_ids=[hub], depth=1, edge_types=["USES"])
+    
+            def seen(subgraph: Subgraph) -> tuple[set[str], set[tuple[str, str, str]]]:
+                return {n.id for n in subgraph.nodes}, {(e.type, e.source, e.target) for e in subgraph.edges}
+    
+            before = seen(await adapter.expand(asked, OFFICIAL))
+    
+            (secret_neighbour,), _ = await _write(adapter, [_node("Endpoint", classification="SECRET")], [])
+            await _write(adapter, [], [
+                _edge("USES", hub, secret_neighbour, classification="OFFICIAL"),  # its far end is above them
+                _edge("USES", hub, also_visible, classification="SECRET"),  # the link itself is above them
+            ])
+            after = seen(await adapter.expand(asked, OFFICIAL))
+    
+>           assert before == after
+E           AssertionError: assert ({'01M7BSGQRA...JRDMECAXSA')}) == ({'01M7BSGQRA...AWN5X7SCRS')})
+E             
+E             At index 0 diff: {'01M7BSGQRACNJFNGJRDMECAXSA', '01M7BSGQRACNJFNGJRDMECAXS9'} != {'01M7BSGQRACNJFNGJRDMECAXSA', '01M7BSGQRACNJFNGJRDMECAXS9', '01M7BSGR3V606YEDAWN5X7SCRS'}
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:3859: AssertionError
+---------------------- 1 unmarked test(s) reached a store ----------------------
+tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+============================= slowest 30 durations =============================
+1.51s call     tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+0.24s setup    tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+============================== 1 failed in 3.98s ===============================
+AS IT MUST BE: planted: the far end's access step left out (exit 1)
+
+=== 2. green again, put back (01:07:31Z)
+builders.py put back: 1 line(s)
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py .         [100%]
+
+==================================== PASSES ====================================
+---------------------- 1 unmarked test(s) reached a store ----------------------
+tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+============================= slowest 30 durations =============================
+3.36s call     tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+0.26s setup    tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+============================== 1 passed in 6.23s ===============================
+AS IT MUST BE: after the plants (exit 0)
+
+=== 3. the graph port's whole suite on ArcadeDB (nothing else moved) (01:07:39Z)
+........................................................................ [ 25%]
+........................................................................ [ 50%]
+........................................................................ [ 75%]
+.....................................................................    [100%]
+==================================== PASSES ====================================
+--------------------- 282 unmarked test(s) reached a store ---------------------
+tests/conformance/graph_port/test_suite.py::test_a_changed_link_keeps_its_datasets[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_correction_keeps_the_nodes_datasets_and_its_links_stay_in_theirs[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_correction_marks_only_its_own_types_link_superseded[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_dataset_trigger_applies_only_to_links_in_a_dataset_the_reader_may_read[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_fixed_id_write_after_its_link_was_reverted_is_a_link_of_its_own[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_fixed_id_write_in_another_audience_is_a_link_of_its_own_under_a_new_id[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_hub_receiving_many_edges_across_batches_stores_each_edge_once[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_line_break_in_a_property_and_in_a_dataset_name_round_trips_through_get_nodes[a\nb-graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_line_break_in_a_property_and_in_a_dataset_name_round_trips_through_get_nodes[c\rd-graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_link_created_with_writes_n_holds_revision_n[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_link_nobody_wrote_reads_back_to_the_same_digest[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_link_state_restored_on_the_adapter_that_read_it_round_trips_exactly[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_link_structure_past_its_caps_is_refused_with_only_what_is_seen_counted[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_link_written_again_lower_is_a_link_of_its_own[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_link_written_by_two_datasets_is_two_links_each_case_reads_only_its_own[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_links_own_basis_round_trips_and_survives_supersede_node[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_links_stored_state_read_for_its_type_names_that_types_successor_alone[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_merge_adds_writes_to_the_stored_revision[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_merge_that_raised_the_links_marking_is_put_back_at_the_marking_before_it[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+tests/conformance/graph_port/test_suite.py::test_a_merge_writes_its_own_type_and_never_another_holding_the_same_id[graph_arcadedb[gremlin]]: ArcadeDB on port 2497
+… and 262 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+59.94s call     tests/conformance/graph_port/test_suite.py::test_get_edges_past_one_chunk_returns_exactly_the_readable_ones[graph_arcadedb[gremlin]]
+54.22s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+52.33s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+42.41s call     tests/conformance/graph_port/test_suite.py::test_live_edges_touching_past_one_chunk_names_every_link[graph_arcadedb[gremlin]]
+17.86s call     tests/conformance/graph_port/test_suite.py::test_a_hub_receiving_many_edges_across_batches_stores_each_edge_once[graph_arcadedb[gremlin]]
+11.53s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_past_one_chunk_returns_exactly_the_readable_ones[graph_arcadedb[gremlin]]
+10.16s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+9.15s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+8.46s call     tests/conformance/graph_port/test_suite.py::test_existing_node_ids_past_one_chunk_names_exactly_the_existing_ones[graph_arcadedb[gremlin]]
+6.18s call     tests/conformance/graph_port/test_suite.py::test_routes_at_a_length_are_exactly_that_long_and_every_such_route_is_found[graph_arcadedb[gremlin]]
+5.74s call     tests/conformance/graph_port/test_suite.py::test_restore_link_state_refuses_a_link_written_since_by_anyone[graph_arcadedb[gremlin]]
+5.59s call     tests/conformance/graph_port/test_suite.py::test_paths_never_walk_a_not_same_as_judgement[graph_arcadedb[gremlin]]
+5.21s call     tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[absent-graph_arcadedb[gremlin]]
+5.02s call     tests/conformance/graph_port/test_suite.py::test_a_revert_takes_the_nodes_and_links_out_of_every_read_for_every_reader[graph_arcadedb[gremlin]]
+4.88s call     tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[reverted_target-graph_arcadedb[gremlin]]
+4.85s call     tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[handling_code-graph_arcadedb[gremlin]]
+4.55s call     tests/conformance/graph_port/test_suite.py::test_match_where_leaves_no_trace_of_a_node_the_reader_cannot_see[graph_arcadedb[gremlin]]
+4.52s call     tests/conformance/graph_port/test_suite.py::test_get_edges_of_no_ids_is_empty[graph_arcadedb[gremlin]]
+4.48s call     tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[hidden_source-graph_arcadedb[gremlin]]
+4.45s call     tests/conformance/graph_port/test_suite.py::test_stored_link_states_says_each_links_flags_whatever_the_reader_may_read[graph_arcadedb[gremlin]]
+4.42s call     tests/conformance/graph_port/test_suite.py::test_an_open_span_reads_back_open_and_stays_open_when_a_closed_one_is_merged_in[graph_arcadedb[gremlin]]
+4.21s call     tests/conformance/graph_port/test_suite.py::test_live_nodes_naming_geometry_names_live_nodes_whoever_may_read_them[graph_arcadedb[gremlin]]
+4.15s call     tests/conformance/graph_port/test_suite.py::test_expand_leaves_out_a_reverted_neighbour_and_a_superseded_one_for_any_clearance[cleared-graph_arcadedb[gremlin]]
+4.06s call     tests/conformance/graph_port/test_suite.py::test_match_where_in_one_dataset_matches_a_graph_without_the_other_datasets_node[graph_arcadedb[gremlin]]
+4.00s call     tests/conformance/graph_port/test_suite.py::test_expand_edge_types_filters_to_the_declared_type[graph_arcadedb[gremlin]]
+3.97s call     tests/conformance/graph_port/test_suite.py::test_superseded_node_is_excluded_from_default_reads[graph_arcadedb[gremlin]]
+3.77s call     tests/conformance/graph_port/test_suite.py::test_supersede_edge_replaces_it_in_default_reads[graph_arcadedb[gremlin]]
+3.64s call     tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[restricted_target-graph_arcadedb[gremlin]]
+3.58s call     tests/conformance/graph_port/test_suite.py::test_the_clients_rarity_is_one_less_a_values_share_of_the_pair_links_of_its_kind[graph_arcadedb[gremlin]]
+3.57s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_leaves_out_an_unreadable_id_whatever_the_reason[clearance-graph_arcadedb[gremlin]]
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_write_and_read_back_every_default_ontology_entity_type[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_node_property_values_round_trip_exactly[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_node_resolution_state_round_trips_exactly[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_edge_properties_and_distinct_interval_round_trip_exactly[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_an_open_span_reads_back_open_and_stays_open_when_a_closed_one_is_merged_in[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_action_code_and_sanitisation_code_never_gate_a_read[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_subgraph_has_no_filtered_count_field[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_write_and_read_back_an_edge[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_expand_reaches_further_nodes_as_depth_increases[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_expand_edge_types_filters_to_the_declared_type[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_both_sims_reach_their_device_in_one_expand[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_msisdn_reaches_its_device_in_two_hops_not_one[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_expand_leaves_out_a_reverted_neighbour_and_a_superseded_one_for_any_clearance[official-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_expand_leaves_out_a_reverted_neighbour_and_a_superseded_one_for_any_clearance[cleared-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_paths_finds_the_chain_and_respects_max_hops[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_paths_edge_types_filters_to_the_declared_type[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_paths_returns_hydrated_nodes_and_edges_not_bare_ids[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_paths_never_walk_a_not_same_as_judgement[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_routes_at_a_length_are_exactly_that_long_and_every_such_route_is_found[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_no_route_passes_through_a_hidden_node_or_link_and_the_fewest_degrees_do_not_move[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_routes_at_a_length_honour_the_limit_and_say_when_more_exist[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_not_same_as_judgement_is_never_a_step_on_a_route[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_routes_at_a_length_follow_only_the_link_types_asked_for[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_routes_in_one_dataset_match_a_graph_without_the_other_datasets_link[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_finds_the_declared_pattern[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_finds_a_pattern_of_one_variable_with_no_edges[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_single_chain_pattern_compiles_to_the_same_gremlin_as_before[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_finds_the_intersection_across_two_independent_roots[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_intersection_never_leaks_a_hidden_common_endpoint[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_where_returns_only_the_nodes_the_condition_matches[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_where_on_a_pinned_diamond_narrows_the_convergence_node[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_where_leaves_no_trace_of_a_node_the_reader_cannot_see[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_where_in_one_dataset_matches_a_graph_without_the_other_datasets_node[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_where_refuses_a_condition_the_ontology_does_not_allow_by_name[not_indexed-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_where_refuses_a_condition_the_ontology_does_not_allow_by_name[sensitivity_high-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_where_refuses_a_condition_the_ontology_does_not_allow_by_name[unknown_property-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_where_refuses_a_sensitive_property_that_is_also_indexed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_condition_that_is_not_equality_on_one_text_value_cannot_be_drawn_at_all[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_honours_a_pinned_node_in_a_single_chain[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_returns_every_node_it_counted_however_many_ways_they_match[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_finds_two_who_share_two_contacts[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_shared_contacts_never_rest_on_what_the_reader_cannot_see[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_intersection_never_rests_on_a_hidden_link[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_count_agrees_with_the_filtered_results_own_count[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_count_never_leaks_a_hidden_node[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_count_is_a_floor_at_the_ceiling[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_expand_temporal_window_filters_edges_by_valid_from[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_rollback_discards_every_write_made_under_the_transaction[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_schema_migration_is_idempotent_and_reversible[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_find_node_locates_an_existing_node_by_its_identifier_field[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_find_node_matches_a_graph_where_the_node_never_existed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_search_nodes_matches_an_identifier_declared_on_any_entity_type[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_search_nodes_finds_an_endpoint_in_the_shape_the_engine_actually_writes[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_search_matches_a_graph_where_the_node_never_existed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_suggest_nodes_finds_an_account_by_the_start_of_its_normalised_value[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_applying_the_schema_makes_a_name_findable_on_a_node_written_before_it_was_indexed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_suggest_nodes_says_when_more_matched_and_never_returns_more_than_the_limit[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_suggestions_match_a_graph_where_the_node_never_existed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_suggest_nodes_ignoring_case_finds_either_case_and_the_default_does_not[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_suggest_nodes_contains_and_exact_modes[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_suggest_nodes_typed_regex_characters_are_text_not_a_pattern[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_suggest_nodes_ignoring_case_still_hides_what_the_principal_may_not_see[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_suggest_locations_matches_a_substring_of_the_name[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_suggest_locations_respects_the_limit[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_suggest_locations_with_no_match_returns_empty[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_suggest_locations_matches_a_graph_where_the_node_never_existed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_list_nodes_returns_every_node_of_a_type_paginated[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_list_nodes_single_page_exhausts_immediately[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_list_nodes_a_full_page_that_exactly_exhausts_the_type_still_needs_a_final_call[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_list_nodes_matches_a_graph_where_the_node_never_existed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_list_nodes_cursor_excludes_already_returned_nodes[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_upserting_the_same_pair_twice_merges_into_one_edge[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_upserting_the_same_pair_twice_retains_both_source_references[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_upserting_the_same_node_id_twice_merges_into_one_node[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_edge_weight_is_derived_not_hardcoded_and_persists_its_components[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_every_stored_weight_carries_the_current_parameter_set[1-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_every_stored_weight_carries_the_current_parameter_set[2-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_every_stored_weight_carries_the_current_parameter_set[3-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_stored_weight_is_what_the_rules_compute[1-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_stored_weight_is_what_the_rules_compute[2-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_stored_weight_is_what_the_rules_compute[3-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_self_loop_counts_its_occurrences_twice_in_its_nodes_degree[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_second_write_of_the_same_self_loop_counts_both_writes_twice[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_superseded_link_stores_the_current_parameter_set_and_the_rules_weight[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_superseded_link_does_not_count_in_the_corpus[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_load_ledger_stamp_is_recorded_on_every_written_element[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_reverted_node_is_invisible_to_every_read_any_clearance[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_reverted_edge_is_invisible_and_excluded_from_corpus_statistics[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_revert_elements_on_an_empty_or_unknown_id_is_a_safe_no_op[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_withdrawn_element_leaves_every_read_for_every_reader_and_its_load_restores_it[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_restore_brings_back_only_what_that_load_withdrew_and_never_a_reverted_element[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_reverting_the_load_that_made_a_withdrawn_element_means_no_restore_brings_it_back[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_write_onto_a_withdrawn_node_is_a_fresh_create_and_no_longer_withdrawn[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_restore_leaves_withdrawn_a_link_whose_pair_was_written_again_since[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_withdrawing_nothing_or_an_unknown_id_is_a_safe_no_op[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_superseded_node_is_excluded_from_default_reads[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_superseded_node_is_retrievable_by_explicit_revision[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_superseded_by_chain_is_traversable_across_two_corrections[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_include_superseded_does_not_bypass_classification[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_node_carries_its_whole_network_to_the_replacement[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_links_own_basis_round_trips_and_survives_supersede_node[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_node_retains_each_cloned_edges_original_provenance[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_node_rollback_leaves_zero_trace_of_the_partial_operation[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_edge_returns_the_replacements_own_id[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_stored_states_name_each_superseded_elements_successor[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_node_names_each_cloned_link_and_its_successor_before_the_commit[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_node_clones_a_self_loop_once_onto_the_new_node_at_both_ends[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_rolled_back_supersede_node_leaves_each_link_unmarked_and_no_clone[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_edge_replaces_it_in_default_reads[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_write_after_supersede_merges_into_the_replacement_edge[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_an_inferred_write_never_lowers_an_asserted_same_as_link[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_get_node_matches_a_graph_where_the_node_never_existed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_degree_count_matches_a_graph_without_the_hidden_neighbour[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_path_length_matches_a_graph_without_the_hidden_hop[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_match_never_returns_the_hidden_node[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_an_unrecognised_clearance_sees_nothing_rather_than_everything[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_restricted_record_visible_only_to_the_owning_unit_and_receivable_set[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_degree_count_matches_a_graph_without_the_wrong_unit_neighbour[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_edges_sharing_an_endpoint_written_in_one_batch_are_each_stored_once[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_hub_receiving_many_edges_across_batches_stores_each_edge_once[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_edges_among_gives_the_links_between_leaves_that_an_expansion_leaves_out[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_edges_among_shows_no_hidden_link_and_no_link_to_a_hidden_node[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_edges_among_filters_to_the_declared_edge_types[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_edges_among_an_empty_or_single_node_set_is_empty[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_returns_readable_nodes_ordered_by_id[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_leaves_out_an_unreadable_id_whatever_the_reason[clearance-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_leaves_out_an_unreadable_id_whatever_the_reason[handling_code-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_leaves_out_an_unreadable_id_whatever_the_reason[dataset-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_leaves_out_an_unreadable_id_whatever_the_reason[superseded-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_leaves_out_an_unreadable_id_whatever_the_reason[reverted-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_leaves_out_an_unreadable_id_whatever_the_reason[absent-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_of_a_mixed_list_is_exactly_the_readable_subset[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_returns_a_duplicated_id_once[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_of_no_ids_is_empty[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_past_one_chunk_returns_exactly_the_readable_ones[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_returns_readable_links_with_readable_ends_ordered_by_id[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[clearance-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[handling_code-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[dataset-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[hidden_source-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[hidden_target-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[reverted_source-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[reverted_target-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[dataset_source-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[dataset_target-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[restricted_source-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[restricted_target-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[superseded-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[reverted-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason[absent-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_of_a_mixed_list_is_exactly_the_readable_subset[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_of_several_link_types_in_one_call[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_returns_a_duplicated_id_once[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_of_no_ids_is_empty[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_past_one_chunk_returns_exactly_the_readable_ones[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_of_several_node_types_in_one_call[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_nodes_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_get_edges_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_line_break_in_a_property_and_in_a_dataset_name_round_trips_through_get_nodes[a\nb-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_line_break_in_a_property_and_in_a_dataset_name_round_trips_through_get_nodes[c\rd-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_node_of_another_dataset_matches_a_graph_where_it_never_existed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_node_written_by_two_datasets_belongs_to_both_and_a_rewrite_never_drops_one[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_link_written_by_two_datasets_is_two_links_each_case_reads_only_its_own[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_degree_in_one_dataset_matches_a_graph_without_the_other_datasets_neighbour[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_path_length_in_one_dataset_matches_a_graph_without_the_other_datasets_hop[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_expansion_stays_within_the_cases_datasets[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_match_and_its_count_never_reach_another_dataset[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_search_suggestions_and_lookups_find_only_the_cases_datasets[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_correction_keeps_the_nodes_datasets_and_its_links_stay_in_theirs[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_changed_link_keeps_its_datasets[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_reverting_one_node_leaves_the_others_of_its_type_listed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_correcting_one_node_leaves_the_others_of_its_type_listed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_rewriting_one_node_with_new_handling_leaves_the_others_listed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_type_counts_are_of_what_the_case_can_see[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_most_connected_ranks_by_visible_links_and_says_of_how_many[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_most_connected_pages_without_gaps_or_repeats[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_most_connected_of_one_type_counts_only_that_type[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_busiest_links_rank_by_records_and_say_of_how_many[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_busiest_links_of_one_node_rank_only_its_own_visible_links[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_busiest_links_page_and_filter_by_type[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_link_structure_is_what_the_case_can_see[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_link_structure_past_its_caps_is_refused_with_only_what_is_seen_counted[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_recent_loads_are_the_latest_first_and_only_what_the_case_can_see[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_recent_loads_say_how_many_beyond_the_ones_shown[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_recently_confirmed_is_the_latest_first_and_only_what_the_case_can_see[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_shared_contacts_are_counted_most_first_and_only_what_the_reader_sees[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_shared_contacts_page_and_say_how_many[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_link_written_again_lower_is_a_link_of_its_own[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_node_written_again_lower_keeps_its_higher_handling[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[secret-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[secret-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[secret-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[restricted-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[restricted-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[restricted-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[hidden_node-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[hidden_node-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[hidden_node-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[other_dataset-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[other_dataset-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[other_dataset-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[raised_by_supersede_edge-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[raised_by_supersede_edge-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[raised_by_supersede_edge-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[raised_by_supersede_node-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[raised_by_supersede_node-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[raised_by_supersede_node-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[secret-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[secret-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[secret-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[restricted-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[restricted-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[restricted-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[hidden_node-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[hidden_node-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[hidden_node-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[other_dataset-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[other_dataset-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[other_dataset-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_edge-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_edge-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_edge-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_node-upsert-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_node-edge_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_node-node_supersede-graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_same_pair_write_in_another_dataset_is_a_link_of_its_own[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_two_writes_with_one_marking_make_one_link_with_two_occurrences[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_secret_write_onto_an_official_link_makes_two_links_and_changes_nothing_the_official_reader_sees[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_writes_under_two_restricted_units_make_two_links_each_unit_reads_only_its_own[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_same_restricted_unit_still_merges[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_writes_in_two_datasets_make_two_links_each_case_reads_only_its_own[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_reader_cleared_for_everything_reads_every_audiences_link[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_an_undirected_type_written_reversed_merges_within_an_audience_and_not_across[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_two_unrestricted_codes_with_different_units_still_merge[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_fixed_id_write_in_another_audience_is_a_link_of_its_own_under_a_new_id[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_fixed_id_write_after_its_link_was_reverted_is_a_link_of_its_own[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_strip_provenance_references_removes_the_prefix_from_live_and_superseded_links[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_existing_node_ids_names_every_node_that_exists_whatever_it_is_marked_or_its_state[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_existing_node_ids_is_what_upsert_nodes_would_merge_into[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_existing_node_ids_names_a_duplicated_id_once_and_no_ids_nothing[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_existing_node_ids_past_one_chunk_names_exactly_the_existing_ones[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_one_link_id_written_under_two_audiences_in_one_transaction_is_two_links[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_write_onto_a_reverted_node_is_a_fresh_create_readable_with_the_new_body[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_revert_takes_the_nodes_and_links_out_of_every_read_for_every_reader[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_node_reverted_and_superseded_stays_superseded_when_written_again[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_superseded_nodes_live_successor_is_the_only_live_revision_after_a_rewrite[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_live_edges_touching_names_every_live_link_at_a_node_whatever_the_reader_may_read[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_live_edges_touching_past_one_chunk_names_every_link[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_live_nodes_naming_geometry_names_live_nodes_whoever_may_read_them[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_stored_writes_says_which_load_last_wrote_each_node_and_whether_it_is_reverted[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_stored_link_states_says_each_links_flags_whatever_the_reader_may_read[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_read_link_state_gives_a_link_as_stored_whatever_the_reader_may_read[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_link_nobody_wrote_reads_back_to_the_same_digest[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_link_state_restored_on_the_adapter_that_read_it_round_trips_exactly[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_restore_link_state_puts_a_merged_link_back_exactly_as_it_was[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_restore_link_state_refuses_a_link_written_since_by_anyone[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_restore_writes_its_own_type_and_never_another_holding_the_same_id[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_merge_writes_its_own_type_and_never_another_holding_the_same_id[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_read_link_state_reads_its_named_type_alone[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_correction_marks_only_its_own_types_link_superseded[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_links_stored_state_read_for_its_type_names_that_types_successor_alone[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_node_never_marks_another_types_link_holding_a_cloned_links_id[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_node_marks_each_of_two_types_holding_one_id_at_the_node_by_its_own_clone[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_restored_link_keeps_its_marking[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_merge_that_raised_the_links_marking_is_put_back_at_the_marking_before_it[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_revert_by_id_touches_only_the_kind_it_was_given_and_refuses_an_ambiguous_id[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_link_created_with_writes_n_holds_revision_n[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_merge_adds_writes_to_the_stored_revision[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_edge_refuses_a_write_standing_for_more_than_one[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_connection_strength_applies_an_influencer_only_with_a_visible_evidencing_record[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_connection_strength_matches_a_world_without_the_hidden_evidence[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_shared_attribute_rarity_is_the_inverse_frequency_of_what_the_reader_shares[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_rarity_matches_a_world_without_the_hidden_entity[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_rarity_is_refused_past_its_cap_rather_than_scored_in_part[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_clients_rarity_is_one_less_a_values_share_of_the_pair_links_of_its_kind[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_unauthorised_share_rarity_matches_a_world_without_the_hidden_holders[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_clients_rarity_is_refused_past_its_cap_rather_than_counted_in_part[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_client_parity_is_the_links_own_rarity_plus_the_adds_with_no_count_or_recency[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_dataset_trigger_applies_only_to_links_in_a_dataset_the_reader_may_read[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_client_parity_scores_a_pair_linked_through_a_shared_value[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_client_parity_scores_equal_a_transcription_of_the_clients_r_function[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_regrade_drawn_changes_the_grade_and_original_alone[graph_arcadedb[gremlin]]
+285 passed in 718.91s (0:11:58)
+AS IT MUST BE: the graph port suite (exit 0)
+
+=== 4. the preview's service cases and the cap cases beside them (01:19:47Z)
+..............................                                           [100%]
+==================================== PASSES ====================================
+============================= slowest 30 durations =============================
+0.07s setup    tests/services/api/working_set/test_preview_link_count.py::test_the_link_count_is_equal_with_and_without_a_hidden_stored_item[nothing hidden]
+0.01s setup    tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_the_previews_counts_are_equal_with_and_without_a_hidden_stored_item[all three]
+
+(28 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_preview_link_count.py::test_the_link_count_is_equal_with_and_without_a_hidden_stored_item[nothing hidden]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_preview_link_count.py::test_the_link_count_is_equal_with_and_without_a_hidden_stored_item[a node above clearance]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_preview_link_count.py::test_the_link_count_is_equal_with_and_without_a_hidden_stored_item[a readable link to a hidden node]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_preview_link_count.py::test_the_link_count_is_equal_with_and_without_a_hidden_stored_item[a hidden link between readable nodes]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_preview_link_count.py::test_the_link_count_is_equal_with_and_without_a_hidden_stored_item[all three]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_preview_link_count.py::test_a_link_already_on_the_canvas_is_counted
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_preview_link_count.py::test_only_links_of_the_asked_type_at_the_asked_node_are_counted
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_preview_link_count.py::test_a_link_whose_far_end_the_read_left_out_is_not_counted
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_preview_link_count.py::test_a_reader_cleared_for_more_is_counted_with_it
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_the_previews_counts_are_equal_with_and_without_a_hidden_stored_item[nothing hidden]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_the_previews_counts_are_equal_with_and_without_a_hidden_stored_item[a node above clearance]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_the_previews_counts_are_equal_with_and_without_a_hidden_stored_item[a readable link to a hidden node]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_the_previews_counts_are_equal_with_and_without_a_hidden_stored_item[a hidden link between readable nodes]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_the_previews_counts_are_equal_with_and_without_a_hidden_stored_item[all three]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_a_node_cap_breach_reports_the_same_would_be_with_and_without_a_hidden_item[nothing hidden]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_a_node_cap_breach_reports_the_same_would_be_with_and_without_a_hidden_item[a node above clearance]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_a_node_cap_breach_reports_the_same_would_be_with_and_without_a_hidden_item[a readable link to a hidden node]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_a_node_cap_breach_reports_the_same_would_be_with_and_without_a_hidden_item[a hidden link between readable nodes]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_a_node_cap_breach_reports_the_same_would_be_with_and_without_a_hidden_item[all three]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_a_link_cap_breach_reports_the_same_would_be_with_and_without_a_hidden_item[nothing hidden]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_a_link_cap_breach_reports_the_same_would_be_with_and_without_a_hidden_item[a node above clearance]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_a_link_cap_breach_reports_the_same_would_be_with_and_without_a_hidden_item[a readable link to a hidden node]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_a_link_cap_breach_reports_the_same_would_be_with_and_without_a_hidden_item[a hidden link between readable nodes]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_a_link_cap_breach_reports_the_same_would_be_with_and_without_a_hidden_item[all three]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_the_choice_to_ask_for_links_among_does_not_move_with_a_hidden_stored_node[nothing hidden]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_the_choice_to_ask_for_links_among_does_not_move_with_a_hidden_stored_node[a node above clearance]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_the_choice_to_ask_for_links_among_does_not_move_with_a_hidden_stored_node[a readable link to a hidden node]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_the_choice_to_ask_for_links_among_does_not_move_with_a_hidden_stored_node[a hidden link between readable nodes]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_the_choice_to_ask_for_links_among_does_not_move_with_a_hidden_stored_node[all three]
+PASSED ../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py::test_a_reader_who_can_read_the_item_is_counted_with_it
+30 passed in 3.37s
+AS IT MUST BE: the preview's cases (exit 0)
+
+=== 5. test_route_rights.py (rule 4) (01:19:51Z)
+.....                                                                    [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/case-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+______ test_each_right_is_refused_without_it_and_needs_the_case_level_too ______
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [14/Nov/2026 01:19:59] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route __
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [14/Nov/2026 01:20:02] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_____ test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real _____
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [14/Nov/2026 01:20:07] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+---------------------- 3 unmarked test(s) reached a store ----------------------
+tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route: ArcadeDB on port 2497, Postgres on port 55439, Valkey on port 6385
+tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real: ArcadeDB on port 2497, Postgres on port 55439, Valkey on port 6385
+tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too: ArcadeDB on port 2497, Postgres on port 55439, Valkey on port 6385
+============================= slowest 30 durations =============================
+4.79s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+4.39s call     tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+3.18s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+2.33s call     tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real
+0.18s setup    tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real
+0.11s teardown tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real
+0.09s setup    tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.06s setup    tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.06s teardown tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.04s teardown tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.02s setup    tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+
+(4 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_right_guards_at_least_one_route
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real
+5 passed, 1 warning in 16.44s
+AS IT MUST BE: test_route_rights.py (exit 0)
+
+every step as it must be
+Wall time: 783 s, exit 0 (stack g, the lease case-b took at 2026-11-14T01:05:53Z; set-up before it 52 s)

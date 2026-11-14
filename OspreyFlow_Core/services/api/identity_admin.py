@@ -191,7 +191,9 @@ def _person(user: dict[str, Any]) -> PersonAccount:
     )
 
 
-def _slug(name: str) -> str:
+def dashboard_slug(name: str) -> str:
+    """A dashboard's name, as its Keycloak client id carries it after `osprey-dashboard-` and as
+    Entra ID's registration stores it (ADR-148 Amendment 10)."""
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     if not slug:
         raise UnknownRoleError("a dashboard needs a name of letters or digits")
@@ -221,7 +223,7 @@ class PeopleDirectory(Protocol):
     ) -> tuple[PersonAccount, OrganisationArrival]: ...
     async def list_dashboards(self) -> list[DashboardIdentity]: ...
     async def create_dashboard(
-        self, name: str, *, clearance: str, org_unit: str
+        self, name: str, *, clearance: str, org_unit: str, application_id: str | None = None
     ) -> RegisteredDashboard: ...
     async def delete_dashboard(self, client_id: str) -> None: ...
 
@@ -697,6 +699,7 @@ class IdentityAdmin:
         attributes = account.get("attributes") or {}
         return DashboardIdentity(
             client_id=str(client["clientId"]), account_id=str(account["id"]),
+            name=str(client["clientId"]).removeprefix(DASHBOARD_PREFIX),
             clearance=_first(attributes, "clearance"), org_unit=_first(attributes, "org_unit"),
             receivable_handling_codes=[
                 str(c) for c in attributes.get("receivable_handling_codes") or []
@@ -716,9 +719,14 @@ class IdentityAdmin:
         ]
 
     async def create_dashboard(
-        self, name: str, *, clearance: str, org_unit: str
+        self, name: str, *, clearance: str, org_unit: str, application_id: str | None = None
     ) -> RegisteredDashboard:
-        client_id = f"{DASHBOARD_PREFIX}{_slug(name)}"
+        if application_id is not None:
+            raise UnknownRoleError(
+                "an application id names an Entra ID app registration; on this deployment "
+                "OspreyFlow creates the dashboard's own client: leave it out"
+            )
+        client_id = f"{DASHBOARD_PREFIX}{dashboard_slug(name)}"
         made = await self._call(
             "POST",
             "/clients",
@@ -743,6 +751,7 @@ class IdentityAdmin:
         )
         return RegisteredDashboard(
             dashboard=DashboardIdentity(client_id=client_id, account_id=str(account["id"]),
+                                        name=client_id.removeprefix(DASHBOARD_PREFIX),
                                         clearance=clearance, org_unit=org_unit),
             secret=secret,
         )  # fmt: skip

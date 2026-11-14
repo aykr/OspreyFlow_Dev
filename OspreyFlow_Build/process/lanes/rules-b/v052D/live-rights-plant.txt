@@ -1,0 +1,31 @@
+# plant at a0cfa1a on stack e (rules-b's lease): will_read_route's row removed from test_route_rights.py
+
+../OspreyFlow_Build/tests/services/api/test_route_rights.py:562: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+---------------------- 3 unmarked test(s) reached a store ----------------------
+tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route: ArcadeDB on port 2495, Postgres on port 55437, Valkey on port 6383
+tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real: ArcadeDB on port 2495, Postgres on port 55437, Valkey on port 6383
+tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too: ArcadeDB on port 2495, Postgres on port 55437, Valkey on port 6383
+============================= slowest 30 durations =============================
+4.80s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+4.56s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+2.42s call     tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+1.91s call     tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real
+0.43s teardown tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.18s teardown tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.10s teardown tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real
+0.07s setup    tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real
+0.05s setup    tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.04s setup    tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.02s setup    tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+
+(4 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+1 failed, 4 passed, 1 warning in 16.94s
+Wall time: 20 s, exit 1 (stack e, the lease rules-b took at 2026-11-13T23:43:31Z; set-up before it 23 s)

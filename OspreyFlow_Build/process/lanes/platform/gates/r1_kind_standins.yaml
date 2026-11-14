@@ -29,8 +29,9 @@ spec:
       containers:
         - name: postgres
           image: localhost:5001/postgres:16.4
-          # max_connections as the install asks the platform team to set it in the parameter group (R1, finding 15).
-          args: ["-c", "max_connections=750", "-c", "ssl=on", "-c", "ssl_cert_file=/pgtls/tls.crt", "-c", "ssl_key_file=/pgtls/tls.key",
+          # max_connections as the Terraform sets it in the parameter group (ADR-114 Am 46): filled in
+          # at apply from harness.cloud_platform.connections, never a number of its own (r1_kind.standins_text).
+          args: ["-c", "max_connections=${MAX_CONNECTIONS}", "-c", "ssl=on", "-c", "ssl_cert_file=/pgtls/tls.crt", "-c", "ssl_key_file=/pgtls/tls.key",
                  "-c", "hba_file=/pgtls/pg_hba.conf"]
           env:
             # The image's superuser is the platform's, never handed out; `osprey` is the master user.

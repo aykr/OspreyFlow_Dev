@@ -1,0 +1,6 @@
+# plant: no_stage_names (scripts/lanes_heartbeat.sh)
+# replaced:       @listed = @s if $state eq "running" || $state eq "blocked" } }
+# with:       } }
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_a_running_row_lists_its_stages_by_name_and_others_stay_one_line
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py::test_the_route_view_is_one_screen_with_every_step_running
+2 failed, 20 passed in 19.47s

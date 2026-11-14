@@ -72,6 +72,7 @@ from schemas.domain import (
     Provenance,
     ProvenanceState,
     SourceRef,
+    Subgraph,
 )
 
 from .access_index import ABSENT, AccessEntries, AccessSignature
@@ -1171,6 +1172,7 @@ class WorkingSetService:
         return CardinalityPreview(
             candidate_node_count=would_be_nodes,
             candidate_edge_count=would_be_edges,
+            link_count=_links_at(req, subgraph),
             would_breach=_cap_breach(would_be_nodes, would_be_edges),
         )
 
@@ -1789,6 +1791,24 @@ class WorkingSetService:
             except HandlingSchemeError:
                 return True
         return False
+
+
+def _links_at(req: ExpandRequest, subgraph: Subgraph) -> int:
+    """The links of the asked types at the asked nodes in what the adapter's expand returned
+    (ADR-098 Amendment 8): the read is access-filtered in the traversal (rule 3), and a link is
+    counted only when its other end was returned too, so a link to a node the reader may not read
+    is never counted."""
+    asked = set(req.node_ids)
+    returned = asked | {n.id for n in subgraph.nodes}
+    types = set(req.edge_types) if req.edge_types else None
+    return sum(
+        1
+        for e in subgraph.edges
+        if (types is None or e.type in types)
+        and (e.source in asked or e.target in asked)
+        and e.source in returned
+        and e.target in returned
+    )
 
 
 def _cap_breach(would_be_nodes: int, would_be_edges: int) -> LimitExceeded | None:

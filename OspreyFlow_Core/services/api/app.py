@@ -907,12 +907,15 @@ from .promotions import (
 )
 from .questions import (
     AskRequest,
-    NoDocumentsError,
+    NothingToReadError,
     PostgresQuestionStore,
     QuestionAccepted,
     QuestionAnswer,
     QuestionsService,
     QuestionsTooLargeError,
+    ReadFromUnavailableError,
+    ScopeRequest,
+    WillRead,
 )
 from .recipe_run import (
     RecipeRunDeps,
@@ -995,6 +998,7 @@ from .sentence_rules import (
     strength_context,
 )
 from .service_identity import (
+    DASHBOARD_IS_NO_SERVICE_IDENTITY,
     DEPLOYMENT_CLIENT_WORDS,
     ServiceIdentityRefused,
     ServiceIdentityVerifier,
@@ -1538,15 +1542,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-148 Amendment 8: on Entra ID sign-in, Admin › People writes the deployment's own store,
     # which an open delta socket also asks before each message (`_socket_standing`).
     app.state.people_store = resources.people_store
-    app.state.identity_admin = (
-        EntraPeopleAdmin(resources.people_store)
-        if resources.people_store is not None
-        else IdentityAdmin(
-            config,
-            by_email=os.environ.get("OSPREY_SIGN_IN_EMAIL", "").lower() == "true",
-            organisation=os.environ.get("OSPREY_ORGANISATION_SIGN_IN") or None,
-        )
-    )
+    app.state.identity_admin = people_directory(resources, config)
     # ADR-111 Amendment 3: Superset dashboards inside the Glass; None when not configured.
     superset_settings = SupersetSettings.from_env()
     app.state.superset_embedder = SupersetEmbedder(superset_settings) if superset_settings else None
@@ -2120,6 +2116,22 @@ def get_compute(request: Request) -> ComputePort:
     return request.app.state.compute  # type: ignore[no-any-return]
 
 
+def people_directory(resources: Any, config: ApiConfig) -> PeopleDirectory:
+    """Admin › People's and Dashboards' directory: the deployment's own store on Entra ID sign-in
+    (ADR-148 Amendment 8), told the Glass's and this API's own application ids, which it never
+    registers as dashboard identities (Amendment 10); Keycloak's admin API otherwise."""
+    if resources.people_store is not None:
+        mapping = resources.principal_resolver.claim_mapping
+        return EntraPeopleAdmin(
+            resources.people_store, own_clients=(mapping.client_id, mapping.api_client_id)
+        )
+    return IdentityAdmin(
+        config,
+        by_email=os.environ.get("OSPREY_SIGN_IN_EMAIL", "").lower() == "true",
+        organisation=os.environ.get("OSPREY_ORGANISATION_SIGN_IN") or None,
+    )
+
+
 async def get_principal(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
@@ -2154,6 +2166,20 @@ async def get_principal(
                 "Try again shortly.",
             },
         ) from exc
+    # ADR-148 Amendment 10: a principal admitted to named routes alone (a dashboard identity on
+    # Entra ID) is refused every other, before anything is read for it.
+    if identity.routes is not None:
+        route = request.scope.get("route")
+        asked = f"{request.method} {getattr(route, 'path', request.url.path)}"
+        if asked not in identity.routes:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "route_not_admitted",
+                    "message": "this identity is admitted only to "
+                    + ", ".join(sorted(identity.routes)),
+                },
+            )
     # The token's own roles, kept apart for what must read a custom role's rights afresh later
     # (the delta socket's ticket, `issue_ws_ticket`).
     request.state.token_roles = list(identity.roles)
@@ -2280,11 +2306,27 @@ async def get_service_identity(
     anyio's shared pool, with no bound of its own)."""
     verifier: ServiceIdentityVerifier = request.app.state.service_identities
     try:
-        return await in_keys_thread(verifier.client_of, credentials.credentials)
+        client = await in_keys_thread(verifier.client_of, credentials.credentials)
     except SigningKeysUnavailable as unavailable:
         raise HTTPException(status_code=503, detail=str(unavailable)) from unavailable
     except ServiceIdentityRefused as refused:
         raise HTTPException(status_code=refused.status, detail=str(refused)) from refused
+    # ADR-148 Amendment 10: a client Admin › Dashboards registered is a dashboard identity, which
+    # reads the report feed and never submits runs, whatever its token holds. The read is bounded as
+    # a person's stored roles are; past it, the same 503.
+    store = getattr(request.app.state, "people_store", None)
+    if store is not None:
+        try:
+            registered = await asyncio.wait_for(
+                store.dashboard(store.tenant_id, client), timeout=ROLE_LOOKUP_TIMEOUT_SECONDS
+            )
+        except Exception as exc:  # noqa: BLE001 - any failure of the read is the one 503
+            raise HTTPException(
+                status_code=503, detail="the dashboard identities could not be read"
+            ) from exc
+        if registered is not None:
+            raise HTTPException(status_code=403, detail=DASHBOARD_IS_NO_SERVICE_IDENTITY)
+    return client
 
 
 ServiceIdentityDep = Annotated[str, Depends(get_service_identity)]
@@ -3505,11 +3547,24 @@ async def _dataset_refused_handler(request: Request, exc: DatasetRefusedError) -
     )
 
 
-@app.exception_handler(NoDocumentsError)
-async def _no_documents_handler(request: Request, exc: NoDocumentsError) -> JSONResponse:
-    """ADR-098 decision 4: the case holds no Document the analyst can see to ask about."""
+@app.exception_handler(NothingToReadError)
+async def _nothing_to_read_handler(request: Request, exc: NothingToReadError) -> JSONResponse:
+    """ADR-098 Amendment 7: nothing selected that the asker's view holds, or an empty graph. There
+    is no refusal for want of documents: with none, the model answers from the links and events."""
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"error": "no_documents"}
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "nothing_to_read", "detail": exc.words},
+    )
+
+
+@app.exception_handler(ReadFromUnavailableError)
+async def _read_from_unavailable_handler(
+    request: Request, exc: ReadFromUnavailableError
+) -> JSONResponse:
+    """ADR-098 Amendment 7: *Whole case* asked for before the case's search is called (D(iii))."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "read_from_unavailable", "detail": exc.words},
     )
 
 
@@ -4298,19 +4353,40 @@ async def _may_hold_a_level(
             )
         return
     people = await names.people([grantee])
-    if people is None or grantee in people:
+    if people is not None and grantee in people:
         return
-    dashboards = {d.account_id for d in await get_identity_admin(request).list_dashboards()}
-    if grantee in dashboards and level is AccessLevel.VIEWER:
+    # Not a person the directory holds, so its registration is read: on Entra ID the names
+    # directory holds no people (`people` is None) and a registered dashboard is still a Viewer
+    # and nothing more (ADR-148 Amendment 10). With no directory, an identity provider that
+    # cannot answer leaves the grant as before: the deployment cannot tell.
+    admin = getattr(request.app.state, "identity_admin", None)
+    try:
+        dashboards = {d.account_id for d in await admin.list_dashboards()} if admin else set()
+    except IdentityAdminRefused:
+        if people is None:
+            return
+        raise
+    if grantee in dashboards:
+        if level is AccessLevel.VIEWER:
+            return
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "service_account",
+                "message": f"a dashboard identity may be a Viewer of a case and nothing more; "
+                f"{grantee} was asked to be {level.value}",
+            },
+        )
+    if people is None:
         return
-    words = (
-        f"a dashboard identity may be a Viewer of a case and nothing more; {grantee} was asked "
-        f"to be {level.value}"
-        if grantee in dashboards
-        else f"{grantee} is not an enabled person: a service account owns nothing and is never a "
-        "case member, and a disabled account holds no level"
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "error": "service_account",
+            "message": f"{grantee} is not an enabled person: a service account owns nothing and "
+            "is never a case member, and a disabled account holds no level",
+        },
     )
-    raise HTTPException(status_code=409, detail={"error": "service_account", "message": words})
 
 
 @app.put(
@@ -7511,6 +7587,7 @@ async def ask_question_route(
         engine=body.engine,
         view_id=body.view_id,
         view_node_ids=in_view,
+        read_from=body.read_from,
     )
     await audit.record(
         principal=principal,
@@ -7521,6 +7598,49 @@ async def ask_question_route(
     )
     names = await principal_names.display_names([answer.author])
     return answer.model_copy(update={"author_name": names.get(answer.author)})
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/questions/will-read",
+    dependencies=[Depends(require_right(Right.ASK_MODEL))],
+)
+async def will_read_route(
+    investigation: InvestigationEditorDep,
+    body: ScopeRequest,
+    principal: PrincipalDep,
+    questions: QuestionsDep,
+    audit: AuditDep,
+    views: CaseViewsDep,
+    working_set: WorkingSetDep,
+) -> WillRead:
+    """ADR-098 Amendment 7, ADR-135 Amendment 12: what a question asked with this scope would read,
+    counted as the asker (rule 3), and the engine that would answer it as the routing decides, with
+    the engines that cannot and why. Nothing is sent to a model. The same right and case level as
+    asking, the same refusals (`nothing_to_read`, `read_from_unavailable`, the typed
+    `limit_exceeded`), so what it says is what asking would do."""
+    in_view = (
+        await _view_node_ids(views, working_set, investigation.id, body.view_id, principal)
+        if body.view_id is not None
+        else None
+    )
+    will = await questions.will_read(
+        investigation.id,
+        principal,
+        selected_node_ids=body.selected_node_ids,
+        selected_link_ids=body.selected_link_ids,
+        window=body.window,
+        engine=body.engine,
+        view_node_ids=in_view,
+        read_from=body.read_from,
+    )
+    await audit.record(
+        principal=principal,
+        action="will_read_question",
+        investigation_id=investigation.id,
+        resolved_query={"read_from": will.read.read_from, "view_id": body.view_id},
+        result_cardinality=will.read.documents,
+    )
+    return will
 
 
 async def _view_node_ids(
@@ -16952,6 +17072,16 @@ async def sign_in_kind_route(identity_admin: IdentityAdminDep) -> SignInKind:
     return SignInKind(kind="entra" if isinstance(identity_admin, EntraPeopleAdmin) else "keycloak")
 
 
+@app.get(
+    "/v1/admin/dashboards/sign-in", dependencies=[Depends(require_right(Right.MANAGE_DASHBOARDS))]
+)
+async def dashboards_sign_in_kind_route(identity_admin: IdentityAdminDep) -> SignInKind:
+    """ADR-148 Amendment 10: the same answer for Admin › Dashboards, which asks an application id on
+    Entra ID and nothing on Keycloak; behind `manage_dashboards`, as Dashboards is, so an
+    administrator of dashboards alone is not refused it."""
+    return SignInKind(kind="entra" if isinstance(identity_admin, EntraPeopleAdmin) else "keycloak")
+
+
 @app.post(
     "/v1/admin/people/by-object-id",
     status_code=201,
@@ -17297,8 +17427,9 @@ async def register_dashboard_route(
             detail={"error": "dashboard_above_your_clearance", "clearance": body.clearance},
         )
     made = await identity_admin.create_dashboard(
-        body.name, clearance=body.clearance, org_unit=body.org_unit
-    )
+        body.name, clearance=body.clearance, org_unit=body.org_unit,
+        application_id=body.application_id,
+    )  # fmt: skip
     await audit.record(principal=principal, action="register_dashboard",
                        resolved_query={"client_id": made.dashboard.client_id,
                                        "clearance": body.clearance, "org_unit": body.org_unit},
@@ -17312,11 +17443,29 @@ async def register_dashboard_route(
     dependencies=[Depends(require_right(Right.MANAGE_DASHBOARDS))],
 )
 async def remove_dashboard_route(
-    client_id: str, principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+    client_id: str,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    investigations: InvestigationsDep,
+    audit: AuditDep,
 ) -> Response:
+    """Removed, and every case grant its account holds revoked with it (ADR-148 Amendment 10), so a
+    dashboard registered again later finds no level waiting. The grants go first, while the
+    registration still names the account: if that fails, the dashboard stays registered and removing
+    it again revokes; if the removal then fails, it holds no level and is removed again. One not
+    registered revokes nothing and is refused by the identity provider's own answer. The audit row
+    counts the grants revoked; it never names their cases."""
+    accounts = [d.account_id for d in await identity_admin.list_dashboards()
+                if d.client_id == client_id]  # fmt: skip
+    revoked = [
+        case
+        for account in accounts
+        for case in await investigations.revoke_everywhere(account, by=principal)
+    ]
     await identity_admin.delete_dashboard(client_id)
     await audit.record(principal=principal, action="remove_dashboard",
-                       resolved_query={"client_id": client_id}, result_cardinality=1)  # fmt: skip
+                       resolved_query={"client_id": client_id, "grants_revoked": len(revoked)},
+                       result_cardinality=1)  # fmt: skip
     return Response(status_code=204)
 
 
@@ -20671,6 +20820,12 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
         return
     except PrincipalLookupUnavailable:
         await websocket.close(code=status.WS_1013_TRY_AGAIN_LATER)
+        return
+    # ADR-148 Amendment 10: the socket asks no `get_principal`, so the route gate is its own here. A
+    # principal admitted to named routes alone (a dashboard identity) opens no stream; nothing of
+    # the case is read for it.
+    if raw.routes is not None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
     # ADR-148 Amendment 8: a ticket minted before a disable or a change of roles stands no longer.
     if (refused := await _socket_standing(websocket.app, raw)) is not None:

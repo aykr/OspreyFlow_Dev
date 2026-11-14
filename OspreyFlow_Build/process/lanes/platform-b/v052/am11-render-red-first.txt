@@ -1,0 +1,36 @@
+# ADR-148 Amendment 11, the render (step 6): each piece red first by a plant in its own code. Each pytest with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a). Mac, offline, on v052-gate (admin's 7a84543 merged). Plant (h), the install's own connection figure, went with the rebuild: main's harness/cloud_platform/connections.py counts Superset and the report sync.
+
+== (a) Superset on with no app registration of its own is not refused:
+FAILED test_cloud_platform_entra.py::test_superset_on_without_its_app_registration_is_refused_naming_the_setting
+1 failed, 177 passed, 1 warning in 9.50s
+
+== (b) the cluster's rate-limit address (redis://valkey:6379/5) left in the ConfigMap:
+FAILED test_cloud_platform_entra.py::test_superset_and_the_report_sync_render_signing_in_with_entra_id
+1 failed, 177 passed, 1 warning in 9.20s
+
+== (c) the realm's Superset addresses not taken out:
+FAILED test_cloud_platform_entra.py::test_the_realms_settings_are_gone_and_entras_are_rendered
+FAILED test_cloud_platform_entra.py::test_superset_and_the_report_sync_render_signing_in_with_entra_id
+2 failed, 176 passed, 1 warning in 8.69s
+
+== (d) Superset and the report sync not given Entra's sign-in host:
+FAILED test_cloud_platform_entra.py::test_superset_and_the_report_sync_reach_entra_id_and_superset_the_conduit
+FAILED test_cloud_platform_render.py::test_entras_sign_in_host_is_the_one_host_p10_adds_and_who_reaches_it
+2 failed, 176 passed, 1 warning in 9.36s
+
+== (e) Superset not given its path to the Conduit:
+FAILED test_cloud_platform_entra.py::test_superset_and_the_report_sync_reach_entra_id_and_superset_the_conduit
+FAILED test_cloud_platform_entra.py::test_a_restore_stops_superset_and_the_report_sync_with_the_other_writers
+2 failed, 176 passed, 1 warning in 9.89s
+
+== (f) the report sync asking the delegated scope, not the API's application permissions:
+FAILED test_cloud_platform_entra.py::test_the_api_s_id_uri_names_superset_s_and_the_report_sync_s_scopes
+FAILED test_cloud_platform_entra.py::test_superset_and_the_report_sync_render_signing_in_with_entra_id
+2 failed, 176 passed, 1 warning in 9.78s
+
+== (g) the managed cache reached without TLS:
+FAILED test_superset_entra_sign_in.py::test_the_rate_limits_go_to_the_managed_cache_over_tls_with_its_password
+1 failed, 177 passed, 1 warning in 9.81s
+
+== green:
+178 passed, 1 warning in 10.23s

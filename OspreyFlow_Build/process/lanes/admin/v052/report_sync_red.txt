@@ -1,0 +1,224 @@
+# red: the report sync on Entra, before the code, ff73a9d, 2026-11-13T20:45:44Z (the sync_once case needs the live stores: on the server)
+FFE                                                                      [100%]
+==================================== ERRORS ====================================
+__________ ERROR at setup of test_a_pass_on_entra_asks_with_the_scope __________
+
+    @pytest.fixture
+    async def stores() -> Iterator[tuple[Mart, Valkey]]:
+>       mart = await Mart.connect(PostgresConfig.from_env().dsn, schema=f"reports_{new_id().lower()}")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py:103: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/report_sync/mart.py:37: in connect
+    pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/pool.py:496: in _async__init__
+    await self._initialize()
+.venv/lib/python3.12/site-packages/asyncpg/pool.py:530: in _initialize
+    await first_ch.connect()
+.venv/lib/python3.12/site-packages/asyncpg/pool.py:172: in connect
+    con = await self._pool._get_new_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/pool.py:655: in _get_new_connection
+    con = await self._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2498: in connect
+    return await connect_utils._connect(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1307: in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1278: in _connect
+    conn = await _connect_addr(
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1092: in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:1162: in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py:996: in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+protocol_factory = <function _create_ssl_connection.<locals>.<lambda> at 0x107f34680>
+host = 'localhost', port = 59992, ssl = None, family = 0, proto = 0, flags = 0
+sock = None, local_addr = None, server_hostname = None
+ssl_handshake_timeout = None, ssl_shutdown_timeout = None
+happy_eyeballs_delay = None, interleave = None, all_errors = False
+
+    async def create_connection(
+            self, protocol_factory, host=None, port=None,
+            *, ssl=None, family=0,
+            proto=0, flags=0, sock=None,
+            local_addr=None, server_hostname=None,
+            ssl_handshake_timeout=None,
+            ssl_shutdown_timeout=None,
+            happy_eyeballs_delay=None, interleave=None,
+            all_errors=False):
+        """Connect to a TCP server.
+    
+        Create a streaming transport connection to a given internet host and
+        port: socket family AF_INET or socket.AF_INET6 depending on host (or
+        family if specified), socket type SOCK_STREAM. protocol_factory must be
+        a callable returning a protocol instance.
+    
+        This method is a coroutine which will try to establish the connection
+        in the background.  When successful, the coroutine returns a
+        (transport, protocol) pair.
+        """
+        if server_hostname is not None and not ssl:
+            raise ValueError('server_hostname is only meaningful with ssl')
+    
+        if server_hostname is None and ssl:
+            # Use host as default for server_hostname.  It is an error
+            # if host is empty or not set, e.g. when an
+            # already-connected socket was passed or when only a port
+            # is given.  To avoid this error, you can pass
+            # server_hostname='' -- this will bypass the hostname
+            # check.  (This also means that if host is a numeric
+            # IP/IPv6 address, we will attempt to verify that exact
+            # address; this will probably fail, but it is possible to
+            # create a certificate for a specific IP address, so we
+            # don't judge it here.)
+            if not host:
+                raise ValueError('You must set server_hostname '
+                                 'when using ssl without a host')
+            server_hostname = host
+    
+        if ssl_handshake_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_handshake_timeout is only meaningful with ssl')
+    
+        if ssl_shutdown_timeout is not None and not ssl:
+            raise ValueError(
+                'ssl_shutdown_timeout is only meaningful with ssl')
+    
+        if sock is not None:
+            _check_ssl_socket(sock)
+    
+        if happy_eyeballs_delay is not None and interleave is None:
+            # If using happy eyeballs, default to interleave addresses by family
+            interleave = 1
+    
+        if host is not None or port is not None:
+            if sock is not None:
+                raise ValueError(
+                    'host/port and sock can not be specified at the same time')
+    
+            infos = await self._ensure_resolved(
+                (host, port), family=family,
+                type=socket.SOCK_STREAM, proto=proto, flags=flags, loop=self)
+            if not infos:
+                raise OSError('getaddrinfo() returned empty list')
+    
+            if local_addr is not None:
+                laddr_infos = await self._ensure_resolved(
+                    local_addr, family=family,
+                    type=socket.SOCK_STREAM, proto=proto,
+                    flags=flags, loop=self)
+                if not laddr_infos:
+                    raise OSError('getaddrinfo() returned empty list')
+            else:
+                laddr_infos = None
+    
+            if interleave:
+                infos = _interleave_addrinfos(infos, interleave)
+    
+            exceptions = []
+            if happy_eyeballs_delay is None:
+                # not using happy eyeballs
+                for addrinfo in infos:
+                    try:
+                        sock = await self._connect_sock(
+                            exceptions, addrinfo, laddr_infos)
+                        break
+                    except OSError:
+                        continue
+            else:  # using happy eyeballs
+                sock = (await staggered.staggered_race(
+                    (
+                        # can't use functools.partial as it keeps a reference
+                        # to exceptions
+                        lambda addrinfo=addrinfo: self._connect_sock(
+                            exceptions, addrinfo, laddr_infos
+                        )
+                        for addrinfo in infos
+                    ),
+                    happy_eyeballs_delay,
+                    loop=self,
+                ))[0]  # can't use sock, _, _ as it keeks a reference to exceptions
+    
+            if sock is None:
+                exceptions = [exc for sub in exceptions for exc in sub]
+                try:
+                    if all_errors:
+                        raise ExceptionGroup("create_connection failed", exceptions)
+                    if len(exceptions) == 1:
+                        raise exceptions[0]
+                    else:
+                        # If they all have the same str(), raise one.
+                        model = str(exceptions[0])
+                        if all(str(exc) == model for exc in exceptions):
+                            raise exceptions[0]
+                        # Raise a combined exception so the user can see all
+                        # the various error messages.
+>                       raise OSError('Multiple exceptions: {}'.format(
+                            ', '.join(str(exc) for exc in exceptions)))
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('127.0.0.1', 59992), [Errno 61] Connect call failed ('::1', 59992, 0, 0)
+
+../../../../miniconda3/lib/python3.12/asyncio/base_events.py:1140: OSError
+=================================== FAILURES ===================================
+_______________ test_on_entra_the_token_asks_for_the_api_s_scope _______________
+
+world = ('http://127.0.0.1:49530', <tests.services.report_sync.test_report_sync._World object at 0x107de9670>)
+
+    async def test_on_entra_the_token_asks_for_the_api_s_scope(world: tuple[str, _World]) -> None:
+        """Entra's v2.0 endpoint refuses a client-credentials request without the API's scope."""
+        base, w = world
+        w.scope = API_SCOPE
+>       asked = TokenSource(f"{base}/token", DASHBOARD_APP, "right-secret", scope=API_SCOPE)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: TokenSource.__init__() got an unexpected keyword argument 'scope'
+
+../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py:239: TypeError
+____ test_on_entra_the_configuration_names_the_scope_and_an_application_id _____
+
+    def test_on_entra_the_configuration_names_the_scope_and_an_application_id() -> None:
+        from services.report_sync.__main__ import dashboards_from_env
+    
+        env = {"REPORT_SYNC_TOKEN_URL": "https://login.microsoftonline.com/t/oauth2/v2.0/token",
+               "REPORT_SYNC_CONDUIT_URL": "http://api:8000", "REPORT_SYNC_SCOPE": API_SCOPE,
+               "REPORT_SYNC_DASHBOARDS": f'[{{"client_id": "{DASHBOARD_APP}", "secret": "s"}}]'}  # fmt: skip
+>       (board,) = dashboards_from_env(env)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py:256: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+env = {'REPORT_SYNC_TOKEN_URL': 'https://login.microsoftonline.com/t/oauth2/v2.0/token', 'REPORT_SYNC_CONDUIT_URL': 'http://...eeeeeeee/.default', 'REPORT_SYNC_DASHBOARDS': '[{"client_id": "dddddddd-eeee-4fff-8000-111111111111", "secret": "s"}]'}
+
+    def dashboards_from_env(env: Mapping[str, str]) -> list[Dashboard]:
+        """The configured dashboards, refused in words when the configuration is not usable."""
+        token_url = env.get("REPORT_SYNC_TOKEN_URL", "")
+        conduit_url = env.get("REPORT_SYNC_CONDUIT_URL", "")
+        if not token_url or not conduit_url:
+            raise SystemExit("REPORT_SYNC_TOKEN_URL and REPORT_SYNC_CONDUIT_URL must both be set")
+        try:
+            listed = json.loads(env.get("REPORT_SYNC_DASHBOARDS", "[]"))
+        except json.JSONDecodeError as e:
+            raise SystemExit(f"REPORT_SYNC_DASHBOARDS is not JSON: {e}") from e
+        boards = []
+        for entry in listed:
+            client_id, secret = str(entry.get("client_id", "")), str(entry.get("secret", ""))
+            if not client_id.startswith("osprey-dashboard-") or not secret:
+>               raise SystemExit(
+                    f"a dashboard needs an osprey-dashboard-* client_id and a secret: {client_id!r}"
+                )
+E               SystemExit: a dashboard needs an osprey-dashboard-* client_id and a secret: 'dddddddd-eeee-4fff-8000-111111111111'
+
+services/report_sync/__main__.py:68: SystemExit
+---------------------- 1 unmarked test(s) reached a store ----------------------
+tests/services/report_sync/test_report_sync.py::test_a_pass_on_entra_asks_with_the_scope: Postgres on port 59992
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py::test_on_entra_the_token_asks_for_the_api_s_scope
+FAILED ../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py::test_on_entra_the_configuration_names_the_scope_and_an_application_id
+2 failed, 9 deselected, 1 error in 1.46s

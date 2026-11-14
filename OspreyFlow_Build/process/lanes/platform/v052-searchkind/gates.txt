@@ -1,0 +1,6 @@
+v052-searchkind's gates at c08f063 (on main e7ca7e6), on the test server through stack_lease.sh offline platform (no stack, no lease):
+- make -k ci, run 20261114T010420Z-6a935697: exit 0 (cp-policy-check 391 passed, 6 skipped; the chart linted; every suite green).
+- make -k test, run 20261114T004554Z-3ddd48b3: exit 2, each failure main's own. pytest 3 failed, 13413 passed, 36 skipped: test_guides_cloud_platform 6a8 (docs'), test_worker_isolation and test_write_store_marks (test_feed_live.py named before rules lands it; the orchestrator's and platform-b's). vitest 377 files passed; case's MatrixView.budget (5145 ms against 2500 under make test's load; the Matrix cases pass alone, run 20261114T000512Z-c10c3108). tests/harness, tests/cloud_platform_backup, tests/cp_policy_check and the R1 stand-in suites all passed, test_render_memory with them.
+- Offline on the Mac at the rebased head: harness, cp_policy_check, cloud_platform_backup and the R1 suites 1923 passed, 504 skipped; ruff on the branch's files no finding beyond main's; the ADR checks green.
+- Earlier runs at 7d1a074 and 96694ea superseded (main moved under them; 96694ea's stopped, exit 143).
+- Not yet: the live kind run of the domain (after rules' v052-index, the orchestrator's order).

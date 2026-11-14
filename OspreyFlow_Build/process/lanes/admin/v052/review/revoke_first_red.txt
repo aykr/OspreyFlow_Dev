@@ -1,0 +1,10 @@
+        assert failed.status_code == 500
+>       assert ("deleted", "osprey-dashboard-board") not in client.identity.made
+E       AssertionError: assert ('deleted', 'osprey-dashboard-board') not in [('deleted', 'osprey-dashboard-board')]
+E        +  where [('deleted', 'osprey-dashboard-board')] = <tests.services.api.test_admin_routes._Identity object at 0x11d96c6b0>.made
+E        +    where <tests.services.api.test_admin_routes._Identity object at 0x11d96c6b0> = <starlette.testclient.TestClient object at 0x11d96ca10>.identity
+
+../OspreyFlow_Build/tests/services/api/test_admin_routes.py:722: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_routes.py::test_a_failed_revoke_keeps_the_registration_so_a_retry_still_revokes
+1 failed, 167 deselected in 1.89s

@@ -29,9 +29,24 @@ from tests.harness.test_cloud_platform_render import _config
 from tools.cp_policy_check import _resolver
 
 
+#: The client's deployment as the manifest lists it: the poc shape with Superset and the report sync on
+#: (ADR-148 Amendment 11; the owner's ruling of 13 November 2026, one copy of each), Superset signing in as
+#: its own app registration.
+SUPERSET_APP = "cccccccc-dddd-4eee-8fff-000000000001"
+
+
+def _client_s_deployment() -> Any:
+    from schemas.deployment import OspreyConfig
+
+    raw = _config("poc").model_dump(mode="json", exclude_none=True)
+    raw["reporting"] = {"sync": True, "superset": True}
+    raw["cloud_platform"]["claims"]["superset_client_id"] = SUPERSET_APP
+    return OspreyConfig.model_validate(raw)
+
+
 @pytest.fixture(scope="module")
 def rendered() -> dict[str, Any]:
-    return manifest.rendered(_config("poc"), resolver=_resolver)
+    return manifest.rendered(_client_s_deployment(), resolver=_resolver)
 
 
 @pytest.fixture
@@ -146,7 +161,8 @@ def test_every_pending_entry_names_a_v052_step(listed: dict[str, Any]) -> None:
                 walk(value)
 
     walk(listed)
-    assert steps == {"v052-superset"}  # v052-opensearch rendered at 3a
+    # v052-opensearch rendered at 3a, v052-superset at 3b (ADR-148 Amendment 11): nothing is pending.
+    assert steps == set()
 
 
 def test_the_tables_are_printed_from_the_manifest_alone(listed: dict[str, Any]) -> None:

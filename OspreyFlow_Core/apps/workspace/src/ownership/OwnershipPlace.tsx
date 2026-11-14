@@ -1,4 +1,5 @@
-// The *Ownership* place on the left rail (`06_DECISIONS.md` ADR-109 phase C, rulings 5 and 9):
+// The *Ownership* view, under the view switch's More views (ADR-145 Amendment 15; `06_DECISIONS.md`
+// ADR-109 phase C, rulings 5 and 9):
 // enhanced due diligence on one organisation or account — who ultimately owns or controls it,
 // through every layer, with cumulative shares. A share is the product of a chain's percentages,
 // summed over chains; a link with no stated percentage makes the share unknown (never assumed);

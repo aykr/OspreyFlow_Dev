@@ -1,11 +1,18 @@
-// Questions to the model about a case's documents (ADR-098 decision 4): the four routes under
+// Questions to the model about a case's documents (ADR-098 decision 4): the five routes under
 // `/v1/investigations/{id}/questions`. The Conduit decides what the model reads (the Documents in
 // the case's view the analyst can see) and what the reader sees of the conversation; nothing here
 // widens either.
 import type { EmailCandidate } from "../inspector/linkEventsApi";
+import type { ReadSummary, UnusableEngine, WillRead } from "../../../../packages/schemas/generated";
 import type { GraphCitation } from "./graphFacts";
 
 export type { GraphCitation };
+
+/** What a question reads from (ADR-098 Amendment 7): *Selected items*, *Everything on the graph*,
+ * or *Whole case* (refused by the Conduit in words until the case's search is called). */
+export type ReadFrom = "selection" | "graph" | "case";
+
+export type { ReadSummary, UnusableEngine, WillRead };
 
 export interface Citation {
   document_id: string;
@@ -33,6 +40,8 @@ export interface QuestionAnswer {
    * absent on an answer kept before engines were named. */
   engine?: string | null;
   model?: string | null;
+  /** ADR-098 Amendment 7: what the question read; absent on an answer kept before it was. */
+  read?: ReadSummary | null;
 }
 
 function questionsUrl(apiBaseUrl: string, investigationId: string): string {
@@ -87,6 +96,53 @@ export interface AskScope {
   /** ADR-144 decision 4: asked in a case view (*Ask the model about these*): the question reads only
    * what the view holds, and is kept with the view. */
   viewId?: string | null;
+  /** ADR-098 Amendment 7: what to read from; absent, the selection when there is one, else the
+   * graph. */
+  readFrom?: ReadFrom | null;
+}
+
+function scopeBody(scope: AskScope): Record<string, unknown> {
+  return {
+    selected_node_ids: scope.nodeIds,
+    selected_link_ids: scope.linkIds,
+    ...(scope.window ? { window: { valid_from: scope.window.validFrom, valid_to: scope.window.validTo } } : {}),
+    ...(scope.engine ? { engine: scope.engine } : {}),
+    ...(scope.viewId ? { view_id: scope.viewId } : {}),
+    ...(scope.readFrom ? { read_from: scope.readFrom } : {}),
+  };
+}
+
+/** The typed `limit_exceeded` (rule 2), in words, with its three ways out. */
+function limitWords(body: Record<string, unknown>): string {
+  const count = new Intl.NumberFormat("en-GB");
+  const figure = (value: unknown, otherwise: string) => (typeof value === "number" ? count.format(value) : otherwise);
+  return (
+    `This question comes to ${figure(body.would_be, "more")} characters, more than the model ` +
+    `can read at once (${figure(body.cap, "the limit")}): the documents are ` +
+    `${figure(body.documents_chars, "some")} and the graph facts ` +
+    `${figure(body.evidence_brief_chars, "some")}. Nothing was sent. ` +
+    "Narrow the selection, narrow the timeline window, or ask in a smaller view, then ask again."
+  );
+}
+
+/** What will be read and who will answer, from the Conduit, before anything is sent. A refusal is
+ * said in the Conduit's words (nothing to read, Whole case not yet available, too long). */
+export async function willRead(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  scope: AskScope,
+): Promise<WillRead> {
+  const response = await send(`${questionsUrl(apiBaseUrl, investigationId)}/will-read`, bearerToken, {
+    method: "POST",
+    body: JSON.stringify(scopeBody(scope)),
+  });
+  if (response.ok) return (await response.json()) as WillRead;
+  const body = await detailOf(response);
+  if (response.status === 403) throw new Error("Asking needs Editor access to this case.");
+  if (response.status === 409 && body.error === "limit_exceeded") throw new Error(limitWords(body));
+  if (typeof body.detail === "string") throw new Error(body.detail);
+  throw new Error(`What will be read could not be worked out (${response.status}).`);
 }
 
 /** What a refused question says, in words: never a bare status. */
@@ -99,35 +155,12 @@ export async function askQuestion(
 ): Promise<QuestionAnswer> {
   const response = await send(questionsUrl(apiBaseUrl, investigationId), bearerToken, {
     method: "POST",
-    body: JSON.stringify({
-      question,
-      selected_node_ids: scope.nodeIds,
-      selected_link_ids: scope.linkIds,
-      ...(scope.window
-        ? { window: { valid_from: scope.window.validFrom, valid_to: scope.window.validTo } }
-        : {}),
-      ...(scope.engine ? { engine: scope.engine } : {}),
-      ...(scope.viewId ? { view_id: scope.viewId } : {}),
-    }),
+    body: JSON.stringify({ question, ...scopeBody(scope) }),
   });
   if (response.ok) return (await response.json()) as QuestionAnswer;
   const body = await detailOf(response);
   if (response.status === 403) throw new Error("Asking needs Editor access to this case.");
-  if (response.status === 409 && body.error === "limit_exceeded") {
-    const count = new Intl.NumberFormat("en-GB");
-    const figure = (value: unknown, otherwise: string) =>
-      typeof value === "number" ? count.format(value) : otherwise;
-    throw new Error(
-      `This question comes to ${figure(body.would_be, "more")} characters, more than the model ` +
-        `can read at once (${figure(body.cap, "the limit")}): the documents are ` +
-        `${figure(body.documents_chars, "some")} and the graph facts ` +
-        `${figure(body.evidence_brief_chars, "some")}. Nothing was sent. ` +
-        "Narrow the selection, narrow the timeline window, or ask in a smaller view, then ask again.",
-    );
-  }
-  if (response.status === 422 && body.error === "no_documents") {
-    throw new Error("This case holds no document you can see. Put documents on the canvas first.");
-  }
+  if (response.status === 409 && body.error === "limit_exceeded") throw new Error(limitWords(body));
   if (typeof body.detail === "string") throw new Error(body.detail);
   throw new Error(`The question could not be asked (${response.status}). Try again.`);
 }

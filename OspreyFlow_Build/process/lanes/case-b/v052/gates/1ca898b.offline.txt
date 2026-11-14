@@ -1,0 +1,1 @@
+1ca898b, stack_lease.sh offline case-b: v052/ + tests/harness/test_poc_manifest.py + test_friction_assemble, test_layout, test_no_test_module_shadows_the_product, test_spec_doc_paths: 152 passed in 3.82s, exit 0 (no stack, no lease)

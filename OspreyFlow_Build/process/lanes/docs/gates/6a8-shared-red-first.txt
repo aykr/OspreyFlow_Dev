@@ -1,0 +1,96 @@
+# test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up, red first
+Branch lane/docs-6a8-shared at 52075e6 (from main f4bdd2f); offline, closed ports, on the Mac, no stack.
+Command: cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 POSTGRES_PASSWORD=throwaway VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/test_guides_cloud_platform.py -k set_holds
+Each plant is in the working tree only, restored after its run; the planted lines are shown. Render plants are at the call site that builds the chart's values (cloud_platform_backups.py).
+
+## 1. main's guide ('the shared volume ... is not backed up') against the render
+E       AssertionError: §6a.8's sentence naming the set's folders
+E       assert None
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:176: AssertionError
+1 failed, 9 deselected in 0.93s
+
+## 2. Render: a fourth folder backed up that the guide does not name
++    {"name": "shared-models", "subPath": "models"},
+E       AssertionError: assert ['data/recipe...del-settings'] == ['data/recipe...gs', 'models']
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:177: AssertionError
+1 failed, 9 deselected in 0.88s
+
+## 3. Render: a folder dropped (map settings) that the guide still names
+-    {"name": "shared-map-settings", "subPath": "map-settings"},
+E       AssertionError: assert ['data/recipe...del-settings'] == ['data/recipe...del-settings']
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:177: AssertionError
+1 failed, 9 deselected in 0.89s
+
+## 4. Render: the shared parts backed up in the poc shape alone (the guide still says every shape)
+-        "shared": [dict(part) for part in SHARED_PARTS],
++        "shared": [dict(part) for part in SHARED_PARTS] if str(config.cloud_platform.shape) in ("poc", "Shape.poc") else [],
+E       AssertionError: assert ('The claims part holds, in every shape' in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:179: AssertionError
+1 failed, 9 deselected in 0.87s
+
+## 5. Render: the tiles backed up (the guide still says they are left out)
++    {"name": "shared-tiles", "subPath": "tiles"},
+E       AssertionError: assert ['data/recipe...del-settings'] == ['data/recipe...ngs', 'tiles']
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:177: AssertionError
+1 failed, 9 deselected in 0.87s
+
+## 6. Render: the standard shape's Ingest root backed up (the guide still says it is left out)
++    {"name": "shared-ingest", "subPath": "ingest"},
+E       AssertionError: assert ['data/recipe...del-settings'] == ['data/recipe...del-settings']
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:177: AssertionError
+1 failed, 9 deselected in 0.85s
+
+## 7. Guide: the claims run given back to the poc shape alone
+-`BACKUP DATABASE`, then ClickHouse's `BACKUP … TO S3`) and `ospreyflow-backup-claims` (the claims part,
+-in every shape: each folder and claim, read-only). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by
++`BACKUP DATABASE`, then ClickHouse's `BACKUP … TO S3`) and, in the poc shape, `ospreyflow-backup-claims`
++(each claim, read-only). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by
+E       AssertionError: assert ('`ospreyflow-backup-claims` (the claims part, in every shape' in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media a
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:180: AssertionError
+1 failed, 9 deselected in 0.91s
+
+## 7b. Guide: the corrected sentence kept, and a second giving the claims run to the poc shape alone
+-in every shape: each folder and claim, read-only). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by
++in every shape: each folder and claim, read-only). Earlier releases ran, in the poc shape, `ospreyflow-backup-claims` alone. Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named
+E       AssertionError: assert ('in the poc shape, `ospreyflow-backup-claims`' in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:181: AssertionError
+1 failed, 9 deselected in 0.87s
+
+## 8. Guide: the poc shape's own Ingest claim left out of the set's sentence
+-key file (`map-settings`, ADR-147); and, in the poc shape, the Ingest root's claim. Each is
++key file (`map-settings`, ADR-147); and, in the poc shape, nothing more. Each is
+E       assert ("; and, in the poc shape, the Ingest root's claim" in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet befo
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:183: AssertionError
+1 failed, 9 deselected in 0.91s
+
+## 9. Guide: the sentence naming what no set holds reworded so its anchor is gone
+-**Not in a set**: the rest of the shared volume, `ospreyflow-shared`: the tiles (`tiles`), made
++Outside the set is the rest of the shared volume, `ospreyflow-shared`: the tiles (`tiles`), made
+E       AssertionError: §6a.8's sentence naming what no set holds
+E       assert None
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:186: AssertionError
+1 failed, 9 deselected in 0.86s
+
+## 9b. Guide: the tiles no longer named among what no set holds
+-**Not in a set**: the rest of the shared volume, `ospreyflow-shared`: the tiles (`tiles`), made
++**Not in a set**: the rest of the shared volume, `ospreyflow-shared`: the tiles, made
+E       AssertionError: assert {'ingest'} == {'ingest', 'tiles'}
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:188: AssertionError
+1 failed, 9 deselected in 0.88s
+
+## 9c. Guide: the Ingest root left out 'in every shape' (it is the poc shape's own claim, in the set)
+-again, and, in the standard shape, the Ingest root (`ingest`: uploads and the drop folder), which
++again, and, in every shape, the Ingest root (`ingest`: uploads and the drop folder), which
+E       AssertionError: assert ('in the standard shape, the Ingest root (`ingest`' in 'the rest of the shared volume, `ospreyflow-shared`: the tiles (`tiles`), made again, and, in every shape, the Ing
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:190: AssertionError
+1 failed, 9 deselected in 0.87s
+
+## 10. Guide: the old sentence planted back beside the folders
+-there is a folder of the shared volume, not a claim of its own. A restore leaves those as they are,
++there is a folder of the shared volume, not a claim of its own. The shared volume, `ospreyflow-shared`, is not backed up. A restore leaves those as they are,
+E       AssertionError: assert True is not ['data/recipes', 'map-settings', 'model-settings']
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:191: AssertionError
+1 failed, 9 deselected in 0.89s
+
+## 11. Green
+1 passed, 9 deselected in 0.85s

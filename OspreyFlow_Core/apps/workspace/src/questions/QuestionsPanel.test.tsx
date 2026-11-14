@@ -4,8 +4,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { QuestionsPanel } from "./QuestionsPanel";
-import type { QuestionAnswer } from "./questionsApi";
+import { QuestionsPanel, WHOLE_CASE_UNAVAILABLE } from "./QuestionsPanel";
+import type { QuestionAnswer, WillRead } from "./questionsApi";
 
 afterEach(() => {
   cleanup();
@@ -44,7 +44,22 @@ const WITH_FACTS: QuestionAnswer = {
   unplaced: 0,
 };
 
-function serve(routes: Record<string, (init?: RequestInit) => Response>) {
+/** What the Conduit says will be read (ADR-098 Amendment 7): served to every test that does not
+ * serve its own. */
+const WILL: WillRead = {
+  read: { read_from: "graph", documents: 2, documents_without_text: 0, items: 5, links: 4, events: 0, selected: 0, first_selected: null },
+  engine: "local",
+  engine_label: "This deployment's own model",
+  model: "qwen2.5:7b-instruct",
+  unusable: [],
+  refused: null,
+};  // prettier-ignore
+
+function serve(given: Record<string, (init?: RequestInit) => Response>) {
+  const routes: Record<string, (init?: RequestInit) => Response> = {
+    "POST /questions/will-read": () => json(200, WILL),
+    ...given,
+  };
   const calls: { url: string; init?: RequestInit }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -100,11 +115,12 @@ describe("QuestionsPanel", () => {
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who wrote about the plant?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
     expect(await screen.findByText("Dana Mercer wrote about it [1].")).toBeTruthy();
-    const posted = calls.find((c) => c.init?.method === "POST")!;
+    const posted = calls.find((c) => c.init?.method === "POST" && c.url.endsWith("/questions"))!;
     expect(JSON.parse(String(posted.init!.body))).toEqual({
       question: "Who wrote about the plant?",
       selected_node_ids: [],
       selected_link_ids: [],
+      read_from: "graph",
     });
   });
 
@@ -121,12 +137,13 @@ describe("QuestionsPanel", () => {
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
     await screen.findByText("Dana Mercer wrote about it [1].");
-    const posted = calls.find((c) => c.init?.method === "POST")!;
+    const posted = calls.find((c) => c.init?.method === "POST" && c.url.endsWith("/questions"))!;
     expect(JSON.parse(String(posted.init!.body))).toEqual({
       question: "Who?",
       selected_node_ids: ["n-dana"],
       selected_link_ids: ["l-called"],
       window: { valid_from: "2026-01-01T00:00:00Z", valid_to: null },
+      read_from: "selection",
     });
   });
 
@@ -198,16 +215,19 @@ describe("QuestionsPanel", () => {
     expect((screen.getByLabelText("Your question") as HTMLTextAreaElement).value).toBe("Anything?");
   });
 
-  it("says when the case holds no document the analyst can see", async () => {
+  it("says in the Conduit's words when there is nothing to read (ADR-098 Amendment 7: never for want of documents)", async () => {
+    const words = "The graph holds nothing to read. Add items to the canvas first.";
     serve({
       "GET /questions": () => json(200, []),
-      "POST /questions": () => json(422, { error: "no_documents" }),
+      "POST /questions/will-read": () => json(422, { error: "nothing_to_read", detail: words }),
+      "POST /questions": () => json(422, { error: "nothing_to_read", detail: words }),
     });
     mount();
     await screen.findByText("No questions asked in this case yet.");
+    expect(await screen.findByText(words)).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Anything?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
-    expect((await screen.findByRole("alert")).textContent).toMatch(/no document you can see/);
+    expect((await screen.findByRole("alert")).textContent).toBe(words);
   });
 
   it("accepting a proposal applies its change to the view and marks it accepted", async () => {
@@ -241,8 +261,8 @@ describe("QuestionsPanel", () => {
       "POST /questions/candidates/c1/accept?view_id=v%201": () => json(200, { node_id: "n9", delta }),
     });
     const onLeaveView = vi.fn();
-    mount(vi.fn(), vi.fn(), { view: { id: "v 1", name: "Questions on 2 documents" }, onLeaveView });
-    expect((await screen.findByRole("status")).textContent).toContain("Asking in the view Questions on 2 documents");
+    mount(vi.fn(), vi.fn(), { view: { id: "v 1", name: "Questions on 2 items" }, onLeaveView });
+    expect((await screen.findByRole("status")).textContent).toContain("Asking in the view Questions on 2 items");
     fireEvent.click(await screen.findByRole("button", { name: "Accept Person · Dana Mercer" }));
     await screen.findByText("Accepted");
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who wrote these?" } });
@@ -297,7 +317,7 @@ describe("the engine choice (ADR-135)", () => {
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
     await screen.findByText("Dana Mercer wrote about it [1].");
-    const posted = calls.find((c) => c.init?.method === "POST")!;
+    const posted = calls.find((c) => c.init?.method === "POST" && c.url.endsWith("/questions"))!;
     expect(JSON.parse(String(posted.init!.body))).not.toHaveProperty("engine");
   });
 
@@ -313,7 +333,7 @@ describe("the engine choice (ADR-135)", () => {
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
     expect(await screen.findByText("Answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeTruthy();
-    const posted = calls.find((c) => c.init?.method === "POST")!;
+    const posted = calls.find((c) => c.init?.method === "POST" && c.url.endsWith("/questions"))!;
     expect(JSON.parse(String(posted.init!.body)).engine).toBe("local");
   });
 
@@ -358,7 +378,12 @@ describe("an engine the case's data may not reach (ADR-136)", () => {
   };  // prettier-ignore
 
   it("asks the case's own engines, shows each one's contract mark, and disables one with the reason in words", async () => {
-    const calls = serve({ "GET /questions": () => json(200, []), "GET /models/engines": () => json(200, BLOCKED) });
+    const calls = serve({
+      "GET /questions": () => json(200, []),
+      "GET /models/engines": () => json(200, BLOCKED),
+      // The reasons beneath the choice are the Conduit's for this question (`will-read`).
+      "POST /questions/will-read": () => json(200, { ...WILL, unusable: [{ name: "gemini", label: "Gemini", reason: REASON }] }),
+    });
     mount();
     const choice = (await screen.findByRole("combobox", { name: "Model engine" })) as HTMLSelectElement;
     expect(calls.some((c) => c.url === "http://api/v1/investigations/b1/models/engines")).toBe(true);
@@ -384,7 +409,174 @@ describe("an engine the case's data may not reach (ADR-136)", () => {
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
     await screen.findByText("Dana Mercer wrote about it [1].");
-    const posted = calls.find((c) => c.init?.method === "POST")!;
+    const posted = calls.find((c) => c.init?.method === "POST" && c.url.endsWith("/questions"))!;
     expect(JSON.parse(String(posted.init!.body)).engine).toBe("local");
+  });
+});
+
+// ADR-098 Amendment 7, ADR-135 Amendment 12: what the question reads from, what it will read and
+// which engine will answer, all from the Conduit before anything is sent.
+describe("QuestionsPanel · read from, will read, the engine", () => {
+  const selection = { nodeIds: ["n-tarbuck", "n-cole"], linkIds: [] };
+  const SELECTED: WillRead = {
+    ...WILL,
+    read: { read_from: "selection", documents: 0, documents_without_text: 1, items: 2, links: 3, events: 4, selected: 2, first_selected: "Tarbuck, Kyle" },
+  };  // prettier-ignore
+  const willBodies = (calls: { url: string; init?: RequestInit }[]) =>
+    calls.filter((c) => c.url.endsWith("/will-read")).map((c) => JSON.parse(String(c.init!.body)) as Record<string, unknown>);
+
+  it("defaults to Selected items when something is selected, and says what it is about and will read, from the Conduit", async () => {
+    const calls = serve({ "GET /questions": () => json(200, []), "POST /questions/will-read": () => json(200, SELECTED) });
+    mount(vi.fn(), vi.fn(), { selection });
+    expect((screen.getByRole("radio", { name: "Selected items" }) as HTMLInputElement).checked).toBe(true);
+    expect(await screen.findByText("About: Tarbuck, Kyle and 1 other")).toBeTruthy();
+    expect(screen.getByText("Will read: 0 documents, 2 items, 3 links and 4 events (1 document has no text to read)")).toBeTruthy();
+    expect(screen.getByText("No documents will be read: the answer will come from the links and events.")).toBeTruthy();
+    expect(willBodies(calls)[0]).toEqual({ selected_node_ids: ["n-tarbuck", "n-cole"], selected_link_ids: [], read_from: "selection" });
+  });
+
+  it("never counts in the Glass: the figures are the Conduit's, even when the canvas holds more selected", async () => {
+    const one: WillRead = { ...SELECTED, read: { ...SELECTED.read, selected: 1 } };
+    serve({ "GET /questions": () => json(200, []), "POST /questions/will-read": () => json(200, one) });
+    mount(vi.fn(), vi.fn(), { selection });
+    expect(await screen.findByText("About: Tarbuck, Kyle")).toBeTruthy();
+    expect(screen.queryByText(/and 1 other/)).toBeNull();
+  });
+
+  it("with nothing selected reads everything on the graph, and Selected items is not offered", async () => {
+    serve({ "GET /questions": () => json(200, []) });
+    mount();
+    expect((screen.getByRole("radio", { name: "Everything on the graph" }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("radio", { name: /Selected items/ }) as HTMLInputElement).disabled).toBe(true);
+    expect(await screen.findByText("About: everything on the graph")).toBeTruthy();
+    expect(screen.getByText("Will read: 2 documents, 5 items and 4 links")).toBeTruthy();
+  });
+
+  it("offers Whole case disabled, with why, until the case's search is called", () => {
+    serve({ "GET /questions": () => json(200, []) });
+    mount();
+    const whole = screen.getByRole("radio", { name: "Whole case" }) as HTMLInputElement;
+    expect(whole.disabled).toBe(true);
+    expect(whole.getAttribute("aria-describedby")).toBeTruthy();
+    expect(document.getElementById(whole.getAttribute("aria-describedby")!)!.textContent).toBe(WHOLE_CASE_UNAVAILABLE);
+  });
+
+  it("choosing Everything on the graph asks the Conduit again and sends that choice with the question", async () => {
+    const calls = serve({
+      "GET /questions": () => json(200, []),
+      "POST /questions": () => json(200, ANSWERED),
+    });
+    mount(vi.fn(), vi.fn(), { selection });
+    fireEvent.click(screen.getByRole("radio", { name: "Everything on the graph" }));
+    await waitFor(() => expect(willBodies(calls).some((b) => b.read_from === "graph")).toBe(true));
+    expect(willBodies(calls).find((b) => b.read_from === "graph")!.selected_node_ids).toEqual([]);
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText("Dana Mercer wrote about it [1].");
+    const posted = calls.find((c) => c.init?.method === "POST" && c.url.endsWith("/questions"))!;
+    expect(JSON.parse(String(posted.init!.body))).toMatchObject({ read_from: "graph", selected_node_ids: [] });
+  });
+
+  it("names the engine that will answer even when there is only one", async () => {
+    serve({ "GET /questions": () => json(200, []), "GET /models/engines": () => json(200, { engines: [
+      { name: "local", label: "This deployment's own model", roles: ["extraction"], default_for: ["extraction"] }] }) });  // prettier-ignore
+    mount();
+    expect(await screen.findByText("Will be answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Model engine" })).toBeNull();
+  });
+
+  it("lists the engines that cannot answer this question with their reasons, even with no choice to make", async () => {
+    serve({
+      "GET /questions": () => json(200, []),
+      "POST /questions/will-read": () =>
+        json(200, { ...WILL, unusable: [{ name: "eyes", label: "Eyes", reason: "Eyes has no model for questions on this deployment." }] }),
+    });
+    mount();
+    expect(await screen.findByText("Eyes: Eyes has no model for questions on this deployment.")).toBeTruthy();
+  });
+
+  it("says the routing's refusal when no engine may answer", async () => {
+    const refused = "The extraction model is Gemini, and it may not be sent; this deployment has no local extraction model to use instead.";
+    serve({
+      "GET /questions": () => json(200, []),
+      "POST /questions/will-read": () => json(200, { ...WILL, engine: null, engine_label: null, model: null, refused }),
+    });
+    mount();
+    expect(await screen.findByText(refused)).toBeTruthy();
+    expect(screen.queryByText(/Will be answered by/)).toBeNull();
+  });
+
+  it("says the engine list failed, never that there is none", async () => {
+    serve({ "GET /questions": () => json(200, []), "GET /models/engines": () => json(500, {}) });
+    mount();
+    expect(await screen.findByText(/The list of model engines could not be loaded/)).toBeTruthy();
+    expect(screen.queryByText(/no engines?/i)).toBeNull();
+  });
+
+  it("asks again when the timeline window has moved by the time the question box is focused, as the question reads it", async () => {
+    let current: { validFrom: string; validTo: string | null } | null = { validFrom: "2026-01-01T00:00:00Z", validTo: null };
+    const calls = serve({ "GET /questions": () => json(200, []), "POST /questions": () => json(200, ANSWERED) });
+    mount(vi.fn(), vi.fn(), { getTimelineWindow: () => current });
+    await screen.findByText("About: everything on the graph");
+    expect(willBodies(calls)).toHaveLength(1);
+    expect(willBodies(calls)[0]!.window).toEqual({ valid_from: "2026-01-01T00:00:00Z", valid_to: null });
+    current = { validFrom: "2026-06-01T00:00:00Z", validTo: null };
+    fireEvent.focus(screen.getByLabelText("Your question"));
+    await waitFor(() => expect(willBodies(calls)).toHaveLength(2));
+    expect(willBodies(calls)[1]!.window).toEqual({ valid_from: "2026-06-01T00:00:00Z", valid_to: null });
+    fireEvent.focus(screen.getByLabelText("Your question")); // unchanged: not asked again
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText("Dana Mercer wrote about it [1].");
+    expect(willBodies(calls).filter((b) => (b.window as { valid_from: string }).valid_from === "2026-06-01T00:00:00Z").length).toBeGreaterThanOrEqual(1);
+    const posted = calls.find((c) => c.init?.method === "POST" && c.url.endsWith("/questions"))!;
+    expect(JSON.parse(String(posted.init!.body)).window).toEqual({ valid_from: "2026-06-01T00:00:00Z", valid_to: null });
+  });
+
+  it("asks nothing when the canvas's selection changes under Everything on the graph, since nothing it sends changes", async () => {
+    const calls = serve({ "GET /questions": () => json(200, []) });
+    const props = { apiBaseUrl: "http://api", bearerToken: "t", investigationId: "b1", onDelta: vi.fn() };
+    const { rerender } = render(<QuestionsPanel {...props} selection={selection} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Everything on the graph" }));
+    await screen.findByText("About: everything on the graph");
+    const before = willBodies(calls).length;
+    rerender(<QuestionsPanel {...props} selection={{ nodeIds: ["n-other"], linkIds: [] }} />);
+    rerender(<QuestionsPanel {...props} selection={{ nodeIds: ["n-other", "n-more"], linkIds: [] }} />);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(willBodies(calls).length).toBe(before);
+  });
+
+  it("keeps the case's own reasons beneath the engine choice while will read is refused", async () => {
+    serve({
+      "GET /questions": () => json(200, []),
+      "GET /models/engines": () => json(200, { engines: [
+        { name: "local", label: "This deployment's own model", roles: ["extraction"], default_for: ["extraction"] },
+        { name: "gemini", label: "Gemini", roles: ["extraction"], default_for: [], privacy_contract: false, available: false, reason: "Not available for this case: kept in." },
+      ] }),
+      "POST /questions/will-read": () => json(422, { error: "nothing_to_read", detail: "The graph holds nothing to read. Add items to the canvas first." }),
+    });  // prettier-ignore
+    mount();
+    expect(await screen.findByText("The graph holds nothing to read. Add items to the canvas first.")).toBeTruthy();
+    expect(screen.getByText("Gemini: Not available for this case: kept in.")).toBeTruthy();
+  });
+
+  it("says the engine list failed when the answer holds no list, never that there is none", async () => {
+    serve({ "GET /questions": () => json(200, []), "GET /models/engines": () => json(200, {}) });
+    mount();
+    expect(await screen.findByText(/The list of model engines could not be loaded/)).toBeTruthy();
+  });
+
+  it("says under each answer what it read, and that an answer with no document came from the links and events", async () => {
+    serve({ "GET /questions": () => json(200, [
+      { ...ANSWERED, read: WILL.read },
+      { ...ANSWERED, id: "q9", read: SELECTED.read },
+    ]) });  // prettier-ignore
+    mount();
+    expect(await screen.findByText("Read: 2 documents, 5 items and 4 links.")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "No documents were read: the answer comes from the links and events (read: 0 documents, 2 items, 3 links and 4 events (1 document has no text to read)).",
+      ),
+    ).toBeTruthy();
   });
 });

@@ -39,6 +39,9 @@ class Dashboard:
     token_url: str
     conduit_url: str
     weeks: int = 12
+    #: ADR-148 Amendment 10: on Entra ID, the API's `api://<application id>/.default`, asked for in
+    #: the client-credentials request (Entra refuses one without it); None on Keycloak.
+    scope: str | None = None
 
 
 @dataclass
@@ -54,8 +57,10 @@ class TokenSource:
     """A dashboard's access token, renewed `margin_seconds` before it expires."""
 
     def __init__(self, token_url: str, client_id: str, secret: str, *, margin_seconds: float = 30.0,
-                 clock: Callable[[], float] = time.monotonic) -> None:  # fmt: skip
+                 clock: Callable[[], float] = time.monotonic,
+                 scope: str | None = None) -> None:  # fmt: skip
         self._url, self._client_id, self._secret = token_url, client_id, secret
+        self._scope = scope
         self._margin, self._clock = margin_seconds, clock
         self._token: str | None = None
         self._expires = 0.0
@@ -71,7 +76,8 @@ class TokenSource:
             response = await self._http.post(
                 self._url,
                 data={"grant_type": "client_credentials", "client_id": self._client_id,
-                      "client_secret": self._secret},
+                      "client_secret": self._secret,
+                      **({"scope": self._scope} if self._scope else {})},
             )  # fmt: skip
         except httpx.HTTPError as e:
             raise SyncRefused(f"the identity provider could not be reached: {e}") from e
@@ -95,7 +101,7 @@ def parse_feed(text: str) -> list[FigureRow]:
 async def _pull_dashboard(
     board: Dashboard, mart: Mart, valkey: Valkey, slot: int, summary: Summary
 ) -> None:
-    tokens = TokenSource(board.token_url, board.client_id, board.secret)
+    tokens = TokenSource(board.token_url, board.client_id, board.secret, scope=board.scope)
     http = httpx.AsyncClient(base_url=board.conduit_url, timeout=60.0)
     try:
         try:

@@ -426,14 +426,15 @@ def test_egress_allows_the_managed_stores_and_each_enabled_host_by_its_networks(
     assert prod == {**AWS, "api.openai.com": ["203.0.113.0/24"]}
 
 
-def test_entras_sign_in_host_is_the_one_host_p10_adds_and_the_conduit_alone_reaches_it() -> None:
+def test_entras_sign_in_host_is_the_one_host_p10_adds_and_who_reaches_it() -> None:
     """ADR-148 Amendment 8 (the docs lane's gap (a)): Entra ID's sign-in host is the one host P10
-    adds, a kind of its own (`egress.sign_in`) the Conduit alone reaches, since it alone verifies
-    tokens; `always` is unchanged; and a render without its networks is refused in words."""
+    adds, a kind of its own (`egress.sign_in`), reached by the Conduit, which verifies tokens, and,
+    since Amendments 9 and 10, by Superset (its sign-in) and the report sync (its token) when they
+    are rendered; `always` is unchanged; a render without its networks is refused in words."""
     egress = load_profile().egress
     assert egress.always == ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com"]
     assert egress.sign_in == ["login.microsoftonline.com"]
-    assert egress.reach["sign_in"] == ["api"]
+    assert egress.reach["sign_in"] == ["api", "superset", "report-sync"]
     rows = {row["name"]: row for row in _values(_config("development"))["egress"]["workloads"]}
     reaching = sorted(
         n for n, r in rows.items() if "login.microsoftonline.com" in r.get("hosts", [])
