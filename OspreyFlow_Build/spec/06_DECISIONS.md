@@ -39742,20 +39742,22 @@ exact search the fallback answers from, as Amendment 20 did for `edges_among`.*
    same five as one labelled `has()` per type took 3 to 12 ms, and as one SQL lookup per type and field, then a
    traversal from the records found, 67 to 70 ms.
 2. **What is built.** `search_nodes` first finds its candidates: one SQL query per stored vertex type and searchable
-   field that type can hold, `SELECT @rid AS rid FROM <type> WHERE <field> = :value`, the value bound, sent
-   together (`_search_candidates`, `render_field_record_id_lookup_sql`). It then sends, for each 1,000 of the
+   field that type keeps at its top level, `SELECT @rid AS rid FROM <type> WHERE <field> = :value`, the
+   value bound, sent together (`_search_candidates`, `render_field_record_id_lookup_sql`). It then sends, for each 1,000 of the
    record ids found, `g.V(<record ids>).<match_any_field's or()>.<access>.dedup().limit(n).elementMap()`, and keeps
    the first `n` nodes of the answers, none twice.
    - **The match and the access step are in the traversal**, as before (rule 3), applied to every candidate; the
      gazetteer guard (ADR-147 Amendments 1 and 2) is in that `or()` unchanged. The SQL lookup decides only where the
      traversal starts, so a candidate it over-finds is dropped there, and nothing it finds leaves the adapter.
-   - **The same matches as before.** The query as built matched a field on a vertex of any type, so a field is asked
-     of every stored type that can hold it (a property the type declares, or an identifier it lists, since a write
-     refuses any other), not only where it is indexed: an `Account`, which declares `name` without indexing it, is
-     still found by its name. Such a field is answered by a read of that one type, where an indexed one is answered
-     from the type's index. A field no request reader is matched on (`GAZETTEER_ONLY_IDENTIFIERS`, ADR-147
-     Amendment 3) is not looked up for one. As on every read by id (Amendment 2), a type without a unique `id`
-     index is not asked; every type the ontology applies has one.
+   - **The same matches as before.** The query as built matched `has(field, value)` on a vertex of any
+     type, and a vertex holds a field at its top level only where its type lists it as an identifier
+     or marks it `indexed`, which the write flattens (`serialization._indexed_property_names`); any
+     other property stays inside `properties`, where `has` never matched it. An `Account` declares
+     `name` without indexing it, so it was never found by its name, and is not now (probed on stack
+     d, 14 November 2026). So each stored type is asked exactly those fields, each answered from the
+     type's own index. A field no request reader is matched on (`GAZETTEER_ONLY_IDENTIFIERS`, ADR-147
+     Amendment 3) is not looked up for one. As on every read by id (Amendment 2), a type without a
+     unique `id` index is not asked; every type the ontology applies has one.
    - **Nothing cut** (rule 2): every chunk's traversal is sent, so the one-past row that says `more` is found
      whichever chunk holds it, and the answer is cut at `n` after.
    - **The round trips** depend only on how many vertices hold the value: one SQL query per type and field, and one
@@ -39770,22 +39772,34 @@ exact search the fallback answers from, as Amendment 20 did for `edges_among`.*
    `FALLBACK_DEPTH`); and the boards' match by value (`boards.py`, at `MATCH_LIMIT`). None depended on the order.
 4. **Held by** (rule 12):
    - offline, `tests/adapters/graph_arcadedb/test_search_nodes_from_candidates.py`: no search starts from every
-     vertex; the match and the access step are in the traversal from the candidates; a field is asked of every type
-     that holds it, the value bound and never in the text; a request reader looks up no gazetteer-only identifier,
+     vertex; the match and the access step are in the traversal from the candidates; each type is asked the
+     fields it keeps flattened and no other (an `Account` its `account_number`, not its `name`), the value
+     bound and never in the text; a request reader looks up no gazetteer-only identifier,
      the Conduit's own work does; a type the store does not hold is not asked; a value nobody holds still sends its
      query; candidates past a chunk are all traversed and the answer cut at the limit, none twice; an empty field
      set sends nothing. Six of its eight cases are red on main's adapter and builder; the other two hold there too,
      as they should (`process/lanes/rules/adr124-am21/PLANTS_RECORD.offline.txt`);
    - `tests/adapters/graph_arcadedb/test_gazetteer_name_only_match.py` and the live
      `tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py`, the builder now given its candidates;
-   - the graph port's conformance suite's `search_nodes` and access cases, unchanged, live;
-   - live, on stack d (`process/lanes/rules/adr124-am21/equivalence.py`, the orchestrator's ruling): the query as
-     built beside the new one over step 4's first 100 M3 names and 200 M5 numbers and 200 values drawn from B that
-     nodes hold, as a request reader, a restricted reader and an unlimited principal, each query the same set of ids
-     and the same `more` both ways (past the limit, the whole sets compared), with the count that matched at least
-     one node;
+   - the graph port's conformance suite's `search_nodes` and access cases, unchanged, live, and
+     `tests/conformance/graph_port/test_search_nodes_any_type.py`: with the deployment's ontology, an
+     Organisation found by its name, an Account by its `account_number` and not its name, each only by
+     the readers who may see it, and each answer equal to the query as built sent to the same store;
+   - live, on stack d, the equivalence (the orchestrator's ruling), in two steps:
+     - `process/lanes/rules/adr124-am21/equivalence.py`: the query as built beside the candidates found
+       from every field a type declares (the first version built), over step 4's first 100 M3 names and
+       200 M5 numbers and 200 values drawn from B that nodes hold (seed 21), as a request reader, a
+       restricted reader and, on the 200 drawn, an unlimited principal: 1,200 of 1,200 the same set of
+       ids and the same `more` (past the depth, the whole sets compared). Of the drawn, 194 of 200
+       matched at least one node as the request reader, 92 as the restricted one; of the M5 numbers 99
+       of 200 as the request reader; of the M3 names none, as an exact search of a whole name expects;
+     - `narrowing.py`: the candidates as built (the fields each type keeps flattened) beside that
+       first version, over the same 1,200, each the whole set of matches and `more`. The first version
+       equalled the query as built in all 1,200, so the version built equals it too wherever the two
+       versions agree;
    - plants (`process/lanes/rules/adr124-am21/plants.py`), each red on its test: the start from every vertex, the
-     access step dropped, a field asked only where searchable on its type, the gazetteer-only identifiers looked up
+     access step dropped, a field asked of every type that declares it (flattened or not), the gazetteer-only
+   identifiers looked up
      for a request reader, a type the store does not hold asked, no query for a value nobody holds, only the first
      chunk traversed, the answer not cut at the limit.
 

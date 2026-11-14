@@ -155,6 +155,7 @@ from .naming import (
 from .schema import apply_schema as _apply_schema_ddl
 from .schema import drop_schema as _drop_schema_ddl
 from .serialization import (
+    _indexed_property_names,
     edge_from_element_map,
     edge_write_to_properties,
     node_from_element_map,
@@ -1056,13 +1057,12 @@ class GraphArcadeDBAdapter:
         principal: Principal,
     ) -> list[str]:
         """`search_nodes`' candidates (ADR-124 Amendment 21): the record ids of every vertex that
-        could match, one SQL query per stored vertex type and searchable field that type can hold
-        (a property it declares, or an identifier it lists: a write refuses any other), run
-        together, the value bound. `g.V().or(...)` matched a field on a vertex of any type, so a
-        field is asked of every type that holds it, not only where it is indexed or an
-        identifier: an `Account` is found by its `name` as before. A field matched for no request
-        reader (`GAZETTEER_ONLY_IDENTIFIERS`, ADR-147 Amendment 3) is not asked for one. A type the
-        store does not hold (no unique `id` index, Amendment 2) is not asked. Nothing here is
+        could match, one SQL query per stored vertex type and searchable field that type keeps at
+        its top level (its identifiers and indexed properties, `_indexed_property_names`, which the
+        write flattens; any other property stays inside `properties`, where `has(field, value)`
+        never matched it), run together, the value bound. A field matched for no request reader
+        (`GAZETTEER_ONLY_IDENTIFIERS`, ADR-147 Amendment 3) is not asked for one. A type the store
+        does not hold (no unique `id` index, Amendment 2) is not asked. Nothing here is
         access-filtered, and the traversal from these records applies the match again, so a
         candidate the lookup over-finds is dropped there; the result is ordered, without repeats,
         so the chunks, and the round trips, depend only on how many vertices hold the value."""
@@ -1074,9 +1074,7 @@ class GraphArcadeDBAdapter:
             (physical_type_name(entity.name), name)
             for entity in schema.entity_types
             if physical_type_name(entity.name) in stored
-            for name in sorted(
-                asked & ({p.name for p in entity.properties} | set(entity.identifiers))
-            )
+            for name in sorted(asked & _indexed_property_names(entity))
         ]
         found = await asyncio.gather(
             *(

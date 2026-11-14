@@ -42,11 +42,11 @@ PLANTS = [
         "test_the_match_and_the_access_step_are_in_the_traversal_from_the_candidates",
     ),
     (
-        "A3 a field asked only where it is searchable on that type (an Account not found by its name)",
+        "A3 a field asked of every type that declares it, flattened or not (an Account's name scanned)",
         ADAPTER,
+        "asked & _indexed_property_names(entity)",
         "asked & ({p.name for p in entity.properties} | set(entity.identifiers))",
-        "asked & ({p.name for p in entity.properties if p.indexed} | set(entity.identifiers))",
-        "test_a_field_is_asked_of_every_type_that_holds_it_and_the_value_is_bound",
+        "test_a_field_is_asked_of_each_type_that_keeps_it_flattened_and_the_value_is_bound",
     ),
     (
         "A4 a request reader's lookups keep the gazetteer-only identifiers",

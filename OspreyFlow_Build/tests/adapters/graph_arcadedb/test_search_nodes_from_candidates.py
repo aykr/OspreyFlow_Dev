@@ -134,18 +134,22 @@ async def test_the_match_and_the_access_step_are_in_the_traversal_from_the_candi
     assert adapter._access.gremlin_has_step(READER) in query
 
 
-async def test_a_field_is_asked_of_every_type_that_holds_it_and_the_value_is_bound() -> None:
-    """`g.V().or(...)` matched a field on a vertex of any type: `name` is searchable (indexed on
-    `Location`), and an `Account`, which declares `name` without indexing it, was found by it.
-    It still is. The value is never part of the text."""
+async def test_a_field_is_asked_of_each_type_that_keeps_it_flattened_and_the_value_is_bound() -> (
+    None
+):
+    """`g.V().or(__.has(f, v), …)` matched a field where a vertex keeps it at its top level: its
+    type's identifiers and indexed properties, which the write flattens (`_indexed_property_names`).
+    Any other property stays inside `properties`, where `has` never matched it: an `Account`'s
+    unindexed `name` (stack d, 14 November 2026). So each type is asked those fields alone, and
+    the value is never part of the text."""
     store = _Store(_every_type(), {})
     await _adapter(store).search_nodes("Copperleaf Imports", READER)
     asked = {(t, f) for t, f, _p, _c in store.sql_sent}
-    assert {(LOCATION, "name"), (ACCOUNT, "name"), (PERSON, "family_name")} <= asked
+    assert {(LOCATION, "name"), (PERSON, "family_name"), (PERSON, "nino")} <= asked
+    assert (ACCOUNT, "name") not in asked and (ACCOUNT, "account_number") in asked
+    assert (PERSON, "name") not in asked
     assert all(p == {"value": "Copperleaf Imports"} for _t, _f, p, _c in store.sql_sent)
     assert not any("Copperleaf" in c for _t, _f, _p, c in store.sql_sent)
-    # A type is asked only for the fields it can hold: a Person has no `name`.
-    assert (PERSON, "name") not in asked
 
 
 async def test_a_request_reader_looks_up_no_gazetteer_only_identifier() -> None:
