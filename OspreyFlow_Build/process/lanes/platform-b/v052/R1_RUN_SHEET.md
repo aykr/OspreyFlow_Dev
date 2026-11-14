@@ -65,8 +65,8 @@ From the server's copy (`stack_lease.sh remote platform-b …`, from the reposit
 | 0 | `bash $G/r1_kind.sh tools`, then `up`, then `py platform` | the cluster (32 GiB node), the stand-ins, the domain's engine | R1's |
 | 1 | **from a copy at v0.5.1 (477a500, its tagged commit)**: `bash $G/r1_kind.sh py runbook INSTALL` | v0.5.1 installed by its own runbook | `INSTALL-v051.log` |
 | 2 | v0.5.1's `bash $G/r1_kind.sh py check` | R1's 28 checks on v0.5.1; leaves a case, a hotlist, a load and its alert to find after the upgrade | `check-v051.log` |
-| 3 | *A backup now* before the upgrade (the guide §6a.8: Conduit and workers stopped, copy counts noted): `py backup` | one finished set before the upgrade | `backup-pre.log` |
-| 4 | **the upgrade, from the candidate's copy**: `bash $G/r1_kind.sh py runbook INSTALL` again (Q1: the client's way) | `helm upgrade --install` of the candidate over v0.5.1 | `UPGRADE.log` |
+| 3 | the backup first, as the guide's upgrade paragraph says: the runbook's *Before an upgrade* (the Conduit, the workers and the report sync stopped, each copy count noted), *A backup now* (`py backup`), the set's `manifest.json` checked | one finished set before the upgrade | `backup-pre.log` |
+| 4 | **the upgrade, from the candidate's copy**: `bash $G/r1_kind.sh py runbook INSTALL` again (Q1: the client's way), block by block, then the copy counts from row 3 restored if the install has not | `helm upgrade --install` of the candidate over v0.5.1, then INSTALL's own checks as the guide names them: **section 6's check that the Conduit reads Entra's settings, and section 7's `/healthz` through the Glass** | `UPGRADE.log` (see row 14) |
 | 5 | `py check` on the candidate | step 2's case, hotlist, load and alert still there; R1's 28 again | `check-candidate.log` |
 | 6 | `python ../OspreyFlow_Build/process/lanes/platform-b/v052/dashboards_check.py run` | Superset's own browser sign-in through Entra, the embed, the report sync's identity | `dashboards.log` |
 | 7 | `python $D/spec08_poc.py` (the module unchanged; dispositions both ways) | 12 of 27 run (or more once the seed path lands) | `spec08.log` |
@@ -78,6 +78,7 @@ From the server's copy (`stack_lease.sh remote platform-b …`, from the reposit
 | 12 | `bash $G/r1_kind.sh down` | nothing of the run left | — |
 | 13 | **the full suite once**, on the candidate, through `stack_lease.sh offline` (Q4): `make ci`'s offline gates and `make test` | "the full suite runs once, at step 6" | `suite.log` |
 | 13b | what offline cannot run (Q4): CI's `conformance` (ArcadeDB, ClickHouse, Valkey, Postgres: the live store tests, the Entra people and access-store live files among them), `conformance-model` and `-vision`, `six-screen-live-exit-test`, and the nine `trivy-image-*` scans (each builds an image) | CI's run on the candidate's **exact** commit is their evidence (the orchestrator, 14 Nov), recorded here by its run id on the day | `suite-ci-run.txt` (the run id, its commit, each job's result) |
+| 14 | **in the same commit that records `UPGRADE.log`**: the guide's §6a.1 *What will check it.* rewritten from what is planned to what ran (the date, v0.5.1 then the candidate over it, whether the data made before was still there, the record's path), and its "It has not run yet." removed | docs' `tests/test_guide_6a_upgrade.py` goes red the moment any `UPGRADE.log` is under `process/` while the paragraph still says it has not run (docs' correction 1, 14 Nov) | the guide's diff in the same commit |
 
 A failing block stops the run, and its record names it. After a fix, `runbook … --from N` reruns the affected part.
 Every record goes to `process/lanes/platform-b/v052-r1/run/`, and every measurement says the lease it was taken
