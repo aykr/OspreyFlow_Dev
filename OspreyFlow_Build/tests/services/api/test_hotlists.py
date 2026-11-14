@@ -226,3 +226,56 @@ async def test_a_stopped_hotlist_keeps_why_until_it_is_active_again(store) -> No
         await conn.close()
     unknown = await store.get_authorized(hotlist.id, OWNER)
     assert (unknown.status, unknown.status_detail, unknown.stopped_why) == ("stopped", None, None)
+
+
+# --- ADR-044 Amendment 2: three unreachable loads in a row, counted in the row ------------------
+
+
+async def test_the_unreachable_count_outlives_a_restart_and_any_status_puts_it_back(store) -> None:  # type: ignore[no-untyped-def]
+    """The real column: one statement adds one and answers the count; a new store over the same database (a
+    restarted Conduit) reads what the last left; the row is served the count and its words while active;
+    and `set_status`, any status, puts it back to 0 in the column itself."""
+    from services.api.watch_status import active_note
+
+    hotlist = await store.create(OWNER, identifier="07700900189", review_date=date(2027, 1, 1))
+    assert (await store.get_authorized(hotlist.id, OWNER)).unreachable_in_a_row == 0
+    first = await HotlistStore.connect(PostgresConfig.from_env().dsn)
+    assert await first.count_unreachable(hotlist.id) == 1
+    assert await first.count_unreachable(hotlist.id) == 2
+    await first.close()  # the Conduit that counted it gone; a new one reads what it left
+    restarted = await HotlistStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        read = await restarted.get_authorized(hotlist.id, OWNER)
+        assert (read.status, read.unreachable_in_a_row, read.status_note) == ("active", 2, active_note(2))
+        assert await restarted.count_unreachable(hotlist.id) == 3
+        await restarted.set_status(hotlist.id, "stopped", "unreachable")
+        stopped = await restarted.get_authorized(hotlist.id, OWNER)
+        assert (stopped.unreachable_in_a_row, stopped.status_note) == (0, None)  # stopped: its reason, no note
+        await restarted.count_unreachable(hotlist.id)
+        await restarted.set_status(hotlist.id, "active")
+        async with restarted._pool.acquire() as conn:
+            assert await conn.fetchval("SELECT unreachable_in_a_row FROM hotlists WHERE id = $1", hotlist.id) == 0
+    finally:
+        await restarted.close()
+
+
+async def test_two_evaluators_counting_at_once_never_read_the_same_count(store) -> None:  # type: ignore[no-untyped-def]
+    """ADR-044 Amendment 2, decision 2: the count is added and read in one statement, so two evaluators counting
+    the same hotlist at once get 1 and 2, never both 1 (which would let three unreachable loads pass as two)."""
+    import asyncio
+
+    hotlist = await store.create(OWNER, identifier="07700900190", review_date=date(2027, 1, 1))
+    other = await HotlistStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        counts = await asyncio.gather(*(s.count_unreachable(hotlist.id) for s in (store, other, store, other)))
+        assert sorted(counts) == [1, 2, 3, 4]
+    finally:
+        await other.close()
+
+
+async def test_a_stopped_hotlist_is_still_listed_for_evaluation(store) -> None:  # type: ignore[no-untyped-def]
+    """ADR-044 Amendment 2, decision 3: one stopped `unreachable` is evaluated again at each load, so the first load
+    that can act as its owner makes it active again ("It is tried again at the next")."""
+    hotlist = await store.create(OWNER, identifier="07700900191", review_date=date(2027, 1, 1))
+    await store.set_status(hotlist.id, "stopped", "unreachable")
+    assert hotlist.id in {h.id for h in await store.list_all_active()}

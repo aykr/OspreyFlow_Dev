@@ -174,3 +174,39 @@ async def test_a_stopped_watch_keeps_why_and_a_reason_not_known_here_is_served_a
                 await conn.execute("DELETE FROM monitors WHERE id = $1", monitor.id)
         async with pattern_store._pool.acquire() as conn:
             await conn.execute("DELETE FROM saved_patterns WHERE pattern_id = $1", saved.pattern_id)
+
+
+async def test_the_unreachable_count_outlives_a_restart_and_any_status_puts_it_back(
+    store: MonitorStore, pattern_store: PatternStore
+) -> None:
+    """ADR-044 Amendment 2, `test_hotlists.py`'s twin: counted in the row in one statement, read back by a new
+    store over the same database, served with its words while active, and put back to 0 by any status."""
+    from services.api.watch_status import active_note
+
+    saved = await pattern_store.save(OWNER, pattern_id=None, name="Monitor fixture unreachable",
+                                     definition=_pattern())  # fmt: skip
+    monitor = None
+    restarted = None
+    try:
+        monitor = await store.create(OWNER, pattern_id=saved.pattern_id)
+        assert monitor.unreachable_in_a_row == 0
+        first = await MonitorStore.connect(PostgresConfig.from_env().dsn)
+        assert await first.count_unreachable(monitor.id) == 1
+        await first.close()  # the Conduit that counted it gone; a new one reads what it left
+        restarted = await MonitorStore.connect(PostgresConfig.from_env().dsn)
+        read = await restarted.get_authorized(monitor.id, OWNER)
+        assert (read.unreachable_in_a_row, read.status_note) == (1, active_note(1))
+        assert await restarted.count_unreachable(monitor.id) == 2
+        await restarted.set_status(monitor.id, "stopped", "revoked")  # another reason: stopped, count back to 0
+        stopped = await restarted.get_authorized(monitor.id, OWNER)
+        assert (stopped.status_detail, stopped.unreachable_in_a_row, stopped.status_note) == ("revoked", 0, None)
+        async with restarted._pool.acquire() as conn:
+            assert await conn.fetchval("SELECT unreachable_in_a_row FROM monitors WHERE id = $1", monitor.id) == 0
+    finally:
+        if restarted is not None:
+            await restarted.close()
+        if monitor is not None:
+            async with store._pool.acquire() as conn:
+                await conn.execute("DELETE FROM monitors WHERE id = $1", monitor.id)
+        async with pattern_store._pool.acquire() as conn:
+            await conn.execute("DELETE FROM saved_patterns WHERE pattern_id = $1", saved.pattern_id)

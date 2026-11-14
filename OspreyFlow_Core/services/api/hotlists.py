@@ -22,7 +22,7 @@ from knowledge_adapters import REGISTRY, NormalisationError
 from schemas.domain import Hotlist, HotlistAudience, Principal, StoppedReason, WatchStatus
 
 from .dataset_scope import made_in, reach_clause
-from .watch_status import stopped_why
+from .watch_status import active_note, stopped_why
 
 #: `ADD COLUMN IF NOT EXISTS` — `alerts.py`'s own `_BOOTSTRAP_SQL` docstring has the full reasoning:
 #: this codebase has no migration tooling, and `CREATE TABLE IF NOT EXISTS` alone is a no-op
@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS hotlists (
 ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 -- ADR-044 Amendment 1: why it is stopped, NULL while active.
 ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS status_detail TEXT;
+-- ADR-044 Amendment 2: loads in a row whose owner's sign-in could not be checked; the third stops
+-- it.
+ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS unreachable_in_a_row INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS hotlists_owner_id_idx ON hotlists (owner_id);
 CREATE INDEX IF NOT EXISTS hotlists_identifier_idx ON hotlists (identifier);
 ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS dataset_id TEXT;
@@ -56,7 +59,7 @@ _log = logging.getLogger(__name__)
 
 _COLUMNS = (
     "id, identifier, identifier_typed, identifier_canonical, owner_id, review_date, status, "
-    "status_detail, created_at, dataset_id, audience"
+    "status_detail, unreachable_in_a_row, created_at, dataset_id, audience"
 )
 
 #: A digit string of this length fits `imei` and `imsi` alike, with different canonical forms.
@@ -155,6 +158,8 @@ def _row_to_hotlist(row: asyncpg.Record) -> Hotlist:
         status=row["status"],
         status_detail=_detail(row),
         stopped_why=stopped_why(_detail(row)),
+        unreachable_in_a_row=row["unreachable_in_a_row"],
+        status_note=active_note(row["unreachable_in_a_row"]) if row["status"] == "active" else None,
         created_at=row["created_at"],
         dataset_id=row["dataset_id"],
         audience=row["audience"],
@@ -312,12 +317,26 @@ class HotlistStore:
         through."""
         async with self._pool.acquire() as conn:
             await conn.execute(
+                # ADR-044 Amendment 2: any status set puts the count of unreachable loads back to 0.
                 "UPDATE hotlists SET status = $2, status_detail = CASE WHEN $2 = 'stopped' "
-                "THEN $3 END WHERE id = $1",
+                "THEN $3 END, unreachable_in_a_row = 0 WHERE id = $1",
                 hotlist_id,
                 status,
                 detail,
             )
+
+    async def count_unreachable(self, hotlist_id: str) -> int:
+        """ADR-044 Amendment 2: one more load in a row whose owner's sign-in could not be
+        checked, and the count it makes. Called only by the evaluator, as `set_status` is. One
+        statement, so two evaluators never both read the same count; kept in the row, so it
+        outlives a restart."""
+        async with self._pool.acquire() as conn:
+            count = await conn.fetchval(
+                "UPDATE hotlists SET unreachable_in_a_row = unreachable_in_a_row + 1 WHERE id = $1 "
+                "RETURNING unreachable_in_a_row",
+                hotlist_id,
+            )
+        return int(count or 0)
 
     async def list_all_active(self) -> list[Hotlist]:
         """**Not principal-scoped — deliberately, and the one method on this store that isn't.**

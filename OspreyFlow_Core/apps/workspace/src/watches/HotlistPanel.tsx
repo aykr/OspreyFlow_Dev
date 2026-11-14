@@ -175,7 +175,7 @@ export function HotlistPanel({ apiBaseUrl, bearerToken, investigationId }: Hotli
               ) : (
                 <span className="label">{AUDIENCE_FIXED[hotlist.audience ?? "only_me"]}</span>
               )}
-              <StatusBadge status={hotlist.status ?? "active"} why={hotlist.stopped_why} />
+              <StatusBadge status={hotlist.status ?? "active"} why={hotlist.stopped_why} note={hotlist.status_note} />
             </li>
           ))}
         </ul>

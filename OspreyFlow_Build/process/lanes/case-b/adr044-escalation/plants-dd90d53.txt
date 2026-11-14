@@ -1,0 +1,23 @@
+AS IT MUST BE (red): one unreachable load stops it (ADR-044 before Amendment 2)
+    test_one_unreachable_load_leaves_it_active_counted_once_and_matches_nothing[hotlist]
+    test_one_unreachable_load_leaves_it_active_counted_once_and_matches_nothing[watch]
+AS IT MUST BE (red): the second in a row stops it (the bound one short)
+    test_two_in_a_row_leave_it_active_counted_twice[hotlist]
+    test_two_in_a_row_leave_it_active_counted_twice[watch]
+AS IT MUST BE (red): the third in a row leaves it active (the bound one long)
+    test_the_third_in_a_row_stops_it_unreachable[hotlist]
+    test_the_third_in_a_row_stops_it_unreachable[watch]
+AS IT MUST BE (red): another reason counted as unreachable is
+    test_another_reason_at_the_first_load_stops_it_at_once_uncounted[hotlist]
+    test_another_reason_at_the_first_load_stops_it_at_once_uncounted[watch]
+AS IT MUST BE (red): a schedule giving its slot back counts
+    test_a_schedule_giving_its_slot_back_neither_counts_nor_resets
+AS IT MUST BE (red): a schedule giving its slot back resets
+    test_a_schedule_giving_its_slot_back_neither_counts_nor_resets
+AS IT MUST BE (red): a schedule acting as the owner leaves the count (resets only where it matches)
+    test_a_schedule_that_acts_as_the_owner_puts_the_count_back_even_matching_nothing[no-dataset]
+    test_a_schedule_that_acts_as_the_owner_puts_the_count_back_even_matching_nothing[dataset-not-reached]
+AS IT MUST BE (red): the active note says nothing of how many
+    test_the_words_for_an_active_watch_with_misses_and_none_without
+unplanted: 20 passed in 1.15s
+every plant red for its reason, unplanted green

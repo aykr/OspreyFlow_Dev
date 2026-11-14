@@ -31,7 +31,7 @@ from principal_auth import (
 )
 from schemas.domain import Hotlist, Monitor, Principal, StoppedReason
 from tests.services.api.test_owner_on_entra import _Claims
-from tests.services.api.watch_status_fake import kept
+from tests.services.api.watch_status_fake import UnreachableCount, kept
 
 OWNER = Principal(id="owner-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 NOW = datetime(2026, 11, 14, 9, tzinfo=UTC)
@@ -65,6 +65,7 @@ class _Watches:
     def __init__(self, active: list[Any]) -> None:
         self.active = active
         self.told: list[tuple[str, str, str | None]] = []
+        self.count = UnreachableCount()  # ADR-044 Amendment 2's count, kept as the real stores keep it
 
     async def list_all_active(self) -> list[Any]:
         return self.active
@@ -72,6 +73,10 @@ class _Watches:
     async def set_status(self, watch_id: str, status: str, detail: str | None = None) -> None:
         kept(status, detail)  # refused as the real store's types refuse it
         self.told.append((watch_id, status, detail))
+        self.count.reset(watch_id)
+
+    async def count_unreachable(self, watch_id: str) -> int:
+        return self.count.count(watch_id)
 
     async def last_slot(self, _id: str) -> None:
         return None
@@ -130,9 +135,11 @@ async def test_a_load_that_cannot_act_as_a_hotlist_s_owner_stops_it_with_the_rea
     refusal: Exception | None, reason: str
 ) -> None:
     store = _Watches([_hotlist()])
-    await evaluate_hotlists_for_entry(_Entry(), graph=_Nothing(), scheme=load_uk_le_scheme(), hotlist_store=store,  # type: ignore[arg-type]
-                                      alert_store=_Nothing(), audit=_Nothing(), valkey=_Nothing(),  # type: ignore[arg-type]
-                                      principal_for_owner=_resolving(refusal), policy="strict")  # type: ignore[arg-type]  # fmt: skip
+    # ADR-044 Amendment 2: `unreachable` stops at the third load in a row (`test_unreachable_in_a_row.py`).
+    for _ in range(3 if reason == "unreachable" else 1):
+        await evaluate_hotlists_for_entry(_Entry(), graph=_Nothing(), scheme=load_uk_le_scheme(), hotlist_store=store,  # type: ignore[arg-type]
+                                          alert_store=_Nothing(), audit=_Nothing(), valkey=_Nothing(),  # type: ignore[arg-type]
+                                          principal_for_owner=_resolving(refusal), policy="strict")  # type: ignore[arg-type]  # fmt: skip
     assert store.told == [("h-1", "stopped", reason)]
 
 
@@ -141,9 +148,10 @@ async def test_a_load_that_cannot_act_as_a_watch_s_owner_stops_it_with_the_reaso
     refusal: Exception | None, reason: str
 ) -> None:
     store = _Watches([_monitor()])
-    await evaluate_monitors_for_entry(_Nothing(), graph=_Nothing(), monitor_store=store, pattern_store=_Nothing(),  # type: ignore[arg-type]
-                                      alert_store=_Nothing(), audit=_Nothing(), valkey=_Nothing(),  # type: ignore[arg-type]
-                                      principal_for_owner=_resolving(refusal))  # fmt: skip
+    for _ in range(3 if reason == "unreachable" else 1):  # ADR-044 Amendment 2, as above
+        await evaluate_monitors_for_entry(_Nothing(), graph=_Nothing(), monitor_store=store, pattern_store=_Nothing(),  # type: ignore[arg-type]
+                                          alert_store=_Nothing(), audit=_Nothing(), valkey=_Nothing(),  # type: ignore[arg-type]
+                                          principal_for_owner=_resolving(refusal))  # fmt: skip
     assert store.told == [("m-1", "stopped", reason)]
 
 
@@ -213,6 +221,10 @@ def test_the_user_guide_gives_each_reason_in_the_conduit_s_words() -> None:
     start = guide.index("### 7.5")
     section = re.sub(r"\s+", " ", guide[start : guide.index("\n### ", start + 1)])
     assert [r for r, words in STOPPED_WHY.items() if f'"{words}"' not in section] == []
+    # ADR-044 Amendment 2: and the two notes an active watch shows beside the word, whole.
+    from services.api.watch_status import active_note
+
+    assert [n for n in (1, 2) if f'"{active_note(n)}"' not in section] == []
 
 
 def test_the_administration_guide_s_troubleshooting_row_quotes_the_unreachable_reason_as_served() -> None:
@@ -261,14 +273,15 @@ def admin_users_url():  # type: ignore[no-untyped-def]
 DISABLED = {"owner-disabled"}
 
 
-async def _stopped_with(resolver: Any, owner_id: str) -> list[tuple[str, str, str | None]]:
+async def _stopped_with(resolver: Any, owner_id: str, loads: int = 1) -> list[tuple[str, str, str | None]]:
     held = Hotlist(id="h-9", identifier="07700900125", owner_id=owner_id, review_date=date(2027, 1, 1),
                    created_at=NOW)  # fmt: skip
     store = _Watches([held])
     try:
-        await evaluate_hotlists_for_entry(_Entry(), graph=_Nothing(), scheme=load_uk_le_scheme(), hotlist_store=store,  # type: ignore[arg-type]
-                                          alert_store=_Nothing(), audit=_Nothing(), valkey=_Nothing(),  # type: ignore[arg-type]
-                                          principal_for_owner=resolver.resolve_for_owner_detailed, policy="strict")  # type: ignore[arg-type]  # fmt: skip
+        for _ in range(loads):
+            await evaluate_hotlists_for_entry(_Entry(), graph=_Nothing(), scheme=load_uk_le_scheme(), hotlist_store=store,  # type: ignore[arg-type]
+                                              alert_store=_Nothing(), audit=_Nothing(), valkey=_Nothing(),  # type: ignore[arg-type]
+                                              principal_for_owner=resolver.resolve_for_owner_detailed, policy="strict")  # type: ignore[arg-type]  # fmt: skip
     finally:
         await resolver.aclose()
     return store.told
@@ -292,13 +305,14 @@ async def test_a_revoked_principal_sets_status_detail_revoked_not_unreachable(
 
 async def test_an_unreachable_identity_provider_sets_status_detail_unreachable_not_revoked(jwks_url) -> None:  # type: ignore[no-untyped-def]
     """ADR-044's second named test: the exchange call itself errors (connection refused on a closed
-    port), so the hotlist is stopped as `unreachable`, never `revoked`."""
+    port), so the hotlist is stopped as `unreachable`, never `revoked`: at the third such load in a row
+    (ADR-044 Amendment 2), the first two leaving it active."""
     from services.api.auth import PrincipalResolver
 
     from tests.services.api.test_auth import _config_with_exchange
 
     resolver = PrincipalResolver(_config_with_exchange(jwks_url, "http://127.0.0.1:9/token-exchange"))
-    assert await _stopped_with(resolver, "owner-1") == [("h-9", "stopped", "unreachable")]
+    assert await _stopped_with(resolver, "owner-1", loads=3) == [("h-9", "stopped", "unreachable")]
 
 
 async def test_an_owner_the_identity_provider_refuses_sets_status_detail_refused(

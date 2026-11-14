@@ -25,12 +25,37 @@ STOPPED_WHY: dict[str, str] = {
     # On Entra ID: Admin › People does not hold them, and Entra was not asked (ADR-148 Am 16).
     "not_held": "Its owner is not a person Admin › People holds.",
     "refused": "The identity provider refused to act as its owner.",
+    # ADR-044 Amendment 2: only the third load in a row stops it (`UNREACHABLE_STOPS_AT`).
     "unreachable": (
-        "Its owner's sign-in could not be checked at the last load. It is tried again at the next."
+        "Its owner's sign-in could not be checked at three loads in a row. "
+        "It is tried again at the next."
     ),
     "unresolved": "Its owner could not be acted as at the last load.",
     "pattern_gone": "Its saved pattern is no longer its owner's.",
 }
+
+
+#: ADR-044 Amendment 2 (the owner's ruling, 14 November 2026): a load that cannot check its owner's
+#: sign-in (`unreachable`) stops a hotlist or a watch only when it is the third in a row; the first
+#: two leave it active, matching nothing, and a load that can act as its owner puts the count back
+#: to 0.
+UNREACHABLE_STOPS_AT = 3
+
+
+def active_note(unreachable_in_a_row: int) -> str | None:
+    """The owner's words beside an active badge while loads have missed its owner's sign-in,
+    `None` with none. No id (rule 7)."""
+    if unreachable_in_a_row <= 0:
+        return None
+    if unreachable_in_a_row == 1:
+        return (
+            "Its owner's sign-in could not be checked at the last load. "
+            "It stops if that happens at three loads in a row."
+        )
+    return (
+        "Its owner's sign-in could not be checked at the last two loads. "
+        "It stops if the next is the third in a row."
+    )
 
 
 def stopped_why(reason: str | None) -> str | None:
@@ -54,4 +79,4 @@ def reason_of(error: PrincipalExchangeError) -> StoppedReason:
     return "unresolved"
 
 
-__all__ = ["STOPPED_WHY", "reason_of", "stopped_why"]
+__all__ = ["STOPPED_WHY", "UNREACHABLE_STOPS_AT", "active_note", "reason_of", "stopped_why"]

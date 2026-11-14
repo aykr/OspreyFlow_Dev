@@ -22,7 +22,7 @@ from schemas.domain import (
 )
 
 from .dataset_scope import made_in, reach_clause
-from .watch_status import stopped_why
+from .watch_status import active_note, stopped_why
 
 #: `ADD COLUMN IF NOT EXISTS` — `alerts.py`'s own `_BOOTSTRAP_SQL` docstring has the full reasoning.
 _BOOTSTRAP_SQL = """
@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS monitors (
 ALTER TABLE monitors ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 -- ADR-044 Amendment 1: why it is stopped, NULL while active.
 ALTER TABLE monitors ADD COLUMN IF NOT EXISTS status_detail TEXT;
+-- ADR-044 Amendment 2: loads in a row whose owner's sign-in could not be checked; the third stops
+-- it.
+ALTER TABLE monitors ADD COLUMN IF NOT EXISTS unreachable_in_a_row INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS monitors_owner_id_idx ON monitors (owner_id);
 ALTER TABLE monitors ADD COLUMN IF NOT EXISTS dataset_id TEXT;
 -- ADR-146 decision 4 (G16): each watched pattern also runs on its own schedule, daily by default.
@@ -67,6 +70,8 @@ def _row_to_monitor(row: asyncpg.Record) -> Monitor:
         status=row["status"],
         status_detail=_detail(row),
         stopped_why=stopped_why(_detail(row)),
+        unreachable_in_a_row=row["unreachable_in_a_row"],
+        status_note=active_note(row["unreachable_in_a_row"]) if row["status"] == "active" else None,
         created_at=row["created_at"],
         dataset_id=row["dataset_id"],
         every=row["every"],
@@ -76,7 +81,8 @@ def _row_to_monitor(row: asyncpg.Record) -> Monitor:
 
 
 _SELECT = (
-    "SELECT id, pattern_id, owner_id, status, status_detail, created_at, dataset_id, every, hour, "
+    "SELECT id, pattern_id, owner_id, status, status_detail, unreachable_in_a_row, created_at, "
+    "dataset_id, every, hour, "
     "weekday FROM monitors"
 )
 
@@ -129,7 +135,8 @@ class MonitorStore:
         reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, pattern_id, owner_id, status, status_detail, created_at, dataset_id, "
+                "SELECT id, pattern_id, owner_id, status, status_detail, unreachable_in_a_row, "
+                "created_at, dataset_id, "
                 "every, hour, weekday "
                 f"FROM monitors WHERE id = $1 AND owner_id = $2{reach}",
                 monitor_id,
@@ -144,7 +151,8 @@ class MonitorStore:
         reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, pattern_id, owner_id, status, status_detail, created_at, dataset_id, "
+                "SELECT id, pattern_id, owner_id, status, status_detail, unreachable_in_a_row, "
+                "created_at, dataset_id, "
                 "every, hour, weekday "
                 f"FROM monitors WHERE owner_id = $1{reach} ORDER BY created_at DESC",
                 principal.id,
@@ -160,6 +168,16 @@ class MonitorStore:
             rows = await conn.fetch(_SELECT)
         return [_row_to_monitor(row) for row in rows]
 
+    async def count_unreachable(self, monitor_id: str) -> int:
+        """`HotlistStore.count_unreachable`'s twin (ADR-044 Amendment 2), identical reasoning."""
+        async with self._pool.acquire() as conn:
+            count = await conn.fetchval(
+                "UPDATE monitors SET unreachable_in_a_row = unreachable_in_a_row + 1 WHERE id = $1 "
+                "RETURNING unreachable_in_a_row",
+                monitor_id,
+            )
+        return int(count or 0)
+
     async def set_status(
         self, monitor_id: str, status: WatchStatus, detail: StoppedReason | None = None
     ) -> None:
@@ -167,13 +185,13 @@ class MonitorStore:
         evaluator, written on every evaluation attempt so `status` reflects the most recent one."""
         async with self._pool.acquire() as conn:
             await conn.execute(
+                # ADR-044 Amendment 2: any status set puts the count of unreachable loads back to 0.
                 "UPDATE monitors SET status = $2, status_detail = CASE WHEN $2 = 'stopped' "
-                "THEN $3 END WHERE id = $1",
+                "THEN $3 END, unreachable_in_a_row = 0 WHERE id = $1",
                 monitor_id,
                 status,
                 detail,
             )
-
 
     async def set_schedule(
         self, monitor_id: str, principal: Principal, schedule: MonitorScheduleInput
@@ -184,7 +202,8 @@ class MonitorStore:
             row = await conn.fetchrow(
                 "UPDATE monitors SET every = $3, hour = $4, weekday = $5 "
                 f"WHERE id = $1 AND owner_id = $2{reach} "
-                "RETURNING id, pattern_id, owner_id, status, status_detail, created_at, "
+                "RETURNING id, pattern_id, owner_id, status, status_detail, "
+                "unreachable_in_a_row, created_at, "
                 "dataset_id, every, hour, weekday",
                 monitor_id,
                 principal.id,
