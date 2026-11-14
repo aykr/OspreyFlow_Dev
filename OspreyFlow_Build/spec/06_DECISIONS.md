@@ -39416,3 +39416,23 @@ about 4.5 GB at thirty million) and left a streaming check to CARRIES.*
    first built (`feat(search): the drift check streams`, before the unread count): 570,460 nodes against 642,460 documents in 711 s, at 169 MB peak,
    clean once the outboxes were drained. The record (`B_RECORD.md`, `drain.try2.txt`) is step B's, on
    `lane/rules-v052-load`, merged after this.
+
+### ADR-149, Amendment 4 (14 November 2026) — the fallback knows when its depth cut the list, and its words send the reader to nothing the page cannot do
+
+*Docs' review of Amendment 3, confirmed by the orchestrator, 14 November. The orchestrator kept these words over
+its own suggestion, because an exact-match fallback cannot be narrowed by more words. This amends Amendment 3; its
+other text stands.*
+
+- **A cut is said only when there was one.** Today's search is asked one past the depth (`FALLBACK_DEPTH + 1`), and
+  the list is then cut to `FALLBACK_DEPTH`. Exactly 100 matches is a whole list, and the line says nothing of a
+  cut. Amendment 3 had said "only the first 100" whenever 100 matched.
+- **The words ask nothing the page cannot do.** `DEPTH_REACHED` is now " Only the first {depth} matches are
+  listed, and the filters apply to those alone."
+  - "Narrow the search" is gone, for two reasons. The page's dataset and group filters apply to the listed
+    matches alone, so they cannot reach one past the cut. And today's search is an exact match, so a different
+    query does not narrow it.
+- *Tests:* `tests/services/api/test_search_service.py::test_exactly_the_depth_matched_and_nothing_was_cut` and
+  `::test_the_depths_words_never_send_the_reader_to_the_filters`, both red before the change, and
+  `::test_past_the_depth_the_list_holds_the_first_hundred_alone`.
+- *Planted again:* `process/lanes/studio/v052-search/plants.py` (a cut said at exactly the depth, and the old words),
+  each red.
