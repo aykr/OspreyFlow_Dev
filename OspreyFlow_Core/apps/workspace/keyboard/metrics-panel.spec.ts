@@ -230,7 +230,7 @@ test("the legend lists the strength influencers in force, folded and opened by k
   registerCovered("METRICS_PANEL_ACTIONS", "legend-lists-the-strength-influencers-by-keyboard");
 });
 
-test("the legend's composition indicator says the case is under client parity, by keyboard (ADR-139 Amendment 2)", async ({
+test("the legend's composition indicator says the case is under rarity plus adds, by keyboard (ADR-139 Amendment 2)", async ({
   page,
 }) => {
   await page.goto("/keyboard/metrics-panel-harness.html?composition=client_parity");

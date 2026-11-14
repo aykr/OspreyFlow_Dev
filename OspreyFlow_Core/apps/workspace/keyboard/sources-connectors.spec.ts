@@ -191,7 +191,7 @@ test("a list is imported through a format's template, refreshed now, and schedul
   registerCovered(REGISTRY, "schedule-a-screening-lists-refresh-by-keyboard");
 });
 
-test("a client's own list is imported through the blank template's column picks", async ({ page }) => {
+test("your organisation's own list is imported through the blank template's column picks", async ({ page }) => {
   const state = await serve(page, { canManage: true });
   await page.goto(HARNESS);
   await tabTo(page, /^Import a list$/);
@@ -216,7 +216,7 @@ test("a client's own list is imported through the blank template's column picks"
     ref: "Client ref", primary_name: "Full name", aliases: "Other names", date_of_birth: null, nationality: null,
     identifiers: null, programme: null, separator: ",", entity_type: null, entity_type_column: "Party type", listing: "sanction",
   });  // prettier-ignore
-  registerCovered(REGISTRY, "import-a-client-list-through-the-blank-template-by-keyboard");
+  registerCovered(REGISTRY, "import-your-own-list-through-the-blank-template-by-keyboard");
 });
 
 test("a dataset's own list's rows are imported from one of its files", async ({ page }) => {

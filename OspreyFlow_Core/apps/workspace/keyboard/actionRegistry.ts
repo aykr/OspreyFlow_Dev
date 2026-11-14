@@ -710,11 +710,11 @@ export const STRENGTH_ACTIONS = defineActionRegistry("STRENGTH_ACTIONS", [
   "propose-an-influencer-version-by-keyboard",
   "set-a-case-override-by-keyboard",
   "write-a-strength-rule-by-keyboard",
-  // ADR-139 Amendment 2: the case switched to client parity, an installation version's composition
-  // and rarity measure chosen, and a rule's figure named on the client's scale.
-  "switch-a-case-to-client-parity-by-keyboard",
+  // ADR-139 Amendment 2: the case switched to rarity plus adds, an installation version's composition
+  // and rarity measure chosen, and a rule's figure named on the raw-sum scale.
+  "switch-a-case-to-rarity-plus-adds-by-keyboard",
   "choose-an-installation-composition-and-rarity-measure-by-keyboard",
-  "write-a-strength-rule-on-the-clients-scale-by-keyboard",
+  "write-a-strength-rule-on-the-raw-sum-scale-by-keyboard",
 ] as const);
 
 /** ADR-133 stage (d) in the Monitoring place: a rule written to run on a schedule, its schedule and
@@ -850,8 +850,8 @@ export const INSPECTOR_ACTIONS = defineActionRegistry("INSPECTOR_ACTIONS", [
   "expand-a-node-from-the-inspector-by-keyboard",
   // ADR-139 decision 9: a link's strength explained, and what its ends share ranked by rarity.
   "explain-a-links-strength-by-keyboard",
-  // ADR-139 Amendment 2: under client parity, the composition and the raw sum on the client's scale.
-  "read-a-links-raw-sum-under-client-parity-by-keyboard",
+  // ADR-139 Amendment 2: under rarity plus adds, the composition and the raw sum on the raw-sum scale.
+  "read-a-links-raw-sum-under-rarity-plus-adds-by-keyboard",
 ] as const);
 
 /** The workspace shell (ADR-097 step 1): the top bar, the left rail, the classification strip.
@@ -1316,7 +1316,7 @@ export const MATRIX_ACTIONS = defineActionRegistry("MATRIX_ACTIONS", [
 export const SOURCES_CONNECTORS_ACTIONS = defineActionRegistry("SOURCES_CONNECTORS_ACTIONS", [
   "subscribe-a-dataset-to-a-screening-list-by-keyboard",
   "import-a-screening-list-through-a-template-by-keyboard",
-  "import-a-client-list-through-the-blank-template-by-keyboard",
+  "import-your-own-list-through-the-blank-template-by-keyboard",
   "refresh-a-screening-list-now-by-keyboard",
   "schedule-a-screening-lists-refresh-by-keyboard",
   "import-a-datasets-own-list-rows-by-keyboard",

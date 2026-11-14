@@ -54,7 +54,7 @@ test("a link's connection strength is explained, and what its ends share ranked,
   registerCovered(REGISTRY, "explain-a-links-strength-by-keyboard");
 });
 
-test("under client parity a link's raw sum on the client's scale is read by keyboard (ADR-139 Amendment 2)", async ({
+test("under rarity plus adds a link's raw sum on the raw-sum scale is read by keyboard (ADR-139 Amendment 2)", async ({
   page,
 }) => {
   await serve(page);
@@ -79,7 +79,7 @@ test("under client parity a link's raw sum on the client's scale is read by keyb
   const lines = page.getByRole("list", { name: "What this link's strength rests on" });
   await expect(lines).toContainText("Its rarity term 0.7500, in prison-intelligence");
   await expect(lines).not.toContainText("Seen 2 times");
-  registerCovered(REGISTRY, "read-a-links-raw-sum-under-client-parity-by-keyboard");
+  registerCovered(REGISTRY, "read-a-links-raw-sum-under-rarity-plus-adds-by-keyboard");
 });
 
 test("a part opens and folds by Enter on its header", async ({ page }) => {
