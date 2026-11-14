@@ -1,0 +1,390 @@
+Running on ospreyflow-test (stack g, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T093914Z-6930ab82/log: env LIVE_SEED=scripts.seed_hmp_fixture LIVE_SPECS=live/scenario-a-a12-a15.spec.ts bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: scripts.seed_hmp_fixture into a case the seed makes
+Case 'Live search check 20261114T093915Z' is 01M7CPSVTTCNY6PYQ9C5X71DJV.
+Seeded 400 Person nodes, 10 yards, 262 current-window and 4 prior-period incident events.
+Put the prison, its yards, the towns and the accounts on the map.
+  check: no id stored more than once (whole shared graph)
+Loaded 809 network events (calls, visits, payments, custody, incidents); 1075 events in all under investigation_scope='01M7CPSVTTCNY6PYQ9C5X71DJV'.
+case: 01M7CPSVTTCNY6PYQ9C5X71DJV
+# step: the search index rebuilt from the graph
+search index rebuilt: 1203 documents from 1203 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t094015575820
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 4.10 5.07 8.49
+[warm-up +0.8 s] loaded
+[warm-up +1.2 s] console warning: [.WebGL-0x337c07900000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.2 s] console warning: [.WebGL-0x337c078adc00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.2 s] console warning: [.WebGL-0x337c0790b400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.2 s] search box drawn
+[warm-up +1.3 s] console error: [ECharts] Component toolbox is used but not imported.
+import { ToolboxComponent } from 'echarts/components';
+echarts.use([ToolboxComponent]);
+[warm-up +1.4 s] console warning: [.WebGL-0x337c07900000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+# warm-up: the Glass drew its search box after 8 s
+
+Running 3 tests using 1 worker
+
+[1/3] live/scenario-a-a12-a15.spec.ts:114:1 › A12 — the Clique Metric ranks nodes in the metrics panel
+  1) live/scenario-a-a12-a15.spec.ts:114:1 › A12 — the Clique Metric ranks nodes in the metrics panel 
+
+    Error: the radial menu offered no ASSOCIATE_OF entry
+
+    expect(locator).toBeVisible() failed
+
+    Locator: locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem').filter({ hasText: /^ASSOCIATE_OF\b/ }).first()
+    Expected: visible
+    Timeout: 30000ms
+    Error: element(s) not found
+
+    Call log:
+      - the radial menu offered no ASSOCIATE_OF entry locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem').filter({ hasText: /^ASSOCIATE_OF\b/ }).first() with timeout 30000ms
+      - waiting for locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem').filter({ hasText: /^ASSOCIATE_OF\b/ }).first()
+
+
+      94 |     expandItem,
+      95 |     `the radial menu offered no ${edgeType} entry`,
+    > 96 |   ).toBeVisible();
+         |     ^
+      97 |   // **The previewed cardinality is real** — `08_ACCEPTANCE_SCENARIOS.md` A1's "expansion
+      98 |   // previews its cardinality before running: the analyst is never surprised by ten thousand
+      99 |   // nodes". Round 12c wired this to `/expand/preview`; before it, every entry read `(0)`, which
+        at expandFromTheSelectedNode (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/scenario-a-a12-a15.spec.ts:96:5)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/scenario-a-a12-a15.spec.ts:150:3
+
+    Error Context: test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[2/3] live/scenario-a-a12-a15.spec.ts:185:1 › A13–A15 — a judgement is recorded against the investigation
+[3/3] live/scenario-a-a12-a15.spec.ts:214:1 › A15 — export names what it blocked, and takes a justification
+  1 failed
+    live/scenario-a-a12-a15.spec.ts:114:1 › A12 — the Clique Metric ranks nodes in the metrics panel 
+  2 passed (39.5s)
+# playwright exit 1
+== Vite's log
+  VITE v8.3.4  ready in 143 ms
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+== test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: scenario-a-a12-a15.spec.ts >> A12 — the Clique Metric ranks nodes in the metrics panel
+- Location: live/scenario-a-a12-a15.spec.ts:114:1
+
+# Error details
+
+```
+Error: the radial menu offered no ASSOCIATE_OF entry
+
+expect(locator).toBeVisible() failed
+
+Locator: locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem').filter({ hasText: /^ASSOCIATE_OF\b/ }).first()
+Expected: visible
+Timeout: 30000ms
+Error: element(s) not found
+
+Call log:
+  - the radial menu offered no ASSOCIATE_OF entry locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem').filter({ hasText: /^ASSOCIATE_OF\b/ }).first() with timeout 30000ms
+  - waiting for locator('.radial-menu__list[role=\'menu\']').getByRole('menuitem').filter({ hasText: /^ASSOCIATE_OF\b/ }).first()
+
+```
+
+```yaml
+- link "Skip to main content":
+  - /url: "#main-content"
+- note "Protective marking": OFFICIAL
+- banner:
+  - button "Osprey, go to Home": Osprey
+  - navigation "Places":
+    - list:
+      - listitem:
+        - button "The Glass"
+      - listitem:
+        - button "Rules and Monitoring"
+  - combobox "Search entities, identifiers, documents": HMP-0003
+  - button "Add many from a list"
+  - button "Filters"
+  - group "View":
+    - button "Graph" [pressed]
+    - button "Map"
+    - button "Drawing board"
+    - button "Reports"
+  - button "More views"
+  - button "Export"
+  - button "Switch to the light theme"
+- region "You are in the Glass":
+  - heading "You are in the Glass" [level=2]
+  - 'button "Case: Untitled case"'
+  - button "Views in this case"
+  - text: reads HMP fixture
+- navigation "Workspace":
+  - button "Explore"
+  - button "Ask & Chat"
+  - button "History"
+  - button "Help"
+  - button "Show names"
+- toolbar "Graph view":
+  - text: Match strictness Balanced
+  - slider "Match strictness": "1"
+- dialog "Welcome back":
+  - heading "Welcome back" [level=2]
+  - button "Close the welcome panel": ×
+  - paragraph: The canvas shows the 354 entities you were working on last.
+  - paragraph:
+    - link "Read the user guide (PDF)":
+      - /url: http://127.0.0.1:58677/v1/guides/user
+  - heading "Keys worth knowing" [level=3]
+  - list "Keys worth knowing":
+    - listitem: / Search entities, identifiers, documents
+    - listitem: ←→ Move between nodes on the canvas
+    - listitem: Enter Expand the focused node by one hop
+    - listitem: F Fit the graph to the window
+    - listitem: Esc Clear the selection
+    - listitem: "? Open or close this panel"
+- application "Network canvas":
+  - toolbar "Canvas tools":
+    - group "Select":
+      - button "⬚"
+    - group "Layout":
+      - combobox "Layout":
+        - option "Organic" [selected]
+        - option "Radial around selected node"
+        - option "Hierarchical"
+        - option "Circular"
+        - option "Group by type"
+        - option "Force-directed tree"
+        - option "Clustered bubbles"
+      - button "Arrange"
+    - group "Show":
+      - button "Communities"
+      - button "Grid" [pressed]
+      - button "Labels"
+      - button "Icons"
+    - group "View":
+      - button "Views"
+      - button "Show links among all"
+      - button "Clear view"
+      - button "Add files"
+      - text: "Last change: Seeded, 09:40"
+      - button "Details" [pressed]
+  - menu "MARSH, Naledi":
+    - text: MARSH, Naledi
+    - menuitem "Expand"
+    - menuitem "Ask the model about these…"
+    - menuitem "Save as a view"
+    - menuitem "Remove from view"
+    - menuitem "Clear"
+    - group "Expand by link type":
+      - menuitem "Uses (1)"
+      - menuitem "Present at (5)"
+      - menuitem "Mentioned in (2)"
+      - menuitem "Associate of (8)"
+      - menuitem "Member of (1)"
+      - menuitem "Holds account (1)"
+      - menuitem "Role in (5)"
+      - menuitem "Shared a cell with (1)"
+      - menuitem "Co-defendant of (2)"
+      - menuitem "Visited (1)"
+      - menuitem "14 types with no links"
+    - group "Actions":
+      - menuitem "Add files held by this…"
+      - menuitem "Set picture…"
+      - menuitem "Mark for suppression"
+  - status: MARSH, Naledi, Person, 27 links
+  - text: Selection of 1. Arrow keys move between nodes, Escape clears.
+  - toolbar "Selection":
+    - status: 1 selected
+    - button "Expand"
+    - button "Ask the model about these…"
+    - button "Save as a view"
+    - button "Remove from view"
+    - button "Clear"
+  - button "Legend" [expanded]
+  - button "Move legend": ⠿
+  - list "Types in view":
+    - listitem: Person 131
+    - listitem: Location 83
+    - listitem: Endpoint 52
+    - listitem: Document 42
+    - listitem: Incident 26
+    - listitem: Account 18
+    - listitem: Organisation 2
+  - list "Icons by value":
+    - listitem: "Account: Endpoint, endpoint kind account 50"
+    - listitem: "Magnifier: Incident, category find 12"
+    - listitem: "Clash: Incident, category assault 8"
+    - listitem: "Crowd: Incident, category disorder 6"
+    - listitem: "Phone: Endpoint, endpoint kind msisdn 2"
+  - list "Links in view":
+    - listitem:
+      - checkbox "Present at" [checked]
+      - text: Present at 206
+    - listitem:
+      - checkbox "Role in" [checked]
+      - text: Role in 59
+    - listitem:
+      - checkbox "Shared a cell with" [checked]
+      - text: Shared a cell with 53
+    - listitem:
+      - checkbox "Uses" [checked]
+      - text: Uses 52
+    - listitem:
+      - checkbox "Mentioned in" [checked]
+      - text: Mentioned in 42
+    - listitem:
+      - checkbox "Associate of" [checked]
+      - text: Associate of 36
+    - listitem:
+      - checkbox "Visited" [checked]
+      - text: Visited 35
+    - listitem:
+      - checkbox "Holds account" [checked]
+      - text: Holds account 18
+    - listitem:
+      - checkbox "Member of" [checked]
+      - text: Member of 18
+    - listitem:
+      - checkbox "Co-defendant of" [checked]
+      - text: Co-defendant of 7
+    - listitem:
+      - checkbox "Communicated with" [checked]
+      - text: Communicated with 6
+    - listitem:
+      - checkbox "Family of" [checked]
+      - text: Family of 6
+    - listitem:
+      - checkbox "In conflict with" [checked]
+      - text: In conflict with 4
+    - listitem:
+      - checkbox "Transacted" [checked]
+      - text: Transacted 4
+  - paragraph: Connection strength
+  - paragraph: "Composition: standard (shipped with OspreyFlow): strength is the stored weight with the influencers; rarity by share of pair links (the client's)."
+  - list "Strength influencers":
+    - listitem:
+      - strong: Direct link
+      - text: "Communicated with, Transacted, Visited and Shared a cell with: adds 0.13 to the score before the curve, always (these are direct links) (shipped with OspreyFlow; to be confirmed with the client)"
+    - listitem:
+      - strong: Evidenced by an assault, disorder or find
+      - text: "Role in, In conflict with, Associate of and Shared a cell with: adds 0.13 to the score before the curve, when an Incident's category is assault, disorder or find (shipped with OspreyFlow; to be confirmed with the client)"
+  - paragraph: "Direct links: Communicated with, Shared a cell with, Transacted and Visited."
+  - paragraph: "Shared-attribute rarity is worked out over what you may see: two analysts with different access can see different rarity for the same pair."
+  - group "Zoom":
+    - button "Zoom out": −
+    - text: 100%
+    - button "Zoom in": +
+    - button "Fit to view"
+  - dialog:
+    - status: "Nothing new: everything linked to this node is already in view."
+    - button "Close message": ×
+- region "Inspector":
+  - separator "Resize the side panel"
+  - button "Open the inspector to the full width": Full width
+  - button "Hide the inspector" [expanded]: Hide
+  - toolbar "Inspector position":
+    - button "Inspector" [expanded]
+    - button "Arrange the inspector": ⋯
+  - heading "Person MARSH, Naledi Marking" [level=3]: Person MARSH, Naledi OFFICIAL
+  - heading "Properties" [level=3]:
+    - button "Properties" [expanded]
+  - term: Type
+  - definition: Person
+  - term: Prison number
+  - definition: HMP-0003
+  - term: Family name
+  - definition: MARSH
+  - term: Given names
+  - definition: Naledi
+  - term: Date of birth
+  - definition: 1983-12-04
+  - heading "Picture" [level=3]:
+    - button "Picture"
+  - heading "Relationships" [level=3]:
+    - button "Relationships"
+  - heading "Shares contacts" [level=3]:
+    - button "Shares contacts"
+  - heading "Neighbourhood risk" [level=3]:
+    - button "Neighbourhood risk"
+  - heading "Provenance" [level=3]:
+    - button "Provenance"
+  - heading "Source" [level=3]:
+    - button "Source"
+  - heading "Judgements" [level=3]:
+    - button "Judgements"
+  - separator "Resize the inspector"
+  - toolbar "Metrics position":
+    - button "Metrics"
+    - button "Arrange the metrics": ⋯
+  - toolbar "Query builder position":
+    - button "Query builder"
+    - button "Arrange the query builder": ⋯
+  - toolbar "Find connections position":
+    - button "Find connections"
+    - button "Arrange the find connections": ⋯
+- region "Timeline":
+  - button "Show the timeline"
+  - text: Timeline
+- status: 354 nodes 546 edges 0 dimmed by filter
+- region "Tip":
+  - text: Tip Press / to search entities, identifiers and documents.
+  - button "Next tip"
+```
+
+== the last of the Conduit's log
+INFO:     127.0.0.1:57250 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/starter-questions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/starter-questions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57238 - "GET /v1/investigations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57238 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57238 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57262 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/busiest-links?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57238 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57262 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57262 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57238 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57262 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/busiest-links?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57222 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/most-connected?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/most-connected?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57256 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57238 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57238 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "POST /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57238 - "POST /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57238 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57238 - "GET /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "POST /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "OPTIONS /v1/investigations/01M7CPXBF8QX0DJ8TYG9TJN71K/expand/preview HTTP/1.1" 200 OK
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T093914Z-6930ab82).
+Wall time: 123 s, exit 1 (stack g, the lease case took at 2026-11-14T09:38:57Z; set-up before it 12 s)

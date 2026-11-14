@@ -1,0 +1,35 @@
+Running on ospreyflow-test (stack g, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T094608Z-f5c28c26/log: env LIVE_SEED=scripts.seed_hmp_fixture LIVE_SPECS=live/scenario-a-a12-a15.spec.ts bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: scripts.seed_hmp_fixture into a case the seed makes
+Case 'Live search check 20261114T094609Z' is 01M7CQ6F8XGWZX9PBRG98W143D.
+Seeded 400 Person nodes, 10 yards, 262 current-window and 4 prior-period incident events.
+Put the prison, its yards, the towns and the accounts on the map.
+  check: no id stored more than once (whole shared graph)
+Loaded 809 network events (calls, visits, payments, custody, incidents); 1075 events in all under investigation_scope='01M7CQ6F8XGWZX9PBRG98W143D'.
+case: 01M7CQ6F8XGWZX9PBRG98W143D
+# step: the search index rebuilt from the graph
+search index rebuilt: 1203 documents from 1203 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t094659890311
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 2.26 3.07 6.34
+[warm-up +0.9 s] loaded
+[warm-up +1.3 s] console warning: [.WebGL-0x20140771fa00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.3 s] console warning: [.WebGL-0x20140771e800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.3 s] console warning: [.WebGL-0x20140775b200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.3 s] search box drawn
+[warm-up +1.4 s] console error: [ECharts] Component toolbox is used but not imported.
+import { ToolboxComponent } from 'echarts/components';
+echarts.use([ToolboxComponent]);
+[warm-up +1.6 s] console warning: [.WebGL-0x20140771fa00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+# warm-up: the Glass drew its search box after 8 s
+
+Running 3 tests using 1 worker
+
+[1/3] live/scenario-a-a12-a15.spec.ts:118:1 › A12 — the Clique Metric ranks nodes in the metrics panel
+[2/3] live/scenario-a-a12-a15.spec.ts:191:1 › A13–A15 — a judgement is recorded against the investigation
+[3/3] live/scenario-a-a12-a15.spec.ts:220:1 › A15 — export names what it blocked, and takes a justification
+  3 passed (11.4s)
+# playwright exit 0
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T094608Z-f5c28c26).
+Wall time: 85 s, exit 0 (stack g, the lease case took at 2026-11-14T09:38:57Z; set-up before it 8 s)
