@@ -20,10 +20,12 @@ Plants:
     -> first form of the test stayed GREEN: it used a release VERSION, which is shown before the tree check is
        asked (rule 15, a plant that fails by another path). The test now uses a -dev checkout:
     -> FAILED test_untracked_files_do_not_unseat_the_commit (1 failed, 16 passed)
-  make version-file-check (the gate, before it was wired into make ci), OspreyFlow_Core/VERSION planted:
-    "0.5.2"       -> FAILED test_the_repositorys_own_version_file_is_well_formed, make exit 1
-    "v0.5.2-rc1"  -> FAILED test_the_repositorys_own_version_file_is_well_formed, make exit 1
-    "v0.5.2-dev"  -> 17 passed
+  The gate, tests/test_version_file.py (CI's test job; first as make version-file-check, withdrawn at the
+  orchestrator's word: a Makefile change is outside the owner's standing word), OspreyFlow_Core/VERSION planted:
+    "0.5.2"       -> FAILED test_the_repositorys_own_version_file_is_well_formed (1 failed, 16 passed)
+    "v0.5.2-rc1"  -> FAILED test_the_repositorys_own_version_file_is_well_formed (1 failed, 16 passed)
+    "v0.5.2-dev"  -> 17 passed (test_version_file.py with test_code_version.py)
+    (the same plants were red through make version-file-check, exit 1, before it was withdrawn)
   release.yml's step (release_yml.diff, the owner's file, not applied), its run body in bash from OspreyFlow_Core:
     TAG=v0.5.2 with VERSION v0.5.2-dev -> "::error::the tag v0.5.2 is not the code's VERSION (v0.5.2-dev)", exit 1
     TAG=v0.5.2-dev                     -> exit 0

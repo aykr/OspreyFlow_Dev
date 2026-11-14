@@ -37253,7 +37253,8 @@ the tag HEAD sits on). So a copy of newer code named itself v0.5.0. The source t
 4. **The cut sets VERSION to the tag in the candidate commit**, and main moves to the next `-dev` afterwards.
    `release.yml` refuses a tag that differs from VERSION; that file is the owner's, so the change is a diff
    (`process/lanes/platform-b/v052-codeversion/release_yml.diff`), its check shown red and green in bash.
-5. **`make version-file-check`, in `make ci`**: the committed VERSION is one line, a release or a `-dev`.
+5. **The committed VERSION is held well formed by `tests/test_version_file.py`**, which CI's test job runs: one
+   line, a release or a `-dev`. (Not a `make ci` target: a Makefile change is outside the owner's standing word.)
 6. **Not changed: backup set names** (`<stamp>-<deployment>-<commit>`). `harness.backup.SET_NAME` and
    `ospreyflow doctor`'s copy read the last dash-separated part as the commit, so a version with a dot or a dash
    there would misread the deployment's name, and existing sets must keep parsing. Carried on CARRIES 218.
@@ -37263,8 +37264,8 @@ the tag HEAD sits on). So a copy of newer code named itself v0.5.0. The source t
 `-dev`) shows the code's version in `checkout_version`, glass.json's `deployment_version` and the render's
 `release_version`, never the tag or the commit; a release checkout is its release; a clean `-dev` checkout is
 `dev-<commit>`; changed code is VERSION's `-dev`; on a `-dev` checkout untracked files leave the commit believed;
-no `.git` is VERSION; no VERSION is `.git`'s answer; a malformed VERSION is flagged and never shown; the
-repository's own VERSION is well formed.
+no `.git` is VERSION; no VERSION is `.git`'s answer; a malformed VERSION is never shown.
+`tests/test_version_file.py`: a malformed VERSION is flagged; the repository's own is well formed.
 
 ### ADR-148, Amendment 10 (13 November 2026) — Dashboard identities and the report sync on Entra ID
 

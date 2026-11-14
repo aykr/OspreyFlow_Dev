@@ -15,11 +15,8 @@ from types import SimpleNamespace
 import pytest
 
 from harness import site
-from harness.release import VERSION_FILE, checkout_version, version_file_problem
+from harness.release import VERSION_FILE, checkout_version
 from harness.render import release_version
-
-CORE = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
-
 
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout.strip()
@@ -104,18 +101,7 @@ def test_code_with_no_version_file_keeps_the_checkouts_answer(tmp_path: Path) ->
     assert checkout_version(tmp_path) == "dev-unknown"
 
 
-@pytest.mark.parametrize("text", ["0.5.2", "v0.5", "v0.5.2-rc1", "v0.5.2\nv0.5.3", ""])
-def test_a_malformed_version_file_is_flagged(tmp_path: Path, text: str) -> None:
-    (tmp_path / VERSION_FILE).write_text(text)
-    assert version_file_problem(tmp_path) is not None
-
-
 def test_a_malformed_version_file_is_never_shown(released: Path) -> None:
     (released / VERSION_FILE).write_text("v0.5.2-rc1\n")
     (released / "code.py").write_text("WHAT = 'newer'\n")
     assert checkout_version(released) != "v0.5.2-rc1"
-
-
-def test_the_repositorys_own_version_file_is_well_formed() -> None:
-    """The gate on the committed file: a release or the release the code is heading to, one line."""
-    assert version_file_problem(CORE) is None, version_file_problem(CORE)

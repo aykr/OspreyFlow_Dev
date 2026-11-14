@@ -4,7 +4,7 @@
 # with this folder on `PYTHONPATH` — so every command and every relative path in it is unchanged.
 # The reasoning each target used to carry in Core's Makefile is in git history (`git log -p
 # OspreyFlow_Core/Makefile`) and in each tool's own docstring.
-.PHONY: publish-user-repo ci version-file-check cp-policy-check lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle live-collect
+.PHONY: publish-user-repo ci cp-policy-check lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle live-collect
 
 CORE := ../OspreyFlow_Core
 BUILD := $(CURDIR)
@@ -19,7 +19,7 @@ TOOLS := PYTHONPATH=$(BUILD)
 
 # Phase 0's exit criterion: CI green; a GPL dependency fails; a schema drift fails. Core's own
 # gates first (lint, type check, image scans, the harness's accessibility suite), then these.
-ci: core-check lint-tools licence-check design-check ui-words-check opentofu-check chart-check cp-policy-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check version-file-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check bundle
+ci: core-check lint-tools licence-check design-check ui-words-check opentofu-check chart-check cp-policy-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check bundle
 
 # ADR-142: the lease, the heartbeat, the launcher, the friction assembler, the reservation check and the
 # widened spec scan, each shown red first (rule 15); the reservation check also runs over the real log.
@@ -126,11 +126,6 @@ decision-log-publication-check:
 
 citation-check:
 	$(IN_CORE) $(TOOLS) $(PY) -m tools.doc_citations_check
-
-# ADR-114 Amendment 47: the code's own version, OspreyFlow_Core/VERSION, is one line, a release (v0.5.2) or
-# the release the code is heading to (v0.5.2-dev); shown red with a malformed file (its own cases, and a plant).
-version-file-check:
-	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/harness/test_code_version.py
 
 test-file-coverage-check:
 	$(IN_CORE) $(TOOLS) $(PY) -m tools.test_file_coverage_check
