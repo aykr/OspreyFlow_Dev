@@ -22,14 +22,13 @@ from __future__ import annotations
 import re
 import subprocess
 from pathlib import Path
+
 import pytest
 from harness.cloud_platform.runbooks import command_blocks
 from harness.cloud_platform_backups import BUCKET_SUFFIX, EXPIRE_DAYS
-
 from tools.cp_policy_check import _resolver
 
 from tests.harness.test_cloud_platform_render import _artefacts, _config, _values
-
 
 # ---- 1. the shared claim -----------------------------------------------------------------------
 
@@ -209,19 +208,19 @@ def test_step_8_names_the_step_that_writes_each_listing_it_lacks(tmp_path) -> No
     from tests.harness.test_cloud_platform_render import _artefacts, _config
 
     text = _artefacts(_config("poc"))["DECOMMISSION.md"]
-    loop = re.search(r"^for listing in .*?^done\n.*?\n", text, re.S | re.M)
+    loop = re.search(r"^for listing in .*?^done\n.*?\n", text, re.DOTALL | re.MULTILINE)
     assert loop, "step 8's listing check"
     (tmp_path / "state.txt").write_text("")
     (tmp_path / "buckets.txt").write_text("")
     run = ["bash", "-c", "set -e\n" + loop.group(0)]
     env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path)}
-    done = subprocess.run(run, capture_output=True, text=True, env=env)
+    done = subprocess.run(run, capture_output=True, text=True, env=env, check=False)
     assert done.returncode != 0
     assert f"no {tmp_path}/backups: step 7's platform block writes it" in done.stdout
     (tmp_path / "backups").write_text("keep\n")
     (tmp_path / "state.txt").unlink()
     run = ["bash", "-c", "set -e\n" + loop.group(0)]
     env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path)}
-    done = subprocess.run(run, capture_output=True, text=True, env=env)
+    done = subprocess.run(run, capture_output=True, text=True, env=env, check=False)
     said = f"no {tmp_path}/state.txt: step 8's first block (the platform's) writes it"
     assert said in done.stdout
