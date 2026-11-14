@@ -13,6 +13,7 @@ import asyncio
 from typing import Any
 
 from adapters.graph_arcadedb.bulk import GremlinBulkTransport
+from tests.adapters.graph_arcadedb.edge_store import refuse_scans
 
 LABEL = "mx_TRANSACTED"
 
@@ -26,13 +27,22 @@ class _RecordingClient:
         self, command: str, *, params: Any = None, session_id: Any = None
     ) -> list[dict[str, Any]]:
         self.sent.append((command, dict(params or {})))
+        refuse_scans(command)  # as every stand-in of the store does (ADR-124 Amendment 18)
         return []
 
     async def sql(
         self, command: str, *, params: Any = None, session_id: Any = None
     ) -> list[dict[str, Any]]:
         self.sql_sent.append((command, dict(params or {})))
-        return []
+        if command == "SELECT name, type, indexes FROM schema:types":
+            return [{"name": "mx_Endpoint", "type": "vertex",
+                     "indexes": [{"unique": True, "properties": ["id"]}]}]  # fmt: skip
+        if command.startswith("SELECT @rid AS rid, id FROM "):
+            # Every id asked for is a vertex, each with a record id of its own.
+            return [{"rid": f"#1:{n}", "id": i} for n, i in enumerate((params or {})["ids"])]
+        if command.startswith("SELECT id FROM `") and command.endswith("` WHERE id IN :ids"):
+            return []  # no link id is taken yet
+        raise AssertionError(f"unexpected SQL: {command}")
 
 
 def _rows(prefix: str) -> list[dict[str, Any]]:
@@ -62,10 +72,38 @@ def test_every_lookup_passes_its_ids_as_parameters() -> None:
         await transport.degrees(LABEL, ["id-1", "id-2"])
 
     asyncio.run(run())
-    assert len(client.sent) == 3
+    # vertex_labels is SQL alone now (ADR-124 Amendment 18); the other two start from record ids.
+    assert len(client.sent) == 2
     for script, params in client.sent:
         assert "id-1" not in script and "id-2" not in script
         assert params, script
+    for command, params in client.sql_sent:
+        assert "id-1" not in command and "id-2" not in command
+
+
+def test_no_lookup_scans_the_store_by_id() -> None:
+    """ADR-124 Amendment 18: every lookup of the bulk path resolves ids by SQL through each vertex
+    type's unique `id` index, then starts Gremlin from the record ids; none starts from the whole
+    store by `id` (which ArcadeDB answers by scanning every vertex), the per-row write included."""
+    from tests.adapters.graph_arcadedb.edge_store import refuse_scans
+
+    client = _RecordingClient()
+    transport = GremlinBulkTransport(client)  # type: ignore[arg-type]
+
+    async def run() -> None:
+        await transport.vertex_labels(["id-1", "id-2"])
+        await transport.stored_links(LABEL, [("id-1", "id-2")], directed=True)
+        await transport.degrees(LABEL, ["id-1", "id-2"])
+        await transport.write_chunk(LABEL, _rows("w"), "tx")
+
+    asyncio.run(run())
+    for script, _ in client.sent:
+        refuse_scans(script)
+        # Nothing starts from the whole store by `id`, the per-row write's two ends included (a
+        # `where` among a vertex's own neighbours reads no other vertex, so it may match by `id`).
+        assert 'g.V().has("id"' not in script and '.V().has("id", r.' not in script, script
+    (write, params) = client.sent[-1]
+    assert params["rows"][0]["sr"].startswith("#1:") and params["rows"][0]["tr"].startswith("#1:")
 
 
 def test_an_undirected_type_is_looked_for_from_either_end() -> None:
@@ -118,3 +156,26 @@ def test_the_taken_id_lookup_is_sql_against_the_types_unique_id_index_and_binds_
     assert command == f"SELECT id FROM `{LABEL}` WHERE id IN :ids"
     assert params == {"ids": ["id-1", "id-2"]}
     assert "reverted" not in command and "superseded_by" not in command
+
+
+def test_a_rows_end_not_in_the_graph_is_refused_in_words_never_dropped() -> None:
+    """ADR-124 Amendment 18: the bulk write starts each row from its ends' record ids, so a row
+    whose end is not in the graph is refused, with how many ends are missing (it was dropped
+    unsaid: an `addE` from an empty start writes nothing)."""
+    import pytest
+
+    from ontology.errors import OntologyError
+
+    class _NoVertices(_RecordingClient):
+        async def sql(self, command: str, *, params: Any = None, session_id: Any = None) -> Any:
+            if command.startswith("SELECT @rid AS rid, id FROM "):
+                known = {"a-0", "a-1"}
+                return [{"rid": f"#1:{n}", "id": i} for n, i in enumerate(params["ids"]) if i in known]
+            return await super().sql(command, params=params, session_id=session_id)
+
+    client = _NoVertices()
+    transport = GremlinBulkTransport(client)  # type: ignore[arg-type]
+    rows = [{"s": "a-0", "t": f"gone-{n}", "p": {"id": f"e-{n}"}} for n in range(7)]
+    with pytest.raises(OntologyError, match=r"^7 of the links' ends are not in the graph: .* and 2 more"):
+        asyncio.run(transport.write_chunk(LABEL, rows, "tx"))
+    assert client.sent == []

@@ -23,6 +23,7 @@ It does not prove what a real cluster's analysers make of a document: `test_feed
 
 from __future__ import annotations
 
+import heapq
 import json
 from typing import Any
 
@@ -90,6 +91,9 @@ class FakeOpenSearch:
         self.busy = False
         self.blocked = False
         self.flood_stage = False
+        self.max_result_window = 10_000
+        #: Each sorted page's hits reversed: an order the caller must refuse, not compare.
+        self.unordered = False
         self.closed: set[str] = set()
         self.transport = type("T", (), {"serializer": JSONSerializer()})()
         self.docs: dict[str, dict[str, dict[str, Any]]] = {}
@@ -208,9 +212,52 @@ class FakeOpenSearch:
     async def count(self, *, index: str) -> dict[str, int]:
         return {"count": sum(len(self.docs[i]) for i in self.resolve(index))}
 
-    async def search(self, *, index: str, body: Any, scroll: str, size: int) -> dict[str, Any]:
-        hits = [{"_id": d, "_source": s} for i in self.resolve(index) for d, s in self.docs[i].items()]
-        return {"_scroll_id": "s", "hits": {"hits": hits}}
+    async def search(
+        self, *, index: str, body: Any, size: int, scroll: str | None = None
+    ) -> dict[str, Any]:
+        """A `term` query on one field (or `match_all`), sorted ascending by one field, at most
+        `size` hits after `search_after`, as OpenSearch pages a sorted search; a scroll gives every
+        hit at once (the only use left is a test's)."""
+        if size > self.max_result_window:
+            # `index.max_result_window`, 10,000 by default: a page larger is refused, as OpenSearch
+            # refuses it (search_after pages past it; a single page never does).
+            raise TransportError(400, "illegal_argument_exception", {"reason": "Result window is too large"})
+        if scroll is not None:
+            hits = [{"_id": d, "_source": s} for i in self.resolve(index)
+                    for d, s in self.docs[i].items()]  # fmt: skip
+            return {"_scroll_id": "s", "hits": {"hits": hits}}
+        term = (body.get("query") or {}).get("term")
+        ((name, value),) = term.items() if term else ((None, None),)
+        ((key, _),) = body["sort"][0].items()
+        after = (body.get("search_after") or [None])[0]
+        # The page alone is built (heapq), so the stand-in's own memory is the page's, as a client's
+        # is against a real cluster: a test measuring the caller's memory measures the caller.
+        # A document without the sort key is sorted after every one with it, as OpenSearch sorts a
+        # missing value last (`"missing": "_last"`, the default for an ascending sort).
+        def rank(source: dict[str, Any]) -> tuple[int, Any]:
+            return (1, "") if source.get(key) is None else (0, source[key])
+
+        chosen = heapq.nsmallest(
+            size,
+            (
+                (rank(s), d, s)
+                for i in self.resolve(index)
+                for d, s in self.docs[i].items()
+                if (name is None or s.get(name) == value)
+                and (after is None or rank(s) > (0, after))
+            ),
+            key=lambda t: t[0],
+        )
+        if self.unordered:
+            chosen.reverse()
+        return {
+            "hits": {"hits": [{"_id": d, "_source": s, "sort": [k[1]]} for k, d, s in chosen]}
+        }
+
+    async def mget(self, *, index: str, body: Any) -> dict[str, Any]:
+        held = {d: s for i in self.resolve(index) for d, s in self.docs[i].items()}
+        return {"docs": [{"_id": d, "found": d in held, **({"_source": held[d]} if d in held else {})}
+                         for d in body["ids"]]}  # fmt: skip
 
     async def scroll(self, *, scroll_id: str, scroll: str) -> dict[str, Any]:
         return {"_scroll_id": scroll_id, "hits": {"hits": []}}

@@ -39297,3 +39297,122 @@ registered job type, and the inventory note is corrected.
 
 Analysts need a batch result larger than a view can open. Then the cap on opening a view is reopened in
 ADR-007's terms (measure, then raise), not worked around here.
+
+### ADR-124, Amendment 18 (14 November 2026) — The write path looks items up through each type's `id` index, not by a scan of the store
+
+*Reserved for the rules lane on 13 November (the owner: before the client-size load, ROUTE_052 step B). Amends
+Amendment 2's last point ("the same scan affects every other Gremlin read that starts from our ids… fixing those
+reads is its own record") for the write path.*
+
+1. **What was wrong.** Every write of a load started its Gremlin from the whole store by our `id` property, which
+   ArcadeDB 26.10.1 answers by scanning every element, labelled or not (Amendment 2's measure: 3.6 s for 1,000 ids
+   at 200,000 vertices). `upsert_nodes` did so once per node (its existing node); `upsert_edges` up to five times per
+   link (each end's type, the existing link, each end's degree, the `addE` from both ends, and a merge's
+   `g.E().hasLabel(…).has("id", …)`); the bulk loader once per chunk for its labels, stored links and degrees, and
+   twice per row in its write script. A load of n items into a graph of N therefore cost n × N, and a client-size
+   load grew with its square.
+2. **What is built.** Each call resolves the ids it touches once, by SQL through the unique `id` index of each vertex
+   type it can touch (`SELECT @rid AS rid, id FROM <type> WHERE id IN :ids`, one query per type per 1,000 ids, in the write's
+   own transaction, which sends them one after another; outside one they go together), and every traversal starts
+   from those record ids: `lookup.vertex_records`, used by `upsert_nodes`, `upsert_edges` (its ends resolved once
+   per call and passed to each link's degree query) and the bulk loader. A link to merge into is written as a
+   traversal reaches it, from its source's record id through its own adjacency (`g.V(<source>).outE(<type>)
+   .has("id", …)`), never by its record in the type's `id` index: ArcadeDB keeps some links twice (ADR-056
+   Amendments 15, 16 and 19), the index may answer with the stray second record no traversal reaches, and a merge
+   written there would be read by nothing. A target is matched by `id` among its source's own neighbours, which reads
+   no other vertex. An id written earlier in the same call is resolved again, since its record is new. A bulk row
+   whose end is not in the graph is refused in words, with how many ends are missing (it was dropped unsaid: the
+   `addE` from an empty start wrote nothing). Unfiltered by design, as the lookups it replaces were: an internal
+   lookup during a trusted write; no record id leaves the adapter.
+
+   **Which types a call asks** (the lane review of 14 November). A link's ends are asked of the types its link
+   type joins (every type for one that joins anything, `*`), and an end not found there is asked again of every
+   type, so an end of a type the link does not allow is still refused for its type, never reported missing: a link
+   call costs one read of the store's types and one query per type its links can reach, per 1,000 ids, not one per
+   type in the store. A node write asks every vertex type, once a call: an id another type already holds, or one the
+   call itself writes under two types, is refused in words (a node's type is not changed by a write), never inserted
+   beside it as a second vertex under one id, which no per-type unique index can refuse (asked of its own type
+   alone, the write would have made one, where the scan it replaces sent an `UPDATE` that matched nothing). Every
+   write of the call is checked (its type, its properties and its id's type) before the first is sent, so a
+   refused call writes nothing, and the refusal names
+   neither type, since the holder may be a node its writer cannot read (rule 3). One id found in two types stops the
+   write (`IdInTwoTypes`). Both are `OntologyError`s, so a load reports either as a refused write. This costs a node
+   write one read of the store's types and one query per vertex type, per call: the ingest engine writes one node a
+   call, so the scale test times that shape too (below), a figure recorded with the store's number of vertex types
+   beside it, since its two sizes differ in vertices, not in types. It refuses what `main` lost unsaid: a deployment whose
+   generator moved an id to another type, reseeded, now stops on that id. `supersede_node`, which inserts the id
+   its caller gives, is not a load's write and is unchanged. As on the read path (Amendment 2), a vertex type without a unique `id` index is never asked,
+   since asking it would scan it. The bulk loader asks every type once a chunk, which its chunk amortises.
+3. **What it does not change.** The per-call corpus total (`g.V().outE(<type>)…sum()`, read once per call and type,
+   ADR-056 Amendment 22) is a whole-corpus traversal by design, not a lookup by id; the reads outside the write path
+   that still start by `has("id")` (supersede and clone, `shared_contacts`, and `restore_link_state`, a revert's put-back
+   of a link) are not a load's, and stay as they are.
+4. **Held by** (rule 12):
+   - offline, every stand-in of the store refuses a traversal that starts from the whole store by `id`
+     (`tests/adapters/graph_arcadedb/edge_store.refuse_scans`, used by `CountingStore`, the node store of
+     `test_write_onto_a_reverted_node.py`, the stray-records store, `tests/ingest`'s `TypedStore`, the bulk shapes'
+     recording client and the bulk spike's client; it catches the property quoted either way and any filter step
+     before it, nested ones included, and `test_refuse_scans.py` shows it on each shape and on the write path's own,
+     which pass; plant S1), and `test_gremlin_bulk_transport_shapes.py`'s
+     `test_no_lookup_scans_the_store_by_id` holds the bulk path's four lookups and its write: red first, 35 offline
+     tests on the old write path by the refusal itself (`process/lanes/rules/adr124-am18/red-first.txt`, which shows
+     40: the other five are live files, `test_client_row_limit.py` and `test_datasets_index.py`, that failed for want of
+     a store); `tests/ingest/combined_run_support.py`'s `TypedStore`, behind the adapter cases of
+     `test_run_writes_each_link_once.py`, refuses it too (it still read the old shape at the first rebase, which no
+     gate of the lane's saw, since `make test` leaves `tests/ingest` to the live job; plant I1 puts that back);
+   - offline, `test_write_path_round_trips.py` counts a call's lookups: a link write asks the types its link joins,
+     unmoved by thirty more types in the store, and a node write every type once a call; an end of the wrong type
+     is refused for its type; a node write onto an id another type holds, or one call writing an id as two
+     types, is refused, the call writing nothing; an id in two types stops the write; plants R1, R1b and R2 to R4;
+   - offline, `CountingStore` keeps a stray second record of a link that its `id` index answers with, and
+     `test_a_merge_is_written_to_the_link_a_traversal_reaches_not_a_stray_record` holds the merge to the reached one;
+     `test_a_rows_end_not_in_the_graph_is_refused_in_words_never_dropped` holds the bulk refusal;
+   - live, `tests/conformance/graph_port/test_write_path_scale.py`: the same load (200 nodes, 200 links, 200 more in
+     bulk) in a graph padded with 2,000 vertices and then with 102,000 makes the same number of round trips to the store
+     (the bulk loader's included), always (deterministic, so CI's conformance job holds it), and, in a run that names its lease
+     (`$OSPREY_RUN_TAG/lease`, written by `stack_lease.sh remote`), takes less than one and a half times as long;
+     elsewhere its times are printed and not judged, since a time taken beside unknown work measures nothing (rule
+     14). The same test times fifty nodes written one a call, the ingest engine's shape, at both sizes, under the
+     same bound. Measured first on stack c under the rules lane's lease of 2026-11-14T01:36:26Z: 6.63 s and 6.41 s at 2,000 and 22,000 vertices, flat; but at 22,000 one scanning lookup
+     put back stayed under the bound (plants A9 to A11 green), so the graph is made fifty times larger and the bound
+     tighter, and its load writes its nodes a second time (as a re-ingest does) so the existing node's lookup is
+     measured too. At 102,000, three runs of the new path (stack c, the rules lane's lease of 2026-11-14T02:35:59Z): 8.30/8.06 s,
+     8.43/8.94 s and 8.54/8.84 s, ratios 0.97, 1.06 and 1.04, and plants A9 to A11 each red by the test alone; and
+     `test_one_call_writing_one_node_twice_ends_as_one_node`, one call that writes a node twice in one transaction;
+   - plants A1 to A13 (`process/lanes/rules/adr124-am18/plants.py`), each lookup put back to its scanning shape, A5
+     to the record in the index, each red (`PLANTS_RECORD.txt`); and the review's R1 to R4, D1 to D3, S1 and I1 in
+     the same file, each red offline at the head (`PLANTS_RECORD.offline.txt`); A9 to A11 list the scale test alone, so it is shown
+     red by its own measure, not by an offline refusal.
+
+### ADR-150, Amendment 1 (14 November 2026) — The drift check streams
+
+*Reserved for the rules lane on 14 November (the orchestrator, before step B's load was checked). Amends decision 5's
+last sentence, which held every indexed id and fingerprint and every expected id in memory (some 150 bytes a document,
+about 4.5 GB at thirty million) and left a streaming check to CARRIES.*
+
+1. **What is built.** The graph's live ids, the index's node documents (sorted by `id`) and its text documents
+   (sorted by `node_id`) are merged a page at a time in one id order (`search_after`, never a scroll of the whole index), and a missing document is looked up in the refused
+   index a page at a time, so its memory is bounded by the page, not by the graph: run on step B's load, a check that
+   held every id would fail on memory on the load it checks. Its counts are exact; its id lists keep the first
+   `DRIFT_IDS_KEPT` (1,000) of each kind, the count beside them, and the command says how many more (rule 2). Any of
+   the three streams out of strictly ascending order raises `DriftOrderError`, rather than calling every document
+   after it missing, and the command says so and exits 3, never 1: a rebuild cannot mend it, so it is not drift. A
+   page holds each document's whole source, a text's included, so its memory is the page's documents, not the
+   graph's. `tests/services/search_index/test_drift_streams.py` holds each sentence: its peak memory at ten
+   times the graph under twice that at one, with texts and missing and refused documents in it (red first on the
+   whole-set check, 0.32 MB to 3.18 MB: `process/lanes/rules/v052-index/drift-stream-red-first.txt`), each difference
+   found across pages, an extra before the first id and a node listed but not live, the cut lists, each stream's
+   order and the command's exit; live, `test_feed_live.py`'s drift case pages by one and two, so `search_after` is
+   sent to the real cluster; plants V78 (the whole index in one page) to V86. A document no stream reads, of another
+   kind than node or text or without the key its kind is sorted by (which OpenSearch sorts after every one with it),
+   is counted as unread, from the index's own count less the documents read, and the check is not clean while one is
+   there (`test_a_document_no_stream_reads_is_counted_unread_never_passed_over`); the stand-in's refusal of a page
+   over `max_result_window` is shown firing; plants D1 to D3 each red (`process/lanes/rules/adr124-am18/plants.py`,
+   `PLANTS_RECORD.offline.txt`). While the outboxes hold rows the unread count, like every other difference, may be
+   a change in flight, and it is never below none.
+2. **What it changes besides.** Decision 5's differences (missing, extra, stale, refused, and the outboxes' pending)
+   are compared as before, and drift still exits 1; unread is a difference of its own, which exits 1 too.
+3. **Measured** on step B's load, on stack d under the rules lane's lease of 2026-11-14T03:27:42Z, by this check as
+   first built (`feat(search): the drift check streams`, before the unread count): 570,460 nodes against 642,460 documents in 711 s, at 169 MB peak,
+   clean once the outboxes were drained. The record (`B_RECORD.md`, `drain.try2.txt`) is step B's, on
+   `lane/rules-v052-load`, merged after this.

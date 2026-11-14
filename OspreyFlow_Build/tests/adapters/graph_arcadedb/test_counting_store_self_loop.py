@@ -14,7 +14,7 @@ from tests.adapters.graph_arcadedb.edge_store import CountingStore
 
 def _degree(store: CountingStore, node: str) -> int:
     query = (
-        f'g.V().has("id",{groovy_string_literal(node)}).bothE({groovy_string_literal("L")})'
+        f'g.V({groovy_string_literal(store.vertex_rid(node))}).bothE({groovy_string_literal("L")})'
         '.has("reverted",false).values("occurrences").sum()'
     )
     (answer,) = asyncio.run(store.gremlin(query))

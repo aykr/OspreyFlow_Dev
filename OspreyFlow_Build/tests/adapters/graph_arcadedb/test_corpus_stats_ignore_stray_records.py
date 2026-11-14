@@ -12,6 +12,8 @@ the scan, whatever the query happens to look like.
 
 from __future__ import annotations
 
+from tests.adapters.graph_arcadedb.edge_store import refuse_scans
+
 import asyncio
 from typing import Any
 
@@ -26,12 +28,21 @@ class _StoreWithStrays:
     def __init__(self) -> None:
         self.queries: list[str] = []
 
+    async def sql(self, command: str, *, params: Any = None, session_id: Any = None) -> list[Any]:
+        if command == "SELECT name, type, indexes FROM schema:types":
+            return [{"name": "mx_Endpoint", "type": "vertex",
+                     "indexes": [{"unique": True, "properties": ["id"]}]}]  # fmt: skip
+        if command == "SELECT @rid AS rid, id FROM `mx_Endpoint` WHERE id IN :ids":
+            return [{"rid": f"#1:{n}", "id": i} for n, i in enumerate(params["ids"])]
+        raise AssertionError(f"unexpected SQL: {command}")
+
     async def gremlin(self, query: str, *, session_id: Any = None, **_: Any) -> list[Any]:
         self.queries.append(query)
+        refuse_scans(query)
         if query.startswith("g.E("):
             return [{"result": SCAN_SEES}]  # the stray records are in a scan
-        if query.startswith('g.V().has("id",'):
-            return [{"result": 3}]  # one vertex's own edge list
+        if query.startswith("g.V('#1:"):
+            return [{"result": 3}]  # one vertex's own edge list, from its record id
         if query.startswith("g.V()"):
             return [{"result": TRAVERSAL_REACHES}]  # reached from the vertices, once each
         raise AssertionError(f"unexpected query: {query}")
@@ -62,5 +73,5 @@ def test_the_total_still_leaves_out_reverted_edges() -> None:
     corpus statistics live edges are scored against (as the scan it replaces did)."""
     store = _StoreWithStrays()
     _stats(store)
-    (total_query,) = [q for q in store.queries if not q.startswith('g.V().has("id",')]
+    (total_query,) = [q for q in store.queries if not q.startswith("g.V('#1:")]
     assert '.has("reverted",false)' in total_query and "mx_TRANSACTED" in total_query

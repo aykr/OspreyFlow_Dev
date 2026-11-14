@@ -41,6 +41,7 @@ CA = f"{B}/services/search_index/test_client_ca.py"
 RANK = f"{B}/services/search_index/test_mapping_strict_ranking.py"
 LAURIUM = f"{B}/adapters/extract_laurium/test_findings_inferred.py"
 PENDING = f"{B}/services/search_index/test_pending.py"
+DRIFT = f"{B}/services/search_index/test_drift_streams.py"
 STAND_IN = "OspreyFlow_Build/tests/adapters/extract_laurium/review_queue.py"
 REACH_TEST = "OspreyFlow_Build/tests/services/search_index/test_index_feed_reach.py"
 #: Tests that need the leased stack; `--offline` leaves them, and every plant that names one, out.
@@ -127,9 +128,10 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
       f"{FEED}::test_a_deletion_takes_the_document_and_its_text_out"]),
     # --- decisions 4 and 5: the rebuild and the drift check -----------------------------------
     ("V20 a stale document not reported", REBUILD,
-     "                elif indexed[document[\"id\"]] != fingerprint(document):\n",
-     "                elif False:\n",
-     [f"{FEED}::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them"]),
+     "                    elif stream.head[2] != expected:\n",
+     "                    elif False:\n",
+     [f"{FEED}::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them",
+      f"{DRIFT}::test_each_difference_is_found_while_streaming"]),
     ("V21 the rebuild leaves the alias where it was", REBUILD,
      "        {\"add\": {\"index\": index, \"alias\": alias}},\n", "",
      [f"{FEED}::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them"]),
@@ -214,10 +216,7 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      "            await client.indices.delete(index=left, ignore_unavailable=True)\n", "            pass\n",
      [f"{REFUSED}::test_a_rebuild_removes_the_index_a_crashed_rebuild_left"]),
     # --- decision 5: the drift check's refused and pending -----------------------------------------
-    ("V44 the drift check reports a refused document as missing", REBUILD,
-     "    report.refused = {d: set_aside[d] for d in sorted(report.missing) if d in set_aside}\n",
-     "    report.refused = {}\n",
-     [f"{REFUSED}::test_a_document_over_the_cap_is_set_aside_and_the_outbox_moves_on"]),
+    # V44 retired: the streaming drift check replaced the code it planted; V82 holds its sentence.
     ("V45 the drift check never says the outboxes are pending", REBUILD,
      "    pending = bool(await source.pending_index(1)) or bool(await texts.pending_text_index(1))\n",
      "    pending = False\n",
@@ -346,6 +345,36 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ("V77 the query side's retries ignored", CLIENTPY,
      '        "max_retries": max_retries,\n', "",
      [f"{CLIENT}::test_the_query_side_can_ask_for_no_retries"]),
+    # --- decision 5: the drift check streams -------------------------------------------------------
+    ("V78 the drift check holds the whole index in one page", REBUILD,
+     '    nodes_stream = _Stream(client, alias, "node", "id", page)\n',
+     '    nodes_stream = _Stream(client, alias, "node", "id", 10_000)\n',
+     [f"{DRIFT}::test_its_memory_is_bounded_by_the_page_not_the_graph"]),
+    ("V79 the graph's order not checked", REBUILD,
+     "            if previous is not None and node_id <= previous:\n", "            if False:\n",
+     [f"{DRIFT}::test_a_stream_out_of_order_is_raised"]),
+    ("V80 the id lists kept whole", REBUILD,
+     "        if len(kept) < DRIFT_IDS_KEPT:\n", "        if True:\n",
+     [f"{DRIFT}::test_the_counts_are_exact_and_the_lists_say_they_are_cut"]),
+    ("V81 the texts not compared", REBUILD,
+     "                if node is not None and node_id in held\n", "                if False\n",
+     [f"{DRIFT}::test_each_difference_is_found_while_streaming"]),
+    ("V82 a refused document reported missing", REBUILD,
+     "        if doc_id in reasons:\n", "        if False:\n",
+     [f"{REFUSED}::test_a_document_over_the_cap_is_set_aside_and_the_outbox_moves_on"]),
+    ("V83 the text stream in one page", REBUILD,
+     '    texts_stream = _Stream(client, alias, "text", "node_id", page)\n',
+     '    texts_stream = _Stream(client, alias, "text", "node_id", 10_000)\n',
+     [f"{DRIFT}::test_its_memory_is_bounded_by_the_page_not_the_graph"]),
+    ("V84 every missing id held to the end", REBUILD,
+     "            if len(missing) >= page:\n", "            if False:\n",
+     [f"{DRIFT}::test_its_memory_is_bounded_by_the_page_not_the_graph"]),
+    ("V85 the index streams' order not checked", REBUILD,
+     "            if before is not None and self.head[0] <= before[0]:\n", "            if False:\n",
+     [f"{DRIFT}::test_an_index_stream_out_of_order_is_raised"]),
+    ("V86 an order fault reported as drift", "OspreyFlow_Core/scripts/search_index_drift.py",
+     "            return ORDER_FAULT\n", "            return 1\n",
+     [f"{DRIFT}::test_the_command_says_an_order_fault_and_exits_3_never_1"]),
 ]
 
 
@@ -376,7 +405,7 @@ def _run(tests: list[str]) -> tuple[str, str]:
 def main() -> int:
     offline = "--offline" in sys.argv[1:]
     every = [OUTBOX, FEED, DOC, CLIENT, REACH, RUN, HARNESS, SIGV4, SEEDS, BULK, REFUSED, CA, RANK,
-             LAURIUM, PENDING]  # fmt: skip
+             LAURIUM, PENDING, DRIFT]  # fmt: skip
     plants = PLANTS
     if offline:
         every = [t for t in every if t not in LIVE]

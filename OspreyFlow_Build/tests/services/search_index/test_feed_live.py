@@ -214,13 +214,14 @@ async def test_a_deletion_takes_the_document_and_its_text_out(world: World) -> N
 async def test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them(world: World) -> None:
     a, b, c = await _written(world.graph, _person("Ashdown"), _person("Blyth"), _person("Corrie"))
     await world.drain()
-    clean = await drift(world.graph, world.texts, world.client, world.alias, ONTOLOGY)
+    # A page of two, so each stream pages with `search_after` against the real cluster.
+    clean = await drift(world.graph, world.texts, world.client, world.alias, ONTOLOGY, page=2)
     assert clean.none and clean.graph_nodes == 3 and clean.index_documents == 3
     # Planted: one missing, one stale, one extra.
     await world.client.delete(index=world.alias, id=a)
     await world.client.update(index=world.alias, id=b, body={"doc": {"handling_code": "R"}})
     await world.client.index(index=world.alias, id="ghost", body={"kind": "node", "id": "ghost"})
-    found = await drift(world.graph, world.texts, world.client, world.alias, ONTOLOGY)
+    found = await drift(world.graph, world.texts, world.client, world.alias, ONTOLOGY, page=1)
     assert (found.missing, found.stale, found.extra) == ([a], [b], ["ghost"])
     done = await rebuild(world.graph, world.texts, world.client, world.alias, ONTOLOGY)
     assert (done.nodes, done.documents) == (3, 3) and done.index.startswith(world.alias)

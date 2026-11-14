@@ -308,6 +308,12 @@ def render_edges_among_gremlin(
     )
 
 
+def render_record_id_and_id_lookup_sql(type_name: str) -> str:
+    """As `render_record_id_lookup_sql`, with each record's own `id`, so the write path can map an
+    id to its record (ADR-124 Amendment 18)."""
+    return f"SELECT @rid AS rid, id FROM `{groovy_identifier(type_name)}` WHERE id IN :ids"
+
+
 def render_record_id_lookup_sql(type_name: str) -> str:
     """The first half of `GraphPort.get_nodes`/`get_edges` (ADR-124 decision 6): the record ids of
     the elements of one stored type that hold the ids bound to `:ids`. Gremlin's own
