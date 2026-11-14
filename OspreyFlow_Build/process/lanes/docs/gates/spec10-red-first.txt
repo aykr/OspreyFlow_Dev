@@ -1,0 +1,45 @@
+# test_admin_guide_copies.py, red first
+Branch lane/docs-spec10 from main 54c09f4; offline, closed ports, on the Mac, no stack.
+Command: cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 POSTGRES_PASSWORD=throwaway VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 PYTHONPATH=.:packages:../OspreyFlow_Build <the docs worktree>/OspreyFlow_Core/.venv/bin/python -m pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/test_admin_guide_copies.py
+The levelling replaces spec/10 from section 1 to its end with the shipped guide's text, screenshots left out. Before it, each of spec/10's 23 lines found nowhere in the shipped guide was read: each is an earlier wording the shipped guide has since replaced ("such a run is marked stopped", struck as untrue in 1.94; the old ports and repair-sign-in rows), none a passage the shipped guide lacks.
+
+## 1. main's spec/10 against the shipped guide
+E           AssertionError: spec/10 differs from the shipped guide at section 1's line 21:
+E             spec:    ## 1a. Choosing a starter
+E             shipped: ### HTTP or HTTPS
+../OspreyFlow_Build/tests/test_admin_guide_copies.py:34: AssertionError
+1 failed, 1 passed in 0.22s
+
+## 2. The shipped guide changed alone (§6a.8's 'Nightly, at 02:15 UTC' made 02:30)
+E           AssertionError: spec/10 differs from the shipped guide at section 1's line 1419:
+E             spec:    **Nightly, at 02:15 UTC**, whatever the cluster's time zone: the CronJob `ospreyflow-backup` (ArcadeDB's
+E             shipped: **Nightly, at 02:30 UTC**, whatever the cluster's time zone: the CronJob `ospreyflow-backup` (ArcadeDB's
+../OspreyFlow_Build/tests/test_admin_guide_copies.py:34: AssertionError
+1 failed, 1 passed in 0.20s
+
+## 3. A screenshot left in spec/10
+E           AssertionError: spec/10 differs from the shipped guide at section 1's line 1843:
+E             spec:    ![People](images/admin/01-people.png)
+E             shipped: ### 9.1 The Admin place
+../OspreyFlow_Build/tests/test_admin_guide_copies.py:34: AssertionError
+E       AssertionError: a screenshot in spec/, where images/ is not
+E       assert not <re.Match object; span=(134734, 134773), match='![People](images/admin/01-people.png)\n\n'>
+
+## 4. spec/10 given document control
+E       AssertionError: assert '<!-- docume...ol:begin -->' not in '# 10 — Inst...ns:end -->\n'
+../OspreyFlow_Build/tests/test_admin_guide_copies.py:43: AssertionError
+1 failed, 1 passed in 0.20s
+
+## 5. Green
+2 passed in 0.20s
+
+## 6. The repair a lane is told of, at a890ddc plus the test's --write: the shipped guide changed alone (02:15 made 02:30), red with the command; the command run; green
+E           AssertionError: spec/10 differs from the shipped guide at section 1's line 1419:
+E             spec:    **Nightly, at 02:15 UTC**, whatever the cluster's time zone: the CronJob `ospreyflow-backup` (ArcadeDB's
+E             shipped: **Nightly, at 02:30 UTC**, whatever the cluster's time zone: the CronJob `ospreyflow-backup` (ArcadeDB's
+E           Change the shipped guide (docs/administration-guide.md), then mirror it: from OspreyFlow_Build: python -m tests.test_admin_guide_copies --write
+../OspreyFlow_Build/tests/test_admin_guide_copies.py:44: AssertionError
+1 failed, 1 passed in 0.20s
+spec/10_ADMINISTRATION_GUIDE.md: level with OspreyFlow_Core/docs/administration-guide.md from section 1
+2 passed in 0.19s
+ 1 file changed, 1 insertion(+), 1 deletion(-)
