@@ -843,4 +843,5 @@ def test_the_live_gate_stops_the_whole_run_on_a_refused_token(conduit: str, tmp_
     assert "401" in said and "void" in said, said[-2000:]
     assert " passed" not in said.splitlines()[-1], said[-600:]
     assert not results.exists() or not list(results.iterdir()), "no result written past it"
+    assert len(_Conduit.seen) == 3, f"no case sent anything past the refusal: {len(_Conduit.seen)}"
 
