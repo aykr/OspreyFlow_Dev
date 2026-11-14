@@ -38,13 +38,24 @@ class _Conduit(BaseHTTPRequestHandler):
     leak = ""
     # A never-join world: hid-1 is in another dataset, read only in its own case, case-partner.
     partner_only = False
+    # M9: OpenSearch stopped (`index_down`), and how the fallback misbehaves: "slow", "silent"
+    # (no words), "stuck" (the stop does not take), "never_back" (the start does not).
+    index_down = False
+    fallback = ""
 
     def do_POST(self) -> None:  # noqa: N802 - http.server's name
+        if self.path.startswith("/_control/"):  # the stand-in docker's stop and start (M9)
+            _Conduit.index_down = self.path.endswith("/stop")
+            self.send_response(204)
+            self.end_headers()
+            return
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.seen.append((self.path, body, self.headers.get("Authorization", "")))
         time.sleep(self.delay)
         status = 200
-        if self.leak_world and self.path.endswith(("/search", "/suggest")):
+        if self.index_down and self.path.endswith(("/search", "/suggest")):
+            answer = self._fallback_answer()
+        elif self.leak_world and self.path.endswith(("/search", "/suggest")):
             answer = self._leak_answer(
                 self.headers.get("Authorization", "") == "Bearer cleared-unit-fiu"
             )
@@ -81,6 +92,26 @@ class _Conduit(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _fallback_answer(self) -> dict[str, Any]:
+        if self.fallback == "slow":
+            time.sleep(0.3)
+        silent = self.fallback == "silent"
+        if self.path.endswith("/suggest"):
+            return {
+                "nodes": [{"id": "n1"}],
+                "more": False,
+                "source": "graph",
+                "limited": not silent,
+            }
+        return {
+            "source": "fallback",
+            "limited": not silent,
+            "limited_reason": None if silent else "Search is limited: names starting with this",
+            "total": 1, "groups": [],
+            "results": [{"node_ids": ["n1"], "match": {"band": "prefix"}}],
+            "nodes": [],
+        }  # fmt: skip
 
     def _leak_answer(self, cleared: bool) -> dict[str, Any]:
         hidden = cleared and self.leak != "unreached"
@@ -119,6 +150,7 @@ def conduit() -> Iterator[str]:
     _Conduit.delay, _Conduit.source, _Conduit.exact_first, _Conduit.seen = 0.0, "index", True, []
     _Conduit.lag, _Conduit.refuse_draw, _Conduit.drawn = 0.0, False, {}
     _Conduit.leak_world, _Conduit.leak, _Conduit.partner_only = False, "", False
+    _Conduit.index_down, _Conduit.fallback = False, ""
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Conduit)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -367,7 +399,7 @@ def test_the_live_gate_passes_a_conduit_within_every_failure_figure(
 ) -> None:
     done = _run_live(tmp_path, conduit)
     assert done.returncode == 0, done.stdout[-2000:]
-    assert "5 passed, 1 skipped" in done.stdout  # M10: no leak cases named
+    assert "5 passed, 2 skipped" in done.stdout  # M9 and M10: not named
 
 
 def test_the_live_gate_fails_a_suggestion_over_its_failure_figure(
@@ -383,7 +415,7 @@ def test_the_live_gate_fails_a_suggestion_over_its_failure_figure(
 
 def test_the_live_gate_is_skipped_with_its_reason_where_no_stack_is_named(tmp_path: Path) -> None:
     done = _run_live(tmp_path, None)
-    assert done.returncode == 0 and "6 skipped" in done.stdout
+    assert done.returncode == 0 and "7 skipped" in done.stdout
     assert "no B-sized stack named" in done.stdout
 
 
@@ -635,3 +667,110 @@ def test_a_never_join_partner_merged_into_the_answer_fails(conduit: str) -> None
     _Conduit.leak = "id"
     result = _never_join(conduit, partner_case="case-partner")
     assert any("hid-1 is in the answer" in f for f in result["failures"]), result["failures"]
+
+
+# ---- M9, the fallback (measure_fallback)
+
+_M9_QUERIES = [{"route": "search", "query": "Kestral"}, {"route": "suggest", "query": "kes"}]
+_M9_WITHIN = {"search": 250.0, "suggest": 250.0}
+
+
+def _m9(conduit: str) -> tuple[dict[str, Any], list[str]]:
+    calls: list[str] = []
+
+    def stop() -> None:
+        calls.append("stop")
+        if _Conduit.fallback != "stuck":
+            _Conduit.index_down = True
+
+    def start() -> None:
+        calls.append("start")
+        if _Conduit.fallback != "never_back":
+            _Conduit.index_down = False
+
+    result = measure_search.measure_fallback(
+        base=conduit, case="case-1", token="t", queries=_M9_QUERIES, stop=stop, start=start,
+        within_ms=_M9_WITHIN, recovery_seconds=0.5, poll_seconds=0.05,
+    )  # fmt: skip
+    return result, calls
+
+
+def test_the_fallback_answers_in_time_and_says_so_then_the_index_returns(conduit: str) -> None:
+    result, calls = _m9(conduit)
+    assert result["verdict"] == "met", result["failures"]
+    assert calls == ["stop", "start"] and result["recovered_s"] is not None
+    assert [t["route"] for t in result["timings"]] == ["search", "suggest"]
+
+
+@pytest.mark.parametrize(
+    ("fallback", "said"),
+    [
+        ("slow", "over the 250 ms timeout"),
+        ("silent", "did not say so"),
+        ("stuck", "answered from the index, not the fallback"),
+        ("never_back", "did not answer again"),
+    ],
+)
+def test_a_fallback_late_silent_or_absent_or_an_index_never_back_fails_m9(
+    conduit: str, fallback: str, said: str
+) -> None:
+    _Conduit.fallback = fallback
+    result, calls = _m9(conduit)
+    assert result["verdict"] == "not met"
+    assert any(said in f for f in result["failures"]), result["failures"]
+    assert calls[-1] == "start", "OpenSearch started again whatever happened"
+
+
+def test_a_session_that_never_had_the_index_proves_nothing(conduit: str) -> None:
+    _Conduit.index_down = True
+    result, calls = _m9(conduit)
+    assert result["verdict"] == "not met" and "proves nothing" in result["failures"][0]
+    assert calls == [], "nothing stopped when there was nothing to stop"
+
+
+def test_opensearch_is_started_again_when_the_check_itself_fails(conduit: str) -> None:
+    calls: list[str] = []
+
+    def stop() -> None:
+        calls.append("stop")
+        raise RuntimeError("docker stop failed")
+
+    with pytest.raises(RuntimeError):
+        measure_search.measure_fallback(
+            base=conduit, case="case-1", token="t", queries=_M9_QUERIES, stop=stop,
+            start=lambda: calls.append("start"), within_ms=_M9_WITHIN,
+        )  # fmt: skip
+    assert calls == ["stop", "start"]
+
+
+def _run_live_m9(conduit: str, tmp_path: Path) -> subprocess.CompletedProcess[str]:
+    """The live file's M9 case as step 4 runs it, its `docker stop` and `docker start` a stand-in
+    on PATH that stops and starts the stub's index (never a real container)."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "docker").write_text(
+        "#!/bin/sh\n"
+        f"exec curl -s -o /dev/null -X POST -H 'Content-Length: 0' {conduit}/_control/$1\n"
+    )
+    (bin_ / "docker").chmod(0o755)
+    extra = {"OSPREY_MEASURE_STOP_OPENSEARCH": "osprey-test-x-opensearch",
+             "PATH": f"{bin_}:{os.environ['PATH']}"}  # fmt: skip
+    done = _run_live(tmp_path, conduit, extra, only="m9")
+    if "local_docker_guard" in done.stdout:
+        # On this machine the guard refuses any docker call, the stand-in's too: the server's
+        # make test runs these (where the stand-in on PATH is what `docker` finds).
+        pytest.skip("a server-only test: the live M9 case calls the docker CLI (its stand-in here)")
+    return done
+
+
+def test_the_live_gate_passes_m9_when_the_fallback_says_so(conduit: str, tmp_path: Path) -> None:
+    done = _run_live_m9(conduit, tmp_path)
+    assert done.returncode == 0 and "1 passed" in done.stdout, done.stdout[-1500:]
+    assert _Conduit.index_down is False, "OpenSearch started again"
+
+
+def test_the_live_gate_fails_m9_when_the_fallback_is_silent(conduit: str, tmp_path: Path) -> None:
+    _Conduit.fallback = "silent"
+    done = _run_live_m9(conduit, tmp_path)
+    assert done.returncode != 0 and "M9:" in done.stdout and "did not say so" in done.stdout
+    assert _Conduit.index_down is False

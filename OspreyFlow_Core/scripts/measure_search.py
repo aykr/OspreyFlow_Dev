@@ -27,7 +27,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
 #: The accepted budgets (ADR-149 Amendment 2; the orchestrator's decision 8, 14 November 2026), by
@@ -352,6 +352,91 @@ def measure_leaks(
         "measure": "M10",
         "cases": len(cases),
         "verdict": "not met" if failures else "met",
+        "failures": failures,
+    }
+
+
+#: M9's figures (ADR-149 Amendment 2): the search service's own timeouts, after which the bar
+#: falls back (`services/api/search_service.py`: SEARCH_TIMEOUT, SUGGEST_TIMEOUT).
+FALLBACK_WITHIN_MS = {"search": 5000.0, "suggest": 2000.0}
+#: How long the index may take to answer again once OpenSearch is back.
+RECOVERY_SECONDS = 120.0
+
+
+def measure_fallback(
+    *,
+    base: str,
+    case: str,
+    token: str,
+    queries: Sequence[dict[str, Any]],
+    stop: Callable[[], None],
+    start: Callable[[], None],
+    within_ms: dict[str, float] | None = None,
+    recovery_seconds: float = RECOVERY_SECONDS,
+    poll_seconds: float = 1.0,
+) -> dict[str, Any]:
+    """M9, the fallback (ADR-149 Amendment 2; the owner's requirement c): OpenSearch stopped
+    mid-session (`stop`), each query must answer within its route's timeout, and say so: a search
+    from the fallback (`source` "fallback", `limited`, words in `limited_reason`), a suggestion
+    from the graph and `limited`. Before the stop, the first query must be the index's (the
+    control: a session that never had the index proves nothing). OpenSearch is started again
+    (`start`) whatever happens, and the index must answer again within `recovery_seconds`."""
+    within = within_ms or FALLBACK_WITHIN_MS
+    if not queries:
+        raise SystemExit("M9: no queries: the fallback would pass having asked nothing")
+    failures: list[str] = []
+    timings: list[dict[str, Any]] = []
+    first = queries[0]
+    path, body = _leak_request(case, {**first, "route": first.get("route", "search")})
+    _ms, before, error = _send(base, path, body, token)
+    if before is None or before.get("source") not in ("index",):
+        answered = error or (before or {}).get("source")
+        return {"measure": "M9", "verdict": "not met", "timings": [], "failures": [
+            f"before the stop the answer was not the index's ({answered}): a session that never "
+            "had the index proves nothing"]}  # fmt: skip
+    recovered_s: float | None = None
+    try:
+        stop()
+        for query in queries:
+            route = query.get("route", "search")
+            path, body = _leak_request(case, {**query, "route": route})
+            ms, answer, error = _send(base, path, body, token)
+            timings.append({"route": route, "query": query["query"], "ms": round(ms, 1)})
+            said = f"{route} {query['query']!r}"
+            if answer is None:
+                failures.append(f"{said}: an error, not a fallback ({error})")
+                continue
+            if ms > within[route]:
+                failures.append(f"{said}: {ms:.0f} ms, over the {within[route]:.0f} ms timeout")
+            if route == "search":
+                if answer.get("source") != "fallback":
+                    failures.append(
+                        f"{said}: answered from the {answer.get('source')}, not the fallback"
+                    )
+                elif not answer.get("limited") or not (answer.get("limited_reason") or "").strip():
+                    failures.append(f"{said}: the fallback did not say so (no limited_reason)")
+            elif answer.get("source") == "index" or not answer.get("limited"):
+                failures.append(f"{said}: the suggestions did not say they are limited")
+    finally:
+        start()
+    deadline = time.monotonic() + recovery_seconds
+    started = time.monotonic()
+    while time.monotonic() < deadline:
+        path, body = _leak_request(case, {**first, "route": "search"})
+        _ms, again, _error = _send(base, path, body, token)
+        if again is not None and again.get("source") == "index":
+            recovered_s = round(time.monotonic() - started, 1)
+            break
+        time.sleep(poll_seconds)
+    if recovered_s is None:
+        failures.append(
+            f"the index did not answer again within {recovery_seconds:.0f} s of the start"
+        )
+    return {
+        "measure": "M9",
+        "verdict": "not met" if failures else "met",
+        "timings": timings,
+        "recovered_s": recovered_s,
         "failures": failures,
     }
 

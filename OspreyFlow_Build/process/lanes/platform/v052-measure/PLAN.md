@@ -92,6 +92,10 @@ end-to-end is measured separately, in a browser.
   unit-border). Its cases are derived by rules' generator from B's SAME_AS truth and source table, on the case
   *Intelligence reports* (ADR-149 Amendment 2). Step 4 leaves M6's board and its drawn nodes in B's case (no route
   removes them).
+- **M9:** the same file's pass/fail case (`measure_search.measure_fallback`): OpenSearch stopped by name
+  (`OSPREY_MEASURE_STOP_OPENSEARCH`, stack d's on the day, under rules' lease and with its agreement), each search
+  falling back within 5 s and saying so, each suggestion within 2 s, OpenSearch started again whatever happens and the
+  index answering again within 120 s.
 - **M7 and M8:** they set the runbooks' and the CronJobs' bounds and memory, held by the render tests.
 - **M11:** changes the manifest and the profile together, as ADR-148 Amendment 12 decision 4 says.
 
