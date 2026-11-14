@@ -349,7 +349,9 @@ class GraphArcadeDBAdapter:
             if typed.setdefault(write.id, wanted) != wanted:
                 raise OntologyError(
                     f"the id {write.id!r} is held by a node of another type: a node's type is not "
-                    "changed by a write, and one id is never two nodes"
+                    "changed by a write, and one id is never two nodes. If a generator or recipe "
+                    "moved this record to another type, give it an id of its own in that type "
+                    "(an id names one node for good, reverted or not)"
                 )
         written: set[str] = set()
         for write in nodes:
