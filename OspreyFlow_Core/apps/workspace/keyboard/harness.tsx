@@ -42,6 +42,8 @@ declare global {
       openedDocument: string | null;
       /** The node whose menu asked for the Inspector's Picture part (ADR-105 Amendment 1). */
       pictureRequested?: string | null;
+      /** An expansion the cap refused, its *Save a smaller view* chosen (spec/00 §4): the figure handed up. */
+      savedSmallerView?: { would_be: number; cap: number; subject: string | undefined } | null;
     };
     __CANVAS__?: {
       viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
@@ -433,6 +435,9 @@ createRoot(container).render(
       }}
       onSetPicture={(nodeId) => {
         window.__KEYBOARD__!.pictureRequested = nodeId;
+      }}
+      onSaveSmallerView={(refused, subject) => {
+        window.__KEYBOARD__!.savedSmallerView = { would_be: refused.would_be, cap: refused.cap, subject };
       }}
       onSelectionChange={(ids) => {
         window.__KEYBOARD__!.selection = ids;

@@ -128,7 +128,7 @@ import type { BusyDay, RankedLink } from "./explore/exploreApi";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { emergence, type FirstSeen } from "./crossfilter/emergence";
-import type { WorkingSetDelta } from "./workingset/models";
+import type { LimitExceeded, WorkingSetDelta } from "./workingset/models";
 import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
 import { DEFAULT_TIMELINE_HEIGHT } from "./layout/layoutSizes";
@@ -171,6 +171,7 @@ import {
 } from "./workingset/deltaClient";
 import { createWorkingSet } from "./workingset/store";
 import { applyRestoredSnapshot, ViewOverCapGate } from "./workingset/ViewOverCapGate";
+import { ViewOverCapDialog } from "./workingset/ViewOverCapDialog";
 
 // **An empty base URL means same-origin, and that is what a rendered
 // deployment builds with** (05_DEPLOYMENT.md §2.6 item 1, owner's decision
@@ -801,6 +802,9 @@ export function App() {
   // back to it, still open; `null` for a view opened any other way.
   const [lensFromAlert, setLensFromAlert] = useState<{ alertId: string; title: string } | null>(null);
   const [viewsRead, setViewsRead] = useState(0);
+  // An expansion the working set's cap refused, its *Save a smaller view* chosen (spec/00 §4): the over-cap
+  // dialog's save form, in the expansion's own words.
+  const [expansionOverCap, setExpansionOverCap] = useState<{ refused: LimitExceeded; subject: string | undefined } | null>(null);
   const [viewProblem, setViewProblem] = useState<string | null>(null);
   // ADR-144 decision 4: the view *Ask the model about these* saved, whose conversation is open.
   const [questionsView, setQuestionsView] = useState<{ id: string; name: string } | null>(null);
@@ -2206,6 +2210,7 @@ export function App() {
                       : null,
                   );
                 }}
+                onSaveSmallerView={(refused, subject) => setExpansionOverCap({ refused, subject })}
                 onViewMessages={(nodeId) => {
                   setDossierNodeId(nodeId);
                   setView("dossier");
@@ -2664,6 +2669,23 @@ export function App() {
           dimmedCount={dimmedNodeIds.size}
           withheld={withheld}
           groupedCount={groupedCount}
+        />
+      )}
+      {bearerToken && investigationId && expansionOverCap && (
+        <ViewOverCapDialog
+          wouldBe={expansionOverCap.refused}
+          entityTypes={ontologySchema?.entity_types.map((e) => e.name) ?? []}
+          apiBaseUrl={API_BASE_URL}
+          bearerToken={bearerToken}
+          investigationId={investigationId}
+          title="This expansion is too large"
+          why={`Expanding ${expansionOverCap.subject ?? "it"} would take the canvas past what it can hold. Nothing has been added. You can save a smaller view of the case, private to you, and open that.`}
+          onViewOpened={(opened) => {
+            setExpansionOverCap(null);
+            setViewsRead((n) => n + 1);
+            showLens(opened);
+          }}
+          onClose={() => setExpansionOverCap(null)}
         />
       )}
       {bearerToken && investigationId && (
