@@ -1,0 +1,30 @@
+AS IT MUST BE (red): the App giving the canvas no batch handler
+    AssertionError: expected undefined to be type of 'function'
+AS IT MUST BE (red): a batch job offered while a view is open
+    AssertionError: expected [Function] to be undefined
+AS IT MUST BE (red): the job's result not shown as the lens
+    TestingLibraryElementError: Unable to find role="region" and name "Open view"
+AS IT MUST BE (red): a second choice reusing the first's panel
+    AssertionError: expected [ { …(2) } ] to have a length of 2 but got 1
+AS IT MUST BE (red): the choice kept when another case is opened
+    AssertionError: expected { …(4) } to be null
+AS IT MUST BE (red): the choice kept when someone else signs in in place
+    AssertionError: expected { …(4) } to be null
+AS IT MUST BE (red): a choice made again given the first's count
+    AssertionError: expected { …(4) } to match object { n: 2, request: { depth: 2 } }
+AS IT MUST BE (red): a done job's view opened unasked
+    TestingLibraryElementError: Unable to find role="button" and name "Open the view"
+AS IT MUST BE (red): a second POST under StrictMode
+    AssertionError: expected [ { …(4) }, { …(4) } ] to have a length of 1 but got 2
+AS IT MUST BE (red): a second try offered while a view is open
+    AssertionError: expected <button type="button" …(1)></button> to be null
+AS IT MUST BE (red): the canvas handing up another node than the one refused
+    Error: expect(received).toEqual(expected) // deep equality
+AS IT MUST BE (red): Open the view out of the Tab order
+    Error: Open the view was not reached by Tab from the panel's heading
+AS IT MUST BE (red): the canvas handing up another depth than the one refused
+    Error: expect(received).toEqual(expected) // deep equality
+AS IT MUST BE (red): the panel's Close out of the Tab order
+    Error: Close was not reached by Tab from the panel's heading
+unplanted: App jsdom 3 passed, hook 5 passed, panel 25 passed, keyboard 2 passed (plain and StrictMode)
+every plant red for its reason, unplanted green
