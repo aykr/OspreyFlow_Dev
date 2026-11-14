@@ -6171,17 +6171,20 @@ async def _search_tau(working_set: WorkingSetService | None, investigation_id: s
     return await working_set.get_resolution_threshold(investigation_id)
 
 
-def _case_search(
-    request: Request,
+def case_search_with(
+    graph: GraphPort,
     index: search_service.SearchIndexSetup | None,
-    datasets: DatasetStore,
-    working_set: WorkingSetService | None,
+    *,
+    pending_of: Callable[[], Awaitable[PendingIds]],
+    names_of: Callable[[Principal], Awaitable[Mapping[str, str]]],
+    tau_of: Callable[[str], Awaitable[float | None]],
 ) -> CaseSearch:
     """*Whole case*'s search (ADR-098 Amendment 9; `SEARCH_RESPONSE_SHAPE.md` note 5): the same
-    service, the same access filter built from the asker's own principal, the same threshold and
-    the same exclusion of what the index has not caught up with as `POST …/search`, called
-    in-process, not over HTTP. The not-yet-indexed nodes are read only when it is called, so a
-    question that does not read the whole case costs nothing more."""
+    service, the access filter built here from the asker's own principal (page A §1), the case's
+    threshold and the exclusion of what the index has not caught up with, as `POST …/search` has
+    them, called in-process, not over HTTP. Each part is read only when the search is called, so a
+    question that does not read the whole case costs nothing more. The leak test calls this, the
+    routes' own call site (`test_ask_whole_case_leak_live.py`)."""
     from services.search_index.document import phonetic_codes
 
     from .search_access import index_access_filter
@@ -6189,27 +6192,49 @@ def _case_search(
     async def search(
         investigation_id: str, principal: Principal, body: SearchPageRequest
     ) -> SearchPageResponse:
-        pending = await get_search_pending(request, index)
-        case = set(principal.datasets or ())
-        names = {d.id: d.name for d in await datasets.list_for(principal) if d.id in case}
+        pending = await pending_of()
         return await search_service.search_page(
             body,
             principal,
-            request.app.state.graph,
+            graph,
             searcher=index.searcher if index is not None else None,
             access_filter=index_access_filter(index.scheme, principal)
             if index is not None
             else None,
             phonetic_codes=phonetic_codes,
             types=index.types if index is not None else (),
-            case_datasets=names,
-            tau=await _search_tau(working_set, investigation_id),
+            case_datasets=await names_of(principal),
+            tau=await tau_of(investigation_id),
             pending=sorted(pending.ids),
             pending_complete=pending.complete,
             schema=index.schema if index is not None else None,
         )
 
     return search
+
+
+def _case_search(
+    request: Request,
+    index: search_service.SearchIndexSetup | None,
+    datasets: DatasetStore,
+    working_set: WorkingSetService | None,
+) -> CaseSearch:
+    """`case_search_with` from the dependencies `POST …/search` uses."""
+
+    async def names_of(principal: Principal) -> Mapping[str, str]:
+        case = set(principal.datasets or ())
+        return {d.id: d.name for d in await datasets.list_for(principal) if d.id in case}
+
+    async def tau_of(investigation_id: str) -> float | None:
+        return await _search_tau(working_set, investigation_id)
+
+    return case_search_with(
+        request.app.state.graph,
+        index,
+        pending_of=lambda: get_search_pending(request, index),
+        names_of=names_of,
+        tau_of=tau_of,
+    )
 
 
 @app.post(
