@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 
 import { type CaseViewOpened, deleteView, openView, saveView } from "../views/viewsApi";
 import type { LimitExceeded } from "./models";
@@ -19,15 +19,20 @@ export interface ViewOverCapDialogProps {
   apiBaseUrl: string;
   bearerToken: string;
   investigationId: string;
-  /** "Try again": a resync with no last sequence. */
-  onTryAgain: () => void;
+  /** "Try again": a resync with no last sequence. None for a refusal no resync can change (an
+   * expansion the cap refused), and then no Try again is offered. */
+  onTryAgain?: () => void;
+  /** What was refused, when it is not the reader's view of the case grown past the cap: an expansion
+   * the cap refused (spec/00 §4) gives its own title and reason, and the same way out. */
+  title?: string;
+  why?: string;
   /** A filtered view of the case was saved and opened now (ADR-144): show it as the lens. */
   onViewOpened: (opened: CaseViewOpened) => void;
   onClose: () => void;
 }
 
 /** The figure, in the words the canvas's other limit refusal uses (`canvas/linksAmong.ts`). */
-function figure(wouldBe: LimitExceeded): string {
+export function figure(wouldBe: LimitExceeded): string {
   const what = wouldBe.cap_kind === "nodes" ? "nodes" : "links";
   return `Too many for the canvas: ${COUNT.format(wouldBe.would_be)} ${what} against a limit of ${COUNT.format(wouldBe.cap)}.`;
 }
@@ -50,8 +55,12 @@ export function ViewOverCapDialog({
   onTryAgain,
   onViewOpened,
   onClose,
+  title = "Your view of this case is too large",
+  why = "Work in this case by others has taken the part of it you are cleared to see past what the canvas can hold. You can save a smaller view of it, private to you, and open that, or try again.",
 }: ViewOverCapDialogProps) {
   const ref = useRef<HTMLDivElement>(null);
+  // Its own: the case's over-cap dialog and an expansion's can both be up at once.
+  const titleId = useId();
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const [choosing, setChoosing] = useState(false);
@@ -163,18 +172,15 @@ export function ViewOverCapDialog({
       className="view-over-cap"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="view-over-cap-title"
+      aria-labelledby={titleId}
       ref={ref}
       onKeyDown={holdFocus}
     >
-      <h2 id="view-over-cap-title" className="view-over-cap__title">
-        Your view of this case is too large
+      <h2 id={titleId} className="view-over-cap__title">
+        {title}
       </h2>
       <p className="view-over-cap__figure">{figure(wouldBe)}</p>
-      <p className="view-over-cap__why">
-        Work in this case by others has taken the part of it you are cleared to see past what the
-        canvas can hold. You can save a smaller view of it, private to you, and open that, or try again.
-      </p>
+      <p className="view-over-cap__why">{why}</p>
       <div className="view-over-cap__actions">
         <button
           type="button"
@@ -184,9 +190,11 @@ export function ViewOverCapDialog({
         >
           Save as a view
         </button>
-        <button type="button" className="btn" onClick={onTryAgain}>
-          Try again
-        </button>
+        {onTryAgain && (
+          <button type="button" className="btn" onClick={onTryAgain}>
+            Try again
+          </button>
+        )}
       </div>
       {choosing && (
         <form className="view-over-cap__form" onSubmit={(e) => void submit(e)}>

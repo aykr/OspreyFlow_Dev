@@ -109,6 +109,7 @@ import {
 } from "./expansionGate";
 import { fetchWouldAdd } from "./expansionPreview";
 import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
+import { CapRefusalPrompt } from "./CapRefusalPrompt";
 import { type CaseView, saveView } from "../views/viewsApi";
 import { SaveViewForm } from "../views/SaveViewForm";
 import { fetchFirstSeen } from "../analytics/api";
@@ -168,7 +169,7 @@ import { PathfinderOverlay } from "./PathfinderOverlay";
 import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
 import { ActionErrorOverlay } from "./ActionErrorOverlay";
 import { describeEmptyExpansion } from "./expansionOutcome";
-import type { ClusterExplanation, ResolutionOutcome, WorkingSetDelta } from "../workingset/models";
+import type { ClusterExplanation, LimitExceeded, ResolutionOutcome, WorkingSetDelta } from "../workingset/models";
 
 const NODE_PROGRAM = createNodeCompoundProgram<
   WorkingSetNodeAttributes,
@@ -283,6 +284,12 @@ export interface GlassCanvasProps {
    * with the node's own id rather than owning any Dossier state itself; `App.tsx` owns `view`,
    * the same separation `onSelectionChange` already establishes. */
   onViewMessages?: (nodeId: string) => void;
+  /** An expansion the working set's cap refused (rule 2; spec/00 §4): the cap's *save_as_view*, a
+   * smaller view of the case saved and opened as the lens. Its refusal offers it only when given. */
+  onSaveSmallerView?: (refused: LimitExceeded, subject: string | undefined) => void;
+  /** The cap's *promote_to_batch* (ADR-151, case-b's): the refused expansion run on the server.
+   * Its refusal offers it only when given. */
+  onRunExpansionAsBatch?: (request: { nodeId: string; edgeType: string | null; depth: number; refused: LimitExceeded }) => void;
   /** Phase 7 Stage 3: the metrics panel's own community-detection result, already grouped into
    * hull polygons by `metrics/hulls.ts`'s pure `computeCommunityHulls` — `GlassCanvas` only
    * renders them (`CommunityHullOverlay`, a camera-tracked DOM overlay, ADR-002's "one honest
@@ -482,6 +489,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       onEdgeSelect,
       onFocusChange,
       onViewMessages,
+      onSaveSmallerView,
+      onRunExpansionAsBatch,
       communityHulls,
       onGroupedCountChange,
       judgementCounts,
@@ -689,6 +698,17 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       wouldAdd: number | "unavailable";
       options: NarrowingOption[];
       depth: number;
+    } | null>(null);
+    // An expansion the working set's cap refused (rule 2): the typed `limit_exceeded` and the cap's
+    // choices, never "Expand failed" alone and never a part drawn.
+    const [capRefusal, setCapRefusal] = useState<{
+      nodeId: string;
+      edgeType: string | null;
+      x: number;
+      y: number;
+      depth: number;
+      refused: LimitExceeded;
+      options: NarrowingOption[];
     } | null>(null);
     // A failed `expandNode`/`manualAssertion`/`explainCluster` call — `ActionErrorOverlay`'s own
     // doc comment has the full reasoning for why these three share one generic overlay rather than
@@ -2345,6 +2365,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       depth = 1,
     ): Promise<void> {
       if (refusedInLens()) return;
+      // A new expansion asked for: an earlier one's cap refusal no longer stands.
+      setCapRefusal(null);
       const ask = {
         apiBaseUrl,
         bearerToken,
@@ -2362,21 +2384,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         await expandNode(nodeId, edgeType, x, y, depth);
         return;
       }
-      let options: NarrowingOption[] = [];
-      if (edgeType === null && graph.hasNode(nodeId)) {
-        const node = graph.getNodeAttribute(nodeId, "data");
-        const types = edgeTypesOfferedFor(edgeTypes, node.type);
-        const counts = await Promise.all(
-          types.map(
-            async (et) =>
-              [
-                et.name,
-                await fetchWouldAdd(fetch, { ...ask, edgeTypes: [et.name] }),
-              ] as const,
-          ),
-        );
-        options = narrowingOptions(Object.fromEntries(counts));
-      }
+      const options = edgeType === null ? await narrowingFor(nodeId, depth) : [];
       setPendingExpansion({
         nodeId,
         edgeType,
@@ -2386,6 +2394,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         options,
         depth,
       });
+    }
+
+    /** The relationship types to expand `nodeId` by instead, each with what it would add: the gate's
+     * and the cap refusal's narrowing (spec/00 §4's *filter*). */
+    async function narrowingFor(nodeId: string, depth: number): Promise<NarrowingOption[]> {
+      if (!graph.hasNode(nodeId)) return [];
+      const ask = { apiBaseUrl, bearerToken, investigationId, nodeId, currentOrder: graph.order, depth };
+      const node = graph.getNodeAttribute(nodeId, "data");
+      const types = edgeTypesOfferedFor(edgeTypes, node.type);
+      const counts = await Promise.all(
+        types.map(async (et) => [et.name, await fetchWouldAdd(fetch, { ...ask, edgeTypes: [et.name] })] as const),
+      );
+      return narrowingOptions(Object.fromEntries(counts));
     }
 
     async function expandNode(
@@ -2415,10 +2436,20 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             }),
           },
         );
+        if (response.status === 409) {
+          // The working set's cap (rule 2): its typed `limit_exceeded`, said with the cap's own
+          // figure and choices (spec/00 §4), nothing added.
+          const body = (await response.json().catch(() => null)) as Partial<LimitExceeded> | null;
+          if (body?.error === "limit_exceeded" && typeof body.cap === "number" && typeof body.would_be === "number") {
+            const refused = body as LimitExceeded;
+            const options = edgeType === null ? await narrowingFor(nodeId, depth) : [];
+            // Gone while its choices were counted (removed, another case): nothing to offer them for.
+            if (!graph.hasNode(nodeId)) return;
+            setCapRefusal({ nodeId, edgeType, x, y, depth, refused, options });
+            return;
+          }
+        }
         if (!response.ok) {
-          // `limit_exceeded` (409, the working-set cap) included — no silent drop is allowed; the
-          // typed error surface itself, not a silent drop; the response body's own `options` (the
-          // three the cap offers) are not yet rendered here — flagged, not solved, by this fix.
           throw new Error(`Expand failed (${response.status}). Try again.`);
         }
       } catch (err) {
@@ -3834,6 +3865,41 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             message={actionError.message}
             tone={actionError.tone}
             onClose={dismissActionError}
+          />
+        )}
+        {capRefusal && graph.hasNode(capRefusal.nodeId) && (
+          <CapRefusalPrompt
+            x={capRefusal.x}
+            y={capRefusal.y}
+            refused={capRefusal.refused}
+            options={capRefusal.options}
+            subject={graph.hasNode(capRefusal.nodeId) ? nodeLabel(graph.getNodeAttribute(capRefusal.nodeId, "data")) : undefined}
+            edgeTypes={edgeTypesRef.current}
+            onChooseType={(edgeType) => {
+              const { nodeId, x, y, depth } = capRefusal;
+              setCapRefusal(null);
+              // The node removed since the refusal: expanding it would draw its neighbours back.
+              if (graph.hasNode(nodeId)) void expandNode(nodeId, edgeType, x, y, depth);
+            }}
+            onSaveSmallerView={
+              onSaveSmallerView
+                ? () => {
+                    const { nodeId, refused } = capRefusal;
+                    setCapRefusal(null);
+                    onSaveSmallerView(refused, graph.hasNode(nodeId) ? nodeLabel(graph.getNodeAttribute(nodeId, "data")) : undefined);
+                  }
+                : undefined
+            }
+            onRunAsBatch={
+              onRunExpansionAsBatch
+                ? () => {
+                    const { nodeId, edgeType, depth, refused } = capRefusal;
+                    setCapRefusal(null);
+                    if (graph.hasNode(nodeId)) onRunExpansionAsBatch({ nodeId, edgeType, depth, refused });
+                  }
+                : undefined
+            }
+            onCancel={() => setCapRefusal(null)}
           />
         )}
         {pendingExpansion && (
