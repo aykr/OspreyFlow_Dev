@@ -15,6 +15,8 @@ from schemas.domain import Principal
 
 READER = Principal(id="a", clearance="OFFICIAL", org_unit="unit-1", datasets=["gazetteer-osm-x"])
 CONDUIT = READER.model_copy(update={"datasets": None})
+#: A search's candidates (ADR-124 Amendment 21): the match is applied to them in the traversal.
+RIDS = ("#9:0",)
 #: ADR-147 Amendment 2: a place in a gazetteer dataset, or a case's copy of one by its provenance.
 GUARD = (
     """__.not(__.or(__.values("datasets").unfold().is(TextP.startingWith('gazetteer-')),"""
@@ -26,7 +28,7 @@ def _queries(principal: Principal) -> list[str]:
     access = AccessFilter(load_uk_le_scheme())
     fields = ("name", "osm_id", "uprn")
     return [
-        SearchNodesBuilder(fields, "node/1").render_gremlin(access, principal),
+        SearchNodesBuilder(fields, "node/1", record_ids=RIDS).render_gremlin(access, principal),
         SuggestNodesBuilder(("Location",), fields, "node/1").render_gremlin(access, principal),
     ]
 
@@ -65,7 +67,7 @@ def _all_fields(principal: Principal, types: tuple[str, ...] = ("Location",)) ->
     access = AccessFilter(load_uk_le_scheme())
     fields = ("name", "uprn", *ONLY)
     return [
-        SearchNodesBuilder(fields, "node/1").render_gremlin(access, principal),
+        SearchNodesBuilder(fields, "node/1", record_ids=RIDS).render_gremlin(access, principal),
         SuggestNodesBuilder(types, fields, "node/1").render_gremlin(access, principal),
     ]
 
@@ -88,14 +90,16 @@ def test_a_search_by_a_gazetteer_only_identifier_alone_matches_nothing() -> None
     rather than falling back to every field."""
     access = AccessFilter(load_uk_le_scheme())
     case_reader = READER.model_copy(update={"datasets": ["case-a"]})
-    query = SearchNodesBuilder(("osm_id",), "node/1").render_gremlin(access, case_reader)
+    query = SearchNodesBuilder(("osm_id",), "node/1", record_ids=RIDS).render_gremlin(
+        access, case_reader
+    )
     assert "__.has('osm_id'" not in query
     # Exactly the step that keeps no node, before the access step, dedup and limit: never a
     # bare or() or a fall-back that matches every node. ArcadeDB's answer to it is proven live
     # (`test_gazetteer_only_ids_withheld_everywhere_live.py`).
-    assert query.startswith("g.V().or(__.not(__.identity())).")
+    assert query.startswith("g.V(['#9:0']).or(__.not(__.identity())).")
     for builder in (
         SuggestNodesBuilder(("Location",), ("osm_id", "os_place_id"), "7"),
-        SearchNodesBuilder(("osm_id", "os_place_id"), "7"),
+        SearchNodesBuilder(("osm_id", "os_place_id"), "7", record_ids=RIDS),
     ):
         assert ".or(__.not(__.identity()))." in builder.render_gremlin(access, case_reader)
