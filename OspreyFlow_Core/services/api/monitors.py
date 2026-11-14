@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS monitors (
 ALTER TABLE monitors ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 -- ADR-044 Amendment 1: why it is stopped, NULL while active.
 ALTER TABLE monitors ADD COLUMN IF NOT EXISTS status_detail TEXT;
--- ADR-044 Amendment 2: loads in a row whose owner's sign-in could not be checked; the third stops it.
+-- ADR-044 Amendment 2: loads in a row whose owner's sign-in could not be checked; the third stops
+-- it.
 ALTER TABLE monitors ADD COLUMN IF NOT EXISTS unreachable_in_a_row INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS monitors_owner_id_idx ON monitors (owner_id);
 ALTER TABLE monitors ADD COLUMN IF NOT EXISTS dataset_id TEXT;
@@ -80,7 +81,8 @@ def _row_to_monitor(row: asyncpg.Record) -> Monitor:
 
 
 _SELECT = (
-    "SELECT id, pattern_id, owner_id, status, status_detail, unreachable_in_a_row, created_at, dataset_id, every, hour, "
+    "SELECT id, pattern_id, owner_id, status, status_detail, unreachable_in_a_row, created_at, "
+    "dataset_id, every, hour, "
     "weekday FROM monitors"
 )
 
@@ -133,7 +135,8 @@ class MonitorStore:
         reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, pattern_id, owner_id, status, status_detail, unreachable_in_a_row, created_at, dataset_id, "
+                "SELECT id, pattern_id, owner_id, status, status_detail, unreachable_in_a_row, "
+                "created_at, dataset_id, "
                 "every, hour, weekday "
                 f"FROM monitors WHERE id = $1 AND owner_id = $2{reach}",
                 monitor_id,
@@ -148,7 +151,8 @@ class MonitorStore:
         reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, pattern_id, owner_id, status, status_detail, unreachable_in_a_row, created_at, dataset_id, "
+                "SELECT id, pattern_id, owner_id, status, status_detail, unreachable_in_a_row, "
+                "created_at, dataset_id, "
                 "every, hour, weekday "
                 f"FROM monitors WHERE owner_id = $1{reach} ORDER BY created_at DESC",
                 principal.id,
@@ -199,7 +203,8 @@ class MonitorStore:
             row = await conn.fetchrow(
                 "UPDATE monitors SET every = $3, hour = $4, weekday = $5 "
                 f"WHERE id = $1 AND owner_id = $2{reach} "
-                "RETURNING id, pattern_id, owner_id, status, status_detail, unreachable_in_a_row, created_at, "
+                "RETURNING id, pattern_id, owner_id, status, status_detail, "
+                "unreachable_in_a_row, created_at, "
                 "dataset_id, every, hour, weekday",
                 monitor_id,
                 principal.id,
