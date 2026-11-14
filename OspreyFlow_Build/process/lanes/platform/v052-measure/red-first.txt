@@ -153,3 +153,21 @@ plant 11: the live file's M10 verdict dropped
   tests/test_measure_search.py -k 'fails_m10_on_a_leak': RED (1 failed, 33 deselected in 2.42s)
 11/11 red
 Green after: 62 passed, 6 skipped (with test_adr_reservations and the coverage check).
+# Step 4's stack runner, step4_stack.py (2026-11-14T08:47:37Z; the orchestrator's order: stack d holds only the stores).
+# Offline: tests/test_step4_stack.py 12 passed. One plant per check at its real line (plants_step4.py), each restored:
+plant 1: the Conduit bound to every interface
+  tests/test_step4_stack.py -k 'loopback': RED (1 failed, 11 deselected in 0.60s)
+plant 2: a setting's value on the command line
+  tests/test_step4_stack.py -k 'no_value_reaches': RED (1 failed, 11 deselected in 0.64s)
+plant 3: the Conduit's limits typed, not the manifest's
+  tests/test_step4_stack.py -k 'poc_manifest': RED (2 failed, 10 deselected in 0.67s)
+plant 4: the probe's read taken as a pass
+  tests/test_step4_stack.py -k 'stops_a_run': RED (1 failed, 2 passed, 9 deselected in 2.13s)
+plant 5: M10 asked as the measuring subject
+  tests/test_step4_stack.py -k 'each_use': RED (1 failed, 11 deselected in 0.61s)
+plant 6: a control without R
+  tests/test_step4_stack.py -k 'rules_granted': RED (1 failed, 11 deselected in 0.64s)
+plant 7: the realm's users left as the deployment's
+  tests/test_step4_stack.py -k 'subjects_alone': RED (1 failed, 11 deselected in 0.61s)
+7/7 red
+Its live red and green (a subject with no grant refused, then a granted one read) wait for a small leased stack, not d.
