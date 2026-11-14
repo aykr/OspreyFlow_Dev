@@ -38991,9 +38991,15 @@ not to regress. The orchestrator approved three choices:
      *Invite a person*). Each is drawn smaller than the `h1`. In dark and light they keep the sizes main drew them
      as `h3` and `h4` (`--fs-14`, `--fs-13`); in GOV.UK they take `govuk-heading-s` or the scale.
    - **Not yet on the other sections.** Their own headings still step from the `h1` to `h3`, `h4` or `h5`:
-     Roles, Dashboard identities, Datasets, Operations and its figures, System and Demo packs (the admin lane's),
-     and Models and Maps (the platform lane's). This is left for a later step that measures each screen as
-     People's was measured.
+     Roles, Dashboard identities, Datasets, Operations and its figures, System and Demo packs (the admin lane's).
+     This is left for a later step that measures each screen as People's was measured.
+   - **Admin › Models and Admin › Maps head their parts with `h2`s beneath the section's `h1`** (What the
+     installer declared, Engines, Each job's default engine, Usage, History; Providers, The local basemap,
+     Prefetch areas, History), each `className="value"`, so `.admin-place__section h2.value` draws them below
+     the `h1` in every look (`--fs-13`; in GOV.UK 19px, below the 36px `h1`), as People's parts are. Held by the
+     sections' own tests (`Models.test.tsx` and `Maps.test.tsx`: every heading an `h2` with `value`) and by
+     `admin-look.spec.ts`'s Models and Maps cases in the dark, light and GOV.UK looks (one `h1`, levels [1, 2],
+     every `h2` below the `h1`), with both in `every-harness.spec.ts`'s axe scans.
    - Not changed: the help page *Roles, teams and Authors* is shared with the other places (`RolesHelpPage`), and
      its own heading stays an `h2`.
 2. **The type scale, in GOV.UK alone.**

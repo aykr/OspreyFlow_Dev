@@ -337,7 +337,7 @@ export function Models({ api }: { api: ModelsApi }) {
       {view && (
         <>
           <section aria-labelledby="models-declared">
-            <h3 id="models-declared">What the installer declared</h3>
+            <h2 id="models-declared" className="value">What the installer declared</h2>
             <p className="label" style={{ margin: 0 }}>
               {view.local_only
                 ? "This deployment is local only: no engine outside it may be added here. The installer changes that in osprey.yaml (local_only: false), then runs ospreyflow apply."
@@ -355,7 +355,7 @@ export function Models({ api }: { api: ModelsApi }) {
           </section>
 
           <section aria-labelledby="models-engines">
-            <h3 id="models-engines">Engines</h3>
+            <h2 id="models-engines" className="value">Engines</h2>
             <table className="table" aria-label="Engines">
               <thead>
                 <tr>
@@ -537,7 +537,7 @@ export function Models({ api }: { api: ModelsApi }) {
           </section>
 
           <section aria-labelledby="models-defaults">
-            <h3 id="models-defaults">Each job&apos;s default engine</h3>
+            <h2 id="models-defaults" className="value">Each job&apos;s default engine</h2>
             <p className="label" style={{ margin: 0 }}>
               An analyst may choose another engine for a request. A default whose key is not set runs on this
               deployment&apos;s own model.
@@ -576,7 +576,7 @@ export function Models({ api }: { api: ModelsApi }) {
           <ModelsUsage read={readUsageHere} />
 
           <section aria-labelledby="models-history">
-            <h3 id="models-history">History</h3>
+            <h2 id="models-history" className="value">History</h2>
             {history.length === 0 ? (
               <p className="label" style={{ margin: 0 }}>
                 Nothing has been changed here yet.

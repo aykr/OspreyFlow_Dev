@@ -67,6 +67,16 @@ function stub(answers: (path: string, init?: RequestInit) => Answer | undefined)
 const API = { apiBaseUrl: "http://api", bearerToken: "t" };
 
 describe("Maps", () => {
+  it("heads its parts with h2s beneath Admin's h1, sized as People's (ADR-145 Amendment 16)", async () => {
+    stub(() => undefined);
+    const { container } = render(<Maps api={API} />);
+    await screen.findByRole("heading", { name: "Providers" });
+    const headings = [...container.querySelectorAll("h1, h2, h3, h4, h5, h6")];
+    expect(headings.map((h) => h.tagName)).toEqual(headings.map(() => "H2"));
+    expect(headings.length).toBeGreaterThan(2);
+    expect(headings.every((h) => h.classList.contains("value"))).toBe(true);
+  });
+
   it("shows each provider's tier, attribution and state", async () => {
     stub(() => undefined);
     render(<Maps api={API} />);

@@ -421,7 +421,7 @@ export function Maps({ api }: { api: MapsApi }) {
       {view && (
         <>
           <section aria-labelledby="maps-providers">
-            <h3 id="maps-providers">Providers</h3>
+            <h2 id="maps-providers" className="value">Providers</h2>
             <p className="label" style={{ margin: 0 }}>
               {view.changed_in_admin
                 ? "Changed here: these replace the map section of osprey.yaml."
@@ -547,7 +547,7 @@ export function Maps({ api }: { api: MapsApi }) {
           </section>
 
           <section aria-labelledby="maps-local">
-            <h3 id="maps-local">The local basemap</h3>
+            <h2 id="maps-local" className="value">The local basemap</h2>
             <table className="table" aria-label="Local basemaps">
               <thead>
                 <tr>
@@ -613,7 +613,7 @@ export function Maps({ api }: { api: MapsApi }) {
           </section>
 
           <section aria-labelledby="maps-areas">
-            <h3 id="maps-areas">Prefetch areas</h3>
+            <h2 id="maps-areas" className="value">Prefetch areas</h2>
             <p className="label" style={{ margin: 0 }}>
               An area&apos;s tiles are fetched ahead of use, so routine work there asks the provider nothing and says
               nothing about where analysts look. Only a provider fetched and kept by the Conduit can have one.
@@ -704,7 +704,7 @@ export function Maps({ api }: { api: MapsApi }) {
           </section>
 
           <section aria-labelledby="maps-history">
-            <h3 id="maps-history">History</h3>
+            <h2 id="maps-history" className="value">History</h2>
             {history.length === 0 ? (
               <p className="label" style={{ margin: 0 }}>
                 Nothing has been changed here yet.
