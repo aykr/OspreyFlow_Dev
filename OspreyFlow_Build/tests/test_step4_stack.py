@@ -247,3 +247,17 @@ def test_each_workload_s_own_plain_settings_are_the_render_s_and_none_from_a_sec
         "the stack's, from the lease"
     )
     assert all(v for v in api.values()), "no empty setting given"
+
+
+@pytest.mark.parametrize("dockerfile", ["services/api/Dockerfile", "services/worker/Dockerfile"])
+def test_each_image_builds_from_core_whatever_directory_the_runner_starts_in(
+    dockerfile: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rules' first run on d started the runner at the repository root, where there is no
+    `services/`, and docker refused the build; `-f` is read from the process's directory."""
+    monkeypatch.chdir(tmp_path)
+    argv = step4.build_argv(dockerfile, "ospreyflow/api:step4-x")
+    given = Path(argv[argv.index("-f") + 1])
+    assert given.is_absolute() and given.is_file(), given
+    assert given == step4.CORE / dockerfile
+    assert argv[0] == "build" and argv[-1] == str(step4.CORE)

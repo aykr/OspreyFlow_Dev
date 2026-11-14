@@ -47,6 +47,9 @@ PLANTS = [
      '        *(a for host, at in mounts for a in ("-v", f"{host}:{at}:ro")),\n', "", "own_files_where"),
     ("the realm's users left as the deployment's", RUNNER,
      '    realm["users"] = realm_users()\n    return realm', "    return realm", "subjects_alone"),
+    ("the Dockerfile read from the process's directory", RUNNER,
+     '    return ["build", "-q", "-f", str(CORE / dockerfile), "-t", tag, str(CORE)]',
+     '    return ["build", "-q", "-f", dockerfile, "-t", tag, str(CORE)]', "whatever_directory"),
 ]
 env = {**os.environ, "ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "POSTGRES_PASSWORD": "throwaway",
        "VALKEY_PORT": "59993", "CLICKHOUSE_HTTP_PORT": "59994"}

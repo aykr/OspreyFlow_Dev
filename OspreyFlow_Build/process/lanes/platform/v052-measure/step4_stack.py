@@ -188,6 +188,14 @@ def passed_through(environment: dict[str, str]) -> list[str]:
     return [arg for n in names for arg in ("-e", n)]
 
 
+def build_argv(dockerfile: str, tag: str) -> list[str]:
+    """A workload's image built from the checkout's Core, whatever directory the runner is started
+    from: docker reads `-f` from the process's own directory, not from the context (14 November
+    2026, rules' first run on d, started at the repository root: "lstat services: no such file or
+    directory")."""
+    return ["build", "-q", "-f", str(CORE / dockerfile), "-t", tag, str(CORE)]
+
+
 def keycloak_argv(run: str, name: str, port: int) -> list[str]:
     return [
         "run", "-d", "--name", name, *run_labels(run), "--network", "host",
@@ -453,7 +461,7 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
             images[workload] = given
             continue
         tag = f"ospreyflow/{workload}:step4-{slug(stack.run)}"
-        stack.docker("build", "-q", "-f", dockerfile, "-t", tag, str(CORE))
+        stack.docker(*build_argv(dockerfile, tag))
         stack.images.append(tag)
         images[workload] = tag
     cp = _free_port()
