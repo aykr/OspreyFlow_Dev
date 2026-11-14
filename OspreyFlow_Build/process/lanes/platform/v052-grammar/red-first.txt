@@ -1,0 +1,8 @@
+# v052-grammar (admin's catch, 14 November 2026; CARRIES.md's row): principal_auth's refusal of a value an administrator never set
+# said "your handling codes has not been set". Each value now takes its own verb (has / have) and pronoun (it / them).
+Red first (the test parametrised with each value's own verb, before the fix):
+FAILED tests/services/api/test_auth_entra_administrator_access.py::test_a_value_never_set_is_refused_in_words[receivable_handling_codes-handling codes have]
+1 failed, 2 passed, 11 deselected in 5.64s
+Green after: test_auth, test_auth_entra_administrator_access, test_auth_entra_claims, test_auth_entra_token_version: 181 passed.
+The live case in test_entra_people_live.py refuses on clearance first (the loop's order), so its 'has not been set' still holds.
+The spec's quote (ADR-148 Amendment 15) is the clearance case's, "has", and stands.
