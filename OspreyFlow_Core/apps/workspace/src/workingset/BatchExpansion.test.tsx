@@ -138,12 +138,20 @@ describe("BatchExpansion", () => {
   });
 
   it("says a reader below Editor cannot start one, and asks nothing more", async () => {
-    const calls = conduit({ status: 403, body: { detail: { error: "right_required", right: "investigate" } } });
+    const calls = conduit({ status: 403, body: { detail: "Editor is needed in this case." } });
     show();
     expect(await alertText()).toBe(
       "You cannot run a batch job in this case: it needs the Editor level, since its result is saved as a view of the case. No job was started.",
     );
     expect(reads(calls)).toHaveLength(0);
+  });
+
+  it("says an account without the right to expand cannot start one", async () => {
+    conduit({ status: 403, body: { detail: { error: "right_required", right: "investigate" } } });
+    show();
+    expect(await alertText()).toBe(
+      "Your account does not hold the right to expand a case, so it cannot run a batch job. No job was started.",
+    );
   });
 
   it("says a case the reader cannot open could not be, and starts nothing", async () => {

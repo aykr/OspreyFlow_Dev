@@ -40,7 +40,10 @@ export type Started =
   | { ok: true; job: BatchExpansionJob }
   /** The reader already has a batch job on this case: the one to follow, and the server's words. */
   | { ok: true; running: { id: string; words: string } }
+  /** The case level is too low: a batch job needs Editor, as `/expand` does. */
   | { ok: false; kind: "forbidden" }
+  /** The account lacks the right the route names (`require_right`'s `right_required`). */
+  | { ok: false; kind: "right_required" }
   | { ok: false; kind: "not_found" }
   | { ok: false; kind: "failed"; message: string };
 
@@ -111,7 +114,10 @@ export async function startBatchExpansion(
     if (response.status === 409 && body.error === "batch_expansion_running" && typeof body.id === "string" && body.id) {
       return { ok: true, running: { id: body.id, words: typeof body.detail === "string" ? body.detail : "" } };
     }
-    if (response.status === 403) return { ok: false, kind: "forbidden" };
+    if (response.status === 403) {
+      const detail = body.detail as Record<string, unknown> | undefined;
+      return { ok: false, kind: detail?.error === "right_required" ? "right_required" : "forbidden" };
+    }
     if (response.status === 404) return { ok: false, kind: "not_found" };
     return { ok: false, kind: "failed", message: `The batch job could not be started (${response.status}).` };
   } catch (err) {

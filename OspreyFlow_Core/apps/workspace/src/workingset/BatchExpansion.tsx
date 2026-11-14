@@ -159,6 +159,12 @@ export function BatchExpansion({
           again: false,
           words: "You cannot run a batch job in this case: it needs the Editor level, since its result is saved as a view of the case. No job was started.",
         });
+      } else if (started.kind === "right_required") {
+        setShown({
+          phase: "stopped",
+          again: false,
+          words: "Your account does not hold the right to expand a case, so it cannot run a batch job. No job was started.",
+        });
       } else if (started.kind === "not_found") {
         setShown({
           phase: "stopped",

@@ -31,6 +31,9 @@ plant() { # name, file, perl substitution, the case that must go red
 plant "a 403 at the start read as any failure" "$API" \
   's/    if \(response.status === 403\) return \{ ok: false, kind: "forbidden" \};\n//' \
   "says a reader below Editor cannot start one, and asks nothing more"
+plant "right_required read as a case level too low" "$API" \
+  's/detail\?.error === "right_required" \? "right_required" : "forbidden"/"forbidden"/' \
+  "says an account without the right to expand cannot start one"
 plant "a 404 at the start read as any failure" "$API" \
   's/    if \(response.status === 404\) return \{ ok: false, kind: "not_found" \};\n  *return \{ ok: false, kind: "failed", message: `The batch job could not be started/    return { ok: false, kind: "failed", message: `The batch job could not be started/' \
   "says a case the reader cannot open could not be, and starts nothing"
