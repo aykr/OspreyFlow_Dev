@@ -327,9 +327,10 @@ const EXTRA_STATES: Record<string, string[]> = {
 // title and the node's selector, with the text it held and either the ratio it measured (a floor:
 // worse fails) or the exact reason it could not be measured and what its own surfaces gave (a floor
 // too). Fixed ones come off; a new one is never added to make a run green. The owners, by page:
-// the map's attribution chip over the map's canvas (platform); the case screen's variant b ⋯ and
+// the case screen's variant b ⋯ and
 // places' open More views under GOV.UK (shell); the boards' handles and labels where a link line or
 // another item lies at them (case); Home's key cap at `opacity: 0.8` (home). Show as BPMN's words, once listed, measure on their task box since T3b.
+// The map's attribution chip (platform) came off in v0.5.2: an opaque token surface (CARRIES 91).
 const CONTRAST_FINDINGS: Record<string, ListedFindings> = readFindings(
   JSON.parse(readFileSync(new URL("./contrastFindings.json", import.meta.url), "utf8")),
 );
