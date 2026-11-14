@@ -31,7 +31,9 @@ def fold(text: str) -> str:
 
 
 def guide(name: str) -> str:
-    return fold((DOCS / f"{name}-guide.md").read_text(encoding="utf-8"))
+    """A guide without its document-control table, which records what earlier versions said, whitespace folded."""
+    text = (DOCS / f"{name}-guide.md").read_text(encoding="utf-8")
+    return fold(re.sub(r"<!-- document-control:begin -->.*?<!-- document-control:end -->", " ", text, flags=re.DOTALL))
 
 
 def protocols() -> set[str]:
@@ -119,3 +121,28 @@ def test_the_opensearch_signing_setting_is_given_as_the_settings_file_holds_it()
     assert "How they reach it is the platform settings file's `opensearch_signing`. With `sigv4`, the default," in text
     assert "admits that role alone, with no fine-grained access control" in text
     assert "With `none`, for a platform whose own module fronts the domain with a proxy that signs for us" in text
+
+
+def test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says_what_replaces_it() -> None:
+    """Question 13 (the orchestrator's ruling, 14 November 2026): the domain the render makes, one IAM role and no
+    fine-grained access control, and in its place the reader's access in OspreyFlow's own query to the index
+    (`search_access.py`'s `index_access_filter`, given to every search by the route)."""
+    settings = (CORE / "harness" / "cloud_platform" / "settings.py").read_text(encoding="utf-8")
+    assert 'opensearch_signing: Literal["sigv4", "none"] = "sigv4"' in settings
+    runbook = fold((CORE / "harness" / "cloud_platform" / "runbooks.py").read_text(encoding="utf-8"))
+    assert "admits that role alone, with no fine-grained access control" in runbook.replace('" "', "")
+    assert "two private subnets, in two availability zones" in runbook
+    access = fold((CORE / "services" / "api" / "search_access.py").read_text(encoding="utf-8"))
+    for part in ("1. **classification:** no higher than the principal's clearance", "2. **handling code:**",
+                 "3. **datasets:** one of the case's"):  # fmt: skip
+        assert part in access, part
+    route = (CORE / "services" / "api" / "app.py").read_text(encoding="utf-8")
+    assert "access_filter=index_access_filter(index.scheme, principal)" in route
+    text = guide("administration")
+    q13 = text[text.index("13. **OpenSearch without fine-grained access control.**") :]
+    q13 = q13[: q13.index("## ")]
+    assert "admits one IAM role, the namespace's, with no fine-grained access control and no OpenSearch users?" in q13
+    assert ("OspreyFlow applies each reader's access in its own query to the index: the Conduit adds to every "
+            "search, before it is sent, a filter that keeps only what the reader's clearance, handling codes and "
+            "the case's datasets allow") in q13  # fmt: skip
+    assert "(`opensearch_signing: none`, section 6a.1)" in q13 and "two private subnets, in two availability zones" in q13

@@ -64,8 +64,11 @@ Paths are relative to `OspreyFlow_Core/`.
     fine-grained access control, so there is no user or master password to keep"; with `none`, the platform's proxy
     signs.
   - `services/search_index/client.py` reads `OPENSEARCH_SIGNING`.
-- **Not answered in the guide:** §6a.11's question on an IAM-only OpenSearch access policy without fine-grained
-  access control. It is a ruling, brought to the orchestrator with a recommendation.
+- **§6a.11's question 13**, an IAM-only OpenSearch access policy without fine-grained access control: a ruling,
+  brought to the orchestrator with a recommendation and approved on 14 November with one addition, to name where each
+  reader's access is applied instead (`search_access.py`'s `index_access_filter`, given to every search by the route,
+  `access_filter=index_access_filter(index.scheme, principal)`). CARRIES: platform builds FGAC if the client's
+  standard requires it, open until the client answers.
 
 ## 7. Built since it was called "coming"
 
