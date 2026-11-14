@@ -1,0 +1,16 @@
+Red first, 14 November 2026, lane/studio-sql-interrupt (CI conformance run 43622866387).
+Measured with duckdb 1.5.6, pyarrow 26.0.0: an interrupt before execute is cleared; during it, InterruptException; after it, while the Arrow reader reads, builtins.OSError: INTERRUPT Error: Interrupted!
+
+== main's sql_transform.py:
+E   OSError: INTERRUPT Error: Interrupted!
+FAILED ../OspreyFlow_Build/tests/ingest/test_sql_transform.py::test_a_time_limit_reached_while_the_rows_are_read_is_stopped_in_words
+1 failed, 1 passed, 112 deselected in 1.71s
+
+== a fix too broad (every OSError said as the time limit):
+E   OSError: INTERRUPT Error: Interrupted!
+E   services.ingest.staging_catalogue.StagingError: step 'calls' ran past its time limit of 60 seconds and was stopped
+FAILED ../OspreyFlow_Build/tests/ingest/test_sql_transform.py::test_an_os_error_that_is_not_the_time_limit_s_still_propagates
+1 failed, 1 passed, 112 deselected in 1.62s
+
+== the fix:
+2 passed, 112 deselected in 1.63s

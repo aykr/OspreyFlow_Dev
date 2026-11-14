@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from services.ingest.sql_transform import (
@@ -336,6 +337,92 @@ def test_a_query_past_its_time_limit_is_stopped() -> None:
     with pytest.raises(StagingError) as refused:
         run_sql_step(_step(select, ("visits",)), [many], time_limit=0.3, check=False, marked=())
     assert any("time limit" in p for p in refused.value.problems), refused.value.problems
+
+
+def test_a_time_limit_reached_while_the_rows_are_read_is_stopped_in_words(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CI conformance run 43622866387: on a loaded runner the time limit fired after the SELECT had
+    run and while its rows were read, and DuckDB's interrupt came out of the Arrow reader as a bare
+    `OSError: INTERRUPT Error: Interrupted!` (measured: an interrupt before `execute` is cleared,
+    during it is `InterruptException`, after it is that `OSError`), not the limit's words. The
+    step's own timer is made to fire at exactly that moment: what it was given to call, called as
+    the real `execute` returns, on the real connection."""
+    import threading
+    import types
+
+    import services.ingest.sql_transform as sql_transform
+
+    real = sql_transform.sandbox_connection
+    timers: list[Callable[[], None]] = []
+
+    class _Timer:
+        def __init__(self, interval: float, function: Callable[[], None]) -> None:
+            timers.append(function)
+
+        def start(self) -> None:
+            return None
+
+        def cancel(self) -> None:
+            return None
+
+    class _FiresAfterExecute:
+        def __init__(self, con: Any) -> None:
+            self._con = con
+
+        def execute(self, *args: Any, **kwargs: Any) -> Any:
+            result = self._con.execute(*args, **kwargs)
+            for fire in timers:
+                fire()  # the step's own time limit, reached just after its SELECT has run
+            return result
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._con, name)
+
+    monkeypatch.setattr(
+        sql_transform, "threading", types.SimpleNamespace(Timer=_Timer, Event=threading.Event)
+    )
+    monkeypatch.setattr(
+        sql_transform, "sandbox_connection", lambda **kw: _FiresAfterExecute(real(**kw))
+    )
+    with pytest.raises(StagingError) as refused:
+        run_sql_step(
+            _step("SELECT unnest(range(100000)) AS n, _ref FROM visits", ("visits",)),
+            [_tables()["visits"]], marked=(), time_limit=60, check=False,
+        )  # fmt: skip
+    assert any("time limit" in p for p in refused.value.problems), refused.value.problems
+    assert timers, "the step set its time limit"
+
+
+def test_an_os_error_that_is_not_the_time_limit_s_still_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the interrupt the time limit caused becomes its words: an `OSError` with no interrupt
+    behind it (here the same words, raised with no timer having fired) is not hidden."""
+    import services.ingest.sql_transform as sql_transform
+
+    real = sql_transform.sandbox_connection
+
+    class _ReaderFails:
+        def __init__(self, con: Any) -> None:
+            self._con = con
+
+        def execute(self, *args: Any, **kwargs: Any) -> Any:
+            class _Result:
+                def to_arrow_reader(self, *a: Any) -> Any:
+                    raise OSError("INTERRUPT Error: Interrupted!")
+
+            return _Result()
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._con, name)
+
+    monkeypatch.setattr(sql_transform, "sandbox_connection", lambda **kw: _ReaderFails(real(**kw)))
+    with pytest.raises(OSError, match="INTERRUPT"):
+        run_sql_step(
+            _step("SELECT pin, _ref FROM visits", ("visits",)), [_tables()["visits"]], marked=(),
+            time_limit=60, check=False,
+        )  # fmt: skip
 
 
 def test_a_query_past_its_memory_limit_is_stopped() -> None:

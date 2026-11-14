@@ -90,6 +90,8 @@ SQL_MEMORY_LIMIT = "512MB"
 SQL_ROW_LIMIT = 1_000_000
 SQL_BYTE_LIMIT = 256 * 1024 * 1024
 _BATCH_ROWS = 8192
+#: DuckDB's words for an interrupted query, as the Arrow reader passes them on in an `OSError`.
+_INTERRUPTED = "INTERRUPT Error"
 
 REF_COLUMN = "_ref"
 
@@ -689,7 +691,13 @@ def _execute(
 ) -> pa.Table:
     """The SELECT's rows, read batch by batch within the time limit, refused (never cut short) past
     the row or byte limit, before any of it becomes Python values."""
-    timer = threading.Timer(time_limit, con.interrupt)
+    fired = threading.Event()
+
+    def stop() -> None:
+        fired.set()
+        con.interrupt()
+
+    timer = threading.Timer(time_limit, stop)
     timer.start()
     try:
         reader = con.execute(step.select).to_arrow_reader(_BATCH_ROWS)
@@ -710,6 +718,17 @@ def _execute(
         raise StagingError(
             [f"step {step.id!r} ran past its time limit of {time_limit:g} seconds and was stopped"]
         ) from exc
+    except OSError as exc:
+        # The same interrupt, landing after the SELECT has run and while its rows are read: the
+        # Arrow reader gives it as a bare `OSError` (CI conformance run 43622866387; measured:
+        # before `execute` it is cleared, during it `InterruptException`, after it this). Only when
+        # this limit's own timer fired; any other `OSError` is not the limit's and goes on.
+        if fired.is_set() and str(exc).startswith(_INTERRUPTED):
+            raise StagingError(
+                [f"step {step.id!r} ran past its time limit of {time_limit:g} seconds and was "
+                 "stopped"]
+            ) from exc  # fmt: skip
+        raise
     except duckdb.OutOfMemoryException as exc:
         raise StagingError([f"step {step.id!r} ran past its memory limit and was stopped"]) from exc
     except duckdb.Error as exc:
