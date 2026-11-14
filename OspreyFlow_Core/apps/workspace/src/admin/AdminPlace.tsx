@@ -54,8 +54,9 @@ export const ADMIN_GROUPS: AdminGroup[] = SECTIONS.groups;
 
 /** Each built section's screen, by its id in `sections.json` (`AdminSections.test.tsx` holds their
  * ids together; `test_admin_sections.py` holds each to the file `sections.json` names). */
-export const SCREENS: Record<string, (api: AdminApi) => ReactNode> = {
-  people: (api) => <People api={api} />,
+export const SCREENS: Record<string, (api: AdminApi, rights: ReadonlySet<string>) => ReactNode> = {
+  // Route A2: People offers only the roles the giver may give, from their own rights.
+  people: (api, rights) => <People api={api} rights={rights} />,
   roles: (api) => <Roles api={api} />,
   "grading-scheme": (api) => <GradingScheme api={api} />,
   dashboards: (api) => <Dashboards api={api} />,
@@ -190,7 +191,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
             <h1 id="admin-section-title" ref={heading} tabIndex={-1} className={govuk ? "govuk-heading-l admin-place__heading" : "value admin-place__heading"}>
               {section.label}
             </h1>
-            {SCREENS[section.id]?.(api)}
+            {SCREENS[section.id]?.(api, rights)}
           </div>
         </div>
       )}

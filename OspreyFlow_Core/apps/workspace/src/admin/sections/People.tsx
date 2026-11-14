@@ -15,6 +15,7 @@ import type {
   SignInDelivery,
 } from "../../../../../packages/schemas/generated";
 import { currentBrand } from "../../brand/brand";
+import { rightName } from "../../help/roles";
 import { PLACE_NAME, placesFor } from "../../shell/places";
 import { LEVELS_TIP_ID, RoleAndLevelTips, grantWords, roleTip, roleTipId } from "../tips";
 import { Button, Input, Select } from "../../design/primitives";
@@ -56,13 +57,53 @@ const ROLE_IDS = new Set(ROLES.map((r) => r.id));
 /** The Super user preset (ADR-145 Amendment 5 point 2): three roles given together, never one. */
 export const SUPER_USER = ["analyst", "data_engineer", "rule_author"];
 
-/** What the People rows need besides the people: the custom roles, the built-in roles' rights and
- * the case levels, read once for the section. */
+/** The rights only their holder may give (`schemas.rights.ADMINISTRATION_RIGHTS`, ADR-145 Amendment 5;
+ * `test_admin_giver_rights.py` holds this list to it). Every other right is given freely. */
+export const ADMINISTRATION_RIGHTS = [
+  "administer_system", "manage_people", "manage_dashboards", "operate_schedules", "manage_ontology",
+  "manage_geospatial", "read_audit", "read_export_ledger", "manage_models",
+] as const;  // prettier-ignore
+const ADMINISTRATION = new Set<string>(ADMINISTRATION_RIGHTS);
+
+/** What the People rows need besides the people: the custom roles, the built-in roles' rights,
+ * the case levels, read once for the section, and the giver's own rights. */
 interface Context {
   custom: CustomRole[];
   builtIn: Record<string, string[]>;
   rows: AdminPeopleRows | null;
+  /** The signed-in giver's rights (`GET /v1/me/rights`); `null` while unknown, when everything is offered and
+   * the Conduit refuses what it must. */
+  giver?: ReadonlySet<string> | null;
 }
+
+/** The rights a role confers: a built-in role's, a single grant's, or a custom role's current ones. */
+function roleRights(role: string, ctx: Context): string[] {
+  if (role.startsWith("right:")) return [role.slice("right:".length)];
+  const custom = ctx.custom.find((c) => `role:${c.id}` === role);
+  return custom ? [...custom.rights] : (ctx.builtIn[role] ?? []);
+}
+
+/** The administration rights `role` would give that the giver does not hold (route A2): the Conduit refuses such
+ * a role newly given (`_may_give`), so the Glass does not offer it. */
+export function withheldRights(role: string, ctx: Context): string[] {
+  if (!ctx.giver) return [];
+  return roleRights(role, ctx).filter((r) => ADMINISTRATION.has(r) && !ctx.giver!.has(r));
+}
+
+const listed = (words: string[]) =>
+  words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+
+/** Why a role is not offered: "You cannot give Admin: it carries Administer system and Read audit, which you do
+ * not hold." */
+export function withheldWords(label: string, rights: string[]): string {
+  return `You cannot give ${label}: it carries ${listed(rights.map(rightName))}, which you do not hold.`;
+}
+
+/** Where the words for every role not offered are said; each such box is described by it. */
+export const WITHHELD_ID = "people-withheld-roles";
+
+const describedBy = (tip: string | undefined, withheld: boolean) =>
+  [tip, withheld ? WITHHELD_ID : undefined].filter(Boolean).join(" ") || undefined;
 
 /** "Author of Kestrel, Harrier; Editor of Heron through Intel" (R3). */
 export function levelWords(levels: PersonCaseLevel[]): string {
@@ -444,6 +485,8 @@ function PersonRow({
   const [confirming, setConfirming] = useState(false);
   const [removing, setRemoving] = useState(false);
   const others = (person.roles ?? []).filter((r) => !ROLE_IDS.has(r) && !customIds.has(r));
+  // A role they hold already stays offered: taking it away gives nothing (route A2).
+  const notOffered = (role: string) => !(person.roles ?? []).includes(role) && withheldRights(role, ctx).length > 0;
   const offered = [...ROLES.map((r) => r.id), ...customIds];
   const changed = offered.some((id) => chosen.has(id) !== (person.roles ?? []).includes(id));
   const levels = ctx.rows?.rows.find((r) => r.id === person.id)?.levels ?? [];
@@ -495,7 +538,8 @@ function PersonRow({
             <input
               type="checkbox"
               aria-label={`${role.label} for ${person.username}`}
-              aria-describedby={roleTip(role.id) ? roleTipId(role.id) : undefined}
+              aria-describedby={describedBy(roleTip(role.id) ? roleTipId(role.id) : undefined, notOffered(role.id))}
+              disabled={notOffered(role.id)}
               checked={chosen.has(role.id)}
               onChange={(e) => {
                 const next = new Set(chosen);
@@ -512,6 +556,8 @@ function PersonRow({
               <input
                 type="checkbox"
                 aria-label={`${c.name} for ${person.username}`}
+                aria-describedby={notOffered(`role:${c.id}`) ? WITHHELD_ID : undefined}
+                disabled={notOffered(`role:${c.id}`)}
                 checked={chosen.has(`role:${c.id}`)}
                 onChange={(e) => {
                   const next = new Set(chosen);
@@ -902,10 +948,12 @@ function AddByObjectIdForm({ api, onAdded }: { api: AdminApi; onAdded: (p: Perso
 function InviteForm({
   api,
   scheme,
+  ctx,
   onInvited,
 }: {
   api: AdminApi;
   scheme: Scheme;
+  ctx: Context;
   onInvited: (d: SignInDelivery) => void;
 }) {
   const [username, setUsername] = useState("");
@@ -998,6 +1046,8 @@ function InviteForm({
               <input
                 type="checkbox"
                 aria-label={`Invite as ${role.label}`}
+                aria-describedby={withheldRights(role.id, ctx).length ? WITHHELD_ID : undefined}
+                disabled={withheldRights(role.id, ctx).length > 0}
                 checked={roles.has(role.id)}
                 onChange={(e) => {
                   const next = new Set(roles);
@@ -1080,9 +1130,9 @@ function WithoutAuthor({
   );
 }
 
-export function People({ api }: { api: AdminApi }) {
+export function People({ api, rights = null }: { api: AdminApi; rights?: ReadonlySet<string> | null }) {
   const [people, setPeople] = useState<PersonAccount[] | null>(null);
-  const [ctx, setCtx] = useState<Context>({ custom: [], builtIn: {}, rows: null });
+  const [ctx, setCtx] = useState<Context>({ custom: [], builtIn: {}, rows: null, giver: rights });
   const [problem, setProblem] = useState<string | null>(null);
   const [delivered, setDelivered] = useState<SignInDelivery | null>(null);
   const [removed, setRemoved] = useState<PersonAccount | null>(null);
@@ -1168,6 +1218,7 @@ export function People({ api }: { api: AdminApi }) {
       )}
       {ctx.rows && <WithoutAuthor api={api} rows={ctx.rows} people={people} onNamed={readContext} />}
       <RoleAndLevelTips roles={ROLES} />
+      <WithheldRoles ctx={ctx} />
       <table className="table" aria-label="People and their roles">
         <thead>
           <tr>
@@ -1216,6 +1267,7 @@ export function People({ api }: { api: AdminApi }) {
         <InviteForm
           api={api}
           scheme={scheme}
+          ctx={ctx}
           onInvited={(delivery) => {
             setDelivered(delivery);
             setPeople((current) => [...(current ?? []), delivery.person]);
@@ -1223,5 +1275,23 @@ export function People({ api }: { api: AdminApi }) {
         />
       )}
     </>
+  );
+}
+
+/** The roles this giver is not offered, each with why (route A2); nothing when every role is offered. */
+function WithheldRoles({ ctx }: { ctx: Context }) {
+  const roles = [
+    ...ROLES.map((r) => [r.id, r.label] as const),
+    ...ctx.custom.map((c) => [`role:${c.id}`, c.name] as const),
+  ];
+  const said = roles
+    .map(([id, label]) => [label, withheldRights(id, ctx)] as const)
+    .filter(([, rights]) => rights.length > 0)
+    .map(([label, rights]) => withheldWords(label, rights));
+  if (!said.length) return null;
+  return (
+    <p className="label" id={WITHHELD_ID} style={{ margin: 0 }}>
+      {said.join(" ")}
+    </p>
   );
 }
