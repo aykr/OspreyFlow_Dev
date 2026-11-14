@@ -124,6 +124,8 @@ afterEach(() => {
 
 const REFUSED: LimitExceeded = { error: "limit_exceeded", cap_kind: "nodes", cap: 5000, would_be: 6210, options: ["save_as_view", "filter", "promote_to_batch"] };
 const ASKED = { nodeId: "p1", edgeType: null, depth: 1, refused: REFUSED };
+// The panel asks where the job is every 2 s (ADR-151), on real timers: each case waits up to 5 s for the result, in a
+// test given 15 s, so a result never opened fails on its own words, not the test's timeout.
 const panel = () => screen.queryByRole("region", { name: "Batch job: the whole expansion" });
 
 describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
@@ -141,7 +143,7 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     expect(screen.getByText("Saved 6,210 nodes and 9,004 links as your private view “Kestrel, expanded”. Its result is open as the view “Kestrel, expanded”.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(panel()).toBeNull());
-  });
+   }, 15_000);
 
   test("offers no batch job while a view is open: an expansion there is not the case's", async () => {
     render(<App />);
@@ -151,5 +153,5 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     await screen.findByRole("region", { name: "Open view" }, { timeout: 5000 });
     await waitFor(() => expect(canvasProps.current?.lens).toBe(true));
     expect(canvasProps.current?.onRunExpansionAsBatch).toBeUndefined();
-  });
+   }, 15_000);
 });
