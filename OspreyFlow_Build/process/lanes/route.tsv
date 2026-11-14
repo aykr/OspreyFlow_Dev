@@ -40,7 +40,12 @@ S7	Mark for suppression survives a reload: the marks are read back, and a marked
 S8	Mark for suppression asks the analyst for a reason (ADR-046 step 1), not a fixed one	case	2026-11-14	2026-11-15	y	-	case:v052-suppress-reason
 S9	ospreyflow start --build rebuilds the search index, as install and update do	platform	2026-11-14	2026-11-15	y	-	platform:v052-startbuild-index
 M9	The fallback name search under its 5 s budget at client size: search_nodes from record ids found by index, not a scan of the store (ADR-124 Am 21)	rules	2026-11-15	2026-11-15	y	4	rules:v052-search-from-rids
-C	The candidate: main after the sweep, with CI green on it (waits on step 4, M10 passing: the owner, 14 Nov)	orchestrator	2026-11-15	2026-11-15	y	4,5,3i,F,T,Q,P,S,W,E,G,M,R,K,A,V,N,H,D2,A2,S7,S8,S9,M9	orchestrator:v052-candidate
+V1	"View" means a saved view only, and the way back to the whole case (ADR-145 Am 17, ADR-144 Am 6; the owner's exception, 14 Nov)	case	2026-11-14	2026-11-15	y	-	case:v052-saved-views
+V2	The saved views panel: its title, The whole case first, Open now, unnamed views told apart (the owner's exception)	case-b	2026-11-14	2026-11-15	y	-	case-b:v052-saved-views-panel
+V3	No internal note on screen: "(the client's)", "to be confirmed" removed, held by a guard (the owner's exception)	studio	2026-11-14	2026-11-15	y	-	studio:v052-no-internal-notes
+V4	Every panel and menu on the page's own type scale in both looks, by measurement (the owner's exception)	admin	2026-11-14	2026-11-15	y	-	admin:v052-panel-type-scale
+V5	The user guide follows the saved-views words; the sweep's navigation items re-run (the owner's exception)	docs	2026-11-14	2026-11-15	y	V1,V2	docs:v052-guide-saved-views
+C	The candidate: main after the sweep, with CI green on it (waits on step 4, M10 passing: the owner, 14 Nov)	orchestrator	2026-11-15	2026-11-15	y	4,5,3i,F,T,Q,P,S,W,E,G,M,R,K,A,V,N,H,D2,A2,S7,S8,S9,M9,V1,V2,V3,V4,V5	orchestrator:v052-candidate
 D	osprey-small (the GOV.UK demo) from the candidate, for client sign-ins (the owner, 14 Nov): backup, the gate, four sign-ins, health, a browser pass; restored if any check fails	orchestrator	2026-11-15	2026-11-15	n	C,4	-
 6	The install test on the candidate, from the manifest: v0.5.1 upgraded, and a fresh v0.5.2 install, each with spec 08's poc scenarios	platform-b	2026-11-16	2026-11-16	y	4,C	platform-b:v052-r1
 7	Cut v0.5.2; print the page tables; the demos when the owner says	orchestrator	2026-11-17	2026-11-17	y	6	-

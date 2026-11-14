@@ -2088,3 +2088,7 @@ Also asked by the lanes:
 2. **M10 is a gate**: the candidate (C) and the demo update (D) wait on step 4, M10 passing; a failure in the product stops everything and goes to the owner.
 3. **The candidate's list is closed**: nothing new joins unless a client using the demo would trip over it, and any addition goes to the owner first in one line (what a user sees, what changes).
 4. **One green CI run on main**, with its number, before the candidate is made.
+
+## 14 November 2026, ~22:00Z: the owner's exception, saved views and the way back
+
+The owner's exception to the closed list, built tonight and in the candidate: "view" means a saved view only; the way back to the whole case; two defects seen on the same screen (an internal note on screen; panels and menus off the type scale). Split by file ownership: case V1 (wording, case line, strip, back link, toolbar menu withdrawn; ADR-145 Am 17, ADR-144 Am 6), case-b V2 (the saved views panel), studio V3 (internal notes, a guard), admin V4 (type scale by measurement), docs V5 (the user guide; the sweep's navigation items re-run). The candidate ad2725f is superseded; C is remade after V1–V5, and the demo update waits on it. M10, a green CI run and step 6 stand unchanged.
