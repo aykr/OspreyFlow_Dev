@@ -132,6 +132,43 @@ day adds the following:
 So allow **most of the day**, and the full suite on top: about 80 minutes for CI's run, from its recent runs on main,
 not measured here.
 
+## The day plan (Wed 25 Nov), in order, with times
+
+**M** is measured: R1's own records of 13 November, `process/lanes/platform/r1/run/`, on a warm cluster with our
+images already built (INSTALL 17:58:44 to its check 18:04:25; the check to the restore's record about 1.5 min; the
+decommission about 4 min). **E** is an estimate, never measured: chiefly the cold builds of our images, which R1's
+records do not time.
+
+| Start (UTC) | Rows | What | Time | Basis |
+| --- | --- | --- | --- | --- |
+| 08:00 | — | the server checked first: rules' B stack down (Q5), osprey-r1 and R1's state folder ours, the load low, nothing of `osprey-upg` or another lane's R1 left | 10 min | E |
+| 08:10 | 0 | copy A: `tools`, `up`, `py platform` (the cluster, Calico, ingress, the stand-ins, the domain's engine image built) | 20–30 min | E |
+| 08:40 | 1 | copy A: v0.5.1's INSTALL. Its step 3 builds and pushes our images cold | 35–50 min | E (warm: ≤ 6 min, M) |
+| 09:30 | 2 | copy A: R1's checks on v0.5.1 | 3–5 min | E (inside M's 6) |
+| 09:35 | 2b–10 | **copy B, one `stack_lease.sh remote` command:** | | |
+| | 2b | `survival snap` | < 1 min | E |
+| | 3 | *Before an upgrade*, then *A backup now* | 2–3 min | M (backup + restore ≈ 1.5 min) |
+| | 4 | the upgrade: INSTALL again. Its step 3 builds the candidate's images cold | 35–50 min | E |
+| | 4b | `survival verify` | < 1 min | E |
+| | 5 | R1's checks on the candidate | 3–5 min | E |
+| | 6 | the dashboards check: the report sync's restart and first pull wait up to 10 min, then sign-ins, building, the chart and RLS reads, the refusals | 15–25 min | E |
+| | 7, 7b, 7c | spec 08 (12 cases), its two seed-free halves, and their reds | 20–30 min | E |
+| | 8 | backup, change, restore, restored, and the two suspended CronJobs once each | 5–10 min | M for the backup and restore, E for the jobs |
+| | 9 | `verify_live.sh`, 50 checks | 5–10 min | E |
+| | 10 | memory | 1 min | E |
+| ~11:30 | — | copy B's command ends. Its records are read **before going on**: a FAIL anywhere means a fix, then rows 4 to 10 again (another 1.5–2 h) | 15 min | E |
+| 11:45 | 11a, 11 | the unchosen decommission (blocks 1 to 6, then the refusal at 7), then keep from 7 | 8–10 min | M (≈ 4 min) + E |
+| 12:00 | 11b | the cluster made again (down, up, platform), INSTALL from copy B (images cold again, the registry gone with the cluster), a set, then destroy | 70–100 min | E |
+| 13:40 | 12 | `down`, nothing of the run left | 5 min | E |
+| 13:45 | 13 | the full suite offline: `make ci`'s gates and `make test`, through `stack_lease.sh offline` | 60–90 min | E (CI's own run on main is about 80 min) |
+| 15:15 | 13b, 14 | the CI run on the candidate's exact commit recorded by id; `UPGRADE.log` committed with docs' guide sentence (row 14) | 15 min | E |
+| ~15:30 | — | the report to the orchestrator: every row's record, the leases each ran under | 15 min | — |
+
+**Start at 08:00 sharp, and if a fix is needed after about 13:00, tell the orchestrator before rerunning** (the orchestrator, 14 November: a FAIL costs 1.5 to 2 h, and the 15:30 finish has little slack). **About 7.5 h with no fix**, ending mid-afternoon. A failure in copy B's command costs one more pass of rows 4 to 10,
+about 1.5 to 2 h, and the day still ends within it. Row 13 does not touch the cluster, but it is kept until after row
+12 because both load one server (a 32 GiB node and the suite's workers). The two cold builds (rows 1 and 4) are the
+largest unknowns: their real times go in the record and replace these estimates for the next release's run.
+
 ## Answered by the orchestrator (14 November)
 
 - **Q1. The upgrade:** the client upgrades by re-running INSTALL's `helm upgrade --install` from the new release's

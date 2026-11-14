@@ -146,8 +146,11 @@ def test_the_chart_with_its_backups_is_valid_kubernetes() -> None:
 
 
 def _with_claims(values: dict[str, Any]) -> dict[str, Any]:
-    """The poc shape's Ingest root on a claim of its own (ADR-148 Amendment 5): `storage.claims`."""
+    """The poc shape's Ingest root on a claim of its own (ADR-148 Amendment 5): `storage.claims`; so
+    its shared folder is not a part as well (`cloud_platform_backups.shared_parts`)."""
     values["storage"] = {**values["storage"], "claims": [{"name": "ingest", "size": "50Gi"}]}
+    shared = values["backups"]["shared"]
+    values["backups"]["shared"] = [p for p in shared if p["name"] != "shared-ingest"]
     return values
 
 
@@ -161,6 +164,8 @@ def _env(container: dict[str, Any]) -> dict[str, Any]:
 
 #: The shared claim's parts every set holds (the ADR-148 audit's ruling 3, Amendment 13), in order.
 SHARED = "shared-recipes,shared-model-settings,shared-map-settings"
+#: The standard shape's, with its Ingest root's folder (MORNING item 6, (a)).
+STANDARD_SHARED = f"{SHARED},shared-ingest"
 SHARED_CLAIM_READ_ONLY = {
     "name": "shared",
     "persistentVolumeClaim": {"claimName": "ospreyflow-shared", "readOnly": True},
@@ -179,9 +184,28 @@ def test_the_standard_shapes_claims_run_backs_the_shared_claims_parts_alone() ->
     assert main is not None
     env = _env(main["containers"][0])
     named = _env(claims["containers"][0])["OSPREY_BACKUP_CLAIMS"]
-    assert env["OSPREY_BACKUP_CLAIMS"] == named == SHARED
+    assert env["OSPREY_BACKUP_CLAIMS"] == named == STANDARD_SHARED
+    container = claims["containers"][0]
+    mounts = {m["mountPath"]: (m["subPath"], m.get("readOnly")) for m in container["volumeMounts"]}
+    assert mounts["/claims/shared-ingest"] == ("ingest", True)
     # Each run names its set by its Job's name, the schedule slot (platform_backup.set_of).
     assert env["OSPREY_BACKUP_JOB"] == {"fieldRef": {"fieldPath": "metadata.labels['batch.kubernetes.io/job-name']"}}
+
+
+def test_the_standard_shapes_restore_puts_the_ingest_folder_back() -> None:
+    """MORNING item 6, (a): restore-claims mounts the shared claim's `ingest` folder writable, at
+    its part's name, and is told it among the parts it puts back."""
+    values = rendered.values()
+    values["backups"]["restore"] = {"set": "20261111T021500Z"}
+    docs = _docs(values)
+    pod = pod_spec(_exactly(docs, "Job", "ospreyflow-restore-claims-20261111t021500z"))
+    assert pod is not None
+    container = pod["containers"][0]
+    mounts = {
+        m["mountPath"]: (m["subPath"], m.get("readOnly", False)) for m in container["volumeMounts"]
+    }
+    assert mounts["/claims/shared-ingest"] == ("ingest", False)
+    assert _env(container)["OSPREY_BACKUP_CLAIMS"] == STANDARD_SHARED
 
 
 def test_the_claims_run_is_beside_the_shared_pods_on_the_same_schedule_read_only() -> None:

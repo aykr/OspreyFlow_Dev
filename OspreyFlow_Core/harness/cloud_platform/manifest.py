@@ -139,6 +139,15 @@ def rendered(config: Any, *, resolver: Any = None) -> dict[str, Any]:
                 **_sizes(search["resources"]),
             }
 
+    seed = values.get("seed")
+    if seed:
+        jobs[seed["name"]] = {
+            "kind": "CronJob",
+            "schedule": "suspended, started by the install runbook's optional seed block",
+            "image": _repository(seed["image"], registry),
+            **_sizes(seed["resources"]),
+        }
+
     listed_images: dict[str, Any] = {}
     for image in images["images"]:
         name = _repository(image["target"], registry)

@@ -1,0 +1,105 @@
+Running on ospreyflow-test (stack f, osprey-runs/studio/), logged at osprey-runs/studio.meta/runs/20261113T223821Z-b9f0092e/log: bash -c cd OspreyFlow_Build && ../OspreyFlow_Core/.venv/bin/python -m pytest -p no:cacheprovider -q -rA tests/services/search_index/test_search_leak_live.py
+............FF.FF                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_names_exact_every_word_sounds_alike_and_spelt_alike ___________
+
+    async def test_names_exact_every_word_sounds_alike_and_spelt_alike() -> None:
+        assert _bands(await _search("Smythe"))[0] == ("p-smythe", "name_exact")
+        assert ("p-smythe", "name_words") in _bands(await _search("John Smythe"))
+        sounds = _bands(await _search("Smyth"))
+        assert ("p-smythe", "name_sounds") in sounds and ("p-smith-r", "name_sounds") in sounds
+        assert ("p-mohammed", "name_sounds") in _bands(await _search("Muhammad"))
+>       assert ("p-smythe", "name_typo") in _bands(await _search("Smythee"))
+E       assert ('p-smythe', 'name_typo') in [('p-smith-r', 'name_sounds'), ('p-smythe', 'name_sounds'), ('p-smythe-public', 'name_sounds')]
+E        +  where [('p-smith-r', 'name_sounds'), ('p-smythe', 'name_sounds'), ('p-smythe-public', 'name_sounds')] = _bands(SearchPageResponse(nodes=[Node(id='p-smith-r', type='Person', properties={'family_name': 'Smith', 'given_names': 'John...unds', why="Sounds like 'Smythee'", field=None), passage=[], date='2026-01-01', datasets=['ds-1'], is_document=False)]))
+
+tests/services/search_index/test_search_leak_live.py:510: AssertionError
+___________ test_a_mention_is_found_in_text_with_its_passage_marked ____________
+
+    async def test_a_mention_is_found_in_text_with_its_passage_marked() -> None:
+        found = await _search("Kestrel invoice")
+        bands = _bands(found)
+>       assert bands[0] == ("d-memo", "mention_words")
+E       AssertionError: assert ('d-note', 'name_typo') == ('d-memo', 'mention_words')
+E         
+E         At index 0 diff: 'd-note' != 'd-memo'
+E         Use -v to get more diff
+
+tests/services/search_index/test_search_leak_live.py:516: AssertionError
+__________________ test_the_date_filter_and_the_offered_span ___________________
+
+    async def test_the_date_filter_and_the_offered_span() -> None:
+        found = await _search(
+            "invoice", filters=s.SearchFilters(date_from="2026-01-01", date_to="2026-01-31")
+        )
+>       assert [n for n, _ in _bands(found)] == ["d-memo"]
+E       AssertionError: assert ['d-public'] == ['d-memo']
+E         
+E         At index 0 diff: 'd-public' != 'd-memo'
+E         Use -v to get more diff
+
+tests/services/search_index/test_search_leak_live.py:537: AssertionError
+__________________ test_suggestions_come_from_stored_prefixes __________________
+
+    async def test_suggestions_come_from_stored_prefixes() -> None:
+        reader = READERS["cleared-for-R"]
+        nodes, texts = _seen(reader)
+        async with throwaway_index(nodes, texts, schema=ONTOLOGY) as (client, index):
+            searcher = s.opensearch_searcher(client, index)
+            body = q.build_suggest_body(
+                "Smy", access_filter=index_access_filter(SCHEME, reader), limit=10
+            )
+            ids, more = q.read_suggest_response(await searcher(body), limit=10)
+            body = q.build_suggest_body(
+                "AB1234", access_filter=index_access_filter(SCHEME, reader), limit=10
+            )
+            by_id, _ = q.read_suggest_response(await searcher(body), limit=10)
+>       assert ids == ["p-smythe"] and more is False
+E       AssertionError: assert (['p-smythe', ...mythe-public'] == ['p-smythe']
+E         
+E         Left contains one more item: 'p-smythe-public'
+E         Use -v to get more diff)
+
+tests/services/search_index/test_search_leak_live.py:559: AssertionError
+==================================== PASSES ====================================
+============================= slowest 30 durations =============================
+0.91s call     tests/services/search_index/test_search_leak_live.py::test_names_exact_every_word_sounds_alike_and_spelt_alike
+0.87s call     tests/services/search_index/test_search_leak_live.py::test_default_relevance_would_leak_through_word_rarity
+0.68s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[datasets]
+0.64s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+0.59s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[classification]
+0.59s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[not-for-R]
+0.58s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[text_unit]
+0.57s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[public-other-unit]
+0.57s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[handling_code]
+0.47s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[empty-case]
+0.42s call     tests/services/search_index/test_search_leak_live.py::test_the_world_is_not_vacuous
+0.39s call     tests/services/search_index/test_search_leak_live.py::test_fuzzy_expansion_would_leak_a_visible_record_out
+0.22s call     tests/services/search_index/test_search_leak_live.py::test_names_rank_above_mentions_and_groups_count_records
+0.19s call     tests/services/search_index/test_search_leak_live.py::test_suggestions_come_from_stored_prefixes
+0.19s call     tests/services/search_index/test_search_leak_live.py::test_an_exact_identifier_comes_first
+0.19s call     tests/services/search_index/test_search_leak_live.py::test_the_date_filter_and_the_offered_span
+0.18s call     tests/services/search_index/test_search_leak_live.py::test_a_mention_is_found_in_text_with_its_passage_marked
+0.06s setup    tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+
+(12 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+PASSED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[not-for-R]
+PASSED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[public-other-unit]
+PASSED tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[empty-case]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_world_is_not_vacuous
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[classification]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[handling_code]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[datasets]
+PASSED tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[text_unit]
+PASSED tests/services/search_index/test_search_leak_live.py::test_default_relevance_would_leak_through_word_rarity
+PASSED tests/services/search_index/test_search_leak_live.py::test_fuzzy_expansion_would_leak_a_visible_record_out
+PASSED tests/services/search_index/test_search_leak_live.py::test_an_exact_identifier_comes_first
+PASSED tests/services/search_index/test_search_leak_live.py::test_names_rank_above_mentions_and_groups_count_records
+FAILED tests/services/search_index/test_search_leak_live.py::test_names_exact_every_word_sounds_alike_and_spelt_alike
+FAILED tests/services/search_index/test_search_leak_live.py::test_a_mention_is_found_in_text_with_its_passage_marked
+FAILED tests/services/search_index/test_search_leak_live.py::test_the_date_filter_and_the_offered_span
+FAILED tests/services/search_index/test_search_leak_live.py::test_suggestions_come_from_stored_prefixes
+4 failed, 13 passed in 9.34s
+Wall time: 11 s, exit 1 (stack f, the lease studio took at 2026-11-13T22:35:56Z; set-up before it 14 s)

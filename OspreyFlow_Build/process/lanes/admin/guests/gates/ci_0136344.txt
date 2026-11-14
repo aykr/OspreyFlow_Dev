@@ -1,0 +1,41 @@
+# make -k ci at 0136344 (on main d836ff0): trivy-image-superset alone failed, main's (CVE-2026-128089 in dnspython; accepted on main by 8fdf6ef after this base).
+Total: 1 (HIGH: 1, CRITICAL: 0)
+│ dnspython (METADATA) │ CVE-2026-128089 │ HIGH     │ fixed  │ 2.7.0             │ 2.9.2         │ dnspython has excessive memory and CPU use  │
+make[2]: *** [Makefile:75: trivy-image-superset] Error 1
+  34 passed (24.0s)
+make[1]: *** [Makefile:69: core-check] Error 2
+licence-check: 94 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+licence-check: 355 packages, all allowed.
+licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
+design-check: no finding outside DESIGN.md §9, and Core's DESIGN.md is the contract
+colour-drift-check: every colour in the Glass is one DESIGN.md holds
+ui-words-check: no "target model" in the Glass's copy (tests/test_ui_words_check.py holds the proof)
+============================== 8 passed in 5.18s ===============================
+Success! 9 passed, 0 failed.
+Success! 11 passed, 0 failed.
+Success! 12 passed, 0 failed.
+Success! 11 passed, 0 failed.
+============================= 54 passed in 13.28s ==============================
+cp-policy-check: 0 violation(s)
+============ 391 passed, 6 skipped, 1 warning in 299.95s (0:04:59) =============
+schemas-check: 618 generated types match committed output.
+authorized-query-check: 168 files under services/api, no offenders.
+demo-guide-check: 12 registered demo(s), all documented.
+domain-model-coverage-check: 105 class(es), 0 allowlisted, no new drift.
+route-coverage-check: 425 route(s), 0 allowlisted, no new drift.
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allowlist shrinks to zero as the decision log's own prose is edited to state each constraint without the private pointer.
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+test-file-coverage-check: 1083 test file(s), 0 allowlisted, no new drift.
+doc-citations-check: 2818 file(s) scanned, every cited path exists.
+================ 17 passed, 2 skipped, 780 deselected in 1.37s =================
+======================== 205 passed in 78.94s (0:01:18) ========================
+adr-reservations-check: every heading above the baseline is reserved.
+============================= 10 passed in 17.35s ==============================
+no-branches-check: 1679 files, no branch named.
+============================== 12 passed in 1.27s ==============================
+no-langchain-check: no LangChain, spaCy or Laurium outside Laurium's own image (source).
+============================== 28 passed in 1.54s ==============================
+make: *** [Makefile:19: ci] Error 2
+Wall time: 853 s, exit 2 (no stack, no lease; set-up before it 7 s)
+ci exit 2

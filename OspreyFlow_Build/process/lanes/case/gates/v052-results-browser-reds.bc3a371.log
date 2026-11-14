@@ -1,0 +1,58 @@
+# v052-fixes browser reds at bc3a371; each plant restored with `git checkout -- <file>`
+## 1. Enter not passed on by the search box (main's GlobalSearch)
+plant in src/search/GlobalSearch.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/search-results.spec.ts -g 'ospreyflow dark: Enter in the search box opens the results'; exit 1
+  ✘  1 keyboard/search-results.spec.ts:34:3 › ospreyflow dark: Enter in the search box opens the results, focus on their heading, the view left out of reach (5.2s)
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Error: element(s) not found
+  1 failed
+## 2. the view left in reach beneath the results
+plant in keyboard/search-results-harness.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/search-results.spec.ts -g 'ospreyflow dark: Enter in the search box opens the results'; exit 1
+  ✘  1 keyboard/search-results.spec.ts:34:3 › ospreyflow dark: Enter in the search box opens the results, focus on their heading, the view left out of reach (5.3s)
+    Error: expect(locator).not.toBeFocused() failed
+    Expected: not focused
+    Received: focused
+  1 failed
+## 3. the heading not focused on opening
+plant in src/search/SearchResults.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/search-results.spec.ts -g 'govuk light: Enter in the search box opens the results'; exit 1
+  ✘  1 keyboard/search-results.spec.ts:34:3 › govuk light: Enter in the search box opens the results, focus on their heading, the view left out of reach (5.2s)
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+  1 failed
+## 4. a group not chosen by its button
+plant in src/search/SearchResults.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/search-results.spec.ts -g 'ospreyflow light: a group, a dataset and the next page'; exit 1
+  ✘  1 keyboard/search-results.spec.ts:50:3 › ospreyflow light: a group, a dataset and the next page are chosen by keyboard (5.3s)
+    Error: expect(locator).toHaveAttribute(expected) failed
+    Expected: "true"
+    Received: "false"
+  1 failed
+## 5. Next page asking the same page
+plant in src/search/SearchResults.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/search-results.spec.ts -g 'govuk light: a group, a dataset and the next page'; exit 1
+  ✘  1 keyboard/search-results.spec.ts:50:3 › govuk light: a group, a dataset and the next page are chosen by keyboard (5.1s)
+    Error: expect(received).toMatchObject(expected)
+    - Expected  - 1
+    + Received  + 1
+  1 failed
+## 6. Open doing nothing
+plant in src/search/SearchResults.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/search-results.spec.ts -g 'ospreyflow dark: a result is shown on the graph'; exit 1
+  ✘  1 keyboard/search-results.spec.ts:69:3 › ospreyflow dark: a result is shown on the graph, a document opened and the Ask line followed, by keyboard (5.1s)
+    Error: expect(received).toEqual(expected) // deep equality
+    - Expected  - 3
+    + Received  + 1
+  1 failed
+## 7. Back leaving focus where it was
+plant in keyboard/search-results-harness.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/search-results.spec.ts -g 'govuk light: Back returns to the view'; exit 1
+  ✘  1 keyboard/search-results.spec.ts:86:3 › govuk light: Back returns to the view, focus in the search box (5.2s)
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+  1 failed
+## 8. Enter always submitting, over a suggestion moved to
+plant in src/design/primitives/Combobox.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/search-results.spec.ts -g 'a suggestion moved to with the arrow keys'; exit 1
+  ✘  1 keyboard/search-results.spec.ts:100:1 › a suggestion moved to with the arrow keys is chosen by Enter, and no results page opens (5.5s)
+    Error: expect(locator).toHaveCount(expected) failed
+    Expected: 0
+    Received: 1
+  1 failed
+# 8 of 8 red

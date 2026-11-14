@@ -3,6 +3,11 @@
 # the cluster's own registry. Every id is synthetic (rule 9); the tenant and the app registrations are the
 # Entra stand-in's (r1_kind.py), which answers as login.microsoftonline.com inside the cluster.
 profile: cloud-platform
+# Spec 08's acceptance data holds SECRET items, above the profile's default ceiling: a POC shown with it
+# declares SECRET, the client's choice (INSTALL.md step 9; the owner's ruling, MORNING item 2 (a)), so
+# step 6 can run the seed.
+deployment:
+  highest_marking: SECRET
 components:
   analytics_engine: clickhouse
   # v0.5.2 (ADR-148 Amendment 13): the poc shape searches with its own OpenSearch domain, which the

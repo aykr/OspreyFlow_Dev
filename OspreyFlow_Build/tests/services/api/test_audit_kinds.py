@@ -198,6 +198,8 @@ def test_a_writer_the_scan_cannot_read_is_reported(tmp_path: pathlib.Path) -> No
 WORDS_SHOWN_ACTIONS = frozenset({
     "invite_person", "add_person_by_object_id", "grant_first_administrator",
     "grant_first_administrator_access", "set_person_roles",
+    # ADR-148 Amendment 17: whether guests are admitted, its before and after a setting's.
+    "set_guest_sign_in",
     "set_person_access",
     "disable_person", "disable_person_incomplete", "enable_person", "remove_person", "reset_person_sign_in",
     "link_organisation_account", "create_custom_role", "change_custom_role", "make_team",

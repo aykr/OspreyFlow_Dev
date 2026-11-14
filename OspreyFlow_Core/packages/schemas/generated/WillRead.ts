@@ -1,6 +1,6 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
-export type ReadFrom = "selection" | "graph";
+export type ReadFrom = "selection" | "graph" | "case";
 export type Documents = number;
 export type DocumentsWithoutText = number;
 export type Items = number;
@@ -8,6 +8,11 @@ export type Links = number;
 export type Events = number;
 export type Selected = number;
 export type FirstSelected = string | null;
+export type Found = number;
+export type Passages = number;
+export type LimitedReason = string | null;
+export type CountsExact = boolean;
+export type More = boolean;
 export type Engine = string | null;
 export type EngineLabel = string | null;
 export type Model = string | null;
@@ -45,6 +50,11 @@ export interface ReadSummary {
   events: Events;
   selected: Selected;
   first_selected: FirstSelected;
+  found: Found;
+  passages: Passages;
+  limited_reason: LimitedReason;
+  counts_exact: CountsExact;
+  more: More;
   [k: string]: unknown;
 }
 /**

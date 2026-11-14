@@ -1,0 +1,6 @@
+# Glass plant: StatusBadge.tsx not rendering the reason; vitest src/watches
+     × the reason is shown beside Stopped 4ms
+     × shows why it is stopped 1005ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 8 passed (10)
+# restored: Tests 10 passed (10)

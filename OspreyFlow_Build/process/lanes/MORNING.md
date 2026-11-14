@@ -4,7 +4,7 @@ Kept by the orchestrator through the night. The owner's words for the night: mer
 merges, sol lanes to ayan without the 80% limit, load B on the test server; page A ruled (strict ranking, groups
 count records).
 
-**v0.5.1 is tagged but not released (01:35 UTC).** The tag `v0.5.1` is pushed to the product repository
+**v0.5.1 is released (06:4x UTC, 14 Nov):** the tag at da62b36, release workflow 43565800393 green, 6 assets. Step 13, updating osprey-small (your GOV.UK demo) to v0.5.1, waits on your word, as the demo server always does; it needs the CHANGELOG's one-line repair first. *(History below.)* **v0.5.1 was tagged but not released (01:35 UTC).** The tag `v0.5.1` is pushed to the product repository
 (213d2c2, from 477a500) and to this one. The release workflow (aykr/OspreyFlow run 43541237293) then failed:
 the Superset image's scan found **CVE-2026-128089 in dnspython 2.7.0** (HIGH, excessive memory and CPU use;
 fixed in 2.9.2), published after the last scan. The other images were cancelled with it, so no release and no
@@ -134,6 +134,22 @@ The items below are kept as they were written.
    client's API registration. That is something the client creates, which A ruled out, so it is not being built.
    Say if you want it after v0.5.2.
 
+10. **"Promote to a batch job" at the working-set cap is required but built nowhere (case's finding, 14 Nov).**
+    spec 00 (§ the working set, lines 828–830), spec 03 (lines 1441–1443) and the working-set decision (06:335)
+    say that at the cap the Glass offers three choices: save a smaller view, filter before expanding, or promote the
+    expansion to a batch job whose result is a saved subgraph. The Conduit already names all three in its typed
+    `limit_exceeded`. But there is no batch-job route, job type or screen anywhere, and ADR-144 Am 2 already narrowed
+    the over-cap dialog to *Save as a view*. Case is now giving the canvas's expand refusal the two that exist:
+    narrow by link type, and save as a view. The third is your call:
+    - **(a)** build it for v0.5.2: a batch job that runs the expansion server-side and saves the result as a view
+      (roughly 1–2 days across case and rules, and it needs an ADR);
+    - **(b)** defer it past v0.5.2, amending spec 00 and 03 to say two choices until it is built, and telling the
+      client.
+
+    **You ruled (a), build it for v0.5.2 (14 Nov).** ADR-151 is reserved; rules-b leads the Conduit and worker,
+    case-b the Glass, with a target of main by Sat 21. (I had recommended (b).) It has been missing since before this route, B's load shows the cap is rarely met on the
+    measured case, and (a) would land in freeze week.
+
 ## Decided by the lanes, for you to overrule if you wish
 
 - **Case, Build a report for the Administrator (ADR-145 Am 15 decision 5):** a builder without the Reports
@@ -158,6 +174,12 @@ The items below are kept as they were written.
   - A refusal's dataset names are scrubbed for a caller who may not see them.
 
 ## Done overnight
+
+- **A Glass crash found live (case, 14 Nov), being fixed.** In scenario A's A12, choosing the search suggestion for
+  HMP-0003 throws "NotFoundError: Failed to execute 'insertBefore' on 'Node'", and React throws away the whole page
+  (#root empty). It happened on every run. Fixture Corp's suggestions don't crash. The lead is the search box's
+  three-hop draw into a 1,203-entity case. Case owns it and is fixing it red first. A whole-page crash is treated as a
+  release blocker for v0.5.2.
 
 - **B's load was interrupted at 04:40Z by the test server running out of memory** (59 of 62 GB used). Two lanes'
   `make test` runs had run at the same time, beside about 15 orphaned test-IdP Keycloak containers, and the kernel

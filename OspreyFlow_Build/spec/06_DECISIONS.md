@@ -36924,7 +36924,71 @@ beside the current view, and there is one route to cases and one place to manage
 `note` props, left for a later clean-up with their tests; `case-screen-options-harness.tsx`, L2.3's prototype of the old variants, left as the
 record it is.
 
-**Part A (step 3e′), the search results layout:** to be recorded here when built.
+**Part A (step 3e′, `v052-results`), the search results layout, as built (14 November 2026).** Built against the search
+service's request and response as studio froze them (`process/lanes/studio/SEARCH_RESPONSE_SHAPE.md` at ee7a16d) and
+modelled them (`packages/schemas/search.py`, `SearchPageRequest` and `SearchPageResponse`, studio's 47e9213, carried on
+this branch as the same commit). The owner's rulings stand: strict ranking, and the groups count records, the screen
+saying "records".
+
+1. **Enter opens the results.** Enter on the words typed in the top bar's search box opens the results page. Suggestions
+   under the box stay as they were: one moved to with the arrow keys is still chosen by Enter (`Combobox`'s `onSubmit`:
+   with it, nothing is highlighted until the arrow keys move; without it, Enter chooses the first option, as before, so
+   the query builder's box is unchanged).
+2. **They fill the main area.** The results (`search/SearchResults.tsx`) are laid over the view the person left, which
+   stays mounted beneath them, as it was, and `inert` while they show: "Back to ‹view›" returns to it exactly as it was,
+   focus in the search box. While they show no view is current (none pressed in the switch, *More views* not marked),
+   and choosing any view leaves them, as do a saved view opened (from the Cases panel or an alert), another place, the
+   context row's cross-link and the openers of Rules and Monitoring and the Studio. A rail panel opens beside them and
+   leaves them showing; Help's keys panel opens over them. When they show, Back's focus, the view's reach and focus
+   after a document is read are one hook, `search/useSearchResultsOverlay.ts`, which the keyboard harness uses too.
+   The same words searched again ask again and take focus to the heading. The search box's own Filters (an entity
+   type, *Only nodes on screen*) shape its suggestions alone: the results start at *All* with no filter, and their
+   own filters are the page's.
+3. **The page.** A back link (`govuk-back-link` under GOV.UK); the heading "Search results for '…'", focused on opening;
+   the total in records, the Conduit's (the chosen group's own count once a group is chosen), with "(counts may be
+   incomplete)" where `counts_exact` is false, announced in a status line at each load; every count from the latest
+   answer, the group and filters as they stand; *All* then the Conduit's groups, each with its count, choosing one asking again; the
+   dataset and date filters the response offers, beside the list, with *Clear filters*; each result named as the canvas
+   names it (`nodeLabel` of its first record, so the analyst's per-type label holds), its type, the Conduit's words for
+   why it matched, its date, and for a document its passage with the matched words bold and underlined; a record the
+   result names that the answer does not hold is said ("1 of its 3 records could not be read."), never dropped in
+   silence; *Next page* and *Previous page* (20 a page; GOV.UK's pagination under that brand), each, like *Clear
+   filters*, taking focus to the heading of the new answer; the date filter GOV.UK's date input (day, month, year)
+   under that brand, a date field otherwise; "No records match '…'." with *Clear filters* where a filter is on; on the
+   fallback, the Conduit's `limited_reason` in one line, or "Results are limited: the search index is not in use."
+   where it gives none; a refusal in the Conduit's words. A query over the search's limit (`MAX_QUERY_CHARS`, 200,
+   counted by character as the Conduit counts) is refused, never cut (rule 2). The box sets no `maxLength`, so a long
+   query is taken whole, pasted or typed. FastAPI's 422 for it is a list, not words, and the page names the limit
+   from it: "The search could not be done: a search can be at most 200 characters, and this one has ‹n›. Shorten it
+   and press Enter again." Any other list refusal says only "The search could not be done (‹status›)." and never
+   the framework's own words. Found reading studio's route while preparing the live check; the orchestrator ruled on
+   14 November 2026 that it is fixed before the merge and that the box sets no `maxLength`. Help's keys panel opens
+   over the results only when asked for (Help or `?`). The panel shown by itself on a first visit belongs to the graph:
+   over the results it lay on the first result's *Show on graph*, found by the live check, so it is not drawn there and
+   is shown again on Back.
+4. **The actions.** *Show on graph* (named "Show on graph: ‹name›", the visible words first, WCAG 2.5.3) seeds every
+   record the result stands for through `/seed` and returns to the graph, focus on it. *Open*, for a document, reads it
+   over the view; the results are kept, hidden, and shown again when the reader closes, focus on their heading (never
+   on the view beneath, inert again). The Ask line, "Ask a question about '…' instead", opens Ask & Chat with the words
+   in its question box, focused (`QuestionsPanel`'s `draft`), once: closed and opened again, the box is empty. Nothing
+   is sent until the person presses Ask. It is offered only to someone Ask & Chat is offered to (`ask_model`).
+5. **Every count is the Conduit's** (rule 7): the Glass shows the response's `total`, `groups[].count` and dataset counts
+   and counts nothing itself; a dataset the fallback cannot count is listed without one.
+6. **Decided by the lane under the never-stop rule** (the owner free to overrule): *Show on graph* leaves the results for
+   the graph, as choosing a suggestion does; *Open* keeps them; the page size is 20.
+
+Tests, each red first: `search/SearchResults.test.tsx` (25), `App.search.test.tsx` (17, on the real App),
+`design/primitives/Combobox.test.tsx` (4); `keyboard/search-results.spec.ts` on `search-results-harness.html` in dark,
+light and GOV.UK (registry `SEARCH_RESULTS_ACTIONS`, eleven actions, Previous page, Clear filters and the dates among
+them, a read document hiding the results where the stylesheet applies, and a pasted over-long query kept whole and
+refused with the limit named), and `a11y/every-harness.spec.ts` scanning
+the page open, with nothing found, on the fallback and refused. The plants: `process/lanes/case/gates/v052-results-unit-reds.log`
+and `v052-results-browser-reds.2016275.log` (the over-long query's plants in `v052-results-browser-reds.too-long.log`), each plant red for its stated reason; those marked "the first review's"
+are the defects the lane review found (14 November 2026). The registry and every-harness states are the orchestrator's
+files, sent as `process/lanes/case/shared-files-v052-results.diff`.
+
+**Not covered:** the route itself, its access rules and its leak test (studio's, ADR-149); the user guide's page on
+search (docs', after the freeze's sweep); a live run against a real index, which waits for studio's route on main.
 
 ### ADR-144, Amendment 3 (13 November 2026) — *Views ▾* by the graph: the case's saved views one click from the canvas
 
@@ -37339,9 +37403,30 @@ decommission:**
 4. **The shared claim's parts join the backup set and its restore**: the published pipelines (`data/recipes`), the model
    settings and the map settings with the map key file (ADR-147), each a part of the set's claims part beside the Ingest
    root, read-only to the backup; the pods that mount them are writers a restore refuses to run beside. The tiles and the
-   uploads' scratch are made again or are the Ingest's, and are not.
-5. **RDS keeps point in time for 35 days** (`backup_retention_period`), the sets' own expiry
-   (`cloud_platform_backups.EXPIRE_DAYS`), in every shape, so every kept set can be met by a point-in-time restore.
+   uploads' scratch are made again, and are not. *Amended 14 November 2026 (MORNING item 6, option (a), decided under
+   the owner's standing rule):* this point was written with poc's own Ingest claim in view. Outside poc the Ingest root
+   (the uploads and the drop folder) is the shared volume's `ingest` folder and was in no set, so a restore brought
+   back loads citing uploads no longer there, or drop-folder files without the loads that read them: the disagreement
+   ruling 3 exists to prevent. **Wherever the Ingest root is not a claim of its own, its folder is a fourth shared
+   part** (`shared-ingest`, `cloud_platform_backups.INGEST_PART`), read-only to the backup and put back by
+   `restore-claims`; whether it is a claim is read from the render's own mounts (`shared_parts`), never from the
+   shape's name. Every pod mounting it, or a folder inside it (`ingest/uploaded`), is a writer. The cost: uploads can
+   be large, so the claims run's size and time grow with them. Option (b), recording it as a known limit, was declined.
+   Held by `tests/harness/test_cloud_platform_data_safety.py` (the parts in each shape, poc's not doubled, the
+   writers, the recovery runbook's words), `tests/cp_policy_check/test_cp_egress_order.py` and
+   `tests/cloud_platform_backup/test_backups_chart.py` (Helm's own output: read-only to the backup, writable to the
+   restore, named to the runner).
+5. **RDS keeps point in time for 35 days** (`backup_retention_period`, `cloud_platform_backups.POINT_IN_TIME_DAYS`;
+   AWS's maximum), in every shape, **and the sets expire a day sooner, at 34** (`EXPIRE_DAYS`), so every kept set can
+   be met by a point-in-time restore. *Amended 14 November 2026 (MORNING item 5, option (a), decided under the
+   owner's standing rule):* as first written the sets expired at 35, the same as RDS's window, and at the edge that
+   was optimistic. RDS's earliest restorable point lags its retention by up to about a day, and S3's expiry rounds up
+   to midnight UTC, so a set in its last day could fall outside the window. RDS cannot keep more than 35 days, so the
+   sets give up the day. Option (b), keeping 35 and saying a set's last day may not be restorable with its database,
+   was declined. Held by `tests/harness/test_cloud_platform_data_safety.py`, reading the rendered Terraform both ways
+   (`test_rds_keeps_point_in_time_a_day_longer_than_the_sets_are_kept`), the recovery runbook's words and the
+   decommission's; and by `tests/test_guides_cloud_platform.py`'s §6a.8 case, which reads the guide's numbers from
+   the same render.
 6. **The decommission has no default for the backups.** Its step 7 refuses until `BACKUPS=keep` or `BACKUPS=destroy` is
    given, and touches nothing before. `keep` sets the agreed retention on the bucket (Amendment 7's path, unchanged);
    `destroy` empties and removes the bucket and schedules the key's deletion (thirty days, cancellable) there and then,
@@ -38076,7 +38161,7 @@ By platform-b. An access step: two review rounds, listed for the owner (round 1'
    recorded and refused until set. Three live plants each went red for their own test: the seed's values given past
    its role gate, the Access write's audit row after its transaction commits, and the store's clearance limit
    removed. Not shown by any test: two transactions racing (`FOR SHARE`/`FOR UPDATE` is by design). The
-   administration guide 2.00, §6a.7 and Appendix A, says the rest.
+   administration guide 2.06, §6a.7 and Appendix A, says the rest.
 
 8. **A run acting as its owner (Amendment 16) takes the values set here.** `EntraPeopleStore.owner` reads the
    administrator's columns for each value the mapping sources from the administrator, and the token's columns for
@@ -38104,3 +38189,708 @@ By platform-b. An access step: two review rounds, listed for the owner (round 1'
 
    People's stale-access words for a transfer or promotion (4c's second review, could 9) are carried: they read a
    `PersonAccount`, which cannot tell an unset value from "never signed in" without a schema change.
+
+## ADR-149 — Search on OpenSearch: the reader's access filter in the query, nodes not yet caught up left out, strict ranking in bands, merged entities over visible hits, the fallback that says so, and one leak test — ACCEPTED (as built)
+
+*13 November 2026. **Accepted: the owner's route to v0.5.2** (`process/lanes/ROUTE_052.md`, step 3d; search scope 1–5,
+requirements a–f). The owner read the access design page (`process/lanes/studio/SEARCH_ACCESS_DESIGN.md`) on 13
+November at about 22:40 and ruled:
+- **ranking is strict:** no word-rarity scoring and no fuzzy or prefix expansion. The tiers are exact identifier,
+  then close name, then mention, with trigrams, edge n-grams and the Conduit's Double Metaphone key;
+- **groups count records,** and the screen says "records".
+
+The orchestrator's rulings on the reviews of d2b207a, the same night:
+- **(A)** the nodes the index has not caught up with are left out of every query;
+- **(B)** the bar's own fallback line belongs to this step.
+
+The index, its documents and its feed are ADR-150's. The response shape the results page is built against is
+`process/lanes/studio/SEARCH_RESPONSE_SHAPE.md`, frozen at ee7a16d, and its models are `packages/schemas/search.py`.*
+
+### Context
+
+Today's search is the graph's exact match on declared identifiers (`GraphPort.search_nodes`). The type-ahead is
+the graph's prefix read (`suggest_nodes`, ADR-059). Neither tolerates a typo or a sound-alike, finds a word in a
+document, ranks, or counts by type. At one type in the tens of millions, the prefix read is the slow part.
+
+Three things would let a record the reader may not see change what they do see, even with an access filter in
+the query:
+- **word-rarity scoring (BM25's IDF).** It is computed over the whole index, so hidden records reorder visible ones.
+- **fuzzy and prefix expansion.** It stops at a fixed number of words from the index's word list, and words held
+  only by hidden records can use that number up.
+- **the indexer's lag** (ADR-150's Consequences). Until it catches up, a node reverted, withdrawn, superseded or
+  re-marked to a tighter marking is still in the index under its older facts.
+
+### Decisions
+
+1. **The reader's access filter is built from their own principal and goes in the query's own filter, never after
+   retrieval** (rule 3). The filter is `services/api/search_access.index_access_filter(scheme, principal)`, and it
+   has four parts:
+   - the classification, at or below the reader's clearance (an unknown clearance sees nothing);
+   - the handling code: unrestricted, or restricted and receivable by the reader, on a record their unit owns or
+     originated (a code the scheme does not define is never visible);
+   - one of the case's datasets (an empty case sees nothing);
+   - for a Document's text, the unit that holds it, which is the narrower rule `review.get_document_text` applies
+     today.
+
+   It is never a `post_filter`, so it limits counts and suggestions as well as hits. A principal with no case limit
+   (the Conduit's own background work) is refused.
+   - *Tests:* `tests/services/api/test_search_access.py::test_the_filter_agrees_with_the_conduits_rule_everywhere`
+     (over 10,000 combinations of the uk-le scheme, against `principal_may_view` and `in_case_datasets`, evaluated
+     by an interpreter whose `should` default is OpenSearch's own,
+     `::test_the_interpreter_reads_a_should_beside_a_filter_as_opensearch_does`) and
+     `::test_the_agreement_check_finds_each_axis_dropped` (each part shown red).
+   - *Tests:* `tests/services/api/test_search_index_query.py::test_a_body_cannot_be_built_without_an_access_filter`,
+     `::test_the_access_filter_limits_hits_and_counts_alike`,
+     `tests/services/api/test_search_route_index.py::test_the_index_is_asked_with_the_readers_own_access_filter` and
+     `::test_another_cases_reader_on_the_same_unit_asks_with_their_own_datasets`.
+2. **The nodes the index has not caught up with are left out of every query** (the orchestrator's ruling A).
+   - **How:** they are read from both of ADR-150's outboxes by `services.search_index.pending.pending_node_ids`, ids
+     alone and with no principal, and go in the query's `must_not` on `node_id`, beside the access filter.
+   - **The counts:** while any are pending, the counts are not shown as exact.
+   - **When the set may be incomplete:** if either outbox holds more rows than `PENDING_LIMIT` (10,000), the set is
+     not known to be whole, and the graph answers, saying the index "is catching up".
+   - **The ids are never shown:** they reach only the `must_not`, never another part of the body or the reply.
+   - *Tests:* `tests/services/api/test_search_index_query.py::test_pending_nodes_are_left_out_of_a_search_and_a_suggestion`,
+     `tests/services/api/test_search_service.py::test_nodes_the_index_has_not_caught_up_with_are_left_out_and_counts_not_exact`,
+     `::test_a_pending_set_not_known_to_be_whole_and_the_graph_answers`,
+     `tests/services/api/test_search_route_index.py::test_the_pending_ids_reach_only_the_querys_must_not`.
+3. **The leak test: the reader's whole answer is identical whether or not the records they may not see are in the
+   index** (requirement a). `tests/services/search_index/test_search_leak_live.py` indexes one world through
+   ADR-150's real builder and writer.
+   - **The hidden plants:** they share names, sound-alikes, identifiers, words in text and same-as links with
+     visible records, including a hidden member between two visible ones (A–H–B).
+   - **The stale plants:** reverted, withdrawn, superseded and re-marked records held at their older facts, with
+     the outbox naming them.
+   - **The readers:** four. One cleared for a restricted code, one not, a PUBLIC reader of another unit across two
+     datasets, and an empty case.
+   - **The comparison:** each reader asks 20 searches and 21 suggestions through the service itself (`search_page`,
+     `suggest_page`) of that world, and of one holding only what the Conduit's rule lets them see in the graph as it
+     is now, less the pending nodes. Every result, order, merged entity, passage, count, offered filter and `more`
+     must agree.
+   - **The graph there applies no access,** so a leaked hit cannot be hidden by the graph's own filter.
+   - **Shown red at that same comparison,** each with one protection removed:
+     - `::test_the_leak_check_finds_each_filter_part_dropped`, once per part of the filter;
+     - `::test_the_leak_check_finds_the_pending_nodes_counted`, without the exclusion;
+     - `::test_the_leak_check_finds_word_rarity_when_scoring_is_not_strict`, with `similarity: boolean` off and
+       decision 4's refusal turned off;
+     - `::test_the_leak_check_finds_fuzzy_expansion`, with the typo band asked as a fuzzy query.
+
+   That a removed node then leaves the index is ADR-150's, shown by `tests/services/search_index/test_feed_live.py`.
+4. **Ranking is strict, in fixed-score bands** (the owner's ruling), best first:
+
+   | Band | Score | Matches |
+   | --- | --- | --- |
+   | Exact identifier | 3000 | the text as typed, or its canonical form (ADR-128) |
+   | Exact name | 2900 | the whole name |
+   | Every word of the name | 2500 | each word of the query in the name |
+   | Sounds like | 2300 | every query word shares a Double Metaphone code |
+   | Spelt like | 2100 | 60% of the query's trigrams, for a query of four letters or more |
+   | Mention: phrase | 1500 | the phrase in a Document's text |
+   | Mention: every word | 1200 | each word in the text |
+   | Mention: some words | 1 a word, under 1200 | some of the words in the text |
+
+   - Every scored field has `similarity: boolean` (ADR-150), and every band is a `constant_score` combined by
+     `dis_max` with a tie-breaker of 0. So no score depends on another document, and no band reaches the next.
+   - No fuzzy, prefix, wildcard, regexp, phrase-prefix, query-string, span-multi, intervals or more-like-this query
+     is ever built.
+   - A query is at most 200 characters, and a longer one is refused, never cut (rule 2). That also bounds the
+     "some words" band below the band above it, even at a word a character.
+   - Within a band, results run newest first by `date`, then by node id.
+   - A score that no band gives is refused as a defect: a bare 500, naming no score.
+   - *Tests:* `tests/services/api/test_search_index_query.py::test_no_clause_expands_against_the_word_list` (shown
+     red by `::test_the_expansion_check_finds_a_planted_fuzzy_clause` and
+     `::test_the_expansion_check_knows_every_expanding_query`), `::test_the_bands_never_overlap`,
+     `::test_every_dis_max_takes_the_best_band_alone`, `::test_a_query_over_the_limit_is_refused_not_cut`,
+     `::test_a_score_between_bands_is_a_defect_not_a_guess`, and
+     `tests/services/api/test_search_route_index.py::test_a_score_outside_the_bands_is_a_bare_500_naming_no_score`.
+   - *Live tests:* `tests/services/search_index/test_search_leak_live.py::test_an_exact_identifier_comes_first`,
+     `::test_names_exact_every_word_sounds_alike_and_spelt_alike`, `::test_a_typo_needs_most_of_the_querys_trigrams`,
+     `::test_names_rank_above_mentions_and_groups_count_records`.
+5. **No OpenSearch plugin is relied on.** Every analyser is core (analysis-common). The Double Metaphone codes come
+   from `phonetics` (MIT) in the indexer and on the query side alike, through one function
+   (`services.search_index.document.phonetic_codes`). Checked 13 November:
+   - the stock `opensearchproject/opensearch:2.17.1` image bundles neither analysis-phonetic nor analysis-icu (its
+     build manifest);
+   - Amazon OpenSearch Service lists both.
+
+   So Lite, Small and cloud-platform search alike. Beider–Morse is not used: abydos, its usual package, is GPL.
+   - *Test:* `tests/services/search_index/test_mapping_strict_ranking.py::test_no_phonetic_fuzzy_synonym_or_stemming_analysis_inside_opensearch`.
+6. **A Document's text is a document of its own**, found as a mention. Its passage is the highlighted fragment of
+   that text, returned as plain parts marked matched or not, never as markup. The marks are private-use
+   characters: OpenSearch trims a fragment's edges of every character up to U+0020, which cut control-character
+   marks (found live).
+   - *Tests:* `tests/services/api/test_search_index_query.py::test_a_snippet_is_text_and_marks_never_markup`,
+     `::test_the_marks_survive_opensearch_trimming_a_fragments_edges`, and
+     `tests/services/search_index/test_search_leak_live.py::test_a_mention_is_found_in_text_with_its_passage_marked`.
+7. **Groups count records** (the owner's ruling), by type over node documents, with documents' text matches apart
+   as "Mentioned in documents".
+   - **Labels:** a group is labelled in the plural ("People", "Organisations").
+   - **The matched field:** a result names the property it matched by its display name ("Family name"). It is
+     never one the index does not search. It is `null` for a mention, and for a typo, whose trigrams are graded
+     over every name rather than one.
+   - **Documents:** a Document found by its title and in its text counts once in each group and is listed once.
+   - **A chosen group** narrows the list as a `post_filter`, so every group's count stays whole.
+   - **Inexact counts:** counts OpenSearch says may be short are not shown as exact.
+   - **Datasets:** the dataset counts are asked of the case's datasets alone (`include`). A dataset outside the case
+     is never offered, and a filter on one is refused (422).
+   - **Depth:** results are listed at most 1,000 deep, and a deeper page is refused with words, on either path.
+   - *Tests:* `tests/services/api/test_search_index_query.py::test_a_group_narrows_the_list_and_leaves_every_groups_count_whole`,
+     `::test_the_by_type_counts_ask_every_type_the_ontology_has`,
+     `::test_counts_that_opensearch_says_may_be_short_are_not_shown_as_exact`,
+     `::test_the_dataset_and_date_filters_are_offered_from_the_same_query`, and
+     `tests/services/api/test_search_service.py::test_group_labels_and_the_matched_fields_display_name`,
+     `::test_a_dataset_outside_the_case_is_never_offered`, `::test_a_filter_on_a_dataset_outside_the_case_is_refused`,
+     `::test_a_page_past_the_depth_is_refused_on_either_path`, `::test_a_list_valued_property_never_breaks_a_search`.
+8. **The graph stays the source of truth** (requirement b). The index names hits by node id, and the nodes are read
+   through `GraphPort.get_nodes` with the reader's principal. A hit the graph does not return is never listed, and
+   the counts beside it are then not shown as exact. The Glass names a result with its own `nodeLabel`; the
+   response keeps today's `nodes`.
+   - *Test:* `tests/services/api/test_search_service.py::test_a_hit_the_graph_does_not_return_is_dropped_and_counts_are_not_exact`.
+9. **Merged entities are merged over one page's visible hits** (rule 6; page A §2).
+   - **What merges:** the hits on a page that the case reads as one entity at its threshold become one result, at
+     its best member's place. The clustering is case views' own (`case_views._collapsed`).
+   - **Only visible links count:** links are asked only among hits the graph returned, through the adapter's
+     filter. So a member the reader may not see joins nothing and adds nothing, and a same-as link they may not
+     see merges nothing.
+   - **No cluster field** is indexed (ADR-150).
+   - **The threshold** is read through `get_search_working_set`.
+   - *Tests:* `tests/services/api/test_search_service.py::test_visible_hits_the_case_reads_as_one_are_one_result`,
+     `::test_a_merge_through_a_hidden_member_is_not_made`,
+     `::test_a_hidden_same_as_between_visible_records_merges_nothing`,
+     `::test_a_merge_below_the_cases_threshold_or_split_is_not_made`, and
+     `tests/services/api/test_search_route_index.py::test_the_cases_threshold_merges_through_the_working_set`.
+10. **Only an unreachable index falls back, and the fallback says so** (requirements c and f).
+    - **When it falls back:** a refused or timed-out connection (5 s for a search, 2 s for a suggestion, with no
+      retries). It also falls back where no OpenSearch is configured, or where the pending set is not known to be
+      whole (decision 2).
+    - **What it answers:** today's exact search, with `source: "fallback"`, `limited: true`, and words naming which
+      of the three it was:
+      - no search index;
+      - the index cannot be reached;
+      - the index is catching up.
+    - **What the fallback does with the request:** it lists no deeper than 100 and says `more` when it reaches
+      that. It narrows by dataset and group before it pages. It says a date filter is not applied, and its counts
+      are never shown as exact.
+    - **What is raised, never shown as "limited":** every other failure, each logged. That is a TLS failure, a
+      refusal of our identity (401, 403), an alias that does not exist (404), an overload (429), a server error,
+      or a query the index refuses (400).
+    - **Where it shows:** the results page shows the line (case lane, step 3e′). The bar's own line is the
+      ADR-059 amendment below (the orchestrator's ruling B).
+    - *Tests:* `tests/services/api/test_search_service.py::test_with_no_index_the_fallback_says_there_is_none`,
+      `::test_only_an_unreachable_index_falls_back`, `::test_an_index_that_answers_badly_is_raised`,
+      `::test_an_index_that_cannot_be_reached_is_unavailable`, `::test_any_other_failure_is_raised_not_hidden`,
+      `::test_the_fallback_says_more_at_its_depth`, `::test_the_fallback_narrows_by_group_and_dataset_before_it_pages`,
+      `::test_the_fallback_says_it_cannot_apply_a_date_filter`.
+11. **Searches are audited as today** (requirement d), with action `search` and the records sent as the
+    cardinality. The audit now also records:
+    - what was asked: the query, group, filters and page;
+    - who answered: `source`.
+
+    A suggestion records its `source` too.
+    - *Tests:* `tests/services/api/test_search_route_index.py::test_the_search_is_audited_with_what_was_asked_and_who_answered`,
+      `tests/services/api/test_suggest_route.py::test_the_options_are_passed_to_the_graph`.
+
+### Consequences
+
+- An index search reads the outboxes' pending rows (two indexed reads) and one page of nodes from the graph.
+  Merging reads the links among that page only.
+- A merged entity whose members fall on two pages is shown on each.
+- Relevance within a band is plainer than OpenSearch's default: a match on a common word counts as much as one on a
+  rare word. That is the owner's chosen cost.
+- While the indexer lags, a pending node is missing from search rather than counted at its older facts.
+- The query side's client is not closed at shutdown yet (listed, the orchestrator's review of d2b207a, minor 20).
+
+### ADR-059, Amendment 1 (13 November 2026) — suggestions from the index, with the graph's prefix read as the fallback, and the bar saying so
+
+A "starts with" suggestion is answered by the index (ADR-149):
+- **How it is asked:** with the reader's own access filter and the pending nodes' exclusion in its query, from the
+  stored prefixes of node documents' identifiers and names (edge n-grams, ADR-150), never a prefix query. Types
+  are filtered in the query. The prefix is asked as typed, never trimmed.
+- **Case:** the stored prefixes ignore case. A case-sensitive request (the box's default) asks for up to four
+  times its page and keeps the nodes holding an identifier or name (never another property) that starts with the
+  prefix as typed. It says `more` whenever the index had more than it was asked (rule 2).
+- **Refused with 422, never cut:** a prefix longer than the stored prefixes (`PREFIX_MAX_CHARS`, 50), and an
+  entity type the ontology does not have.
+- **Fallback:** "contains" and "exact", no index, an index that cannot be reached, or a pending set not known to be
+  whole use the graph's prefix read, as before.
+
+The response gains two optional fields:
+- `source`: `"index"` or `"graph"`;
+- `limited`: true when a "starts with" suggestion was answered by the graph.
+
+When `limited` is true, the box shows one line under its suggestions (the owner's requirement c, on screen;
+`GlobalSearch.tsx`'s `LIMITED_SUGGESTIONS`): "Suggestions are limited just now: only the exact start of a name or
+identifier matches". It does not fade.
+- *Tests:* `tests/services/api/test_search_service.py::test_a_suggestion_is_answered_by_the_index_in_its_order`,
+  `::test_a_case_sensitive_suggestion_is_narrowed_and_says_there_may_be_more`,
+  `::test_a_case_sensitive_suggestion_looks_only_at_identifiers_and_names`, `::test_contains_and_exact_stay_on_the_graph`,
+  `::test_a_suggestion_the_graph_answers_says_it_is_limited`, `::test_an_unknown_type_is_refused_as_today`,
+  `tests/services/api/test_search_index_query.py::test_a_suggestion_longer_than_the_stored_prefixes_is_refused_not_cut`,
+  `::test_a_suggestion_is_asked_as_typed`,
+  `tests/services/api/test_search_route_index.py::test_a_suggestion_the_index_cannot_ask_is_refused_with_422`, and
+  `apps/workspace/src/search/GlobalSearch.test.tsx` ("says suggestions are limited…", "does not say so…", "keeps
+  the limited line in view…").
+- *In three looks, with axe:* `apps/workspace/keyboard/top-bar.spec.ts` ("the box says its suggestions are
+  limited…", dark, light and GOV.UK).
+- *Live:* `tests/services/search_index/test_search_leak_live.py::test_suggestions_come_from_stored_prefixes`.
+
+### ADR-074, Amendment 3 (13 November 2026) — the search box's scope: names by sound and spelling, identifiers, and words in documents
+
+The search box now covers more, through `POST /v1/investigations/{id}/search` (ADR-149):
+- **Names:** found by sound and by spelling, as well as by identifier. Names are a type's string properties marked
+  indexed and not `sensitivity: high`, the set ADR-074 named.
+- **Documents:** words in a Document's text, for the unit that holds the text.
+
+It still starts after two characters. Enter opens the results page (the owner's navigation decision, Part A), where
+results are grouped by type with counts of records. Suggestions under the box look as before, with the one
+"limited" line when the index did not answer (ADR-059 Amendment 1).
+- *Tests:* ADR-149 decisions 4, 6 and 7.
+
+### ADR-148, Amendment 14 (13 November 2026) — The POC seed path: spec 08's acceptance data on a cloud-platform POC, and the seeds' events in the deployment's own store
+
+**Context.** The owner ruled on 13 November 2026 that a proof of concept on the `cloud-platform` profile can
+be shown with spec 08's synthetic acceptance data, as a local deployment can (`harness.apply --seed`). The
+local path does not carry over:
+- It makes its case through the Conduit as Keycloak's verify identity, which Entra has no counterpart for.
+- It runs a one-shot container on the host's compose network.
+- Its seeds wrote their events to a DuckDB file whatever store the deployment named. On every
+  `cloud-platform` deployment (ClickHouse) the graph half would arrive and the events would be lost with the
+  seed's container, while it printed "loaded" (CLAUDE.md rule 2). Any local deployment on ClickHouse has the
+  same fault today.
+
+**Decision.**
+1. **The seeds write their events to the deployment's own store.** It is the one `OSPREY_ANALYTICS_ENGINE`
+   names, opened by the Conduit's own opener (`scripts/seed_analytics.py` → `services.api.analytics_store`).
+   An engine the Conduit does not know is refused in words, never taken for DuckDB. Re-seed checks read
+   through the port as the seed's principal, by event id. This applies to `seed_hmp_fixture` and
+   `seed_scenarios`; `seed_fixture_corp` writes the graph alone. The other seeders (Enron, PaySim, the
+   ledger, the public sets, `seed_support`) still open DuckDB themselves: a carry (CARRIES.md), not part of
+   this amendment.
+2. **HMP's events on a rerun.** HMP's graph and its events are two writes, and its network events carry the
+   edge ids the graph write returns. So a rerun that finds the graph already here writes no events. It
+   checks, by id through the port, that this case's HMP events are there. If they are not (an earlier run's
+   events write failed after its graph committed), it refuses in words and loads nothing, never "loaded" over
+   nothing. Recreating them would mean writing the graph twice, so the remedy is the backup taken before the
+   seed.
+3. **One entry, `python -m scripts.seed_poc`.** Two refusals come before anything is written:
+   - **The ceiling.** A deployment whose highest marking (`OSPREY_HIGHEST_MARKING`) is below the seeds' data
+     is refused, naming both. HMP's and Fixture Corp's data reach SECRET (`seed_internal.DATASETS`); the
+     scenarios' is OFFICIAL. The cloud-platform profile's default ceiling is OFFICIAL-SENSITIVE, so a default
+     poc is refused. **The owner ruled on 14 November 2026 (MORNING item 2, option (a))**: a POC shown with
+     spec 08's data declares `deployment.highest_marking: SECRET` in its `osprey.yaml`. That is the client's
+     choice, made for a POC holding synthetic data alone, and step 9 says so in those words. Otherwise the
+     seed is refused, naming both values and that setting. Nothing is loaded partly (option (b) was
+     declined: spec 08's rows resting on the SECRET items would be missing), and the packs are not re-marked
+     for a POC (option (c) was declined: the scenarios' access cases would then test handling codes, not
+     clearance). R1's kind deployment declares SECRET (`gates/r1_kind_osprey.yaml`), so its step 6 runs the
+     seed.
+   - **The case's unit.** The case is made in the first administrator's own unit, as Entra gave it at their
+     sign-in: the people store's record, this tenant's alone (`EntraPeopleStore.one`). Where the tenant's
+     groups map several units, it is the unit of the first of `OSPREY_FIRST_ADMINISTRATORS`; a person's unit
+     is the one their own token carried. A first administrator who has not signed in has none yet, and the
+     seed is refused. Off Entra the unit is given (`--org-unit`, no default).
+
+   It then makes or reuses one named case, *Acceptance scenarios (spec 08)*, through the
+   `InvestigationStore` the routes use. Its creator is a seed principal no person signs in as, its first
+   Author is that administrator, and its packs are the seeds' union. Each seed runs with `OSPREY_ORG_UNIT`
+   set to the case's unit, so **the datasets it registers are held by the case's unit** (ADR-099:
+   `case_seed.ensure_case_reads`), and the case reads them. A seed that fails, raises or exits stops the run
+   there, named, and the Job fails with it.
+4. **A standing Job, `ospreyflow-seed`, for the poc shape alone.** It is a CronJob held suspended, in the
+   Conduit's image at its size, bounded by `activeDeadlineSeconds` (35 minutes).
+   - **What it holds.** The case store's address and credentials (the platform's RDS secret's variables, as
+     `managed_variables` gives the Conduit), the graph's and ClickHouse's passwords by name, and nothing
+     else of ours. No service-account token: it calls nothing of AWS's.
+   - **Its egress.** ArcadeDB, ClickHouse and the managed networks; its row is rendered where the Job is,
+     never elsewhere.
+   - **The gate.** It admits those two keys to the Job and refuses it our Secret whole, another key or a
+     token.
+   - **The manifest.** The poc manifest lists the Job, and a test reading Helm's own output holds every
+     rendered CronJob to the manifest both ways. The manifest's builder had read only the values keys it
+     knew, so a new Job was invisible to its both-ways check.
+   - **The restore.** A restore refuses to run beside it (one of the backups' writers, Amendment 13).
+5. **Step 9 of the poc's install runbook, optional and outside the order (`bash later`).** It runs in a
+   subshell whose exit always deletes a seed Job that did not succeed, then puts the Conduit, the worker and
+   the daily backups back. So nothing it stopped is left stopped, and no seed writes beside a Conduit it
+   restarted. In order, it:
+   - refuses copies noted at none;
+   - holds the backups;
+   - scales the Conduit and the worker to none, and refuses while their pods remain;
+   - gives the Job five minutes to start and 30 to finish, then names what failed;
+   - where the deployment searches with OpenSearch, ends with the index's rebuild, which is bounded the
+     same way, and deleted and named if it fails.
+
+   The words say never on a deployment holding real data, and run after the first administrator has signed
+   in.
+
+**Consequences.** A POC can be shown with the acceptance scenarios on its own cluster, the events in the store
+its analytics read, where the client has declared SECRET as step 9 says. The seed's identity is not a person, so the case's
+access history names it as creator and the first administrator as the Author who shares it. The kind proof
+runs in v0.5.2's live R1 run, after rules' search index lands: the Job against R1's stand-ins, the case open
+to the first administrator, and B18's trail through the Glass's own sightings request.
+
+**Tests that fail if it is violated:**
+- `tests/test_seed_analytics.py`: no seeder imports DuckDB; the real DuckDB opener's file holding the events;
+  an unknown engine refused; HMP's events and places through each store.
+- `tests/test_seed_scenarios.py`: B18 through each store, with a re-seed not doubling the track.
+- `tests/test_seed_hmp_rerun.py`: at `_run`, a rerun over a graph whose events were lost refused; a failure
+  between the two writes failing the run.
+- `tests/test_seed_poc.py`: the ceiling and the unit refused before any write, the ceiling's refusal naming
+  `deployment.highest_marking: SECRET`; the case, its Author, unit and
+  packs; the seeds given the case's unit; the order, read from `harness/apply.py`'s own map; a failed,
+  raising or exiting seed stopping the Job.
+- `tests/test_seed_poc_live.py`: the unit from the real people store, this tenant's alone.
+- `tests/harness/test_cloud_platform_seed.py`: the render, its keys, egress, shape and the restore's writers;
+  step 9 saying a POC shown with spec 08's data declares SECRET, the client's choice;
+  step 9 run as written against a stub `kubectl` on success and on each failure (not started, overrun,
+  failed, not created, copies at none, pods remaining, rebuild failed), each putting everything back.
+- `tests/test_r1_kind_standins.py`: R1's own render gives the Conduit's settings a ceiling the seed's check
+  admits.
+- `tests/cp_policy_check/test_cp_egress_order.py`: the gate on the seed's keys and token, and every CronJob
+  held to the manifest both ways, with the seed's own suspended, bounded and tokenless.
+
+The ClickHouse cases (B18's and HMP's) and the live people store need the live stores: they run under a lease,
+and their record is in `process/lanes/platform/v052-seed/` (or the step is not done). Red first:
+`process/lanes/platform/v052-seed/red-first.txt`.
+
+### ADR-098, Amendment 9 (14 November 2026) — *Whole case* reads the case through its search
+
+Status: written 14 November 2026 by the rules-b lane (step v052D, part D(iii)) under the orchestrator's
+reservation of the same day, built on studio's search service (ADR-149; `process/lanes/studio/SEARCH_RESPONSE_SHAPE.md`,
+frozen at ee7a16d, note 5). Amendment 7 point 2 ("Whole case is not built yet") is superseded; nothing else in
+Amendment 7 changes. Each point names its test (rule 12); the plants are recorded with their output in
+`process/lanes/rules-b/v052Diii/` (`server-plants.txt`, `keyboard-plant.txt`, `axe-plant.txt`).
+
+1. **The case's search, as the asker, with the question's own words.** `read_from: case` calls
+   `search_service.search_page` in-process (`app.case_search_with`, the questions routes' call site), with the
+   asker's own access filter built there, the case's threshold and the exclusion of what the index has not caught
+   up with, exactly as `POST …/search` does. No second route is added. The query is the question whole, one page
+   of 50 (`WHOLE_CASE_PAGE`), no filters; a second page is never read. *Everything on the graph*'s timeline window
+   does not apply.
+   - Test: `test_questions_whole_case.py`, *the question's own words are the query*. Red with the page left at the
+     search's default.
+   - Test: `tests/services/search_index/test_ask_whole_case_leak_live.py`, *whole case reads the same with hidden
+     records present or absent*, for each of studio's readers. Red with the access filter `case_search_with` builds
+     replaced by match-all (*the ask leak check finds the access filter dropped*).
+2. **A question the search cannot take is refused, never cut.** The search takes 1 to 200 characters, a question
+   up to 2,000. Past 200, *Whole case* is refused 422 `question_too_long_to_search`, by the question and by *will
+   read* alike, in words that say what to do: "Whole case searches the case with your question's own words, which
+   can be at most 200 characters; yours has N. Shorten the question, or choose Selected items or Everything on the
+   graph to ask it as it is." The Conduit never cuts the question or picks keywords from it (rule 2): that would be
+   a guess at meaning, which the search does not make.
+   - Test: *a question longer than the search takes is refused, never cut*. Red with the question cut to fit.
+3. **What is read of each result.** A Document the document reader opens (one in the working set; the reader
+   checks access again) is read whole, as under the other choices. A Document it does not open (found beyond the
+   canvas) is a source read as the passage the search matched, never whole. Every other result is a source by its
+   name (`canvas_label`), its type and the search's own words for why it was found. A merged entity is one source,
+   standing for its visible members only.
+   - Test: *a document on the canvas is read whole*. Red with every Document read by its passage.
+   - Test: *a document off the canvas is read as its passage, never whole*. Red with the passage left out.
+   - Test: *a record the asker may not see is not found, counted, read or cited* (rule 4).
+4. **Nothing to search, nothing found.** *Will read* before a question is typed says to type it first; a search
+   that finds nothing the asker may see is 422 `nothing_to_read`: "Nothing in the case matches your question's
+   words. Try the names or words the records hold, or choose Everything on the graph."
+   - Test: *will read with no question yet says to type it*; *nothing found is refused in words*. Each red with its
+     refusal removed.
+5. **What the search's answer was is said.** The read summary (`ReadSummary`) gains `found` (the results read),
+   `passages` (Documents read by their passage), `limited_reason` (the search's fallback words, as given),
+   `counts_exact` and `more`, all required; a summary kept before them reads back as having found nothing by
+   search. The panel says them: "4 matches found in the case: 1 document whole, 1 document by the passage found
+   and 2 other records", the fallback's words, "The search's counts may be incomplete." and "Only the first 50
+   matches are read; there are more."
+   - Test: *the search's fallback and limits reach the read summary*. Red with the fallback words dropped.
+   - Test: `test_questions_store.py`, *a summary kept before Whole case reads back with nothing found* (live).
+   - Test: `QuestionsPanel.test.tsx`, *says the search's fallback, counts that may be incomplete and a second page
+     never read*.
+6. **The one line.** Under the choice, and on the read line of an answer read that way: "Whole case finds things
+   by their names and words, not by what they mean." (`WHOLE_CASE_LINE`, the panel's held to the server's).
+   - Test: `test_questions_read_from.py`, *the panel says whole case's line in the server's own words*.
+7. **In a case view**, only results whose records the view holds are read.
+   - Test: *in a view only what the view holds is read*. Red with the view not applied.
+8. **By keyboard** (rule 13): *Whole case* is chosen by arrow keys and the question's words go with *will read*.
+   - Test: `keyboard/questions.spec.ts`, *Whole case is chosen by arrow keys, its search is asked with the question's
+     words, and an [S-n] selects its records on the real canvas*; axe in dark, light and GOV.UK on
+     `questions-harness.html?case=1`, red with a low-contrast span drawn only in that state.
+
+Lane decisions on the owner's morning page, to overrule: the 200-character refusal (point 2); off-canvas
+Documents read by their passage, not whole (point 3: the reader opens only what is in the working set, and is the
+case lane's); one page of 50; no timeline window.
+
+### ADR-129, Amendment 5 (14 November 2026) — the brief's search sources, `[S-n]`
+
+Status: written 14 November 2026 by the rules-b lane (step v052D, part D(iii)) with ADR-098 Amendment 9.
+
+1. **Numbered sources.** Under *Whole case*, after the Documents, the model is given the sources the search found,
+   numbered `[S-n]`, each with its type, name and why it was found, and a Document's matched passage. It is told
+   they were found by names and words, not by meaning, so a source may not be about the question; and to cite them
+   as `[S-n]` in its words and in `search_cited`. The model never sees an id (rule 7). The sources and the
+   Documents share the one budget (decision 1): past it, the typed `limit_exceeded`, never trimmed.
+   - Test: `test_questions_whole_case.py`, *a document off the canvas is read as its passage, never whole* (the
+     line the model reads, and no id in it).
+2. **A citation stands for its records.** Each cited `[S-n]` the sources hold comes back as a `SearchCitation`
+   (`number`, `label`, `name`, `type`, `why`, `node_ids`); one they do not hold is dropped from the words and the
+   list and counted unplaced, as an unheld `[G-n]` is.
+   - Test: *a cited source stands for its records and an invented one is dropped*. Red with the invented marker
+     kept, and again with it not counted.
+3. **A later reader.** The records the sources stand for are kept with the answer (`search_node_ids`) and checked
+   by the graph's own access step (`get_nodes`), not the canvas, since a source need not be on it: a reader the
+   graph hides one from is not shown the answer (rule 3).
+   - Test: *an answer is shown only to a reader who may see every source*. Red with the records not kept, and
+     again with the check removed.
+4. **In the Glass**, each `[S-n]` is a button that selects its records on the canvas and brings them into view, as
+   a `[G-n]` does; every source is listed under the answer with its type and why it was found. A record not on the
+   canvas is not brought onto it (a lane decision on the owner's morning page: that needs `App.tsx`'s seeding).
+   - Test: `QuestionsPanel.test.tsx`, *shows each [S-n] as a button that selects its records*; the keyboard case
+     above, red with the button selecting nothing (`keyboard-plant.txt`).
+
+### ADR-149, Amendment 1 (14 November 2026) — Ask's *Whole case* calls the search, and the leak test covers what it reads
+
+Status: written 14 November 2026 by the rules-b lane (step v052D, part D(iii)), after ADR-149 landed. It records
+how ADR-098 Amendment 9's *Whole case* uses this ADR's search. No decision here is narrowed.
+
+1. **Whole case calls `search_page` in-process, not over HTTP, with what `POST …/search` gives it.** The call site
+   is `app.case_search_with`. It builds the asker's own access filter (`index_access_filter`, decision 1), leaves
+   out the nodes the index has not caught up with (decision 2), and passes the case's threshold and the asker's
+   datasets. Ranking and fallback are the search's own (decisions 4 and 10). Nothing is read until the search is
+   called, so a question that does not read the whole case costs nothing more.
+   - Test: `tests/services/api/test_questions_whole_case.py`, *the question's own words are the query* (its fake
+     search re-validates the request and finds only through the graph's access step); `test_questions.py`'s route
+     case, with no index, graph or request.
+2. **The fallback and the counts reach the read summary.** A search that fell back (decision 10) says so in the
+   summary's `limited_reason`. Counts that may be short (decision 7) are `counts_exact: false`, and a page not read
+   is `more`. The panel shows each one.
+   - Test: *the search's fallback and limits reach the read summary*; `QuestionsPanel.test.tsx`'s *Whole case*
+     cases.
+3. **Decision 3's leak test covers Ask.** `tests/services/search_index/test_ask_whole_case_leak_live.py` reuses
+   `test_search_leak_live.py`'s worlds and readers, and asks each of its queries as a question through
+   `case_search_with` into `QuestionsService._gather_case`. What would be sent to the model must be identical
+   from the index holding every record and from the index holding only what the reader may see now. That covers
+   the sources' text, the Documents read and their passages, the read summary, and the records each `[S-n]`
+   stands for.
+   - Shown red at the real call site: `::test_the_ask_leak_check_finds_the_access_filter_dropped`, with the filter
+     `case_search_with` builds replaced by match-all.
+   - Live on a leased stack (`process/lanes/rules-b/v052Diii/live.txt`).
+
+Open: none.
+
+### ADR-149, Amendment 2 (14 November 2026) — search's budgets: what v0.5.2's step 4 measures on B's load, and the figure each is judged by
+
+**Context.** ADR-149 gave search on OpenSearch no figures to be held to: no time for a suggestion, a name search or a
+full-text search, no lag for the feed, no bound for the rebuild or the drift check. Step 4 of v0.5.2 measures them on
+B's load (about 281,000 Persons, the largest loaded type), and a measurement needs a figure decided before the run, or
+any result can be read as a pass. Platform proposed the figures in `process/lanes/platform/v052-measure/PLAN.md`; the
+orchestrator accepted them on 14 November 2026 as step 4's targets, under the owner's standing rule (its decision 8).
+**The owner's tens-of-millions figure is not measured**, by the owner's ruling of 13 November ("measure what is
+loaded"): each result says so beside its figure.
+
+**Decision.** Each measure has a budget and a **failure figure**. A result between the two is recorded as over budget,
+not failed. A result past the failure figure fails step 4. Where a class is timed by `python -m scripts.measure_search`,
+the timer judges it by the figures below, held as `measure_search.BUDGETS` to this table both ways
+(`tests/test_measure_search.py::test_the_timer_s_budgets_are_the_amendment_s_both_ways`), with no file of figures given
+to a run. Times are the p95 of 200 sends after 20 discarded, at the Conduit, through the case's own routes as the Glass
+sends them. An answer from the fallback, an error, or an exact identifier not ranked first is never counted as the
+index's speed: each makes its class fail.
+
+| Measure | What | Timed by `measure_search` | Budget | Failure figure | Basis |
+| --- | --- | --- | --- | --- | --- |
+| M1 | Suggestions (`POST …/suggest`), 2–6 characters, on the largest loaded type | `suggest` | ≤ 300 ms | p95 > 300 ms, or any over 2 s | ADR-059's 300 ms; 2 s is the fallback's timeout |
+| M2 | Suggestions in the Glass: last key to the list shown, the 250 ms pause excluded | no (a `perf/` case in a browser slot) | ≤ 400 ms | > 600 ms | M1 plus one render, spec 02 §5's hover budget as the render's share |
+| M3 | Name search (typos, variants, sounds-like), grouped by type with counts | `names` | ≤ 1 s | p95 > 2 s | Half the fallback's 5 s, so the fallback never fires under normal load |
+| M4 | Full text with the passage highlighted, with a dataset and a date filter | `fulltext` | ≤ 1.5 s | p95 > 3 s | Below the 5 s timeout, with room for highlighting |
+| M5 | Ranking: an exact identifier comes first | `exact` | ≤ 1 s | p95 > 2 s | Every one first, or the class fails; timed as the name search it is (M3's figures) |
+| M6 | Index feed lag: a change made through the Conduit to searchable | `lag` | ≤ 5 s | p95 > 30 s | ADR-150's poll (1 s idle); 30 s is the indexer's lease. A node drawn on a board, polled until the index answers it |
+| M7 | Rebuild from the graph, B's whole load | no (the restore's rebuild) | measured, then the restore's bound set from it with a margin | the rebuild exceeds the bound the restore runbook gives it | Platform's finding F1: today's bound is a guess |
+| M8 | Drift check, B's whole load | no (its Job) | inside its Job's 4 GiB, its peak flat as the load grows, ≤ 1 h | out of memory, a peak growing with the documents, or over 1 h | The streaming check's bound by the page (ADR-124 Amendment 18's lane, 90442ba); finding F2 |
+| M9 | The fallback: OpenSearch stopped mid-session | no (pass or fail: `measure_search.measure_fallback`, the live file's M9 case) | the bar falls back and says so within the 5 s timeout | no message, or a wait over 5 s | ADR-149's fallback that says so |
+| M10 | The leak test at scale (the part-cleared principal) | no (pass or fail: `measure_search.measure_leaks`, the live file's M10 case) | nothing they may not see, count or infer, in results, counts, suggestions or snippets | any | Rule 3 (pass or fail, not a time) |
+| M11 | Sizes: each container's peak working set during M1–M8 | no (the cluster's metrics) | peak ≤ 80% of its limit | at or over its limit, or killed | ADR-148 Amendment 12 decision 4: step 4 measures the manifest's sizes |
+
+**How each becomes a gate.** M1, M3, M4, M5 and M6 are judged by a live file, `tests/perf/test_search_budget_live.py`,
+run by step 6 and at each release under a lease, against the load: each class fails at its failure figure through
+`measure_search`, a named stack whose queries leave a class out fails it, and where no B-sized stack is named each
+case is skipped with that reason. Its red is shown by `tests/test_measure_search.py`, which runs the file as step 6
+does against a stub Conduit, fast and slow. M6 is timed by `measure_search.measure_lag`: a node drawn on a board through
+the Conduit (`POST …/boards/{board}/items`, the smallest write through the adapter's `upsert_nodes` and so the outbox,
+rules' advice of 14 November), from the request until the case's search answers it from the index, polled every
+100 ms, the board made once outside the clock. No route says the indexer has drained an event, and the analyst sees
+the search, so the search is the measure. A worker's death mid-run hands the indexer's 30 s lease over: such a run
+is not M6's steady state. **No route removes a board or its items, so step 4 leaves M6's board ("M6") and its drawn
+nodes (OFFICIAL Persons, each labelled `M6 <unique>`) in B's case**; they are synthetic, and B's case is a measurement
+load. M10 is the live file's pass-or-fail case, `measure_search.measure_leaks`. Each of its cases is a query, as the
+part-cleared principal, that matches a record they may not see. The record's ids and distinguishing words must appear
+nowhere in the answer (results, merged entities, passages, suggestions, labels, filters), the totals and group counts
+must be those of what they may see where the case gives them, and the answer must be the index's. **The control:** the
+same request as the case's control must name the hidden record, or the case reaches nothing hidden and fails as
+proving nothing; a case whose control is missing or not given fails the same way, never skips. **There is one control
+per unit owning an R source**, `m10-cleared-<unit>` (SECRET, code R, that unit, granted every case), and each case names
+its own (`control`, the control subject's name; a SECRET record without R may name any): a principal holds one unit, and a restricted code is read only in its own unit, so no one
+principal could be the control for every unit's records (found building step 4's runner; the orchestrator's ruling, 14
+November). Its cases are derived from B's data, never typed by hand: from a SAME_AS truth row of "same" whose one
+record the part-cleared principal may see and whose other is SECRET, carries code R, or is in a case they are not
+granted, its control the subject of the hidden record's owning unit (rules, 14 November; rules writes the generator,
+with B's load). The search is scoped to one case, so a case keeps only hidden records the measured case reads: on B,
+*Intelligence reports*, whose SECRET/C reports are hidden from `m10-part` and whose SECRET/R ones (unit-intel-covert)
+only `m10-cleared-unit-intel-covert` reads. **A never-join case** asks the name of a visible record whose SAME_AS partner is
+in another dataset: the partner (its id, and its spelling where no visible record shares it) must never appear or be
+merged into `m10-part`'s answer in the measured case, and its control is the cleared subject of the partner's unit
+asking the same query in the partner's own case (`partner_case`), which every cleared subject is granted (the
+orchestrator's ruling (a), 14 November). It counts toward M10's pass; a null control still fails.
+The principals: `m10-part` (OFFICIAL-SENSITIVE without R, unit-records, granted the nominals and intel cases), the
+controls, and `m10-measure` (M1 to M6's, OFFICIAL-SENSITIVE, an editor on one case for M6's draws); rules grants
+them on B's cases under its lease, and step 4's runner mints their tokens into the run's environment. **M9** is the live file's pass-or-fail case,
+`measure_search.measure_fallback`: before the stop the first query must be the index's (a session that never had the
+index proves nothing); OpenSearch is stopped (`docker stop` of the container `OSPREY_MEASURE_STOP_OPENSEARCH` names,
+on the day stack d's, under rules' lease with its agreement, and skipped where none is named); each search must
+answer within its 5 s timeout from the fallback, `limited`, with words in `limited_reason`, and each suggestion within
+its 2 s from the graph, `limited`; OpenSearch is started again whatever happens, and the index must answer again
+within 120 s. M1, M3 and
+M4 are also to become a CI regression gate on a fixed corpus of a million names (CI cannot hold B's load), shown red
+before it is wired (rule 15). M2 is to become a `perf/` case beside glass-perf. M7 and M8 set the restore runbook's
+and the drift check's bounds and memory, held by the render tests. M11 changes the manifest and the profile together.
+Those not yet written are built with step 4's results, not before: this amendment fixes the figures they will hold.
+
+**A known difference: step 4 measures without the poc's signing, TLS and network.** Step 4's runner
+(`process/lanes/platform/v052-measure/step4_stack.py`) gives the Conduit the poc render's own settings, but its stores
+are the leased stack's on the host's loopback: OpenSearch unsigned (no SigV4) and every store without TLS. The client's
+poc signs every OpenSearch call for `es`, sends it over TLS, and reaches a VPC endpoint across the network. So M1 to
+M6's figures leave out three costs the poc pays on each search:
+- **SigV4 signing:** measured by `v052-measure/sigv4_cost.py` with the Conduit's own signer (opensearch-py's
+  `AWSV4SignerAsyncAuth` over botocore, synthetic credentials, a 1.4 KB search body): **35 µs at p50, 38 µs at p95**
+  per signature on an arm64 development machine (14 November 2026). A suggestion or a search makes one OpenSearch call,
+  so against M1's 300 ms it is about 0.01%; on a slower cluster CPU, take it as up to 0.1 ms.
+- **TLS:** not measured. With the client's pool kept alive the handshake is paid per connection, not per request; per
+  request it is the record encryption of a few KB.
+- **The network to the endpoint:** not measured, and likely the largest of the three (an in-VPC round trip, against a
+  loopback one). Step 6's run on the poc itself is where it is seen; until then a figure close to its budget is read as
+  possibly over it on the poc.
+
+**Consequences.** A result is read against a figure fixed before the run, and the timer cannot be handed a laxer one.
+A figure changed later is an amendment to this table, and the timer's constants follow it in the same change, or the
+test above is red. What B's load cannot answer (M1 at tens of millions) is said beside the figure it limits, never
+read as met.
+
+
+### ADR-148, Amendment 17 (14 November 2026) — Guests on Entra ID, behind a setting off by default
+
+Status: decided by the owner (13 November 2026, the ADR-148 audit's ruling 4b, "guests behind a setting (admin) in
+v0.5.2"; `process/lanes/AUDIT_ADR148_2026-11-13.md`, finding 5). Built by the admin lane (v0.5.2, audit 4b). Amends
+Amendment 6 point 8, which refused every guest (B2B) account outright.
+
+**Decisions.**
+
+1. **One setting, per tenant, off by default.** `entra_sign_in.admit_guests` in the people store, false when never set.
+   `GET|PUT /v1/admin/sign-in/guests`, behind `manage_people` as Admin › People is; Admin › People's **Admit guest
+   accounts**. Each change is audited as `set_guest_sign_in` with what it was and what it is now. On Keycloak there is
+   none (409 `not_entra`). Turning it off is refused (409 `locks_out_administrators`) while every enabled person who
+   has signed in and can manage people is a guest, as Amendment 8's lock-out is. Once it is off, every read of the
+   people store (`PEOPLE_SQL`: the list, one person, the start's seeding of the first administrators) answers a
+   guest as not enabled, so no lock-out counts them, no recipient is chosen among them, and the way back in opens when
+   only such a guest could manage people (the lane review's must 1).
+2. **The token check marks a guest, never admits one.** `_verified_parts` keeps Amendment 6's test (`acct` 1, or an
+   `idp` naming another tenant or no Entra issuer) and no longer refuses on it. `resolve_principal` then asks the
+   setting, read fresh, within the role lookup's bound, before the person is read or recorded:
+   - not admitted: `PrincipalResolutionError(GUESTS_NOT_ADMITTED_WORDS)`, "this is a guest account, homed outside
+     this organisation's Entra ID, and this deployment does not admit guests: an administrator can admit them in
+     Admin › People" (true of an `idp` naming another tenant and of one naming no Entra issuer at all). Nothing is
+     recorded of them;
+   - the setting unread: a 503 (`PrincipalLookupUnavailable`), never admitted;
+   - a member never asks it;
+   - `principal_from_claims`, the one construction path (decision 9), refuses a guest's claims itself unless its
+     caller says the guest was admitted (`guest_admitted`), so no other caller can let one in unasked.
+3. **Admitted, a guest is any person, never more** (rule 3). The same mapping, so the clearance, unit and handling codes
+   their own token gives (a guest's token often carries none of the tenant's extension attributes or groups, and is
+   then refused as any person missing them is), and the roles Admin › People gives. The person is recorded as a guest
+   (`entra_people.guest`), and People marks them.
+4. **Turned off, a guest already recorded is refused everywhere a person is read.** At their next request (by token,
+   decision 2). An open live view (`standing` answers them as disabled). A run acting as them as its owner
+   (Amendment 16's stored owner): `PrincipalRevoked`, counted as an owner who can no longer sign in. **Not** a reporting
+   session the guest already holds in Superset: Superset reads a person's role at its own sign-in only, as it does
+   for a person disabled here; the session ends with Superset's own.
+
+**What R1 must re-check against the organisation's real tenant** (none of this has met a real guest):
+- that a real guest's access token, issued by the client's tenant, carries `idp` naming the guest's home tenant, and
+  `acct` 1 where the app registration asks for it; and that a member's carries neither, or an `idp` of its own tenant;
+- with **Admit guest accounts** off, that a real guest is refused in the words above and is not in People; turned on,
+  that they sign in with the clearance, unit and codes the mapping gives them (or are refused for lacking them), and
+  are marked as a guest; turned off again, that their next request and their open live view are refused;
+- that the guest's token reaches the API at all: the API's app registration may need guests assigned to it, or its
+  "assignment required" left off, which is the client's to set;
+- the audit row of each change, and that someone without `manage_people` cannot switch it;
+- that a guest signed in to Superset keeps that session after guests are turned off, as a disabled member does, and
+  how long Superset's session lasts on the deployment.
+
+**Tests.**
+- `tests/services/api/test_entra_guests.py` (offline, the fake store refusing as the real one does):
+  - both guest shapes refused, in the words, with nothing recorded;
+  - admitted: a guest's principal is a member's with the same claims, field for field, by extension attribute and by
+    groups, and refused for a missing clearance as a member is;
+  - the setting unread: a 503; a member never asks it;
+  - refused again once off; a run as a guest owner refused once off.
+- `test_entra_people.py`: the route behind `manage_people`, both verbs refused to an analyst with nothing changed; each
+  change audited with before and after; the lock-out; an unknown field; Keycloak's 409.
+- `test_entra_people_live.py`: the real store's setting off until set, per tenant, each change answering what it was;
+  a guest recorded as one and standing disabled once off; the real resolver refusing then admitting a guest.
+- `PeopleEntra.test.tsx`: the box shows the setting and switches it, a refusal is shown in its words with the box left
+  as it was, a guest is marked, no box on Keycloak; `keyboard/admin.spec.ts`: the box switched by keyboard
+  (`admit-guest-accounts-by-keyboard`, rule 13).
+- `test_entra_guests.py` also: an admitted guest through Superset's client held to Superset's routes; a guest owner
+  whose setting cannot be read is the store unread; the construction path refusing a guest's claims unasked.
+- `test_entra_people.py` also: a guest manager counts for nothing once guests are off, so the last member cannot give
+  up `manage_people`; `test_entra_people_live.py`: the same against the real store, and the way back in opening.
+- `test_guides_cloud_platform.py`: §6a.7 quotes the refusal and the audit action as the code has them.
+Each rule is planted alone and red (`process/lanes/admin/guests/`).
+
+### ADR-044, Amendment 1 (14 November 2026) — A stopped hotlist or watch says why
+
+Status: the orchestrator's assignment (14 November 2026), from the CARRIES row ADR-148 Amendment 16 left ("a stopped
+hotlist or watch says why"), before v0.5.2's freeze. Built by the admin lane. Builds the reason field ADR-044 decided and
+left unbuilt; its escalation (three consecutive unreachable evaluations) is not built here and stays as ADR-044 left it.
+
+**Decisions.**
+
+1. **The reason beside the status, as ADR-044 chose.** `Hotlist.status_detail` and `Monitor.status_detail`
+   (`StoppedReason`), kept in a nullable `status_detail` column of each table. `set_status(id, status, detail)` writes
+   it only with `stopped`; `active` clears it in the same statement, so the two never disagree. A stored reason this
+   release does not know (a later release's) is served as none, never guessed.
+2. **Every ADR-044 stop says one.** At a load, each refusal `resolve_for_owner_detailed` raises is its reason
+   (`watch_status.reason_of`):
+   - `revoked`: disabled, or a guest no longer admitted;
+   - `out_of_date`: on Entra ID, not signed in within 24 hours;
+   - `not_held`: on Entra ID, Admin › People does not hold them (`OwnerNotHeld`; Entra was not asked);
+   - `refused`: the identity provider refused;
+   - `unreachable`: their sign-in could not be checked;
+   - `unresolved`: a resolver that told nothing.
+   `recipe_run` gives a load's hotlists and watches the detailed resolver (`_watch_owner_resolver`), so a reason is
+   specific; rule evaluation keeps its collapsed one. A watch whose saved pattern is no longer its owner's is
+   `pattern_gone`; a watch's schedule finding its owner revoked is `revoked`.
+   Which evaluations stop is unchanged: this records why each stops, and stops nothing it did not stop before. A watch
+   whose owner can be acted as is set active at once, as a hotlist always was, so an earlier reason is never shown once
+   untrue; one whose owner no longer reaches its dataset is skipped, not stopped.
+3. **In true words, never an id** (rule 7). `stopped_why`, served with the row from `watch_status.STOPPED_WHY`, names no
+   owner, account or source-system identifier; Entra's out-of-date owner uses `principal_auth.ACCESS_OUT_OF_DATE_WORDS`
+   (Amendment 16's). None says "could not be reached", and none repeats *Stopped*, which the badge already says. The
+   Glass's `StatusBadge` shows it beside *Stopped*, and nothing beside *Active*. Alert sources, on the same tab, still
+   says *Stopped* alone: a CARRIES row for the rules lane, whose file it is.
+4. **What comes next maps here too.** When platform-b's step 4c (the administrator fallback, ADR-148) lands, its
+   refusal for a clearance or unit with no value set is one more reason, with its own words, mapped in
+   `watch_status.reason_of`; until then such an owner is refused as any other and stopped with that reason.
+
+**Tests.**
+- ADR-044's two named tests, `test_a_revoked_principal_sets_status_detail_revoked_not_unreachable` and
+  `test_an_unreachable_identity_provider_sets_status_detail_unreachable_not_revoked`, in `test_stopped_why.py`: the real
+  `PrincipalResolver` against a loopback token exchange and users read (a disabled account; a closed port), to the
+  reason the stop records, with a third for an exchange refused (`refused`).
+- `tests/services/api/test_stopped_why.py` (offline):
+  - every reason has its words, none names an id, and the out-of-date one uses Amendment 16's words;
+  - each refusal is its reason;
+  - a load stopping a hotlist and a watch, for each refusal, records its reason;
+  - a gone pattern and a revoked schedule do too;
+  - a load's watches stopped with the detailed resolver's reason through `_evaluate_watches_best_effort` itself, the
+    collapsed form never asked;
+  - the user guide quotes every reason's sentence whole, and the administration guide's §16 the `unreachable` one.
+- `test_hotlists.py` and `test_monitors.py` (live): the real column kept, and cleared in the column itself with active,
+  not only hidden by the read; a later stop with no reason served with none; an unknown reason served as none.
+- `StatusBadge.test.tsx`, `HotlistPanel.test.tsx` and `MonitorPanel.test.tsx`: the reason beside *Stopped*, none
+  beside *Active*.
+
+Each rule is planted alone and red (`process/lanes/admin/stopped_why/`).

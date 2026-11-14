@@ -56,7 +56,8 @@ platform-b's dashboards check and for anyone fitting a new stand-in):
   the probe's hash. Over http, so the TLS settings are carried but not exercised; the stand-in itself is first met on
   the leased run after platform's searchkind and rules' index land. The same case is in the tests, skipped until both
   opensearch-py and the client are in this tree.
-- **On main's manifest** (this branch rebased onto it, 13 November): 43 checks planned, the 7 pending all v052-superset;
+- **On main's manifest** (this branch rebased onto it, 13 November): 43 checks planned, the 7 pending all v052-superset
+  (none pending since step 3b, 78564d2: the pending case now plants its own, in a copy of the candidate's manifest);
   `managed.opensearch` is planned and fails on a live run until platform's searchkind and rules' index both land (the probe
   was run with rules' real client against a server answering as the stand-in does, both ways: `gates/search-probe-real.txt`);
   `managed.rds.point_in_time_days` is held by the render check (only AWS shows it). The domain's egress placeholder
@@ -71,25 +72,32 @@ platform-b's dashboards check and for anyone fitting a new stand-in):
 
 ## Spec 08 on poc: `spec08_poc.py`
 
-`tests/scenarios/test_phase8_exit_over_the_wire.py`, **unchanged**, under a pytest plugin that signs in as the Glass
+`tests/scenarios/test_phase8_exit_over_the_wire.py`, unchanged but for two cases split in two at the orchestrator's
+request (14 November: the WebSocket's ticket, upgrade and snapshot from its delta, A7's refusal from the table's
+survival, each seed-free half running on poc), under a pytest plugin that signs in as the Glass
 does at the Entra stand-in (authorization code with PKCE, run from the api pod), skips each case that cannot run on
 poc with its reason, and **stops the run** if the module (as written, whatever `-k` selects) has a case with no
-disposition or a disposition for a gone case. The runner makes an empty case and uploads the CDR fixture through
+disposition or a disposition for a gone case. The runner makes an empty case and uploads the CDR fixture and the seizure record through
 `POST .../ingest/source-files`, the analyst's own door.
 
-**12 of 27 cases run; 15 rest on a seed ("no seed path on poc").** The 15 rest on the `hmp`, `fixture-corp` and
+**14 of 29 cases run; 15 rest on a seed ("no seed path on poc").** The 15 rest on the `hmp`, `fixture-corp` and
 `scenarios` seed datasets, and `harness.apply`'s seed is compose-only. What runs: the door, the ingest root and the
 Studio, B1–B3 and the find-and-open case on their load, A1's grid, redraw and centroid, and B13 (both) and B14 on
-the uploaded seizure record. B13–B14 were broken on every shape until c6c6044 (their fixture asked `POST
+the uploaded seizure record, and two seed-free halves split from seeded cases (the orchestrator's review of
+step 6's sheet): the WebSocket through the poc ingress (ticket, upgrade and the empty snapshot; its delta waits on
+the seed) and A7's refusal of a hostile field name (the events table's survival waits). B13–B14 were broken on every shape until c6c6044 (their fixture asked `POST
 /v1/hotlists` and `GET /v1/alerts`, moved under the case); B12 and B19–B20 had drifted the same way. All five calls are
 fixed, and `tests/scenarios/test_over_the_wire_routes_exist.py` holds every call in the module to the Conduit's routes.
 
-`python spec08_poc.py table` prints the dispositions.
+`python spec08_poc.py table` prints the dispositions. On the kind cluster, under a lease, from OspreyFlow_Core:
+`bash ../OspreyFlow_Build/process/lanes/case-b/v052/spec08_live.sh [pytest arguments]` (r1_kind.sh's own environment;
+`r1_kind.sh py` hands its arguments to r1_kind.py's argparse and cannot run it).
 
 ## Red first
 
-`plants.py`: 62 plants, each one check broken at its real call site in a copy of the driver, and 8 in the route reading (in a copy, beside a copy of its module); every one turns the
-tests red and the unplanted copy stays green (`gates/plants.txt`, with the commit it ran at). Building them found
+`plants.py`: 70 plants, each one check broken at its real call site in a copy of the driver, 8 in the route reading (in a copy, beside a copy of its module) and 2 in a copy of spec 08's module (a seeded step moved into a seed-free half); every one turns the
+tests red, each record naming the test it failed, and the unplanted copy stays green (`gates/plants.txt`, with the
+commit it ran at). Building them found
 four gaps (no test had a CronJob whose runs never succeeded; a reader test whose pod order hid the finished-pod
 plant; no test of an unobserved generation alone; none of a CronJob template still on the old release).
 **The live run.** `verify_live.sh` (from OspreyFlow_Core, on the server, under a lease) runs `install_verify.py verify`

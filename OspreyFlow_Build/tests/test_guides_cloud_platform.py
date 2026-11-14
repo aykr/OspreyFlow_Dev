@@ -192,6 +192,9 @@ def test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days() -> None
     else:
         stale = ["only a set finished in the last", "no database to pair with it", "is not to be restored"]
         assert [words for words in stale if words in text] == []
+    # The sets' retention is held inside RDS's window, so an organisation's own may be shorter, never longer.
+    bound = f"may be shorter but not longer: a set kept longer would outlive RDS's point-in-time window (below), {days} days"
+    assert (bound in text) is (int(sets) < int(days))
 
 
 def test_section_6a5_gives_one_s3_reads_cap_as_the_connector_holds_it() -> None:
@@ -228,7 +231,7 @@ def test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up() -> Non
     text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.8"))
     folders = sorted({f for found in parts.values() for f in found})
 
-    holds = re.search(r"cannot make again\*\*: (.*?); and, in the poc shape", text)
+    holds = re.search(r"cannot make again\*\*: (.*?) Each is read-only to the backup", text)
     assert holds, "§6a.8's sentence naming the set's folders"
     assert sorted(set(re.findall(r"\(`([^`]+)`", holds.group(1)))) == folders
     every = all(parts.values())
@@ -236,7 +239,12 @@ def test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up() -> Non
     assert ("`ospreyflow-backup-claims` (the claims part, in every shape" in text) is every
     assert ("in the poc shape, `ospreyflow-backup-claims`" in text) is (not every)
     poc_alone = bool(claims["poc"]) and not any(claims[s] for s in standard)
-    assert ("; and, in the poc shape, the Ingest root's claim" in text) is poc_alone
+    assert ("the Ingest root (uploads and the drop folder) beside them: in the poc shape its own claim" in text) is (
+        poc_alone and "ingest" in claims["poc"])
+    # Where the Ingest root is no claim of its own, the shared volume's folder of it is a part of the set.
+    part_in_standard = all("ingest" in parts[s] for s in standard) and "ingest" not in parts["poc"]
+    assert ("in the standard shape the shared volume's folder of it (`ingest`, a part of its own)" in text) is (
+        part_in_standard)
 
     outside = re.search(r"\*\*Not in a set\*\*: (.*?) A restore leaves those", text)
     assert outside, "§6a.8's sentence naming what no set holds"
@@ -244,4 +252,19 @@ def test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up() -> Non
     assert named == left_out("poc") | {f for s in standard for f in left_out(s)}
     in_standard_only = all("ingest" in left_out(s) for s in standard) and "ingest" not in left_out("poc")
     assert ("in the standard shape, the Ingest root (`ingest`" in outside.group(1)) is in_standard_only
+    assert ("an upload can disagree with the stores it brings back" in text) is any("ingest" in left_out(s) for s in values)
     assert bool(re.search(r"`ospreyflow-shared`[^.]{0,40}is not backed up", text)) is (not folders)
+
+
+# ---------------------------------------------------------------- guests on Entra ID (ADR-148 Amendment 17)
+
+
+def test_section_6a7_quotes_the_guest_refusal_and_the_audit_action_as_the_code_has_them() -> None:
+    from principal_auth import GUESTS_NOT_ADMITTED_WORDS
+
+    text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.7"))
+    assert f'"{GUESTS_NOT_ADMITTED_WORDS}"' in text
+    app = (CORE / "services/api/app.py").read_text(encoding="utf-8")
+    assert 'action="set_guest_sign_in"' in app and "`set_guest_sign_in`" in text
+    assert "Admit guest accounts" in text
+    assert "Admitting guests would need a setting that does not exist" not in text

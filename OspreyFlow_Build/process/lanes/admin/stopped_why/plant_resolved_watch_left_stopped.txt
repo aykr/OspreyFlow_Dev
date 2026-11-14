@@ -1,0 +1,8 @@
+# plant: resolved_watch_left_stopped (services/api/evaluation.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k active_again_though
+# RED
+E       AssertionError: assert [] == [('m-1', 'active', None)]
+E         
+E         Right contains one more item: ('m-1', 'active', None)
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_a_watch_whose_owner_resolves_is_active_again_though_it_no_longer_reaches_its_dataset
+1 failed, 29 deselected in 3.23s

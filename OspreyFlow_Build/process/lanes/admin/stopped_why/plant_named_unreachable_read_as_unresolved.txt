@@ -1,0 +1,8 @@
+# plant: named_unreachable_read_as_unresolved (services/api/watch_status.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k unreachable_identity_provider_sets
+# RED
+E       AssertionError: assert [('h-9', 'sto...'unresolved')] == [('h-9', 'sto...unreachable')]
+E         
+E         At index 0 diff: ('h-9', 'stopped', 'unresolved') != ('h-9', 'stopped', 'unreachable')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_an_unreachable_identity_provider_sets_status_detail_unreachable_not_revoked
+1 failed, 29 deselected in 3.55s

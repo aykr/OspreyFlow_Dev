@@ -1,0 +1,216 @@
+scripts/measure_search.py, red first (offline on the Mac, closed ports, fresh PYTHONPYCACHEPREFIX):
+- before the module existed: tests/test_measure_search.py did not collect (ImportError: cannot import name 'measure_search').
+- green: 5 passed, against a stub Conduit answering 3d's frozen shape (SEARCH_RESPONSE_SHAPE.md: the case's /search and /suggest routes, results' node_ids and match.band).
+- one plant per check, each at its own site, by OspreyFlow_Build/process/lanes/platform/v052-measure/plants.py (run from OspreyFlow_Core with the repository and the venv's bin as its arguments), each file restored after:
+Plant: the failure figure not judged:
+FAILED tests/test_measure_search.py::test_a_slow_suggestion_is_not_met_at_its_failure_figure
+1 failed, 4 passed in 9.21s
+Plant: a fallback answer counted as the index's:
+FAILED tests/test_measure_search.py::test_an_answer_from_the_fallback_is_never_counted_as_the_index_s
+1 failed, 4 passed in 9.19s
+Plant: the ranking not checked:
+FAILED tests/test_measure_search.py::test_an_exact_identifier_ranked_second_is_not_met
+1 failed, 4 passed in 9.23s
+Plant: a class with no budget measured:
+FAILED tests/test_measure_search.py::test_a_class_with_no_budget_is_refused_rather_than_measured_against_nothing
+1 failed, 4 passed in 9.18s
+
+Not yet built: M6's lag (a write through the Conduit, then search polled until it appears), which needs 3c's and 3d's routes on main to name the write; M2's browser case beside glass-perf.
+
+# ADR-149 Amendment 2's budgets in the timer (the orchestrator's decision 8, 2026-11-14T07:01:01Z), offline on closed ports,
+# a fresh PYTHONPYCACHEPREFIX each run. Red first, with the amendment written and BUDGETS an empty constant (main's
+# behaviour: no accepted figures, a --budgets file required):
+        # passed the last option string
+FAILED tests/test_measure_search.py::test_the_timer_s_budgets_are_the_amendment_s_both_ways
+FAILED tests/test_measure_search.py::test_the_run_judges_against_the_accepted_budgets_with_no_file_of_its_own
+FAILED tests/test_measure_search.py::test_one_suggestion_over_two_seconds_is_not_met_whatever_the_p95
+FAILED tests/test_measure_search.py::test_full_text_is_sent_to_the_search_route_and_judged_at_m4
+4 failed, 5 passed in 10.75s
+  (the first case's first red was the test's own: the amendment is the file's last section; fixed, then red as
+  'assert {} == {suggest, names, fulltext, exact}')
+Then one plant per check at its real call site (plants_budgets.py), each restored after its run:
+plant 1: M1's any-over-2-s check removed
+  tests/test_measure_search.py -k 'over_two_seconds': RED (1 failed, 8 deselected in 3.14s)
+plant 2: the timer's M3 failure figure laxer than the table's
+  tests/test_measure_search.py -k 'both_ways': RED (1 failed, 8 deselected in 0.52s)
+plant 3: the table's M4 failure figure changed alone
+  tests/test_measure_search.py -k 'both_ways': RED (1 failed, 8 deselected in 0.51s)
+plant 4: a timed class with no row in the table
+  tests/test_measure_search.py -k 'both_ways': RED (1 failed, 8 deselected in 0.51s)
+plant 5: a run handed a figures file again
+  tests/test_measure_search.py -k 'no_file_of_its_own': RED (1 failed, 8 deselected in 1.22s)
+plant 6: full text sent to the suggestion route
+  tests/test_measure_search.py -k 'judged_at_m4': RED (1 failed, 8 deselected in 1.02s)
+6/6 red
+Green after: tests/test_measure_search.py and tests/test_adr_reservations.py 16 passed; the ADR checks 23 passed.
+
+# The live budget gate, tests/perf/test_search_budget_live.py (2026-11-14T07:47:26Z): the citation check refused 7d6e8e1, ADR-149
+# Amendment 2 and PLAN.md naming the file before it existed. Written now for M1, M3, M4 and M5 (M6, M9 and M10 reworded
+# as live cases still to be written for step 6, no path named). Its red, at the real call site: tests/test_measure_search.py
+# runs the file as step 6 does against the stub Conduit (fast: 4 passed; M1 slow: failed at its failure figure; no stack:
+# 4 skipped with the reason). One plant per check at the file's own lines (plants_live.py), each restored after its run:
+plant 1: the gate's verdict check dropped
+  tests/test_measure_search.py -k 'over_its_failure_figure': RED (1 failed, 12 deselected in 8.07s)
+plant 2: a class with no queries passed unmeasured
+  tests/test_measure_search.py -k 'leaves_out': RED (1 failed, 12 deselected in 2.91s)
+plant 3: the gate run without a named stack, against a default
+  tests/test_measure_search.py -k 'no_stack_is_named': RED (1 failed, 12 deselected in 2.08s)
+3/3 red
+Green after: test_measure_search, tests/perf, test_adr_reservations, test_test_file_coverage_check, test_write_store_marks;
+doc-citations-check: every cited path exists.
+
+# M6, the feed's lag (2026-11-14T07:56:41Z): measure_search.measure_lag and the live file's M6 case, on rules' advice (a node
+# drawn on a board, POST .../boards/{board}/items, polled on the case's search until the index answers it). Built, then shown
+# red one plant per check at its real call site (plants_lag.py), each restored after its run:
+plant 1: a fallback answer holding the node counted as the index's
+  tests/test_measure_search.py -k 'fallback_answering_the_node': RED (1 failed, 18 deselected in 1.12s)
+plant 2: M6's failure figure not applied
+  tests/test_measure_search.py -k 'lag_over_the_failure_figure': RED (1 failed, 18 deselected in 2.76s)
+plant 3: a refused draw not counted
+  tests/test_measure_search.py -k 'refused_draw': RED (1 failed, 18 deselected in 1.08s)
+plant 4: the board made inside the loop, once per draw
+  tests/test_measure_search.py -k 'in_time_meets_m6': RED (1 failed, 18 deselected in 1.34s)
+plant 5: the live file's M6 verdict dropped
+  tests/test_measure_search.py -k 'fails_m6_when': RED (1 failed, 18 deselected in 2.32s)
+plant 6: the table's M6 failure figure changed alone
+  tests/test_measure_search.py -k 'both_ways': RED (1 failed, 18 deselected in 0.61s)
+6/6 red
+The earlier plants rerun after the change: plants_budgets 6/6 red, plants_live 3/3 red.
+Green after: test_measure_search and tests/perf 19 passed, 5 skipped (no stack named); with test_adr_reservations,
+test_test_file_coverage_check and test_write_store_marks 60 passed, 5 skipped; doc-citations-check: every cited path exists.
+
+# M10, the leak test at scale (2026-11-14T08:04:39Z): measure_search.measure_leaks and the live file's M10 case.
+# Each case a hidden record's query as the part-cleared principal, the fully cleared principal's answer its control.
+# Built, then shown red one plant per check at its real call site (plants_leaks.py), each restored after its run:
+plant 1: the control dropped: a case reaching nothing hidden passes
+  tests/test_measure_search.py -k 'cannot_reach': RED (1 failed, 27 deselected in 1.27s)
+plant 2: the hidden ids not looked for
+  tests/test_measure_search.py -k 'seen_or_counted and id': RED (1 failed, 3 passed, 24 deselected in 2.78s)
+plant 3: the hidden words not looked for
+  tests/test_measure_search.py -k 'seen_or_counted and text': RED (1 failed, 27 deselected in 1.41s)
+plant 4: the totals not compared
+  tests/test_measure_search.py -k 'seen_or_counted and count': RED (1 failed, 3 passed, 24 deselected in 2.83s)
+plant 5: a fallback answer taken as the index's
+  tests/test_measure_search.py -k 'fallback_answer_is_not_the_index_s_for_m10': RED (1 failed, 27 deselected in 1.35s)
+plant 6: no cases taken as a pass
+  tests/test_measure_search.py -k 'no_leak_cases': RED (1 failed, 27 deselected in 1.20s)
+plant 7: the live file's M10 verdict dropped
+  tests/test_measure_search.py -k 'fails_m10_on_a_leak': RED (1 failed, 27 deselected in 2.37s)
+7/7 red
+The earlier plants rerun after the change: plants_budgets 6/6, plants_live 3/3 (its third anchor made unique), plants_lag 6/6.
+Green after: with test_adr_reservations, test_test_file_coverage_check and test_write_store_marks, 69 passed, 6 skipped
+(no stack named); doc-citations-check: every cited path exists.
+Not yet runnable on B (rules, 14 Nov): B has no leak cases with an answer key and no accounts. Its cases are to be derived
+from B's SAME_AS truth rows (same, one side visible, the other SECRET, code R or in an ungranted case) once the two principals
+are minted and B's cases granted (the cases stage rerun with --grant, the orchestrator's word).
+
+# M10's controls, one per R-owning unit (2026-11-14T08:42:23Z; the orchestrator's ruling): a principal holds one unit and a
+# restricted code is read only in its own, so each case names its control. Shown red, one plant per check (plants_leaks.py):
+plant 1: the control dropped: a case reaching nothing hidden passes
+  tests/test_measure_search.py -k 'cannot_reach': RED (1 failed, 30 deselected in 1.14s)
+plant 2: the hidden ids not looked for
+  tests/test_measure_search.py -k 'seen_or_counted and id': RED (1 failed, 3 passed, 27 deselected in 2.64s)
+plant 3: the hidden words not looked for
+  tests/test_measure_search.py -k 'seen_or_counted and text': RED (1 failed, 30 deselected in 1.11s)
+plant 4: the totals not compared
+  tests/test_measure_search.py -k 'seen_or_counted and count': RED (1 failed, 3 passed, 27 deselected in 2.63s)
+plant 5: a fallback answer taken as the index's
+  tests/test_measure_search.py -k 'fallback_answer_is_not_the_index_s_for_m10': RED (1 failed, 30 deselected in 1.11s)
+plant 6: no cases taken as a pass
+  tests/test_measure_search.py -k 'no_leak_cases': RED (1 failed, 30 deselected in 1.10s)
+plant 7: every case asked of one control, not its own
+  tests/test_measure_search.py -k 'control_cannot_name_its_record': RED (1 failed, 2 passed, 28 deselected in 2.12s)
+plant 8: a case with no control token skipped, not failed
+  tests/test_measure_search.py -k 'control_cannot_name_its_record': RED (2 failed, 1 passed, 28 deselected in 2.12s)
+plant 9: the live file's M10 verdict dropped
+  tests/test_measure_search.py -k 'fails_m10_on_a_leak': RED (1 failed, 30 deselected in 2.25s)
+9/9 red
+The earlier plants rerun: plants_budgets 6/6, plants_live 3/3, plants_lag 6/6. Green after: 59 passed, 6 skipped.
+
+# Never-join cases' control in the partner's own case, and M10 asked as m10-part (2026-11-14T08:52:27Z; the orchestrator's
+# ruling (a)). Shown red, one plant per check (plants_leaks.py), each restored:
+plant 1: the control dropped: a case reaching nothing hidden passes
+  tests/test_measure_search.py -k 'cannot_reach': RED (1 failed, 33 deselected in 1.15s)
+plant 2: the hidden ids not looked for
+  tests/test_measure_search.py -k 'seen_or_counted and id': RED (1 failed, 3 passed, 30 deselected in 2.67s)
+plant 3: the hidden words not looked for
+  tests/test_measure_search.py -k 'seen_or_counted and text': RED (1 failed, 33 deselected in 1.16s)
+plant 4: the totals not compared
+  tests/test_measure_search.py -k 'seen_or_counted and count': RED (1 failed, 3 passed, 30 deselected in 2.67s)
+plant 5: a fallback answer taken as the index's
+  tests/test_measure_search.py -k 'fallback_answer_is_not_the_index_s_for_m10': RED (1 failed, 33 deselected in 1.17s)
+plant 6: no cases taken as a pass
+  tests/test_measure_search.py -k 'no_leak_cases': RED (1 failed, 33 deselected in 1.14s)
+plant 7: every case asked of one control, not its own
+  tests/test_measure_search.py -k 'control_cannot_name_its_record': RED (1 failed, 2 passed, 31 deselected in 2.17s)
+plant 8: a case with no control token skipped, not failed
+  tests/test_measure_search.py -k 'control_cannot_name_its_record': RED (2 failed, 1 passed, 31 deselected in 2.14s)
+plant 9: a never-join control asked in the measured case, not the partner's
+  tests/test_measure_search.py -k 'control_asks_in_the_partner': RED (1 failed, 33 deselected in 1.16s)
+plant 10: the live file's M10 asked as the measuring subject
+  tests/test_measure_search.py -k 'passes_m10_when_nothing': RED (1 failed, 33 deselected in 2.33s)
+plant 11: the live file's M10 verdict dropped
+  tests/test_measure_search.py -k 'fails_m10_on_a_leak': RED (1 failed, 33 deselected in 2.42s)
+11/11 red
+Green after: 62 passed, 6 skipped (with test_adr_reservations and the coverage check).
+# Step 4's stack runner, step4_stack.py (2026-11-14T08:47:37Z; the orchestrator's order: stack d holds only the stores).
+# Offline: tests/test_step4_stack.py 12 passed. One plant per check at its real line (plants_step4.py), each restored:
+plant 1: the Conduit bound to every interface
+  tests/test_step4_stack.py -k 'loopback': RED (1 failed, 11 deselected in 0.60s)
+plant 2: a setting's value on the command line
+  tests/test_step4_stack.py -k 'no_value_reaches': RED (1 failed, 11 deselected in 0.64s)
+plant 3: the Conduit's limits typed, not the manifest's
+  tests/test_step4_stack.py -k 'poc_manifest': RED (2 failed, 10 deselected in 0.67s)
+plant 4: the probe's read taken as a pass
+  tests/test_step4_stack.py -k 'stops_a_run': RED (1 failed, 2 passed, 9 deselected in 2.13s)
+plant 5: M10 asked as the measuring subject
+  tests/test_step4_stack.py -k 'each_use': RED (1 failed, 11 deselected in 0.61s)
+plant 6: a control without R
+  tests/test_step4_stack.py -k 'rules_granted': RED (1 failed, 11 deselected in 0.64s)
+plant 7: the realm's users left as the deployment's
+  tests/test_step4_stack.py -k 'subjects_alone': RED (1 failed, 11 deselected in 0.61s)
+7/7 red
+Its live red and green (a subject with no grant refused, then a granted one read) wait for a small leased stack, not d.
+
+# The runner's users' ids are their names (2026-11-14T08:54:19Z): the Conduit's principal id is the token's sub, Keycloak's
+# user id, and B's cases are granted to the names. Plants rerun (plants_step4.py):
+plant 1: the Conduit bound to every interface
+  tests/test_step4_stack.py -k 'loopback': RED (1 failed, 12 deselected in 0.64s)
+plant 2: a setting's value on the command line
+  tests/test_step4_stack.py -k 'no_value_reaches': RED (1 failed, 12 deselected in 0.64s)
+plant 3: the Conduit's limits typed, not the manifest's
+  tests/test_step4_stack.py -k 'poc_manifest': RED (2 failed, 11 deselected in 0.67s)
+plant 4: the probe's read taken as a pass
+  tests/test_step4_stack.py -k 'stops_a_run': RED (1 failed, 2 passed, 10 deselected in 2.43s)
+plant 5: M10 asked as the measuring subject
+  tests/test_step4_stack.py -k 'each_use': RED (1 failed, 12 deselected in 0.61s)
+plant 6: a control without R
+  tests/test_step4_stack.py -k 'rules_granted': RED (1 failed, 12 deselected in 0.63s)
+plant 7: each user's id left to Keycloak
+  tests/test_step4_stack.py -k 'principal_id_is_its_name': RED (1 failed, 12 deselected in 0.65s)
+plant 8: the realm's users left as the deployment's
+  tests/test_step4_stack.py -k 'subjects_alone': RED (1 failed, 12 deselected in 0.63s)
+8/8 red
+
+# M9, the fallback (2026-11-14T10:00:23Z): measure_search.measure_fallback and the live file's M9 case. Offline, one plant per
+# check at its real line (plants_fallback.py), each restored:
+plant 1: a fallback that says nothing taken as one that says so
+  tests/test_measure_search.py -k 'late_silent_or_absent and silent': RED (1 failed, 3 passed, 39 deselected in 3.81s)
+plant 2: the timeout not applied
+  tests/test_measure_search.py -k 'late_silent_or_absent and slow': RED (1 failed, 42 deselected in 1.72s)
+plant 3: an index's answer taken for the fallback
+  tests/test_measure_search.py -k 'late_silent_or_absent and stuck': RED (1 failed, 42 deselected in 1.15s)
+plant 4: the index's return not waited for
+  tests/test_measure_search.py -k 'late_silent_or_absent and never_back': RED (1 failed, 3 passed, 39 deselected in 3.78s)
+plant 5: OpenSearch started again only when all went well
+  tests/test_measure_search.py -k 'started_again_when': RED (1 failed, 42 deselected in 1.32s)
+plant 6: a session that never had the index measured anyway
+  tests/test_measure_search.py -k 'never_had': RED (1 failed, 42 deselected in 1.18s)
+6/6 red
+Every earlier plant set rerun: 6/6, 3/3, 6/6, 11/11. Green offline: 41 passed, 9 skipped (the two live M9 runs skip here:
+the Mac's docker guard refuses the stand-in too; server_m9.sh runs them on the test server).
+
+# M9's live runs on the test server (server_m9.sh through stack_lease.sh offline, run 20261114T100049Z-07a58c0d, no stack):
+- green: both live-run cases passed (2 passed): the stand-in docker stopped and started the stub's index, the case met,
+  and the silent fallback's case failed as it should;
+- red: with the live case's verdict check planted out, the silent fallback's case failed (1 failed); then put back.

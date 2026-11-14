@@ -1,7 +1,9 @@
 """What Ask & Chat reads, and who will answer (`06_DECISIONS.md` ADR-098 Amendment 7, ADR-129
 Amendment 4, ADR-135 Amendment 12).
 
-- **`ReadSummary`**: what a question read, or will read, counted by the Conduit as the asker.
+- **`ReadSummary`**: what a question read, or will read, counted by the Conduit as the asker. Under
+  *Whole case* (ADR-098 Amendment 9) it also says what the case's search found and whether its
+  answer was limited.
 - **`UnusableEngine`**: an engine that cannot answer this question, and why, in words.
 - **`WillRead`**: `POST /v1/investigations/{id}/questions/will-read`, the summary and the engine the
   routing will use on the question's own material, before anything is sent.
@@ -21,7 +23,7 @@ class ReadSummary(BaseModel):
     view: nothing they may not see moves a figure (rule 3). Kept with the answer, which a later
     reader is shown only if they may see every node, link and Document counted."""
 
-    read_from: Literal["selection", "graph"]
+    read_from: Literal["selection", "graph", "case"]
     #: Documents in scope with text, every one read whole.
     documents: int
     #: Documents in scope with no text to read (an image, say): counted, never read.
@@ -36,6 +38,19 @@ class ReadSummary(BaseModel):
     selected: int
     #: The first selected node's display name, for "About: <name> and N others".
     first_selected: str | None
+    #: *Whole case* only (0, `None`, true and false otherwise): the records the case's search
+    #: found for the question's words and the asker may see, as many as were read.
+    found: int
+    #: Documents the search found by their words that the reader does not open (not on the canvas):
+    #: each read as its matched passage only, never whole.
+    passages: int
+    #: The search's own words when it answered from its fallback; `None` when the index answered.
+    limited_reason: str | None
+    #: False: the search's counts may be incomplete (its fallback, or records it has not caught up
+    #: with yet).
+    counts_exact: bool
+    #: True: the search had more matches than the first page read (rule 2: said, never hidden).
+    more: bool
 
 
 class UnusableEngine(BaseModel):

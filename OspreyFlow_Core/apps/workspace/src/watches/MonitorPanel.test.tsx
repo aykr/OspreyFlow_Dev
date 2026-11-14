@@ -1,0 +1,44 @@
+// @vitest-environment jsdom
+// ADR-044 Amendment 1: a stopped watch says why, in the Conduit's words, beside Stopped; an active one
+// shows no reason.
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { MonitorPanel } from "./MonitorPanel";
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+const WHY = "Its saved pattern is no longer its owner's.";
+
+function serve(monitors: Record<string, unknown>[]) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      const body = String(url).endsWith("/monitors") ? { monitors } : { patterns: [] };
+      return { ok: true, status: 200, json: async () => body } as Response;
+    }),
+  );
+}
+
+const watch = (extra: Record<string, unknown>) => ({
+  id: "m1", pattern_id: "p1", owner_id: "a1", status: "active", created_at: "2026-11-14T09:00:00Z",
+  every: "daily", hour: 6, ...extra,
+});  // prettier-ignore
+
+describe("a watch in the list", () => {
+  it("shows why it is stopped", async () => {
+    serve([watch({ status: "stopped", status_detail: "pattern_gone", stopped_why: WHY })]);
+    render(<MonitorPanel apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" />);
+    expect(await screen.findByText(WHY)).toBeTruthy();
+  });
+
+  it("shows no reason while active", async () => {
+    serve([watch({ stopped_why: WHY })]);
+    render(<MonitorPanel apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" />);
+    expect(await screen.findByText("Active")).toBeTruthy();
+    expect(screen.queryByText(WHY)).toBeNull();
+  });
+});

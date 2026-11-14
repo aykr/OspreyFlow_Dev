@@ -14,8 +14,10 @@ conformance suite, and the seed *plumbing* (Conduit stopped, one-shot container,
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 
-import duckdb
+import pytest
 from scripts.seed_scenarios import (
     SCENARIOS_TOKEN,
     SEIZURE_DATE,
@@ -26,8 +28,9 @@ from scripts.seed_scenarios import (
     load_sighting_events,
 )
 
-from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
-from ontology.handling import load_uk_le_scheme
+from adapters.analytics_duckdb.testing import duckdb_adapter
+from ontology.handling import HandlingScheme, load_uk_le_scheme
+from ports.analytics import AnalyticsPort
 from schemas.analytics import EventFilter, SightingRequest
 from schemas.domain import Interval, Principal
 
@@ -238,7 +241,17 @@ def test_fixture_corps_population_is_untouched_by_this_seeder() -> None:
     )
 
 
-async def test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads() -> None:
+#: Each analytics engine a deployment can name (`components.analytics_engine`): the seed writes
+#: its sightings to the deployment's own store (ADR-148 Amendment 14), so B18 holds on each.
+#: DuckDB's here; ClickHouse's against the live server in `tests/test_seed_clickhouse_live.py`
+#: (never a fake of it, rule 15), which runs this same case with this map's other entry.
+STORES: dict[str, Callable[[list, HandlingScheme], AbstractAsyncContextManager[AnalyticsPort]]] = {
+    "duckdb": duckdb_adapter,
+}
+
+
+@pytest.mark.parametrize("engine", list(STORES))
+async def test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads(engine: str) -> None:
     """**B18's trail, through the function the Glass actually calls — round 13cde.**
 
     The Glass's snail trail is `POST /v1/analytics/sightings`, which is `AnalyticsPort.
@@ -264,13 +277,19 @@ async def test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads() -> 
         "every sighting edge needs exactly one occurrence in the analytics store, tied by edge_id"
     )
 
-    con = duckdb.connect(":memory:")
     scheme = load_uk_le_scheme()
-    assert await load_sighting_events(con, scheme, events) == len(events)
-    assert await load_sighting_events(con, scheme, events) == 0, (
-        "a second seed wrote the sightings again; re-seeding must not double the track"
-    )
+    seeder = Principal(id="seed-scenarios", clearance="SECRET", org_unit="unit-1")
+    async with STORES[engine]([], scheme) as analytics:
+        assert await load_sighting_events(analytics, seeder, events) == len(events)
+        assert await load_sighting_events(analytics, seeder, events) == 0, (
+            "a second seed wrote the sightings again; re-seeding must not double the track"
+        )
+        await _the_trail_is_the_track(analytics, scope, handset, present_at)
 
+
+async def _the_trail_is_the_track(
+    analytics: AnalyticsPort, scope: str, handset: str, present_at: dict
+) -> None:
     day = SEIZURE_DATE.replace(hour=0)
     request = SightingRequest(
         filter=EventFilter(
@@ -280,7 +299,7 @@ async def test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads() -> 
         )
     )
     demo_analyst = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
-    track = await AnalyticsDuckDBAdapter(con, scheme).list_sightings(request, demo_analyst)
+    track = await analytics.list_sightings(request, demo_analyst)
 
     assert len(track) == len(present_at), (
         f"the Glass's own sightings request returns {len(track)} of {len(present_at)} seeded "

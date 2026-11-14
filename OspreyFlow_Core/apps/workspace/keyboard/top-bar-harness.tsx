@@ -46,6 +46,7 @@ window.__TOPBAR__ = { opened: null, browsed: false, signedOut: false, rail: [], 
 // `?long=1`: the current case has a long name and reads one dataset with a long name, as the Prison
 // Intelligence demo does, so the bar carries the case and its scope badge at their widest.
 const wantsLong = new URLSearchParams(window.location.search).get("long") === "1";
+const wantsLimited = new URLSearchParams(window.location.search).get("limited") === "1";
 const CASES = [
   { id: "c1", name: "Enron corpus (real data, this machine only)", level: "author", created_at: "2026-09-29T09:00:00Z", created_by: "a" },
   { id: "c2", name: "PaySim mobile money (internal)", level: "viewer", created_at: "2026-09-28T09:00:00Z", created_by: "b" },
@@ -82,7 +83,11 @@ window.fetch = (async (url: string, init?: RequestInit) => {
       : null;
     return { ok: true, status: 200, json: async () => ({ counts, added }) };
   }
-  const body = String(url).endsWith("/suggest") ? { nodes: SUGGESTIONS, more: true } : CASES;
+  // `?limited=1`: the suggestions came from today's prefix read, not the search index (ADR-059
+  // Amendment 1), so the box shows its one "limited" line.
+  const body = String(url).endsWith("/suggest")
+    ? { nodes: SUGGESTIONS, more: true, ...(wantsLimited ? { source: "graph", limited: true } : {}) }
+    : CASES;
   return { ok: true, status: 200, json: async () => body };
 }) as unknown as typeof fetch;
 

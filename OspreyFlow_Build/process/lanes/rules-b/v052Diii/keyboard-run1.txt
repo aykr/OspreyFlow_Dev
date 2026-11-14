@@ -1,0 +1,30 @@
+[WebServer] (node:22260) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:22263) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:22301) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 12 tests using 1 worker
+
+(node:22303) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/12] keyboard/questions.spec.ts:80:1 › Ctrl+Enter in the question asks it, and the answer joins the conversation
+[2/12] keyboard/questions.spec.ts:91:1 › Tab from the question reaches Ask, and Enter asks
+[3/12] keyboard/questions.spec.ts:103:1 › a document the answer draws on opens to read by keyboard
+[4/12] keyboard/questions.spec.ts:111:1 › a proposal is accepted by keyboard, and its change reaches the view
+[5/12] keyboard/questions.spec.ts:121:1 › the drawer closes from its visible Close button, reached by keyboard
+[6/12] keyboard/questions.spec.ts:132:1 › a proposal is rejected by keyboard, and nothing reaches the view
+[7/12] keyboard/questions.spec.ts:170:1 › asking, then reaching a [G-n] from the answer by Tab, selects what it stands for on the real canvas
+[8/12] keyboard/questions.spec.ts:202:1 › the model engine is reached from the question by Shift+Tab, changed by keyboard, and named in the question
+[9/12] keyboard/questions.spec.ts:238:1 › asked in a view, the questions go through it, and Ask about the whole case instead leaves it, by keyboard (ADR-144 decision 4)
+[10/12] keyboard/questions.spec.ts:265:1 › what to read from is chosen by arrow keys, the Conduit says what will be read, and the question sends the choice (ADR-098 Amendment 7)
+[11/12] keyboard/questions.spec.ts:315:1 › Whole case is chosen by arrow keys, its search is asked with the question's words, and an [S-n] selects its records on the real canvas (ADR-098 Amendment 9)
+[12/12] keyboard/questions.spec.ts:343:1 › every registered questions action has its own proving test case above
+  12 passed (8.0s)
+exit=0

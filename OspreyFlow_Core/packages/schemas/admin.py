@@ -34,6 +34,9 @@ class PersonAccount(BaseModel):
     #: has not, and counts for nothing a sign-in proves (the lock-out's last manager among them).
     #: Always true on Keycloak, whose accounts are the directory's own.
     signed_in: bool = True
+    #: On Entra ID, a guest (B2B) account, homed in another organisation's tenant, as their last
+    #: sign-in's token said (ADR-148 Amendment 17). Never on Keycloak.
+    guest: bool = False
     #: On Entra ID, when this person's clearance, unit and handling codes were last read from their
     #: token (ADR-148 Amendment 8); older than a day, they are not trusted to receive anything. None
     #: on Keycloak, whose directory attributes are current.
@@ -168,6 +171,24 @@ class SignInKind(BaseModel):
     administrator_sets: list[Literal["clearance", "org_unit", "handling_codes"]] = Field(
         default_factory=list
     )
+
+
+class GuestSignIn(BaseModel):
+    """`GET|PUT /v1/admin/sign-in/guests` (ADR-148 Amendment 17): whether this deployment admits
+    guest (B2B) accounts on Entra ID, off until an administrator of people turns it on; who last
+    changed it, and when (none, never)."""
+
+    admitted: bool
+    changed_by: str | None = None
+    changed_at: datetime | None = None
+
+
+class GuestSignInInput(BaseModel):
+    """`PUT /v1/admin/sign-in/guests`: admit guests, or no longer."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    admitted: bool
 
 
 class AddPersonInput(BaseModel):
@@ -839,7 +860,7 @@ class NeedsYou(BaseModel):
 
 ALL_MODELS: list[type[BaseModel]] = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, AddPersonInput,
-    SignInKind, DashboardInput,
+    SignInKind, GuestSignIn, GuestSignInInput, DashboardInput,
     ComponentHealth, UpdateNotice, ConvertedViews, SystemStatus, EmbeddedDashboard,
     DashboardGuestToken,
     AccessInput, PersonAccessInput, InviteInput, SignInDelivery, DemoPackStatus,

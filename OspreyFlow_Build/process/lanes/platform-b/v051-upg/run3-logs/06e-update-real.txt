@@ -1,0 +1,4 @@
+upg-run: $ ospreyflow update --name osprey-upg --to v0.5.1 --yes
+Updated to v0.5.1. The backup taken before it is /root/osprey-runs/platform-b-upg/home/OspreyFlow/backups/osprey-upg/20261114T063946Z-osprey-upg-2be985a966a742adb31bbac6c0e14b59962e76ac.
+upg-run: update exit 0
+upg-run: checkout: v0.5.1

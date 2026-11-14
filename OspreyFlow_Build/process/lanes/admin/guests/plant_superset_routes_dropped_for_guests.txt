@@ -1,0 +1,8 @@
+# plant: superset_routes_dropped_for_guests (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k superset
+# RED
+E         Extra items in the right set:
+E         'GET /v1/me/rights'
+E         'GET /v1/me'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_an_admitted_guest_through_superset_s_client_is_held_to_superset_s_routes
+1 failed, 15 deselected in 1.91s

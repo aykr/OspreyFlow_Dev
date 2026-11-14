@@ -86,7 +86,11 @@ class _Store:
             raise OSError("down")
 
     async def rows(self) -> list[PersonAccount]:
-        return [p for (t, _), p in self.people.items() if t == self.tenant_id]
+        # As the real store reads them (`PEOPLE_SQL`): a guest is not enabled while guests are not
+        # admitted (ADR-148 Amendment 17).
+        refused = not self.guests[0]
+        return [p.model_copy(update={"enabled": False}) if p.guest and refused else p
+                for (t, _), p in self.people.items() if t == self.tenant_id]  # fmt: skip
 
     async def update(self, oid: str, column: str, value: object) -> PersonAccount:
         found = self.people.get((self.tenant_id, oid))
@@ -132,6 +136,19 @@ class _Store:
     async def remove_dashboard(self, application_id: str) -> bool:
         rows = self.dashboard_rows
         return rows.pop((self.tenant_id, application_id), None) is not None
+
+    # ADR-148 Amendment 17: whether guests are admitted, off when never set, as the real table is.
+    guests: tuple[bool, str | None, Any] = (False, None, None)
+
+    async def guest_sign_in(self) -> tuple[bool, str | None, Any]:
+        return self.guests
+
+    async def set_guests_admitted(self, admitted: bool, by: str) -> bool:
+        from datetime import UTC, datetime
+
+        before = self.guests[0]
+        self.guests = (admitted, by, datetime.now(UTC))
+        return before
 
 
 class _Audit:
@@ -783,3 +800,103 @@ def test_the_app_tells_the_entra_admin_its_own_applications() -> None:
     admin = people_directory(resources, config=None)  # type: ignore[arg-type]
     assert isinstance(admin, EntraPeopleAdmin)
     assert admin.own_clients == {GLASS_APP, API_APP}
+
+
+# --- ADR-148 Amendment 17: admitting guests, switched by an administrator of people alone ----------
+
+
+def test_guests_are_not_admitted_until_an_administrator_admits_them(client: Any) -> None:
+    _as(ADMIN)
+    assert client.get("/v1/admin/sign-in/guests").json() == {
+        "admitted": False, "changed_by": None, "changed_at": None}  # fmt: skip
+
+
+@pytest.mark.parametrize("method", ["get", "put"])
+def test_the_guest_setting_is_refused_without_manage_people_and_left_as_it_was(
+    client: Any, method: str
+) -> None:
+    _as(ANALYST)
+    kwargs = {"json": {"admitted": True}} if method == "put" else {}
+    assert getattr(client, method)("/v1/admin/sign-in/guests", **kwargs).status_code == 403
+    assert client.store.guests[0] is False and client.audit.records == []
+
+
+def test_admitting_guests_is_set_by_who_and_audited_with_before_and_after(client: Any) -> None:
+    _as(ADMIN)
+    on = client.put("/v1/admin/sign-in/guests", json={"admitted": True})
+    assert on.status_code == 200, on.text
+    assert on.json()["admitted"] is True and on.json()["changed_by"] == ADMIN.id
+    off = client.put("/v1/admin/sign-in/guests", json={"admitted": False})
+    assert off.json()["admitted"] is False
+    assert [(r["action"], r["resolved_query"]) for r in client.audit.records] == [
+        ("set_guest_sign_in", {"before": False, "after": True}),
+        ("set_guest_sign_in", {"before": True, "after": False}),
+    ]
+
+
+def test_turning_guests_off_is_refused_when_every_people_manager_is_a_guest(client: Any) -> None:
+    _as(ADMIN)
+    client.store.guests = (True, ADMIN.id, None)
+    member = client.store.people[(TENANT, OID)]
+    client.store.people[(TENANT, OID)] = member.model_copy(update={"guest": True})
+    refused = client.put("/v1/admin/sign-in/guests", json={"admitted": False})
+    assert refused.status_code == 409 and refused.json()["detail"]["error"] == "locks_out_administrators"
+    assert client.store.guests[0] is True and client.audit.records == []
+    client.store.people[(TENANT, OID)] = member  # a member who can manage people: allowed
+    assert client.put("/v1/admin/sign-in/guests", json={"admitted": False}).status_code == 200
+
+
+def test_an_unknown_field_is_refused(client: Any) -> None:
+    _as(ADMIN)
+    assert client.put("/v1/admin/sign-in/guests", json={"admitted": True, "x": 1}).status_code == 422
+
+
+def test_on_keycloak_there_are_no_guests_to_admit() -> None:
+    from services.api.app import get_custom_roles
+
+    class _Keycloak:
+        async def list_people(self) -> list[Any]:
+            return []
+
+    app.dependency_overrides[get_identity_admin] = lambda: _Keycloak()
+    app.dependency_overrides[get_audit] = lambda: _Audit()
+    app.dependency_overrides[get_custom_roles] = _NoCustomRoles
+    _as(ADMIN)
+    try:
+        refused = TestClient(app).put("/v1/admin/sign-in/guests", json={"admitted": True})
+        assert refused.status_code == 409 and refused.json()["detail"]["error"] == "not_entra"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_a_guest_manager_counts_for_nothing_once_guests_are_off_so_the_last_member_cannot_leave(
+    client: Any,
+) -> None:
+    """The lane review's must 1: guests on, a member and a guest both manage people. Turning guests
+    off is allowed (the member still can); the member then giving up manage_people is refused,
+    since the guest can no longer sign in."""
+    _as(ADMIN)
+    client.store.guests = (True, ADMIN.id, None)
+    client.store.people[(TENANT, NEW)] = _row(NEW, ["osprey-admin"]).model_copy(update={"guest": True})
+    assert client.put("/v1/admin/sign-in/guests", json={"admitted": False}).status_code == 200
+    listed = {p["id"]: p for p in client.get("/v1/admin/people").json()}
+    assert listed[NEW]["enabled"] is False and listed[NEW]["guest"] is True
+    refused = client.put(f"/v1/admin/people/{OID}/roles", json={"roles": ["analyst"]})
+    assert refused.status_code == 409 and refused.json()["detail"]["error"] == "locks_out_administrators"
+    client.store.guests = (True, ADMIN.id, None)  # admitted again: the guest counts
+    assert client.put(f"/v1/admin/people/{OID}/roles", json={"roles": ["analyst"]}).status_code == 200
+
+
+def test_on_keycloak_the_guest_setting_cannot_be_read_either() -> None:
+    from services.api.app import get_custom_roles
+
+    class _Keycloak:
+        pass
+
+    app.dependency_overrides[get_identity_admin] = lambda: _Keycloak()
+    app.dependency_overrides[get_custom_roles] = _NoCustomRoles
+    _as(ADMIN)
+    try:
+        assert TestClient(app).get("/v1/admin/sign-in/guests").status_code == 409
+    finally:
+        app.dependency_overrides.clear()

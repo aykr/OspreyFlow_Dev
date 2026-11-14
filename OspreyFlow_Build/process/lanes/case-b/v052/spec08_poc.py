@@ -1,5 +1,6 @@
 """Spec 08's acceptance scenarios on the poc shape (ROUTE_052 step 6, BRIEF_v052): the closing-pass proof,
-`tests/scenarios/test_phase8_exit_over_the_wire.py`, run **unchanged** against the kind deployment, as a
+`tests/scenarios/test_phase8_exit_over_the_wire.py`, run unchanged (but for two cases split so their seed-free halves
+run here, 14 November) against the kind deployment, as a
 pytest plugin that
 
 - signs in at the Entra stand-in as the Glass does (authorization code with PKCE, the stand-in's own
@@ -14,11 +15,14 @@ stops the compose `api`, seeds, starts it). A cloud-platform deployment has no w
 rows built on them cannot be performed there. What runs is what an analyst can do from an empty case:
 sign in, the ingest root and the Studio on the CDR fixture (B1-B3, uploaded through
 `POST .../ingest/source-files`, the analyst's own door), the site grid (A1's first three), and B13-B14 on
-the uploaded seizure record: 12 of 27. (B13-B14's fixture asked routes the Conduit had moved; fixed in c6c6044,
+the uploaded seizure record, the stream through the ingress (ticket, upgrade, snapshot) and A7's refusal of a
+hostile field name, two halves split from seeded cases: 14 of 29. (B13-B14's fixture asked routes the Conduit had moved; fixed in c6c6044,
 held by tests/scenarios/test_over_the_wire_routes_exist.py.)
 
-    # on the kind cluster, after the install and under a lease (from OspreyFlow_Core):
-    bash ../OspreyFlow_Build/process/lanes/platform/gates/r1_kind.sh py ../../case-b/v052/spec08_poc.py run
+    # on the kind cluster, after the install and under a lease (from OspreyFlow_Core), with r1_kind.sh's own
+    # environment (its tools, its kubeconfig, the kind platform's folder): `r1_kind.sh py` hands its arguments to
+    # r1_kind.py's argparse and cannot run this file
+    bash ../OspreyFlow_Build/process/lanes/case-b/v052/spec08_live.sh [pytest arguments]
 """
 
 
@@ -66,10 +70,12 @@ DISPOSITIONS: dict[str, str | None] = {
     "test_a1_a_cells_geometry_reference_resolves_to_its_centroid": None,
     "test_a1_incidents_geocode_into_the_cells_that_contain_them": NO_SEED,  # the hmp incidents
     "test_a7_reports_can_be_filtered_to_one_item_category": NO_SEED,
-    "test_a7_an_unknown_field_name_is_refused_rather_than_ignored": NO_SEED,  # its after-check counts the hmp events
+    "test_a7_an_unknown_field_name_is_refused_rather_than_ignored": None,  # the boundary's refusal, on the run's own case
+    "test_a7_the_events_table_survives_a_refused_field_name": NO_SEED,  # it counts the hmp events after
     "test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification": NO_SEED,
     "test_a6_the_reports_for_the_selection_open_with_a_source_locator_each": NO_SEED,
     "test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place": NO_SEED,
+    "test_the_stream_opens_through_the_proxy_with_a_ticket": None,  # ticket, upgrade and snapshot: the only test of the poc ingress's WebSocket
     "test_the_delta_stream_is_reachable_through_the_proxy": NO_SEED,  # it seeds an hmp subject into the stream
 }
 

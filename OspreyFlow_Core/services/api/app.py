@@ -107,6 +107,7 @@ from services.ingest.staging_catalogue import DEPLOYMENT_WIDE
 from services.ingest.transforms import STRUCTURED_PARTS
 from services.ingest.watermark import RefreshRead
 from services.resolve.trigger import service_principal
+from services.search_index.pending import PendingIds, pending_node_ids
 from valkey.asyncio import Valkey
 
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
@@ -180,6 +181,8 @@ from schemas.admin import (
     DisableInput,
     DisablePlan,
     EmbeddedDashboard,
+    GuestSignIn,
+    GuestSignInInput,
     InviteInput,
     LayerAction,
     LayerDryRun,
@@ -479,6 +482,7 @@ from schemas.screening import (
     ScreeningListUpdate,
     ScreeningSubscriptionInput,
 )
+from schemas.search import SearchPageRequest, SearchPageResponse
 from schemas.sentences import (
     RULE_TEST_DAYS,
     RulePreview,
@@ -529,6 +533,7 @@ from . import (
     map_places,
     raised_alerts,
     rule_editor,
+    search_service,
     sentence_rules,
 )
 from . import audit_section as audit_section_module
@@ -551,7 +556,6 @@ from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import risk as risk_module
 from . import rules_place as rules_place_clock
-from . import search as search_module
 from .add_by_identifiers import (
     MAX_IDENTIFIERS,
     AddByIdentifiersRequest,
@@ -919,15 +923,17 @@ from .promotions import (
 )
 from .questions import (
     AskRequest,
+    CaseSearch,
     NothingToReadError,
     PostgresQuestionStore,
     QuestionAccepted,
     QuestionAnswer,
     QuestionsService,
     QuestionsTooLargeError,
+    QuestionTooLongToSearchError,
     ReadFromUnavailableError,
-    ScopeRequest,
     WillRead,
+    WillReadRequest,
 )
 from .recipe_run import (
     RecipeRunDeps,
@@ -1002,7 +1008,7 @@ from .screening_refresh import (
     check_location,
 )
 from .screening_refresh import refresh as refresh_screening_list
-from .search import SearchRequest, SearchResponse, SuggestRequest, SuggestResponse
+from .search import SuggestRequest, SuggestResponse
 from .sentence_rules import (
     is_deployment_wide,
     run_on_list_refresh,
@@ -3581,6 +3587,18 @@ async def _read_from_unavailable_handler(
     )
 
 
+@app.exception_handler(QuestionTooLongToSearchError)
+async def _question_too_long_to_search_handler(
+    request: Request, exc: QuestionTooLongToSearchError
+) -> JSONResponse:
+    """ADR-098 Amendment 9: *Whole case* with a question longer than the search takes; refused in
+    words that say what to do, never cut (rule 2)."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "question_too_long_to_search", "detail": exc.words},
+    )
+
+
 @app.exception_handler(CouldNotExpress)
 async def _could_not_express_handler(request: Request, exc: CouldNotExpress) -> JSONResponse:
     """ADR-129 decision 2: a question, or the model's answer to it, that cannot be drawn as a
@@ -6097,22 +6115,199 @@ async def restore_history_step(
 # --- search -------------------------------------------------------------------
 
 
+def get_search_index(request: Request) -> search_service.SearchIndexSetup | None:
+    """ADR-149: the index search asks, made once per process, or `None` where no OpenSearch is
+    configured (`OPENSEARCH_URL` or `OPENSEARCH_HOST`), and then every search takes the fallback
+    and says so. The client and the alias are the index's own (ADR-150 decision 7). A setting the
+    client refuses (no signing credentials, a malformed address) is logged and searched without
+    the index, never a 500 on every search; it is tried again after a minute."""
+    held = getattr(request.app.state, "search_index", None)
+    now = time.monotonic()
+    if held is not None and (held[0] is not None or now - held[1] < 60):
+        return held[0]  # type: ignore[no-any-return]
+    from services.search_index.client import SearchIndexConfig, search_client
+    from services.search_index.run import configured
+
+    setup = None
+    if configured():
+        try:
+            config = SearchIndexConfig.from_env()
+            setup = search_service.SearchIndexSetup(
+                # No retries: an unreachable index costs one short timeout, then the fallback.
+                searcher=search_service.opensearch_searcher(
+                    search_client(config, max_retries=0), config.alias
+                ),
+                schema=request.app.state.ontology,
+                scheme=request.app.state.handling_scheme,
+            )
+        except Exception:
+            logger.exception("the search index is configured but its client could not be made")
+    request.app.state.search_index = (setup, now)
+    return setup
+
+
+SearchIndexDep = Annotated[search_service.SearchIndexSetup | None, Depends(get_search_index)]
+
+
+async def get_search_pending(request: Request, index: SearchIndexDep) -> PendingIds:
+    """ADR-149 decision 2 (the orchestrator's ruling on page A): the nodes the index may hold at
+    older facts, from both of ADR-150's outboxes, which every index query leaves out in its own
+    filter. Read only where there is an index to ask; ids alone, never shown."""
+    if index is None:
+        return PendingIds(ids=frozenset(), complete=True)
+    return await pending_node_ids(
+        request.app.state.graph,
+        request.app.state.extraction_candidates,
+        limit=search_service.PENDING_LIMIT,
+    )
+
+
+SearchPendingDep = Annotated[PendingIds, Depends(get_search_pending)]
+
+
+def get_search_working_set(request: Request) -> WorkingSetService | None:
+    """The working set search reads the case's resolution threshold from (page A §2). The lifespan
+    always sets it; a test app without one merges nothing, and a test overrides this to merge."""
+    return getattr(request.app.state, "working_set", None)
+
+
+SearchWorkingSetDep = Annotated[WorkingSetService | None, Depends(get_search_working_set)]
+
+
+async def _search_tau(working_set: WorkingSetService | None, investigation_id: str) -> float | None:
+    if working_set is None:
+        return None
+    return await working_set.get_resolution_threshold(investigation_id)
+
+
+def case_search_with(
+    graph: GraphPort,
+    index: search_service.SearchIndexSetup | None,
+    *,
+    pending_of: Callable[[], Awaitable[PendingIds]],
+    names_of: Callable[[Principal], Awaitable[Mapping[str, str]]],
+    tau_of: Callable[[str], Awaitable[float | None]],
+) -> CaseSearch:
+    """*Whole case*'s search (ADR-098 Amendment 9; `SEARCH_RESPONSE_SHAPE.md` note 5): the same
+    service, the access filter built here from the asker's own principal (page A §1), the case's
+    threshold and the exclusion of what the index has not caught up with, as `POST …/search` has
+    them, called in-process, not over HTTP. Each part is read only when the search is called, so a
+    question that does not read the whole case costs nothing more. The leak test calls this, the
+    routes' own call site (`test_ask_whole_case_leak_live.py`)."""
+    from services.search_index.document import phonetic_codes
+
+    from .search_access import index_access_filter
+
+    async def search(
+        investigation_id: str, principal: Principal, body: SearchPageRequest
+    ) -> SearchPageResponse:
+        pending = await pending_of()
+        return await search_service.search_page(
+            body,
+            principal,
+            graph,
+            searcher=index.searcher if index is not None else None,
+            access_filter=index_access_filter(index.scheme, principal)
+            if index is not None
+            else None,
+            phonetic_codes=phonetic_codes,
+            types=index.types if index is not None else (),
+            case_datasets=await names_of(principal),
+            tau=await tau_of(investigation_id),
+            pending=sorted(pending.ids),
+            pending_complete=pending.complete,
+            schema=index.schema if index is not None else None,
+        )
+
+    return search
+
+
+def _case_search(
+    request: Request,
+    index: search_service.SearchIndexSetup | None,
+    datasets: DatasetStore,
+    working_set: WorkingSetService | None,
+) -> CaseSearch:
+    """`case_search_with` from the dependencies `POST …/search` uses."""
+
+    async def names_of(principal: Principal) -> Mapping[str, str]:
+        case = set(principal.datasets or ())
+        return {d.id: d.name for d in await datasets.list_for(principal) if d.id in case}
+
+    async def tau_of(investigation_id: str) -> float | None:
+        return await _search_tau(working_set, investigation_id)
+
+    async def search(
+        investigation_id: str, principal: Principal, body: SearchPageRequest
+    ) -> SearchPageResponse:
+        # The graph is read here, when the search is called, not when the route builds it: a
+        # question that does not read the whole case touches nothing of the search's.
+        built = case_search_with(
+            request.app.state.graph,
+            index,
+            pending_of=lambda: get_search_pending(request, index),
+            names_of=names_of,
+            tau_of=tau_of,
+        )
+        return await built(investigation_id, principal, body)
+
+    return search
+
+
 @app.post(
     "/v1/investigations/{investigation_id}/search",
     dependencies=[Depends(require_right(Right.INVESTIGATE))],
 )
 async def search_route(
     investigation: InvestigationViewerDep,
-    body: SearchRequest,
+    body: SearchPageRequest,
     principal: PrincipalDep,
     graph: GraphDep,
     audit: AuditDep,
-) -> SearchResponse:
-    result = await search_module.search(graph, body, principal)
+    datasets: DatasetsDep,
+    working_set: SearchWorkingSetDep,
+    index: SearchIndexDep,
+    pending: SearchPendingDep,
+) -> SearchPageResponse:
+    """ADR-149: the index when there is one, today's exact search otherwise, saying so. The
+    reader's access filter is built here from their own principal (page A §1) and goes into the
+    index's query; the case's threshold merges the visible hits (page A §2)."""
+    from services.search_index.document import phonetic_codes
+
+    from .search_access import index_access_filter
+
+    case = set(principal.datasets or ())
+    names = {d.id: d.name for d in await datasets.list_for(principal) if d.id in case}
+    try:
+        result = await search_service.search_page(
+            body,
+            principal,
+            graph,
+            searcher=index.searcher if index is not None else None,
+            access_filter=index_access_filter(index.scheme, principal)
+            if index is not None
+            else None,
+            phonetic_codes=phonetic_codes,
+            types=index.types if index is not None else (),
+            case_datasets=names,
+            tau=await _search_tau(working_set, investigation.id),
+            pending=sorted(pending.ids),
+            pending_complete=pending.complete,
+            schema=index.schema if index is not None else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     await audit.record(
         principal=principal,
         action="search",
-        resolved_query={"query": body.query},
+        resolved_query={
+            "query": body.query,
+            "group": body.group,
+            "filters": body.filters.model_dump(mode="json"),
+            "page": body.page,
+            "page_size": result.page_size,
+            "source": result.source,
+        },
         result_cardinality=len(result.nodes),
     )
     return result
@@ -6128,8 +6323,30 @@ async def suggest_route(
     principal: PrincipalDep,
     graph: GraphDep,
     audit: AuditDep,
+    index: SearchIndexDep,
+    pending: SearchPendingDep,
 ) -> SuggestResponse:
-    result = await search_module.suggest(graph, body, principal)
+    """ADR-059 Amendment 1: from the index when there is one, with the reader's own access filter
+    in its query; from the graph's prefix read otherwise, as before, saying a "starts with"
+    suggestion is limited. A prefix the index cannot ask (longer than its stored prefixes) or an
+    entity type the ontology does not have is refused with 422, never cut."""
+    from .search_access import index_access_filter
+
+    try:
+        result = await search_service.suggest_page(
+            body,
+            principal,
+            graph,
+            searcher=index.searcher if index is not None else None,
+            access_filter=index_access_filter(index.scheme, principal)
+            if index is not None
+            else None,
+            schema=index.schema if index is not None else None,
+            pending=sorted(pending.ids),
+            pending_complete=pending.complete,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     await audit.record(
         principal=principal,
         action="suggest",
@@ -6138,6 +6355,7 @@ async def suggest_route(
             "mode": body.mode,
             "ignore_case": body.ignore_case,
             "types": body.types,
+            "source": result.source,
         },
         result_cardinality=len(result.nodes),
     )
@@ -7578,6 +7796,10 @@ async def ask_question_route(
     principal_names: PrincipalNamesDep,
     views: CaseViewsDep,
     working_set: WorkingSetDep,
+    request: Request,
+    index: SearchIndexDep,
+    datasets: DatasetsDep,
+    search_working_set: SearchWorkingSetDep,
 ) -> QuestionAnswer:
     """Asks the model about the case's Documents and graph facts the analyst can see (ADR-098
     decision 4, ADR-129 decision 1): the selection and one link around it, or the whole view. What
@@ -7601,12 +7823,17 @@ async def ask_question_route(
         view_id=body.view_id,
         view_node_ids=in_view,
         read_from=body.read_from,
+        case_search=_case_search(request, index, datasets, search_working_set),
     )
     await audit.record(
         principal=principal,
         action="ask_question",
         investigation_id=investigation.id,
-        resolved_query={"question_id": answer.id},
+        # The question's own row says it read the whole case; its search writes no second one.
+        resolved_query={
+            "question_id": answer.id,
+            "read_from": answer.read.read_from if answer.read is not None else None,
+        },
         result_cardinality=len(answer.candidates),
     )
     names = await principal_names.display_names([answer.author])
@@ -7619,18 +7846,23 @@ async def ask_question_route(
 )
 async def will_read_route(
     investigation: InvestigationEditorDep,
-    body: ScopeRequest,
+    body: WillReadRequest,
     principal: PrincipalDep,
     questions: QuestionsDep,
     audit: AuditDep,
     views: CaseViewsDep,
     working_set: WorkingSetDep,
+    request: Request,
+    index: SearchIndexDep,
+    datasets: DatasetsDep,
+    search_working_set: SearchWorkingSetDep,
 ) -> WillRead:
     """ADR-098 Amendment 7, ADR-135 Amendment 12: what a question asked with this scope would read,
     counted as the asker (rule 3), and the engine that would answer it as the routing decides, with
     the engines that cannot and why. Nothing is sent to a model. The same right and case level as
-    asking, the same refusals (`nothing_to_read`, `read_from_unavailable`, the typed
-    `limit_exceeded`), so what it says is what asking would do."""
+    asking, the same refusals (`nothing_to_read`, `read_from_unavailable`,
+    `question_too_long_to_search`, the typed `limit_exceeded`), so what it says is what asking would
+    do. Under *Whole case* the question as typed so far is sent too: its words are the search's."""
     in_view = (
         await _view_node_ids(views, working_set, investigation.id, body.view_id, principal)
         if body.view_id is not None
@@ -7645,6 +7877,8 @@ async def will_read_route(
         engine=body.engine,
         view_node_ids=in_view,
         read_from=body.read_from,
+        question=body.question,
+        case_search=_case_search(request, index, datasets, search_working_set),
     )
     await audit.record(
         principal=principal,
@@ -14318,8 +14552,13 @@ async def read_alert_queue(
         principal=principal,
         action="read_alert_queue",
         investigation_id=investigation.id,
-        resolved_query={"status": status_filter, "kind": kind, "severity": severity, "show": show,
-                        "older_than_days": older_than_days},  # fmt: skip
+        resolved_query={
+            "status": status_filter,
+            "kind": kind,
+            "severity": severity,
+            "show": show,
+            "older_than_days": older_than_days,
+        },  # fmt: skip
         result_cardinality=len(rows),
     )
     rows = await _with_team_names(request, rows)
@@ -14785,8 +15024,12 @@ async def suppress_alert(
         principal=principal,
         action="alert_suppressed",
         investigation_id=investigation.id,
-        resolved_query={"alert_id": alert.id, "until": body.until.isoformat(),
-                        "reason": body.reason, "team": alert.routed_team},  # fmt: skip
+        resolved_query={
+            "alert_id": alert.id,
+            "until": body.until.isoformat(),
+            "reason": body.reason,
+            "team": alert.routed_team,
+        },  # fmt: skip
         result_cardinality=1,
     )
     return alert
@@ -14948,8 +15191,11 @@ async def raise_an_alert(
         action="alert_raised",
         investigation_id=investigation.id,
         resolved_query={
-            "alert_id": alert.id, "to": body.to, "dataset_id": body.dataset_id,
-            "severity": body.severity, "node_ids": alert.referent_node_ids,
+            "alert_id": alert.id,
+            "to": body.to,
+            "dataset_id": body.dataset_id,
+            "severity": body.severity,
+            "node_ids": alert.referent_node_ids,
         },  # fmt: skip
         result_cardinality=1,
     )
@@ -16152,8 +16398,10 @@ async def _use_the_rule_editor_handler(request: Request, exc: UseTheRuleEditor) 
 def _refuse_outside_just_me(sentence: RuleSentence, current: TypologyRule | None = None) -> None:
     if sentence.scope != "just_me":
         raise UseTheRuleEditor()
-    if current is not None and isinstance(current.params, SentenceRuleParams) and (
-        current.params.sentence.scope != "just_me"
+    if (
+        current is not None
+        and isinstance(current.params, SentenceRuleParams)
+        and (current.params.sentence.scope != "just_me")
     ):
         raise UseTheRuleEditor()
 
@@ -16737,9 +16985,7 @@ async def make_team_route(
     return team.model_copy(update={"members": [TeamMember(id=p.id, name=p.name) for p in holders]})
 
 
-async def _member_of(
-    identity_admin: PeopleDirectory, role_id: str, account: str
-) -> PersonAccount:
+async def _member_of(identity_admin: PeopleDirectory, role_id: str, account: str) -> PersonAccount:
     """`account` as one of the team's members, or a refusal in words: only a member, never a
     service account, may be lead or cover (ADR-112 Amendment 5 decisions 4 and 5)."""
     people = {p.id: p for p in await identity_admin.list_people()}
@@ -17089,6 +17335,60 @@ async def sign_in_kind_route(identity_admin: IdentityAdminDep) -> SignInKind:
         sets = sorted(identity_admin.by_administrator)
         return SignInKind(kind="entra", administrator_sets=sets)  # type: ignore[arg-type]
     return SignInKind(kind="keycloak")
+
+
+def _guest_sign_in_admin(identity_admin: Any) -> EntraPeopleAdmin:
+    """Guests are Entra ID's (ADR-148 Amendment 17): on Keycloak there is no setting to read or
+    set."""
+    if not isinstance(identity_admin, EntraPeopleAdmin):
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "not_entra", "detail": "guests are admitted only where people sign in "
+                    "with Entra ID; this deployment signs in with Keycloak"},
+        )  # fmt: skip
+    return identity_admin
+
+
+@app.get(
+    "/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
+)
+async def guest_sign_in_route(identity_admin: IdentityAdminDep) -> GuestSignIn:
+    """ADR-148 Amendment 17: whether guest (B2B) accounts are admitted, who last changed it and
+    when. Behind `manage_people`, as People is; 409 `not_entra` on Keycloak."""
+    admitted, by, at = await _guest_sign_in_admin(identity_admin).guest_sign_in()
+    return GuestSignIn(admitted=admitted, changed_by=by, changed_at=at)
+
+
+@app.put(
+    "/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
+)
+async def set_guest_sign_in_route(
+    body: GuestSignInInput,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    custom_roles: CustomRolesDep,
+    audit: AuditDep,
+) -> GuestSignIn:
+    """ADR-148 Amendment 17: admit guest (B2B) accounts, or no longer; only an administrator of
+    people (`manage_people`) may. Audited with what it was and what it is now. Turning it off is
+    refused (409 `locks_out_administrators`) when it would leave no enabled member who has signed in
+    able to manage people: every one of them a guest."""
+    admin = _guest_sign_in_admin(identity_admin)
+    async with custom_roles.people_lock():
+        current = await custom_roles.current_rights()  # fresh under the lock, as disabling reads it
+        if not body.admitted:
+            try:
+                leaves_no_people_manager(
+                    [p for p in await admin.list_people() if not p.guest], current
+                )
+            except RoleRefused as error:
+                raise _role_refused(error) from None
+        before = await admin.set_guests_admitted(body.admitted, principal.id)
+    await audit.record(principal=principal, action="set_guest_sign_in",
+                       resolved_query={"before": before, "after": body.admitted},
+                       result_cardinality=1)  # fmt: skip
+    admitted, by, at = await admin.guest_sign_in()
+    return GuestSignIn(admitted=admitted, changed_by=by, changed_at=at)
 
 
 @app.get(
@@ -17689,9 +17989,7 @@ async def manage_screening_lists(
     lists, and their refreshes, the reader is cleared for (ADR-146 Amendment 7; review item 3)."""
     cleared = ListClearance.of(principal, handling_scheme)
     found = await screening_lists.subscriptions(cleared=cleared)
-    updates = await screening_lists.updates(
-        org_unit=principal.org_unit, cleared=cleared, limit=20
-    )
+    updates = await screening_lists.updates(org_unit=principal.org_unit, cleared=cleared, limit=20)
     await audit.record(principal=principal, action="list_screening_lists", investigation_id=None,
                        resolved_query={"manage": True}, result_cardinality=len(found))  # fmt: skip
     return ScreeningLists(lists=found, updates=updates, can_manage=True)
@@ -17842,9 +18140,7 @@ async def refresh_screening_list_route(
                                        "version": update.version, "alerts": update.alerts,
                                        **await screening_lists.audit_marking(list_name)},
                        result_cardinality=update.alerts)  # fmt: skip
-    own = await screening_lists.update_for(
-        update.id, org_unit=principal.org_unit, cleared=cleared
-    )
+    own = await screening_lists.update_for(update.id, org_unit=principal.org_unit, cleared=cleared)
     if own is None:  # recorded a moment ago in the same store
         raise HTTPException(
             status_code=500,

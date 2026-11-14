@@ -50,6 +50,7 @@ from schemas.rights import ALL_MODELS as RIGHTS_MODELS  # noqa: E402
 from schemas.rule_editor import ALL_MODELS as RULE_EDITOR_MODELS  # noqa: E402
 from schemas.rule_standards import ALL_MODELS as RULE_STANDARDS_MODELS  # noqa: E402
 from schemas.screening import ALL_MODELS as SCREENING_MODELS  # noqa: E402
+from schemas.search import ALL_MODELS as SEARCH_MODELS  # noqa: E402
 from schemas.sentences import ALL_MODELS as SENTENCE_MODELS  # noqa: E402
 from schemas.sources import ALL_MODELS as SOURCE_MODELS  # noqa: E402
 from schemas.staging import ALL_MODELS as STAGING_MODELS  # noqa: E402
@@ -96,6 +97,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *OPERATIONS_MODELS,
     *RELEASE_MODELS,
     *QUESTION_MODELS,
+    *SEARCH_MODELS,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

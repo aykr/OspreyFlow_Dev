@@ -1,0 +1,5 @@
+upg-run: $ cd <checkout>/cli && ../.venv/bin/python -m ospreyflow --help   (no PYTHONPATH: 0)
+
+options:
+  -h, --help      show this help message and exit
+upg-run: python -m ospreyflow --help exit 0

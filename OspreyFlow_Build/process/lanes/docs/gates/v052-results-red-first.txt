@@ -1,0 +1,535 @@
+v052-results (user guide 1.57, §5.5's search results page), red first at 37ea223 on main fe172a8, after the lane review and its re-check: main's guide, then 105 plants, one at a time, each at its real call site (the page, App, the overlay, Combobox, the box, Ask & Chat's panel, the schema, the search route, search_service and search_index_query) or in the guide's own sentence; each must turn red the one test that holds it and no other, checked by the script; then restored and green. A code plant's old text is matched exactly and found once (so Next page and Previous page are the buttons' own lines, not the comments that name them); a guide plant's with any whitespace between its words. Each pytest run had a fresh PYTHONPYCACHEPREFIX of its own (the orchestrator's correction: PYTHONDONTWRITEBYTECODE alone reads a .pyc already on disk, CARRIES 1cd8b5a). Main's guide is red for all fourteen through the one finder (no results page to read); each sentence's own reason is the plant beside it.
+
+command: cd OspreyFlow_Build && python -m pytest -q -p no:cacheprovider tests/test_user_guide_search_results.py
+each run: closed ports 59991-59994, no OSPREY_LANE, and a fresh PYTHONPYCACHEPREFIX (a new empty directory), so no plant or restore is read from a .pyc already on disk (PYTHONDONTWRITEBYTECODE alone still reads one, CARRIES 1cd8b5a)
+
+== main's guide, before the results page: 14 failed in 0.69s
+   red: test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggestion_is_still_chosen, test_section_5_5_says_the_view_waits_beneath_out_of_reach_and_back_returns_to_it, test_section_5_5_quotes_the_heading_the_empty_lines_and_the_ask_line_as_the_page_words_them, test_section_5_5_gives_the_count_under_the_heading_as_the_page_chooses_it, test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them, test_section_5_5_says_the_box_s_filters_shape_suggestions_alone_and_the_page_starts_unfiltered, test_section_5_5_gives_the_page_size_the_page_asks_for, test_section_5_5_lists_what_each_result_shows_as_the_page_draws_it, test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph, test_section_5_5_says_open_sets_the_results_aside_and_reads_the_document_over_the_view, test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_sends_nothing, test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_schema_and_page_do, test_section_5_5_quotes_the_conduit_s_other_refusals_in_its_words, test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== Combobox submits even with a suggestion moved to [Combobox.tsx]
+   '!(open && highlighted >= 0 && filtered[highlighted])'
+   -> 'true'
+   1 failed, 13 passed in 0.68s; red: test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggestion_is_still_chosen
+
+== Combobox highlights the first option at once [Combobox.tsx]
+   'const none = onSubmit ? -1 : 0;'
+   -> 'const none = 0;'
+   1 failed, 13 passed in 0.68s; red: test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggestion_is_still_chosen
+
+== the box submits nothing [GlobalSearch.tsx]
+   'onSubmit={onSearch}'
+   -> 'onSubmit={undefined}'
+   1 failed, 13 passed in 0.66s; red: test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggestion_is_still_chosen
+
+== App's search no longer opens the results [App.tsx]
+   'results.open(query, view'
+   -> 'results.peek(query, view'
+   1 failed, 13 passed in 0.69s; red: test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggestion_is_still_chosen
+
+== the view left in reach [useSearchResultsOverlay.ts]
+   'viewInert: searching !== null && !reading,'
+   -> 'viewInert: false,'
+   1 failed, 13 passed in 0.84s; red: test_section_5_5_says_the_view_waits_beneath_out_of_reach_and_back_returns_to_it
+
+== App no longer makes the view inert [App.tsx]
+   'results.viewInert ? true : undefined'
+   -> 'false ? true : undefined'
+   1 failed, 13 passed in 0.64s; red: test_section_5_5_says_the_view_waits_beneath_out_of_reach_and_back_returns_to_it
+
+== Back no longer returns focus to the box [useSearchResultsOverlay.ts]
+   'focusBox.current = true;\n      setSearching(null);'
+   -> 'setSearching(null);'
+   1 failed, 13 passed in 0.61s; red: test_section_5_5_says_the_view_waits_beneath_out_of_reach_and_back_returns_to_it
+
+== the back link reworded [SearchResults.tsx]
+   '{`Back to ${backLabel}`}'
+   -> '{`Return to ${backLabel}`}'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_says_the_view_waits_beneath_out_of_reach_and_back_returns_to_it
+
+== the heading reworded [SearchResults.tsx]
+   "{`Search results for '${query}'`}"
+   -> "{`Results for '${query}'`}"
+   1 failed, 13 passed in 0.67s; red: test_section_5_5_quotes_the_heading_the_empty_lines_and_the_ask_line_as_the_page_words_them
+
+== the empty line's group form reworded [SearchResults.tsx]
+   '" in this group"'
+   -> '" in that group"'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_quotes_the_heading_the_empty_lines_and_the_ask_line_as_the_page_words_them
+
+== the empty line on every page [SearchResults.tsx]
+   'shown.page === 1 &&'
+   -> 'shown.page >= 1 &&'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_quotes_the_heading_the_empty_lines_and_the_ask_line_as_the_page_words_them
+
+== the Ask line reworded [SearchResults.tsx]
+   "{`Ask a question about '${query}' instead`}"
+   -> "{`Ask about '${query}'`}"
+   1 failed, 13 passed in 0.67s; red: test_section_5_5_quotes_the_heading_the_empty_lines_and_the_ask_line_as_the_page_words_them
+
+== the group's own count never used [SearchResults.tsx]
+   'group !== null ? counts.groups.find'
+   -> 'false ? counts.groups.find'
+   1 failed, 13 passed in 0.68s; red: test_section_5_5_gives_the_count_under_the_heading_as_the_page_chooses_it
+
+== counts always marked incomplete [SearchResults.tsx]
+   '${counts.counts_exact ? "" : " (counts may be incomplete)"}'
+   -> '${" (counts may be incomplete)"}'
+   1 failed, 13 passed in 0.86s; red: test_section_5_5_gives_the_count_under_the_heading_as_the_page_chooses_it
+
+== All renamed [SearchResults.tsx]
+   'label: "All"'
+   -> 'label: "Every"'
+   1 failed, 13 passed in 0.67s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== Datasets renamed [SearchResults.tsx]
+   '>Datasets</legend>'
+   -> '>Sources</legend>'
+   1 failed, 13 passed in 0.61s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== Dates renamed [SearchResults.tsx]
+   '>Dates</legend>'
+   -> '>Period</legend>'
+   1 failed, 13 passed in 0.67s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== Clear filters beside the filters always drawn [SearchResults.tsx]
+   '{filtered && clear}\n          </section>'
+   -> '{clear}\n          </section>'
+   1 failed, 13 passed in 0.83s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== a filter always counted as on [SearchResults.tsx]
+   'filters.dateTo !== "";'
+   -> 'filters.dateTo !== "" || true;'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== Next page renamed (the button's own line, at its indentation; not the comments) [SearchResults.tsx]
+   'Next page'
+   -> 'More'
+   1 failed, 13 passed in 0.59s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== Previous page renamed (the button's own line, at its indentation; not the comments) [SearchResults.tsx]
+   'Previous page'
+   -> 'Back a page'
+   1 failed, 13 passed in 0.61s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== the page starts at a group [SearchResults.tsx]
+   'useState<string | null>(null);'
+   -> 'useState<string | null>("person");'
+   1 failed, 13 passed in 0.66s; red: test_section_5_5_says_the_box_s_filters_shape_suggestions_alone_and_the_page_starts_unfiltered
+
+== the page starts filtered [SearchResults.tsx]
+   'useState<Filters>(NO_FILTERS);'
+   -> 'useState<Filters>({ datasets: ["d1"], dateFrom: "", dateTo: "" });'
+   1 failed, 13 passed in 0.70s; red: test_section_5_5_says_the_box_s_filters_shape_suggestions_alone_and_the_page_starts_unfiltered
+
+== App hands the box's filters on [App.tsx]
+   'query={searching.query}'
+   -> 'query={searching.query}\n          filters={searching.filters}'
+   1 failed, 13 passed in 0.76s; red: test_section_5_5_says_the_box_s_filters_shape_suggestions_alone_and_the_page_starts_unfiltered
+
+== the page asks 25 [SearchResults.tsx]
+   'export const RESULTS_PAGE_SIZE = 20;'
+   -> 'export const RESULTS_PAGE_SIZE = 25;'
+   1 failed, 13 passed in 0.73s; red: test_section_5_5_gives_the_page_size_the_page_asks_for
+
+== the request asks 50 whatever the constant [SearchResults.tsx]
+   'page, page_size: RESULTS_PAGE_SIZE }'
+   -> 'page, page_size: 50 }'
+   1 failed, 13 passed in 0.70s; red: test_section_5_5_gives_the_page_size_the_page_asks_for
+
+== the result named by its type alone [SearchResults.tsx]
+   'first ? nodeLabel(first) : result.type'
+   -> 'result.type'
+   1 failed, 13 passed in 0.68s; red: test_section_5_5_lists_what_each_result_shows_as_the_page_draws_it
+
+== why it matched not shown [SearchResults.tsx]
+   '<span>{result.match.why}</span>'
+   -> '<span>{result.type}</span>'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_lists_what_each_result_shows_as_the_page_draws_it
+
+== the passage's matched words not marked [SearchResults.tsx]
+   'part.match ? <mark key={i}>{part.text}</mark>'
+   -> 'part.match ? <span key={i}>{part.text}</span>'
+   1 failed, 13 passed in 0.66s; red: test_section_5_5_lists_what_each_result_shows_as_the_page_draws_it
+
+== Show on graph sends the first record alone [SearchResults.tsx]
+   'onClick={() => onShow(nodes)}'
+   -> 'onClick={() => onShow(nodes.slice(0, 1))}'
+   1 failed, 13 passed in 0.75s; red: test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph
+
+== the records not read reworded [SearchResults.tsx]
+   'records could not be read.'
+   -> 'records were left out.'
+   1 failed, 13 passed in 0.69s; red: test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph
+
+== App seeds only the first [App.tsx]
+   'void seedToCanvas(nodes, []);'
+   -> 'void seedToCanvas(nodes.slice(0, 1), []);'
+   1 failed, 13 passed in 0.74s; red: test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph
+
+== App no longer selects the first [App.tsx]
+   'setSelectedNode(nodes[0] ?? null);'
+   -> ''
+   1 failed, 13 passed in 0.71s; red: test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph
+
+== App no longer goes to the graph [App.tsx]
+   'results.leave();\n            setView("graph");'
+   -> 'results.leave();'
+   1 failed, 13 passed in 0.70s; red: test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph
+
+== Open offered for every result [SearchResults.tsx]
+   '{result.is_document && first && ('
+   -> '{first && ('
+   1 failed, 13 passed in 0.68s; red: test_section_5_5_says_open_sets_the_results_aside_and_reads_the_document_over_the_view
+
+== Open renamed Read [SearchResults.tsx]
+   'onClick={() => onOpenDocument(first.id)}>\n            Open'
+   -> 'onClick={() => onOpenDocument(first.id)}>\n            Read'
+   1 failed, 13 passed in 0.70s; red: test_section_5_5_says_open_sets_the_results_aside_and_reads_the_document_over_the_view
+
+== the results left drawn under the reader [App.tsx]
+   'hidden={results.resultsHidden}'
+   -> 'hidden={false}'
+   1 failed, 13 passed in 0.71s; red: test_section_5_5_says_open_sets_the_results_aside_and_reads_the_document_over_the_view
+
+== the overlay never sets them aside [useSearchResultsOverlay.ts]
+   'resultsHidden: reading,'
+   -> 'resultsHidden: false,'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_says_open_sets_the_results_aside_and_reads_the_document_over_the_view
+
+== focus not returned to the results after reading [useSearchResultsOverlay.ts]
+   'document.querySelector<HTMLElement>(RESULTS_HEADING)?.focus();'
+   -> 'document.querySelector<HTMLElement>(SEARCH_BOX)?.focus();'
+   1 failed, 13 passed in 0.76s; red: test_section_5_5_says_open_sets_the_results_aside_and_reads_the_document_over_the_view
+
+== the Ask line given to everyone [App.tsx]
+   'onAsk={railEntries(rights).includes("questions") ? (words) => {'
+   -> 'onAsk={true ? (words) => {'
+   1 failed, 13 passed in 0.64s; red: test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_sends_nothing
+
+== the Ask line sends the question [App.tsx]
+   'setQuestionsOpen(true);\n          } : undefined}'
+   -> 'setQuestionsOpen(true);\n            void sendQuestion(words);\n          } : undefined}'
+   1 failed, 13 passed in 0.65s; red: test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_sends_nothing
+
+== the page draws the Ask line without onAsk [SearchResults.tsx]
+   'const askLine = onAsk && ('
+   -> 'const askLine = ('
+   1 failed, 13 passed in 0.65s; red: test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_sends_nothing
+
+== the schema's limit at 150 [search.py]
+   'MAX_QUERY_CHARS = 200'
+   -> 'MAX_QUERY_CHARS = 150'
+   1 failed, 13 passed in 0.66s; red: test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_schema_and_page_do
+
+== the schema no longer limits the query [search.py]
+   'query: str = Field(min_length=1, max_length=MAX_QUERY_CHARS)'
+   -> 'query: str = Field(min_length=1)'
+   1 failed, 13 passed in 0.61s; red: test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_schema_and_page_do
+
+== the refusal matched on another field [SearchResults.tsx]
+   'd.loc.at(-1) === "query"'
+   -> 'd.loc.at(-1) === "words"'
+   1 failed, 13 passed in 0.66s; red: test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_schema_and_page_do
+
+== the refusal no longer names the limit [SearchResults.tsx]
+   'a search can be at most ${entry.ctx.max_length} characters, and this one'
+   -> 'a search is too long, and this one'
+   1 failed, 13 passed in 0.61s; red: test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_schema_and_page_do
+
+== the page cuts the query it sends [SearchResults.tsx]
+   'body: JSON.stringify({ query, group,'
+   -> 'body: JSON.stringify({ query: query.slice(0, 200), group,'
+   1 failed, 13 passed in 0.64s; red: test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_schema_and_page_do
+
+== the box cuts what is typed [Combobox.tsx]
+   'onFocus={() => setOpen(true)}'
+   -> 'maxLength={200}\n        onFocus={() => setOpen(true)}'
+   1 failed, 13 passed in 0.64s; red: test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_schema_and_page_do
+
+== the date order refusal reworded [search_service.py]
+   'raise ValueError("the date filter ends before it starts")'
+   -> 'raise ValueError("the dates are the wrong way round")'
+   1 failed, 13 passed in 0.59s; red: test_section_5_5_quotes_the_conduit_s_other_refusals_in_its_words
+
+== the depth refusal reworded [search_service.py]
+   'deep at most; narrow the search to see further'
+   -> 'deep at most'
+   1 failed, 13 passed in 0.59s; red: test_section_5_5_quotes_the_conduit_s_other_refusals_in_its_words
+
+== the depth at 500 [search_index_query.py]
+   'MAX_DEPTH = 1000'
+   -> 'MAX_DEPTH = 500'
+   1 failed, 13 passed in 0.65s; red: test_section_5_5_quotes_the_conduit_s_other_refusals_in_its_words
+
+== the page no longer shows the Conduit's words [SearchResults.tsx]
+   'typeof body?.detail === "string" ? body.detail :'
+   -> 'false ? body.detail :'
+   1 failed, 13 passed in 0.67s; red: test_section_5_5_quotes_the_conduit_s_other_refusals_in_its_words
+
+== the no-index line reworded [search_service.py]
+   '"Search is limited to exact identifiers: this deployment has no search index."'
+   -> '"Search is limited: there is no search index."'
+   1 failed, 13 passed in 0.67s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== the dates line reworded [search_service.py]
+   'DATES_NOT_APPLIED = " The date filter is not applied."'
+   -> 'DATES_NOT_APPLIED = " Dates are ignored."'
+   1 failed, 13 passed in 0.69s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== the fallback's depth at 50 [search_service.py]
+   'FALLBACK_DEPTH = 100'
+   -> 'FALLBACK_DEPTH = 50'
+   1 failed, 13 passed in 0.71s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== the fallback reads past its depth [search_service.py]
+   'SearchRequest(query=request.query, limit=FALLBACK_DEPTH)'
+   -> 'SearchRequest(query=request.query, limit=FALLBACK_DEPTH * 10)'
+   1 failed, 13 passed in 0.66s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== the fallback not marked limited [search_service.py]
+   'source="fallback",\n        limited=True,'
+   -> 'source="fallback",\n        limited=False,'
+   1 failed, 13 passed in 0.72s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== the fallback's counts called exact [search_service.py]
+   'counts_exact=False,\n        groups=[\n            SearchGroup(key=k, label=group_label(k), count=c)'
+   -> 'counts_exact=True,\n        groups=[\n            SearchGroup(key=k, label=group_label(k), count=c)'
+   1 failed, 13 passed in 0.70s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== the fallback counts its datasets [search_service.py]
+   'DatasetFilter(id=d, name=n, count=None)'
+   -> 'DatasetFilter(id=d, name=n, count=0)'
+   1 failed, 13 passed in 0.70s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== the fallback offers dates [search_service.py]
+   'dates=None,'
+   -> 'dates=DateSpan(earliest=None, latest=None),'
+   1 failed, 13 passed in 0.68s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== the date line added whatever the filter [search_service.py]
+   'if request.filters.date_from or request.filters.date_to:\n        reason += DATES_NOT_APPLIED'
+   -> 'reason += DATES_NOT_APPLIED'
+   1 failed, 13 passed in 0.77s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== the page ignores the Conduit's line [SearchResults.tsx]
+   '{shown.limited_reason ??'
+   -> '{undefined ??'
+   1 failed, 13 passed in 0.66s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== Enter on a chosen suggestion does nothing [Combobox.tsx]
+   'if (option) select(option);'
+   -> ''
+   1 failed, 13 passed in 0.68s; red: test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggestion_is_still_chosen
+
+== Ask & Chat asks the draft at once [QuestionsPanel.tsx]
+   'questionBox.current?.focus();\n  }, [draft]);'
+   -> 'questionBox.current?.focus();\n    void ask();\n  }, [draft]);'
+   1 failed, 13 passed in 0.67s; red: test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_sends_nothing
+
+== the route sends the words as a list [app.py]
+   'schema=index.schema if index is not None else None,\n        )\n    except ValueError as exc:\n        raise HTTPException(status_code=422, detail=str(exc)) from exc'
+   -> 'schema=index.schema if index is not None else None,\n        )\n    except ValueError as exc:\n        raise HTTPException(status_code=422, detail=[str(exc)]) from exc'
+   1 failed, 13 passed in 0.61s; red: test_section_5_5_quotes_the_conduit_s_other_refusals_in_its_words
+
+== the page takes a group [SearchResults.tsx]
+   'query: string;'
+   -> 'query: string;\n  group?: string;'
+   1 failed, 13 passed in 0.64s; red: test_section_5_5_says_the_box_s_filters_shape_suggestions_alone_and_the_page_starts_unfiltered
+
+== no filters start with a dataset [SearchResults.tsx]
+   'const NO_FILTERS: Filters = { datasets: [], dateFrom: "", dateTo: "" };'
+   -> 'const NO_FILTERS: Filters = { datasets: ["d1"], dateFrom: "", dateTo: "" };'
+   1 failed, 13 passed in 0.65s; red: test_section_5_5_says_the_box_s_filters_shape_suggestions_alone_and_the_page_starts_unfiltered
+
+== the fallback line never drawn [SearchResults.tsx]
+   '{shown?.limited && ('
+   -> '{false && ('
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== the dates offered whether or not the answer has any [SearchResults.tsx]
+   '{counts.filters.dates && ('
+   -> '{true && ('
+   1 failed, 13 passed in 0.69s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== Clear filters renamed [SearchResults.tsx]
+   'Clear filters\n    </button>'
+   -> 'Reset\n    </button>'
+   1 failed, 13 passed in 0.79s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== Back only leaves [App.tsx]
+   'onBack={results.back}'
+   -> 'onBack={results.leave}'
+   1 failed, 13 passed in 0.69s; red: test_section_5_5_says_the_view_waits_beneath_out_of_reach_and_back_returns_to_it
+
+== the type not shown [SearchResults.tsx]
+   '<span>{result.type}</span>'
+   -> '<span>{result.kind}</span>'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_lists_what_each_result_shows_as_the_page_draws_it
+
+== the date not shown [SearchResults.tsx]
+   '<span>{result.date}</span>'
+   -> '<span>{result.when}</span>'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_lists_what_each_result_shows_as_the_page_draws_it
+
+== the result holds only its first record [SearchResults.tsx]
+   '.filter((n): n is Node => n !== undefined)}'
+   -> '.filter((n): n is Node => n !== undefined).slice(0, 1)}'
+   1 failed, 13 passed in 0.64s; red: test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph
+
+== the records not read never counted [SearchResults.tsx]
+   'const unread = result.node_ids.length - nodes.length;'
+   -> 'const unread = 0;'
+   1 failed, 13 passed in 1.09s; red: test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph
+
+== App no longer leaves the results [App.tsx]
+   'results.leave();\n            setView("graph");'
+   -> 'setView("graph");'
+   1 failed, 13 passed in 0.73s; red: test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph
+
+== the box cuts what is typed, in GlobalSearch [GlobalSearch.tsx]
+   'onSubmit={onSearch}'
+   -> 'onSubmit={onSearch}\n          maxLength={200}'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_schema_and_page_do
+
+== guide: the Ask line said to be for everyone [user-guide.md]
+   'Where Ask & Chat is offered to you, a last line'
+   -> 'For everyone, a last line'
+   1 failed, 13 passed in 0.60s; red: test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_sends_nothing
+
+== guide: the filters not said to be the search's own [user-guide.md]
+   'narrow it again to what the search offers'
+   -> 'narrow it again'
+   1 failed, 13 passed in 0.60s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== guide: Enter with no suggestion struck [user-guide.md]
+   'with no suggestion moved to, and the results'
+   -> 'and the results'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggestion_is_still_chosen
+
+== guide: a suggestion said ignored [user-guide.md]
+   'is still chosen by Enter'
+   -> 'is ignored by Enter'
+   1 failed, 13 passed in 0.65s; red: test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggestion_is_still_chosen
+
+== guide: §12's row struck [user-guide.md]
+   "| The top bar's search box | Enter | The search results page for the words typed; with a suggestion moved to by the arrows, that suggestion |"
+   -> ''
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggestion_is_still_chosen
+
+== guide: the view said in reach [user-guide.md]
+   'and cannot be reached until you leave them'
+   -> 'and can still be used'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_says_the_view_waits_beneath_out_of_reach_and_back_returns_to_it
+
+== guide: Back reworded [user-guide.md]
+   'returns to the view as you left it.'
+   -> 'returns to the graph.'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_says_the_view_waits_beneath_out_of_reach_and_back_returns_to_it
+
+== guide: the heading misquoted [user-guide.md]
+   'headed "Search results for \'…\'"'
+   -> 'headed "Results for \'…\'"'
+   1 failed, 13 passed in 0.65s; red: test_section_5_5_quotes_the_heading_the_empty_lines_and_the_ask_line_as_the_page_words_them
+
+== guide: the group form struck [user-guide.md]
+   'or "No records match \'…\' in this group." once a group is chosen'
+   -> 'once a group is chosen'
+   1 failed, 13 passed in 0.65s; red: test_section_5_5_quotes_the_heading_the_empty_lines_and_the_ask_line_as_the_page_words_them
+
+== guide: the Ask line misquoted [user-guide.md]
+   'a last line, "Ask a question about \'…\' instead"'
+   -> 'a last line, "Ask about \'…\'"'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_quotes_the_heading_the_empty_lines_and_the_ask_line_as_the_page_words_them
+
+== guide: the group's count struck [user-guide.md]
+   "the total, or a group's own count once you choose one,"
+   -> 'the total,'
+   1 failed, 13 passed in 0.64s; red: test_section_5_5_gives_the_count_under_the_heading_as_the_page_chooses_it
+
+== guide: Datasets not named [user-guide.md]
+   '**Datasets** and **Dates**'
+   -> 'the datasets and **Dates**'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== guide: Clear filters said always there [user-guide.md]
+   'with **Clear filters** where a filter is on'
+   -> 'with **Clear filters**'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them
+
+== guide: the page said to start with the box's filters [user-guide.md]
+   'the page starts at **All** with no filter.'
+   -> 'the page starts with them.'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_says_the_box_s_filters_shape_suggestions_alone_and_the_page_starts_unfiltered
+
+== guide: 25 a page [user-guide.md]
+   'Results come 20 a page'
+   -> 'Results come 25 a page'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_gives_the_page_size_the_page_asks_for
+
+== guide: why it matched struck [user-guide.md]
+   'its type, why it matched and its date'
+   -> 'its type and its date'
+   1 failed, 13 passed in 0.65s; red: test_section_5_5_lists_what_each_result_shows_as_the_page_draws_it
+
+== guide: Show on graph said to stay [user-guide.md]
+   'selects the first and takes you there'
+   -> 'and selects the first'
+   1 failed, 13 passed in 0.65s; red: test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph
+
+== guide: the unread example out of shape [user-guide.md]
+   '"1 of its 2 records could not be read."'
+   -> '"1 record could not be read."'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph
+
+== guide: Open over the results again [user-guide.md]
+   'sets the results aside and reads it over the view; they come back when you close it.'
+   -> 'reads it over the results, which are there again when you close it.'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_says_open_sets_the_results_aside_and_reads_the_document_over_the_view
+
+== guide: the Ask line said to send [user-guide.md]
+   'sending nothing until you press **Ask**.'
+   -> 'and asks at once.'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_sends_nothing
+
+== guide: 250 characters [user-guide.md]
+   'A search can be at most 200 characters.'
+   -> 'A search can be at most 250 characters.'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_schema_and_page_do
+
+== guide: never cut short struck [user-guide.md]
+   'and is never cut short: shorten'
+   -> 'and is shortened: shorten'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_gives_the_search_s_limit_and_its_refusal_as_the_schema_and_page_do
+
+== guide: the date refusal misquoted [user-guide.md]
+   '("the date filter ends before it starts")'
+   -> '("the dates are the wrong way round")'
+   1 failed, 13 passed in 0.62s; red: test_section_5_5_quotes_the_conduit_s_other_refusals_in_its_words
+
+== guide: the depth at 100 [user-guide.md]
+   '("results are listed 1000 deep at most;'
+   -> '("results are listed 100 deep at most;'
+   1 failed, 13 passed in 0.61s; red: test_section_5_5_quotes_the_conduit_s_other_refusals_in_its_words
+
+== guide: the fallback line misquoted [user-guide.md]
+   '"Search is limited to exact identifiers: this deployment has no search index."'
+   -> '"Search is limited: there is no search index."'
+   1 failed, 13 passed in 0.64s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== guide: the first 50 [user-guide.md]
+   'looks no further than the first 100 exact matches'
+   -> 'looks no further than the first 50 exact matches'
+   1 failed, 13 passed in 0.64s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== guide: dates said offered [user-guide.md]
+   'and there are no dates to filter by.'
+   -> 'and the dates are offered as ever.'
+   1 failed, 13 passed in 0.64s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== guide: the date line said always added [user-guide.md]
+   'A date filter already set is not applied, and the line then adds'
+   -> 'Dates are not applied, and the line adds'
+   1 failed, 13 passed in 0.63s; red: test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do
+
+== restored: 14 passed in 0.60s
+each plant red for its own test alone: True

@@ -57,14 +57,11 @@ import os
 import sys
 from collections.abc import Sequence
 from datetime import timedelta
-from pathlib import Path
 from typing import cast
 
-import duckdb
+from scripts.seed_analytics import seed_analytics
 from services.api.dataset_scope import stamping
 
-from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
-from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from conduit_common.identity import new_edge_id, now_utc
@@ -77,10 +74,11 @@ from demo_fixtures.scenario_cohorts import (
     generate_handle_cohort,
 )
 from demo_fixtures.seizure_record import SEIZURE_DATE as _SEIZURE_DAY
-from ontology.handling import HandlingScheme, load_uk_le_scheme
+from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
+from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
-from schemas.analytics import EventRecord
+from schemas.analytics import EventFilter, EventListRequest, EventRecord
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -345,29 +343,40 @@ def build_sighting_events(edges: Sequence[Edge], *, investigation_scope: str) ->
 
 
 async def load_sighting_events(
-    con: duckdb.DuckDBPyConnection, scheme: HandlingScheme, events: Sequence[EventRecord]
+    analytics: AnalyticsPort, reader: Principal, events: Sequence[EventRecord]
 ) -> int:
     """Loads the sightings not already present, and returns how many it wrote.
 
     `events` has no primary key and `load_events` is a plain insert, so without this a second
     seed would double the track — four sightings drawn as eight, each pair on one instant.
     Existing ids are read back and skipped, the same way the grid route treats its geometries.
+    They are read through the port, as `reader` (the seed's own principal), in whatever store the
+    deployment names (ADR-148 Amendment 14): never by a query of the seed's own.
     """
-    create_events_table(con)
-    create_geometries_table(con)
     wanted = [e.event_id for e in events]
     if not wanted:
         return 0
-    placeholders = ",".join("?" for _ in wanted)
-    present = {
-        row[0]
-        for row in con.execute(
-            f"SELECT event_id FROM events WHERE event_id IN ({placeholders})", wanted
-        ).fetchall()
-    }
+    present: set[str] = set()
+    for scope in sorted({e.investigation_scope for e in events}):
+        ids = [e.event_id for e in events if e.investigation_scope == scope]
+        for start in range(0, len(ids), _PAGE):
+            listed = await analytics.list_events(
+                EventListRequest(
+                    filter=EventFilter(
+                        investigation_scope=scope, event_ids=ids[start : start + _PAGE]
+                    ),
+                    limit=_PAGE,
+                ),
+                reader,
+            )
+            present |= {e.event_id for e in listed.events}
     missing = [e for e in events if e.event_id not in present]
-    await AnalyticsDuckDBAdapter(con, scheme).load_events(missing)
+    await analytics.load_events(missing)
     return len(missing)
+
+
+#: `list_events`'s own largest page (`EventListRequest.limit`).
+_PAGE = 200
 
 
 async def _write(
@@ -427,9 +436,7 @@ async def _run(args: argparse.Namespace) -> int:
     database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     await client.create_database_if_absent()
-    graph = cast(
-        GraphPort, stamping(GraphArcadeDBAdapter(client, scheme), dataset=SCENARIOS.id)
-    )
+    graph = cast(GraphPort, stamping(GraphArcadeDBAdapter(client, scheme), dataset=SCENARIOS.id))
     await graph.apply_schema(ontology)
     # ADR-099: the case these scenarios are written under reads their dataset.
     from scripts.case_seed import _reads_from_arguments
@@ -444,18 +451,15 @@ async def _run(args: argparse.Namespace) -> int:
     nodes, edges, landmarks = build_everything()
     node_count, edge_count = await _write(graph, nodes, edges, load_id=load_id)
 
-    # The analytics half — the same file and the same env fallback `seed_hmp_fixture` uses, and
-    # the same reason this runs with the Conduit stopped: DuckDB's lock is exclusive.
-    Path(args.analytics_db_path).parent.mkdir(parents=True, exist_ok=True)
-    analytics_con = duckdb.connect(args.analytics_db_path)
-    try:
+    # The analytics half, in the deployment's own store (ADR-148 Amendment 14): DuckDB at the path
+    # `seed_hmp_fixture` uses too (and the reason this runs with the Conduit stopped: DuckDB's lock
+    # is exclusive), ClickHouse where the deployment names it.
+    async with seed_analytics(args.analytics_db_path, scheme) as analytics:
         loaded = await load_sighting_events(
-            analytics_con,
-            scheme,
+            analytics,
+            seeder,
             build_sighting_events(edges, investigation_scope=args.investigation_scope),
         )
-    finally:
-        analytics_con.close()
 
     print(
         f"  seed[scenarios]: Seeded {node_count} nodes and {edge_count} edges for Scenario A/B "

@@ -771,6 +771,8 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   "close-the-questions-drawer-by-keyboard",
   // ADR-129 decision 1: a cited graph fact selects what it stands for and brings it into view.
   "select-a-graph-fact-from-an-answer-by-keyboard",
+  // ADR-129 Amendment 5: a source Whole case's search found ([S-n]) selects its records.
+  "select-a-search-source-from-an-answer-by-keyboard",
   // ADR-135 decision 5: the model engine is reached and changed by keyboard, and the engine chosen
   // is the one the question names.
   "choose-the-model-engine-by-keyboard",
@@ -964,6 +966,8 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "invite-a-person-by-keyboard",
   // ADR-148 Amendment 8: on Entra ID sign-in, a person added by object id.
   "add-a-person-by-object-id-by-keyboard",
+  // ADR-148 Amendment 17 (audit 4b): guest accounts admitted, or no longer, in People on Entra ID.
+  "admit-guest-accounts-by-keyboard",
   "edit-a-persons-access-by-keyboard",
   "disable-and-enable-a-person-by-keyboard",
   "reset-a-persons-sign-in-by-keyboard",
@@ -1156,6 +1160,22 @@ export const WELCOME_ACTIONS = defineActionRegistry("WELCOME_ACTIONS", [
   "open-the-welcome-panel-with-question-mark",
   "pick-up-a-history-step-from-the-welcome-panel",
   "close-the-welcome-panel",
+] as const);
+
+// The search results page (the owner's navigation decision of 13 November 2026, Part A; ADR-145 Amendment 15 Part A):
+// opened by Enter in the top bar's search box, each of its actions by keyboard, and Back with focus in the box.
+export const SEARCH_RESULTS_ACTIONS = defineActionRegistry("SEARCH_RESULTS_ACTIONS", [
+  "open-search-results-by-keyboard",
+  "choose-a-result-group-by-keyboard",
+  "filter-search-results-by-keyboard",
+  "next-page-of-results-by-keyboard",
+  "previous-page-of-results-by-keyboard",
+  "clear-search-filters-by-keyboard",
+  "filter-results-by-date-by-keyboard",
+  "show-a-result-on-the-graph-by-keyboard",
+  "open-a-document-from-the-results-by-keyboard",
+  "ask-instead-from-the-results-by-keyboard",
+  "back-from-the-results-by-keyboard",
 ] as const);
 
 // ADR-124 decision 2 (U6b): the dialog a reader is shown when their own view of the case is past a cap.

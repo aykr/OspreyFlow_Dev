@@ -80,6 +80,9 @@ async function serve(page: Page, opts: { owns?: boolean; entra?: boolean } = {})
     if (path === "operations/ageing") return json(200, AGEING);
     // ADR-148 Amendment 8: how people sign in; Entra ID adds a person by object id.
     if (path === "sign-in") return json(200, { kind: opts.entra ? "entra" : "keycloak" });
+    // ADR-148 Amendment 17: whether guest accounts are admitted, switched in People on Entra ID.
+    if (path === "sign-in/guests")
+      return json(200, { admitted: request.method() === "PUT" ? (request.postDataJSON() as { admitted: boolean }).admitted : false });
     if (path === "people/by-object-id" && request.method() === "POST") {
       const sent = request.postDataJSON() as { object_id: string };
       return json(201, { ...PERSON, id: sent.object_id, username: sent.object_id, name: sent.object_id, roles: [] });
@@ -401,6 +404,22 @@ test("a person is added by Entra object id by keyboard", async ({ page }) => {
   await expect(page.getByText("50000000-0000-4000-8000-000000000002 was added with no roles.", { exact: false })).toBeVisible();
   expect(asked).toContain("POST people/by-object-id");
   registerCovered(REGISTRY, "add-a-person-by-object-id-by-keyboard");
+});
+
+// ADR-148 Amendment 17 (rule 13): guest accounts admitted in People on Entra ID, by keyboard alone.
+test("guest accounts are admitted by keyboard", async ({ page }) => {
+  const asked = await serve(page, { entra: true });
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  const box = page.getByLabel("Admit guest accounts");
+  await expect(box).toBeEnabled();
+  await expect(box).not.toBeChecked();
+  const sent = page.waitForRequest((r) => r.url().endsWith("/sign-in/guests") && r.method() === "PUT");
+  await box.focus();
+  await page.keyboard.press("Space");
+  expect((await sent).postDataJSON()).toEqual({ admitted: true });
+  await expect(box).toBeChecked();
+  expect(asked).toContain("PUT sign-in/guests");
+  registerCovered(REGISTRY, "admit-guest-accounts-by-keyboard");
 });
 
 test("a person's access is edited by keyboard", async ({ page }) => {

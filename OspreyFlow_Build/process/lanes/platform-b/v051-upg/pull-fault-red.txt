@@ -1,0 +1,17 @@
+# pull_fault.py shown red then green, 2026-11-14T01:45:05Z
+planted (pattern matches the pinned image): compose pull exit 1: Error response from daemon: manifest unknown: the rehearsal's planted fault
+control (pattern matches nothing): compose pull exit 0:  Image busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 Pulled 
+pass-through (compose ls via the proxy) exit 0
+the real daemon, without DOCKER_HOST, while the proxy runs: compose pull exit 0
+--- proxy log
+pull_fault: listening on /root/osprey-runs/platform-b-upg.meta/fault-test/p.sock, refusing pulls matching 'busybox'
+pull_fault: refused the pull of docker.io/library/busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+pull_fault: listening on /root/osprey-runs/platform-b-upg.meta/fault-test/p.sock, refusing pulls matching '^ghcr\\.io/aykr/no-such-image'
+pull_fault: listening on /root/osprey-runs/platform-b-upg.meta/fault-test/p.sock, refusing pulls matching 'busybox'
+
+# the rollback's pattern (upg_run.sh update-rollback) against pulls in the shape compose sends, checked locally 2026-11-14T01:46:10Z
+pattern: ^ghcr\.io/aykr/ner@sha256:(?!aaaa1111)   (v0.5.0's own digest stood in by aaaa1111)
+fromImage=ghcr.io/aykr/ner tag=sha256:bbbb2222 (a new ner) -> REFUSED
+fromImage=ghcr.io/aykr/ner tag=sha256:aaaa1111 (v0.5.0's own, the rollback's) -> passed
+fromImage=ghcr.io/aykr/api tag=sha256:bbbb2222 (another service) -> passed
+fromImage=ghcrXio/aykr/ner (the dot escaped) -> passed

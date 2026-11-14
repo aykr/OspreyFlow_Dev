@@ -1,0 +1,315 @@
+Running on ospreyflow-test (stack g, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T083905Z-fd4c4cf4/log: env LIVE_SEED=scripts.seed_hmp_fixture LIVE_SPECS=live/scenario-a-a12-a15.spec.ts bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: scripts.seed_hmp_fixture into a case the seed makes
+Case 'Live search check 20261114T083906Z' is 01M7CKBPTGGT3NAH2TTX0R6CT0.
+Seeded 400 Person nodes, 10 yards, 262 current-window and 4 prior-period incident events.
+Put the prison, its yards, the towns and the accounts on the map.
+  check: no id stored more than once (whole shared graph)
+Loaded 809 network events (calls, visits, payments, custody, incidents); 1075 events in all under investigation_scope='01M7CKBPTGGT3NAH2TTX0R6CT0'.
+case: 01M7CKBPTGGT3NAH2TTX0R6CT0
+# step: the search index rebuilt from the graph
+search index rebuilt: 1203 documents from 1203 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t083954605704
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 3.48 3.68 6.58
+[warm-up +0.8 s] loaded
+[warm-up +1.1 s] console warning: [.WebGL-0x7e407ade400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] console warning: [.WebGL-0x7e4001c9400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] console warning: [.WebGL-0x7e407ae3e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] search box drawn
+[warm-up +1.3 s] console error: [ECharts] Component toolbox is used but not imported.
+import { ToolboxComponent } from 'echarts/components';
+echarts.use([ToolboxComponent]);
+[warm-up +1.4 s] console warning: [.WebGL-0x7e407ade400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+# warm-up: the Glass drew its search box after 8 s
+
+Running 3 tests using 1 worker
+
+[1/3] live/scenario-a-a12-a15.spec.ts:107:1 › A12 — the Clique Metric ranks nodes in the metrics panel
+  1) live/scenario-a-a12-a15.spec.ts:107:1 › A12 — the Clique Metric ranks nodes in the metrics panel 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('.radial-menu__list[role=\'menu\']')
+    Expected: visible
+    Timeout: 30000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" locator('.radial-menu__list[role=\'menu\']') with timeout 30000ms
+      - waiting for locator('.radial-menu__list[role=\'menu\']')
+
+
+      79 |
+      80 |   const menu = page.locator(".radial-menu__list[role='menu']");
+    > 81 |   await expect(menu).toBeVisible();
+         |                      ^
+      82 |   const expandItem = menu
+      83 |     .getByRole("menuitem")
+      84 |     .filter({ hasText: new RegExp(`^${edgeType}\\b`) })
+        at expandFromTheSelectedNode (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/scenario-a-a12-a15.spec.ts:81:22)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/scenario-a-a12-a15.spec.ts:143:3
+
+    Error Context: test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[2/3] live/scenario-a-a12-a15.spec.ts:178:1 › A13–A15 — a judgement is recorded against the investigation
+  2) live/scenario-a-a12-a15.spec.ts:178:1 › A13–A15 — a judgement is recorded against the investigation 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog')
+    Expected: visible
+    Error: strict mode violation: getByRole('dialog') resolved to 2 elements:
+        1) <div tabindex="-1" role="dialog" aria-modal="false" class="workspace-welcome" aria-labelledby="workspace-welcome-title">…</div> aka getByRole('dialog', { name: 'Welcome back' })
+        2) <div role="dialog" tabindex="-1" class="drawer" aria-label="Record an assessment">…</div> aka getByRole('dialog', { name: 'Record an assessment' })
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog') with timeout 30000ms
+      - waiting for getByRole('dialog')
+
+
+      199 |   // asserted together because the panel builds them from one control.
+      200 |   const dialog = page.getByRole("dialog");
+    > 201 |   await expect(dialog).toBeVisible();
+          |                        ^
+      202 |   await expect(dialog).toContainText(/judgement/i);
+      203 | });
+      204 |
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/scenario-a-a12-a15.spec.ts:201:24
+
+    Error Context: test-results/scenario-a-a12-a15-A13–A15-3babb-d-against-the-investigation/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/scenario-a-a12-a15-A13–A15-3babb-d-against-the-investigation/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/scenario-a-a12-a15-A13–A15-3babb-d-against-the-investigation/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[3/3] live/scenario-a-a12-a15.spec.ts:205:1 › A15 — export names what it blocked, and takes a justification
+  2 failed
+    live/scenario-a-a12-a15.spec.ts:107:1 › A12 — the Clique Metric ranks nodes in the metrics panel 
+    live/scenario-a-a12-a15.spec.ts:178:1 › A13–A15 — a judgement is recorded against the investigation 
+  1 passed (40.5s)
+# playwright exit 1
+== Vite's log
+  VITE v8.3.4  ready in 137 ms
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+== test-results/scenario-a-a12-a15-A12-—-t-9c4ec--nodes-in-the-metrics-panel/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: scenario-a-a12-a15.spec.ts >> A12 — the Clique Metric ranks nodes in the metrics panel
+- Location: live/scenario-a-a12-a15.spec.ts:107:1
+
+# Error details
+
+```
+Error: expect(locator).toBeVisible() failed
+
+Locator: locator('.radial-menu__list[role=\'menu\']')
+Expected: visible
+Timeout: 30000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" locator('.radial-menu__list[role=\'menu\']') with timeout 30000ms
+  - waiting for locator('.radial-menu__list[role=\'menu\']')
+
+```
+
+# Test source
+
+```ts
+  1   | // **Stage 3a's third residual: Scenario A steps A12–A15 walked through a real browser.**
+  2   | //
+  3   | // `07_BUILD_PLAN.md`'s Stage 3a disclosure and `DEMO_GUIDE.md` §1 both record these as "built
+  4   | // [...] but likewise not yet fully walked through a browser" — A12's Clique Metric (Phase 7) and
+  5   | // A13–A15's judgements, gaps, assumptions and export with the handling gate (Phase 8).
+  6   | //
+  7   | // Runs against the HMP fixture, which is reachable from the search box because its Person nodes
+  8   | // carry `prison_number` — one of the three identifiers the ontology declares for Person, and
+  9   | // what `search_nodes` matches on. (Fixture Corp's own entities carry none, which is why its
+  10  | // walkthrough is not in this file; see `process/demo/2026-09-26/RUNBOOK.md` and the round's own
+  11  | // DECISION_NEEDED.md.)
+  12  | import { expect, type Page, test } from "@playwright/test";
+  13  | 
+  14  | import { freshWorkspaceUrl, liveOnly } from "./live";
+  15  | 
+  16  | test.beforeEach(liveOnly);
+  17  | 
+  18  | /** **A member of the fixture's own insular subgroup, which is what A12 is about.**
+  19  |  *
+  20  |  * Not `HMP-0001`, which round 12b used and which has no associates at all. Measured against the
+  21  |  * store in round 12c: of the fixture's 400 Persons exactly 16 carry `ASSOCIATE_OF` edges, 8 each
+  22  |  * — that tight, densely-interconnected cluster *is* "the insular subgroup" A12 asks the Clique
+  23  |  * Metric to rank, and `HMP-0001` sits outside it with `MENTIONED_IN` (12), `PRESENT_AT` (5) and
+  24  |  * `FAMILY_OF` (1) instead. Prison numbers are assigned in order by
+  25  |  * `scripts/seed_hmp_fixture.py`, so this is stable across reseeds without depending on a
+  26  |  * generated id. */
+  27  | const SEEDED_PRISON_NUMBER = "HMP-0003";
+  28  | 
+  29  | async function seedWorkingSetFromSearch(page: Page): Promise<void> {
+  30  |   const search = page
+  31  |     .getByRole("combobox", { name: "Search entities, identifiers, documents" })
+  32  |     .first();
+  33  |   await search.fill(SEEDED_PRISON_NUMBER);
+  34  |   // The combobox's own option label is `${type}: ${id}` (`search/GlobalSearch.tsx`).
+  35  |   const option = page.getByRole("option", { name: /^Person: / }).first();
+  36  |   await expect(
+  37  |     option,
+  38  |     `no search result for ${SEEDED_PRISON_NUMBER} — is the HMP fixture seeded
+  39  |     under the investigation this spec was pointed at?`,
+  40  |   ).toBeVisible();
+  41  |   await option.click();
+  42  | }
+  43  | 
+  44  | async function nodeCount(page: Page): Promise<number> {
+  45  |   const text = (await page.getByRole("status").first().textContent()) ?? "";
+  46  |   return Number(/(\d+)\s*nodes/.exec(text)?.[1] ?? 0);
+  47  | }
+  48  | 
+  49  | async function edgeCount(page: Page): Promise<number> {
+  50  |   const text = (await page.getByRole("status").first().textContent()) ?? "";
+== test-results/scenario-a-a12-a15-A13–A15-3babb-d-against-the-investigation/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: scenario-a-a12-a15.spec.ts >> A13–A15 — a judgement is recorded against the investigation
+- Location: live/scenario-a-a12-a15.spec.ts:178:1
+
+# Error details
+
+```
+Error: expect(locator).toBeVisible() failed
+
+Locator: getByRole('dialog')
+Expected: visible
+Error: strict mode violation: getByRole('dialog') resolved to 2 elements:
+    1) <div tabindex="-1" role="dialog" aria-modal="false" class="workspace-welcome" aria-labelledby="workspace-welcome-title">…</div> aka getByRole('dialog', { name: 'Welcome back' })
+    2) <div role="dialog" tabindex="-1" class="drawer" aria-label="Record an assessment">…</div> aka getByRole('dialog', { name: 'Record an assessment' })
+
+Call log:
+  - Expect "toBeVisible" getByRole('dialog') with timeout 30000ms
+  - waiting for getByRole('dialog')
+
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e5]:
+    - note "Protective marking" [ref=e6]: OFFICIAL
+    - banner [ref=e7]:
+      - button "Osprey, go to Home" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: Osprey
+      - navigation "Places" [ref=e13]:
+        - list [ref=e14]:
+          - listitem [ref=e15]:
+            - button "The Glass" [ref=e16] [cursor=pointer]
+          - listitem [ref=e17]:
+            - button "Rules and Monitoring" [ref=e18] [cursor=pointer]
+      - generic [ref=e21]:
+        - combobox "Search entities, identifiers, documents" [ref=e23]: HMP-0003
+        - button "Add many from a list" [ref=e24] [cursor=pointer]
+        - button "Filters" [ref=e27] [cursor=pointer]
+      - group "View" [ref=e30]:
+        - button "Graph" [pressed] [ref=e31] [cursor=pointer]
+        - button "Map" [ref=e32] [cursor=pointer]
+        - button "Drawing board" [ref=e33] [cursor=pointer]
+        - button "Reports" [ref=e34] [cursor=pointer]
+      - button "More views" [ref=e36] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e38]: ▾
+      - button "Export" [ref=e39] [cursor=pointer]: Export ▾
+      - button "Switch to the light theme" [ref=e41] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e42]: ☀
+    - region [ref=e43]:
+      - heading "You are in the Glass" [level=2] [ref=e44]
+      - generic [aria-hidden] [ref=e45]: ·
+      - generic [aria-hidden] [ref=e46]: Case
+      - 'button "Case: Untitled case" [ref=e48] [cursor=pointer]':
+        - generic [ref=e49]:
+          - generic [ref=e50]: "Case:"
+          - generic [ref=e51]: Untitled case
+        - generic [aria-hidden] [ref=e52]: ▾
+      - generic [aria-hidden] [ref=e53]: ·
+      - button "Views in this case" [ref=e54] [cursor=pointer]
+      - generic [aria-hidden] [ref=e55]: ·
+      - generic [ref=e56]: reads HMP fixture
+    - generic [ref=e57]:
+      - navigation "Workspace" [ref=e58]:
+        - button "Explore" [ref=e59] [cursor=pointer]
+        - button "Ask & Chat" [ref=e62] [cursor=pointer]
+        - button "History" [ref=e65] [cursor=pointer]
+        - button "Help" [ref=e68] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e69]: "?"
+        - button "Show names" [ref=e70] [cursor=pointer]
+== the last of the Conduit's log
+INFO:     127.0.0.1:55154 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55154 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55154 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55154 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/starter-questions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55154 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55154 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55154 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/starter-questions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55154 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55154 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55154 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55154 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55176 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/busiest-links?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55168 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/most-connected?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55154 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/busiest-links?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55176 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/most-connected?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55128 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55176 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55144 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55144 - "POST /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55144 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55144 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55144 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "POST /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "GET /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55144 - "POST /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55144 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/expand/preview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "POST /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/expand/preview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55130 - "OPTIONS /v1/investigations/01M7CKEVMM7GQJC7ZV3YQGXQKW/expand HTTP/1.1" 200 OK
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T083905Z-fd4c4cf4).
+Wall time: 112 s, exit 1 (stack g, the lease case took at 2026-11-14T08:19:24Z; set-up before it 8 s)

@@ -4,7 +4,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { QuestionsPanel, WHOLE_CASE_UNAVAILABLE } from "./QuestionsPanel";
+import { QuestionsPanel, WHOLE_CASE_LINE } from "./QuestionsPanel";
 import type { QuestionAnswer, WillRead } from "./questionsApi";
 
 afterEach(() => {
@@ -44,10 +44,13 @@ const WITH_FACTS: QuestionAnswer = {
   unplaced: 0,
 };
 
+/** A summary's *Whole case* fields, under another choice (ADR-098 Amendment 9). */
+const NOT_CASE = { found: 0, passages: 0, limited_reason: null, counts_exact: true, more: false };
+
 /** What the Conduit says will be read (ADR-098 Amendment 7): served to every test that does not
  * serve its own. */
 const WILL: WillRead = {
-  read: { read_from: "graph", documents: 2, documents_without_text: 0, items: 5, links: 4, events: 0, selected: 0, first_selected: null },
+  read: { read_from: "graph", documents: 2, documents_without_text: 0, items: 5, links: 4, events: 0, selected: 0, first_selected: null, ...NOT_CASE },
   engine: "local",
   engine_label: "This deployment's own model",
   model: "qwen2.5:7b-instruct",
@@ -420,7 +423,7 @@ describe("QuestionsPanel · read from, will read, the engine", () => {
   const selection = { nodeIds: ["n-tarbuck", "n-cole"], linkIds: [] };
   const SELECTED: WillRead = {
     ...WILL,
-    read: { read_from: "selection", documents: 0, documents_without_text: 1, items: 2, links: 3, events: 4, selected: 2, first_selected: "Tarbuck, Kyle" },
+    read: { read_from: "selection", documents: 0, documents_without_text: 1, items: 2, links: 3, events: 4, selected: 2, first_selected: "Tarbuck, Kyle", ...NOT_CASE },
   };  // prettier-ignore
   const willBodies = (calls: { url: string; init?: RequestInit }[]) =>
     calls.filter((c) => c.url.endsWith("/will-read")).map((c) => JSON.parse(String(c.init!.body)) as Record<string, unknown>);
@@ -452,13 +455,12 @@ describe("QuestionsPanel · read from, will read, the engine", () => {
     expect(screen.getByText("Will read: 2 documents, 5 items and 4 links")).toBeTruthy();
   });
 
-  it("offers Whole case disabled, with why, until the case's search is called", () => {
+  it("offers Whole case, described in one line as finding things by names and words", () => {
     serve({ "GET /questions": () => json(200, []) });
     mount();
     const whole = screen.getByRole("radio", { name: "Whole case" }) as HTMLInputElement;
-    expect(whole.disabled).toBe(true);
-    expect(whole.getAttribute("aria-describedby")).toBeTruthy();
-    expect(document.getElementById(whole.getAttribute("aria-describedby")!)!.textContent).toBe(WHOLE_CASE_UNAVAILABLE);
+    expect(whole.disabled).toBe(false);
+    expect(document.getElementById(whole.getAttribute("aria-describedby")!)!.textContent).toBe(WHOLE_CASE_LINE);
   });
 
   it("choosing Everything on the graph asks the Conduit again and sends that choice with the question", async () => {
@@ -576,6 +578,100 @@ describe("QuestionsPanel · read from, will read, the engine", () => {
     expect(
       screen.getByText(
         "No documents were read: the answer comes from the links and events (read: 0 documents, 2 items, 3 links and 4 events (1 document has no text to read)).",
+      ),
+    ).toBeTruthy();
+  });
+});
+
+// ADR-098 Amendment 9, ADR-129 Amendment 5: *Whole case*, through the case's search.
+describe("QuestionsPanel · Whole case", () => {
+  const CASE_READ = {
+    read_from: "case" as const, documents: 1, documents_without_text: 0, items: 2, links: 0, events: 0,
+    selected: 0, first_selected: null, found: 4, passages: 1, limited_reason: null, counts_exact: true, more: false,
+  };  // prettier-ignore
+  const CASE_WILL: WillRead = { ...WILL, read: CASE_READ };
+  const SOURCED: QuestionAnswer = {
+    ...ANSWERED,
+    id: "q-case",
+    answer: "Ann Kestrel was paid [S-1].",
+    candidates: [],
+    unplaced: 0,
+    read: CASE_READ,
+    search_citations: [
+      { number: 1, label: "[S-1]", name: "KESTREL, Ann", type: "Person", why: "Name is 'Kestrel'", node_ids: ["n-k1", "n-k2"] },
+      { number: 2, label: "[S-2]", name: "Kestrel invoice", type: "Document", why: "Mentions 'Kestrel'", node_ids: ["d-k"] },
+    ],
+  };  // prettier-ignore
+  const willBodies = (calls: { url: string; init?: RequestInit }[]) =>
+    calls.filter((c) => c.url.endsWith("/will-read")).map((c) => JSON.parse(String(c.init!.body)) as Record<string, unknown>);
+
+  it("sends the question's words with will read, and says what the search found by how each is read", async () => {
+    const calls = serve({ "GET /questions": () => json(200, []), "POST /questions/will-read": () => json(200, CASE_WILL) });
+    mount();
+    fireEvent.click(screen.getByRole("radio", { name: "Whole case" }));
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who paid Kestrel?" } });
+    await waitFor(() => expect(willBodies(calls).some((b) => b.question === "Who paid Kestrel?")).toBe(true));
+    expect(willBodies(calls).find((b) => b.question)!).toMatchObject({ read_from: "case", selected_node_ids: [] });
+    expect(await screen.findByText("About: the whole case, searched with your question's words")).toBeTruthy();
+    expect(
+      screen.getByText("Will read: 4 matches found in the case: 1 document whole, 1 document by the passage found and 2 other records"),
+    ).toBeTruthy();
+  });
+
+  it("asks again as the question changes, since its words are what is searched", async () => {
+    const calls = serve({ "GET /questions": () => json(200, []), "POST /questions/will-read": () => json(200, CASE_WILL) });
+    mount();
+    fireEvent.click(screen.getByRole("radio", { name: "Whole case" }));
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Kestrel" } });
+    await waitFor(() => expect(willBodies(calls).some((b) => b.question === "Kestrel")).toBe(true));
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Kestrel invoice" } });
+    await waitFor(() => expect(willBodies(calls).some((b) => b.question === "Kestrel invoice")).toBe(true));
+  });
+
+  it("says the search's fallback, counts that may be incomplete and a second page never read", async () => {
+    const limited: WillRead = {
+      ...CASE_WILL,
+      read: { ...CASE_READ, limited_reason: "Results are limited: the search index cannot be reached.", counts_exact: false, more: true },
+    };  // prettier-ignore
+    serve({ "GET /questions": () => json(200, []), "POST /questions/will-read": () => json(200, limited) });
+    mount();
+    fireEvent.click(screen.getByRole("radio", { name: "Whole case" }));
+    expect(await screen.findByText("Results are limited: the search index cannot be reached.")).toBeTruthy();
+    expect(screen.getByText("The search's counts may be incomplete.")).toBeTruthy();
+    expect(screen.getByText("Only the first 4 matches are read; there are more.")).toBeTruthy();
+  });
+
+  it("says in the Conduit's words why a question too long to search was refused", async () => {
+    const words =
+      "Whole case searches the case with your question's own words, which can be at most 200 characters; yours has 240. Shorten the question, or choose Selected items or Everything on the graph to ask it as it is.";
+    serve({
+      "GET /questions": () => json(200, []),
+      "POST /questions/will-read": () => json(422, { error: "question_too_long_to_search", detail: words }),
+    });
+    mount();
+    fireEvent.click(screen.getByRole("radio", { name: "Whole case" }));
+    expect(await screen.findByText(words)).toBeTruthy();
+  });
+
+  it("shows each [S-n] as a button that selects its records, and lists every source with why it was found", async () => {
+    serve({ "GET /questions": () => json(200, [SOURCED]) });
+    const onSelectFacts = vi.fn();
+    mount(vi.fn(), vi.fn(), { onSelectFacts });
+    fireEvent.click(await screen.findByRole("button", { name: "Select [S-1], KESTREL, Ann, on the canvas" }));
+    expect(onSelectFacts).toHaveBeenCalledWith({ number: 1, label: "[S-1]", node_ids: ["n-k1", "n-k2"], link_ids: [] });
+    const sources = screen.getByRole("list", { name: "Sources found in the case" });
+    expect(sources.textContent).toContain("Person · Name is 'Kestrel'");
+    // An unmarked source is still reachable: its button is in the list.
+    fireEvent.click(screen.getByRole("button", { name: "Select [S-2], Kestrel invoice, on the canvas" }));
+    expect(onSelectFacts).toHaveBeenLastCalledWith({ number: 2, label: "[S-2]", node_ids: ["d-k"], link_ids: [] });
+  });
+
+  it("says under an answer read from the whole case what it read, and that the search finds by names and words", async () => {
+    serve({ "GET /questions": () => json(200, [SOURCED]) });
+    mount();
+    expect(
+      await screen.findByText(
+        `Read from the whole case: 4 matches found in the case: 1 document whole, 1 document by the passage found and 2 other records. ${WHOLE_CASE_LINE}`,
       ),
     ).toBeTruthy();
   });

@@ -97,3 +97,29 @@ b925385 cb54a90 case-b lease-tests, with its stack_lease.sh diff
 fd96c11 d8971cd platform-b v052-sheet
 4116841 252df74 admin audit1 (ruling 1, option A), three guide PDFs reprinted
 296ab81 a46e2ee rules v052-index (step 3c), with v052-index_ci_yml.diff (the owner's word)
+c1373da 7ba5f37 studio v052-search (step 3d), with its two diffs (the owner's word)
+822a2fb 859ca7d case-b install-pending (spec 08 halves; CI's over-the-wire job proves the seeded halves)
+fa383e5 3ad0803 docs 6a-upgrade (1.99), PDF reprinted
+d8888d8 2730b69 docs 6a-search (2.00), PDF reprinted
+c42c1e4 9f22c21 platform-b v051-upg (the rehearsal, the real update and its rollback)
+77ee8fb e964d4c platform-b v052-dayplan
+175776c a86a9c1 docs v052-admin-fixes (2.01), PDF reprinted
+bb06bf5 3b144d5 docs v052-nav (user guide 1.54), PDF reprinted
+9db0277 22b24b7 platform v052-seed (the POC seed path), with live_wiring.diff (the owner's word); and 8fdf6ef, CVE-2026-128089 on main (the owner's ruling)
+51fd7e2 b056fdc rules-b v052Diii (Whole case), with five patches; user guide 1.55, PDF reprinted
+aca0591 2916cf6 platform v052-measure (ADR-149 Am 2, the budgets and live gate)
+f44d97b 2c1ffa1 platform v052-m6 (index lag)
+cc6d222 bebfc2f admin guests (audit 4b, Am 17), with registry-4b.diff; guide 2.02, PDF reprinted
+9ec898d 4140e9b case v052-results (step 3e′), with its shared diff
+2301841 0849a28 platform v052-m10 (the leak check at scale)
+cb1178f d27da5f case live-fresh-case
+a95a94d f1bd574 platform v052-expiry (decision 5: sets at 34 days)
+4695349 015ed4c docs v052-expiry (2.03), PDF reprinted
+f9a1802 0a2ee97 platform v052-m10ctl
+7132b83 e2b6305 admin stopped-why (ADR-044 Am 1); guides 2.04 and 1.56, PDFs reprinted
+d196271 defb2e9 case live-drift
+4283b91 3bd66ec+bcca270 platform v052-ingestpart (decision 6) with docs' wording (2.05), PDF reprinted
+8b9d9ae c3de22e platform v052-step4run
+8177aaf 07b0f92 case search-draw-crash (the StrictMode crash)
+cb7eb8e 982d40a platform v052-m9 (the fallback)
+863e6a6 aab0fa2 docs v052-results (user guide 1.57), PDF reprinted

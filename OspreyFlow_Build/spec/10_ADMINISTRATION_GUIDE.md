@@ -877,10 +877,9 @@ shape, which a development namespace alone may take ("cloud_platform.shape: poc 
 namespace's (one copy of each store); a production namespace takes the standard shape"). The poc
 shape runs one copy of each store, ClickHouse with its own Keeper inside it rather than ClickHouse
 Keeper beside it, no disruption budgets, a CPU limit on every container (section 6a.2), and the
-Ingest root (uploads and the drop folder) on a claim of its own, `ospreyflow-ingest`. It makes no
-OpenSearch domain, and refuses a render that would use one ("the poc shape makes no OpenSearch
-domain (ADR-148 Amendment 5), so its Conduit would reach for one that is not there: set
-components.search: postgres-fulltext"): name `components.search: postgres-fulltext` with it.
+Ingest root (uploads and the drop folder) on a claim of its own, `ospreyflow-ingest`. Like the
+standard shape, it makes the platform's OpenSearch domain when `components.search` is `opensearch`
+(the default; ADR-148 Amendment 13), and `components.search: postgres-fulltext` makes none.
 
 Then, in `OspreyFlow_Core`:
 
@@ -909,8 +908,12 @@ with the render to install.
 answers: the checks of the tools and rights, the Terraform's pull request, the unpinned render and
 the push, the pinned render, `helm upgrade --install`, the sign-in check (and the way back in when
 nobody can manage people, section 6a.7), and the Glass's health. `DECOMMISSION.md` removes it: a
-last backup, `helm uninstall`, the claims and our Secret, the buckets and repositories emptied, the
-backups kept for their retention, then `python -m harness.cloud_platform.decommission_check`, which
+last backup, `helm uninstall`, the claims and our Secret, the buckets and repositories emptied, and
+the backups bucket and its key by a choice with no default: its step 7 refuses until it is given
+`BACKUPS=keep` or `BACKUPS=destroy`. **keep** sets the kept bucket's expiry to the retention you agree
+(`BACKUP_RETENTION_DAYS`), so the sets stay readable until then; **destroy** removes every set now,
+which cannot be had back, and schedules the key's deletion (thirty days, cancellable until then).
+Then `python -m harness.cloud_platform.decommission_check`, which
 names anything left behind and exits 1 while anything is. A block fenced `bash platform` runs only
 with the platform's access; the rest runs anywhere. A block fenced `bash later` is in neither
 runbook's sequence and is run only when its words say: the way back in when nobody can manage people,
@@ -933,6 +936,30 @@ on a kind cluster (R1, 13 November 2026)**, with stand-ins for the platform's pa
 and KMS, EKS's pod identity, RDS, ElastiCache and Entra ID); neither has run against a real account
 or tenant. The standard shape has no rendered runbook yet.
 
+**Moving to a new release (poc shape).** There is no separate upgrade runbook. A new release is
+installed by running `INSTALL.md` again from the new release's copy: its `helm upgrade --install` moves
+the deployment onto the new release's images and values. In order:
+
+1. **Back up first.** Take *A backup now* (section 6a.8) as the runbook's *Before an upgrade* does it,
+   with the Conduit, the workers and the report sync stopped and each one's copy count noted, and check
+   that the set finished (its `manifest.json` is written).
+2. **Get the new release's copy**: its tag, checked out in its own folder, with the deployment's own
+   `osprey.yaml` copied in. Read the release's notes first.
+3. **Render, push and render pinned from that copy**, exactly as section 6a.4 says. The values to
+   install are the new release's pinned render, never the old one's. A release that needs a change in
+   the Terraform says so in its notes, and the Terraform is this render's `terraform/` folder: its pull
+   request is applied now, before the install, as at the first install.
+4. **Run `INSTALL.md` again from that copy**, block by block. Its `helm upgrade --install` replaces
+   each pod on the new release, and its own checks follow, as at the first install: section 6's check
+   that the Conduit reads Entra's settings, and section 7's `/healthz` through the Glass. Then start the Conduit and the workers again at the copy counts noted in
+   step 1, if the install has not.
+
+**What will check it.** v0.5.2's install test, planned for 25 November 2026 on a kind cluster, is to
+install v0.5.1, then the candidate by these steps over it, and check that the data made before the
+upgrade is still there. It has not run yet. **Going back to the previous release** (installing its copy again the same way and
+restoring step 1's backup) **has not been rehearsed**: until it has, treat step 1's backup as the way
+back, and test the new release on the development namespace before production.
+
 **A platform is a settings file**, `harness/cloud_platform/platforms/<name>.yaml`: its ingress class
 and annotations, the controller's namespace, its storage class, its egress policy kind and the
 networks its managed stores answer in, and the names of the secrets the managed stores' details
@@ -943,9 +970,11 @@ own file is `client.yaml`.
 in the standard shape) run in the namespace as StatefulSets on the platform's `gp2-expand` class;
 in the standard shape each has a disruption budget allowing one copy down at a time, and two minutes
 for ArcadeDB to close its databases. Postgres is RDS PostgreSQL 16 and Valkey is ElastiCache
-(Redis 7), each reached over TLS; SeaweedFS is S3. In the standard shape the platform's OpenSearch
-2.x domain is made by default (`components.search` defaults to `opensearch`), but no pod is given its
-address yet, so it is unused. Caddy is not rendered: the platform's NGINX ingress is the front door,
+(Redis 7), each reached over TLS; SeaweedFS is S3. In every shape the platform's OpenSearch 2.x
+domain is made by default (`components.search` defaults to `opensearch`), and the pods that read the
+stores, the Conduit (`api`), the workers (`worker`) and the index's rebuild and drift check
+(`ospreyflow-search-rebuild`, `ospreyflow-search-drift`), are given its address (`OPENSEARCH_URL`).
+Caddy is not rendered: the platform's NGINX ingress is the front door,
 with ModSecurity on and the IP allow-list from `allow_from`. Local models and Whisper are not
 rendered, since the platform has no GPU. The model gateway (LiteLLM) is rendered always, with or
 without an engine (section 6a.3 says which identity it runs as; section 6a.9 is the model
@@ -982,8 +1011,8 @@ group 0.
 
 **The shared folders** are one ReadWriteOnce volume, `ospreyflow-shared`, on the platform's class,
 and every pod that mounts it is placed on the same node. In the poc shape the Ingest root is on its
-own claim instead. Moving tiles, the settings files and, in the standard shape, uploads and staging
-off it, and the recipes repository off the shared disk, is *coming*.
+own claim instead. Moving tiles, the settings files and, in the standard shape, the Ingest root
+(`ingest`: uploads and the drop folder) off it, and the recipes repository off the shared disk, is *coming*.
 
 ### 6a.2 What the namespace asks for
 
@@ -993,7 +1022,7 @@ bursts. So a LimitRange in the namespace with a default CPU limit puts that limi
 container, and a ResourceQuota counting `limits.cpu` refuses every pod that names none: both are
 questions for the platform's team (section 6a.11). **The poc shape names a CPU limit on every
 container** (0.5 by default; the Glass 0.5, the Conduit 2, the workers 2, named-entity extraction 1,
-ArcadeDB 2, ClickHouse 2), for a namespace whose quota counts them. ArcadeDB's Java heap is three
+ArcadeDB 2, ClickHouse 2, the search index's rebuild and drift check 2), for a namespace whose quota counts them. ArcadeDB's Java heap is three
 quarters of its memory limit. **These sizes are proposals, not measurements**: no load has yet run
 on the platform.
 
@@ -1012,6 +1041,7 @@ on the platform.
 | Laurium, when it is the extraction engine | 1 | 1 | 0.25 | 1 GiB | 2 GiB |
 | The backups' and the restore's Jobs | — | — | 0.5 | 2 GiB | 4 GiB |
 | The restore's ArcadeDB step | — | — | 1 | 12 GiB | 12 GiB |
+| The search index's rebuild and drift check, when OpenSearch is used | — | — | 0.5 | 2 GiB | 4 GiB |
 | Every init container, and any container not named above | — | — | 0.1 | 256 MiB | 512 MiB |
 
 From renders of the repository's synthetic deployments, counting each running copy:
@@ -1040,7 +1070,7 @@ leaves it unchanged and `tofu validate` accepts it.
 | `variables.tf` | What the platform gives the namespace: `namespace`, `vpc_id`, `subnet_ids`, `eks_oidc_provider_arn` and `eks_oidc_issuer`. The providers, the backend and the tags are the namespace folder's own |
 | `rds.tf` | RDS PostgreSQL 16, encrypted, reached over TLS, and the secret `rds-postgresql-instance-output` |
 | `elasticache.tf` | ElastiCache (Redis 7), TLS and a token, and the secret `elasticache-redis` |
-| `opensearch.tf` | The standard shape alone, when `components.search` is `opensearch`: the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
+| `opensearch.tf` | Every shape, when `components.search` is `opensearch` (the default): the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
 | `s3.tf` | The buckets, private and encrypted, named from a prefix, and the secret `s3-bucket-output` |
 | `irsa.tf` | The service account `ospreyflow` and its IAM role, given the buckets, so no S3 key exists anywhere |
 | `connector_sources.tf` | Only when S3 buckets or Athena workgroups are declared (section 6a.5): the reads on them, attached to `irsa.tf`'s role |
@@ -1135,6 +1165,7 @@ single ports, never a range:
 | ArcadeDB; ClickHouse Keeper | Their own copies |
 | ClickHouse | Its own copies and, in the standard shape, ClickHouse Keeper; S3 and STS, for its backups |
 | The backups' runs and the restore | S3 and STS; ArcadeDB and ClickHouse, or the cluster's API, as each needs (section 6a.8) |
+| The search index's rebuild and drift check, when OpenSearch is used | ArcadeDB; the managed stores' networks (OpenSearch on 443); S3 and STS |
 | The Glass | The Conduit |
 | Superset, when reporting is on | The Conduit (who signed in); the managed stores' networks (its database and the mart, its rate limits); Entra ID's sign-in host |
 | The report sync, when reporting is on | The Conduit; the managed stores' networks (the mart); S3 and STS; Entra ID's sign-in host (its token) |
@@ -1338,8 +1369,25 @@ stays `sub`.
 - an `oid` that is not an object id, or another tenant's token;
 - an app-only token (no delegated `scp`, or `idtyp: app`), which is a program, not a person;
 - a guest from another directory (`acct` of `1`, or an `idp` naming another tenant or a provider
-  that is not Entra). `acct` is an optional claim the app registration must ask for, so `idp` is the
-  check that works without configuration. Admitting guests would need a setting that does not exist.
+  that is not Entra), **while this deployment does not admit guests**, in these words: "this is a
+  guest account, homed outside this organisation's Entra ID, and this deployment does not admit
+  guests: an administrator can admit them in Admin › People". `acct` is an optional claim the app
+  registration must ask for, so `idp` is the check that works without configuration.
+
+**Guests are admitted only when an administrator turns it on** (ADR-148 Amendment 17). In
+*Admin › People*, **Admit guest accounts** is off on a new deployment; only someone holding
+`manage_people` can change it, and each change is recorded in the audit log
+(`set_guest_sign_in`, with what it was and what it is now). While it is on, a guest signs in as
+any person does: through the same mapping, so with the clearance, unit and handling codes their own
+token gives (a guest's token from another directory often carries none of your extension attributes
+or groups, and is then refused as anyone missing a clearance or unit is), and the roles you give them
+in *People and roles*, which marks them as a guest. Nothing gives a guest more than a member with the
+same token would have. Turning it off refuses every guest at their next request to OspreyFlow, an open
+live view included, and a run acting as a guest as its owner stops, counted as an owner who can no
+longer sign in (above); a guest stops counting as someone who can manage people, and is shown as
+not enabled. A reporting session a guest already holds in Superset is not ended by it: Superset
+reads a person's role only when they sign in to it, as it does for a person disabled here. Turning it off is refused while every enabled person who has signed in and can
+manage people is a guest.
 
 On a deployment using the fixed names (Keycloak), a token carrying `tid` is refused, in these
 words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
@@ -1446,7 +1494,7 @@ and what happens next, depends on what was asked:
 - **at a load**: the owner's hotlists and watches are marked stopped, as for any owner who cannot be
   acted as, and are made active again at the first load after they sign in; a stopped watch's own
   runs wait for that load. Their rules are not judged at that load. The watch list shows *Stopped*
-  and does not yet say why.
+  with why beside it, in the Conduit's words for its owner (ADR-044 Amendment 1).
 
 **Other refusals.** An owner disabled in *Admin › People* is refused, and three such refusals in a
 row pause a schedule, as on Keycloak; so is an owner *Admin › People* does not hold ("is not a
@@ -1481,8 +1529,9 @@ one real token from the organisation's development tenant is to settle each:
   the real token carries.
 - **A claims-mapping policy** has its tokens signed with an application's own key, read with
   `?appid=<api_client_id>` (`claims_mapping_policy: true`).
-- **Guests**: that a real guest's token carries `idp` (and `acct` of `1`, where it is asked for) and
-  is refused, while a member's resolves.
+- **Guests**: that a real guest's token carries `idp` (and `acct` of `1`, where it is asked for), and
+  so is refused while guests are not admitted and signs in once they are, while a member's resolves
+  either way.
 - **Access tokens, not ID tokens**: the Glass is to send an access token for this API. An ID token
   carries no `scp`, and is refused as app-only.
 
@@ -1493,12 +1542,12 @@ platform's, under its own snapshots and versioning. **The deployment backs up wh
 (ADR-148 Amendments 7 and 13): ArcadeDB, ClickHouse and the claims part. **The claims part holds, in
 every shape, the shared volume's folders the deployment cannot make again**: the published
 pipelines (`data/recipes`), the model settings (`model-settings`) and the map settings with the map
-key file (`map-settings`, ADR-147); and, in the poc shape, the Ingest root's claim. Each is
+key file (`map-settings`, ADR-147); and the Ingest root (uploads and the drop folder) beside them:
+in the poc shape its own claim, and in the standard shape the shared volume's folder of it (`ingest`,
+a part of its own). Uploads can be large, so the claims run's size and time grow with them. Each is
 read-only to the backup, and the pods that mount them are writers a restore refuses to run beside.
 **Not in a set**: the rest of the shared volume, `ospreyflow-shared`: the tiles (`tiles`), made
-again, and, in the standard shape, the Ingest root (`ingest`: uploads and the drop folder), which
-there is a folder of the shared volume, not a claim of its own. A restore leaves those as they are,
-so in the standard shape an upload can disagree with the stores it brings back. The
+again. A restore leaves those as they are. The
 recovery runbook that ships with the product, `deploy/RUNBOOK.md`, has the whole procedure under *The
 `cloud-platform` profile*, with every command; this section says what it does.
 
@@ -1512,8 +1561,9 @@ policy denies against accident (an administrator who rewrites the policy can lif
 decommission does once the retention ends).
 Two roles write a set, ClickHouse's own and the runner's, each to its own prefix, by IRSA, so no key
 is stored anywhere; neither can erase a set. The bucket is versioned (an object overwritten keeps
-its previous version for 7 days), and a set's objects expire 35 days after they were written: the
-retention is 35 days in all, a proposal until the organisation agrees its own.
+its previous version for 7 days), and a set's objects expire 34 days after they were written: the
+retention is 34 days in all, a proposal until the organisation agrees its own, which may be shorter
+but not longer: a set kept longer would outlive RDS's point-in-time window (below), 35 days at most.
 
 **Checking last night's backup.** A backup Job that completed wrote a finished set, and its log names
 it (`backup: set …`). **A failed run is a failed Job**, its log naming the store, the step and the
@@ -1524,8 +1574,8 @@ refusing service's own words. **No alert is raised on it yet: look each morning*
 The nightly run does not stop the Conduit, so its parts are taken minutes apart and a load running
 across 02:15 can be in one part and not another: take the backup before an upgrade with the Conduit
 and the workers stopped (the runbook shows how). Note each one's copy count first. The runbook's
-commands also scale `deployment/report-sync`, which is not rendered on this profile, so its "not
-found" is expected, and they scale the Conduit and the workers back to 1: start them again at the
+commands also scale `deployment/report-sync`, which is rendered only with reporting on
+(`reporting.sync`), so without it its "not found" is expected, and they scale the Conduit and the workers back to 1: start them again at the
 copy counts noted instead (a known issue).
 
 **The restore** replaces what ArcadeDB, ClickHouse and the claims hold with one set, **for one copy of
@@ -1542,8 +1592,9 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
    withdrawn or deleted since the set comes back under today's grants. The platform team restores RDS
    to the set's finish time by its own point-in-time procedure; the deployment is pointed at it only
    once nothing that writes runs (step 4). **RDS keeps its point-in-time restore for 35 days**, as the
-   Terraform renders it (`backup_retention_period`), against the sets' 35: every set still kept can
-   be restored with its database.
+   Terraform renders it (`backup_retention_period`), against the sets' 34: a day inside RDS's window,
+   since RDS's earliest restorable point lags by up to about a day and the sets' expiry rounds up to
+   midnight UTC, so every set still kept can be restored with its database.
 3. **No backup during the restore**: both CronJobs suspended, and any backup still running left to
    finish.
 4. **Everything that writes stopped**: the render's own list, `backups.writers` in `values.yaml`, each
@@ -1552,8 +1603,13 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
 5. **The restore's Jobs**, rendered for the set by its own name (never `latest`, never by
    `helm upgrade`) and applied, then each waited on.
 6. **Everything started again**, ArcadeDB first, at the copy counts noted, each waited on until it
-   is ready (the door answers), and the CronJobs resumed. A healthy restore's logs end in plain
+   is ready (the door answers), and the backups' CronJobs (`ospreyflow-backup`,
+   `ospreyflow-backup-claims`) resumed. A healthy restore's logs end in plain
    words, with no stack trace: the runbook's *A healthy restore* quotes each step's last line.
+7. **The search index rebuilt**, where the deployment searches with OpenSearch: the index is not in a
+   set (it is rebuilt from the graph, ADR-150), so the restore ends with its rebuild, then the drift
+   check between the graph and the index, each a Job started from its CronJob, held suspended
+   (`ospreyflow-search-rebuild`, then `ospreyflow-search-drift`), and each waited on.
 
 **It refuses, touching nothing**, while anything that writes still runs, while it cannot see what
 runs, or while any part of the set is missing, changed or another set's. Each store is replaced only
@@ -1920,11 +1976,16 @@ disables them. What Entra holds is refused here, in words, each followed by "On 
 Entra ID holds people's accounts…": inviting ("People are not invited here."), access ("A person's
 clearance, unit and handling codes are changed in Entra ID."), a sign-in's reset ("A sign-in is
 reset in Entra ID."), removing ("A person is not removed here: they would return, with no roles, at
-their next sign-in. Disable them instead, or remove them in Entra ID."), joining ("There is no
-organisation account to join.") and a dashboard identity ("Dashboard identities are not registered
-on this deployment yet."). No administrator can give a missing clearance or unit instead: a person
+their next sign-in. Disable them instead, or remove them in Entra ID.") and joining ("There is no
+organisation account to join."). **A dashboard identity** is its own Entra app registration, which
+holds its secret: *Dashboard identities* registers it by its application id, and shows no secret.
+Without an application id it is refused ("on Entra ID a dashboard identity is its own app
+registration: give its application id (the registration holds its secret)"), and so is the
+deployment's own application, the Glass's or the API's. No administrator can give a missing clearance or unit instead: a person
 whose token carries neither is refused at sign-in (section 6a.7). A person is shown by object id,
-not by name.
+not by name. A guest account, homed in another organisation's Entra ID, signs in only while
+**Admit guest accounts** is on, below the list (section 6a.7), and is marked as a guest in it;
+while it is off, a guest is listed as not enabled.
 
 ### 9.1 The Admin place
 
@@ -1937,7 +1998,7 @@ Under the GOV.UK theme the list is a GOV.UK side navigation.
 | --- | --- | --- | --- |
 | People | **People and roles** | `manage_people` | Invite people; set their roles, clearance, unit and handling codes; the Super user preset; **Disable…** with its transfers (section 9.9), re-enable; reset a sign-in; remove an account; join someone the organisation's sign-in refused to their account (section 9.7); name an Author for a case that has none |
 | People | **Roles** | `manage_people` | The built-in roles and their rights; custom roles; teams, their leads and cover (sections 9.2 and 9.8) |
-| People | **Dashboard identities** | `manage_dashboards` | Register a dashboard's account (its secret shown once), see when it last pulled, remove it |
+| People | **Dashboard identities** | `manage_dashboards` | Register a dashboard's account (its secret shown once; on Entra ID, by its app registration's application id, with no secret shown), see when it last pulled, remove it |
 | Data | **Datasets** | `administer_system` | Every dataset's kind, unit, highest marking, egress, promotion policy, Authors and linked cases (section 9.10) |
 | Data | **Connections** | `administer_system` | The named connections pipelines read through: files, a SQL database, an HTTP API or JSON files |
 | Running | **Operations** | `operate_schedules` | Every scheduled or watched pipeline (pause, resume, run now, change its time, its runs), and promotions waiting for review (section 9.11) |
@@ -2675,8 +2736,10 @@ removed container, so a restart, `ospreyflow apply`, an update and `uninstall --
 earlier kept PostgreSQL and ArcadeDB in unnamed volumes, and Valkey and OpenSearch inside their
 containers; its data is moved into the named volumes once (section 14). A backup reads each store through its own
 running server, so it is the same wherever the data is kept. **Not in a backup:** Valkey's working
-sets and queues, and OpenSearch, which holds no index of OspreyFlow's yet — so there is nothing of it
-to restore or rebuild, and a restore starts it empty.
+sets and queues, and OpenSearch's search index, which is rebuilt from the graph instead: a restore's
+last step, once the graph and the texts are back, runs `python -m scripts.rebuild_search_index` in the
+Conduit's container, in a deployment that runs an OpenSearch (`components.search: opensearch`, the
+default). With `postgres-fulltext` there is no index to rebuild.
 
 **A backup that fails** removes the set it had started, and says
 so, so no half-written set is left beside the good ones. If it cannot remove all of it, it says what
@@ -2858,7 +2921,7 @@ Admin → Schedules and runs lists every one.
 | A service is not healthy | `ospreyflow status`, then `ospreyflow logs <service>` |
 | The page does not open | `ospreyflow status`; that port 80 (Lite) or the DNS records (Small) are right |
 | Nobody can sign in | `ospreyflow logs keycloak`; that the address in `osprey.yaml` is the one in the browser; then `ospreyflow repair-sign-in` |
-| Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped**, or a list refresh re-screens 0 customers — typically after the stores were wiped; Admin → System's **Acting for people** says "The Conduit cannot act for people" | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again. The System line turns green within half a minute |
+| Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped** with "Its owner's sign-in could not be checked at the last load. It is tried again at the next." beside it, or a list refresh re-screens 0 customers — typically after the stores were wiped; Admin → System's **Acting for people** says "The Conduit cannot act for people" | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again. The System line turns green within half a minute |
 | Someone signing in through the organisation is told "This email address already belongs to an OspreyFlow account" | An account you made holds their email, and OspreyFlow does not join the two by itself (section 5a.1). Join them in Admin → People and roles' *Refused organisation sign-ins*, or remove that account and they arrive again, or they sign in with that account (section 9.7) |
 | *Refused organisation sign-ins* does not list someone who was refused | It lists the last seven days, from a deployment updated to the release after v0.4.10 and repaired since (`ospreyflow repair-sign-in`, which also makes the identity provider record the refusals). Someone refused before that, or more than seven days ago, is not listed: ask them to sign in through the organisation once more, then look again. Someone already joined to an account is not listed either |
 | Admin → People and roles says "the identity provider refused the Conduit — its account needs manage-users, manage-clients and view-events" | Run `ospreyflow repair-sign-in`, which grants the Conduit's account what it needs |

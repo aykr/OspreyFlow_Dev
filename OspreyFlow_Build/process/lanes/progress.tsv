@@ -108,10 +108,10 @@ platform-b	v052-r1	L	todo	v0.5.2: R1 on kind with a dashboards check (with platf
 platform	v052-manifest	M	done	v0.5.2 step 2: the poc manifest and its render test
 platform	v052-opensearch	M	done	v0.5.2 step 3a: OpenSearch on poc
 rules	v052-index	L	done	v0.5.2 step 3c: the index feed, rebuild, drift check
-rules	v052-load	M	todo	v0.5.2 B: client-size synthetic data, loaded once
-studio	v052-search	L	review	v0.5.2 step 3d: the search service
+rules	v052-load	M	review	v0.5.2 B: client-size synthetic data, loaded once
+studio	v052-search	L	done	v0.5.2 step 3d: the search service
 case	v052-fixes	S	done	v0.5.2 step 3e: the Glass's screen fixes
-case	v052-results	M	review	v0.5.2 step 3e′: the search results layout
+case	v052-results	M	done	v0.5.2 step 3e′: the search results layout
 platform	v052-measure	S	todo	v0.5.2 step 4: the measurement session
 docs	v052-sweep	S	todo	v0.5.2 step 5: the wording sweep
 admin	v052-heartbeat	M	done	The heartbeat's route view (the owner, 13 Nov) (merged ee440c1)
@@ -119,6 +119,8 @@ case-b	v052-r1-driver	M	done	v0.5.2 step 6's driver: the manifest verifier and s
 docs	v052-sweep-draft	S	todo	v0.5.2 step 5 drafted ahead: the non-search wording
 rules-b	v052-ask	L	todo	v0.5.2 Part D: Ask & Chat (panel, server, Whole case)
 case-b	v052-selection	M	done	v0.5.2 Parts C and E: one set of actions for the selection; the typeface
-orchestrator	v051-cut	S	building	v0.5.1 cut: CI at the candidate, the upgrade rehearsal, the CHANGELOG, publish when green (the owner's word)
+orchestrator	v051-cut	S	done	v0.5.1 cut: CI at the candidate, the upgrade rehearsal, the CHANGELOG, publish when green (the owner's word)
 platform	v052-searchkind	M	done	v0.5.2: the OpenSearch domain on R1's kind (stand-in wired, its limits, the run's domain check)
 platform-b	v052-4c	M	building	The administrator fallback on Entra, poc alone (ADR-148 Am 15; audit 4c)
+rules-b	v052-batch	M	building	v0.5.2: promote an expansion to a batch job at the cap (ADR-151, the owner's ruling)
+case-b	v052-batch-ui	S	building	v0.5.2: the batch job's choice, progress and result in the Glass (ADR-151)

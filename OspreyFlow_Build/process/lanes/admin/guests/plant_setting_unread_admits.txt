@@ -1,0 +1,8 @@
+# plant: setting_unread_admits (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k cannot_be_read or refused_in_true_words
+# RED
+E       Failed: DID NOT RAISE PrincipalResolutionError
+E       Failed: DID NOT RAISE PrincipalResolutionError
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_guest_is_refused_in_true_words_while_guests_are_not_admitted_and_nothing_is_recorded[acct]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_guest_is_refused_in_true_words_while_guests_are_not_admitted_and_nothing_is_recorded[acct-text]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_guest_is_refused_in_true_words_while_guests_are_not_admitted_and_nothing_is_recorded[idp-other]
+3 failed, 2 passed, 11 deselected in 3.93s

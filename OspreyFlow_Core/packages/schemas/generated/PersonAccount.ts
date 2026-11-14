@@ -13,6 +13,7 @@ export type MustSetPassword = boolean;
 export type SystemAccount = boolean;
 export type OrganisationLinked = boolean;
 export type SignedIn = boolean;
+export type Guest = boolean;
 export type AccessReadAt = string | null;
 
 export interface PersonAccount {
@@ -29,6 +30,7 @@ export interface PersonAccount {
   system_account?: SystemAccount;
   organisation_linked?: OrganisationLinked;
   signed_in?: SignedIn;
+  guest?: Guest;
   access_read_at?: AccessReadAt;
   [k: string]: unknown;
 }

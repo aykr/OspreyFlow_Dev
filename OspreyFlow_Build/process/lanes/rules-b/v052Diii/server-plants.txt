@@ -1,0 +1,34 @@
+RED   | the question cut to fit, not refused | test_a_question_longer_than_the_search_takes_is_refused_never_cut
+    E       Failed: DID NOT RAISE QuestionTooLongToSearchError
+RED   | one default page, not 50 | test_the_questions_own_words_are_the_query
+    E       assert (1, None, None) == (1, 50, None)
+    E         
+RED   | no question searched with an empty query | test_will_read_with_no_question_yet_says_to_type_it
+    E       Failed: DID NOT RAISE NothingToReadError
+RED   | nothing found answered anyway | test_nothing_found_is_refused_in_words
+    E       Failed: DID NOT RAISE NothingToReadError
+RED   | the view not applied | test_in_a_view_only_what_the_view_holds_is_read
+    E       assert (ReadSummary(read_from='case', documents=0, documents_without_text=0, items=1, links=0, events=0, selected=0, first_selected=None, found=2, passages=1, limited_reason=None, counts_exact
+    E        +  where ReadSummary(read_from='case', documents=0, documents_without_text=0, items=1, links=0, events=0, selected=0, first_selected=None, found=2, passages=1, limited_reason=None, counts_exa
+RED   | a Document on the canvas read by its passage | test_a_document_on_the_canvas_is_read_whole
+    E       assert 'Document 1: Kestrel letter' in 'You answer an analyst\'s question. There are no documents to read whole: answer using only the sources below, and say...und because: Mentions \'Kestrel\
+RED   | the passage not read | test_a_document_off_the_canvas_is_read_as_its_passage_never_whole
+    E       assert 'Passage: "the plant paid Kestrel for the invoice"' in "You answer an analyst's question. There are no documents to read whole: answer using only the sources below, and say ...Name is '
+RED   | an invented [S-n] kept | test_a_cited_source_stands_for_its_records_and_an_invented_one_is_dropped
+    E       AssertionError: assert ('[S-9]' not in 'Ann KESTREL... also [S-9].'
+    E         
+RED   | an invented [S-n] not counted | test_a_cited_source_stands_for_its_records_and_an_invented_one_is_dropped
+    E       assert 0 == 1
+    E        +  where 0 = QuestionAnswer(id='01M7BSJEDTDYRFYQFBRBH405R8', author='analyst-1', author_name=None, question='Who paid Kestrel?', an...]', name='KESTREL, Ann', type='Person', why="Name is 'Kes
+RED   | the search's fallback words dropped | test_the_searchs_fallback_and_limits_reach_the_read_summary
+    E       assert None == 'Results are limited: this deployment has no search index.'
+    E        +  where None = ReadSummary(read_from='case', documents=0, documents_without_text=0, items=1, links=0, events=0, selected=0, first_selected=None, found=2, passages=1, limited_reason=None, cou
+RED   | will read not given the question | test_will_read_counts_what_asking_reads_and_sends_nothing
+    E           services.api.questions.NothingToReadError: Whole case searches with your question's words: type the question first.
+RED   | the sources not kept for a later reader | test_an_answer_is_shown_only_to_a_reader_who_may_see_every_source
+    E       assert [QuestionAnsw...rel-5e6f'])])] == []
+    E         
+RED   | a later reader not checked against the sources | test_an_answer_is_shown_only_to_a_reader_who_may_see_every_source
+    E       assert [QuestionAnsw...rel-5e6f'])])] == []
+    E         
+CONTROL (unplanted, fresh cache): 14 passed, 1 warning in 4.51s

@@ -1,0 +1,24 @@
+lane/docs-v052-admin-fixes from main fa87ad3: tests/test_guide_v052_admin.py, offline, closed ports 59991-59994
+== red: main's guide (the dropped dashboard refusal quoted; the backups 'kept for their retention')
+FAILED tests/test_guide_v052_admin.py::test_section_9_quotes_no_entra_refusal_the_code_does_not_raise
+FAILED tests/test_guide_v052_admin.py::test_the_quote_check_flags_a_refusal_the_code_dropped
+FAILED tests/test_guide_v052_admin.py::test_section_9_gives_the_dashboard_identity_s_registration_as_the_code_does
+FAILED tests/test_guide_v052_admin.py::test_section_6a1_gives_the_decommission_s_backups_choice_as_the_runbook_makes_it
+4 failed in 0.83s
+== red: create_dashboard planted returning a secret (entra_people.py)
+FAILED tests/test_guide_v052_admin.py::test_section_9_gives_the_dashboard_identity_s_registration_as_the_code_does
+1 failed, 3 passed in 0.79s
+== red: create_dashboard's own-application refusal removed (entra_people.py)
+FAILED tests/test_guide_v052_admin.py::test_section_9_gives_the_dashboard_identity_s_registration_as_the_code_does
+1 failed, 3 passed in 0.49s
+== red: the decommission's step 7 given a default, `BACKUPS:=keep` (runbooks.py)
+FAILED tests/test_guide_v052_admin.py::test_section_6a1_gives_the_decommission_s_backups_choice_as_the_runbook_makes_it
+1 failed, 3 passed in 0.47s
+== red: the guide's BACKUP_RETENTION_DAYS struck
+FAILED tests/test_guide_v052_admin.py::test_section_6a1_gives_the_decommission_s_backups_choice_as_the_runbook_makes_it
+1 failed, 3 passed in 0.45s
+== red: the guide's own-application refusal struck
+FAILED tests/test_guide_v052_admin.py::test_section_9_gives_the_dashboard_identity_s_registration_as_the_code_does
+1 failed, 3 passed in 0.43s
+== green
+16 passed in 3.82s

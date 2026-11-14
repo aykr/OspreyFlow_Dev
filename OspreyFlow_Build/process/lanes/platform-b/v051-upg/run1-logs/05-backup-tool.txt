@@ -1,0 +1,23 @@
+upg-run: $ ospreyflow backup --name osprey-upg   (the installed command)
+backup: /root/osprey-runs/platform-b-upg/home/OspreyFlow/backups/osprey-upg/20261114T010119Z-osprey-upg-2be985a966a742adb31bbac6c0e14b59962e76ac
+  analytics     analytics/analytics.duckdb            1,323,008 bytes
+  configuration config/compose.yaml                      15,457 bytes
+  configuration config/handling-uk-le.yaml                  821 bytes
+  configuration config/ontology.yaml                     16,337 bytes
+  configuration config/osprey.yaml                          907 bytes
+  configuration config/realm.json                        10,326 bytes
+  configuration config/weights.yaml                       6,748 bytes
+  graph         graph/arcadedb-backup.zip               902,918 bytes
+  identity      identity/realm.json                       3,500 bytes
+  objects       objects/data.tar.gz                      12,659 bytes
+  postgres      postgres/dump.sql                       126,967 bytes
+  postgres      postgres/litellm.sql                    215,351 bytes
+  postgres-roles postgres/roles.sql                          764 bytes
+  postgres      postgres/superset.sql                   175,348 bytes
+  total         14 file(s)                             2,811,111 bytes
+  recipes       empty: this deployment has none yet, so the set holds none
+
+  Taken with the Conduit running. The graph store and the analytics database were captured at different instants; use --require-quiesced for a consistent set.
+
+  audit data: postgres/dump.sql, table audit_log — NOT separately replicated (§6).
+upg-run: backup exit 0

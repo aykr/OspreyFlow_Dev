@@ -18,6 +18,10 @@ export interface ComboboxProps {
    * filtering (the common case) can ignore this and rely on `options`
    * already holding everything. */
   onQueryChange?: (query: string) => void;
+  /** Enter with no option moved to: the typed words are submitted (the search results page, ADR-145 Amendment 15
+   * Part A). With it, no option is highlighted until the person moves to one with the arrow keys, so Enter on a typed
+   * query submits it rather than choosing the first suggestion; with none, Enter chooses the first, as before. */
+  onSubmit?: (query: string) => void;
   placeholder?: string;
   "aria-label"?: string;
 }
@@ -36,11 +40,15 @@ export interface ComboboxProps {
  * `ArrowUp` move a highlighted option (`aria-activedescendant`, WAI-ARIA combobox pattern);
  * `Enter` selects whichever option is highlighted, defaulting to the first when none has been
  * moved to yet, so a user who types a narrowing query and immediately presses Enter reaches the
- * same result a mouse click on the top option would. */
-export function Combobox({ options, value, onChange, onQueryChange, placeholder, ...aria }: ComboboxProps) {
+ * same result a mouse click on the top option would. With `onSubmit` (the top bar's search, ADR-145
+ * Amendment 15 Part A) nothing is highlighted until the arrow keys move to an option, `ArrowUp` from
+ * the first goes back to none, and `Enter` with none highlighted submits the typed words. */
+export function Combobox({ options, value, onChange, onQueryChange, onSubmit, placeholder, ...aria }: ComboboxProps) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [highlighted, setHighlighted] = useState(0);
+  // With `onSubmit`, nothing is highlighted until the arrow keys move to an option.
+  const none = onSubmit ? -1 : 0;
+  const [highlighted, setHighlighted] = useState(none);
   const listboxId = useId();
   // A caller that passes `onQueryChange` is driving `options` itself (a
   // remote search, `search/GlobalSearch.tsx`'s own case) — `options`
@@ -61,7 +69,7 @@ export function Combobox({ options, value, onChange, onQueryChange, placeholder,
     onChange(option.value);
     setQuery("");
     setOpen(false);
-    setHighlighted(0);
+    setHighlighted(none);
   }
 
   function optionId(index: number): string {
@@ -74,26 +82,34 @@ export function Combobox({ options, value, onChange, onQueryChange, placeholder,
         role="combobox"
         aria-expanded={open}
         aria-controls={listboxId}
-        aria-activedescendant={open && filtered[highlighted] ? optionId(highlighted) : undefined}
+        aria-activedescendant={open && highlighted >= 0 && filtered[highlighted] ? optionId(highlighted) : undefined}
         aria-label={aria["aria-label"]}
         placeholder={placeholder}
         value={query || value}
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
-          setHighlighted(0);
+          setHighlighted(none);
           onQueryChange?.(e.target.value);
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 100)}
         onKeyDown={(e) => {
+          if (onSubmit && e.key === "Enter" && !(open && highlighted >= 0 && filtered[highlighted])) {
+            const words = (query || value).trim();
+            if (words === "") return;
+            e.preventDefault();
+            setOpen(false);
+            onSubmit(words);
+            return;
+          }
           if (!open || filtered.length === 0) return;
           if (e.key === "ArrowDown") {
             e.preventDefault();
             setHighlighted((i) => Math.min(i + 1, filtered.length - 1));
           } else if (e.key === "ArrowUp") {
             e.preventDefault();
-            setHighlighted((i) => Math.max(i - 1, 0));
+            setHighlighted((i) => Math.max(i - 1, none));
           } else if (e.key === "Enter") {
             e.preventDefault();
             const option = filtered[Math.min(highlighted, filtered.length - 1)];

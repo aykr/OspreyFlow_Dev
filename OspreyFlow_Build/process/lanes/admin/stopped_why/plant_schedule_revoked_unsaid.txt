@@ -1,0 +1,8 @@
+# plant: schedule_revoked_unsaid (services/api/monitor_schedule.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k schedule_stops_it_as_revoked
+# RED
+E       AssertionError: assert [('m-1', 'stopped', None)] == [('m-1', 'sto...', 'revoked')]
+E         
+E         At index 0 diff: ('m-1', 'stopped', None) != ('m-1', 'stopped', 'revoked')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_a_watch_s_schedule_stops_it_as_revoked_when_its_owner_can_no_longer_sign_in
+1 failed, 29 deselected in 3.05s

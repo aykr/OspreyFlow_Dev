@@ -67,12 +67,12 @@ sightings into a rendered deployment.
 | A6 | **over the wire** | `test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` — not an extraction row |
 | B6 | **over the wire + the Glass** | `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; `apps/workspace/live/scenario-b-document.spec.ts` for the highlight in place |
 | B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_at_its_address_in_its_own_case_with_its_entities` |
-| A7 | **over the wire** | `test_a7_reports_can_be_filtered_to_one_item_category`, `test_a7_an_unknown_field_name_is_refused_rather_than_ignored` — the "Known gap" below is closed by `EventFilter.value_filters` |
+| A7 | **over the wire** | `test_a7_reports_can_be_filtered_to_one_item_category`, `test_a7_an_unknown_field_name_is_refused_rather_than_ignored`, `test_a7_the_events_table_survives_a_refused_field_name` (the refusal split from the table's survival, so the refusal runs where there is no seed) — the "Known gap" below is closed by `EventFilter.value_filters` |
 | A15 | **over the wire** | `test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification` |
 
 **Every row, by tier, on the closing-pass proof.** "Rendered" is
 `tests/scenarios/test_phase8_exit_over_the_wire.py` against a fresh-clone `local-lite` install,
-signed in as the demo analyst (27 passed). "Glass" is `make glass-live` on the developer stack
+signed in as the demo analyst (27 passed, before two cases were split in two on 14 November: 29 now). "Glass" is `make glass-live` on the developer stack
 (`apps/workspace/live/`). `test_scenario_a_over_the_wire` and `test_scenario_b_over_the_wire` are
 the two walkthrough cases that carry the rows with no case of their own.
 
@@ -81,7 +81,7 @@ the two walkthrough cases that carry the rows with no case of their own.
 | A1 | `test_a1_…` ×4 (grid, redraw, polygon ref, geocode) | — | Yes |
 | A2–A5 | `test_scenario_a_over_the_wire` | — | Yes |
 | A6 | `test_a6_…` | — | Yes |
-| A7 | `test_a7_…` ×2 | — | Yes |
+| A7 | `test_a7_…` ×3 | — | Yes |
 | A8–A11 | `test_scenario_a_over_the_wire` | — | Yes |
 | A12 | `test_scenario_a_over_the_wire` | `scenario-a-a12-a15.spec.ts` A12 | Yes |
 | A13, A14 | `test_scenario_a_over_the_wire` | `scenario-a-a12-a15.spec.ts` A13–A15 | Yes |

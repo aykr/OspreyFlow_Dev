@@ -3,8 +3,9 @@
 1. **The shared claim joins the backup set and its restore**: the published pipelines (the recipes
    repository, `data/recipes`), the model settings and the map settings (with the map key file), each
    a part of the set's claims part beside the Ingest root;
-2. **RDS's point-in-time restore reaches every set**: `backup_retention_period` is the sets' own 35 days
-   (`cloud_platform_backups.EXPIRE_DAYS`), so a set's finish time is always within RDS's window;
+2. **RDS's point-in-time restore reaches every set**: `backup_retention_period` is 35 days, AWS's
+   maximum (`cloud_platform_backups.POINT_IN_TIME_DAYS`), and the sets expire a day sooner, at 34
+   (`EXPIRE_DAYS`; MORNING item 5, (a)), so a set's finish time is always within RDS's window;
 3. **The decommission has no default**: the operator chooses `keep` or `destroy` for the backups bucket
    and its KMS key, and the record (the leftover check's output) states which.
 
@@ -12,7 +13,7 @@ What a mistake would do, and the case that catches it (rule 12):
 - a restore that brings back the stores but not the pipelines or the settings that make sense of them
   — `test_the_shared_claim_s_three_folders_are_parts_of_the_set`;
 - a set older than RDS's window, so the stores and PostgreSQL cannot be brought to one time —
-  `test_rds_keeps_point_in_time_for_as_long_as_the_sets_are_kept`;
+  `test_rds_keeps_point_in_time_a_day_longer_than_the_sets_are_kept`;
 - a decommission that keeps (or destroys) the backups because nobody said otherwise —
   `test_step_7_refuses_until_keep_or_destroy_is_chosen` and the two cases after it.
 """
@@ -22,10 +23,11 @@ from __future__ import annotations
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from harness.cloud_platform.runbooks import command_blocks
-from harness.cloud_platform_backups import BUCKET_SUFFIX, EXPIRE_DAYS
+from harness.cloud_platform_backups import BUCKET_SUFFIX, EXPIRE_DAYS, POINT_IN_TIME_DAYS
 from tools.cp_policy_check import _resolver
 
 from tests.harness.test_cloud_platform_render import _artefacts, _config, _values
@@ -42,6 +44,55 @@ def test_the_shared_claim_s_three_folders_are_parts_of_the_set() -> None:
     ]
     # Every pod that mounts one of them is a writer a restore refuses to run beside.
     assert {"api", "worker"} <= set(backups["writers"])
+
+
+@pytest.mark.parametrize("fixture", ["development", "production"])
+def test_the_ingest_root_joins_the_set_wherever_it_is_not_a_claim_of_its_own(fixture: str) -> None:
+    """MORNING item 6, (a): outside poc the Ingest root (the uploads and the drop folder) is a
+    folder of the shared claim, so it is the set's fourth shared part, read-only to the backup and
+    put back by restore-claims. Without it a restore brings back loads citing uploads that are not there."""
+    values = _values(_config(fixture))
+    api = next(w for w in values["workloads"] if w["name"] == "api")
+    assert not any(m.get("claim") for m in api["shared"]), "the Ingest root has no claim here"
+    assert values["backups"]["shared"] == [
+        {"name": "shared-recipes", "subPath": "data/recipes"},
+        {"name": "shared-model-settings", "subPath": "model-settings"},
+        {"name": "shared-map-settings", "subPath": "map-settings"},
+        {"name": "shared-ingest", "subPath": "ingest"},
+    ]
+
+
+def test_the_poc_s_ingest_root_is_its_own_claim_and_not_a_shared_part_too() -> None:
+    values = _values(_config("poc"))
+    assert {"name": "ingest", "size": values["storage"]["claims"][0]["size"]} in values["storage"][
+        "claims"
+    ]
+    assert "shared-ingest" not in [part["name"] for part in values["backups"]["shared"]]
+
+
+@pytest.mark.parametrize("fixture", ["development", "production"])
+def test_every_pod_writing_the_shared_ingest_folder_is_a_writer(fixture: str) -> None:
+    """A restore refuses to run beside a pod that writes the part it puts back: every workload or
+    Job mounting the shared `ingest` folder, or a folder inside it (`ingest/uploaded`), by the
+    render's own mounts."""
+    from harness.cloud_platform_backups import shared_parts, writers
+
+    values = _values(_config(fixture))
+    pods = [*values["workloads"], *values.get("jobs", [])]
+    def mounts(w: dict[str, Any]) -> list[dict[str, Any]]:
+        inits = [m for c in w.get("initContainers", []) for m in c.get("shared") or []]
+        return [*(w.get("shared") or []), *inits]
+
+    mounting = {
+        str(w["name"])
+        for w in pods
+        for m in mounts(w)
+        if str(m.get("subPath", "")).split("/")[0] == "ingest"
+    }
+    assert mounting and mounting <= set(values["backups"]["writers"])
+    # A pod mounting only a folder inside the part (the uploads) is one too.
+    dropper = {"name": "dropper", "shared": [{"subPath": "ingest/uploaded", "mountPath": "/u"}]}
+    assert "dropper" in writers([*pods, dropper], {}, parts=shared_parts(pods))
 
 
 def test_the_shared_folders_are_the_conduit_s_own_paths() -> None:
@@ -62,17 +113,31 @@ def test_the_shared_folders_are_the_conduit_s_own_paths() -> None:
 
 
 @pytest.mark.parametrize("fixture", ["poc", "development", "production"])
-def test_rds_keeps_point_in_time_for_as_long_as_the_sets_are_kept(fixture: str) -> None:
-    rds = _artefacts(_config(fixture))["terraform/rds.tf"]
-    found = re.search(r"backup_retention_period\s*=\s*(\d+)", rds)
-    assert found and int(found.group(1)) == EXPIRE_DAYS == 35
+def test_rds_keeps_point_in_time_a_day_longer_than_the_sets_are_kept(fixture: str) -> None:
+    """MORNING item 5, (a): RDS's earliest restorable point lags its retention by up to a day, and
+    S3's expiry rounds up to midnight UTC, so a set kept as long as RDS's window may fall outside it
+    in its last day. RDS cannot keep more than 35 days (AWS's maximum), so the sets expire at 34:
+    read from the rendered Terraform both ways, never from the constants alone."""
+    artefacts = _artefacts(_config(fixture))
+    rds = re.search(r"backup_retention_period\s*=\s*(\d+)", artefacts["terraform/rds.tf"])
+    sets = re.findall(r"^\s*days\s*=\s*(\d+)\s*$", artefacts["terraform/backups.tf"], re.MULTILINE)
+    assert rds and int(rds.group(1)) == POINT_IN_TIME_DAYS == 35
+    assert sets == [str(EXPIRE_DAYS)] and EXPIRE_DAYS == 34
+    assert int(sets[0]) + 1 <= int(rds.group(1)), "a set's last day outside RDS's window"
 
 
-def test_the_recovery_runbook_says_the_window_is_the_sets_own() -> None:
+def test_the_recovery_runbook_says_the_sets_expire_a_day_inside_the_window() -> None:
     from harness.render import REPO_ROOT
 
-    text = (REPO_ROOT / "deploy/RUNBOOK.md").read_text(encoding="utf-8")
-    assert "35 days" in text and "point in time" in text
+    text = re.sub(r"\s+", " ", (REPO_ROOT / "deploy/RUNBOOK.md").read_text(encoding="utf-8"))
+    assert f"lifecycle rule {EXPIRE_DAYS} days after they were written" in text
+    assert f"RDS keeps point in time for {POINT_IN_TIME_DAYS} days" in text
+    assert "35 days after they were written" not in text and "the total, 35 days" not in text
+
+
+def test_the_decommission_names_the_sets_own_expiry() -> None:
+    text = re.sub(r"\s+", " ", _artefacts(_config("poc"))["DECOMMISSION.md"])
+    assert f"own {EXPIRE_DAYS}-day rule" in text and "own 35-day rule" not in text
 
 
 # ---- 3. the decommission's choice --------------------------------------------------------------
@@ -173,7 +238,7 @@ def test_the_recovery_runbook_says_the_claims_run_is_every_shapes_and_what_it_ho
     decision 4) and, in the poc shape, the Ingest root's claim beside them. The recovery runbook
     says so, naming each part as
     the render names it (`cloud_platform_backups.SHARED_PARTS`), never 'in the poc shape' alone."""
-    from harness.cloud_platform_backups import SHARED_PARTS
+    from harness.cloud_platform_backups import INGEST_PART, SHARED_PARTS
 
     section = _recovery_cloud_section()
     schedule = section[section.index("**The schedule.**") :]
@@ -182,6 +247,9 @@ def test_the_recovery_runbook_says_the_claims_run_is_every_shapes_and_what_it_ho
     for part in SHARED_PARTS:
         assert f"`{part['subPath']}`" in section, part["subPath"]
     assert "`ospreyflow-ingest`" in section  # the poc shape's own claim, beside them
+    # MORNING item 6, (a): elsewhere the Ingest root is a shared folder, and a part of its own.
+    words = re.sub(r"\s+", " ", section)
+    assert f"`{INGEST_PART['subPath']}` folder" in words and f"`{INGEST_PART['name']}`" in words
 
 
 def test_the_manifest_lists_the_claims_jobs_whenever_the_chart_renders_them() -> None:

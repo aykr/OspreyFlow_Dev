@@ -8,6 +8,8 @@ given, passes `more` through untouched, and audits.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 from fastapi.testclient import TestClient
 from services.api.app import app, get_audit, get_graph, get_investigations, get_principal
@@ -50,7 +52,7 @@ def _client(graph: _FakeGraph) -> tuple[TestClient, _FakeAudit]:
 
 
 @pytest.fixture(autouse=True)
-def _clear() -> None:
+def _clear() -> Iterator[None]:
     yield
     app.dependency_overrides.clear()
 
@@ -154,6 +156,7 @@ def test_the_options_are_passed_to_the_graph() -> None:
         "mode": "contains",
         "ignore_case": True,
         "types": ["Endpoint", "Person"],
+        "source": "graph",  # who answered (ADR-059 Amendment 1)
     }
 
 

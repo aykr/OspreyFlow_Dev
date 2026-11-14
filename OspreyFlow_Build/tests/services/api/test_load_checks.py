@@ -111,6 +111,15 @@ async def _gate(rules: TypologyRuleStore, case: str, recipe: str, graph: Any, re
         async def resolve_for_owner(self, owner_id: str) -> Principal | None:
             return {"author": AUTHOR, "checker": CHECKER}.get(owner_id)
 
+        async def resolve_for_owner_detailed(self, owner_id: str) -> Principal:
+            """As the real resolver: the owner, or the refusal `resolve_for_owner` collapses to None."""
+            found = await self.resolve_for_owner(owner_id)
+            if found is None:
+                from principal_auth import PrincipalExchangeRefused
+
+                raise PrincipalExchangeRefused(f"owner {owner_id!r} is not known")
+            return found
+
     sentence = RuleSentence.model_validate(LISTED)
     return await _rule_gate(
         case, loader=AUTHOR, graph=graph, analytics=None, scheme=SCHEME, typology_rules=rules,  # type: ignore[arg-type]
@@ -218,6 +227,15 @@ def _rule(rule_id: str, name: str, *, case: str = "inv-1", **sentence: Any) -> T
 class _Resolver:
     async def resolve_for_owner(self, owner_id: str) -> Principal | None:
         return AUTHOR if owner_id == "author" else None
+
+    async def resolve_for_owner_detailed(self, owner_id: str) -> Principal:
+        """As the real resolver: the owner, or the refusal `resolve_for_owner` collapses to None."""
+        found = await self.resolve_for_owner(owner_id)
+        if found is None:
+            from principal_auth import PrincipalExchangeRefused
+
+            raise PrincipalExchangeRefused(f"owner {owner_id!r} is not known")
+        return found
 
 
 @pytest.fixture

@@ -89,6 +89,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   "alert-figures-harness.html": ["from=alert", "board=1", "board=1&rule=hotlists&from=alert", "home=1", "help=1"],
   // ADR-145 Amendment 11: Home's *Your access and tasks* where Home draws it, below the two columns.
   "answers-harness.html": ["home=1"],
+  // ADR-098 Amendment 9: Whole case chosen, its search's fallback said, an answer with its sources.
+  "questions-harness.html": ["case=1"],
   // ADR-146 decisions 2 and 6: Rules and Monitoring at an alert's address, and at one the reader may
   // not see.
   "rules-place-harness.html": ["address=a1", "address=not-yours", "evidence=1"],
@@ -106,6 +108,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   // ADR-144 (L3.2b): case views as another member sees them, the Save as a view form, and the banner
   // over an opened view.
   // ADR-144 Amendment 3: the graph's *Views ▾*, closed, open on the case's views, and open on none.
+  // ADR-145 Amendment 15 Part A: the search results page open, with nothing found, on the fallback and refused.
+  "search-results-harness.html": ["open=1", "open=1&state=none", "open=1&state=limited", "open=1&state=refused"],
   "views-harness.html": ["in=drawer", "in=drawer&asking=delete", "in=drawer&long=1", "as=bob", "show=form", "show=lens", "show=merged", "show=merged&notes=open", "asking=delete", "show=menu", "show=menu&open=1", "show=menu&open=1&empty=1"],
   // ADR-143 decisions 4 to 7 (L3.3): a board open with its drawn and loaded items, its inspector, its
   // item and link forms and the withdrawal's question; another member's read-only view; a blank board;

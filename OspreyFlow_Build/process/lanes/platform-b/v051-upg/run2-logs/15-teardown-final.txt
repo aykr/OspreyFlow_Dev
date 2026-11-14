@@ -1,0 +1,8 @@
+upg-images: image osprey/workspace:local: left alone, another build names it now (sha256:aabb7fb243f4d87eeb1c3c972c502310a2e0d713109e17fcc5916eff8b3b64a7)
+upg-images: image osprey/api:local: left alone, another build names it now (sha256:073eec7c73a8ce9eb8f54f7dd00e2bf00031f7d8774c344319c2a4a330029111)
+upg-images: image osprey/ner:local: left alone, another build names it now (sha256:a6e8383c86eb17cf1836f91f5f51a7c8f45f5535c1b6f1fe3586400071d25f36)
+upg-images: image osprey/superset:local: left alone, another build names it now (sha256:51cdb4d6f8365181d41a00305e7b8d854bbce9096bee529eb4435f18a95c2c4b)
+upg-images: another's tags changed meanwhile: ['osprey-test-workspace:proxy']
+upg-images: the run's tags not put back or left: nothing
+upg-run: nothing of osprey-upg is left: containers 0, volumes 0
+teardown exit 0

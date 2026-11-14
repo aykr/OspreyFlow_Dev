@@ -1,0 +1,6 @@
+== at 47e9213 as committed:
+test-file-coverage-check: test file(s) reachable by no CI job and not in the allowlist: tests/services/search_index/test_feed_live.py
+test-file-coverage-check: live-service test file(s) not correctly wired (need both a `test`-job ignore and a live-service-job listing): tests/services/search_index/test_feed_live.py: ignored by `test` but not run by any live-service job
+== with rules' v052-index_ci_yml.diff, ci_yml_live_listing.diff and makefile_live_ignore.diff applied:
+test-file-coverage-check: 1060 test file(s), 0 allowlisted, no new drift.
+exit 0
