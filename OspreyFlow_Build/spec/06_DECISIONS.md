@@ -38970,8 +38970,9 @@ point 5's keyboard case for opening a coming section.
 2. **The type scale, in GOV.UK alone.** The side navigation, the tables, their buttons, inputs and the row's links
    are the Design System's "s" size, 16px. Every value is `tokens.css`'s; the rule is scoped to
    `[data-brand="govuk"]`, so dark and light keep the sizes main drew (13px navigation and cells, 12px headers).
-3. **Names in the body face.** A person's name is bold in the body face (`admin-person__name`). Mono stays for
-   identifiers: the username, and a case's name where it is one.
+3. **Names in the body face.** A person's name is bold in the body face (`admin-person__name`), and so is a case's
+   name in *A case of your unit has no Author* (`admin-case__name`): a case's name is a name, not an identifier
+   (the orchestrator, 14 November). Mono stays for identifiers: the username, and a refused sign-in's provider name.
 4. **A person's actions beneath them.** *Save* is the row's one primary action. *Super user, Access, Disable… (or
    Enable), Reset sign-in* and *Remove* follow it as links on the same line, in a row of their own beneath the
    person (`admin-row-actions-row`), each with the same accessible name as before. What each one shows, and which
@@ -38985,7 +38986,8 @@ point 5's keyboard case for opening a coming section.
 
 Tests, each red first on main's `AdminPlace.tsx`, `sections/People.tsx` and `admin.css`
 (`process/lanes/admin/govuk_admin/red-on-main-code.log`, and `look-spec-on-main.red.log`):
-- `keyboard/admin-look.spec.ts`, at 1280px in each look: one `h1`, the caption, the name outside mono, no coming
+- `keyboard/admin-look.spec.ts`, at 1280px in each look: one `h1`, the caption, a person's and a case's name outside
+  mono (the case's red on the face itself first, `case-name-red.log`), no coming
   link and a tag for each, the roles link on the caption's line, one primary per person, every header on one line
   and at least 30px shorter than main's. GOV.UK: 36px and 16px, a person at most 60% of main's height. Dark and
   light: main's sizes, a person at most one line of actions (20px) taller. These two were planted red by the

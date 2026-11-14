@@ -56,6 +56,10 @@ async function measure(page: Page) {
         return actions.getBoundingClientRect().bottom - row.getBoundingClientRect().top;
       })(),
       nameFont: name ? getComputedStyle(name).fontFamily : "no name element",
+      // A case's name is a name, not an identifier (the orchestrator, 14 November): the no-Author notice's.
+      caseNameFonts: [...place.querySelectorAll('[aria-label="Cases with no Author"] [data-case-name]')].map(
+        (el) => getComputedStyle(el).fontFamily,
+      ),
       comingLinks: [...place.querySelectorAll(".admin-nav a")].filter((a) => /coming/i.test(a.textContent ?? "")).length,
       comingTags: place.querySelectorAll(".admin-nav__coming").length,
       rolesLinkInTitleRow: !!place.querySelector(".admin-place__title-row a, .admin-place__title-row button"),
@@ -72,6 +76,8 @@ for (const [look, brand] of LOOKS) {
     expect(m.h1s.map((h) => h.text)).toEqual(["People and roles"]);
     expect(m.caption).toBe("Admin");
     expect(m.nameFont).not.toMatch(/mono/i);
+    expect(m.caseNameFonts).toHaveLength(1); // the harness's Op Wren
+    expect(m.caseNameFonts.filter((f) => /mono/i.test(f))).toEqual([]);
     expect(m.comingLinks).toBe(0);
     expect(m.comingTags).toBeGreaterThan(0);
     expect(m.rolesLinkInTitleRow).toBe(true);

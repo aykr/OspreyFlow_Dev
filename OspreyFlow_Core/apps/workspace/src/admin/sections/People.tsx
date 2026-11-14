@@ -1005,7 +1005,7 @@ function WithoutAuthor({
       </p>
       {rows.without_author.map((c) => (
         <div key={c.investigation_id} style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "end" }}>
-          <span className="value">{c.name}</span>
+          <span className="admin-case__name" data-case-name>{c.name}</span>
           <Select
             aria-label={`Author for ${c.name}`}
             value={chosen[c.investigation_id] ?? ""}

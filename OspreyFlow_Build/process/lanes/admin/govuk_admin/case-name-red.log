@@ -1,0 +1,46 @@
+# The case-name check before the change: Op Wren still in className=value (mono)
+  1) keyboard/admin-look.spec.ts:73:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
+    Error: expect(received).toHaveLength(expected)
+    Expected length: 1
+    Received length: 0
+    Received array:  []
+    > 79 |     expect(m.caseNameFonts).toHaveLength(1); // the harness's Op Wren
+  2) keyboard/admin-look.spec.ts:73:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
+    Error: expect(received).toHaveLength(expected)
+    Expected length: 1
+    Received length: 0
+    Received array:  []
+    > 79 |     expect(m.caseNameFonts).toHaveLength(1); // the harness's Op Wren
+  3) keyboard/admin-look.spec.ts:73:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
+    Error: expect(received).toHaveLength(expected)
+    Expected length: 1
+    Received length: 0
+    Received array:  []
+    > 79 |     expect(m.caseNameFonts).toHaveLength(1); // the harness's Op Wren
+  3 failed
+# Step 2: data-case-name in place, Op Wren still className=value (mono): red on the face itself
+  1) keyboard/admin-look.spec.ts:73:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "\"IBM Plex Mono\", ui-monospace, monospace",
+    + ]
+  2) keyboard/admin-look.spec.ts:73:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "\"IBM Plex Mono\", ui-monospace, monospace",
+    + ]
+  3) keyboard/admin-look.spec.ts:73:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "\"IBM Plex Mono\", ui-monospace, monospace",
+    + ]
+  3 failed
+
+# After: admin-case__name in the body face
+  52 passed (14.2s)

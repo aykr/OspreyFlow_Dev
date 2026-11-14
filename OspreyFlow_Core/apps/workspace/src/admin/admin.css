@@ -31,6 +31,9 @@
 /* A person's name is words, in the page's own face; mono stays for identifiers (DESIGN.md §9). */
 .admin-person__name { font-family: var(--ui); font-weight: 700; }
 
+/* A case's name is a name, not an identifier (ADR-145 Amendment 16): the body face, as a person's is. */
+.admin-case__name { font-family: var(--ui); font-weight: 700; }
+
 /* A section not built yet is named, never a link, with a Coming tag. */
 .admin-nav__coming-item { display: block; padding: var(--sp-4) var(--sp-8); color: var(--text-secondary); }
 .admin-nav__coming.label { border: 1px solid var(--border); padding: 0 var(--sp-4); font-weight: 600; }
