@@ -10,7 +10,8 @@ import { expect, test, type Page } from "@playwright/test";
 const LOOKS = [["dark", ""], ["light", ""], ["govuk", "brand=govuk"]] as const;
 
 /** Each panel or menu: where it is drawn, how it is opened, and the container its text is measured in. */
-const PANELS: { name: string; harness: string; query: string; open?: (page: Page) => Promise<void>; within: string }[] = [
+const PANELS: { name: string; harness: string; query: string; open?: (page: Page) => Promise<void>; within: string;
+                width?: number }[] = [
   // The right-hand panel: the case's saved views in the Cases drawer (the owner's screenshot).
   { name: "the saved views panel, in its drawer", harness: "views-harness", query: "in=drawer", within: ".drawer" },
   // The strip over the canvas while a saved view is open.
@@ -19,6 +20,15 @@ const PANELS: { name: string; harness: string; query: string; open?: (page: Page
   { name: "the top bar's More menu", harness: "top-bar-harness", query: "",
     open: async (page) => {
       await page.getByRole("button", { name: /^(More views|More ways to show the case)/ }).click();
+    },
+    within: ".menu-panel" },
+  // More's menu at a narrow width, holding everything the bar folds into it, Build a report among them (a GOV.UK link
+  // out of the Glass, the "panel that opens from More" the owner saw).
+  { name: "the top bar's More menu, folded narrow, with Build a report", harness: "top-bar-harness", query: "reports=1",
+    width: 760,
+    open: async (page) => {
+      // At this width everything folds into the open view's own button (Graph ▾), whose menu is More's.
+      await page.getByRole("button", { name: /^(More views|More ways to show the case|More|Graph)\b/ }).first().click();
     },
     within: ".menu-panel" },
   // The case line's menu: the case switcher.
@@ -58,7 +68,7 @@ async function measure(page: Page, within: string) {
 for (const [look, brand] of LOOKS) {
   for (const p of PANELS) {
     test(`${p.name} in the ${look} look is on the page's type scale`, async ({ page }) => {
-      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.setViewportSize({ width: p.width ?? 1280, height: 900 });
       await page.goto(`/keyboard/${p.harness}.html?${[p.query, brand].filter(Boolean).join("&")}`);
       if (look === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
       if (p.open) await p.open(page);

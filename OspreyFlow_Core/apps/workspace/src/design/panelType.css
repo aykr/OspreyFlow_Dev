@@ -8,9 +8,10 @@
    `keyboard/glass-panels-look.spec.ts` measures each panel against the page's scale, in the dark, light and GOV.UK
    looks. Tokens only. */
 
-/* A panel's own headings: where nothing else sizes them, the body size, never the browser's 1.17em for an h3
-   (15.21px beside 13px text). `:where` keeps this below any class that sizes a heading on purpose. */
-:where(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner) :where(h2, h3, h4, h5, h6) {
+/* A panel's heading drawn as a label (`.label`, which sets no size), at the body size in every look, never the
+   browser's 1.17em for an h3 (15.21px beside 13px text). Only these: a heading another class sizes keeps its size,
+   and a bare heading elsewhere is its own panel's choice. `:where` keeps this below any class that sizes it. */
+:where(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner) :where(h2, h3, h4, h5, h6):where(.label) {
   font-size: var(--fs-13);
   line-height: var(--lh-13);
 }
