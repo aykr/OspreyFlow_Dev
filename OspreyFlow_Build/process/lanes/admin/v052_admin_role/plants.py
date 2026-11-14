@@ -54,7 +54,7 @@ def run(how: str) -> str:
         "PYTHONPYCACHEPREFIX": tempfile.mkdtemp(), "ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992",
         "POSTGRES_PASSWORD": "throwaway", "VALKEY_PORT": "59993", "CLICKHOUSE_HTTP_PORT": "59994"}
     target = [ENTRA, "-k", "people_manager_alone"] if how == "pytest-entra" else [LIST]
-    return subprocess.run(["../OspreyFlow_Core/.venv/bin/python", "-m", "pytest", "-q", "-p", "no:cacheprovider",
+    return subprocess.run([os.environ.get("OSPREY_PY", "../OspreyFlow_Core/.venv/bin/python"), "-m", "pytest", "-q", "-p", "no:cacheprovider",
                            "-rf", "--tb=no", *target], cwd=ROOT / "OspreyFlow_Build", capture_output=True, text=True,
                           env=env).stdout
 
