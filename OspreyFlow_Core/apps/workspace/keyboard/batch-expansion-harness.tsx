@@ -4,7 +4,9 @@
 // the job's end: `done` (the default; the view opens), `refused`, `failed` (then done on a second
 // try), `deleted` (done, its view since deleted), `forbidden` (a reader below Editor), `running`
 // (it never ends), `following` (a job of the reader's already running here, the 409). Each stage's
-// words are the route's own sentences. What was sent and what was opened are on `window.__BATCH__`.
+// words are the route's own sentences. `?step=1`: the job moves on only when the spec sets
+// `window.__BATCH__.stage` (0 queued, 1-3 the stages, 4 its end), so each stage stands until it has
+// been read rather than for one poll's length. What was sent and opened are on `window.__BATCH__`.
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -17,7 +19,7 @@ import { applyHarnessBrand } from "./brandHarness";
 
 declare global {
   interface Window {
-    __BATCH__?: { sent: { method: string; path: string }[]; opened: string | null; closed: boolean };
+    __BATCH__?: { sent: { method: string; path: string }[]; opened: string | null; closed: boolean; stage: number };
   }
 }
 
@@ -37,7 +39,8 @@ const ENDS: Record<string, ReturnType<typeof job>> = {
   deleted: job("done", "The batch expansion finished, but the view it saved has since been deleted."),
 };
 
-window.__BATCH__ = { sent: [], opened: null, closed: false };
+window.__BATCH__ = { sent: [], opened: null, closed: false, stage: 0 };
+const stepped = params.get("step") === "1";
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 let starts = 0;
@@ -59,8 +62,10 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   }
   if (/^\/v1\/investigations\/c1\/batch-expansions\/[^/]+$/.test(path)) {
     reads += 1;
-    if (reads <= STAGES.length || end === "running" || end === "following") {
-      return json(200, job("running", STAGES[Math.min(reads, STAGES.length) - 1]!));
+    const at = stepped ? window.__BATCH__!.stage : reads;
+    if (stepped && at === 0) return json(200, job("queued", QUEUED));
+    if (at <= STAGES.length || end === "running" || end === "following") {
+      return json(200, job("running", STAGES[Math.min(at, STAGES.length) - 1]!));
     }
     // A failed job's second try runs to done.
     return json(200, end === "failed" && starts > 1 ? ENDS.done : (ENDS[end] ?? ENDS.done));

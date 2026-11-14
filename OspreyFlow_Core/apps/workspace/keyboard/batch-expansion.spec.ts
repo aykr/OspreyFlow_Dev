@@ -34,11 +34,16 @@ async function tabTo(page: Page, name: string): Promise<void> {
 }
 
 test("the panel says each stage in the route's words and opens the result as the view", async ({ page }) => {
-  await open(page, "job=done");
+  await open(page, "job=done&step=1");
   const status = panel(page).getByRole("status");
+  const to = (stage: number) => page.evaluate((n) => (window.__BATCH__!.stage = n), stage);
   await expect(status).toHaveText("Waiting for the batch expansion to start.");
-  await expect(status).toHaveText("Counting the links among 41,203 nodes.");
+  for (const [stage, words] of ["Expanding from 12 nodes.", "Counting the links among 41,203 nodes.", "Saving the view."].entries()) {
+    await to(stage + 1);
+    await expect(status).toHaveText(words);
+  }
   await expect(panel(page)).toContainText("Closing this does not stop the job");
+  await to(4);
   await expect(status).toHaveText(
     "Saved 41,203 nodes and 96,114 links as your private view “Expansion of Ledger Holdings Ltd”. Its result is open as the view “Expansion of Ledger Holdings Ltd”.",
   );

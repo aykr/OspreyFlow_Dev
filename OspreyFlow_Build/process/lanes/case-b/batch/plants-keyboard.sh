@@ -44,9 +44,9 @@ plant "the stage's words faint against the panel (dark)" "$CSS" \
 plant "the refusal's words faint against the panel (GOV.UK)" "$CSS" \
   's/\.batch-expansion__message \{ margin: 0 0 var\(--sp-12\); font-weight: 600; \}/.batch-expansion__message { margin: 0 0 var(--sp-12); font-weight: 600; color: #c8c8c8; }/' \
   "refused, has no automated.*\\(govuk\\)" "the batch job's panel, refused, has no automated WCAG 2.2 A or AA violation \\(govuk\\)"
-plant "the panel's buttons shrunk below the target size (light)" "$CSS" \
-  's/\.batch-expansion__actions \{ display: flex; gap: var\(--sp-8\); flex-wrap: wrap; \}/.batch-expansion__actions { display: flex; gap: 0; flex-wrap: wrap; }\n.batch-expansion__actions .btn { min-height: 0; min-width: 0; height: 12px; padding: 0; font-size: 8px; line-height: 1; }/' \
-  "failed, has no automated.*\\(light\\)" "the batch job's panel, failed, has no automated WCAG 2.2 A or AA violation \\(light\\)"
+plant "the view's name faint against the panel (light)" "$CSS" \
+  's/\.batch-expansion__status \{ margin: 0 0 var\(--sp-8\); font-weight: 600; \}/.batch-expansion__status { margin: 0 0 var(--sp-8); font-weight: 600; color: #d0d0d0; }/' \
+  "done, has no automated.*\\(light\\)" "the batch job's panel, done, has no automated WCAG 2.2 A or AA violation \\(light\\)"
 
 out="$(run)"
 if grep -qE "^\s+[0-9]+ passed" <<<"$out" && ! grep -qE "^\s+[0-9]+ failed" <<<"$out"; then
