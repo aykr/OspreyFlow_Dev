@@ -908,8 +908,12 @@ with the render to install.
 answers: the checks of the tools and rights, the Terraform's pull request, the unpinned render and
 the push, the pinned render, `helm upgrade --install`, the sign-in check (and the way back in when
 nobody can manage people, section 6a.7), and the Glass's health. `DECOMMISSION.md` removes it: a
-last backup, `helm uninstall`, the claims and our Secret, the buckets and repositories emptied, the
-backups kept for their retention, then `python -m harness.cloud_platform.decommission_check`, which
+last backup, `helm uninstall`, the claims and our Secret, the buckets and repositories emptied, and
+the backups bucket and its key by a choice with no default: its step 7 refuses until it is given
+`BACKUPS=keep` or `BACKUPS=destroy`. **keep** sets the kept bucket's expiry to the retention you agree
+(`BACKUP_RETENTION_DAYS`), so the sets stay readable until then; **destroy** removes every set now,
+which cannot be had back, and schedules the key's deletion (thirty days, cancellable until then).
+Then `python -m harness.cloud_platform.decommission_check`, which
 names anything left behind and exits 1 while anything is. A block fenced `bash platform` runs only
 with the platform's access; the rest runs anywhere. A block fenced `bash later` is in neither
 runbook's sequence and is run only when its words say: the way back in when nobody can manage people,
@@ -1934,9 +1938,12 @@ disables them. What Entra holds is refused here, in words, each followed by "On 
 Entra ID holds people's accounts…": inviting ("People are not invited here."), access ("A person's
 clearance, unit and handling codes are changed in Entra ID."), a sign-in's reset ("A sign-in is
 reset in Entra ID."), removing ("A person is not removed here: they would return, with no roles, at
-their next sign-in. Disable them instead, or remove them in Entra ID."), joining ("There is no
-organisation account to join.") and a dashboard identity ("Dashboard identities are not registered
-on this deployment yet."). No administrator can give a missing clearance or unit instead: a person
+their next sign-in. Disable them instead, or remove them in Entra ID.") and joining ("There is no
+organisation account to join."). **A dashboard identity** is its own Entra app registration, which
+holds its secret: *Dashboard identities* registers it by its application id, and shows no secret.
+Without an application id it is refused ("on Entra ID a dashboard identity is its own app
+registration: give its application id (the registration holds its secret)"), and so is the
+deployment's own application, the Glass's or the API's. No administrator can give a missing clearance or unit instead: a person
 whose token carries neither is refused at sign-in (section 6a.7). A person is shown by object id,
 not by name.
 
@@ -1951,7 +1958,7 @@ Under the GOV.UK theme the list is a GOV.UK side navigation.
 | --- | --- | --- | --- |
 | People | **People and roles** | `manage_people` | Invite people; set their roles, clearance, unit and handling codes; the Super user preset; **Disable…** with its transfers (section 9.9), re-enable; reset a sign-in; remove an account; join someone the organisation's sign-in refused to their account (section 9.7); name an Author for a case that has none |
 | People | **Roles** | `manage_people` | The built-in roles and their rights; custom roles; teams, their leads and cover (sections 9.2 and 9.8) |
-| People | **Dashboard identities** | `manage_dashboards` | Register a dashboard's account (its secret shown once), see when it last pulled, remove it |
+| People | **Dashboard identities** | `manage_dashboards` | Register a dashboard's account (its secret shown once; on Entra ID, by its app registration's application id, with no secret shown), see when it last pulled, remove it |
 | Data | **Datasets** | `administer_system` | Every dataset's kind, unit, highest marking, egress, promotion policy, Authors and linked cases (section 9.10) |
 | Data | **Connections** | `administer_system` | The named connections pipelines read through: files, a SQL database, an HTTP API or JSON files |
 | Running | **Operations** | `operate_schedules` | Every scheduled or watched pipeline (pause, resume, run now, change its time, its runs), and promotions waiting for review (section 9.11) |
