@@ -41,7 +41,11 @@ class _FakeGraph:
 
 @pytest.fixture
 async def client() -> Valkey:
-    conn = Valkey(host="localhost", port=6379, db=0)
+    # The configured Valkey (the leased stack's pinned port), never a fixed 6379: the port guard
+    # refuses that as stack a's, so this module never ran against a lease before ADR-151.
+    from services.api.config import ValkeyConfig
+
+    conn = Valkey(**ValkeyConfig.from_env().client_kwargs())
     yield conn
     await conn.aclose()
 

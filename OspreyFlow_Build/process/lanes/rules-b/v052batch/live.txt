@@ -1,0 +1,32 @@
+rules-b v052batch live, stack e (the orchestrator's grant, 14 Nov 2026), branch head c97fe53
+
+== run 1 (lease taken 10:26:25Z)
+Running on ospreyflow-test (stack e, osprey-runs/rules-b/OspreyFlow_Core/), logged at osprey-runs/rules-b.meta/runs/20261114T102650Z-3101f898/log: bash -c P=".venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider"; echo "== live batch"; $P -q -s ../OspreyFlow_Build/tests/services/api/test_batch_expansion_live.py ../OspreyFlow_Build/tests/services/api/test_worker.py 2>&1 | grep -E "batch of|passed|failed|^FAILED|^ERROR|^E "; echo "== measure"; timeout 480 .venv/bin/python ../OspreyFlow_Build/process/lanes/rules-b/v052batch/measure.py 50000; echo "measure exit=$?"
+== live batch
+batch of 3 written, 2 visible: 0.20s
+            # already-connected socket was passed or when only a port
+                        raise ExceptionGroup("create_connection failed", exceptions)
+            # already-connected socket was passed or when only a port
+                        raise ExceptionGroup("create_connection failed", exceptions)
+__________ test_a_failing_handler_rolls_back_and_marks_the_job_failed __________
+            # already-connected socket was passed or when only a port
+                        raise ExceptionGroup("create_connection failed", exceptions)
+    async def test_a_failing_handler_rolls_back_and_marks_the_job_failed(client: Valkey) -> None:
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_run_once_dispatches_a_submitted_job_to_its_registered_handler
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_run_once_with_nothing_pending_returns_zero
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_a_failing_handler_rolls_back_and_marks_the_job_failed
+3 failed, 3 passed in 5.03s
+Wall time: 7 s, exit 0 (stack e, the lease rules-b took at 2026-11-14T10:26:25Z; set-up before it 20 s)
+Test stack e down for rules-b: osprey-test-e-arcadedb osprey-test-e-pg osprey-test-e-valkey osprey-test-e-objectstore osprey-test-e-clickhouse osprey-test-e-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Lease on stack e released by rules-b.
+
+test_batch_expansion_live.py: both cases passed (the leak test, and its plant with the scope dropped, which asserts the SECRET node DOES land).
+test_worker.py's 3 failures: its fixture connects to Valkey on localhost:6379, not the leased VALKEY_PORT, refused by the port guard; unchanged by this branch (pre-existing, reported).
+
+== run 2 (lease taken 10:27:23Z): measure.py 50000
+Running on ospreyflow-test (stack e, osprey-runs/rules-b/OspreyFlow_Core/), logged at osprey-runs/rules-b.meta/runs/20261114T102734Z-845deace/log: bash -c PYTHONPATH=.:packages timeout 480 .venv/bin/python ../OspreyFlow_Build/process/lanes/rules-b/v052batch/measure.py 50000; echo "measure exit=$?"
+measure exit=124
+Wall time: 480 s, exit 0 (stack e, the lease rules-b took at 2026-11-14T10:27:23Z; set-up before it 7 s)
+Test stack e down for rules-b: osprey-test-e-arcadedb osprey-test-e-pg osprey-test-e-valkey osprey-test-e-objectstore osprey-test-e-clickhouse osprey-test-e-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Lease on stack e released by rules-b.
+No figures: stdout was block-buffered and the 480 s timeout killed the process before it flushed. Not a measurement; rerun with python -u on a new grant.

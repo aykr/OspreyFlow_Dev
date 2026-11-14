@@ -9,6 +9,7 @@ read back with N ids. Writes stop at five minutes and measure at the size reache
 ten minutes hold. Run from OspreyFlow_Core under the lease: `python <this> [N]`."""
 
 import asyncio
+import functools
 import sys
 import time
 from datetime import UTC, datetime
@@ -33,6 +34,8 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+
+print = functools.partial(print, flush=True)  # noqa: A001 - every figure out as it is taken
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 50_000
 CHUNK = 2_000
@@ -71,6 +74,8 @@ async def main() -> None:
         await graph.upsert_edges(edges, tx)
         await graph.commit_transaction(tx)
         written += size
+        if written % 10_000 < CHUNK:
+            print(f"  {written:,} written at {time.monotonic() - began:.0f}s")
     print(f"written: {written:,} nodes and {written - 1:,} links in {time.monotonic() - began:.1f}s")
 
     reader = Principal(id="measure", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"],
