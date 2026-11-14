@@ -7,7 +7,9 @@ identifier second: each must turn the class's verdict to "not met"."""
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 import threading
 import time
 from collections.abc import Iterator
@@ -255,3 +257,89 @@ def test_full_text_is_sent_to_the_search_route_and_judged_at_m4(conduit: str) ->
     )  # fmt: skip
     assert result["classes"]["fulltext"]["fail_ms"] == 3000
     assert {p for p, _b, _a in _Conduit.seen} == {"/v1/investigations/case-1/search"}
+
+
+# ---- the live gate itself (tests/perf/test_search_budget_live.py), run as step 6 runs it
+
+_LIVE = Path(__file__).resolve().parent / "perf/test_search_budget_live.py"
+
+
+def _run_live(tmp_path: Path, base: str | None) -> subprocess.CompletedProcess[str]:
+    import sys
+
+    queries = tmp_path / "queries.jsonl"
+    queries.write_text(
+        "\n".join(
+            json.dumps(q)
+            for q in [
+                *QUERIES,
+                {"class": "fulltext", "query": "harbour", "filters": {"dataset": "d1"}},
+            ]
+        )
+    )
+    env = {k: v for k, v in os.environ.items() if not k.startswith("OSPREY_MEASURE_")}
+    if base is not None:
+        env |= {
+            "OSPREY_MEASURE_BASE": base,
+            "OSPREY_MEASURE_CASE": "case-1",
+            "OSPREY_MEASURE_TOKEN": "t0ken",
+            "OSPREY_MEASURE_QUERIES": str(queries),
+            "OSPREY_MEASURE_N": "3",
+            "OSPREY_MEASURE_WARMUP": "1",
+        }
+    env["PYTHONPYCACHEPREFIX"] = str(tmp_path / "pyc")
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-rfs", str(_LIVE)],
+        cwd=_LIVE.parents[2],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
+def test_the_live_gate_passes_a_conduit_within_every_failure_figure(
+    conduit: str, tmp_path: Path
+) -> None:
+    done = _run_live(tmp_path, conduit)
+    assert done.returncode == 0, done.stdout[-2000:]
+    assert "4 passed" in done.stdout
+
+
+def test_the_live_gate_fails_a_suggestion_over_its_failure_figure(
+    conduit: str, tmp_path: Path
+) -> None:
+    """Rule 15: the gate shown red, at the real call site (the file step 6 runs), for M1 alone."""
+    _Conduit.delay = 0.35
+    done = _run_live(tmp_path, conduit)
+    assert done.returncode != 0
+    assert "FAILED" in done.stdout and "M1-suggest" in done.stdout
+    assert "over the failure figure" in done.stdout
+
+
+def test_the_live_gate_is_skipped_with_its_reason_where_no_stack_is_named(tmp_path: Path) -> None:
+    done = _run_live(tmp_path, None)
+    assert done.returncode == 0 and "4 skipped" in done.stdout
+    assert "no B-sized stack named" in done.stdout
+
+
+def test_the_live_gate_fails_a_class_its_queries_file_leaves_out(
+    conduit: str, tmp_path: Path
+) -> None:
+    """A named stack whose queries hold no full-text query fails M4, never passes it unmeasured."""
+    done = _run_live(tmp_path, conduit)
+    assert "4 passed" in done.stdout  # the control: every class present
+    (tmp_path / "queries.jsonl").write_text("\n".join(json.dumps(q) for q in QUERIES))
+    import sys
+
+    env = {k: v for k, v in os.environ.items() if not k.startswith("OSPREY_MEASURE_")} | {
+        "OSPREY_MEASURE_BASE": conduit, "OSPREY_MEASURE_CASE": "case-1",
+        "OSPREY_MEASURE_TOKEN": "t",
+        "OSPREY_MEASURE_QUERIES": str(tmp_path / "queries.jsonl"), "OSPREY_MEASURE_N": "2",
+        "OSPREY_MEASURE_WARMUP": "0", "PYTHONPYCACHEPREFIX": str(tmp_path / "pyc"),
+    }  # fmt: skip
+    again = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-rfs", str(_LIVE)],
+        cwd=_LIVE.parents[2], env=env, capture_output=True, text=True, timeout=120,
+    )  # fmt: skip
+    assert again.returncode != 0 and "M4-fulltext" in again.stdout and "unmeasured" in again.stdout

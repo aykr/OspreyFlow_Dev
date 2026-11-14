@@ -69,12 +69,13 @@ end-to-end is measured separately, in a browser.
 | M11 | Sizes: each container's peak working set during M1–M8 | peak ≤ 80% of its limit | at or over its limit, or killed | ADR-148 Am 12 d4: step 4 measures the manifest's sizes |
 
 **How each becomes a gate**, once accepted:
-- **M1, M3, M4 and M6:** a live test file, `tests/perf/test_search_budget_live.py`, run by step 6 (`v052-r1`) and at
-  each release against the load. It fails at the failure figure, not the budget.
+- **M1, M3, M4 and M5:** the live test file `tests/perf/test_search_budget_live.py`, run by step 6 (`v052-r1`) and at
+  each release against the load. It fails at the failure figure, not the budget (ADR-149 Amendment 2). M6 is a live
+  case still to be written for step 6.
 - **M1, M3 and M4 in CI:** a regression gate on a fixed 1-million-name corpus (CI cannot hold B's load). It fails if
   a p95 grows by more than 50% over its recorded baseline, as glass-perf is a regression gate.
 - **M2:** a case in `perf/`, beside glass-perf, against the live stack in a granted browser slot.
-- **M5 and M10:** pass/fail cases in the same live file.
+- **M5:** in the same live file (every exact identifier first). **M10:** a pass/fail live case still to be written.
 - **M7 and M8:** they set the runbooks' and the CronJobs' bounds and memory, held by the render tests.
 - **M11:** changes the manifest and the profile together, as ADR-148 Amendment 12 decision 4 says.
 

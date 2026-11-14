@@ -38539,12 +38539,15 @@ index's speed: each makes its class fail.
 | M10 | The leak test at scale (the part-cleared principal) | no (the live search file) | nothing they may not see, count or infer, in results, counts, suggestions or snippets | any | Rule 3 (pass or fail, not a time) |
 | M11 | Sizes: each container's peak working set during M1–M8 | no (the cluster's metrics) | peak ≤ 80% of its limit | at or over its limit, or killed | ADR-148 Amendment 12 decision 4: step 4 measures the manifest's sizes |
 
-**How each becomes a gate.** M1, M3, M4 and M6 become a live file, `tests/perf/test_search_budget_live.py`, run by
-step 6 under a lease; M1, M3 and M4 also become a CI regression gate on a fixed corpus of a million names (CI cannot
-hold B's load), shown red before it is wired (rule 15). M2 becomes a `perf/` case beside glass-perf. M5 and M10 are
-pass-or-fail cases in the live file. M7 and M8 set the restore runbook's and the drift check's bounds and memory, held
-by the render tests. M11 changes the manifest and the profile together. Each of those is built with step 4's results,
-not before: this amendment fixes the figures they will hold.
+**How each becomes a gate.** M1, M3, M4 and M5 are judged by a live file, `tests/perf/test_search_budget_live.py`,
+run by step 6 and at each release under a lease, against the load: each class fails at its failure figure through
+`measure_search`, a named stack whose queries leave a class out fails it, and where no B-sized stack is named each
+case is skipped with that reason. Its red is shown by `tests/test_measure_search.py`, which runs the file as step 6
+does against a stub Conduit, fast and slow. M6, M9 and M10 are live cases still to be written for step 6. M1, M3 and
+M4 are also to become a CI regression gate on a fixed corpus of a million names (CI cannot hold B's load), shown red
+before it is wired (rule 15). M2 is to become a `perf/` case beside glass-perf. M7 and M8 set the restore runbook's
+and the drift check's bounds and memory, held by the render tests. M11 changes the manifest and the profile together.
+Those not yet written are built with step 4's results, not before: this amendment fixes the figures they will hold.
 
 **Consequences.** A result is read against a figure fixed before the run, and the timer cannot be handed a laxer one.
 A figure changed later is an amendment to this table, and the timer's constants follow it in the same change, or the

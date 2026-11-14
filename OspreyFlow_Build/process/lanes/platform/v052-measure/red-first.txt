@@ -43,3 +43,18 @@ plant 6: full text sent to the suggestion route
   tests/test_measure_search.py -k 'judged_at_m4': RED (1 failed, 8 deselected in 1.02s)
 6/6 red
 Green after: tests/test_measure_search.py and tests/test_adr_reservations.py 16 passed; the ADR checks 23 passed.
+
+# The live budget gate, tests/perf/test_search_budget_live.py (2026-11-14T07:47:26Z): the citation check refused 7d6e8e1, ADR-149
+# Amendment 2 and PLAN.md naming the file before it existed. Written now for M1, M3, M4 and M5 (M6, M9 and M10 reworded
+# as live cases still to be written for step 6, no path named). Its red, at the real call site: tests/test_measure_search.py
+# runs the file as step 6 does against the stub Conduit (fast: 4 passed; M1 slow: failed at its failure figure; no stack:
+# 4 skipped with the reason). One plant per check at the file's own lines (plants_live.py), each restored after its run:
+plant 1: the gate's verdict check dropped
+  tests/test_measure_search.py -k 'over_its_failure_figure': RED (1 failed, 12 deselected in 8.07s)
+plant 2: a class with no queries passed unmeasured
+  tests/test_measure_search.py -k 'leaves_out': RED (1 failed, 12 deselected in 2.91s)
+plant 3: the gate run without a named stack, against a default
+  tests/test_measure_search.py -k 'no_stack_is_named': RED (1 failed, 12 deselected in 2.08s)
+3/3 red
+Green after: test_measure_search, tests/perf, test_adr_reservations, test_test_file_coverage_check, test_write_store_marks;
+doc-citations-check: every cited path exists.
