@@ -38,7 +38,9 @@ curl -sf -o /dev/null -u "$AUTH" -X POST "$A" -d '{"command":"create database os
 
 echo "# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)"
 mkdir -p "$W/jwks"
-"$PY" ../OspreyFlow_Build/tools/mint_dev_token.py --jwks-path "$W/jwks/jwks.json" >"$W/mint.txt" 2>/dev/null || fail "mint"
+# As a module from the Build root: it imports tests.conftest's signing (DEMO_GUIDE.md §2).
+(cd ../OspreyFlow_Build && PYTHONPATH=.:../OspreyFlow_Core:../OspreyFlow_Core/packages "$PY" -m tools.mint_dev_token \
+  --jwks-path "$W/jwks/jwks.json" >"$W/mint.txt" 2>"$W/mint.err") || { tail -5 "$W/mint.err"; fail "mint"; }
 TOKEN=$(tail -1 "$W/mint.txt")
 JP=$(free_port)
 "$PY" -m http.server "$JP" --bind 127.0.0.1 --directory "$W/jwks" >/dev/null 2>&1 &
