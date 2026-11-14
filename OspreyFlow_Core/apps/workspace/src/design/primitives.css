@@ -815,7 +815,6 @@
 .batch-expansion__title { margin: 0 0 var(--sp-8); font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 700; }
 .batch-expansion__figure, .batch-expansion__trouble { margin: 0 0 var(--sp-8); color: var(--text-secondary); }
 .batch-expansion__status { margin: 0 0 var(--sp-8); font-weight: 600; }
-.batch-expansion__progress { display: block; width: 100%; margin: 0 0 var(--sp-12); accent-color: var(--text-primary); }
 .batch-expansion__message { margin: 0 0 var(--sp-12); font-weight: 600; }
 .batch-expansion__actions { display: flex; gap: var(--sp-8); flex-wrap: wrap; }
 .view-over-cap__reopen { position: fixed; z-index: 20; left: 50%; top: calc(var(--h-canvas-toolbar) + var(--sp-8)); transform: translateX(-50%); }
