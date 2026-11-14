@@ -1,0 +1,8 @@
+# plant: setting_failure_admits (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k cannot_be_read or too_slow
+# RED
+E       Failed: DID NOT RAISE PrincipalLookupUnavailable
+E       Failed: DID NOT RAISE OwnerRecordUnavailable
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_setting_that_cannot_be_read_is_unavailable_never_admitted
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_setting_too_slow_to_answer_is_unavailable_within_the_bound
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_run_as_a_guest_owner_whose_setting_cannot_be_read_is_the_store_unread_never_admitted
+3 failed, 13 deselected in 2.98s

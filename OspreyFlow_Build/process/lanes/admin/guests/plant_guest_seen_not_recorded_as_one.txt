@@ -1,0 +1,8 @@
+# plant: guest_seen_not_recorded_as_one (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k same_claims
+# RED
+E        +  where False = SeenPerson(name='Synthetic Analyst', username='synthetic.analyst@example.test', email=None, clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=(), guest=False).guest
+E        +    where SeenPerson(name='Synthetic Analyst', username='synthetic.analyst@example.test', email=None, clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=(), guest=False) = <tests.services.api.test_auth_entra_claims.FakePeople object at 0x108c01a60>.seen
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_an_admitted_guest_signs_in_as_a_member_with_the_same_claims_does[acct]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_an_admitted_guest_signs_in_as_a_member_with_the_same_claims_does[acct-text]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_an_admitted_guest_signs_in_as_a_member_with_the_same_claims_does[idp-other]
+3 failed, 13 deselected in 3.01s

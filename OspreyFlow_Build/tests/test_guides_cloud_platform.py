@@ -245,3 +245,17 @@ def test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up() -> Non
     in_standard_only = all("ingest" in left_out(s) for s in standard) and "ingest" not in left_out("poc")
     assert ("in the standard shape, the Ingest root (`ingest`" in outside.group(1)) is in_standard_only
     assert bool(re.search(r"`ospreyflow-shared`[^.]{0,40}is not backed up", text)) is (not folders)
+
+
+# ---------------------------------------------------------------- guests on Entra ID (ADR-148 Amendment 17)
+
+
+def test_section_6a7_quotes_the_guest_refusal_and_the_audit_action_as_the_code_has_them() -> None:
+    from principal_auth import GUESTS_NOT_ADMITTED_WORDS
+
+    text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.7"))
+    assert f'"{GUESTS_NOT_ADMITTED_WORDS}"' in text
+    app = (CORE / "services/api/app.py").read_text(encoding="utf-8")
+    assert 'action="set_guest_sign_in"' in app and "`set_guest_sign_in`" in text
+    assert "Admit guest accounts" in text
+    assert "Admitting guests would need a setting that does not exist" not in text

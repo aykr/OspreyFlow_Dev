@@ -156,6 +156,20 @@ class FakePeople:
         self.delay = 0.0
         #: Owners as held, for a run acting as them (ADR-148 Amendment 16): None when not held.
         self.owners: dict[tuple[str, str], StoredOwner] = {}
+        #: Whether guests are admitted (ADR-148 Amendment 17): off, as the real store's is when never set;
+        #: `guest_fail` raised when it is read, as a store that cannot answer does.
+        self.admit_guests = False
+        self.guest_fail: Exception | None = None
+        self.guest_delay = 0.0
+
+    async def guests_admitted(self, tenant_id: str) -> bool:
+        if self.guest_delay:
+            await asyncio.sleep(self.guest_delay)
+        if self.guest_fail is not None:
+            raise self.guest_fail
+        if tenant_id != TENANT:
+            raise RuntimeError("the people store is another tenant's")
+        return self.admit_guests
 
     async def owner(self, tenant_id: str, oid: str) -> StoredOwner | None:
         self.calls.append((tenant_id, oid))

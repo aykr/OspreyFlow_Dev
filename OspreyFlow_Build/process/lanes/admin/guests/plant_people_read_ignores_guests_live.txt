@@ -1,0 +1,5 @@
+# plant: people_read_ignores_guests (entra_people.py), at 9f932af uncommitted; stack e, the lease admin took at 2026-11-14T07:06Z; fresh PYTHONPYCACHEPREFIX
+E       AssertionError: assert True is False
+E        +  where True = PersonAccount(id='50000000-0000-4000-8000-000000000002', username='analyst@example.test', name='Synthetic Analyst', en...ed_in=True, guest=True, access_read_at=datetime.datetime(2026, 11, 14, 7, 8, 31, 540821, tzinfo=datetime.timezone.utc)).enabled
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_guest_who_can_no_longer_sign_in_is_no_people_manager_and_the_way_back_in_still_opens
+1 failed, 3 passed, 23 deselected in 4.85s

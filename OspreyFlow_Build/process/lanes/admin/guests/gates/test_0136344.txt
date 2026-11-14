@@ -1,0 +1,8 @@
+# make -k test SKIP_JS=1 at 0136344 (on main d836ff0), registry-4b.diff in the run's copy. This lane's: test_audit_kinds (set_guest_sign_in unclassified), fixed after. test_docs_pdf: the PDF, made at merge.
+FAILED ../OspreyFlow_Build/tests/services/api/test_audit_kinds.py::test_every_action_the_conduit_writes_is_classified
+FAILED ../OspreyFlow_Build/tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step
+==== 2 failed, 13873 passed, 36 skipped, 119 warnings in 567.67s (0:09:27) =====
+make[1]: *** [Makefile:175: test] Error 1
+make: *** [Makefile:19: test] Error 2
+Wall time: 589 s, exit 2 (no stack, no lease; set-up before it 11 s)
+test exit 2

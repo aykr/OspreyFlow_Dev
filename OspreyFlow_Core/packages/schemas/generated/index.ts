@@ -268,6 +268,8 @@ export type { RegisteredDashboard } from "./RegisteredDashboard";
 export type { RolesInput } from "./RolesInput";
 export type { AddPersonInput } from "./AddPersonInput";
 export type { SignInKind } from "./SignInKind";
+export type { GuestSignIn } from "./GuestSignIn";
+export type { GuestSignInInput } from "./GuestSignInInput";
 export type { DashboardInput } from "./DashboardInput";
 export type { ComponentHealth } from "./ComponentHealth";
 export type { UpdateNotice } from "./UpdateNotice";

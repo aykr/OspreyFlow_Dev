@@ -1,0 +1,5 @@
+# plant: standing ignores a guest once guests are off (the guest clause removed from its SQL), at 0ed9daa uncommitted; stack e, the lease admin took at 2026-11-14T06:43Z; fresh PYTHONPYCACHEPREFIX
+E       assert False is True
+E        +  where False = StoredPerson(roles=(), disabled=False).disabled
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_guest_is_recorded_as_one_and_stands_disabled_once_guests_are_no_longer_admitted
+1 failed, 2 passed, 23 deselected in 5.14s

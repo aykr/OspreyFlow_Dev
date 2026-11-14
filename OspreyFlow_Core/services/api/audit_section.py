@@ -166,6 +166,7 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "add_person_by_object_id",
         "grant_first_administrator",
         "set_person_roles",
+        "set_guest_sign_in",  # ADR-148 Amendment 17: guests admitted, or no longer
         "set_person_access",
         "disable_person",
         "disable_person_incomplete",
@@ -612,6 +613,8 @@ _WITHHELD_WORDS = frozenset({
 _SETTING_CHANGES = frozenset({
     "change_custom_role", "set_dataset_egress", "set_dataset_promotion_policy",
     "set_dataset_owner_setting", "set_case_datasets",
+    # ADR-148 Amendment 17: whether guest accounts are admitted, false or true.
+    "set_guest_sign_in",
 })
 
 

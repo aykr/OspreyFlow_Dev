@@ -1,0 +1,5 @@
+# plant: construction_admits_guests_unasked (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k construction_path
+# RED
+E       Failed: DID NOT RAISE PrincipalResolutionError
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_the_one_construction_path_refuses_a_guest_s_claims_unless_told_they_were_admitted
+1 failed, 15 deselected in 1.58s

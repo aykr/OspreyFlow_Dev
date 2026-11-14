@@ -181,6 +181,8 @@ from schemas.admin import (
     DisableInput,
     DisablePlan,
     EmbeddedDashboard,
+    GuestSignIn,
+    GuestSignInInput,
     InviteInput,
     LayerAction,
     LayerDryRun,
@@ -17320,6 +17322,60 @@ async def sign_in_kind_route(identity_admin: IdentityAdminDep) -> SignInKind:
     """ADR-148 Amendment 8: how people sign in here, so Admin › People offers invite (Keycloak) or
     add by object id (Entra ID). Behind `manage_people`, as People is."""
     return SignInKind(kind="entra" if isinstance(identity_admin, EntraPeopleAdmin) else "keycloak")
+
+
+def _guest_sign_in_admin(identity_admin: Any) -> EntraPeopleAdmin:
+    """Guests are Entra ID's (ADR-148 Amendment 17): on Keycloak there is no setting to read or
+    set."""
+    if not isinstance(identity_admin, EntraPeopleAdmin):
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "not_entra", "detail": "guests are admitted only where people sign in "
+                    "with Entra ID; this deployment signs in with Keycloak"},
+        )  # fmt: skip
+    return identity_admin
+
+
+@app.get(
+    "/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
+)
+async def guest_sign_in_route(identity_admin: IdentityAdminDep) -> GuestSignIn:
+    """ADR-148 Amendment 17: whether guest (B2B) accounts are admitted, who last changed it and
+    when. Behind `manage_people`, as People is; 409 `not_entra` on Keycloak."""
+    admitted, by, at = await _guest_sign_in_admin(identity_admin).guest_sign_in()
+    return GuestSignIn(admitted=admitted, changed_by=by, changed_at=at)
+
+
+@app.put(
+    "/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
+)
+async def set_guest_sign_in_route(
+    body: GuestSignInInput,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    custom_roles: CustomRolesDep,
+    audit: AuditDep,
+) -> GuestSignIn:
+    """ADR-148 Amendment 17: admit guest (B2B) accounts, or no longer; only an administrator of
+    people (`manage_people`) may. Audited with what it was and what it is now. Turning it off is
+    refused (409 `locks_out_administrators`) when it would leave no enabled member who has signed in
+    able to manage people: every one of them a guest."""
+    admin = _guest_sign_in_admin(identity_admin)
+    async with custom_roles.people_lock():
+        current = await custom_roles.current_rights()  # fresh under the lock, as disabling reads it
+        if not body.admitted:
+            try:
+                leaves_no_people_manager(
+                    [p for p in await admin.list_people() if not p.guest], current
+                )
+            except RoleRefused as error:
+                raise _role_refused(error) from None
+        before = await admin.set_guests_admitted(body.admitted, principal.id)
+    await audit.record(principal=principal, action="set_guest_sign_in",
+                       resolved_query={"before": before, "after": body.admitted},
+                       result_cardinality=1)  # fmt: skip
+    admitted, by, at = await admin.guest_sign_in()
+    return GuestSignIn(admitted=admitted, changed_by=by, changed_at=at)
 
 
 @app.get(

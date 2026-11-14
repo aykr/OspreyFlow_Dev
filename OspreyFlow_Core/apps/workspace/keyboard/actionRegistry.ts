@@ -966,6 +966,8 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "invite-a-person-by-keyboard",
   // ADR-148 Amendment 8: on Entra ID sign-in, a person added by object id.
   "add-a-person-by-object-id-by-keyboard",
+  // ADR-148 Amendment 17 (audit 4b): guest accounts admitted, or no longer, in People on Entra ID.
+  "admit-guest-accounts-by-keyboard",
   "edit-a-persons-access-by-keyboard",
   "disable-and-enable-a-person-by-keyboard",
   "reset-a-persons-sign-in-by-keyboard",

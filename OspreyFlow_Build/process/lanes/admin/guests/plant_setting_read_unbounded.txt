@@ -1,0 +1,5 @@
+# plant: setting_read_unbounded (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k cannot_be_read or too_slow
+# RED
+E       Failed: DID NOT RAISE PrincipalLookupUnavailable
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_setting_too_slow_to_answer_is_unavailable_within_the_bound
+1 failed, 2 passed, 13 deselected in 3.89s
