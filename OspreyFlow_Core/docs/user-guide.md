@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.53** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.54** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.54 | 2026-11-14 | The Glass's navigation as the owner decided it on 13 November (ADR-145 Amendment 15) and the selection's actions as Part C built them (ADR-078 Amendment 1). §3: the banner is the case line, "Case ‹name› ▾ · Views in this case · reads ‹dataset›", *All cases* opening the Cases panel, the cross-link *Open this case's data in the Ingest Studio ↗*; no mode lines. §4: the case switcher and the Cases panel in place of the rail's Cases drawer; *Roles, teams and Authors* from Admin and the Studio. §5's table: the rail Explore, Ask & Chat and History; the view switch Graph, Map, Drawing board and Reports, with Matrix, Figures, Ownership and Connection strength under More views; *Build a report*. §5.2: the selection bar's words and order, the menu's *Expand by link type*, the fold of types with no links, the selection's actions first, the menu key and Shift+F10. §5.12, §5.13, §5.14, §7.1, §8, §9 and §12 follow. Five screenshots marked for a new capture. Held by `tests/test_user_guide_navigation.py`. PDF made by the orchestrator at merge. |
 | 1.53 | 2026-11-14 | §7.5 and §7.11: where people sign in with Entra ID, your watches, hotlists and rules run as you, and a scheduled rule's run acts as you, while you have signed in within the last 24 hours (administration guide §6a.7; ADR-148 Amendment 16). PDF made by the orchestrator at merge. |
 | 1.52 | 2026-11-14 | §6, Ask & Chat, as v0.5.2's Part D built it (ADR-098 Amendment 7, rules-b's wording): **Read from** (*Selected items*, *Everything on the graph*, *Whole case* not available yet), the *About* and *Will read* lines and the engine before anything is sent, an answer from links and events when there is no document; *Ask the model about these…* on any selection saves a private view and asks there; asking needs Editor, no longer a document. Held by `tests/test_user_guide_ask_chat.py`. PDF made by the orchestrator at merge. |
 | 1.51 | 2026-11-13 | §7.5 and §7.11: where people sign in with Entra ID (a shared platform), a load judges only its starter's rules, hotlists and watches, a watch's own runs do not happen, and a scheduled rule is refused (administration guide §6a.7; docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
@@ -176,14 +177,15 @@ It is hidden when nothing waits.
 The OspreyFlow mark at the top left always brings you back.
 
 **Moving between places.** The **place switcher** in the top bar lists the same places; under the
-GOV.UK theme it sits inside the GOV.UK header. Under it, a **context banner** says where you are: in
-the Glass, "You are in the Glass · Graph · Drawing board", with the case you are in and the dataset it
-reads, and a line saying which you are in: "Graph: the case's data. Saved views are under Views or
-Cases." or "Drawing board: your sketch; it does not change the case's data." (on a narrow screen
-that line sits under the banner's row); elsewhere "You are in the Ingest Studio", "You are in Rules and Monitoring" or "You are in
-Admin". If you can open both the Glass and the Ingest Studio, the banner offers **Open ‹dataset› in
-the Ingest Studio ↗**, and from there **← Back to case ‹name› in the Glass**, which brings you back
-to the same case and view.
+GOV.UK theme it sits inside the GOV.UK header. Under it, a **context banner** says where you are. In
+the Glass it is the **case line**: "You are in the Glass · Case ‹name› ▾ · Views in this case · reads
+‹dataset›". The case switcher lists your cases, and its last entry, **All cases**, opens the **Cases**
+panel; **Views in this case** opens the same panel at the case's views (section 5.13); and the line
+names the dataset the case reads, or says "reads no dataset". Graph, Map, Drawing board and Reports are
+in the top bar's view switch, not here (section 5). Elsewhere it says "You are in the Ingest Studio",
+"You are in Rules and Monitoring" or "You are in Admin". If you can open both the Glass and the Ingest
+Studio, the banner offers **Open this case's data in the Ingest Studio ↗**, and from there **← Back to
+case ‹name› in the Glass**, which brings you back to the same case and view.
 
 ## 4. Cases
 
@@ -209,8 +211,8 @@ What you may do in a case is your level and your **roles** together:
 
 Your administrator may also have given you a role of the deployment's own, or the **Super user**
 preset (Analyst, Data Engineer and Rule author together, still never the second person on your own
-work). The rail's **?** opens *Roles, teams and Authors*, which says the same in full: each place,
-role, right and level.
+work). *Roles, teams and Authors*, opened from Admin and from the Ingest Studio, says the same in full:
+each place, role, right and level.
 
 **Starting a case.** **Create case** asks you to name the case and choose what it reads: **Use an
 existing dataset…**, or **Make a new dataset — empty, loaded in the Ingest Studio**. You may tick the
@@ -233,11 +235,11 @@ members, and the Authors of the dataset's home case, read them, and its lead, or
 each to a member (**Give to**) or sets it aside with **Suppress until…**. *Coming:* a case level
 given to a team.
 
-The case menu at the top left lists your cases. The rail's **Cases** drawer lists them too, with
-**Who can open this case**, which the Author manages, and the case's **views** (section 5.13). A link
-to a case opens it directly.
+The case switcher on the case line (section 3) lists your cases. Its last entry, **All cases**, opens
+the **Cases** panel, which lists them too, with the case's **views** (section 5.13), **Browse all
+cases**, and **Who can open this case**, which the Author manages. A link to a case opens it directly.
 
-**The case brief.** The **Cases** drawer also holds the case's **Brief**: what the case is for.
+**The case brief.** The **Cases** panel also holds the case's **Brief**: what the case is for.
 
 - **Priority information requirement** is one statement of the question that matters most.
 - **Information requirements** are up to twenty, each of up to 2,000 characters, each marked **Open** or
@@ -277,13 +279,14 @@ added from outside, such as a VAST Challenge dataset, is a case of its own named
 
 ## 5. The Glass
 
+<!-- needs a new capture: shows the rail and banner before ADR-145 Amendment 15 -->
 ![A case with nothing drawn yet: Where to start](images/user/04-case-where-to-start.png)
 
 | Part | What it is |
 | --- | --- |
-| **Top bar** | The place switcher, the case menu, search, the view switch (Graph and Map, with Matrix and Figures under **More views**), Export, and your account |
-| **Context banner** | Where you are: the Glass's **Graph** and **Drawing board**, with a line saying which is open, the case and the dataset it reads |
-| **Left rail** | Cases, Explore, **Ask & Chat** and Dashboards, then **⋯ Explore Details** with History, Ownership and Connection strength, those your rights allow; and **Help** (**?**), which opens the keys and the user guide over any view and closes again with a second press or Esc |
+| **Top bar** | The place switcher, search, the view switch (**Graph**, **Map**, **Drawing board** and **Reports**, with **Matrix**, **Figures**, **Ownership** and **Connection strength** under **More views**, those your rights allow), **Build a report (opens in new tab)** (section 9), Export, and your account |
+| **Context banner** | The case line: the case switcher, **Views in this case** and the dataset the case reads (section 3) |
+| **Left rail** | **Explore**, **Ask & Chat** and **History**, those your rights allow, each opening its panel beside the view and closing it again with a second press; **Help** (**?**), which opens the keys and the user guide over any view and closes again with a second press or Esc; and **Show names** |
 | **Canvas** | The graph, the map, the Matrix or the case's figures |
 | **Right column** | The Inspector, Metrics, the query builder and Find connections, stacked; **Full width** and **Hide** |
 | **Timeline** | Folded at the bottom until opened |
@@ -299,19 +302,26 @@ list** (section 5.5) is a fold here too.
 
 ### 5.2 The graph
 
+<!-- needs a new capture: shows the rail and banner before ADR-145 Amendment 15 -->
 ![The graph, with its groups shown](images/user/05-canvas.png)
 
 **Selecting.** Click a node; Shift-, Ctrl- or Cmd-click adds or removes one; or draw a lasso. The
-selection bar then offers **Expand**, **Show links among these**, **Save as a view** (section 5.13),
-**Remove from view** and **Clear** (Esc). Past one degree, **Show links among these** draws the routes
-between the selected nodes, says which pairs are not connected, and says when the routes are already
-drawn. **Remove from view** and **Clear view** take nodes off the canvas; a node you put back brings
+selection bar then offers **Expand**, **Show links** (for two or more, with how far to look, "direct"
+or "within 2" to "within 6", stepped by − and +), **Ask the model about these…** (section 6), **Save as
+a view** (section 5.13), **Remove from view** and **Clear** (Esc), and **Undo select what is lit**
+after a selection made by what is lit. Past one degree, **Show links** draws the routes between the
+selected nodes, says which pairs are not connected, and says when the routes are already drawn. **Remove from view** and **Clear view** take nodes off the canvas; a node you put back brings
 its links in the view back with it.
 
-**Expanding.** Double-click, or press Enter, to draw a node's links. Right-click (or `\`) opens its
-menu: **Show links** lists each kind of relationship with how many there are, so you can draw just
-one; **Actions** holds Link to…, Split from…, Find paths to…, Explain cluster, View messages, Expand
-group, Read full screen and Add files held by this…. An expansion that would add more than
+**Expanding.** Double-click, or press Enter, to draw a node's links. Right-click (or `\`, the menu
+key, or Shift+F10) opens its menu, on the selection: a right-click on something not selected selects
+it first. The selection's own actions come first, in the bar's words. **Expand by link type** lists
+each kind of relationship with how many links it has, so you can draw just one; the kinds with none
+fold into one line ("7 types with no links") that opens in place. **Actions** holds what the item
+offers, as its type allows: Explain cluster, View messages, Expand group, Read full screen, Add files
+held by this…, Set picture… and Mark for suppression; with two selected, only the pair's own: Link
+to…, Split from… and Find paths to…. In a view, the menu offers only what changes nothing in the
+case. An expansion that would add more than
 **500** nodes asks first, offering one relationship at a time, all of them, or nothing. An expansion
 past the working set's own limit is refused; reduce what is drawn, or save a smaller view, and try again.
 
@@ -360,6 +370,7 @@ press `G` on a node in it. **Layout** offers Organic, Force-directed tree, and C
 
 ### 5.3 The map
 
+<!-- needs a new capture: shows the rail and banner before ADR-145 Amendment 15 -->
 ![The map, with sites, boundaries and hotspot cells](images/user/06-map.png)
 
 The map shows the same working set and selection as the graph. A location is drawn at its point,
@@ -416,6 +427,7 @@ it.
 
 ### 5.5 Search
 
+<!-- needs a new capture: shows the rail and banner before ADR-145 Amendment 15 -->
 ![Search: suggestions after two characters](images/user/16-search.png)
 
 Press `/` anywhere (outside a text box) to search. Suggestions start at two characters, across names,
@@ -674,7 +686,7 @@ compare the two on the same case, and back.
   it is drawn at. With two people selected, **What these two share** does the same for them.
 
 **Who changes influencers.** An installation-wide set is proposed in the Glass's **Connection
-strength** (on the rail) by someone holding the right to manage influencers, and takes effect only when **another**
+strength** (under **More views**) by someone holding the right to manage influencers, and takes effect only when **another**
 person with that right approves it; the proposer can withdraw it but never approve it, and every
 version is kept; a version may also choose the composition and the rarity measure. A case's **Author**
 may add influencers for that case, switch off installation-wide ones in it, or choose its composition
@@ -697,9 +709,10 @@ copy: there are no branches, and nothing in a view changes the case.
   **View name** and **Save view**. A new view is yours alone.
 - **Finding them.** **Views ▾**, in the graph's toolbar beside *Clear view*, lists the views you may
   see, each marked *Private* or *Shared*, the one open now marked too; choose one to open it. Before
-  you have any it says "No saved views yet. Select nodes and choose Save as a view." The rail's
-  **Cases** drawer also lists them, under **Views in this case**, each with
-  **Open**, **Share with the case** and **Delete** ("Delete this view? Nothing on the case is deleted
+  you have any it says "No saved views yet. Select nodes and choose Save as a view." **Views in this
+  case**, on the case line, opens the **Cases** panel at them: each view's name and its *Private* or
+  *Shared* tag, the one open now marked "open now", and under them **Open**, **Share with the case**
+  and **Delete** ("Delete this view? Nothing on the case is deleted
   with it."). Only the person who saved a view shares or deletes it. Before you have any it says "No
   views yet. Select nodes on the canvas and choose *Save as a view*."
 - **Opening one** reads the case through it, read-only. A banner says "View: ‹name›", whether it is
@@ -713,9 +726,9 @@ declare a person, an account or a place, and draw the links between them. What y
 the case's own **analyst layer**: it is read with the case's dataset but never written into it, and
 no other case can see it or infer it. The analysis canvas never draws.
 
-**Opening a board.** Choose **Drawing board** in the context banner: "Drawing boards in case ‹name›".
-The banner then says "Drawing board: your sketch; it does not change the case's data."; **Graph**
-takes you back to the case's data.
+**Opening a board.** Choose **Drawing board** in the top bar's view switch: "Drawing boards in case
+‹name›", and above the board, "Drawing board: your sketch; it does not change the case's data.";
+**Graph**, in the same switch, takes you back to the case's data.
 **New board** asks for a **Board name** and where to **Start from**: blank, **From a view of this
 case**, or **From the selection** (its items as live references); then **Make the board**. A new board
 is yours alone until you **Share with the case**; on a board someone else drew you read it, "Read
@@ -785,6 +798,7 @@ the case's analyst layer.
 
 ## 6. Ask & Chat: questions to the model
 
+<!-- needs a new capture: shows the rail and banner before ADR-145 Amendment 15 -->
 ![Ask & Chat (named Questions in this picture): ask about the documents in this case](images/user/12-questions.png)
 
 **Ask & Chat** (on the rail; it was named *Questions*) asks the deployment's model about what you choose
@@ -876,7 +890,7 @@ none open, it says "Open a case to see its alerts and what raises them." Its tab
 - **Held rows**: the rows a rule held before they loaded. You see it as an Editor or Author of the case;
 - **Changes**: the rule audit. You see it as an Author of the case, or as an administrator.
 
-**Connection strength** is not here: it is in the Glass's rail (section 5).
+**Connection strength** is not here: it is a view of the Glass, under **More views** (section 5).
 
 **One queue holds every alert you may see.** **Kind** names its five kinds:
 
@@ -1328,7 +1342,7 @@ audit.
 
 ![Ownership: who stands behind an organisation, and its due diligence](images/user/10-ownership-due-diligence.png)
 
-The rail's **Ownership** traces who stands behind an organisation or account: every beneficial owner
+**Ownership**, under **More views** in the Glass, traces who stands behind an organisation or account: every beneficial owner
 at or above the threshold (25% by default), their cumulative share through each chain, and anyone
 holding control whatever their share. A circle of cross-holdings is traced once, and said so. **Due
 diligence** gives the verification status, risk band and score with each factor's weight, and the
@@ -1339,7 +1353,7 @@ verifying documents. All of it is worked out as you read, from what you can see,
 
 ![The case's Figures](images/user/07-reports-figures.png)
 
-**Figures** (under **More views** in the view switch; a Reports Viewer has it in the switch itself)
+**Figures** (under **More views** in the view switch)
 shows the case's own counts over a **Period** of the last 4, 12, 26 or 52 weeks: an **Alerts** panel
 (open alerts by source and age, and the newest), alerts raised each week, open alerts by age,
 outcomes (open, claimed, each closing reason, and closed with no outcome), customers by KYC status, a
@@ -1354,8 +1368,10 @@ Beside Figures, as your rights allow: **Trends**, **Packs** (report packs, expor
 
 ![Dashboards: a board drawn inside the Glass](images/user/08-reports-dashboard.png)
 
-**Dashboards**, on the rail, is the one door to the deployment's boards, drawn inside the Glass and
-showing only those you may open. The same boards are at `bi.` in front of the deployment's address,
+**Reports**, in the view switch (it was named *Dashboards*), is the one door to the deployment's
+boards, drawn inside the Glass and showing only those you may open. Where the deployment has its
+reporting, **Build a report (opens in new tab)**, beside the switch, opens the boards' own editor at
+`bi.`, for whoever may manage dashboards. The same boards are at `bi.` in front of the deployment's address,
 signed in the same way. The first is **Alert monitoring**: alerts raised each week and by rule,
 closed by outcome, time to close, hotlist matches, and the team view.
 
@@ -1445,7 +1461,7 @@ recorded. Report packs export to PDF from the Packs and Published tabs.
 | Canvas | Ctrl/Cmd+Arrows | Step within the selection; with Shift, through every node |
 | Canvas | Space | Add or remove the focused node from the selection |
 | Canvas | Enter | Expand the focused node, or read a document |
-| Canvas | `\` | The focused node's or the selected link's menu |
+| Canvas | `\`, the menu key, Shift+F10 | The focused node's or the selected link's menu |
 | Canvas | `L`, Shift+`L` | The next or previous link of the focused node |
 | Canvas | `G` | Fold or unfold the focused node's group |
 | Canvas | `F` | Fit the graph to the view |

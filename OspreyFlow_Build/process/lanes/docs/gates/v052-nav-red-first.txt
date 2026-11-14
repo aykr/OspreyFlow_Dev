@@ -1,0 +1,45 @@
+lane/docs-v052-nav from main aebe2ab: tests/test_user_guide_navigation.py, offline, closed ports 59991-59994; each plant restored by git checkout of its file
+== red: main's guide (the rail, banner and switch before Amendment 15)
+FAILED tests/test_user_guide_navigation.py::test_section_5_names_the_rail_s_entries_in_order
+FAILED tests/test_user_guide_navigation.py::test_no_guide_passage_puts_on_the_rail_what_is_not_there
+FAILED tests/test_user_guide_navigation.py::test_the_rail_check_flags_a_view_said_to_be_on_the_rail
+FAILED tests/test_user_guide_navigation.py::test_section_5_names_the_view_switch_and_more_views_in_order
+FAILED tests/test_user_guide_navigation.py::test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it
+FAILED tests/test_user_guide_navigation.py::test_section_5_2_gives_the_selection_bar_in_its_words_and_order
+FAILED tests/test_user_guide_navigation.py::test_section_5_2_gives_the_node_menu_s_heading_and_keys
+FAILED tests/test_user_guide_navigation.py::test_the_old_navigation_s_screenshots_are_marked_for_a_new_capture
+8 failed in 0.26s
+== red: Cases put back on the rail (railLayout.ts ON_THE_RAIL)
+FAILED tests/test_user_guide_navigation.py::test_section_5_names_the_rail_s_entries_in_order
+1 failed, 7 passed in 0.26s
+== red: Reports named Dashboards again (railLayout.ts VIEW_LABELS)
+FAILED tests/test_user_guide_navigation.py::test_section_5_names_the_view_switch_and_more_views_in_order
+1 failed, 7 passed in 0.26s
+== red: More views reordered (railLayout.ts MORE_VIEWS)
+FAILED tests/test_user_guide_navigation.py::test_section_5_names_the_view_switch_and_more_views_in_order
+1 failed, 7 passed in 0.25s
+== red: the case line's empty wording changed (ContextBanner.tsx)
+FAILED tests/test_user_guide_navigation.py::test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it
+1 failed, 7 passed in 0.25s
+== red: the cross-link renamed (ContextBanner.tsx)
+FAILED tests/test_user_guide_navigation.py::test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it
+1 failed, 7 passed in 0.25s
+== red: the bar's Show links renamed (selectionActions.ts SELECTION_WORDS)
+FAILED tests/test_user_guide_navigation.py::test_section_5_2_gives_the_selection_bar_in_its_words_and_order
+1 failed, 7 passed in 0.25s
+== red: the menu's heading renamed (GlassCanvas.tsx EXPAND_BY_LINK_TYPE)
+FAILED tests/test_user_guide_navigation.py::test_section_5_2_gives_the_node_menu_s_heading_and_keys
+1 failed, 7 passed in 0.25s
+== red: Shift+F10 no longer opens the menu (GlassCanvas.tsx opensMenu)
+FAILED tests/test_user_guide_navigation.py::test_section_5_2_gives_the_node_menu_s_heading_and_keys
+1 failed, 7 passed in 0.25s
+== red: Connection strength said to be on the rail (the guide)
+FAILED tests/test_user_guide_navigation.py::test_no_guide_passage_puts_on_the_rail_what_is_not_there
+FAILED tests/test_user_guide_navigation.py::test_the_rail_check_flags_a_view_said_to_be_on_the_rail
+2 failed, 6 passed in 0.26s
+== red: a screenshot's capture mark removed (the guide)
+FAILED tests/test_user_guide_navigation.py::test_the_old_navigation_s_screenshots_are_marked_for_a_new_capture
+1 failed, 7 passed in 0.25s
+== green
+1 failed, 102 passed in 5.27s
+  (the one red is test_docs_pdf: user-guide.md changed since user-guide.pdf was made; the orchestrator prints the PDF at merge)
