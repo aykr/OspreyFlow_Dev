@@ -98,8 +98,9 @@ class AnalyticsEngine(StrEnum):
 class SearchBackend(StrEnum):
     """`05_DEPLOYMENT.md` §3's reduced variant, as a declarable component rather than a hidden
     code path: "If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch
-    and falls back to PostgreSQL full-text, stating the trade-off on screen: search quality
-    degrades and semantic search is unavailable."
+    (`search: postgres-fulltext`), stating the trade-off on screen: with no search index, search is
+    the graph store's own exact search". The value's name is older than the code: nothing searches
+    PostgreSQL (docs' v0.5.2 sweep, 14 November 2026).
 
     **Offering it is Preflight's job, not this schema's** (ADR-049 amendment 5, ownership confirmed
     by the owner 24 September 2026). Stage 2 §1 only has to be able to *render* the reduced variant

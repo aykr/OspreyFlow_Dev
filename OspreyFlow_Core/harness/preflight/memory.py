@@ -86,10 +86,10 @@ def check(context: PreflightContext) -> CheckResult:
             "twelve containers at roughly 11GiB at rest, so it will not fit."
         ),
         what_to_do=(
-            "Either run the reduced variant, which drops OpenSearch and falls back to PostgreSQL "
-            "full-text — Preflight offers it below, and it is never applied for you — or raise "
-            "the container runtime's own memory allocation. If you are on Docker Desktop, that "
-            "is Settings → Resources → Memory, not more host RAM by itself"
+            "Either run the reduced variant, which drops OpenSearch, so search is the graph "
+            "store's own exact search — Preflight offers it below, and it is never applied for "
+            "you — or raise the container runtime's own memory allocation. If you are on Docker "
+            "Desktop, that is Settings → Resources → Memory, not more host RAM by itself"
             + (f" ({_gib(host_total)} of it, measured just now)" if host_total is not None else "")
             + "."
         ),
