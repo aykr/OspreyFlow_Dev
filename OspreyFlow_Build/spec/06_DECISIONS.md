@@ -39803,7 +39803,14 @@ exact search the fallback answers from, as Amendment 20 did for `edges_among`.*
      for a request reader, a type the store does not hold asked, no query for a value nobody holds, only the first
      chunk traversed, the answer not cut at the limit.
 
-   **Measured after**: M9 again on stack d, alone on the host.
+   **Measured after** (stack d, B's load, the rules lane's lease; `process/lanes/rules/adr124-am21/gates/`):
+   M9 alone on the host (load 1.9), on the code as built, run 20261114T210905Z-74ac69e7: **met**, the five
+   fallback name searches 82 to 116 ms (5.3 to 5.5 s before), the five suggestions 1.11 to 1.43 s (against
+   2 s), the bar back in 9.2 s (against 120 s). Over the 1,200 comparisons, the new search took 76 to 96 ms
+   at the median and at most 107 ms at the 95th percentile, where the query as built took 7.3 to 22.2 s.
+   The narrowed candidates against the first version: 1,200 of 1,200 the same (579 matched at least one
+   node, 10 past the depth). The Account case live, with its plant (candidates by identifiers alone, so
+   the Organisation is not found by its name) red and restored green.
 
 ### ADR-150, Amendment 1 (14 November 2026) — The drift check streams
 
