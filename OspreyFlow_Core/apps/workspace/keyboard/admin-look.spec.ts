@@ -3,19 +3,19 @@
 // screen the owner's screenshot showed. GOV.UK: the Design System's scale (heading-l for the one h1, the
 // "s" size, 16px, for the side navigation and the tables), names in the body face, every column header
 // on one line, a person's rows at most 60% of their old height, "(coming)" items not links. The dark and
-// light looks: the same structure, and the sizes main drew (measured on main 3c59060: nav and cells
-// 13px, headers 12px and 67px tall, a row 122px tall). Their row grows by at most one line of actions
+// light looks: the same structure, and the sizes main drew (process/lanes/admin/govuk_admin/measures.log: nav
+// and cells 13px, headers 12px and 66.5px tall, a row 122px tall). Their row grows by at most one line of actions
 // (20px): the actions now sit beneath a person rather than beside them, which is what lets every column
 // header keep to one line (each header at least 30px shorter than main's).
 import { expect, test, type Page } from "@playwright/test";
 
 const ALL_RIGHTS = "manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit";
 const LOOKS = [["dark", ""], ["light", ""], ["govuk", "&brand=govuk"]] as const;
-//: What main drew (admin-look-measure, 14 Nov): the bound a look must not cross.
+//: What main drew (measures.log, main's three files): the bound a look must not cross.
 const MAIN = {
-  dark: { nav: 13, cell: 13, header: 12, headerHeight: 67, row: 122 },
-  light: { nav: 13, cell: 13, header: 12, headerHeight: 67, row: 122 },
-  govuk: { nav: 19, cell: 19, header: 16, headerHeight: 113, row: 267 },
+  dark: { nav: 13, cell: 13, header: 12, headerHeight: 66.5, row: 122 },
+  light: { nav: 13, cell: 13, header: 12, headerHeight: 66.5, row: 122 },
+  govuk: { nav: 19, cell: 19, header: 16, headerHeight: 112.5, row: 267 },
 } as const;
 //: One line of link-styled actions, beneath a person, in the dark and light looks.
 const ACTION_LINE = 20;

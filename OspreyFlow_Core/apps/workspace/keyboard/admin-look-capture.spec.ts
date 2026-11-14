@@ -1,6 +1,6 @@
 // Captures, not a test: Admin's People at 1280px in each look, for the pass's before and after (the owner's
-// screenshot, 14 Nov). Written to ADMIN_LOOK_CAPTURE_DIR as <stage>-<state>.png. The viewport is tall enough
-// for the whole section, since `.admin-place` scrolls inside the page and a full-page capture stops at it.
+// screenshot, 14 Nov). Written to ADMIN_LOOK_CAPTURE_DIR as <stage>-<state>.png. `.admin-place` scrolls inside a
+// fixed-height harness, so a full-page capture would stop at it: the place and its ancestors are let grow first.
 import { test } from "@playwright/test";
 
 const DIR = process.env.ADMIN_LOOK_CAPTURE_DIR ?? "";
@@ -16,11 +16,16 @@ const STATES = [
 for (const [name, query, theme] of STATES) {
   test(`capture ${name}`, async ({ page }) => {
     test.skip(!DIR, "ADMIN_LOOK_CAPTURE_DIR not set");
-    await page.setViewportSize({ width: 1280, height: 1800 });
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(`/keyboard/admin-harness.html?${query}`);
     if (theme) await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
     await page.getByRole("table").first().waitFor();
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    await page.evaluate(() => {
+      for (let el = document.querySelector<HTMLElement>(".admin-place"); el; el = el.parentElement) {
+        Object.assign(el.style, { height: "auto", maxHeight: "none", overflow: "visible" });
+      }
+    });
     await page.screenshot({ path: `${DIR}/${STAGE}-${name}.png`, fullPage: true });
   });
 }

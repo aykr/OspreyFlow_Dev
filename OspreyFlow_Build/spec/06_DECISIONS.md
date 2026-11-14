@@ -38972,10 +38972,14 @@ not to regress. The orchestrator approved three choices:
      face at `--fs-16`.
    - *Admin* above it is a caption, not a heading (`govuk-caption-l`).
    - *Roles, teams and Authors* is a link on the caption's line.
-   - Beneath the `h1` every heading is an `h2`: the side list's groups, and People's parts (*Refused organisation
-     sign-ins*, *Guests*, *Add a person by object id*, *Invite a person*). Each is drawn smaller than the `h1`. In
-     dark and light they keep the sizes main drew them as `h3` and `h4` (`--fs-14`, `--fs-13`); in GOV.UK they
-     take `govuk-heading-s` or the scale.
+   - On People and roles, the screen the ruling showed, every heading beneath the `h1` is an `h2`: the side
+     list's groups, and People's parts (*Refused organisation sign-ins*, *Guests*, *Add a person by object id*,
+     *Invite a person*). Each is drawn smaller than the `h1`. In dark and light they keep the sizes main drew them
+     as `h3` and `h4` (`--fs-14`, `--fs-13`); in GOV.UK they take `govuk-heading-s` or the scale.
+   - **Not yet on the other sections.** Their own headings still step from the `h1` to `h3`, `h4` or `h5`:
+     Roles, Dashboard identities, Datasets, Operations and its figures, System and Demo packs (the admin lane's),
+     and Models and Maps (the platform lane's). This is left for a later step that measures each screen as
+     People's was measured.
    - Not changed: the help page *Roles, teams and Authors* is shared with the other places (`RolesHelpPage`), and
      its own heading stays an `h2`.
 2. **The type scale, in GOV.UK alone.**

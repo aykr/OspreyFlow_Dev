@@ -134,8 +134,10 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
   const groups = sectionsFor(rights);
   const shown = groups.flatMap((g) => g.sections);
   const [chosen, setChosen] = useState<string | null>(null);
-  // The first built section the person holds opens first; a placeholder only when nothing else shows.
-  const section = shown.find((s) => s.id === chosen) ?? shown.find((s) => s.screen) ?? shown[0];
+  // The first built section the person holds opens first. A coming section has no screen and is never opened
+  // (ADR-145 Amendment 16); a place is offered only for a built section's first read (Amendment 3), so someone
+  // whose rights show coming sections alone is not offered Admin.
+  const section = shown.find((s) => s.id === chosen) ?? shown.find((s) => s.screen);
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
   // L2.7: *Needs you* asks for a section (Operations, for an overdue promotion); taken once.

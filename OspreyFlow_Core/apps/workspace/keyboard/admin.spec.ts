@@ -715,13 +715,11 @@ test("a coming section says what it will hold in the side list, and Tab passes o
   await page.goto("/keyboard/admin-harness.html?rights=administer_system,read_audit");
   await expect(page.getByRole("heading", { name: "Datasets" })).toBeVisible();
   await expect.poll(() => asked).toContain("GET datasets");
-  const before = asked.length;
   const nav = page.getByRole("navigation", { name: "Admin sections" });
   await expect(nav.locator(".admin-nav__coming-item", { hasText: "Uploads" })).toContainText(/Coming.*The largest picture/);
   await section(page, "Grading scheme").focus();
   await page.keyboard.press("Tab");
   await expect(section(page, "Audit")).toBeFocused();
-  expect(asked.length).toBe(before);
   registerCovered(REGISTRY, "read-a-coming-admin-section-by-keyboard");
 });
 

@@ -154,7 +154,9 @@ describe("a person's row in Admin › People", () => {
     expect(name.classList.contains("value")).toBe(false);
     const actions = name.closest("tr")!.nextElementSibling!;
     expect(actions.classList.contains("admin-row-actions-row")).toBe(true);
-    expect(actions.querySelectorAll(".admin-row-actions__primary").length).toBe(1);
+    // Save the one button; every other action a link-styled button.
+    const buttons = [...actions.querySelectorAll("button")].filter((b) => !b.classList.contains("admin-row-actions__link"));
+    expect(buttons.map((b) => b.textContent)).toEqual(["Save"]);
     const links = [...actions.querySelectorAll(".admin-row-actions__link")].map((b) => b.getAttribute("aria-label"));
     expect(links).toEqual([
       `Super user preset for ${ANA.username}`, `Edit access for ${ANA.username}`, `Disable ${ANA.username}`,
