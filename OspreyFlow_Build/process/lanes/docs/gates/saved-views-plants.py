@@ -86,6 +86,10 @@ PLANTS = [
   "under *More* (so named since ADR-145 Amendment 17);", "under *More views*;"),
  ("test_the_views_the_guides_name_are_where_the_layout_puts_them", "the admin guide: the Reports view again", AG,
   "**In the Glass**, **Reports** (the top bar's view switch) draws", "**In the Glass**, the **Reports** view (the top bar's view switch) draws"),
+ ("test_the_app_draws_the_strip_the_panel_and_the_way_back", "the decision: the only-route claim again", "OspreyFlow_Build/spec/06_DECISIONS.md",
+  "is the one route on the case's own screen to its saved", "is the one route to a case's saved"),
+ ("test_the_app_draws_the_strip_the_panel_and_the_way_back", "the guide: the one way again", UG,
+  "on the case's own screen it is the one route to them, and the **Cases** panel, from **All cases**, still lists each case's saved views.", "it is the one way to them."),
 ]
 def run():
     env = dict(os.environ, PYTHONPYCACHEPREFIX=tempfile.mkdtemp())

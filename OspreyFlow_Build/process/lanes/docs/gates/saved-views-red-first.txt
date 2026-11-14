@@ -1,9 +1,9 @@
 # Saved views (ADR-145 Am 17, ADR-144 Am 6) and no client words (studio's V3): red-first run, 14 November 2026
-Tree: main 3e185fe (case-b's V2 landed, 84c128d), merged with lane/case-saved-views eb2ce49 (its three App.*.test.tsx conflicts taken from case; no file a test here reads), lane/studio-no-client-words 732b41c and lane/docs-v052-saved-views 4627b24, in a scratch worktree. Not the shipping tree: the run is taken again on main once case and studio land.
+Tree: lane/docs-v052-saved-views 467ceb7, rebased on main f7e9606 (case-b's V2 and studio's V3 landed), merged with lane/case-saved-views 14dfbeb (its three App.*.test.tsx conflicts taken from case; no file a test here reads), in a scratch worktree. Not yet the shipping tree: taken again on main once case lands.
 Command: python3 saved-views-plants.py <tree> <venv python>; a fresh PYTHONPYCACHEPREFIX each run; the offline ports 59991-59994. A plant whose old text is a list applies each pair in turn (a part moved within the real file).
 Earlier runs, each fixed before this one: the strip's reworded note passed (the order check sorted a missing part last); Clear the graph renamed passed (its confirmation's name held the words).
 
-unplanted: 31 passed in 1.49s
+unplanted: 31 passed in 2.28s
 RED  the strip's note in its old words
      OspreyFlow_Core/apps/workspace/src/views/ViewLensBanner.tsx: 'Nothing in a saved view changes the case.' -> 'Nothing in a view changes the case.'
      failed: test_the_strip_starts_with_the_way_back_and_says_what_the_guide_says_in_its_order, test_the_app_draws_the_strip_the_panel_and_the_way_back_as_the_guide_says, test_view_means_a_saved_view_in_every_guide_and_in_the_glass
@@ -118,4 +118,10 @@ RED  the demo guide: More views again
 RED  the admin guide: the Reports view again
      OspreyFlow_Core/docs/administration-guide.md: "**In the Glass**, **Reports** (the top bar's view switch) draws" -> "**In the Glass**, the **Reports** view (the top bar's view switch) draws"
      failed: test_the_views_the_guides_name_are_where_the_layout_puts_them
-restored: 31 passed in 4.21s
+RED  the decision: the only-route claim again
+     OspreyFlow_Build/spec/06_DECISIONS.md: "is the one route on the case's own screen to its saved" -> "is the one route to a case's saved"
+     failed: test_the_app_draws_the_strip_the_panel_and_the_way_back_as_the_guide_says
+RED  the guide: the one way again
+     OspreyFlow_Core/docs/user-guide.md: "on the case's own screen it is the one route to them, and the **Cases** panel, from **All cases**, still lists each case's saved views." -> 'it is the one way to them.'
+     failed: test_the_app_draws_the_strip_the_panel_and_the_way_back_as_the_guide_says
+restored: 31 passed in 1.28s
