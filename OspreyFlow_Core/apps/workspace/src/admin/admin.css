@@ -6,15 +6,53 @@
   padding: var(--sp-16); min-height: 0; flex: 1; overflow-y: auto;
   background: var(--surface-app); color: var(--text-primary);
 }
-.admin-place .admin-place__title { margin: 0; }
+/* The page's one heading is the open section's (the GOV.UK pass, 14 Nov): "Admin" a caption over it,
+   the help page a link in the same row. Outside GOV.UK, the section heading keeps its old size. */
+.admin-place__title-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-16); flex-wrap: wrap; }
+.admin-place .admin-place__caption { margin: 0; }
+.admin-place .admin-place__help { background: none; border: 0; padding: 0; cursor: pointer; }
+.admin-place .admin-place__heading { margin: 0; }
+.admin-place h1.value.admin-place__heading { font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 600; }
+
+/* A row's actions: a full-width row beneath the person, one primary then the rest as links, every look. */
+/* A person's row and its actions read as one item: no rule between them, little space. */
+.admin-place__section tr:has(+ .admin-row-actions-row) > td { border-bottom: 0; padding-bottom: var(--sp-2); }
+.admin-row-actions-row > td { padding-top: var(--sp-2); padding-bottom: var(--sp-8); }
+.admin-row-actions__line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-16); }
+.admin-row-actions__more { display: contents; }
+.admin-row-actions__link {
+  font: inherit; color: var(--brass); background: none; border: 0; padding: 0; min-height: var(--h-control-24);
+  text-decoration: underline; cursor: pointer; white-space: nowrap;
+}
+.admin-row-actions__link:hover { color: var(--brass-hover); }
+.admin-row-actions__link[aria-expanded="true"] { font-weight: 700; }
+
+/* A person's name is words, in the page's own face; mono stays for identifiers (DESIGN.md §9). */
+.admin-person__name { font-family: var(--ui); font-weight: 700; }
+
+/* A case's name is a name, not an identifier (ADR-145 Amendment 16): the body face, as a person's is. */
+.admin-case__name { font-family: var(--ui); font-weight: 700; }
+
+/* A section not built yet is named, never a link, with a Coming tag. */
+.admin-nav__coming-item { display: block; padding: var(--sp-4) var(--sp-8); color: var(--text-secondary); }
+.admin-nav__coming.label { border: 1px solid var(--border); padding: 0 var(--sp-4); font-weight: 600; }
+.admin-nav__coming-what { display: block; font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-secondary); }
+
+/* Column headers on one line at desktop width; they may wrap on a narrower screen. */
+@media (min-width: 1020px) { .admin-place__section th { white-space: nowrap; } }
 .admin-place__body { display: flex; gap: var(--sp-24); align-items: flex-start; min-width: 0; }
 .admin-place__section { display: flex; flex-direction: column; gap: var(--sp-12); flex: 1; min-width: 0; }
-.admin-place__section > h3 { align-self: flex-start; }
-.admin-place__section > h3:focus { outline: none; }
-.admin-place__section > h3:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-offset); }
+.admin-place__section > h1 { align-self: flex-start; }
+.admin-place__section > h1:focus { outline: none; }
+.admin-place__section > h1:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-offset); }
 
 .admin-nav { flex: none; width: 220px; display: flex; flex-direction: column; gap: var(--sp-12); }
 .admin-nav .admin-nav__heading { margin: 0 0 var(--sp-4); }
+/* The side list's groups and People's parts are h2s beneath the section's h1 (ADR-145 Amendment 16): drawn
+   at the sizes main gave them as h3 and h4, below the h1, not at the browser's h2 size. GOV.UK's classes size
+   its own. */
+.admin-nav h2.label.admin-nav__heading { font-size: var(--fs-14); line-height: var(--lh-14); font-weight: 700; }
+.admin-place__section h2.value { font-size: var(--fs-13); line-height: var(--lh-13); font-weight: 700; }
 .admin-nav__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .admin-nav__item { border-left: 4px solid transparent; }
 .admin-nav__item--current { border-left-color: var(--brass); background: var(--surface-raised); }
@@ -28,7 +66,7 @@
 
 /* GOV.UK's side navigation: links underlined, the open item's rule and background as GOV.UK draws it,
    the focus state GOV.UK's own (the yellow with its ink). */
-.admin-nav--govuk { width: 280px; }
+.admin-nav--govuk { width: 220px; }
 .admin-nav--govuk .admin-nav__item--current { background: var(--surface-sunken); }
 .admin-nav--govuk .admin-nav__link { text-decoration: underline; text-underline-offset: 0.1578em; }
 .admin-nav--govuk .admin-nav__item--current .admin-nav__link { text-decoration: none; }
@@ -42,4 +80,11 @@
 @media (max-width: 640px) {
   .admin-place__body { flex-direction: column; }
   .admin-nav { width: 100%; }
+}
+
+/* GOV.UK's scale for Admin's dense parts (the GOV.UK pass, 14 Nov): the side navigation, the tables and
+   their controls at the Design System's "s" size (16px, the --fs-12 slot on these pages); prose stays at
+   the 19px body. */
+[data-brand="govuk"] .admin-place :is(.admin-nav__link, .admin-nav__coming-item, .admin-nav__coming, .admin-nav__coming-what, .admin-place__help, .admin-place__section table, .admin-place__section .btn, .admin-place__section input, .admin-place__section select, .admin-row-actions__link) {
+  font-size: var(--fs-12); line-height: var(--lh-12);
 }

@@ -707,20 +707,20 @@ test("Admin's sections are moved between by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "move-between-admin-sections-by-keyboard");
 });
 
-// ADR-145 decision 5: a section not built yet opens by keyboard to say what it will hold, and asks the
-// Conduit nothing.
-test("a coming section is opened by keyboard, and calls nothing", async ({ page }) => {
+// ADR-145 decision 5, as the GOV.UK pass draws it (the owner's screenshot, 14 Nov): a section not built yet
+// is named in the side list with a Coming tag and says what it will hold there; it is no link, so Tab goes
+// from Grading scheme straight on to Audit, and nothing calls the Conduit.
+test("a coming section says what it will hold in the side list, and Tab passes over it", async ({ page }) => {
   const asked = await serve(page);
-  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system,read_audit");
   await expect(page.getByRole("heading", { name: "Datasets" })).toBeVisible();
   await expect.poll(() => asked).toContain("GET datasets");
-  const before = asked.length;
-  await open(page, "Uploads (coming)");
-  await expect(page.getByRole("heading", { name: "Uploads" })).toBeFocused();
-  await expect(page.getByText(/^Coming: The largest picture/)).toBeVisible();
-  await expect(section(page, "Uploads (coming)")).toHaveAttribute("aria-current", "page");
-  expect(asked.length).toBe(before);
-  registerCovered(REGISTRY, "open-a-coming-admin-section-by-keyboard");
+  const nav = page.getByRole("navigation", { name: "Admin sections" });
+  await expect(nav.locator(".admin-nav__coming-item", { hasText: "Uploads" })).toContainText(/Coming.*The largest picture/);
+  await section(page, "Grading scheme").focus();
+  await page.keyboard.press("Tab");
+  await expect(section(page, "Audit")).toBeFocused();
+  registerCovered(REGISTRY, "read-a-coming-admin-section-by-keyboard");
 });
 
 // L2.5 (ADR-145 decisions 6 and 7 and Amendment 5; rule 13): every new action of People and Roles, by

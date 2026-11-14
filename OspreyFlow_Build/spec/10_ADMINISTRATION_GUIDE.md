@@ -2000,7 +2000,9 @@ while it is off, a guest is listed as not enabled.
 **Admin** is one of the four places (key `A`); Home and the place switcher offer it to whoever holds
 one of its sections' rights. A side list groups its sections, each shown only to someone holding its
 right, and each section's routes refuse anyone without it, so hiding a section is never the control.
-Under the GOV.UK theme the list is a GOV.UK side navigation.
+Under the GOV.UK theme the list is a GOV.UK side navigation. A section not built yet is not a link: its name
+stands with a **Coming** tag, and what it will hold is written beneath it. Each person in **People and roles**
+has **Save** and, beside it, links to the person's other actions on a line beneath their name.
 
 | Group | Section | Right | What it does |
 | --- | --- | --- | --- |

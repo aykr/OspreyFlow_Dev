@@ -221,7 +221,7 @@ describe("Admin's words: roles by name, never people or ids", () => {
   const SHOWS: Record<string, string> = {
     people: "Author of Kestrel", roles: "A preset: gives", dashboards: "osprey-dashboard-board", datasets: "Prison records",
     connections: "Telco lookup (synthetic)", operations: "Prison records", system: "Graph store", models: "Gemini",
-    maps: "OpenStreetMap", "grading-scheme": "admiralty", "approval-rights": "Coming:", uploads: "Coming:",
+    maps: "OpenStreetMap", "grading-scheme": "admiralty", "approval-rights": "Coming", uploads: "Coming",
     audit: "Bea Engineer", "demo-packs": "HMP extract (synthetic)",
   }; // prettier-ignore
   const DRAWS_TIPS = new Set(["people", "roles"]);
@@ -232,8 +232,15 @@ describe("Admin's words: roles by name, never people or ids", () => {
   it.each(SECTIONS.map((s) => [s.label, s] as const))("in %s, nothing names a person in a tip or shows an id", async (label, s) => {
     serve();
     open(EVERY_RIGHT);
-    const name = s.screen ? label : `${label} (coming)`;
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Admin sections" })).getByRole("button", { name }));
+    const nav = within(screen.getByRole("navigation", { name: "Admin sections" }));
+    if (!s.screen) {
+      // Not built: named in the side list with a Coming tag, never opened (the GOV.UK pass, 14 Nov).
+      const item = nav.getByText(label).closest(".admin-nav__coming-item")!;
+      expect(item.textContent).toBe(`${label} Coming${s.coming}`); // ADR-145 decision 5: says what it will hold
+      for (const id of IDS) expect(item.textContent, `${label}: ${id}`).not.toMatch(word(id));
+      return;
+    }
+    fireEvent.click(nav.getByRole("button", { name: label }));
     await waitFor(() => expect(document.getElementById("admin-section-title")?.textContent).toBe(label));
     await waitFor(() => expect(document.querySelector(".admin-place__section")?.textContent).toContain(SHOWS[s.id]));
     for (const id of IDS) expect(document.body.textContent, `${label}: ${id}`).not.toMatch(word(id));

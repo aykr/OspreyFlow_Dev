@@ -770,8 +770,8 @@ analyst and the report viewer, who had no screen for it, are no longer answered 
 (ADR-145 Amendment 3) is a side list of sections in groups: *People* (People and roles, Roles,
 Dashboard identities), *Data* (Datasets, Connections, Proposed types), *Running* (Operations, System),
 *Policies* (Grading scheme, Approval rights, Uploads), *Audit* and *Demo packs*, each shown only to an
-account holding its right. Roles, the three Policies and Audit say "(coming)" and what they will
-hold. Under `?brand=govuk` the list is a GOV.UK side navigation.
+account holding its right. A section not built yet is no link: it carries a *Coming* tag and says
+what it will hold. Under `?brand=govuk` the list is a GOV.UK side navigation.
 
 | Account | Role | What it shows | Password variable |
 | --- | --- | --- | --- |

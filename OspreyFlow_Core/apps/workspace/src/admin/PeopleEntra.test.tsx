@@ -142,3 +142,25 @@ describe("Admin › People's guests on Entra ID", () => {
     expect(screen.queryByLabelText("Admit guest accounts")).toBeNull();
   });
 });
+
+// The GOV.UK pass (the owner's screenshot, 14 Nov): a person's actions in a row beneath them, one primary
+// (Save) and the rest as links, each keeping its name; the person's name in the body face, not mono.
+describe("a person's row in Admin › People", () => {
+  it("has one primary action and the rest as named links beneath it, and the name outside mono", async () => {
+    serve("keycloak");
+    place();
+    const name = await screen.findByText(ANA.name);
+    expect(name.hasAttribute("data-person-name")).toBe(true);
+    expect(name.classList.contains("value")).toBe(false);
+    const actions = name.closest("tr")!.nextElementSibling!;
+    expect(actions.classList.contains("admin-row-actions-row")).toBe(true);
+    // Save the one button; every other action a link-styled button.
+    const buttons = [...actions.querySelectorAll("button")].filter((b) => !b.classList.contains("admin-row-actions__link"));
+    expect(buttons.map((b) => b.textContent)).toEqual(["Save"]);
+    const links = [...actions.querySelectorAll(".admin-row-actions__link")].map((b) => b.getAttribute("aria-label"));
+    expect(links).toEqual([
+      `Super user preset for ${ANA.username}`, `Edit access for ${ANA.username}`, `Disable ${ANA.username}`,
+      `Reset sign-in for ${ANA.username}`, `Remove ${ANA.username}`,
+    ]); // prettier-ignore
+  });
+});

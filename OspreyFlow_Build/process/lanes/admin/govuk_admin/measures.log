@@ -1,0 +1,9 @@
+# Measured at 1280px, admin-harness, every Admin right, People. Printed by admin-look.spec.ts with ADMIN_LOOK_PRINT=1.
+## branch 795cd86
+dark {'nav': 13, 'cell': 13, 'header': 12, 'headerHeight': 30.5, 'row': 141, 'rowLink': 13, 'comingWhat': 12, 'headingLevels': [1, 2]} h1 [{'text': 'People and roles', 'size': 16}]
+light {'nav': 13, 'cell': 13, 'header': 12, 'headerHeight': 30.5, 'row': 141, 'rowLink': 13, 'comingWhat': 12, 'headingLevels': [1, 2]} h1 [{'text': 'People and roles', 'size': 16}]
+govuk {'nav': 16, 'cell': 16, 'header': 16, 'headerHeight': 32.5, 'row': 153, 'rowLink': 16, 'comingWhat': 16, 'headingLevels': [1, 2]} h1 [{'text': 'People and roles', 'size': 36}]
+## main's AdminPlace.tsx, sections/People.tsx, admin.css (186144b), under the branch's look spec
+dark {'nav': 13, 'cell': 13, 'header': 12, 'headerHeight': 66.5, 'row': 122, 'rowLink': None, 'comingWhat': None, 'headingLevels': [2, 3, 4]} h1 []
+light {'nav': 13, 'cell': 13, 'header': 12, 'headerHeight': 66.5, 'row': 122, 'rowLink': None, 'comingWhat': None, 'headingLevels': [2, 3, 4]} h1 []
+govuk {'nav': 19, 'cell': 19, 'header': 16, 'headerHeight': 112.5, 'row': 267, 'rowLink': None, 'comingWhat': None, 'headingLevels': [2, 3, 4]} h1 []

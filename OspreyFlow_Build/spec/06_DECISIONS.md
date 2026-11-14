@@ -38955,3 +38955,97 @@ decision 10's "says `more` when it reaches that"; decision 10's text stands as i
   and `::test_the_fallback_says_in_words_where_its_depth_stops_the_list`, both red before the change. They are
   planted again in `process/lanes/studio/v052-search/plants.py`: Next offered past the records, and the depth not
   said, each red.
+
+### ADR-145, Amendment 16 (14 November 2026) — Admin in the GOV.UK look: one heading, names in the body face, a person's actions beneath them, coming sections as plain words
+
+Status: built by the admin lane under the orchestrator's reservation, from the owner's ruling of 14 November 2026
+relayed by the orchestrator: a font-sizing and usability pass on Admin in the GOV.UK look, with the other two looks
+not to regress. The orchestrator approved three choices:
+- a row of link-styled actions, not a menu;
+- one DOM in all three looks, with the GOV.UK type scale alone;
+- the row-height trade in dark and light.
+
+**Changes Amendment 3**: point 3's "*Name* (coming)", and point 5's keyboard case for opening a coming section.
+
+1. **One heading level each.**
+   - The section's name is the screen's one `h1`: `govuk-heading-l`, 36px, in GOV.UK; in dark and light, the ui
+     face at `--fs-16`.
+   - *Admin* above it is a caption, not a heading (`govuk-caption-l`).
+   - *Roles, teams and Authors* is a link on the caption's line.
+   - On People and roles, the screen the ruling showed, every heading beneath the `h1` is an `h2`: the side
+     list's groups, and People's parts (*Refused organisation sign-ins*, *Guests*, *Add a person by object id*,
+     *Invite a person*). Each is drawn smaller than the `h1`. In dark and light they keep the sizes main drew them
+     as `h3` and `h4` (`--fs-14`, `--fs-13`); in GOV.UK they take `govuk-heading-s` or the scale.
+   - **Not yet on the other sections.** Their own headings still step from the `h1` to `h3`, `h4` or `h5`:
+     Roles, Dashboard identities, Datasets, Operations and its figures, System and Demo packs (the admin lane's),
+     and Models and Maps (the platform lane's). This is left for a later step that measures each screen as
+     People's was measured.
+   - Not changed: the help page *Roles, teams and Authors* is shared with the other places (`RolesHelpPage`), and
+     its own heading stays an `h2`.
+2. **The type scale, in GOV.UK alone.**
+   - The Design System's "s" size, 16px, applies to:
+     - the side navigation, with each coming section's words;
+     - the tables, with their buttons and inputs;
+     - the row's links.
+   - The rule is scoped to `[data-brand="govuk"]`, so dark and light keep the sizes main drew: 13px navigation,
+     cells and row links, 12px headers.
+   - Every size, space and colour is a token in `tokens.css`.
+3. **Names in the body face.** A person's name is bold in the body face (`admin-person__name`), and so is a case's
+   name in *A case of your unit has no Author* (`admin-case__name`): a case's name is a name, not an identifier
+   (the orchestrator, 14 November). The username stays where main had it, in the person's detail line in the
+   body face. Mono is kept for an identifier shown alone: a refused sign-in's provider name.
+4. **A person's actions beneath them.**
+   - *Save* is the row's one button. *Super user, Access, Disable… (or Enable), Reset sign-in* and *Remove* follow
+     it on the same line as underlined links, in a row of their own beneath the person (`admin-row-actions-row`),
+     each with the same accessible name as before.
+   - *Save* keeps the default button style, not the filled primary. A filled button in every row would put one per
+     person on the page, where GOV.UK keeps one primary button per page. What makes *Save* primary is that it is
+     the one button among links, and that is what the look spec tests, on the computed style.
+   - What each action shows, and which are offered on Entra ID, is unchanged (for *Access*, ADR-148 Amendment 15's
+     `administratorSets`).
+   - The open forms (Access, Disable…, Remove) span the table's seven columns.
+   - Taking the actions out of a column of their own lets every column header keep to one line at desktop width
+     (1020px and wider). Measured at 1280px against main's code (`measures.log`):
+
+     | Look | Headers | A person |
+     | --- | --- | --- |
+     | Dark and light | 66.5px → 30.5px | 122px → 141px |
+     | GOV.UK | 112.5px → 32.5px | 267px → 153px |
+
+   - *Other grants* is the column's visible name. Assistive technology reads it as "Other grants: custom roles,
+     single rights and older roles".
+5. **A coming section is plain words.**
+   - It is no longer a button. Its name stands with a *Coming* tag (`govuk-tag--grey` in GOV.UK), with the words of
+     what it will hold beneath it in the side list, so decision 5's "says what it will hold" is kept without a link
+     to a screen that holds nothing.
+   - Tab passes over it, and nothing opens it, so the placeholder screen is gone.
+
+Tests. Each was red first, on main's `AdminPlace.tsx`, `sections/People.tsx` and `admin.css`
+(`process/lanes/admin/govuk_admin/red-on-main-code.log`, `look-spec-on-main.red.log`, `case-name-red.log`).
+`plants.py` then plants each check alone, in the shape main drew or a regression would take: 11 plants, each red
+for its reason (`plants.log`).
+- `keyboard/admin-look.spec.ts`, at 1280px in each look, after the document's faces load:
+  - one `h1`, only `h1` and `h2` beneath it, each `h2` smaller;
+  - the caption, and the roles link on its line;
+  - a person's and a case's name outside mono;
+  - nothing focusable in the side list naming a coming section, and a tag for each;
+  - *Save* the row's one bordered control, every other action underlined with no border;
+  - every header on one line, at least 30px shorter than main's.
+  - GOV.UK: 36px and 16px (navigation, cells, headers, row links, coming words), a person at most 60% of main's
+    height.
+  - Dark and light: main's sizes, the row links at the cells' size, a person at most one line of actions (20px)
+    taller. The sizes are planted red by the GOV.UK rule unscoped.
+- `keyboard/admin.spec.ts`:
+  - *a coming section says what it will hold in the side list, and Tab passes over it* (registry
+    `read-a-coming-admin-section-by-keyboard`, replacing `open-a-coming-admin-section-by-keyboard`). It is red for
+    Tab reaching a coming item when that item is a button again.
+  - The moved actions are activated by keyboard in the cases that held them before: Access, Disable and Enable,
+    Reset sign-in, Remove, Super user, Save.
+- `AdminSections.test.tsx`, `adminWords.test.tsx` and `PeopleEntra.test.tsx` (*a person's row in Admin › People*).
+- `a11y/every-harness.spec.ts` scans People with every Admin right, in place of the open placeholder, in dark,
+  light and GOV.UK, with `checkUndecidedContrast`.
+- Captures before and after, People in GOV.UK and with every Admin right in all three looks:
+  `process/lanes/admin/govuk_admin/{before,after}-people*.png`.
+
+`actionRegistry.ts` is the orchestrator's file: its change is sent as
+`process/lanes/admin/govuk_admin/registry-govuk.diff`. The `every-harness.spec.ts` state is changed in the branch.

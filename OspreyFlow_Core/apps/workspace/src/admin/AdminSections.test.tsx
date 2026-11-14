@@ -36,7 +36,12 @@ function place(rights: string[]) {
 /** The side list as read: each group's heading, then its sections' names. */
 function listed(): string[] {
   const nav = screen.getByRole("navigation", { name: "Admin sections" });
-  return [...nav.querySelectorAll("h3, button")].map((el) => (el.tagName === "H3" ? `# ${el.textContent}` : el.textContent!));
+  // A section not built yet is named with a Coming tag, not a button (the GOV.UK pass, 14 Nov): read as
+  // "<label> (coming)", so the order below holds both.
+  return [...nav.querySelectorAll("h2, button, .admin-nav__coming-item")].map((el) =>
+    el.tagName === "H2" ? `# ${el.textContent}`
+      : el.classList.contains("admin-nav__coming-item") ? `${el.firstChild?.textContent?.trim()} (coming)` : el.textContent!,
+  ); // prettier-ignore
 }
 
 const ALL = [...new Set(ADMIN_GROUPS.flatMap((g) => g.sections.map((s) => s.right)))];
@@ -60,7 +65,8 @@ describe("the Admin place's sections (ADR-145 decision 5)", () => {
     place([right]);
     const expected = ADMIN_GROUPS.flatMap((g) => g.sections).filter((s) => s.right === right);
     const names = screen.getAllByRole("button").filter((b) => b.closest("nav")).map((b) => b.textContent);
-    expect(names).toEqual(expected.map((s) => (s.coming ? `${s.label} (coming)` : s.label)));
+    expect(names).toEqual(expected.filter((s) => !s.coming).map((s) => s.label));
+    expect(listed().filter((n) => n.endsWith(" (coming)"))).toEqual(expected.filter((s) => s.coming).map((s) => `${s.label} (coming)`));
   });
 
   it("shows nothing to a person holding no right of a section", () => {
@@ -82,14 +88,18 @@ describe("the Admin place's sections (ADR-145 decision 5)", () => {
     expect(screen.getByRole("heading", { name: "People and roles" })).toBeTruthy();
   });
 
-  it("opens a placeholder from the side list and asks the Conduit nothing for it", async () => {
+  it("names a section not built yet with a Coming tag, never a link or button, and asks the Conduit nothing for it", async () => {
+    // The GOV.UK pass (the owner's screenshot, 14 Nov): "(coming)" items looked like live links.
     const asked = serve();
     const nav = place(["administer_system"]);
     await waitFor(() => expect(asked).toContain("/v1/admin/datasets"));
     const before = asked.length;
-    fireEvent.click(nav.getByRole("button", { name: "Uploads (coming)" }));
-    expect(screen.getByRole("heading", { name: "Uploads" })).toBeTruthy();
-    expect(screen.getByText(/^Coming: The largest picture/)).toBeTruthy();
+    const uploads = nav.getByText("Uploads").closest(".admin-nav__coming-item")!;
+    // ADR-145 decision 5: it still says what it will hold, here in the list.
+    expect(uploads.textContent).toBe("Uploads ComingThe largest picture an analyst may add, and the formats accepted.");
+    expect(uploads.closest("a, button")).toBeNull();
+    expect(nav.queryByRole("button", { name: /Uploads/ })).toBeNull();
+    expect(nav.queryByRole("link", { name: /Uploads/ })).toBeNull();
     expect(asked.length).toBe(before);
   });
 
@@ -134,7 +144,7 @@ describe("under the GOV.UK brand (ADR-145 decision 13)", () => {
     place(["administer_system"]);
     const nav = screen.getByRole("navigation", { name: "Admin sections" });
     expect(nav.classList.contains("admin-nav--govuk")).toBe(true);
-    expect([...nav.querySelectorAll("h3")].every((h) => h.classList.contains("govuk-heading-s"))).toBe(true);
+    expect([...nav.querySelectorAll("h2")].every((h) => h.classList.contains("govuk-heading-s"))).toBe(true);
     const links = within(nav).getAllByRole("button");
     expect(links.every((b) => b.classList.contains("govuk-link"))).toBe(true);
     expect(links.filter((b) => b.getAttribute("aria-current") === "page").map((b) => b.textContent)).toEqual(["Datasets"]);

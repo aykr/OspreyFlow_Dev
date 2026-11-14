@@ -276,7 +276,9 @@ const EXTRA_STATES: Record<string, string[]> = {
   "needs-you-harness.html": ["open=1", "open=1&notices=1"],
   "admin-harness.html": [
     "open=connections&rights=administer_system",
-    "rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&open=Uploads%20(coming)",
+    // Every section in the side list, the coming ones named with their tag and what they will hold (the
+    // GOV.UK pass, 14 Nov: no longer opened as placeholders); People's rows with their actions beneath.
+    "rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&serve=people",
     // L2.4 part 2: Datasets' details (policy with its warning, Authors, linked cases), Change
     // owner… open, a removed case's dry run shown, and System's Dataset owners may be.
     "rights=administer_system&serve=datasets&show=details",

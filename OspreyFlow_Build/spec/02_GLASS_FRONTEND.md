@@ -1615,15 +1615,19 @@ right; the first built section the person holds, in this order, opens first:
 | Demo packs | Demo packs | `administer_system` |
 
 The rights of the sections not yet built, and Proposed types under *Data*, are ADR-145
-Amendment 3's. A **coming** section says what it will hold and calls nothing; a
+Amendment 3's. A **coming** section is no link: it carries a *Coming* tag, says what it will hold in the side
+list and calls nothing (ADR-145 Amendment 16); a
 holder of `read_audit` alone is offered no Admin place until Audit is built (§2.0a: a place is offered
 for its entry screen's first read). Hiding is never the control (rule 3): each built section's screen
 is its own file under `admin/sections/` (Operations' stays `admin/Schedules.tsx`), and
 `test_admin_sections.py` derives the routes it calls from the code and holds each to the section's
 right, over HTTP too, passing over only the reads it names per section. Choosing a section moves focus to
-its heading and marks it `aria-current="page"` in the list. Under the GOV.UK brand the list is a
+its heading and marks it `aria-current="page"` in the list. The open section's name is the screen's one `h1`, under
+an *Admin* caption, with `h2`s beneath it; a person's name is in the body face; and a person's actions sit on a line
+beneath them, *Save* the one button and the rest links (ADR-145 Amendment 16). Under the GOV.UK brand the list is a
 GOV.UK side navigation (decision 13): group headings, underlined link-styled buttons (a section has
-no address of its own), the open one bold with a 4px rule. The sections' contents are as follows. *People and
+no address of its own), the open one bold with a 4px rule; Admin there takes the Design System's 16px "s" size and
+a 36px heading. The sections' contents are as follows. *People and
 roles* (each person's built-in roles — ADR-112's four and *Rule author* — and each custom role as
 checkboxes, saved whole, other grants kept and shown, and *Super user*, which chooses the preset's three
 roles together; L2.5, ADR-145 Amendment 5: the row also says the places those roles open and the
