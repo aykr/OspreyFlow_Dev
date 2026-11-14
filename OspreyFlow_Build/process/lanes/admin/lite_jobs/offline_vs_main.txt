@@ -1,0 +1,5 @@
+# all of tests/services/api offline on the branch and on main 0bc09d0, compared
+branch: 200 failed, 6700 passed, 24 skipped, 105 warnings, 853 errors in 179.96s (0:02:59)
+main:   198 failed, 6688 passed, 24 skipped, 105 warnings, 854 errors in 139.81s (0:02:19)
+# only on the branch: test_scheduler_lifespan's new live case (needs Valkey); test_valkey_store's write-expiry case, an xdist ordering difference: run alone, that file is 60 errors on both
+# harness, cp_policy_check and the cloud-platform guide tests on the branch: 1767 passed, 457 skipped, none failed

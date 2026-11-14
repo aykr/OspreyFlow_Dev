@@ -1,0 +1,12 @@
+# red: test_lite_job_loop.py on main fe172a8, offline (closed ports, fresh PYTHONPYCACHEPREFIX). The registry case fails on behaviour (compute_metric and pattern_match enqueued, never registered for any loop); the rest name what main lacks (job_worker_place, job_loop_in_conduit). The loop's own red is the live case in test_scheduler_lifespan.py.
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_every_job_type_the_conduit_enqueues_is_one_the_loop_registers
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_the_render_says_the_conduit_runs_the_jobs_exactly_where_it_renders_no_worker[local-lite]
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_the_render_says_the_conduit_runs_the_jobs_exactly_where_it_renders_no_worker[small]
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_the_render_says_the_conduit_runs_the_jobs_exactly_where_it_renders_no_worker[cluster]
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_the_render_says_the_conduit_runs_the_jobs_exactly_where_it_renders_no_worker[cloud-platform]
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_lite_s_deployment_env_names_the_conduit_as_the_job_loop
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_the_conduit_runs_the_job_loop_only_where_the_render_says_so[conduit]
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_the_conduit_runs_the_job_loop_only_where_the_render_says_so[service]
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_the_conduit_runs_the_job_loop_only_where_the_render_says_so[empty]
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_the_conduit_runs_the_job_loop_only_where_the_render_says_so[unset]
+10 failed, 2 passed in 7.94s

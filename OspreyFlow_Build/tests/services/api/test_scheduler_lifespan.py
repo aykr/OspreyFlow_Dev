@@ -83,3 +83,51 @@ def test_the_conduits_own_tick_judges_a_due_schedule_and_writes_the_ledger(jwks_
     (outcome, failure), *_ = rows
     assert outcome == "refused"
     assert failure and "owner" in failure
+
+
+# --- a profile with no worker service runs the job loop inside the Conduit (the orchestrator's fix, --
+# --- 14 November 2026; harness/service_inventory.py: "Lite runs the same loop inside the Conduit") --
+
+
+async def _submit_a_compute_job() -> str:
+    from services.api.compute_routes import JOB_TYPE_COMPUTE_METRIC
+    from services.api.config import ValkeyConfig
+    from services.api.jobs import JobQueue
+    from valkey.asyncio import Valkey
+
+    client = Valkey(**ValkeyConfig.from_env().client_kwargs())
+    try:
+        return await JobQueue(client).submit(
+            JOB_TYPE_COMPUTE_METRIC, {"metric": "communities", "subgraph": {"nodes": [], "edges": []}}
+        )
+    finally:
+        await client.aclose()
+
+
+async def _job_state(job_id: str) -> str | None:
+    from services.api.config import ValkeyConfig
+    from services.api.jobs import JobQueue
+    from valkey.asyncio import Valkey
+
+    client = Valkey(**ValkeyConfig.from_env().client_kwargs())
+    try:
+        record = await JobQueue(client).get_status(job_id)
+        return record.state if record else None
+    finally:
+        await client.aclose()
+
+
+def test_a_job_enqueued_on_a_conduit_with_no_worker_service_is_run_by_the_conduit(jwks_url: str) -> None:
+    """local-lite renders `OSPREY_JOB_WORKER=conduit`: no worker image runs there, so the Conduit's
+    own lifespan drains every job stream. Red on main: the job stays `pending` forever."""
+    conduit = _ConduitInstance(jwks_url, extra_env={"OSPREY_JOB_WORKER": "conduit"})
+    try:
+        job_id = asyncio.run(_submit_a_compute_job())
+        deadline = time.monotonic() + 30
+        state = asyncio.run(_job_state(job_id))
+        while time.monotonic() < deadline and state in ("pending", "running"):
+            time.sleep(1)
+            state = asyncio.run(_job_state(job_id))
+    finally:
+        conduit.kill()
+    assert state == "done", f"the job is {state!r}: nothing in a lite Conduit ran it"

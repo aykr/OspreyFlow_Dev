@@ -1,0 +1,7 @@
+# main at 0bc09d0, the new case copied in uncommitted; stack f, the lease admin took at 2026-11-14T10:23Z; fresh PYTHONPYCACHEPREFIX
+E       assert 'pending' == 'done'
+E         
+E         - done
+E         + pending
+FAILED ../OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py::test_a_job_enqueued_on_a_conduit_with_no_worker_service_is_run_by_the_conduit
+1 failed, 1 deselected, 1 warning in 45.17s

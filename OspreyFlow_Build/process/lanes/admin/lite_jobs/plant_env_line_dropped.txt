@@ -1,0 +1,8 @@
+# plant: env_line_dropped (harness/render.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k rendered_job_loop and lite
+# RED
+E         - service)
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_each_profile_s_rendered_job_loop_agrees_with_whether_it_renders_a_worker[local-lite]
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_each_profile_s_rendered_job_loop_agrees_with_whether_it_renders_a_worker[small]
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_each_profile_s_rendered_job_loop_agrees_with_whether_it_renders_a_worker[cluster]
+FAILED ../OspreyFlow_Build/tests/services/api/test_lite_job_loop.py::test_each_profile_s_rendered_job_loop_agrees_with_whether_it_renders_a_worker[cloud-platform]
+4 failed, 7 deselected in 3.94s
