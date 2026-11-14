@@ -173,6 +173,7 @@ from demo_fixtures.hmp_population import (
     RELAY_GROUP_PRISON_NUMBERS,
     SECOND_SUBJECT_PRISON_NUMBER,
 )
+from ports.analytics import FIELD_NAME_RULE
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("OSPREY_TEST_OVER_THE_WIRE") != "1",
@@ -2377,9 +2378,14 @@ def test_a7_an_unknown_field_name_is_refused_rather_than_ignored(
             "dimensions": [{"name": "category", "field": "item_type", "bucketing": "categorical"}],
         },
     )
-    assert hostile.status_code >= 400, (
-        f"a field name carrying SQL was accepted: {hostile.status_code} {hostile.text[:200]}"
+    # Refused in words, not a bare 500 (a 500 met the `>= 400` this once asked for): the port's
+    # words name the rule and never echo the name sent.
+    assert hostile.status_code == 422, (
+        f"a field name carrying SQL was not refused in words: {hostile.status_code} "
+        f"{hostile.text[:200]}"
     )
+    assert hostile.json() == {"error": "field_name_refused", "detail": FIELD_NAME_RULE}
+    assert "DROP" not in hostile.text
 
     # The table is still there — the assertion that matters if the guard ever failed.
     after = analyst.post(
