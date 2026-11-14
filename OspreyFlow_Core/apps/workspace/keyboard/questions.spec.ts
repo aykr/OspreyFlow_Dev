@@ -22,14 +22,26 @@ const ANSWER = {
   created_at: "2026-10-07T10:00:00Z",
 };
 
-/** What the Conduit says will be read (ADR-098 Amendment 7), for the scope the panel sent. */
+/** A summary's *Whole case* fields, under another choice (ADR-098 Amendment 9). */
+const NOT_CASE = { found: 0, passages: 0, limited_reason: null, counts_exact: true, more: false };
+
+/** What the Conduit says will be read (ADR-098 Amendments 7 and 9), for the scope the panel sent. */
 function willRead(posted: { read_from?: string }) {
   const selection = posted.read_from === "selection";
+  if (posted.read_from === "case") {
+    return {
+      read: {
+        read_from: "case", documents: 0, documents_without_text: 0, items: 1, links: 0, events: 0, selected: 0,
+        first_selected: null, found: 2, passages: 1, limited_reason: null, counts_exact: true, more: false,
+      },
+      engine: "local", engine_label: "This deployment's own model", model: "qwen2.5:7b-instruct", unusable: [], refused: null,
+    };  // prettier-ignore
+  }
   return {
     read: {
       read_from: selection ? "selection" : "graph", documents: selection ? 1 : 2, documents_without_text: 0,
       items: selection ? 2 : 5, links: selection ? 1 : 4, events: 0, selected: selection ? 1 : 0,
-      first_selected: selection ? "Mercer, Dana" : null,
+      first_selected: selection ? "Mercer, Dana" : null, ...NOT_CASE,
     },
     engine: "local", engine_label: "This deployment's own model", model: "qwen2.5:7b-instruct", unusable: [], refused: null,
   };  // prettier-ignore
@@ -39,7 +51,7 @@ async function serve(page: Page, history: unknown[] = [], answer: unknown = ANSW
   const asked: string[] = [];
   const scopes: unknown[] = [];
   const decided: string[] = [];
-  const willReads: { read_from?: string }[] = [];
+  const willReads: { read_from?: string; question?: string }[] = [];
   await page.route("**/*/v1/investigations/*/questions**", async (route) => {
     const request = route.request();
     const url = request.url();
@@ -47,7 +59,7 @@ async function serve(page: Page, history: unknown[] = [], answer: unknown = ANSW
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
     if (request.method() === "GET") return json(200, history);
     if (url.endsWith("/will-read")) {
-      const posted = request.postDataJSON() as { read_from?: string };
+      const posted = request.postDataJSON() as { read_from?: string; question?: string };
       willReads.push(posted);
       return json(200, willRead(posted));
     }
@@ -258,7 +270,7 @@ test("what to read from is chosen by arrow keys, the Conduit says what will be r
   await expect(page.getByText("About: Mercer, Dana")).toBeVisible();
   await expect(page.getByText("Will read: 1 document, 2 items and 1 link")).toBeVisible();
   await expect(page.getByText("Will be answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeVisible();
-  await expect(page.getByRole("radio", { name: "Whole case" })).toBeDisabled();
+  await expect(page.getByRole("radio", { name: "Whole case" })).toBeEnabled(); // ADR-098 Amendment 9
   await selected.focus();
   await page.keyboard.press("ArrowDown");
   await expect(everything).toBeChecked();
@@ -284,6 +296,48 @@ test("what to read from is chosen by arrow keys, the Conduit says what will be r
   await expect.poll(() => scopes.length).toBe(2);
   expect(scopes[1]).toMatchObject({ read_from: "selection", selected_node_ids: ["n-dana"], selected_link_ids: [] });
   registerCovered(REGISTRY, "choose-what-to-read-from-by-keyboard");
+});
+
+/** An answer read from the whole case (ADR-098 Amendment 9), citing a source found by search. */
+const FROM_THE_CASE = {
+  ...ANSWER,
+  id: "q-case",
+  answer: "n2 and n3 are the one person [S-1].",
+  citations: [],
+  candidates: [],
+  read: { read_from: "case", documents: 0, documents_without_text: 0, items: 1, links: 0, events: 0, selected: 0,
+          first_selected: null, found: 2, passages: 1, limited_reason: null, counts_exact: true, more: false },
+  search_citations: [
+    { number: 1, label: "[S-1]", name: "N2", type: "Person", why: "Name is 'n2'", node_ids: ["n2", "n3"] },
+  ],
+};  // prettier-ignore
+
+test("Whole case is chosen by arrow keys, its search is asked with the question's words, and an [S-n] selects its records on the real canvas (ADR-098 Amendment 9)", async ({ page }) => {
+  // ADR-129 Amendment 5, against the real canvas: a source found by search selects its records as a
+  // graph fact does.
+  const { scopes, willReads } = await serve(page, [], FROM_THE_CASE, "/keyboard/harness.html?questions=1");
+  const everything = page.getByRole("radio", { name: "Everything on the graph" });
+  const whole = page.getByRole("radio", { name: "Whole case" });
+  await expect(everything).toBeChecked(); // nothing is selected on the harness canvas
+  await everything.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(whole).toBeChecked();
+  await expect(whole).toBeFocused();
+  await expect(page.getByText("Whole case finds things by their names and words, not by what they mean.")).toBeVisible();
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.type("Who is n2?");
+  await expect.poll(() => willReads.at(-1)).toMatchObject({ read_from: "case", question: "Who is n2?" });
+  await expect(page.getByText("Will read: 2 matches found in the case: 1 document by the passage found and 1 other record")).toBeVisible();
+  await page.keyboard.press("Control+Enter");
+  await expect.poll(() => scopes.length).toBe(1);
+  expect(scopes[0]).toMatchObject({ question: "Who is n2?", read_from: "case", selected_node_ids: [] });
+
+  const state = () => page.evaluate(() => ({ nodes: window.__KEYBOARD__!.selection, edge: window.__KEYBOARD__!.selectedEdge }));
+  await page.getByLabel("Your question").focus();
+  await tabToLabel(page, "Select [S-1], N2, on the canvas");
+  await page.keyboard.press("Enter");
+  await expect.poll(state).toEqual({ nodes: ["n2", "n3"], edge: null });
+  registerCovered(REGISTRY, "select-a-search-source-from-an-answer-by-keyboard");
 });
 
 test("every registered questions action has its own proving test case above", () => {

@@ -42,6 +42,9 @@ export interface QuestionsPanelProps {
   view?: { id: string; name: string } | null;
   /** Leave the view's conversation for the case's own. */
   onLeaveView?: () => void;
+  /** What to read from when the panel opens, before the analyst chooses; absent, the selection
+   * when there is one, else the graph. */
+  initialReadFrom?: ReadFrom;
 }
 
 /** What *Whole case* does, in one line (ADR-098 Amendment 9), shown under the choice before anything
@@ -140,6 +143,7 @@ export function QuestionsPanel({
   onSelectFacts,
   view = null,
   onLeaveView,
+  initialReadFrom,
 }: QuestionsPanelProps) {
   const viewId = view?.id ?? null;
   const [entries, setEntries] = useState<QuestionAnswer[] | null>(null);
@@ -154,7 +158,7 @@ export function QuestionsPanel({
   const nodeIds = selection?.nodeIds ?? [];
   const linkIds = selection?.linkIds ?? [];
   const hasSelection = nodeIds.length + linkIds.length > 0;
-  const [picked, setPicked] = useState<ReadFrom | null>(null);
+  const [picked, setPicked] = useState<ReadFrom | null>(initialReadFrom ?? null);
   const readFrom: ReadFrom =
     picked === "graph" || picked === "case" || (picked === "selection" && hasSelection)
       ? picked
