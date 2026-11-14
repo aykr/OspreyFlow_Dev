@@ -28,6 +28,11 @@ export interface BatchExpansionProps {
   onClose: () => void;
   /** How often the job is asked where it is, in milliseconds (ADR-151: every 2 s). */
   pollMs?: number;
+  /** The job this panel's expansion already started, kept by the App (`useBatchExpansion`) when the panel is
+   * taken away (Home, Admin, All cases) and drawn again: followed, never started a second time. */
+  startedJob?: { id: string; following: boolean } | null;
+  /** The job the start gave, for the App to keep (see `startedJob`). */
+  onJobStarted?: (job: { id: string; following: boolean }) => void;
   /** Whether a failed job may be tried again from here: not while a view is open, where the App offers no
    * batch job (an expansion there is not the case's). */
   mayStartAgain?: boolean;
@@ -71,11 +76,17 @@ export function BatchExpansion({
   onClose,
   pollMs = 2000,
   mayStartAgain = true,
+  startedJob = null,
+  onJobStarted,
 }: BatchExpansionProps) {
   const [shown, setShown] = useState<Shown>({ phase: "starting" });
   const [attempt, setAttempt] = useState(0);
   const onOpenViewRef = useRef(onOpenView);
   onOpenViewRef.current = onOpenView;
+  const onJobStartedRef = useRef(onJobStarted);
+  onJobStartedRef.current = onJobStarted;
+  // Read once, at mount: the job a panel drawn again is to follow.
+  const startedJobRef = useRef(startedJob);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   // Read at each request, never a reason to start again: one job per panel and per *Try again*. The
@@ -181,6 +192,13 @@ export function BatchExpansion({
     async function start(): Promise<void> {
       setShown({ phase: "starting" });
       const { apiBaseUrl, bearerToken, investigationId, pollMs } = asked.current;
+      // Drawn again after the App took it away: the job already started is followed, at once, not started again.
+      const kept = startedJobRef.current;
+      if (attempt === 0 && kept) {
+        setFollowing(kept.following);
+        void watch(kept.id);
+        return;
+      }
       if (startedRef.current?.attempt !== attempt) {
         startedRef.current = { attempt, started: startBatchExpansion(apiBaseUrl, bearerToken, investigationId, startWith) };
       }
@@ -189,6 +207,7 @@ export function BatchExpansion({
       if (started.ok) {
         const [id, words] = "job" in started ? [started.job.id, started.job.words] : [started.running.id, started.running.words];
         setFollowing(!("job" in started));
+        onJobStartedRef.current?.({ id, following: !("job" in started) });
         setShown({ phase: "watching", words: words || "The batch job is under way.", trouble: null });
         timer = setTimeout(() => void watch(id), pollMs);
         return;

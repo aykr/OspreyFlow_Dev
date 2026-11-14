@@ -295,4 +295,52 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     expect(sent.filter((s) => s.url.endsWith("/inv-1/batch-expansions"))).toHaveLength(1);
     expect(screen.getByText("Expanding from 1 node.")).toBeTruthy();
   }, 15_000);
+
+  test("the panel is hidden over the search results, which draw no view, and back when they close", async () => {
+    answerFirst = (url) =>
+      url.endsWith("/inv-1/batch-expansions/j1")
+        ? new Response(JSON.stringify({ id: "j1", state: "running", words: "Expanding from 1 node.", view: null, nodes: null, links: null, refusal: null }))
+        : null;
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
+    act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
+    await screen.findByText("Expanding from 1 node.", undefined, { timeout: 5000 });
+    const box = screen.getByRole("combobox", { name: "Search entities, identifiers, documents" });
+    fireEvent.change(box, { target: { value: "Kestrel" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    await screen.findByRole("heading", { name: "Search results for 'Kestrel'" });
+    expect(panel()).toBeNull();
+    expect(document.querySelector(".batch-expansion")?.closest("[hidden]")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Back to / }));
+    expect(await screen.findByRole("region", { name: "Batch job: the whole expansion" })).toBeTruthy();
+    expect(sent.filter((s) => s.url.endsWith("/inv-1/batch-expansions"))).toHaveLength(1);
+  }, 15_000);
+
+  test("going Home and back on the same page follows the job already started, never starting it again", async () => {
+    let reads = 0;
+    answerFirst = (url) => {
+      if (!url.endsWith("/inv-1/batch-expansions/j1")) return null;
+      reads += 1;
+      return new Response(JSON.stringify(reads < 2
+        ? { id: "j1", state: "running", words: "Expanding from 1 node.", view: null, nodes: null, links: null, refusal: null }
+        : { id: "j1", state: "done", words: "Saved 6,210 nodes and 9,004 links as your private view “Kestrel, expanded”.", view: BATCH_VIEW, nodes: 6210, links: 9004, refusal: null }));
+    }; // prettier-ignore
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
+    act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
+    await screen.findByText("Expanding from 1 node.", undefined, { timeout: 5000 });
+    // Home is another tree of the App's: the workspace, and the panel with it, are taken away.
+    fireEvent.click(screen.getByRole("button", { name: "Osprey, go to Home" }));
+    await waitFor(() => expect(document.querySelector(".batch-expansion")).toBeNull());
+    await new Promise((r) => setTimeout(r, 2500)); // the job finishes meanwhile, on the server
+    // From Home to the Studio and on to the Glass, all on the same page (a case opened from Home's list reloads it,
+    // which starts nothing): the workspace, and the panel with it, are drawn again.
+    fireEvent.click(await screen.findByRole("button", { name: /^Open Ingest Studio/ }));
+    fireEvent.click(within(await screen.findByRole("navigation", { name: "Places" })).getByRole("button", { name: "The Glass" }));
+    // Drawn again, it follows the job it started, now done, and offers its view: no second job, no second view.
+    expect(await screen.findByRole("button", { name: "Open the view" }, { timeout: 5000 })).toBeTruthy();
+    expect(sent.filter((s) => s.url.endsWith("/inv-1/batch-expansions"))).toHaveLength(1);
+  }, 20_000);
 });

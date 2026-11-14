@@ -9,6 +9,8 @@ export interface BatchExpansionAsked {
   caseId: string;
   who: string | null;
   n: number;
+  /** The job its panel started (or followed), once known: a panel drawn again follows it, never starts another. */
+  job?: { id: string; following: boolean };
 }
 
 /**
@@ -30,5 +32,10 @@ export function useBatchExpansion(caseId: string | null, who: string | null) {
     [caseId, who],
   );
   const close = useCallback(() => setAsked(null), []);
-  return { asked: current, ask, close };
+  /** The job choice `n`'s panel started; kept for that choice only. */
+  const started = useCallback(
+    (n: number, job: { id: string; following: boolean }) => setAsked((held) => (held && held.n === n ? { ...held, job } : held)),
+    [],
+  );
+  return { asked: current, ask, close, started };
 }
