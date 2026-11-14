@@ -1,0 +1,18 @@
+case-b, ADR-044 Amendment 2's live store cases and plants, stack b (the orchestrator's go, 14 Nov 2026), head 73c532c
+
+Test stack b up for case-b: osprey-test-b-arcadedb osprey-test-b-pg osprey-test-b-valkey osprey-test-b-objectstore osprey-test-b-clickhouse osprey-test-b-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Running on ospreyflow-test (stack b, osprey-runs/case-b/), logged at osprey-runs/case-b.meta/runs/20261114T155405Z-40fcd37e/log: bash OspreyFlow_Build/process/lanes/case-b/adr044-escalation/plants-live.sh
+== unplanted, both files whole
+21 passed in 1.49s
+AS IT MUST BE (red): the hotlist's count not put back by set_status
+    E           assert (3, None) == (0, None)
+AS IT MUST BE (red): the hotlist's count answered, not kept (gone at a restart)
+    E       assert 1 == 2
+AS IT MUST BE (red): the watch's count not put back by set_status
+    E           AssertionError: assert ('revoked', 2, None) == ('revoked', 0, None)
+AS IT MUST BE (red): the watch's count answered, not kept
+    E           assert (0, None) == (1, "Its owne...ds in a row.")
+every live plant red for its reason
+Wall time: 8 s, exit 0 (stack b, the lease case-b took at 2026-11-14T15:53:35Z; set-up before it 18 s)
+Test stack b down for case-b: osprey-test-b-arcadedb osprey-test-b-pg osprey-test-b-valkey osprey-test-b-objectstore osprey-test-b-clickhouse osprey-test-b-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Lease on stack b released by case-b.
