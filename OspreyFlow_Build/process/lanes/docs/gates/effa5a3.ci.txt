@@ -1,0 +1,264 @@
+# make ci's targets that need no Docker, at effa5a3 (lane/docs-sites2 on main 186144b), on the Mac on closed ports, no stack, no Docker daemon, no OSPREY_LANE, 2026-11-14. The orchestrator's instruction: a clean make -k ci needs Docker; run what applies without it and name the rest.
+#
+# Run and green: Core's lint (ruff, eslint, mypy) and typecheck (tsc); and every Build target of ci except those below: lint-tools licence-check design-check ui-words-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check bundle; and the sites' own tests (tests/test_sites.py, test_sites_design.py, test_website_wording.py, test_site_identifiers.py, test_publish_pages.py, test_doc_site.py, test_doc_citations_check.py: 191 passed, 1 skipped, the client-name check, which needs the owner's local hash file).
+# no-langchain-check failed once, because this worktree's environment had been made with uv sync --frozen --all-extras, whose extraction extra brings spaCy into the Conduit's environment; made again as CI makes it (uv sync --frozen), it passed 28 of 28 (the last block).
+#
+# Not run here, for CI after the merge: core-check's trivy (its database download), trivy-image-ingest, -api, -workspace, -harness, -ner, -worker, -report-sync, -superset and -laurium, and opentofu-check, chart-check and cp-policy-check (all Docker); harness-a11y (a Playwright run of apps/harness, which this branch does not touch, and a local browser run needs a slot).
+
+$ env ARCADEDB_HTTP_PORT=1 OSPREY_POSTGRES_PORT=1 POSTGRES_PORT=1 VALKEY_PORT=1 CLICKHOUSE_HTTP_PORT=1 make -k -C ../OspreyFlow_Core lint typecheck
+.venv/bin/ruff check .
+All checks passed!
+npm run lint
+
+> ospreyflow@0.0.0 lint
+> eslint .
+
+.venv/bin/mypy packages services harness
+Success: no issues found in 489 source files
+npm run typecheck
+
+> ospreyflow@0.0.0 typecheck
+> tsc --noEmit
+
+exit=0
+$ env ARCADEDB_HTTP_PORT=1 OSPREY_POSTGRES_PORT=1 POSTGRES_PORT=1 VALKEY_PORT=1 CLICKHOUSE_HTTP_PORT=1 make -k lint-tools licence-check design-check ui-words-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check bundle
+make: stat: lint-tools licence-check design-check ui-words-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check bundle: File name too long
+make: *** No rule to make target `lint-tools licence-check design-check ui-words-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check bundle'.
+exit=2
+
+$ env ARCADEDB_HTTP_PORT=1 OSPREY_POSTGRES_PORT=1 POSTGRES_PORT=1 VALKEY_PORT=1 CLICKHOUSE_HTTP_PORT=1 make -k lint-tools licence-check design-check ui-words-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check bundle
+../OspreyFlow_Core/node_modules/.bin/eslint -c ../OspreyFlow_Core/eslint.config.js tools
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.licence_check
+licence-check: 160 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+cd ../OspreyFlow_Core && node ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/tools/licence_check.mjs
+licence-check: 354 packages, all allowed.
+cd ../OspreyFlow_Core && node --test ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/tests/licence_check/*.test.mjs
+✔ a GPL-3.0 licence is rejected (1.38275ms)
+✔ a GNU General Public License, spelled out, is rejected (0.201ms)
+✔ an MIT licence is allowed (0.071333ms)
+✔ an Apache-2.0 licence is allowed (0.073875ms)
+✔ LGPL-3.0 is refused for a package with no recorded exception (0.057916ms)
+✔ an LGPL term never carries an AGPL one through (0.063917ms)
+✔ an OR is a choice, so one allowed alternative is enough, but AND needs every term (0.108209ms)
+✔ terms match by whole words, and CC-BY-SA is not CC-BY (0.405375ms)
+✔ the four licences added on 19 October 2026 pass (0.068083ms)
+✔ a dual-licensed package naming both an allowed licence and GPL is rejected -- the real shape main() produces via licenses.join(" AND "), where an allowed marker elsewhere in the string must not let a GPL term slip through (0.085625ms)
+✔ an OFL-1.1 licence, by its SPDX short form, is allowed (0.052959ms)
+✔ OFL-1.1 beside GPL is still rejected (0.04325ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 51.634334
+licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.design_check
+design-check: no finding outside DESIGN.md §9, and Core's DESIGN.md is the contract
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.colour_drift_check
+colour-drift-check: every colour in the Glass is one DESIGN.md holds
+cd ../OspreyFlow_Core && node --test ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/tests/keycloak_theme/*.test.mjs
+✔ under GOV.UK the page is light whatever was chosen, with no theme button (85.551791ms)
+✔ without a brand the saved choice and the button are as before (11.824166ms)
+✔ the GOV.UK header, skip link and footer are added in reading order (22.081ms)
+✔ no service-name band is drawn, and the page title names the service (12.154709ms)
+✔ without a service name the title falls back as the Glass's does (8.3655ms)
+✔ the skip link's target is the page's main content, focusable (8.5655ms)
+✔ a service name is text, never markup (8.748583ms)
+✔ under GOV.UK the card's words name no product; without it they say OspreyFlow (19.2295ms)
+✔ the sign-in page is marked English (ospreyflow brand) (7.321125ms)
+✔ the sign-in page is marked English (govuk brand) (4.7205ms)
+✔ a lang Keycloak wrote is kept (3.4495ms)
+✔ the deployment's banner text follows the phase's tag, in place of the default words (6.304833ms)
+✔ with no phase the banner text is shown alone, as text, never markup (6.34275ms)
+✔ with no phase and no banner text there is no banner (4.794625ms)
+✔ off gov.uk the footer keeps its words and links and drops everything of the Crown (6.552917ms)
+✔ on gov.uk the footer is as it was, Crown and all (6.85075ms)
+✔ off gov.uk the header draws no crown, the word mark kept (6.059833ms)
+✔ on gov.uk the header draws the crown (4.654292ms)
+﹣ without a mail server: the card's words, no reset link, the administrator named, validation before any request (0.357ms) # needs throwaway Keycloaks (see the file's header)
+﹣ with a mail server: reset your password, then check your email, and the mail is sent (0.051041ms) # needs throwaway Keycloaks (see the file's header)
+✔ an empty form says what each field needs, and is not sent (93.492458ms)
+✔ an address that is not one, and a username with a space, are named as such (8.688584ms)
+✔ a well-formed address or username and a password are sent, and earlier errors cleared (8.226667ms)
+✔ nothing is said while typing, only on submit (5.030042ms)
+✔ with no mail server, the way back is the administrator, said where the link would be (16.447584ms)
+✔ the card ends with how accounts are made (5.59725ms)
+✔ the reset page checks the address or username, and its button says what it sends (7.802792ms)
+✔ after a reset is sent, the card says to check your email, with a way back to sign in (7.843792ms)
+✔ a refused submit gives Keycloak's button back, so the corrected form can be sent (8.019875ms)
+✔ a field's error sits directly under the field, before any help beneath it (8.038083ms)
+✔ the reset page's instruction leads the card, under its title, as the handoff has it (5.736083ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
+ℹ duration_ms 802.040083
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.ui_words_check
+ui-words-check: no "target model" in the Glass's copy (tests/test_ui_words_check.py holds the proof)
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_ui_words_check.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build
+configfile: pytest.ini
+plugins: xdist-3.8.0, asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 8 items
+
+../OspreyFlow_Build/tests/test_ui_words_check.py ........                [100%]
+
+============================== 8 passed in 1.38s ===============================
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.schemas_check
+schemas-check: 619 generated types match committed output.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.authorized_query_check
+authorized-query-check: 169 files under services/api, no offenders.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.demo_guide_check
+demo-guide-check: 12 registered demo(s), all documented.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.domain_model_coverage_check
+domain-model-coverage-check: 105 class(es), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.route_coverage_check
+route-coverage-check: 425 route(s), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.product_tree_link_check
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.decision_log_publication_check
+decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allowlist shrinks to zero as the decision log's own prose is edited to state each constraint without the private pointer.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.provenance_annotation_check
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.test_file_coverage_check
+test-file-coverage-check: 1106 test file(s), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.doc_citations_check
+doc-citations-check: 2878 file(s) scanned, every cited path exists.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance -k test_guard
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build
+configfile: pytest.ini
+plugins: xdist-3.8.0, asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 805 items / 788 deselected / 2 skipped / 17 selected
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_guard.py ..    [ 11%]
+../OspreyFlow_Build/tests/conformance/compute_port/test_guard.py ..      [ 23%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_guard.py ...       [ 41%]
+../OspreyFlow_Build/tests/conformance/media_store/test_guard.py ..       [ 52%]
+../OspreyFlow_Build/tests/conformance/model_port/test_guard.py .....     [ 82%]
+../OspreyFlow_Build/tests/conformance/recognise_port/test_guard.py ...   [100%]
+
+================ 17 passed, 2 skipped, 788 deselected in 1.80s =================
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build
+configfile: pytest.ini
+plugins: xdist-3.8.0, asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 205 items
+
+../OspreyFlow_Build/tests/test_stack_lease.py .......................... [ 12%]
+................................ssssssss.sssss...............s.          [ 43%]
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py ...................... [ 54%]
+.................................................                        [ 78%]
+../OspreyFlow_Build/tests/test_lanes_launch.py ......................... [ 90%]
+....                                                                     [ 92%]
+../OspreyFlow_Build/tests/test_friction_assemble.py ......               [ 95%]
+../OspreyFlow_Build/tests/test_adr_reservations.py .......               [ 98%]
+../OspreyFlow_Build/tests/test_spec_doc_paths.py ...                     [100%]
+
+================= 191 passed, 14 skipped in 156.63s (0:02:36) ==================
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.adr_reservations_check
+adr-reservations-check: every heading above the baseline is reserved.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build
+configfile: pytest.ini
+plugins: xdist-3.8.0, asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 10 items
+
+../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py ...... [ 60%]
+....                                                                     [100%]
+
+============================= 10 passed in 11.73s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.no_branches_check
+no-branches-check: 1694 files, no branch named.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_branches_check.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build
+configfile: pytest.ini
+plugins: xdist-3.8.0, asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 12 items
+
+../OspreyFlow_Build/tests/test_no_branches_check.py ............         [100%]
+
+============================== 12 passed in 1.23s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.no_langchain_check
+no-langchain-check: no LangChain, spaCy or Laurium outside Laurium's own image (source).
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_langchain_check.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build
+configfile: pytest.ini
+plugins: xdist-3.8.0, asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 28 items
+
+../OspreyFlow_Build/tests/test_no_langchain_check.py .........F......... [ 67%]
+.........                                                                [100%]
+
+=================================== FAILURES ===================================
+_______________ test_the_image_script_prints_what_the_leg_reads ________________
+
+    def test_the_image_script_prints_what_the_leg_reads() -> None:
+        """The script run inside the image is run here, on this interpreter, and its output read by
+        the same function: the shape the leg receives is the script's, not a hand-written one."""
+        out = subprocess.run(
+            [sys.executable, "-c", check.IMAGE_SCRIPT], capture_output=True, text=True, check=True
+        )
+        rows = json.loads(out.stdout)
+        assert {"name", "version"} <= set(rows[0])
+>       assert check.forbidden_in_image(out.stdout) == []  # the Conduit's own environment
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert ['spacy 3.8.1...oggers 1.0.5'] == []
+E         
+E         Left contains 3 more items, first extra item: 'spacy 3.8.16'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_no_langchain_check.py:61: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_no_langchain_check.py::test_the_image_script_prints_what_the_leg_reads
+========================= 1 failed, 27 passed in 1.75s =========================
+make: *** [no-langchain-check] Error 1
+cd ../OspreyFlow_Core && PYTHONPATH=packages:~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.osprey_bundle --profile local-lite --out ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/dist
+osprey bundle: 80 file(s) -> ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/dist/osprey-bundle-local-lite.tar.gz
+exit=2
+
+# no-langchain-check again, the environment made as CI makes it:
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/docs-v052d/OspreyFlow_Build .venv/bin/python -m tools.no_langchain_check
+no-langchain-check: no LangChain, spaCy or Laurium outside Laurium's own image (source).
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_langchain_check.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/docs-v052d/OspreyFlow_Build
+configfile: pytest.ini
+plugins: xdist-3.8.0, asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 28 items
+
+../OspreyFlow_Build/tests/test_no_langchain_check.py ................... [ 67%]
+.........                                                                [100%]
+
+============================== 28 passed in 1.22s ==============================
