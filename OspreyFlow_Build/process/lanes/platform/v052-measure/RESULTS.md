@@ -22,6 +22,31 @@
 
 A result between the budget and the failure figure is over budget, not failed; past the failure figure, step 4 fails (ADR-149 Amendment 2).
 
+## The shipping code's figures: the ones the client reads
+
+Step 2 run again on the code that ships: run 20261114T214215Z-0940d7df, 21:42–21:46Z, on d under rules' lease since
+2026-11-14T21:31:12Z, the host otherwise idle (load 0.6, no make); run tree 9ec3111 (main 10ff9e2, with ADR-124
+Amendments 20 and 21, and the runner at 576e4d7); the same query set (sha256 f564f75f…), `-k "not m9 and not m10"`, 5
+passed; at the poc's limits ('2', '4g'); `results-today/` on d's host. The rows are `results_table.py`'s from that
+folder.
+
+| Measure | What | Budget | Failure figure | p50 / p95 / max | n | Class | Result | The first run's p50 / p95 (pre-Am 20) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| M1 | Suggestions | ≤ 300 ms | p95 > 300 ms, or any over 2 s | 56.4 / 61.1 / 252.4 ms | 200 | suggest | **met** | 56.8 / 61.3 ms |
+| M3 | Name search | ≤ 1 s | p95 > 2 s | 111.1 / 126.2 / 226.4 ms | 200 | names | **met** | 856.3 / 912.7 ms |
+| M4 | Full text | ≤ 1.5 s | p95 > 3 s | 143.7 / 183.8 / 260.6 ms | 200 | fulltext | **met** | 884.5 / 957 ms |
+| M5 | An exact identifier first | ≤ 1 s | p95 > 2 s | 117.2 / 143.8 / 245.5 ms | 200 | exact | **met** | 857.1 / 914.7 ms |
+| M6 | The feed's lag | ≤ 5 s | p95 > 30 s | 1,044.6 / 2,081.7 / 2,192.3 ms | 50 |  | **met** | 1,799 / 2,836 ms |
+
+**Which set the client reads: this one.** The first run (20261114T143856Z-516ef319, the table at the top) measured
+step 4's tree, 8ba5ed6, which predates ADR-124 Amendment 20; the candidate carries Amendment 20, and these figures
+are its own. The reason the two differ, measured (`STEP4_RECORD.md`, the gap): M5's same 200 sends take 896 ms p50 on
+step 4's tree and 115 ms on today's, both at the poc's limits, and 102 ms on today's without them; the difference is
+the merge's `edges_among`, which step 4's tree started from every vertex in the store on every page of two or more
+hits (808 ms of a page, 43 ms as built now); the CPU cap is worth about 13 ms a page and no warm-up shows. Suggestions
+(M1) never merge, so they are the same in both runs. The first run's figures stay above as what was measured then.
+M6 drew its 50 nodes (and its warm-up's) into the intel case's analyst layer, as each M6 run does.
+
 ## The runs behind each row
 
 | Measure | Run | Results folder | Notes |
@@ -36,7 +61,7 @@ Not results: the void and masked runs (`results-expired-20261114T142209Z/`, `res
 
 ## What each figure means for v0.5.2
 
-- **M1, M3, M4, M5:** met at client size (B, 642,460 nodes) under the poc's limits (the Conduit at 2 CPUs and 4 GB). M3 to M5 sit at about 860 ms p50, close to the 1 s budget. That run predates ADR-124 Amendment 20: measured since (`STEP4_RECORD.md`, the gap), the same 200 exact sends take 896 ms p50 on step 4's own tree and 115 ms on today's, both at the poc's limits, the difference the merge's old `edges_among`, which read the whole store on every page of two or more hits (808 ms of it, 43 ms as built now). These rows stand as measured; the candidate, which carries Amendment 20, pages at about 100–130 ms, an eighth of them.
+- **M1, M3, M4, M5:** met at client size (B, 642,460 nodes) under the poc's limits (the Conduit at 2 CPUs and 4 GB). M3 to M5 sit at about 860 ms p50, close to the 1 s budget. That run predates ADR-124 Amendment 20: measured since (`STEP4_RECORD.md`, the gap), the same 200 exact sends take 896 ms p50 on step 4's own tree and 115 ms on today's, both at the poc's limits, the difference the merge's old `edges_among`, which read the whole store on every page of two or more hits (808 ms of it, 43 ms as built now). These rows stand as measured; the shipping code's own figures, from step 2 run again on it (111–144 ms p50), are the ones the client reads (the section below the table).
 - **M6:** a drawn node is searchable within 3 s, inside the 5 s budget.
 - **M9:** met with ADR-124 Amendment 21, merged to main as 4693457 (the orchestrator, 14 Nov) and so in the candidate: without it, a search with OpenSearch down takes over 5 s at client size and the bar's own timeout is passed.
 - **M10:** no leak at scale: no hidden id, count or word reached the part-cleared reader in 1,000 cases, with the check shown to fire. The never-join file is at the 90% floor exactly; the orchestrator's ruling holds the floor where it is.
