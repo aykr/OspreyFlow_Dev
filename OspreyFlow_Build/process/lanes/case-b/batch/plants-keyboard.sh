@@ -41,7 +41,7 @@ plant "Close out of the Tab order" "$UI" \
   's/<button type="button" className="btn" onClick=\{onClose\}>/<button type="button" className="btn" tabIndex={-1} onClick={onClose}>/' \
   "is closed by keyboard" "the batch job's panel is closed by keyboard while the job runs, and asks no more"
 plant "Try the batch job again out of the Tab order" "$UI" \
-  's/<button type="button" className="btn btn--primary" onClick=\{\(\) => setAttempt/<button type="button" className="btn btn--primary" tabIndex={-1} onClick={() => setAttempt/' \
+  's/<button type="button" className="btn btn--primary" onClick=\{\(\) => \{/<button type="button" className="btn btn--primary" tabIndex={-1} onClick={() => {/' \
   "tried again by keyboard" "a failed batch job is tried again by keyboard, and runs to its view"
 plant "Open the view out of the Tab order" "$UI" \
   's/(<button\n            type="button"\n            className="btn btn--primary"\n            onClick=\{\(\) => void openResult)/<button tabIndex={-1}\n            type="button"\n            className="btn btn--primary"\n            onClick={() => void openResult/' \

@@ -89,7 +89,7 @@ plant "focus dropped to the page when the pressed button is taken away" "$UI" \
   's/function keepFocusInThePanel\(\): void \{\n    headingRef.current\?\.focus\(\);/function keepFocusInThePanel(): void {/' \
   "keeps focus in the panel when the pressed button is taken away (Open the view, Try again)"
 plant "focus dropped to the page when Try again is pressed" "$UI" \
-  's/          onClick=\{\(\) => \{\n            keepFocusInThePanel\(\);\n            setAttempt/          onClick={() => {\n            setAttempt/' \
+  's/onClick=\{\(\) => \{\n            keepFocusInThePanel\(\);\n            setAttempt/onClick={() => {\n            setAttempt/' \
   "keeps focus in the panel when Try the batch job again is pressed"
 plant "the effect keyed on the token too (re-run at each renewal)" "$UI" \
   's/  \}, \[attempt\]\);/  }, [attempt, request, bearerToken]);/' \
