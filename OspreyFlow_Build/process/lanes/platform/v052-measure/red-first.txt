@@ -214,3 +214,17 @@ the Mac's docker guard refuses the stand-in too; server_m9.sh runs them on the t
 - green: both live-run cases passed (2 passed): the stand-in docker stopped and started the stub's index, the case met,
   and the silent fallback's case failed as it should;
 - red: with the live case's verdict check planted out, the silent fallback's case failed (1 failed); then put back.
+
+# Step 4's dry run (2026-11-14T10:08:27Z; the orchestrator's suggestion): the live gate run whole against the stub Conduit, each
+# case's result written, the record made from them (results_table.py; DRY_RUN.md; RESULTS.md empty for the day). One plant per
+# check (plants_dryrun.py), each restored:
+plant 1: a measure with no result shown met
+  tests/test_step4_dry_run.py -k 'never_shown_met': RED (1 failed, 2 deselected in 0.90s)
+plant 2: a measure left out of the record
+  tests/test_step4_dry_run.py -k 'every_measure_s_row': RED (1 failed, 2 deselected in 3.37s)
+plant 3: M10's result not recorded
+  tests/test_step4_dry_run.py -k 'every_measure_s_row': RED (1 failed, 2 deselected in 3.38s)
+plant 4: a figure typed in the renderer, not the amendment's
+  tests/test_step4_dry_run.py -k 'figures_are_the_amendment_s': RED (1 failed, 2 deselected in 0.74s)
+4/4 red
+Green: with test_measure_search, tests/perf and the coverage check, 65 passed, 9 skipped.
