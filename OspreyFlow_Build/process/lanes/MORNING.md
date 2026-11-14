@@ -50,6 +50,17 @@ count records).
    to say a set in its last day may not be restorable with its database; (c) something else. The guide follows the
    ADR as it stands until then.
 
+6. **A data-safety gap in the standard shape (audit ruling 3; found by docs, confirmed by platform).** Outside
+   poc, the Ingest root (uploads and the drop folder) is a folder of the shared volume and in **no backup set**. A
+   restore then brings back loads that cite uploads which are no longer there, or drop-folder files without the
+   loads that read them: exactly the disagreement ruling 3 exists to prevent. Am 13 decision 4 was written with
+   poc's own Ingest claim in view.
+   - **(a) platform's recommendation:** wherever the Ingest root is not a claim of its own, back up the shared
+     volume's `ingest` folder as a fourth shared part, read-only to the backup and put back by the restore. The cost
+     is that uploads can be large, so the backup's size and time grow with them.
+   - **(b)** Record it as a known limit of the standard shape, in the guide and the ADR.
+   Platform can build either once you rule.
+
 ## Decided by the lanes, for you to overrule if you wish
 
 - **Case, Build a report for the Administrator (ADR-145 Am 15 decision 5):** a builder without the Reports
