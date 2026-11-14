@@ -12,7 +12,8 @@ AS IT MUST BE (red): readings that fail asked for ever
     TestingLibraryElementError: Unable to find role="alert"
 AS IT MUST BE (red): a 403 at the start read as any failure
     AssertionError: expected 'The batch job could not be started (4…' to be 'You hold Reader in this case; this ne…' // Object.is equality
-PLANT DID NOT APPLY: right_required read as a case level too low
+AS IT MUST BE (red): right_required read as a case level too low
+    AssertionError: expected 'You cannot run a batch job in this ca…' to be 'Your account does not hold the right …' // Object.is equality
 AS IT MUST BE (red): a 404 at the start read as any failure
     AssertionError: expected 'The batch job could not be started (4…' to be 'This case could not be opened. It may…' // Object.is equality
 AS IT MUST BE (red): a job already running read as a refusal
@@ -27,7 +28,8 @@ AS IT MUST BE (red): a refused job offered a second try
     AssertionError: expected <button type="button" …(1)></button> to be null
 AS IT MUST BE (red): a state not known read as waiting
     TestingLibraryElementError: Unable to find role="alert"
-PLANT DID NOT APPLY: a job not this reader's read as progress not read
+AS IT MUST BE (red): a job not this reader's read as progress not read
+    AssertionError: expected 'The job\'s progress could not be read…' to be 'The batch expansion can no longer be …' // Object.is equality
 AS IT MUST BE (red): the result not opened when the job is done
     AssertionError: expected "vi.fn()" to be called with arguments: [ { view: { id: 'v9', …(6) }, …(4) } ]
 AS IT MUST BE (red): a done job's deleted-view words replaced by the Glass's own
@@ -36,10 +38,11 @@ AS IT MUST BE (red): the carry-on note left up once the job ends
     AssertionError: expected <p class="batch-expansion__figure"></p> to be null
 AS IT MUST BE (red): a result view past the canvas's limit said as any failure
     AssertionError: expected 'The batch job saved its result as the…' to be 'The batch job saved its result as the…' // Object.is equality
-PLANT DID NOT APPLY: a failed job offered no second try
+AS IT MUST BE (red): a failed job offered no second try
+    TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Try the batch job again"
 AS IT MUST BE (red): progress not read taken as the end
     AssertionError: expected "vi.fn()" to be called at least once
 AS IT MUST BE (red): the asking not stopped once closed
     AssertionError: expected 22 to be 2 // Object.is equality
 unplanted: Tests 22 passed (22)
-SOME PLANT WRONG
+every plant red for its reason, unplanted green
