@@ -473,3 +473,32 @@ def test_a_value_set_by_the_administrator_but_not_set_yet_refuses_the_run(sets: 
     row = _owner_row(set_here=set_here, seen=("OFFICIAL", "unit-1", ["R"]), read_hours_ago=1)
     with pytest.raises(PrincipalAccessOutOfDate):
         asyncio.run(_owner_resolver(sets, row).resolve_for_owner_detailed(SETTER))
+
+
+def test_a_value_not_set_here_is_said_as_such_never_as_signing_in() -> None:
+    """The run's refusal names what an administrator has not set, and what happens next, never "sign in",
+    which cannot help (Amendment 15 point 8). Through the real resolver and a real caller's words."""
+    from principal_auth import ACCESS_OUT_OF_DATE_WORDS, OwnerValueNotSet, PrincipalAccessOutOfDate, out_of_date_next, out_of_date_words
+    from services.api.list_schedule import owner_refusal_words
+
+    row = _owner_row(set_here=("SECRET", None, None), read_hours_ago=1)
+    with pytest.raises(OwnerValueNotSet) as refused:
+        asyncio.run(_owner_resolver(EVERY, row).resolve_for_owner_detailed(SETTER))
+    assert refused.value.unset == ("unit", "handling codes")
+    said = owner_refusal_words(refused.value, SETTER)
+    assert said == (f"the schedule's owner, {SETTER}, an administrator has not set unit and handling codes for this person in "
+                    "Admin › People: it runs at its next slot once an administrator has set it")  # fmt: skip
+    assert "sign in" not in said and "signed in" not in said
+    assert out_of_date_next(refused.value, by_hand=True) == "run it again once an administrator has set it"
+    # A token's values out of date are still said as before.
+    stale = PrincipalAccessOutOfDate(SETTER, None)
+    assert out_of_date_words(stale) == ACCESS_OUT_OF_DATE_WORDS and "sign in" in out_of_date_next(stale)
+
+
+def test_a_run_asked_for_by_hand_is_told_what_to_do_in_the_refusal_s_own_words() -> None:
+    from services.api.scheduler import _asked_for, _Refused
+
+    told = _Refused("slot words", kind="owner_out_of_date", about_the_owner=False,
+                    asked_for="the schedule's owner, x, an administrator has not set unit for this person in Admin › People: "
+                              "run it again once an administrator has set it")  # fmt: skip
+    assert _asked_for(told, None) == told.asked_for  # type: ignore[arg-type]

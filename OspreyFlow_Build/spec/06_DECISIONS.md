@@ -38094,5 +38094,11 @@ By platform-b. An access step: two review rounds, listed for the owner (round 1'
    - live: `test_entra_people_live.py`'s `test_am15_a_run_acts_as_its_owner_with_the_values_set_here`, written and
      not yet run: it waits on a lease, which the owner acquires.
 
-   A refused run's words are Amendment 16's `ACCESS_OUT_OF_DATE_WORDS`, which advise signing in. For a value not set
-   here they mislead, as do the stale-access words carried from 4c's second review (could 9).
+   A run refused for a value not set here says so (`OwnerValueNotSet`, a `PrincipalAccessOutOfDate` that never pauses
+   a schedule): "an administrator has not set <the values> for this person in Admin › People", then "it runs at its
+   next slot once an administrator has set it", or for a run asked for by hand "run it again once an administrator has
+   set it". It never says "sign in", which cannot help. Each of Amendment 16's callers uses these words: the
+   scheduler, rules, list refreshes, watches and the KYC sweep. Three plants are red (`owner-red-first.txt`).
+
+   People's stale-access words for a transfer or promotion (4c's second review, could 9) are carried: they read a
+   `PersonAccount`, which cannot tell an unset value from "never signed in" without a schema change.

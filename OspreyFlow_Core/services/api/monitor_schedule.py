@@ -26,12 +26,12 @@ from valkey.asyncio import Valkey
 
 from conduit_common.valkey_compat import reply
 from principal_auth import (
-    ACCESS_OUT_OF_DATE_WORDS,
-    NEXT_SLOT_WORDS,
     OwnerRecordUnavailable,
     PrincipalAccessOutOfDate,
     PrincipalExchangeUnavailable,
     PrincipalRevoked,
+    out_of_date_next,
+    out_of_date_words,
 )
 from schemas.domain import Alert, Monitor, Principal, WatchStatus
 
@@ -101,7 +101,7 @@ class MonitorScheduleExecutor:
             # same slot again rather than losing it. Each in its own words (ADR-148 Amendment 16).
             if isinstance(error, PrincipalAccessOutOfDate):
                 log.warning("watch %s: its owner, %s, %s: %s", monitor.id, monitor.owner_id,
-                            ACCESS_OUT_OF_DATE_WORDS, NEXT_SLOT_WORDS)  # fmt: skip
+                            out_of_date_words(error), out_of_date_next(error))  # fmt: skip
             elif isinstance(error, OwnerRecordUnavailable):
                 log.warning("watch %s: Admin › People's store could not be read", monitor.id)
             else:

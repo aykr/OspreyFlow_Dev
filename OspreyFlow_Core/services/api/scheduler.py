@@ -32,7 +32,6 @@ from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme, principal_may_view
 from principal_auth import (
     ACCESS_OUT_OF_DATE_WORDS,
-    NEXT_SLOT_WORDS,
     RUN_AGAIN_WORDS,
     OwnerNotHeld,
     OwnerRecordUnavailable,
@@ -40,6 +39,8 @@ from principal_auth import (
     PrincipalExchangeRefused,
     PrincipalExchangeUnavailable,
     PrincipalRevoked,
+    out_of_date_next,
+    out_of_date_words,
 )
 from schemas.domain import Alert, AlertMode, Principal
 from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
@@ -269,15 +270,21 @@ class _Refused(Exception):
     refusal that says nothing about the owner (Amendment 3), which never pauses the schedule. `kind`
     is what its owner is told (Amendment 19); the words here go to the ledger alone."""
 
-    def __init__(self, why: str, *, kind: NoticeKind, about_the_owner: bool = True) -> None:
+    def __init__(
+        self, why: str, *, kind: NoticeKind, about_the_owner: bool = True, asked_for: str = ""
+    ) -> None:
         super().__init__(why)
         self.about_the_owner = about_the_owner
         self.kind: NoticeKind = kind
+        #: For a run asked for by hand, the words that say what to do instead (Amendment 16).
+        self.asked_for = asked_for
 
 
 def _asked_for(refused: _Refused, recipe: StudioRecipeDraft) -> str:
     """A refusal's words for a run asked for now (*Run now*, `ospreyflow run`): nothing runs again
     by itself, so an out-of-date owner's says what to do (ADR-148 Amendment 16)."""
+    if refused.kind == "owner_out_of_date" and refused.asked_for:
+        return refused.asked_for
     if refused.kind == "owner_out_of_date":
         return (
             f"the schedule's owner, {recipe.schedule_owner}, {ACCESS_OUT_OF_DATE_WORDS}: "
@@ -639,10 +646,13 @@ class ScheduleExecutor:
         except PrincipalAccessOutOfDate as error:
             # ADR-148 Amendment 16: nothing decided about the owner, so never counted toward the
             # three that pause; refused at each slot until they sign in, then run again.
+            why = out_of_date_words(error)
             raise _Refused(
-                f"the schedule's owner, {owner_id}, {ACCESS_OUT_OF_DATE_WORDS}: {NEXT_SLOT_WORDS}",
+                f"the schedule's owner, {owner_id}, {why}: {out_of_date_next(error)}",
                 kind="owner_out_of_date",
                 about_the_owner=False,
+                asked_for=f"the schedule's owner, {owner_id}, {why}: "
+                f"{out_of_date_next(error, by_hand=True)}",
             ) from error
         except OwnerRecordUnavailable as error:
             raise _Refused(

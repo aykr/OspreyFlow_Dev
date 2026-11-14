@@ -319,7 +319,11 @@ def _owner(
     read_at = row["access_read_at"]
     clearance, org_unit = held("clearance", "clearance"), held("org_unit", "org_unit")
     codes = held("handling_codes", "receivable_handling_codes")
-    if sets and not _all_set(row, sets):
+    named = (("clearance", "clearance"), ("org_unit", "unit"), ("handling_codes", "handling codes"))
+    unset = tuple(
+        words for field, words in named if field in sets and not _all_set(row, frozenset({field}))
+    )
+    if unset:
         clearance, read_at = None, None
     elif sets >= ADMINISTRATOR_FIELDS.keys():
         read_at = now or datetime.now(UTC)
@@ -330,6 +334,7 @@ def _owner(
         org_unit=org_unit,
         receivable_handling_codes=tuple(codes or ()),
         access_read_at=read_at,
+        unset=unset,
     )
 
 

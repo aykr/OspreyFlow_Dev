@@ -532,6 +532,9 @@ class StoredOwner:
     org_unit: str | None
     receivable_handling_codes: tuple[str, ...]
     access_read_at: datetime | None
+    #: ADR-148 Amendment 15: the values the administrator sets for this person and has not set yet
+    #: ("clearance", "unit", "handling codes"), which refuse a run in their own words.
+    unset: tuple[str, ...] = ()
 
 
 class RoleSource(Protocol):
@@ -1052,6 +1055,41 @@ class PrincipalAccessOutOfDate(PrincipalExchangeUnavailable):
         self.access_read_at = access_read_at
 
 
+class OwnerValueNotSet(PrincipalAccessOutOfDate):
+    """On Entra ID with the administrator fallback (ADR-148 Amendment 15): a value the
+    administrator sets for this person (`unset`) has not been set, so a run cannot act as them.
+    Signing in does not help, so a caller says `out_of_date_words` and `out_of_date_next`, never
+    "sign in". As `PrincipalAccessOutOfDate`, it decides nothing about the owner and never pauses
+    a schedule."""
+
+    def __init__(self, owner_id: str, unset: tuple[str, ...]) -> None:
+        super().__init__(owner_id, None)
+        self.args = (f"owner {owner_id!r}: {', '.join(unset)} not set in Admin › People",)
+        self.unset = unset
+
+
+def _listed(words: tuple[str, ...]) -> str:
+    return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
+
+
+def out_of_date_words(error: PrincipalAccessOutOfDate) -> str:
+    """Why a run cannot act as its owner, in words a person can act on."""
+    if isinstance(error, OwnerValueNotSet):
+        unset = _listed(error.unset)
+        return f"an administrator has not set {unset} for this person in Admin › People"
+    return ACCESS_OUT_OF_DATE_WORDS
+
+
+def out_of_date_next(error: PrincipalAccessOutOfDate, *, by_hand: bool = False) -> str:
+    """What happens next: at the next slot, or for a run asked for by hand, what to do."""
+    if isinstance(error, OwnerValueNotSet):
+        return (
+            "run it again once an administrator has set it" if by_hand
+            else "it runs at its next slot once an administrator has set it"
+        )
+    return RUN_AGAIN_WORDS if by_hand else NEXT_SLOT_WORDS
+
+
 def _access_token_of(response: httpx.Response, what: str) -> str:
     """The `access_token` of a token endpoint's 200, or `PrincipalExchangeUnavailable`. A body that
     is not JSON, is not an object, or carries no non-empty string token is a malformed answer, not
@@ -1372,6 +1410,8 @@ class PrincipalResolver:
             raise OwnerRecordUnavailable("the people store answered something not a person")
         if stored.disabled:
             raise PrincipalRevoked(f"owner {owner_id!r} is disabled in this deployment")
+        if stored.unset:
+            raise OwnerValueNotSet(owner_id, stored.unset)
         read_at = stored.access_read_at
         if (
             read_at is None

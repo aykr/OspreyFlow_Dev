@@ -14,3 +14,16 @@ unplanted: exit 0: 5 passed, 34 deselected, 1 warning in 4.54s
   planted: exit 1: 1 failed, 4 passed, 34 deselected, 1 warning in 5.03s
     test_entra_people_administrator_access.py::test_a_partial_fallback_takes_the_value_set_here_and_the_token_s_others_within_the_day
 restored: exit 0: 5 passed, 34 deselected, 1 warning in 4.52s
+
+# a run's refusal for a value not set here, said as such (the orchestrator's word, 14 Nov), each plant at its site, a fresh PYTHONPYCACHEPREFIX per run
+unplanted: exit 0: 7 passed, 34 deselected, 1 warning in 5.09s
+== the resolver not naming an unset value (the out-of-date refusal alone)
+  planted: exit 1: 1 failed, 6 passed, 34 deselected, 1 warning in 5.59s
+    test_entra_people_administrator_access.py::test_a_value_not_set_here_is_said_as_such_never_as_signing_in
+== a caller saying the sign-in words for an unset value
+  planted: exit 1: 1 failed, 6 passed, 34 deselected, 1 warning in 5.25s
+    test_entra_people_administrator_access.py::test_a_value_not_set_here_is_said_as_such_never_as_signing_in
+== a run asked for by hand told to sign in
+  planted: exit 1: 1 failed, 6 passed, 34 deselected, 1 warning in 5.59s
+    test_entra_people_administrator_access.py::test_a_run_asked_for_by_hand_is_told_what_to_do_in_the_refusal_s_own_words
+restored: exit 0: 7 passed, 34 deselected, 1 warning in 5.12s
