@@ -37321,3 +37321,97 @@ shared action list carrying it, is merged, and not before.
 - Test: `SelectionBar.test.tsx`, *offers Ask the model about these… whatever is selected, Document or not*.
 - Test: `keyboard/selection.spec.ts`, *the selection bar's Ask the model about these… saves the selection as a
   private view, named for its items, and asks in it*.
+
+
+### ADR-078, Amendment 1 (13 November 2026) — the right-click menu acts on the whole selection, in the bottom bar's words
+
+Context. The owner's navigation decision of 13 November 2026 (`process/lanes/NAVIGATION_2026-11-13.md`, Part C, ruled
+the same evening): a right-click on a selected item should offer what the bottom bar offers for the selection, and
+say what it applies to.
+
+Decision.
+
+1. **One set of actions for the selection.** The menu on a selected item opens with the selection's actions, the
+   same actions in the same words and order as the bottom bar (ADR-097 step 1), on the bar's own conditions:
+   *Undo select what is lit* (while it stands), *Expand*, *Show links* (two or more; from the menu it looks as far
+   as the bar's stepper reads, one degree held by the canvas for both, the orchestrator's ruling of 14 Nov), *Ask the model about these…*, *Save as a view*,
+   *Remove from view*, *Clear*. Both read one table (`canvas/selectionActions.ts`), and a test reads the rendered
+   bar's buttons against the menu's entries, so the two cannot drift. *Ask* is offered whatever is selected, in the
+   bar and the menu alike (ADR-098 Amendment 7, rules-b's Part D, landed first).
+2. **A right-click on an unselected item selects it first**; so do `\`, the ContextMenu key and Shift+F10 on a
+   focused item. The menu is always the selection's.
+3. **The heading says what the menu applies to**: "2 selected", or the item's name (no longer its type before it).
+4. **One item's own actions follow its selection's**: *Expand by link type* (ADR-098 Amendment 8), then its
+   *Actions*. With two selected, the pair's own (*Link to*, *Split from*, *Find paths to*) follow instead; with
+   more, the selection's actions alone. **A reading for the owner to confirm:** Part C lists *Link to* and *Find
+   paths to…* among one item's own actions, but each needs a second item, so they are offered for two; and with
+   two, the clicked item's other actions (*Explain cluster*, *View messages*) are not, since the heading says the
+   menu is the pair's.
+5. **Link types with no links fold into one line**, "7 types with no links" ("1 type with no links" for one), once
+   their counts are known; it opens the list in place without closing the menu (a `keepsOpen` entry; focus stays in
+   the menu). A type whose count is still awaited or unavailable is shown, never folded.
+6. **The menu never opens over the bottom bar**: measured once drawn, it moves up by what it would overlap.
+7. **Every action is reachable by keyboard**: the ContextMenu key and Shift+F10 open the menu on the focused item
+   as `\` does, and in the menu the arrow keys step through the entries (wrapping), Home and End go to the ends.
+8. In a view, the lens allowlist holds: the selection's *Ask*, *Undo select what is lit* and *Clear* join it, and
+   what changes the case is absent as it is from the bar.
+9. **One exception to the order:** a Document's *Read full screen* stays at the very head of its menu, before the
+   selection's actions, as ADR-092 decision 4 put it (the owner, 6 October 2026); it is an entry of its own, in no
+   group.
+
+Consequences. Decision 2 of the original ("the order of the entries does not change") no longer holds for the
+first entries: the selection's actions now come first. Tests: `canvas/selectionActions.test.tsx` (the menu's words
+against the rendered bar, on four conditions), `design/primitives/RadialMenu.test.tsx` (arrows, Home and End in
+both layouts, the entry that keeps the menu open, the move clear of the bar), and `keyboard/keyboard.spec.ts`'s
+cases for the ContextMenu key, Shift+F10, the selection's actions under "2 selected" and the fold, each acting.
+
+### ADR-098, Amendment 8 (13 November 2026) — *Expand by link type*, with a real count of links per type
+
+Context. The menu's per-type figure was the working set's size after the expansion less its size now: what the
+expansion would add, not how many links of that type the item has. A type whose links were all drawn read 0, and
+the heading *Show links* said the same as the bar's *Show links* (the links among the selection), which is another
+action. The owner, 13 November 2026: "Expand by link type", with a real per-type link count.
+
+Decision.
+
+1. The menu's per-type heading is **Expand by link type**; the bar keeps *Show links* for the links among the
+   selection (Amendment 4).
+2. `POST /expand/preview` answers **`link_count`**: the links of the asked type at the asked node the reader may
+   see, counted in the Conduit (`working_set/service.py` `_links_at`) over what the adapter's own expand returned
+   (rule 3: access is in the traversal), a link counted only when its far end was returned too; one already drawn
+   counts. The two candidate counts and `would_breach` are unchanged, and the large-expansion prompt still asks
+   before a big expansion (rule 2).
+3. A stored item the reader may not read never moves it (ADR-124 decision 2): a link above them, or one to a node
+   above them, is absent from the read and so from the count.
+
+Consequences. Tests: `tests/services/api/working_set/test_preview_link_count.py` (equal with and without each kind
+of hidden stored item; a drawn link counted; the asked type at the asked node only; a link whose far end the read
+left out not counted; a cleared reader counted with what they see), red first; and the graph port's conformance
+case `test_unauthorised_expand_by_type_matches_a_graph_without_the_hidden_links` (a one-type expand carries no trace
+of a hidden link of that type, either kind; a cleared principal reads all three), which is the proof the count holds
+rule 3: it runs on ArcadeDB only, under a lease, red first by two plants in the adapter's traversal
+(`process/lanes/case-b/v052-selection/live_run.sh`, its record beside it). The access step is the same
+`gremlin_has_step` every read uses, whose handling-code and dataset cases the suite already holds on other reads.
+**Why not `neighbourhood_stats(...).degree_by_type`**, which counts a node's visible links per type in one read:
+the menu already asks the preview once per type it shows, and the figure rides on that read; `degree_by_type`
+counts both directions with no time window, while the preview is the expansion the entry would make (its
+direction and the case's window, ADR-128), so the count is of what the click would follow.
+
+### ADR-144, Amendment 5 (13 November 2026) — saving the selection as a view is one of the selection's actions
+
+Amends decision 4. *Save selected (N) as a view…* on a selected node's own menu is replaced by the selection's
+*Save as a view*, in the bar's words (ADR-078 Amendment 1, which puts the bar's actions in the menu); the count is
+the heading's ("2 selected"). Its menu id, `save-selected-as-view`, and its place in the lens allowlist are kept.
+
+### ADR-097, Amendment 3 (13 November 2026) — a heading is in the page's own face, in both looks
+
+Context. The owner, 13 November 2026 (Part E): in the GOV.UK look, card headings ("Alerts", "Raised each week",
+"Team view") and the right-click menu's heading were in a monospace face. They were `<h3 className="value">`
+(`reports/figureParts.tsx` and 22 more), and `.value` is mono, which DESIGN.md §2 keeps for values to copy.
+
+Decision. One rule in `tokens.css`, for both looks: `:is(h1, h2, h3, h4, h5, h6).value { font-family: var(--ui); }`;
+and the right-click menu's heading in `var(--ui)`. Identifiers and values stay in mono.
+
+Consequences. Tests: `design/headingFace.test.ts` (every heading level classed `.value` computes to the page's face
+in the OspreyFlow and GOV.UK looks, a value that is not a heading stays mono; red first, all fourteen), and
+`RadialMenu.test.tsx` (the menu's heading not in mono).

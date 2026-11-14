@@ -500,3 +500,20 @@ createRoot(container).render(
     )}
   </>,
 );
+
+// a11y/every-harness.spec.ts (ADR-078 Amendment 1): the canvas's menu open, by the keyboard's own route — the
+// canvas focused (n0 selected), then `\` on one node, or ArrowRight and Space first for two.
+const wantsMenu = new URLSearchParams(window.location.search).get("menu");
+if (wantsMenu === "node" || wantsMenu === "two") {
+  const press = (target: HTMLElement, key: string) =>
+    target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+  const open = () => {
+    const canvas = document.querySelector<HTMLElement>("[role='application'][aria-label='Network canvas']");
+    if (!canvas) return void window.setTimeout(open, 50);
+    canvas.focus();
+    // One key per task, as a person presses them, so each is heard after the last one's render.
+    const keys = wantsMenu === "two" ? ["ArrowRight", " ", "\\"] : ["\\"];
+    keys.forEach((key, i) => window.setTimeout(() => press(canvas, key), 150 * (i + 1)));
+  };
+  open();
+}

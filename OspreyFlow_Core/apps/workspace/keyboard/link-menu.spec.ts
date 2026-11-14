@@ -256,6 +256,21 @@ test("Hide link from the menu hides it, and Show hidden links brings it back", a
   registerCovered(REGISTRY, "hide-link-from-the-menu");
 });
 
+for (const key of ["ContextMenu", "Shift+F10"]) {
+  test(`${key} opens a selected link's menu as \\ does, and its entry acts`, async ({ page }) => {
+    await openMenuOnFirstLink(page);
+    await expect.poll(() => selectedEdge(page)).toBe("sa0");
+    await page.keyboard.press(key);
+    await expect(menu(page)).toBeVisible();
+    await tabToEntry(page, "Add a note");
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => page.evaluate(() => window.__KEYBOARD__?.linkAction))
+      .toEqual({ edgeId: "sa0", action: "note" });
+    registerCovered(REGISTRY, "context-menu-key-and-shift-f10-open-a-selected-links-menu");
+  });
+}
+
 test("Add a note selects the link and tells the Inspector to take the analyst to the notes", async ({ page }) => {
   await openSameAsMenu(page);
   await tabToEntry(page, "Add a note");

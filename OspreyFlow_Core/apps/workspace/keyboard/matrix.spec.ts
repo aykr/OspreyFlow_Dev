@@ -46,7 +46,7 @@ async function stubExpansion(page: Page): Promise<{ body: unknown }> {
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ candidate_node_count: 1, candidate_edge_count: 0 }),
+      body: JSON.stringify({ candidate_node_count: 1, candidate_edge_count: 0, link_count: 2 }),
     }),
   );
   await page.route("**/*/expand", async (route) => {
