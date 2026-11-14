@@ -22,7 +22,11 @@ p 03c-health-before health
 p 03d-envsnap envsnap
 p 04-repair-c repair-c
 p 05-backup-first backup-tool
-p 06-update-real update-real $TAG
+p 06a-update-rollback update-rollback $TAG ner
+p 06b-health-rolled-back health
+p 06c-pg-rolled-back pg
+p 06d-snap-rolled-back snap "after the rollback"
+p 06e-update-real update-real $TAG
 p 07a-health-after health
 p 07b-pg-after pg
 p 07c-snap-after snap "after the update"

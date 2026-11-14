@@ -134,6 +134,30 @@ update-real)
   say "\$ ospreyflow update --name osprey-upg --to $2 --yes"
   $OF update --name osprey-upg --to $2 --yes < /dev/null; say "update exit $?"
   say "checkout: $(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD)" ;;
+update-rollback)
+  # Run 3's rollback: the same real update, with one owned image's pull refused (tools/pull_fault.py,
+  # shown red in pull-fault-red.txt) for this process alone, so the update fails after its backup and
+  # must roll back. `$2` the tag, `$3` the service (ner). The image v0.5.0 runs is never refused, so
+  # the rollback's own start is not.
+  cd $R/repo
+  [ -n "${2:-}" ] && [ -n "${3:-}" ] || { say "REFUSED: update-rollback needs the tag and a service"; exit 2; }
+  old=$($PY -c "import yaml; print(yaml.safe_load(open('$D/compose.yaml'))['services']['$3']['image'])")
+  case "$old" in *@sha256:*) ;; *) say "REFUSED: $3 is not digest-pinned ($old)"; exit 2;; esac
+  name=${old%@*}; digest=${old#*@sha256:}
+  pattern="^$(printf %s "$name" | sed 's/[.]/\\./g')@sha256:(?!$digest)"
+  sock=$R/pull-fault.sock
+  $PY $R/tools/pull_fault.py $sock "$pattern" 2> $R/logs/pull-fault.err & fault=$!
+  sleep 1
+  say "fault: refusing pulls of $name other than v0.5.0's own sha256:$digest"
+  say "\$ DOCKER_HOST=unix://<fault socket> ospreyflow update --name osprey-upg --to $2 --yes"
+  $U DOCKER_HOST=unix://$sock ospreyflow update --name osprey-upg --to $2 --yes < /dev/null; rc=$?
+  kill $fault; wait $fault 2>/dev/null; rm -f $sock
+  cat $R/logs/pull-fault.err
+  say "update (planted to fail) status $rc; expected non-zero"
+  [ $rc != 0 ] || { say "FAILED: the update succeeded although its pull was refused"; exit 1; }
+  say "checkout after the rollback: $(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD)"
+  [ "$(git describe --tags --exact-match 2>/dev/null)" = v0.5.0 ] || say "FAILED: the checkout is not back at v0.5.0"
+  [ "$(sed -n 's/^OSPREY_RELEASE_VERSION=//p' $D/deployment.env)" = v0.5.0 ] || say "FAILED: the deployment does not say v0.5.0" ;;
 sync)
   # The stand-in's own step, not the CHANGELOG's: the build below runs in the checkout's environment.
   cd $R/repo
