@@ -110,3 +110,4 @@ bb06bf5 3b144d5 docs v052-nav (user guide 1.54), PDF reprinted
 aca0591 2916cf6 platform v052-measure (ADR-149 Am 2, the budgets and live gate)
 f44d97b 2c1ffa1 platform v052-m6 (index lag)
 cc6d222 bebfc2f admin guests (audit 4b, Am 17), with registry-4b.diff; guide 2.02, PDF reprinted
+9ec898d 4140e9b case v052-results (step 3e′), with its shared diff
