@@ -12,4 +12,4 @@ owner	2026-11-14	Rule which audit fixes join v0.5.2 (1, 3, 4b, 4c in; 4d after, 
 owner	2026-11-14	OpenSearch on poc: IRSA with SigV4 and no FGAC? No backups of the index, deleted at decommission? (3a waits)	done
 orchestrator	2026-11-15	Search navigation options (2-3) for the owner to choose from	done
 orchestrator	2026-11-14	Navigation C, D, E: estimates, effect on 26 Nov, the six questions, the amendments	done
-owner	2026-11-14	v0.5.1's release: Superset's dnspython CVE-2026-128089 (MORNING, top)	open
+owner	2026-11-14	v0.5.1's release: Superset's dnspython CVE-2026-128089 (MORNING, top)	done

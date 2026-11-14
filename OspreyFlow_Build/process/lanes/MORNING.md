@@ -4,7 +4,7 @@ Kept by the orchestrator through the night. The owner's words for the night: mer
 merges, sol lanes to ayan without the 80% limit, load B on the test server; page A ruled (strict ranking, groups
 count records).
 
-**v0.5.1 is tagged but not released (01:35 UTC).** The tag `v0.5.1` is pushed to the product repository
+**v0.5.1 is released (06:4x UTC, 14 Nov):** the tag at da62b36, release workflow 43565800393 green, 6 assets. Step 13, updating osprey-small (your GOV.UK demo) to v0.5.1, waits on your word, as the demo server always does; it needs the CHANGELOG's one-line repair first. *(History below.)* **v0.5.1 was tagged but not released (01:35 UTC).** The tag `v0.5.1` is pushed to the product repository
 (213d2c2, from 477a500) and to this one. The release workflow (aykr/OspreyFlow run 43541237293) then failed:
 the Superset image's scan found **CVE-2026-128089 in dnspython 2.7.0** (HIGH, excessive memory and CPU use;
 fixed in 2.9.2), published after the last scan. The other images were cancelled with it, so no release and no
