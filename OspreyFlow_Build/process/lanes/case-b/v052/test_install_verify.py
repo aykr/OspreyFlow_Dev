@@ -209,18 +209,19 @@ def test_a_listed_item_with_no_check_stops_the_run(change: Any, named: str) -> N
 
 
 def test_an_entry_still_pending_stops_the_run_unless_a_dry_run_allows_it() -> None:
-    m = load()
-    assert any("pending" in line for line in _pending(m)), "the manifest on this branch has pending entries"
+    """A pending entry planted in a copy of the candidate's manifest: the install test stops on it, a dry run leaves it
+    out and says so. Planted rather than read from main's manifest, which has had none since step 3b (78564d2), so the
+    case tests the check and not what the manifest happens to hold (rule 12)."""
+    m = candidate()
+    assert iv.skipped_pending(m) == [] and iv.plan(m)  # as built: nothing pending, the run planned
+    m["workloads"]["superset"]["pending"] = "a step that has not rendered it"
     with pytest.raises(iv.NotExercised) as stopped:
         iv.plan(m)
-    assert any("still pending" in line for line in stopped.value.entries)
+    assert "workloads.superset: still pending at the install test" in stopped.value.entries, stopped.value.entries
     planned = iv.plan(m, allow_pending=True)
     assert "workloads.superset" not in {c.entry for c in planned}  # left out, and said so by `skipped`
-    assert "workloads.superset" in iv.skipped_pending(m)
-
-
-def _pending(m: dict[str, Any]) -> list[str]:
-    return [f"{e} pending" for e in iv.skipped_pending(m)]
+    assert iv.skipped_pending(m) == ["workloads.superset"]
+    assert "workloads.superset" in {c.entry for c in iv.plan(candidate())}  # the copy, not the candidate, was planted
 
 
 # ---- the run: a complete deployment passes, one missing item fails --------------------------------
