@@ -459,7 +459,7 @@ function PersonRow({
     <>
       <tr>
         <td>
-          <span className="value">{person.name}</span>
+          <span className="admin-person__name" data-person-name>{person.name}</span>
           <br />
           <span className="label">{`${person.username} · ${person.clearance ?? "no clearance"} · ${person.org_unit ?? "no unit"}`}</span>
           {status && (
@@ -524,9 +524,14 @@ function PersonRow({
           ))}
           {others.length ? others.map(grantWords).join(", ") : ctx.custom.length ? null : "—"}
         </td>
-        <td>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)" }}>
+      </tr>
+      <tr className="admin-row-actions-row">
+        <td className="admin-row-actions" colSpan={ROLES.length + 2}>
+          {/* The row's actions beneath it, the full width: one primary, then the rest as links (the
+              GOV.UK pass, 14 Nov). */}
+          <div className="admin-row-actions__line">
             <Button
+              className="admin-row-actions__primary"
               disabled={!changed}
               aria-label={`Save roles for ${person.username}`}
               onClick={() =>
@@ -540,28 +545,33 @@ function PersonRow({
             >
               Save
             </Button>
-            <Button
+          <div className="admin-row-actions__more">
+            <button
+              type="button"
+              className="admin-row-actions__link"
               aria-label={`Super user preset for ${person.username}`}
               onClick={() => setChosen(new Set([...[...chosen].filter((r) => !ROLE_IDS.has(r)), ...SUPER_USER]))}
             >
               Super user
-            </Button>
+            </button>
             {(!entra || administratorSets.length > 0) && (
-              <Button aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
+              <button type="button" className="admin-row-actions__link" aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
                 Access
-              </Button>
+              </button>
             )}
             {person.enabled ? (
-              <Button aria-label={`Disable ${person.username}`} aria-expanded={confirming} onClick={() => setConfirming(!confirming)}>
+              <button type="button" className="admin-row-actions__link" aria-label={`Disable ${person.username}`} aria-expanded={confirming} onClick={() => setConfirming(!confirming)}>
                 Disable…
-              </Button>
+              </button>
             ) : (
-              <Button aria-label={`Enable ${person.username}`} onClick={() => act(enablePerson(api, person.id))}>
+              <button type="button" className="admin-row-actions__link" aria-label={`Enable ${person.username}`} onClick={() => act(enablePerson(api, person.id))}>
                 Enable
-              </Button>
+              </button>
             )}
             {!entra && (
-              <Button
+              <button
+                type="button"
+                className="admin-row-actions__link"
                 aria-label={`Reset sign-in for ${person.username}`}
                 onClick={() =>
                   void resetSignIn(api, person.id)
@@ -573,15 +583,16 @@ function PersonRow({
                 }
               >
                 Reset sign-in
-              </Button>
+              </button>
             )}
             {!entra && !person.system_account && (
-              <Button aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
+              <button type="button" className="admin-row-actions__link" aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
                 Remove
-              </Button>
+              </button>
             )}
+            </div>
+            {said && <span role="status" className="label">{` ${said}`}</span>}
           </div>
-          {said && <span role="status" className="label">{` ${said}`}</span>}
         </td>
       </tr>
       {editing && (
@@ -1127,8 +1138,9 @@ export function People({ api }: { api: AdminApi }) {
             {ROLES.map((r) => (
               <th key={r.id} style={{ textAlign: "center" }}>{r.label}</th>
             ))}
-            <th>Custom roles and other grants</th>
-            <th />
+            <th>
+              Other grants<span className="visually-hidden"> (custom roles and other grants)</span>
+            </th>
           </tr>
         </thead>
         <tbody>

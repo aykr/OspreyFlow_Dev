@@ -110,15 +110,24 @@ function SideNavigation({
             <ul className="admin-nav__list">
               {group.sections.map((section) => (
                 <li key={section.id} className={section.id === current ? "admin-nav__item admin-nav__item--current" : "admin-nav__item"}>
-                  <button
-                    type="button"
-                    className={govuk ? "govuk-link admin-nav__link" : "admin-nav__link"}
-                    aria-current={section.id === current ? "page" : undefined}
-                    onClick={() => onChoose(section.id)}
-                  >
-                    {/* One text, as the banner's coming Boards is: its name is what it reads. */}
-                    {section.coming ? `${section.label} (coming)` : section.label}
-                  </button>
+                  {section.coming ? (
+                    // Not built yet: named, never a link (the GOV.UK pass, 14 Nov), with a Coming tag.
+                    <span className="admin-nav__coming-item">
+                      {section.label}{" "}
+                      <strong className={govuk ? "govuk-tag govuk-tag--grey admin-nav__coming" : "label admin-nav__coming"}>Coming</strong>
+                      {/* ADR-145 decision 5: it still says what it will hold, here, never behind a link. */}
+                      <span className="admin-nav__coming-what">{section.coming}</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className={govuk ? "govuk-link admin-nav__link" : "admin-nav__link"}
+                      aria-current={section.id === current ? "page" : undefined}
+                      onClick={() => onChoose(section.id)}
+                    >
+                      {section.label}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -165,9 +174,11 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
   }
   return (
     <section aria-label="Admin" className="admin-place">
-      <h2 className={govuk ? "govuk-heading-l admin-place__title" : "value admin-place__title"}>Admin</h2>
-      <div>
-        <button type="button" className={govuk ? "govuk-link" : "btn"} onClick={() => setHelp(true)}>{HELP_TITLE}</button>
+      {/* "Admin" a caption over the section's own h1, the one heading of the page; the help page a
+          link in the same row (the GOV.UK pass, 14 Nov). */}
+      <div className="admin-place__title-row">
+        <span className={govuk ? "govuk-caption-l admin-place__caption" : "label admin-place__caption"}>Admin</span>
+        <button type="button" className={govuk ? "govuk-link admin-place__help" : "admin-row-actions__link admin-place__help"} onClick={() => setHelp(true)}>{HELP_TITLE}</button>
       </div>
       {!section && <p className="label">{`Your account holds no administration right. ${whyNotByRole("administer_system")}`}</p>}
       {section && (
@@ -182,9 +193,9 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
             }}
           />
           <div className="admin-place__section" role="region" aria-labelledby="admin-section-title">
-            <h3 id="admin-section-title" ref={heading} tabIndex={-1} className={govuk ? "govuk-heading-m" : "value"} style={{ margin: 0 }}>
+            <h1 id="admin-section-title" ref={heading} tabIndex={-1} className={govuk ? "govuk-heading-l admin-place__heading" : "value admin-place__heading"}>
               {section.label}
-            </h3>
+            </h1>
             {section.coming ? <Coming section={section} /> : SCREENS[section.id]?.(api)}
           </div>
         </div>
