@@ -633,21 +633,28 @@ dark, light and GOV.UK.
 Enter on the words typed in the top bar's search box opens the results page (`search/SearchResults.tsx`); a suggestion
 moved to with the arrow keys is still chosen by Enter. The results fill the main area, over the view the person left,
 which stays as it was beneath them and out of reach (`inert`); while they show no view is current, and choosing any
-view leaves them. They read `POST /v1/investigations/{id}/search` (`packages/schemas/search.py`: `SearchPageRequest`,
+view leaves them, as do a saved view opened, another place and the cross-link. The box's own Filters shape its
+suggestions alone: the results start at *All* with no filter. They read `POST /v1/investigations/{id}/search` (`packages/schemas/search.py`: `SearchPageRequest`,
 `SearchPageResponse`), 20 a page.
 
 - **Back to ‹view›** (a GOV.UK back link under that brand) returns to the view exactly as it was, focus in the search box.
-- **The heading**, "Search results for '…'", takes focus on opening; under it the total in records, the Conduit's, with
-  "(counts may be incomplete)" where it says so; a status line announces each load.
+- **The heading**, "Search results for '…'", takes focus on opening, and again when the same words are searched again;
+  under it the total in records, the Conduit's (the chosen group's own count once one is chosen), with "(counts may be
+  incomplete)" where it says so; a status line announces each load. Every count is the latest answer's.
 - **Groups:** *All*, then each group the Conduit sends with its count; choosing one asks again for it.
-- **Filters**, beside the list: the datasets and the date span the response offers, and *Clear filters*.
+- **Filters**, beside the list: the datasets and the date span the response offers (GOV.UK's date input under that
+  brand), and *Clear filters*. *Next page* and *Previous page* (GOV.UK's pagination under that brand) and *Clear
+  filters* take focus to the heading of the new answer.
 - **Each result:** its name as the canvas names it (`nodeLabel`), its type, why it matched (the Conduit's words), its
   date, and for a document the passage with the matched words bold and underlined. *Show on graph: ‹name›* seeds every
-  record it stands for and returns to the graph; *Open*, for a document, reads it over the view, the results kept.
+  record it stands for and returns to the graph, focus on it; *Open*, for a document, reads it over the view, the
+  results kept and shown again when it closes, focus on their heading. A record a result names that the answer does
+  not hold is said, never dropped.
 - **The Ask line**, "Ask a question about '…' instead", for someone Ask & Chat is offered to: it opens Ask & Chat with
-  the words in the question box, focused, and sends nothing.
+  the words in the question box, focused, once, and sends nothing.
 - **No results** says "No records match '…'." with *Clear filters* where a filter is on. **The fallback** shows the
-  Conduit's one line on why the results are limited. **A refusal** is said in the Conduit's words.
+  Conduit's one line on why the results are limited (a line of the Glass's own where it gives none). **A refusal** is
+  said in the Conduit's words. Help's keys panel opens over the results.
 - Every count is the Conduit's: the Glass counts nothing it was sent (rule 7).
 
 Proved by `search/SearchResults.test.tsx`, `App.search.test.tsx`, `design/primitives/Combobox.test.tsx`,

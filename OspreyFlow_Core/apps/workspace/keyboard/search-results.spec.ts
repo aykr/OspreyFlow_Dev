@@ -73,7 +73,8 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     await expect(heading(page)).toBeFocused();
     registerCovered(REGISTRY, "previous-page-of-results-by-keyboard");
     await press(page, "Clear filters");
-    await expect.poll(async () => (await state(page)).sent.at(-1)).toMatchObject({ filters: {}, page: 1 });
+    // Exactly no filter: toMatchObject's {} would match any filters at all.
+    await expect.poll(async () => ((await state(page)).sent.at(-1) as { filters: unknown }).filters).toEqual({});
     await expect(dataset).not.toBeChecked();
     await expect(heading(page)).toBeFocused();
     registerCovered(REGISTRY, "clear-search-filters-by-keyboard");

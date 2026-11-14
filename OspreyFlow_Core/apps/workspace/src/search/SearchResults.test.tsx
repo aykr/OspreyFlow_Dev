@@ -187,7 +187,7 @@ test("a dataset and a date range filter the search; Clear filters asks again wit
   );
   expect((filters.getByLabelText("From") as HTMLInputElement).min).toBe("2025-03-02");
   fireEvent.click(filters.getByRole("button", { name: "Clear filters" }));
-  await waitFor(() => expect(sent.at(-1)).toMatchObject({ filters: {} }));
+  await waitFor(() => expect(sent.at(-1)?.filters).toEqual({}));
 });
 
 test("more results are a page away: Next page asks page 2", async () => {

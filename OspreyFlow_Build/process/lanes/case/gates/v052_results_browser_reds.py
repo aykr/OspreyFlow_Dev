@@ -22,29 +22,46 @@ PLANTS = [
     ("Enter not passed on by the search box (main's GlobalSearch)",
      [('src/search/GlobalSearch.tsx', '          onSubmit={onSearch}\n', '')],
      'keyboard/search-results.spec.ts', 'ospreyflow dark: Enter in the search box opens the results'),
-    ('the view left in reach beneath the results',
-     [('keyboard/search-results-harness.tsx', 'inert={searching !== null ? true : undefined}', 'inert={undefined}')],
+    ("the view left in reach beneath the results (the hook's viewInert)",
+     [('src/search/useSearchResultsOverlay.ts', '    viewInert: searching !== null && !reading,', '    viewInert: false,')],
      'keyboard/search-results.spec.ts', 'ospreyflow dark: Enter in the search box opens the results'),
     ('the heading not focused on opening',
-     [('src/search/SearchResults.tsx', '    heading.current?.focus();\n', '')],
+     [('src/search/SearchResults.tsx', '  useEffect(() => {\n    heading.current?.focus();\n  }, [query]);', '  useEffect(() => undefined, [query]);')],
      'keyboard/search-results.spec.ts', 'govuk light: Enter in the search box opens the results'),
     ('a group not chosen by its button',
      [('src/search/SearchResults.tsx', 'onClick={() => choose({ group: g.key })}', 'onClick={() => undefined}')],
      'keyboard/search-results.spec.ts', 'ospreyflow light: a group, a dataset and the next page'),
-    ('Next page asking the same page',
-     [('src/search/SearchResults.tsx', 'onClick={() => setPage(shown.page + 1)}', 'onClick={() => setPage(shown.page)}')],
+    ("Next page asking the same page (GOV.UK's link)",
+     [('src/search/SearchResults.tsx', 'onTurn(to);', 'onTurn(page);')],
      'keyboard/search-results.spec.ts', 'govuk light: a group, a dataset and the next page'),
+    ("focus lost with the pager's button",
+     [('src/search/SearchResults.tsx', '    focusHeadingOnAnswer.current = true;\n    setPage(next);', '    setPage(next);')],
+     'keyboard/search-results.spec.ts', 'ospreyflow dark: a group, a dataset and the next page'),
+    ('Clear filters doing nothing',
+     [('src/search/SearchResults.tsx', '        focusHeadingOnAnswer.current = true;\n        choose({ filters: NO_FILTERS });', '        focusHeadingOnAnswer.current = true;')],
+     'keyboard/search-results.spec.ts', 'ospreyflow light: a group, a dataset and the next page'),
+    ('the GOV.UK date input never sending a date',
+     [('src/search/SearchResults.tsx', '    onDate(date.toISOString().slice(0, 10));\n', '')],
+     'keyboard/search-results.spec.ts', 'govuk light: the results are filtered by date'),
+    ('the browser date field not sending its date',
+     [('src/search/SearchResults.tsx', 'onChange={(e) => choose({ filters: { ...filters, [key]: e.target.value } })}', 'onChange={() => undefined}')],
+     'keyboard/search-results.spec.ts', 'ospreyflow dark: the results are filtered by date'),
     ('Open doing nothing',
      [('src/search/SearchResults.tsx', 'onClick={() => onOpenDocument(first.id)}', 'onClick={() => undefined}')],
      'keyboard/search-results.spec.ts', 'ospreyflow dark: a result is shown on the graph'),
+    ("the results drawn though marked hidden (the stylesheet's grid over [hidden])",
+     [('src/search/searchResults.css', '.search-results[hidden] { display: none; }\n', '')],
+     'keyboard/search-results.spec.ts', 'ospreyflow light: a result is shown on the graph'),
+    ('focus left on the view when the reader closes',
+     [('src/search/useSearchResultsOverlay.ts', '    if (was && !reading && searching !== null) document.querySelector<HTMLElement>(RESULTS_HEADING)?.focus();\n', '')],
+     'keyboard/search-results.spec.ts', 'govuk light: a result is shown on the graph'),
     ('Back leaving focus where it was',
-     [('keyboard/search-results-harness.tsx', '              back.current = true;\n', '')],
+     [('src/search/useSearchResultsOverlay.ts', '      focusBox.current = true;\n', '')],
      'keyboard/search-results.spec.ts', 'govuk light: Back returns to the view'),
-    ("Enter always submitting, over a suggestion moved to",
+    ('Enter always submitting, over a suggestion moved to',
      [('src/design/primitives/Combobox.tsx', 'if (onSubmit && e.key === "Enter" && !(open && highlighted >= 0 && filtered[highlighted])) {', 'if (onSubmit && e.key === "Enter") {')],
      'keyboard/search-results.spec.ts', 'a suggestion moved to with the arrow keys'),
 ]
-
 
 
 def main() -> int:
@@ -56,7 +73,7 @@ def main() -> int:
     if [d for d in dirty if not any(d.endswith(s) for s in shared)]:
         print("refused: the workspace has uncommitted changes; plants restore with git checkout")
         return 2
-    print(f"# v052-fixes browser reds at {head}; each plant restored with `git checkout -- <file>`")
+    print(f"# v052-results browser reds at {head}; each plant restored with `git checkout -- <file>`")
     stayed_green = 0
     # Optional plant numbers as arguments run those alone (a later addition, without rerunning the rest).
     only = {int(a) for a in sys.argv[1:]}
