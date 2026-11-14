@@ -44,7 +44,9 @@ RESERVED_PARAMETER_NAMES = frozenset(
 #: and start from record ids (ADR-124 Amendment 18).
 #: Any filter steps may come first (`g.V().has("reverted",false).has("id",…)` still reads the whole
 #: store), and the property may be quoted either way.
-_SCANS = re.compile(r"""(^g|\.)(V|E)\(\)(\.(hasLabel|has|hasNot)\([^)]*\))*?\.has\((["'])id\5""")
+_SCANS = re.compile(
+    r"""(^g|\.)(V|E)\(\)(\.(hasLabel|has|hasNot)\((?:[^()]|\([^()]*\))*\))*?\.has\((["'])id\5"""
+)
 
 
 def refuse_scans(query: str) -> None:

@@ -13,6 +13,7 @@ import asyncio
 from typing import Any
 
 from adapters.graph_arcadedb.bulk import GremlinBulkTransport
+from tests.adapters.graph_arcadedb.edge_store import refuse_scans
 
 LABEL = "mx_TRANSACTED"
 
@@ -26,6 +27,7 @@ class _RecordingClient:
         self, command: str, *, params: Any = None, session_id: Any = None
     ) -> list[dict[str, Any]]:
         self.sent.append((command, dict(params or {})))
+        refuse_scans(command)  # as every stand-in of the store does (ADR-124 Amendment 18)
         return []
 
     async def sql(
@@ -38,7 +40,9 @@ class _RecordingClient:
         if command.startswith("SELECT @rid AS rid, id FROM "):
             # Every id asked for is a vertex, each with a record id of its own.
             return [{"rid": f"#1:{n}", "id": i} for n, i in enumerate((params or {})["ids"])]
-        return []
+        if command.startswith("SELECT id FROM `") and command.endswith("` WHERE id IN :ids"):
+            return []  # no link id is taken yet
+        raise AssertionError(f"unexpected SQL: {command}")
 
 
 def _rows(prefix: str) -> list[dict[str, Any]]:

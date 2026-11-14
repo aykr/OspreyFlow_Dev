@@ -111,12 +111,17 @@ def _lease() -> str | None:
 
 
 async def _load(graph: GraphArcadeDBAdapter) -> tuple[float, int]:
+    """The load, with the round trips of the adapter's client and of its bulk loader's (built over
+    the same client, ADR-058) both counted."""
     counted = _Counted(graph._client)
+    transport = graph._bulk._transport
     graph._client = counted  # type: ignore[assignment]
+    transport._client = counted  # type: ignore[attr-defined]
     try:
         return await _timed_load(graph), counted.trips
     finally:
         graph._client = counted._client  # type: ignore[assignment]
+        transport._client = counted._client  # type: ignore[attr-defined]
 
 
 async def _timed_load(graph: GraphArcadeDBAdapter) -> float:

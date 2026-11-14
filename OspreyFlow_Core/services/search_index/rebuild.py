@@ -282,7 +282,10 @@ async def drift(
             await stream.advance()
     await _sort_missing(client, alias, missing, report)
     report.index_documents = int((await client.count(index=alias))["count"])
-    report.unread_count = report.index_documents - nodes_stream.seen - texts_stream.seen
+    # Exact when nothing is on its way; while the indexer writes, the count and the streams are read
+    # at different moments, so, like every other difference, it may be a change in flight (the
+    # report says `pending`), and it is never below none.
+    report.unread_count = max(0, report.index_documents - nodes_stream.seen - texts_stream.seen)
     return report
 
 

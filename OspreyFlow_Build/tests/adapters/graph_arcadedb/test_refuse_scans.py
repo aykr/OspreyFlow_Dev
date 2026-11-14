@@ -15,6 +15,7 @@ SCANS = [
     'g.V().has("reverted",false).has("id",\'a\').elementMap()',
     'g.V(\'#1:0\').as("s").V().has("id",\'b\').addE("mx_X").from("s")',
     'g.V().hasLabel(\'mx_Person\').hasNot("superseded_by").has(\'id\',\'a\')',
+    'g.V().has("datasets",within(\'a\')).has("id",\'b\')',
 ]
 ALLOWED = [
     "g.V('#1:0').elementMap()",

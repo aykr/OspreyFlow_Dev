@@ -3,10 +3,11 @@
 The write path resolves the ids a call touches by SQL through each vertex type's unique `id` index.
 Asked of every vertex type in the store, a call cost one read of the store's types and one query per
 type, T, however few types it wrote: the cost of a per-row load (one call a row: the CLI, the site
-grid, the seeders) grew with the store's types. A call now asks only the types it can touch: a
-node's write its own type, a link's ends the types its link type joins. These cases pin the count,
-which is deterministic where a time is not (rule 14: a timing bound run without a lease measures
-nothing), and show it unmoved by thirty more types in the store.
+grid, the seeders) grew with the store's types. A link write now asks only the types its link type
+joins (an end missed there is asked again of every type). A node write still asks every type,
+once per call, so that an id another type holds is refused rather than inserted beside it as a
+second vertex under one id. These cases pin the counts, which are deterministic where a time is
+not (rule 14: a timing bound run without a lease measures nothing).
 """
 
 from __future__ import annotations
@@ -38,16 +39,25 @@ def _with_types(rows: list[dict[str, Any]], extra: int) -> list[dict[str, Any]]:
 class ManyTypedNodes(NodeStore):
     """`NodeStore` whose store holds `extra` more vertex types, each with its unique `id` index."""
 
-    def __init__(self, extra: int) -> None:
+    def __init__(self, extra: int, other: frozenset[str] = frozenset()) -> None:
         super().__init__()
         self.extra = extra
+        #: Ids held by a vertex of `Other0`, not a `Person`.
+        self.other = other
 
     async def sql(
         self, command: str, *, params: dict[str, Any] | None = None, session_id: Any = None
     ) -> list[dict[str, Any]]:
+        lookup = LOOKUP.fullmatch(command)
+        if lookup is not None and lookup.group(1) == physical_type_name("Other0"):
+            assert params is not None
+            self.sql_sent.append(command)
+            return [{"rid": f"#7:{n}", "id": i} for n, i in enumerate(params["ids"]) if i in self.other]
         rows = await super().sql(command, params=params, session_id=session_id)
         if command.startswith("SELECT name, type, indexes FROM schema:types"):
             return _with_types(rows, self.extra)
+        if lookup is not None:
+            return rows if lookup.group(1) == physical_type_name("Person") else []
         return rows
 
 
@@ -93,7 +103,9 @@ def _type_reads(sent: list[Any]) -> int:
 
 
 @pytest.mark.parametrize("extra", [0, 30])
-def test_a_node_write_asks_only_its_own_type(extra: int) -> None:
+def test_a_node_write_asks_every_type_once_a_call(extra: int) -> None:
+    """One read of the store's types and one query per indexed vertex type, for the whole call,
+    however many nodes it writes."""
     store = ManyTypedNodes(extra)
     graph = _adapter(store)
     writes = [
@@ -102,7 +114,19 @@ def test_a_node_write_asks_only_its_own_type(extra: int) -> None:
     ]
     asyncio.run(graph.upsert_nodes(writes, "tx"))
     assert _type_reads(store.sql_sent) == 1
-    assert _lookups(store.sql_sent) == [physical_type_name("Person")]
+    assert sorted(_lookups(store.sql_sent)) == sorted(
+        [physical_type_name("Person")] + [physical_type_name(t) for t in OTHER_TYPES[:extra]]
+    )
+
+
+def test_a_node_write_onto_an_id_another_type_holds_is_refused() -> None:
+    """Never a second vertex under one id: the write names both types and writes nothing."""
+    store = ManyTypedNodes(1, other=frozenset({"n-1"}))
+    graph = _adapter(store)
+    taken = _write("n-1", classification="OFFICIAL", load_id="l", datasets=["Z2001ZZ"], source="f")
+    with pytest.raises(OntologyError, match="held by a Other0 and written as a Person"):
+        asyncio.run(graph.upsert_nodes([taken], "tx"))
+    assert not any(c.startswith(("INSERT", "UPDATE")) for c in store.sql_sent)
 
 
 @pytest.mark.parametrize("extra", [0, 30])

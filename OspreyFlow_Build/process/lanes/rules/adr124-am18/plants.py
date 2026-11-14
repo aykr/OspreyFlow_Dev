@@ -27,6 +27,12 @@ STRAYS = f"{G}/test_corpus_stats_ignore_stray_records.py"
 SHAPES = f"{G}/test_gremlin_bulk_transport_shapes.py"
 ADAPTER = "OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py"
 BULK = "OspreyFlow_Core/packages/adapters/graph_arcadedb/bulk.py"
+LOOKUP = "OspreyFlow_Core/packages/adapters/graph_arcadedb/lookup.py"
+REBUILD = "OspreyFlow_Core/services/search_index/rebuild.py"
+TRIPS = f"{G}/test_write_path_round_trips.py"
+REFUSE = f"{G}/test_refuse_scans.py"
+DRIFT = f"{B}/services/search_index/test_drift_streams.py"
+LINKS_ONCE = f"{B}/ingest/test_run_writes_each_link_once.py"
 LIVE = (SCALE,)
 
 PLANTS: list[tuple[str, str, str, str, list[str]]] = [
@@ -97,15 +103,51 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ("A13 an id written earlier in the call not found again", ADAPTER,
      "            if node_id in written:\n", "            if False:\n",
      [f"{SCALE}::test_one_call_writing_one_node_twice_ends_as_one_node"]),
+    # The lane review of 14 November, its second round: each fix put back, red by its own test.
+    ("R1 a node write onto an id another type holds goes ahead", ADAPTER,
+     "            if held is not None and held[1] != physical_type_name(write.type):\n",
+     "            if False:\n",
+     [f"{TRIPS}::test_a_node_write_onto_an_id_another_type_holds_is_refused"]),
+    ("R2 a link's ends asked of every type", ADAPTER,
+     "            ids, tx=tx, types=None if types is None else sorted(types)\n",
+     "            ids, tx=tx, types=None\n",
+     [f"{TRIPS}::test_a_link_write_asks_only_the_types_its_link_joins"]),
+    ("R3 an end missed by the narrow question not asked again", ADAPTER,
+     "        if missing and types is not None:\n", "        if False:\n",
+     [f"{TRIPS}::test_an_end_of_a_type_the_link_does_not_join_is_refused_for_its_type_not_missing"]),
+    ("R4 one id in two types kept silently", LOOKUP,
+     "                if node_id in found and found[node_id][1] != type_name:\n",
+     "                if False:\n",
+     [f"{TRIPS}::test_one_id_held_by_two_types_stops_the_write"]),
+    ("D1 documents no stream reads not counted", REBUILD,
+     "    report.unread_count = max(0, report.index_documents - nodes_stream.seen - texts_stream.seen)\n",
+     "    report.unread_count = 0\n",
+     [f"{DRIFT}::test_a_document_no_stream_reads_is_counted_unread_never_passed_over"]),
+    ("D2 a document without its sort key read as one with it", REBUILD,
+     "            if len(keyed) < len(hits):\n                self._done = True\n",
+     "            keyed = keyed + [h for h in hits if h not in keyed]\n",
+     [f"{DRIFT}::test_a_document_no_stream_reads_is_counted_unread_never_passed_over"]),
+    ("D3 the stand-in takes a page over the result window", f"{B[3:]}/services/search_index/fake_opensearch.py",
+     "        if size > self.max_result_window:\n", "        if False:\n",
+     [f"{DRIFT}::test_a_page_larger_than_the_result_window_is_refused_as_opensearch_refuses_it"]),
+    ("S1 the scan refusal as it was (double quotes, hasLabel alone)", f"{B[3:]}/adapters/graph_arcadedb/edge_store.py",
+     '''    r"""(^g|\\.)(V|E)\\(\\)(\\.(hasLabel|has|hasNot)\\((?:[^()]|\\([^()]*\\))*\\))*?\\.has\\((["\'])id\\5"""\n''',
+     '''    r\'(^g|\\.)(V|E)\\(\\)(\\.hasLabel\\([^)]*\\))?\\.has\\("id"\'\n''',
+     [REFUSE]),
+    ("I1 the ingest stand-in reading the old shape (the source's id, not its record id)",
+     f"{B[3:]}/ingest/combined_run_support.py",
+     "            src, label, tgt = self.vertex_id(quoted[0]), quoted[1], quoted[-1]\n",
+     "            src, label, tgt = quoted[1], quoted[2], quoted[-1]\n",
+     [LINKS_ONCE]),
 ]
 
 
 def main() -> int:
     offline = "--offline" in sys.argv[1:]
-    every = [G, SCALE]
+    every = [G, SCALE, DRIFT, LINKS_ONCE]
     plants = PLANTS
     if offline:
-        every = [G]
+        every = [G, DRIFT, LINKS_ONCE]
         plants = [
             (n, r, b, p, kept)
             for n, r, b, p, ts in PLANTS

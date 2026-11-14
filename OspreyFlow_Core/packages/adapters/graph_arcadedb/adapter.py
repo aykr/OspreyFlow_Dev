@@ -334,16 +334,12 @@ class GraphArcadeDBAdapter:
         """
         schema = self._require_schema()
         ids: list[NodeId] = []
-        # The call's ids resolved once, by SQL through the unique `id` index of each type the call
-        # writes (ADR-124 Amendment 18): a node is looked for in its own type, which is where its
-        # write goes (`UPDATE` or `INSERT INTO` that type below), so one read of the store's types
-        # and one query per type written, never one per type in the store. An id written earlier in
-        # this call is resolved again, since its record is new.
-        known = await self._vertex_records(
-            [write.id for write in nodes],
-            tx=tx,
-            types=sorted({physical_type_name(write.type) for write in nodes}),
-        )
+        # The call's ids resolved once, by SQL through every vertex type's unique `id` index
+        # (ADR-124 Amendment 18), not only the types written: an id another type already holds is
+        # refused below, never inserted beside it as a second vertex under one id (which no
+        # per-type unique index could refuse). An id written earlier in this call is resolved
+        # again, in its own type, since its record is new.
+        known = await self._vertex_records([write.id for write in nodes], tx=tx)
         written: set[str] = set()
         for write in nodes:
             entity_type = schema.entity_type(write.type)
@@ -352,6 +348,13 @@ class GraphArcadeDBAdapter:
             validate_properties(entity_type, write.properties)
 
             node_id = write.id
+            held = known.get(node_id)
+            if held is not None and held[1] != physical_type_name(write.type):
+                raise OntologyError(
+                    f"the id {node_id!r} is held by a {logical_type_name(held[1])} and written "
+                    f"as a {write.type}: a node's type is not changed by a write, and one id is "
+                    "never two nodes"
+                )
             if node_id in written:
                 existing = await self._find_existing_node(
                     node_id, session_id=tx, type_name=physical_type_name(write.type)
@@ -2443,7 +2446,7 @@ class GraphArcadeDBAdapter:
 
         node_lit = groovy_string_literal(node_id)
         # Unfiltered by design — an internal lookup during a trusted write,
-        # the same as `_node_type`'s, not a principal-scoped read. It must
+        # the same as the write path's lookups, not a principal-scoped read. It must
         # also find a node that is itself already superseded (the caller's
         # business whether that is sensible), so it never applies the
         # access filter's `hasNot("superseded_by")` step.
