@@ -334,5 +334,10 @@ async def test_the_answer_just_asked_names_its_author_as_the_conversation_does()
         principal_names=_Names(),  # type: ignore[arg-type]
         views=None,  # type: ignore[arg-type]  # asked in no view, so no view store is asked
         working_set=None,  # type: ignore[arg-type]
+        # Whole case's search is built, not called, for a question that does not read the case.
+        request=None,  # type: ignore[arg-type]
+        index=None,
+        datasets=None,  # type: ignore[arg-type]
+        search_working_set=None,
     )
     assert got.author_name == "Demo Analyst"

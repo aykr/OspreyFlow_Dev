@@ -8,8 +8,8 @@ What a mistake here would do, and the case that catches it (rule 12):
   (`test_selected_items_reads_the_selection_its_links_and_their_documents`);
 - a case with no document would be refused, or answered as if documents had been read
   (`test_with_no_document_the_model_answers_from_the_links_and_events_and_the_answer_says_so`);
-- *Whole case* would quietly fall back to the graph before the search service exists
-  (`test_whole_case_is_refused_in_words_until_the_search_service_exists`);
+- *Whole case* would quietly fall back to the graph with no case search to call
+  (`test_whole_case_is_refused_in_words_without_a_case_search`);
 - an image Document would vanish from the count (`test_a_document_with_no_text_is_counted_apart`);
 - a Document or item the reader may not see would be counted, quoted or cited, in *will read* or in
   the answer (`test_a_hidden_document_and_item_are_not_counted_quoted_or_cited`, rule 3 and 4), and a
@@ -32,6 +32,7 @@ from services.api.datasets import Dataset
 from services.api.email_extraction import email_document_id
 from services.api.model_routing import Engine, ModelRoutes, RoutedModel
 from services.api.questions import (
+    WHOLE_CASE_LINE,
     NothingToReadError,
     QuestionsService,
     QuestionsTooLargeError,
@@ -134,8 +135,8 @@ async def test_an_empty_graph_is_nothing_to_read() -> None:
     assert model.requests == []
 
 
-async def test_whole_case_is_refused_in_words_until_the_search_service_exists() -> None:
-    """D(iii) is not built: *Whole case* must never fall back to reading the graph instead."""
+async def test_whole_case_is_refused_in_words_without_a_case_search() -> None:
+    """A service with no case search refuses *Whole case*: it never falls back to the graph."""
     service, model, _, _, _ = await _case()
     with pytest.raises(ReadFromUnavailableError) as refused:
         await service.ask("inv-1", "Who?", ANALYST, read_from="case")
@@ -448,15 +449,16 @@ async def test_asks_refusal_names_no_dataset_to_a_caller_the_store_names_none_to
     assert "Open" not in str(unnamed.value) and "no local extraction model" in str(unnamed.value)
 
 
-def test_the_panel_says_whole_case_in_the_servers_own_words() -> None:
-    """One wording for *Whole case*: the panel's, shown before anything is asked, is the server's."""
+def test_the_panel_says_whole_cases_line_in_the_servers_own_words() -> None:
+    """One wording for what *Whole case* does (ADR-098 Amendment 9): the panel's line, shown before
+    anything is asked, is the server's."""
     from pathlib import Path
 
     panel = (
         Path(__file__).resolve().parents[4]
         / "OspreyFlow_Core/apps/workspace/src/questions/QuestionsPanel.tsx"
     ).read_text(encoding="utf-8")
-    assert f'"{ReadFromUnavailableError.words}"' in " ".join(panel.split())
+    assert f'"{WHOLE_CASE_LINE}"' in " ".join(panel.split())
 
 
 # --- the routes -------------------------------------------------------------------------------
