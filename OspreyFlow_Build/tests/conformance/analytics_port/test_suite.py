@@ -2742,18 +2742,24 @@ async def test_a_total_past_the_decimals_range_is_refused_never_wrapped(
     decimal wraps silently to a negative) and never cut. Either sign. Two of 6 × 10^27 make a total
     the decimal holds but the limit (10^28) refuses: there the adapter's own check alone refuses it,
     with no overflow of the store's to do it instead (rule 15)."""
-    from ports.analytics import AmountTotalOutOfRange
+    from ports.analytics import AMOUNT_TOTAL_RULE, AmountTotalOutOfRange
 
     big = sign * each
+    refusals = []
     async with factory.context([_paid(0, big), _paid(1, big)]) as adapter:
-        with pytest.raises(AmountTotalOutOfRange):
+        with pytest.raises(AmountTotalOutOfRange) as refused:
             await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
+        refusals.append(refused.value)
     async with factory.context([_moved(_at(0), big), _moved(_at(1), big)]) as adapter:
-        with pytest.raises(AmountTotalOutOfRange):
+        with pytest.raises(AmountTotalOutOfRange) as refused:
             await adapter.account_activity(_activity(28, amount="amount"), OFFICIAL)
+        refusals.append(refused.value)
     async with factory.context([_moved(_at(-1), big), _moved(_at(-2), big)]) as adapter:
-        with pytest.raises(AmountTotalOutOfRange):  # the days before the window too
+        with pytest.raises(AmountTotalOutOfRange) as refused:  # the days before the window too
             await adapter.account_activity(_activity(28, amount="amount"), OFFICIAL)
+        refusals.append(refused.value)
+    # The port's words on every adapter (the routes answer them), never the total or an amount.
+    assert [str(r) for r in refusals] == [AMOUNT_TOTAL_RULE] * 3
 
 
 async def test_activity_says_the_first_movement_in_the_window_and_the_last_before_it(

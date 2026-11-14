@@ -76,15 +76,21 @@ class AnalyticsFieldRefused(ValueError):
 AMOUNT_TOTAL_LIMIT = 10**28
 
 
+#: What is said when a total of declared amounts is refused: the limit, never the total or an
+#: amount. Every adapter refuses in these words, so the routes answer each the same way.
+AMOUNT_TOTAL_RULE = (
+    "A total of the declared amount reaches 10^28, past what is counted exactly, so nothing was "
+    "answered. Check the amounts loaded for this case."
+)
+
+
 class AmountTotalOutOfRange(Exception):
     """A frequency's or an activity's total of a declared amount at or past `AMOUNT_TOTAL_LIMIT`
-    (ADR-133 Amendment 10, rule 2): refused whole on every adapter, never wrapped or cut."""
+    (ADR-133 Amendment 10, rule 2): refused whole on every adapter, never wrapped or cut. The words
+    are `AMOUNT_TOTAL_RULE`."""
 
     def __init__(self) -> None:
-        super().__init__(
-            "a total of the declared amount reaches 10^28, past what is counted exactly; nothing "
-            "is answered"
-        )
+        super().__init__(AMOUNT_TOTAL_RULE)
 
 
 def refuse_an_amount_total_out_of_range(*totals: float | None) -> None:
