@@ -1,0 +1,18 @@
+scripts/measure_search.py, red first (offline on the Mac, closed ports, fresh PYTHONPYCACHEPREFIX):
+- before the module existed: tests/test_measure_search.py did not collect (ImportError: cannot import name 'measure_search').
+- green: 5 passed, against a stub Conduit answering 3d's frozen shape (SEARCH_RESPONSE_SHAPE.md: the case's /search and /suggest routes, results' node_ids and match.band).
+- one plant per check, each at its own site, by OspreyFlow_Build/process/lanes/platform/v052-measure/plants.py (run from OspreyFlow_Core with the repository and the venv's bin as its arguments), each file restored after:
+Plant: the failure figure not judged:
+FAILED tests/test_measure_search.py::test_a_slow_suggestion_is_not_met_at_its_failure_figure
+1 failed, 4 passed in 9.21s
+Plant: a fallback answer counted as the index's:
+FAILED tests/test_measure_search.py::test_an_answer_from_the_fallback_is_never_counted_as_the_index_s
+1 failed, 4 passed in 9.19s
+Plant: the ranking not checked:
+FAILED tests/test_measure_search.py::test_an_exact_identifier_ranked_second_is_not_met
+1 failed, 4 passed in 9.23s
+Plant: a class with no budget measured:
+FAILED tests/test_measure_search.py::test_a_class_with_no_budget_is_refused_rather_than_measured_against_nothing
+1 failed, 4 passed in 9.18s
+
+Not yet built: M6's lag (a write through the Conduit, then search polled until it appears), which needs 3c's and 3d's routes on main to name the write; M2's browser case beside glass-perf.
