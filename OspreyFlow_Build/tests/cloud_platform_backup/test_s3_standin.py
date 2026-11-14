@@ -443,3 +443,26 @@ def test_a_part_under_five_mib_but_the_last_is_refused_as_s3_does(aws: Running) 
                                      MultipartUpload={"Parts": parts})  # fmt: skip
     assert _code(refused) == "EntityTooSmall"
     assert refused.value.response["ResponseMetadata"]["HTTPStatusCode"] == 400
+
+
+def test_a_key_pending_deletion_is_refused_for_every_use(aws: Running) -> None:
+    """Decommission step 7's destroy schedules the key's deletion: from then on KMS refuses every
+    use of it, whoever asks (`KMSInvalidStateException`, passed on by S3), until the deletion is
+    cancelled. R1's destroy stand-in sets the key so (`r1_kind.decommission_resources`)."""
+    s3 = aws.s3()
+    s3.put_object(Bucket=BUCKET, Key="sets/a/arcadedb/ospreyflow.zip", Body=b"zip")
+    config = standin_config()
+    config["keys"][0]["state"] = "PendingDeletion"
+    aws.stand_in.configure(config)
+    for act in (
+        lambda: s3.put_object(Bucket=BUCKET, Key="sets/b/arcadedb/x", Body=b"x"),
+        lambda: s3.get_object(Bucket=BUCKET, Key="sets/a/arcadedb/ospreyflow.zip"),
+    ):
+        with pytest.raises(ClientError) as refused:
+            act()
+        assert _code(refused) == "KMS.KMSInvalidStateException"
+        assert f"{KEY_ARN} is pending deletion" in refused.value.response["Error"]["Message"]
+    del config["keys"][0]["state"]  # cancel-key-deletion
+    aws.stand_in.configure(config)
+    read = s3.get_object(Bucket=BUCKET, Key="sets/a/arcadedb/ospreyflow.zip")
+    assert read["Body"].read() == b"zip"

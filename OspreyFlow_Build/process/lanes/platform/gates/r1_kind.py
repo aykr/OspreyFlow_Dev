@@ -561,8 +561,16 @@ def _work() -> Path:
 def operator_choices(name: str) -> dict[str, str]:
     """What R1's operator exports before a runbook, as *What it needs* asks: for the decommission, the
     backups kept (the brief: the bucket kept with the last set) for 30 days. Never over a choice
-    already in the environment, and nothing for the install."""
-    if name != "DECOMMISSION" or "BACKUPS" in os.environ:
+    already in the environment, and nothing for the install. A run that asks for no choice at all
+    (`R1_BACKUPS=unset`) is given none, so it meets the product's own "there is no default" refusal
+    rather than R1's keep."""
+    if name != "DECOMMISSION":
+        return {}
+    if os.environ.get("R1_BACKUPS") == "unset":
+        if "BACKUPS" in os.environ:
+            raise SystemExit("R1_BACKUPS=unset asks for no choice, but BACKUPS is set: unset one of them")
+        return {}
+    if "BACKUPS" in os.environ:
         return {}
     return {"BACKUPS": "keep", "BACKUP_RETENTION_DAYS": "30"}
 
@@ -585,50 +593,7 @@ def stand_in(runbook: str, step: str) -> None:
             f"[shutil.rmtree(x) if x.is_dir() else x.unlink() for x in p.glob('*')]\n"
             f"print('emptied {prefix}{b}:', n, 'files')\n" for b in BUCKETS)))
     elif runbook == "DECOMMISSION" and step.startswith("7."):
-        # The pull request applied: what the Terraform made, removed, but the kept backups bucket and
-        # key (taken out of the state first); the lifecycle rule is not modelled by the stand-in.
-        # First the choice the block requires (ADR-148 Amendment 13: keep or destroy, no default),
-        # refused as the block refuses it, then recorded where step 8 reads it.
-        choice = os.environ.get("BACKUPS", "")
-        if choice not in ("keep", "destroy"):
-            raise SystemExit("BACKUPS: choose keep or destroy for the backups bucket and its key (there is no default)")
-        if choice == "destroy":
-            raise SystemExit("stand-in: BACKUPS=destroy is not modelled (R1 keeps its backups); say what the platform does there")
-        days = os.environ.get("BACKUP_RETENTION_DAYS", "")
-        if not days.isdigit() or int(days) < 1:
-            raise SystemExit("BACKUP_RETENTION_DAYS: the retention you agree for the kept backups, in days")
-        work = _work()
-        work.mkdir(parents=True, exist_ok=True)
-        (work / "backups").write_text(f"{choice}\n")
-        print(f"stand-in: backups {choice}, retention {days} days (the lifecycle rule not modelled)")
-        made = state().get("terraform_made", [])
-        for line in made:
-            kind, name = line.split()[:2]
-            kubectl("-n", NS, "delete", "secret" if kind == "kubernetes_secret" else "serviceaccount", name, "--ignore-not-found")
-        config = json.loads(kubectl("-n", MANAGED, "get", "configmap", "s3-standin", "-o", "jsonpath={.data.standin\\.json}"))
-        config["buckets"] = [b for b in config["buckets"] if b["name"].endswith("backups")]
-        config["roles"] = []
-        # The domain goes with the Terraform (ADR-148 Amendment 13: no index backup), its disks with it.
-        config["domains"] = []
-        kubectl("-n", MANAGED, "delete", "statefulset", "opensearch", "--ignore-not-found")
-        kubectl("-n", MANAGED, "delete", "service", "opensearch", "--ignore-not-found")
-        kubectl("-n", MANAGED, "delete", "pvc", "-l", "app=opensearch", "--ignore-not-found")
-        coredns(NAMES)  # the domain's name no longer resolves
-        # The buckets the Terraform made, deleted as `aws_s3_bucket` deletes one: refused while it holds
-        # anything (BucketNotEmpty; no force_destroy), so step 6's emptying is what lets it go.
-        prefix = state()["prefix"]
-        gone = json.loads(s3_exec(
-            "import json, pathlib, shutil\n"
-            f"made = [p for p in pathlib.Path('/data').iterdir() if p.is_dir() and p.name.startswith({prefix!r})"
-            " and not p.name.endswith('backups')]\n"
-            "full = [p.name for p in made if any(f.is_file() for f in p.rglob('*'))]\n"
-            "if full: raise SystemExit('BucketNotEmpty: ' + ', '.join(full))\n"
-            "[shutil.rmtree(p) for p in made]\n"
-            "print(json.dumps([p.name for p in made]))"))
-        print(f"stand-in: the Terraform deleted the buckets {gone}")
-        s3_standin(config)
-        kubectl("delete", "mutatingwebhookconfiguration", "r1-irsa-standin", "--ignore-not-found")
-        print("stand-in: the Terraform's removal applied; kept: the backups bucket and its key")
+        decommission_resources(os.environ.get("BACKUPS", ""), os.environ.get("BACKUP_RETENTION_DAYS", ""))
     elif runbook == "DECOMMISSION" and step.startswith("8.") and "STATE:?" in os.environ.get("R1_BLOCK", ""):
         work = _work()
         work.mkdir(parents=True, exist_ok=True)
@@ -644,6 +609,96 @@ def stand_in(runbook: str, step: str) -> None:
         print(f"stand-in: {work}/volumes.json, the cluster's volumes (the platform team's listing)")
     else:
         raise SystemExit(f"no stand-in for {runbook} step {step}: say what the platform does there")
+
+
+#: Step 7's destroy schedules the key's deletion this many days out (`--pending-window-in-days 30`).
+KEY_PENDING_DAYS = 30
+
+
+def decommission_resources(choice: str, days: str) -> None:
+    """Decommission step 7's platform block and its pull request, applied on kind.
+
+    First the choice the block requires (ADR-148 Amendment 13: keep or destroy, no default), refused as
+    the block refuses it before anything is touched, then recorded where step 8 reads it.
+    - **keep**: the backups bucket and its key stay, with the retention agreed (the lifecycle rule
+      itself is not modelled by the stand-in).
+    - **destroy**: as the block does it, in its order, each refused as AWS refuses it. The bucket's
+      policy goes (`NoSuchBucket` if the bucket is already gone: a destroy run twice). Then every
+      object goes (the stand-in keeps no versions), and then the bucket. The key's policy is replaced
+      by the account's administration alone, and its deletion is scheduled 30 days out
+      (`KMSInvalidStateException` if it already is). From then on the stand-in refuses every use of
+      the key, as KMS does.
+
+    Then what the Terraform made goes, either way: its Secrets and service accounts, the roles, the
+    OpenSearch domain with its disks, the IRSA webhook and the buckets, each refused while it holds
+    anything (`BucketNotEmpty`; step 6 empties them). Nothing else is touched: the platform's own
+    buckets (no deployment prefix) and the platform's namespace stay."""
+    from harness.cloud_platform_backups import BUCKET_SUFFIX
+
+    if choice not in ("keep", "destroy"):
+        raise SystemExit("BACKUPS: choose keep or destroy for the backups bucket and its key (there is no default)")
+    if choice == "keep" and (not days.isdigit() or int(days) < 1):
+        raise SystemExit("BACKUP_RETENTION_DAYS: the retention you agree for the kept backups, in days")
+    config = json.loads(kubectl("-n", MANAGED, "get", "configmap", "s3-standin", "-o", "jsonpath={.data.standin\\.json}"))
+    prefix = state()["prefix"]
+    backups = f"{prefix}{BUCKET_SUFFIX}"
+    if choice == "destroy":
+        if not any(b["name"] == backups for b in config["buckets"]):
+            raise SystemExit(f"NoSuchBucket: {backups} (delete-bucket-policy): the bucket is not there; was it destroyed already?")
+        keys = [k for k in config.get("keys", []) if k["arn"] == KEY_ARN]
+        if not keys:
+            raise SystemExit(f"NotFoundException: {KEY_ARN} (describe-key alias/{NS}-backups): no such key")
+        if keys[0].get("state") == "PendingDeletion":
+            raise SystemExit(f"KMSInvalidStateException: {KEY_ARN} is pending deletion (schedule-key-deletion)")
+    work = _work()
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "backups").write_text(f"{choice}\n")
+    if choice == "keep":
+        print(f"stand-in: backups keep, retention {days} days (the lifecycle rule not modelled)")
+        config["buckets"] = [b for b in config["buckets"] if b["name"] == backups]
+    else:
+        emptied = s3_exec(
+            "import pathlib, shutil\n"
+            f"p = pathlib.Path('/data/{backups}')\n"
+            "n = sum(1 for f in p.rglob('*') if f.is_file())\n"
+            "shutil.rmtree(p)\n"
+            "print(n)")
+        print(f"stand-in: backups destroy: {backups}'s policy, its {emptied.strip()} objects, then the bucket, removed")
+        config["buckets"] = []
+        ends = dt.datetime.now(dt.UTC) + dt.timedelta(days=KEY_PENDING_DAYS)
+        for key in config.get("keys", []):
+            if key["arn"] == KEY_ARN:
+                key["policy"] = {"Version": "2012-10-17", "Statement": [{
+                    "Sid": "Administer", "Effect": "Allow", "Principal": {"AWS": f"arn:aws:iam::{ACCOUNT}:root"},
+                    "Action": "kms:*", "Resource": "*"}]}
+                key["state"] = "PendingDeletion"
+                key["deletion_date"] = ends.strftime("%Y-%m-%dT%H:%M:%SZ")
+        print(f"stand-in: the key's policy replaced and its deletion scheduled for {ends:%Y-%m-%d}; its alias deleted")
+    for line in state().get("terraform_made", []):
+        kind, name = line.split()[:2]
+        kubectl("-n", NS, "delete", "secret" if kind == "kubernetes_secret" else "serviceaccount", name, "--ignore-not-found")
+    config["roles"] = []
+    # The domain goes with the Terraform (ADR-148 Amendment 13: no index backup), its disks with it.
+    config["domains"] = []
+    kubectl("-n", MANAGED, "delete", "statefulset", "opensearch", "--ignore-not-found")
+    kubectl("-n", MANAGED, "delete", "service", "opensearch", "--ignore-not-found")
+    kubectl("-n", MANAGED, "delete", "pvc", "-l", "app=opensearch", "--ignore-not-found")
+    coredns(NAMES)  # the domain's name no longer resolves
+    # The buckets the Terraform made, deleted as `aws_s3_bucket` deletes one: refused while it holds
+    # anything (BucketNotEmpty; no force_destroy), so step 6's emptying is what lets it go.
+    gone = json.loads(s3_exec(
+        "import json, pathlib, shutil\n"
+        f"made = [p for p in pathlib.Path('/data').iterdir() if p.is_dir() and p.name.startswith({prefix!r})"
+        f" and p.name != {backups!r}]\n"
+        "full = [p.name for p in made if any(f.is_file() for f in p.rglob('*'))]\n"
+        "if full: raise SystemExit('BucketNotEmpty: ' + ', '.join(full))\n"
+        "[shutil.rmtree(p) for p in made]\n"
+        "print(json.dumps([p.name for p in made]))"))
+    print(f"stand-in: the Terraform deleted the buckets {gone}")
+    s3_standin(config)
+    kubectl("delete", "mutatingwebhookconfiguration", "r1-irsa-standin", "--ignore-not-found")
+    kept = "the backups bucket and its key" if choice == "keep" else "nothing of the backups (destroyed; the key pending deletion)"
+    print(f"stand-in: the Terraform's removal applied; kept: {kept}")
 
 
 # -- the runbooks, run as written ---------------------------------------------------------------------
@@ -697,8 +752,37 @@ def render_back() -> None:
         print(f"the install's render put back from {KEPT}")
 
 
+def _release_files(folder: Path) -> dict[str, bytes]:
+    """What says what an install does: its runbook and its Terraform, by name."""
+    paths = [folder / "INSTALL.md", *sorted((folder / "terraform").glob("*.tf"))]
+    return {str(p.relative_to(folder)): p.read_bytes() for p in paths if p.exists()}
+
+
+def install_render() -> None:
+    """The install's render, the candidate's own every time (an upgrade is an install of a newer
+    candidate over a kept render). The kept render is put back only when its runbook and Terraform
+    are the candidate's byte for byte: the same release resumed, keeping what its earlier blocks
+    pinned there. A kept render of any other release is set aside (`render.before-upgrade`), never
+    run: its runbook and its Terraform are an older release's (the orchestrator's review, 14 Nov)."""
+    shutil.rmtree(FOLDER, ignore_errors=True)
+    sh(".venv/bin/python", "-m", "harness.render", "--config", str(CONFIG), "--allow-unpinned")
+    if not (KEPT / "values.yaml").exists():
+        return
+    if _release_files(KEPT) == _release_files(FOLDER):
+        shutil.copytree(KEPT, FOLDER, dirs_exist_ok=True)
+        print(f"the install resumed: the kept render ({KEPT}) is this release's, put back")
+        return
+    before = STATE / "render.before-upgrade"
+    shutil.rmtree(before, ignore_errors=True)
+    shutil.copytree(KEPT, before)
+    print(f"an upgrade: the kept render is another release's, set aside in {before}; this install runs its own")
+
+
 def runbook(name: str, start: int) -> None:
-    render_back()
+    if name == "INSTALL":
+        install_render()
+    else:
+        render_back()
     if name == "DECOMMISSION" and (KEPT / "values.yaml").exists():
         # The runbook as this release renders it (a fix to its words reaches a decommission already
         # begun), over the values the install put in, which stay the kept ones.
@@ -707,9 +791,6 @@ def runbook(name: str, start: int) -> None:
             if (KEPT / kept).exists():
                 shutil.copy2(KEPT / kept, FOLDER / kept)
     path = FOLDER / f"{name}.md"
-    if name == "INSTALL" and not path.exists():
-        # The runbook's own header: the render that writes it, before anything is pushed.
-        sh(".venv/bin/python", "-m", "harness.render", "--config", str(CONFIG), "--allow-unpinned")
     log = record(name)
     STATE.mkdir(parents=True, exist_ok=True)
     (STATE / f"{name}.sh").write_text(script_for(name, path.read_text(), start))

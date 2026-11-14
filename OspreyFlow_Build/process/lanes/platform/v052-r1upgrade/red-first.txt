@@ -1,0 +1,29 @@
+# v052-r1upgrade: red first (rule 15), 2026-11-14T04:11:59Z, offline on closed ports 59991-59994, a fresh PYTHONPYCACHEPREFIX each run; by plants.py
+plant 1: the install puts the kept render back and renders only without an INSTALL.md (main's)
+  tests/test_r1_kind_upgrade.py -k 'upgrade_runs': RED (1 failed, 2 deselected in 0.50s)
+plant 2: any kept render put back over the candidate's
+  tests/test_r1_kind_upgrade.py -k 'upgrade_runs': RED (1 failed, 2 deselected in 0.53s)
+plant 3: a resumed install's kept render never put back
+  tests/test_r1_kind_upgrade.py -k 'resumed': RED (1 failed, 2 deselected in 0.51s)
+plant 4: destroy leaves the sets in the backups bucket
+  tests/test_r1_kind_decommission.py -k 'destroy_removes': RED (1 failed, 8 deselected in 0.53s)
+plant 5: destroy leaves the key usable
+  tests/test_r1_kind_decommission.py -k 'destroy_removes': RED (1 failed, 8 deselected in 0.53s)
+plant 6: destroy run twice goes ahead
+  tests/test_r1_kind_decommission.py -k 'aws_refuses and NoSuchBucket': RED (1 failed, 8 deselected in 0.52s)
+plant 7: destroy over a key already pending deletion goes ahead
+  tests/test_r1_kind_decommission.py -k 'aws_refuses and KMSInvalidStateException': RED (1 failed, 8 deselected in 0.52s)
+plant 8: the Terraform's removal takes the platform's own buckets too
+  tests/test_r1_kind_decommission.py -k 'destroy_removes': RED (1 failed, 8 deselected in 0.52s)
+plant 9: keep drops the backups bucket from the stand-in
+  tests/test_r1_kind_decommission.py -k 'keep_leaves': RED (1 failed, 8 deselected in 0.49s)
+plant 10: R1's keep given though the run asked for no choice
+  tests/test_r1_kind_decommission.py -k 'no_choice': RED (1 failed, 8 deselected in 0.45s)
+plant 11: the S3 stand-in serves a key pending deletion
+  tests/cloud_platform_backup/test_s3_standin.py -k 'pending_deletion': RED (1 failed, 39 deselected in 0.80s)
+
+## green: R1's offline suite, the S3 stand-in's own suite, the poc manifest, data safety (no docker-calling file run on the Mac)
+163 passed in 63.85s (0:01:03)
+
+## after the lint's rewrap: plants rerun (above, all 11 RED); the four files whose tests changed, 69 passed in each of
+## four runs, one earlier run of five 1 failed / 68 passed, the failing case not captured (not reproduced since)
