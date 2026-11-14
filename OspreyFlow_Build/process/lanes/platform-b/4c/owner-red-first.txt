@@ -27,3 +27,9 @@ unplanted: exit 0: 7 passed, 34 deselected, 1 warning in 5.09s
   planted: exit 1: 1 failed, 6 passed, 34 deselected, 1 warning in 5.59s
     test_entra_people_administrator_access.py::test_a_run_asked_for_by_hand_is_told_what_to_do_in_the_refusal_s_own_words
 restored: exit 0: 7 passed, 34 deselected, 1 warning in 5.12s
+
+# After the merge of main (Amendment 17, guests), 14 November 2026: the setter of Access read as every read has them
+unplanted: 1 passed (test_a_guest_refused_while_guests_are_not_admitted_sets_nothing)
+== the store's guest check removed from check_administrator_access
+  planted: 1 failed
+restored: 1 passed

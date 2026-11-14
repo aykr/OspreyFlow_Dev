@@ -60,3 +60,19 @@ branch". This branch does not meet that as written:
 The orchestrator waived the rewrite: no history rewrite is needed. At the head, the types are
 regenerated with no drift: `make -s schemas-check` reports "604 generated types match committed
 output".
+
+## Merged with main (Amendments 16 and 17, guide 2.05), 14 November
+
+4c is **merged** with main, not rebased. Amendment 17 (guests) reworked `_person`, the people query and the store's
+set-up, so a rebase would have met the same overlap in commit after commit. Each conflict is the union of both sides
+(31b73b1). Where the two amendments meet:
+- **The setter of Access is read as every read has them,** so a guest refused while guests are not admitted sets
+  nothing (rule 3, in the store). This has a test, with its plant red.
+- **A run's owner** carries main's guest refusal, ahead of the refusal for a value not set here.
+
+The guide is 2.06, above main's 2.05, and the copies are mirrored.
+
+**Not yet run live:** the merged SQL. That is the setter's read (`PEOPLE_SQL … FOR SHARE OF p`), `standing`'s join
+with the administrator's columns, and the person upsert with both the guest and the administrator's columns. The live
+file passed, 35 of 35, before the merge; after it, the file needs a lease again.
+

@@ -502,3 +502,13 @@ def test_a_run_asked_for_by_hand_is_told_what_to_do_in_the_refusal_s_own_words()
                     asked_for="the schedule's owner, x, an administrator has not set unit for this person in Admin › People: "
                               "run it again once an administrator has set it")  # fmt: skip
     assert _asked_for(told, None) == told.asked_for  # type: ignore[arg-type]
+
+
+def test_a_guest_refused_while_guests_are_not_admitted_sets_nothing() -> None:
+    """Amendment 17 meets 15 in the store (rule 3): the setter is read as every read has them, and a guest
+    refused while guests are not admitted is not enabled to set anyone's values, whatever their roles."""
+    setter = _row(SETTER, set_here=("OFFICIAL", "unit-1", ["P"]), roles=("osprey-admin",)) | {"guest": True, "guest_refused": True}
+    with pytest.raises(AccessBeyondTheSetter, match="setter_cannot_set"):
+        check_administrator_access(EVERY, setter, PersonAccessInput(clearance="OFFICIAL"), CLASSES)
+    admitted = setter | {"guest_refused": False}  # guests admitted: a guest sets as anyone does
+    check_administrator_access(EVERY, admitted, PersonAccessInput(clearance="OFFICIAL"), CLASSES)
