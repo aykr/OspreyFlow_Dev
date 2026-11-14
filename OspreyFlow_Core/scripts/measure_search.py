@@ -291,9 +291,10 @@ def measure_leaks(
     the counts of what they may see. The answer must be the index's. **The control:** the same
     request as the case's control (`controls[case["control"]]`, a principal cleared for SECRET
     with code R in the hidden record's owning unit: a restricted code is read only in its own
-    unit, so one principal cannot be the control for every unit) must name every `never_ids`, or
-    the case reaches nothing hidden and proves nothing, and fails as that; so does a case whose
-    control is missing or not given, never skipped. Pass or fail, not a time: any leak fails M10."""
+    unit, so one principal cannot be the control for every unit; for a never-join case, asked in
+    its `partner_case`) must name every `never_ids`, or the case reaches nothing hidden and
+    proves nothing, and fails as that; so does a case whose control is missing or not given,
+    never skipped. Pass or fail, not a time: any leak fails M10."""
     if not cases:
         raise SystemExit("M10: no leak cases: the test would pass having asked nothing")
     failures: list[str] = []
@@ -307,7 +308,13 @@ def measure_leaks(
                 "so the case proves nothing"
             )
             continue
-        _ms, control, error = _send(base, path, body, controls[unit])
+        # A never-join case's hidden record is in another dataset: its control asks the same query
+        # in the partner's own case, which the cleared subject is granted (the orchestrator's
+        # ruling (a), 14 November), and the test asks in the measured case.
+        control_path = path
+        if leak.get("partner_case"):
+            control_path, _body = _leak_request(str(leak["partner_case"]), leak)
+        _ms, control, error = _send(base, control_path, body, controls[unit])
         seen = set(_strings(control)) if control is not None else set()
         unreached = [n for n in leak["never_ids"] if not any(n in t for t in seen)]
         if control is None or unreached:

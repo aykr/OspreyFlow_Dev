@@ -38637,7 +38637,11 @@ record the part-cleared principal may see and whose other is SECRET, carries cod
 granted, its control the subject of the hidden record's owning unit (rules, 14 November; rules writes the generator,
 with B's load). The search is scoped to one case, so a case keeps only hidden records the measured case reads: on B,
 *Intelligence reports*, whose SECRET/C reports are hidden from `m10-part` and whose SECRET/R ones (unit-intel-covert)
-only `m10-cleared-unit-intel-covert` reads. A SAME_AS partner in another dataset is left out and counted.
+only `m10-cleared-unit-intel-covert` reads. **A never-join case** asks the name of a visible record whose SAME_AS partner is
+in another dataset: the partner (its id, and its spelling where no visible record shares it) must never appear or be
+merged into `m10-part`'s answer in the measured case, and its control is the cleared subject of the partner's unit
+asking the same query in the partner's own case (`partner_case`), which every cleared subject is granted (the
+orchestrator's ruling (a), 14 November). It counts toward M10's pass; a null control still fails.
 The principals: `m10-part` (OFFICIAL-SENSITIVE without R, unit-records, granted the nominals and intel cases), the
 controls, and `m10-measure` (M1 to M6's, OFFICIAL-SENSITIVE, an editor on one case for M6's draws); rules grants
 them on B's cases under its lease, and step 4's runner mints their tokens into the run's environment. M9 is a live case

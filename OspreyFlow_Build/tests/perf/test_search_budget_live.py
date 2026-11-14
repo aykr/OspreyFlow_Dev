@@ -16,7 +16,8 @@ discarded; M6 takes `OSPREY_MEASURE_LAG_N` (default 50) draws after 5, each wait
 indexer. Where no stack is named, each case is skipped and says why: there is nothing B-sized to
 measure. A class with no queries in a named stack's file fails rather than passing unmeasured.
 
-M10, the leak test at scale, is pass or fail: it needs two more, `OSPREY_MEASURE_CONTROLS` (a JSON
+M10, the leak test at scale, is pass or fail, asked as m10-part (`OSPREY_MEASURE_PART_TOKEN`): it
+needs that, `OSPREY_MEASURE_CONTROLS` (a JSON
 object, each control subject's token by its name, one per R-owning unit; in the environment, never
 a file) and `OSPREY_MEASURE_LEAKS` (a JSON-lines file of leak cases derived from B's truth, each
 naming its `control`, `measure_search.measure_leaks`), and is skipped with that reason where either
@@ -90,7 +91,9 @@ def test_m6_a_drawn_node_reaches_the_index_within_its_failure_figure() -> None:
 def test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal() -> None:
     stack = _stack()
     missing = [
-        n for n in ("OSPREY_MEASURE_CONTROLS", "OSPREY_MEASURE_LEAKS") if not os.environ.get(n)
+        n
+        for n in ("OSPREY_MEASURE_PART_TOKEN", "OSPREY_MEASURE_CONTROLS", "OSPREY_MEASURE_LEAKS")
+        if not os.environ.get(n)
     ]
     if missing:
         pytest.skip(
@@ -101,7 +104,7 @@ def test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal() -
     found = measure_search.measure_leaks(
         base=stack["OSPREY_MEASURE_BASE"],
         case=stack["OSPREY_MEASURE_CASE"],
-        token=stack["OSPREY_MEASURE_TOKEN"],
+        token=os.environ["OSPREY_MEASURE_PART_TOKEN"],
         controls=json.loads(os.environ["OSPREY_MEASURE_CONTROLS"]),
         cases=[json.loads(line) for line in lines if line.strip()],
     )

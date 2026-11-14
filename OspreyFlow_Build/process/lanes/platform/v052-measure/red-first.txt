@@ -126,3 +126,30 @@ plant 9: the live file's M10 verdict dropped
   tests/test_measure_search.py -k 'fails_m10_on_a_leak': RED (1 failed, 30 deselected in 2.25s)
 9/9 red
 The earlier plants rerun: plants_budgets 6/6, plants_live 3/3, plants_lag 6/6. Green after: 59 passed, 6 skipped.
+
+# Never-join cases' control in the partner's own case, and M10 asked as m10-part (2026-11-14T08:52:27Z; the orchestrator's
+# ruling (a)). Shown red, one plant per check (plants_leaks.py), each restored:
+plant 1: the control dropped: a case reaching nothing hidden passes
+  tests/test_measure_search.py -k 'cannot_reach': RED (1 failed, 33 deselected in 1.15s)
+plant 2: the hidden ids not looked for
+  tests/test_measure_search.py -k 'seen_or_counted and id': RED (1 failed, 3 passed, 30 deselected in 2.67s)
+plant 3: the hidden words not looked for
+  tests/test_measure_search.py -k 'seen_or_counted and text': RED (1 failed, 33 deselected in 1.16s)
+plant 4: the totals not compared
+  tests/test_measure_search.py -k 'seen_or_counted and count': RED (1 failed, 3 passed, 30 deselected in 2.67s)
+plant 5: a fallback answer taken as the index's
+  tests/test_measure_search.py -k 'fallback_answer_is_not_the_index_s_for_m10': RED (1 failed, 33 deselected in 1.17s)
+plant 6: no cases taken as a pass
+  tests/test_measure_search.py -k 'no_leak_cases': RED (1 failed, 33 deselected in 1.14s)
+plant 7: every case asked of one control, not its own
+  tests/test_measure_search.py -k 'control_cannot_name_its_record': RED (1 failed, 2 passed, 31 deselected in 2.17s)
+plant 8: a case with no control token skipped, not failed
+  tests/test_measure_search.py -k 'control_cannot_name_its_record': RED (2 failed, 1 passed, 31 deselected in 2.14s)
+plant 9: a never-join control asked in the measured case, not the partner's
+  tests/test_measure_search.py -k 'control_asks_in_the_partner': RED (1 failed, 33 deselected in 1.16s)
+plant 10: the live file's M10 asked as the measuring subject
+  tests/test_measure_search.py -k 'passes_m10_when_nothing': RED (1 failed, 33 deselected in 2.33s)
+plant 11: the live file's M10 verdict dropped
+  tests/test_measure_search.py -k 'fails_m10_on_a_leak': RED (1 failed, 33 deselected in 2.42s)
+11/11 red
+Green after: 62 passed, 6 skipped (with test_adr_reservations and the coverage check).
