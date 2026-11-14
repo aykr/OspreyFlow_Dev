@@ -29,10 +29,11 @@ def saved_views() -> str:
 
 
 def strip_order(strip: str) -> list[str]:
-    """The strip's own parts, in the order it draws them."""
+    """The strip's own parts it draws, in the order it draws them: a part it no longer draws is left out, so the
+    list is short."""
     parts = ["Back to the whole case", "Saved view: <span", '{shared ? "Shared" : "Private"}', "{note &&",
              "Nothing in a saved view changes the case."]  # fmt: skip
-    return sorted(parts, key=lambda p: strip.find(p) if p in strip else 10**9)
+    return sorted((p for p in parts if p in strip), key=strip.find)
 
 
 def test_the_strip_starts_with_the_way_back_and_says_what_the_guide_says_in_its_order() -> None:
@@ -56,6 +57,8 @@ def test_a_strip_drawn_in_another_order_is_flagged() -> None:
     planted = ('View: <span>{name}</span> {shared ? "Shared" : "Private"} {note && <span/>} '
                "<span>Nothing in a saved view changes the case.</span> <button>Back to the whole case</button>")
     assert strip_order(planted)[0] != "Back to the whole case"
+    reworded = planted.replace("View: <span", "Saved view: <span").replace("in a saved view", "in a view")
+    assert "Nothing in a saved view changes the case." not in strip_order(reworded)
 
 
 def test_the_list_starts_with_the_whole_case_and_tells_default_named_views_apart() -> None:
