@@ -1,4 +1,5 @@
-# plant: store_read_unbounded (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; -k store_unread
+# plant: store_read_unbounded (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k store_unread
+# RED
 E       Failed: DID NOT RAISE OwnerRecordUnavailable
 FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_the_store_unread_is_its_own_unavailable_never_out_of_date[slow]
-1 failed, 2 passed, 16 deselected in 3.82s
+1 failed, 3 passed, 24 deselected in 3.80s

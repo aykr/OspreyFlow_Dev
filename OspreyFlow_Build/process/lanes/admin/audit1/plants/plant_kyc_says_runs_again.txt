@@ -1,0 +1,9 @@
+# plant: kyc_says_runs_again (services/api/kyc_sweep.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k kyc_check
+# RED
+E       AssertionError: assert 'runs again' not in 'rule rule-1...they sign in'
+E         
+E         'runs again' is contained here:
+E            date: it runs again once they sign in
+E         ?           ++++++++++
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_the_daily_kyc_check_s_deployer_out_of_date_is_said_in_the_24_hour_words
+1 failed, 27 deselected in 2.72s

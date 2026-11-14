@@ -1,4 +1,5 @@
-# plant: not_held_admitted_as_stale (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; -k not_held
+# plant: not_held_admitted_as_stale (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k not_held
+# RED
 E           principal_auth.PrincipalAccessOutOfDate: owner '50000000-0000-4000-8000-000000000009': access last read never
 FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_an_owner_not_held_is_refused_and_is_not_out_of_date
-1 failed, 18 deselected in 2.74s
+1 failed, 2 passed, 25 deselected in 2.74s

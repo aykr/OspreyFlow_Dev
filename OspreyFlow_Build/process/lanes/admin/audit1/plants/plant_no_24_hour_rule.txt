@@ -1,4 +1,5 @@
-# plant: no_24_hour_rule (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; -k 24_hours
+# plant: no_24_hour_rule (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k 24_hours
+# RED
 E       Failed: DID NOT RAISE PrincipalAccessOutOfDate
 FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_access_older_than_24_hours_is_out_of_date_and_just_inside_is_not
-1 failed, 1 passed, 17 deselected in 2.73s
+1 failed, 1 passed, 26 deselected in 2.72s

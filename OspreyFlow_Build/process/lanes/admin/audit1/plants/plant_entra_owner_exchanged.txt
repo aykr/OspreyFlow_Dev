@@ -1,4 +1,5 @@
-# plant: entra_owner_exchanged (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; -k AUTH:read_from_the_store_never_exchanged
+# plant: entra_owner_exchanged (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k read_from_the_store_never_exchanged
+# RED
 E           principal_auth.PrincipalLookupUnavailable: an Entra principal is resolved with its stored roles (resolve_principal)
 FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_claims.py::test_an_owner_on_entra_is_read_from_the_store_never_exchanged_even_with_an_exchange_configured
-1 failed, 145 deselected in 2.20s
+1 failed, 145 deselected in 2.15s

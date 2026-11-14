@@ -1,4 +1,0 @@
-# plant: EntraPeopleStore.owner answers for any tenant (its tenant guard removed), at 5186a37, uncommitted; fresh PYTHONPYCACHEPREFIX
-E       AssertionError: assert StoredOwner(roles=(), disabled=False, clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=('R',), access_read_at=datetime.datetime(2026, 11, 14, 3, 52, 7, 400053, tzinfo=datetime.timezone.utc)) is None
-FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_the_store_answers_no_owner_for_another_tenant
-1 failed, 1 passed, 21 deselected in 3.50s

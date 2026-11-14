@@ -1,4 +1,5 @@
-# plant: never_signed_in_admitted (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; -k never_read
+# plant: never_signed_in_admitted (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k never_read
+# RED
 E       TypeError: unsupported operand type(s) for -: 'datetime.datetime' and 'NoneType'
 E       TypeError: unsupported operand type(s) for -: 'datetime.datetime' and 'NoneType'
 E               principal_auth.PrincipalLookupUnavailable: a stored owner is built only once judged current
@@ -6,4 +7,4 @@ E           principal_auth.OwnerRecordUnavailable: the stored owner '50000000-00
 FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_an_owner_whose_access_was_never_read_is_out_of_date[added-by-object-id-never-signed-in]
 FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_an_owner_whose_access_was_never_read_is_out_of_date[no-time]
 FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_an_owner_whose_access_was_never_read_is_out_of_date[no-clearance]
-3 failed, 16 deselected in 2.93s
+3 failed, 25 deselected in 2.88s

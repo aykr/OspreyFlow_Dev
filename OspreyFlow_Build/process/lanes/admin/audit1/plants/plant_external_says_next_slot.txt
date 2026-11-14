@@ -1,0 +1,9 @@
+# plant: external_says_next_slot (services/api/scheduler.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k run_now_and and external
+# RED
+E       assert "the schedule... they sign in" == "the schedule...ave signed in"
+E         
+E         Skipping 153 identical leading characters in diff, use -v to show
+E         -  of date: run it again once they have signed in
+E         +  of date: it runs at its next slot after they sign in
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_run_now_and_ospreyflow_run_say_to_run_it_again_once_the_owner_signs_in[owner_for_external]
+1 failed, 27 deselected in 2.78s
