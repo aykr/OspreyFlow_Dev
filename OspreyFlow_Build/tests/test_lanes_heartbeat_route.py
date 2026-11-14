@@ -99,6 +99,12 @@ def _row(out: str, step: str) -> str:
                 or line.split()[:2] == [step, "★"] or line.strip().startswith(f"{step} "))  # fmt: skip
 
 
+def _done(out: str, step: str) -> bool:
+    """The step is named on a collapsed line of done steps (the owner, 14 Nov: the done rows collapse)."""
+    return any(" ✓ " in line and " done" in line and step in line.split(": ", 1)[-1].split()
+               for line in out.splitlines())  # fmt: skip
+
+
 def _section(out: str, heading: str) -> list[str]:
     start = next(i for i, line in enumerate(out.splitlines()) if line.startswith(heading))
     lines = out.splitlines()[start:]
@@ -139,7 +145,8 @@ def test_past_the_target_undone_is_late(route) -> None:
 
 def test_each_step_s_state_is_its_lane_s_own_and_done_only_when_merged(route, tmp_path) -> None:
     out = route(16)
-    assert " done" in _row(out, "2")
+    assert _done(out, "2")
+    assert " done" in _row(route(16, "--steps"), "2")
     assert " running" in _row(out, "3c")  # building
     assert " built, waiting to merge" in _row(out, "3d")  # in review
     assert " not started" in _row(out, "3e") and " not started" in _row(out, "1")
@@ -169,7 +176,7 @@ def test_a_row_s_bar_is_its_lane_s_stages_when_they_name_its_step(route, hb) -> 
               "4|todo|Drift").returncode == 0  # fmt: skip
     out = route(16)
     assert "[███░░░] running, stage 2 of 4" in _row(out, "3c")
-    assert "[██████]" in _row(out, "2") and "[░░░░░░]" in _row(out, "3e")
+    assert "[██████]" in _row(route(16, "--steps"), "2") and "[░░░░░░]" in _row(out, "3e")
     assert "stage" not in _row(out, "B")  # rules' stages are 3c's, not B's
 
 
@@ -306,7 +313,7 @@ def test_a_running_row_lists_its_stages_by_name_and_others_stay_one_line(route, 
     out = route(16)
     assert _under(out, "3c") == ["✅ 1. Plan", "⏳ 2. Feed · the outbox", "⛔ 3. Rebuild", "— 4. Drift"]
     assert _under(out, "3e") == []  # not started: one line
-    assert _under(out, "2") == []  # done: one line
+    assert _under(route(16, "--steps"), "2") == []  # done: one line (in the default view, collapsed)
     assert _under(out, "3d") == []  # built, waiting to merge: one line
 
 
@@ -469,13 +476,13 @@ def _branch(progress: str, step: str, branch: str) -> str:
 
 def test_a_row_typed_building_whose_branch_is_on_main_by_a_merge_shows_done(gitroute) -> None:
     out = gitroute(16, _branch(PROGRESS, "v052-index", "lane/rules-index"))
-    assert " done" in _row(out, "3c") and "running" not in _row(out, "3c")
+    assert _done(out, "3c") and not any(line.split()[:1] == ["3c"] for line in out.splitlines())
     assert "2 of 8 steps done" in out  # the headline counts it
     assert "3 of 11" not in out and "4 of 11 steps merged" in out  # and so does the finished line
 
 
 def test_a_merge_in_the_merger_brief_s_form_names_its_branch(gitroute) -> None:
-    assert " done" in _row(gitroute(16, _branch(PROGRESS, "v052-fixes", "lane/case-cluster")), "3e")
+    assert _done(gitroute(16, _branch(PROGRESS, "v052-fixes", "lane/case-cluster")), "3e")
 
 
 def test_a_bare_lane_branch_never_reads_done(gitroute) -> None:
@@ -494,13 +501,13 @@ def test_a_branch_named_inside_another_s_name_is_not_merged(gitroute) -> None:
 
 
 def test_the_merger_s_name_is_read_with_its_hyphens_aside_and_outside_ascii(gitroute) -> None:
-    assert " done" in _row(gitroute(16, _branch(PROGRESS, "v052-index", "lane/rules-b-v052batch")), "3c")
-    assert " done" in _row(gitroute(16, _branch(PROGRESS, "v052-index", "lane/case-3f′")), "3c")
+    assert _done(gitroute(16, _branch(PROGRESS, "v052-index", "lane/rules-b-v052batch")), "3c")
+    assert _done(gitroute(16, _branch(PROGRESS, "v052-index", "lane/case-3f′")), "3c")
 
 
 def test_a_subject_past_the_environment_s_size_is_read(gitroute) -> None:
     """Main's merges are read by perl from git, never through the environment (the second review, finding 3)."""
-    assert " done" in _row(gitroute(16, _branch(PROGRESS, "v052-index", "lane/studio-big")), "3c")
+    assert _done(gitroute(16, _branch(PROGRESS, "v052-index", "lane/studio-big")), "3c")
 
 
 def test_the_lanes_full_and_watch_views_read_git_too(gitroute, hb, route) -> None:  # noqa: F811
@@ -545,7 +552,7 @@ def test_a_landed_line_counts_only_when_it_says_the_step_is_done(gitroute) -> No
                    "4283b91 3bd66ec+bcca270 rules v052-load\n")  # fmt: skip
     assert " running" in _row(out, "3c") and " not started" in _row(out, "B")
     out = gitroute(16, landed=head + "aca0591 2916cf6 rules v052-index done (step 3c)\n")
-    assert " done" in _row(out, "3c")
+    assert _done(out, "3c")
     assert " done" not in _row(out, "B")  # a line for one lane's step is not another's (B, after 3c, is ready)
 
 
@@ -588,7 +595,7 @@ def test_a_branch_is_read_from_any_row_shape_the_table_takes(gitroute) -> None:
     rows = rows.replace("docs\tsites\tM\tbuilding\tThe two new websites\n",
                         "docs\tsites\t\tbuilding\tThe two new websites\tlane/docs-sites\r\n")  # fmt: skip
     out = gitroute(16, rows + "rules\tv052-index\tL\tbuilding\tv0.5.2 step 3c: the index feed\tlane/rules-index")
-    assert " done" in _row(out, "3c")
+    assert _done(out, "3c")
     assert "docs" not in "\n".join(_section(out, "OUTSIDE THIS ROUTE"))
 
 
@@ -601,3 +608,119 @@ def test_an_after_list_with_spaces_is_read_as_its_ids(gitroute, tmp_path) -> Non
     (tmp_path / "route.tsv").write_text(ROUTE.replace("\t3c\trules:v052-load", "\t3c \trules:v052-load"),
                                         encoding="utf-8")  # fmt: skip
     assert " ready" in _row(gitroute(14, _branch(PROGRESS, "v052-index", "lane/rules-index")), "B")
+
+
+# --- the done rows collapse (the owner, 14 November 2026: 47 rows, most done, hard to read) ----------------------
+
+GROUPED = (
+    "# target\tv0.5.2\t2026-11-26\n"
+    "# The route to v0.5.2. Kept by the orchestrator; the heartbeat's default view reads it.\n"
+    "# steps\tB\n"
+    "# id, title, lane, start, end, critical (y/n), after, progress (lane:step, or -)\n"
+    "1\tv0.5.1 cut\tplatform\t2026-11-14\t2026-11-15\tn\t-\tplatform:one\n"
+    "3a\tOpenSearch on poc\tplatform\t2026-11-14\t2026-11-15\tn\t1\tplatform:three-a\n"
+    "3b\tSuperset on Entra\tadmin\t2026-11-14\t2026-11-15\tn\t-\tadmin:three-b\n"
+    "B\tClient-size data\trules\t2026-11-14\t2026-11-15\ty\t3a\trules:load\n"
+    "3e′\tThe search results layout\tcase\t2026-11-14\t2026-11-15\ty\t-\tcase:three-e2\n"
+    "T\tThe top bar stays one line\tcase\t2026-11-14\t2026-11-15\ty\t-\tcase:topbar\n"
+    "Q\tThe ontology read retried\tcase\t2026-11-14\t2026-11-15\ty\t-\tcase:tidy\n"
+    "D2\tThe model's refusals in words\tstudio\t2026-11-14\t2026-11-15\ty\t-\tstudio:words\n"
+    "4\tThe measurement session\tplatform\t2026-11-16\t2026-11-17\ty\tB\tplatform:measure\n"
+    "7\tCut v0.5.2\torchestrator\t2026-11-26\t2026-11-26\ty\t4\t-\n"
+)
+GROUPED_PROGRESS = (
+    "# lane, step, size, status, title\n"
+    "platform\tone\tS\tdone\tstep 1\n"
+    "platform\tthree-a\tS\tdone\tstep 3a\n"
+    "admin\tthree-b\tS\tdone\tstep 3b\n"
+    "rules\tload\tS\tdone\tB\n"
+    "case\tthree-e2\tS\tdone\tstep 3e′\n"
+    "case\ttopbar\tS\tdone\tT\n"
+    "case\ttidy\tS\tdone\tQ\n"
+    "studio\twords\tS\tdone\tD2\n"
+    "platform\tmeasure\tS\ttodo\tstep 4\n"
+)
+
+
+def _rows(out: str) -> list[str]:
+    """The route's rows: from the line after the headline's blank one to the next blank one."""
+    lines = out.splitlines()
+    start = lines.index("", 2) + 1
+    return lines[start : lines.index("", start)]
+
+
+@pytest.fixture
+def grouped(route, tmp_path: Path):
+    def view(progress: str = GROUPED_PROGRESS, routes: str = GROUPED, *args: str) -> str:
+        (tmp_path / "route.tsv").write_text(routes, encoding="utf-8")
+        (tmp_path / "progress.tsv").write_text(progress, encoding="utf-8")
+        return route(16, *args)
+
+    return view
+
+
+def test_a_number_s_sub_steps_all_done_are_one_line(grouped) -> None:
+    rows = _rows(grouped())
+    assert rows[1] == "  3a–3e′ ✓ 3 done", rows
+    assert not any(row.split()[:1] in (["3a"], ["3b"], ["3e′"]) for row in rows)
+
+
+def test_the_done_fixes_and_the_done_whole_steps_are_one_line_each_with_their_ids(grouped) -> None:
+    rows = _rows(grouped())
+    assert rows[0] == "  steps ✓ 2 done: 1 B"  # B a step by the route's own "# steps" line
+    assert rows[2] == "  fixes ✓ 3 done: T Q D2"
+    # The steps not done, each on its own line, in route order; nothing else.
+    assert [row.split()[0] for row in rows[3:]] == ["4", "7"] and len(rows) == 5, rows
+
+
+def test_the_steps_done_line_counts_every_step_collapsed_or_not(grouped) -> None:
+    assert "8 of 10 steps done" in grouped().splitlines()[2]
+    progress = GROUPED_PROGRESS.replace("three-b\tS\tdone", "three-b\tS\tbuilding")
+    assert "7 of 10 steps done" in grouped(progress).splitlines()[2]
+
+
+def test_one_sub_step_not_done_stays_expanded_and_the_rest_collapse(grouped) -> None:
+    progress = GROUPED_PROGRESS.replace("three-b\tS\tdone", "three-b\tS\tbuilding").replace(
+        "tidy\tS\tdone", "tidy\tS\ttodo")
+    rows = _rows(grouped(progress))
+    assert rows[1] == "  3a–3e′ ✓ 2 of 3 done: 3a 3e′", rows
+    assert rows[2].split()[0] == "3b" and " running" in rows[2]  # expanded, in route order after 3a
+    fixes = next(row for row in rows if row.startswith("  fixes"))
+    assert fixes == "  fixes ✓ 2 done: T D2"
+    assert " not started" in _row("\n".join(rows), "Q")
+    order = [row.split()[0] for row in rows]
+    assert order.index("3b") < order.index("fixes") < order.index("Q") < order.index("4") < order.index("7")
+
+
+def test_without_a_steps_line_a_letter_is_a_fix(grouped) -> None:
+    rows = _rows(grouped(GROUPED_PROGRESS, GROUPED.replace("# steps\tB\n", "")))
+    assert "  steps ✓ 1 done: 1" in rows and "  fixes ✓ 4 done: B T Q D2" in rows
+
+
+def test_a_whole_number_with_sub_steps_is_in_their_line(grouped) -> None:
+    routes = GROUPED.replace("3a\tOpenSearch", "3\tOpenSearch")
+    rows = _rows(grouped(GROUPED_PROGRESS, routes))
+    assert "  3–3e′ ✓ 3 done" in rows and "  steps ✓ 2 done: 1 B" in rows
+
+
+def test_a_long_list_of_done_ids_wraps_and_drops_none(grouped) -> None:
+    ids = [f"X{i}" for i in range(60)]
+    routes = GROUPED + "".join(f"{i}\tA fix\tcase\t2026-11-14\t2026-11-15\ty\t-\tcase:f{i}\n" for i in ids)
+    progress = GROUPED_PROGRESS + "".join(f"case\tf{i}\tS\tdone\tfix\n" for i in ids)
+    out = grouped(progress, routes)
+    rows = _rows(out)
+    at = next(i for i, row in enumerate(rows) if row.startswith("  fixes"))
+    listed = " ".join(rows[at : at + 3]).split(": ", 1)[1].split()
+    assert listed == ["T", "Q", "D2", *ids] and rows[at].startswith("  fixes ✓ 63 done: ")
+    assert all(len(line) <= 120 for line in out.splitlines())
+
+
+def test_steps_keeps_one_line_a_step(grouped) -> None:
+    rows = _rows(grouped(GROUPED_PROGRESS, GROUPED, "--steps"))
+    assert [row.split()[0] for row in rows] == ["1", "3a", "3b", "B", "3e′", "T", "Q", "D2", "4", "7"]
+    assert not any(" ✓ " in row for row in rows) and " done" in _row("\n".join(rows), "T")
+
+
+def test_full_is_unchanged_the_overview_in_full(grouped) -> None:
+    full = grouped(GROUPED_PROGRESS, GROUPED, "--full")
+    assert "VIEW 1 · FOUNDATION FEATURES" in full and "ROUTE TO" not in full and " ✓ " not in full
