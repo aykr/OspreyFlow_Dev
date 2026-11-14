@@ -36,6 +36,8 @@ class _Conduit(BaseHTTPRequestHandler):
     # "unreached" makes the cleared answer miss it (a case that proves nothing).
     leak_world = False
     leak = ""
+    # A never-join world: hid-1 is in another dataset, read only in its own case, case-partner.
+    partner_only = False
 
     def do_POST(self) -> None:  # noqa: N802 - http.server's name
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -43,7 +45,9 @@ class _Conduit(BaseHTTPRequestHandler):
         time.sleep(self.delay)
         status = 200
         if self.leak_world and self.path.endswith(("/search", "/suggest")):
-            answer = self._leak_answer(self.headers.get("Authorization", "") == "Bearer cleared")
+            answer = self._leak_answer(
+                self.headers.get("Authorization", "") == "Bearer cleared-unit-fiu"
+            )
         elif self.path.endswith("/suggest"):
             answer: dict[str, Any] = {"nodes": [{"id": "n1"}], "more": False}
         elif self.path.endswith("/boards"):
@@ -80,6 +84,8 @@ class _Conduit(BaseHTTPRequestHandler):
 
     def _leak_answer(self, cleared: bool) -> dict[str, Any]:
         hidden = cleared and self.leak != "unreached"
+        if self.partner_only:
+            hidden = hidden and "/investigations/case-partner/" in self.path
         visible = [{"node_ids": ["vis-1"], "match": {"band": "name_exact"}, "passage": []}]
         if self.path.endswith("/suggest"):
             nodes = [{"id": "vis-1", "label": "Kestral"}]
@@ -112,7 +118,7 @@ class _Conduit(BaseHTTPRequestHandler):
 def conduit() -> Iterator[str]:
     _Conduit.delay, _Conduit.source, _Conduit.exact_first, _Conduit.seen = 0.0, "index", True, []
     _Conduit.lag, _Conduit.refuse_draw, _Conduit.drawn = 0.0, False, {}
-    _Conduit.leak_world, _Conduit.leak = False, ""
+    _Conduit.leak_world, _Conduit.leak, _Conduit.partner_only = False, "", False
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Conduit)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -472,6 +478,7 @@ def test_the_live_gate_fails_m6_when_no_drawn_node_reaches_the_index(
 LEAKS = [
     {
         "name": "a hidden namesake",
+        "control": "unit-fiu",
         "route": "search",
         "query": "Kestral",
         "never_ids": ["hid-1"],
@@ -481,6 +488,7 @@ LEAKS = [
     },
     {
         "name": "a hidden namesake's prefix",
+        "control": "unit-fiu",
         "route": "suggest",
         "query": "kes",
         "never_ids": ["hid-1"],
@@ -488,10 +496,15 @@ LEAKS = [
 ]
 
 
+#: One cleared control per R-owning unit (the orchestrator's ruling, 14 November 2026): only
+#: unit-fiu's sees hid-1, as only a principal of a restricted record's own unit may.
+CONTROLS = {"unit-fiu": "cleared-unit-fiu", "unit-border": "cleared-unit-border"}
+
+
 def _leaks(base: str) -> dict[str, Any]:
     _Conduit.leak_world = True
     return measure_search.measure_leaks(
-        base=base, case="case-1", token="part", cleared_token="cleared", cases=LEAKS
+        base=base, case="case-1", token="part", controls=CONTROLS, cases=LEAKS
     )
 
 
@@ -499,7 +512,8 @@ def test_nothing_hidden_seen_or_counted_meets_m10(conduit: str) -> None:
     result = _leaks(conduit)
     assert result["verdict"] == "met", result["failures"]
     tokens = {(p, a) for p, _b, a in _Conduit.seen}
-    assert ("/v1/investigations/case-1/search", "Bearer cleared") in tokens, "the control asked"
+    assert ("/v1/investigations/case-1/search", "Bearer cleared-unit-fiu") in tokens, "the control"
+    assert not any(a == "Bearer cleared-unit-border" for _p, a in tokens), "only the case's own"
     assert ("/v1/investigations/case-1/suggest", "Bearer part") in tokens
 
 
@@ -534,7 +548,7 @@ def test_a_fallback_answer_is_not_the_index_s_for_m10(conduit: str) -> None:
 def test_no_leak_cases_is_refused(conduit: str) -> None:
     with pytest.raises(SystemExit, match="asked nothing"):
         measure_search.measure_leaks(
-            base=conduit, case="c", token="part", cleared_token="cleared", cases=[]
+            base=conduit, case="c", token="part", controls=CONTROLS, cases=[]
         )
 
 
@@ -542,13 +556,21 @@ def _run_live_m10(conduit: str, tmp_path: Path) -> subprocess.CompletedProcess[s
     _Conduit.leak_world = True
     leaks = tmp_path / "leaks.jsonl"
     leaks.write_text("\n".join(json.dumps(c) for c in LEAKS))
-    extra = {"OSPREY_MEASURE_CLEARED_TOKEN": "cleared", "OSPREY_MEASURE_LEAKS": str(leaks)}
+    extra = {
+        "OSPREY_MEASURE_PART_TOKEN": "part",
+        "OSPREY_MEASURE_CONTROLS": json.dumps(CONTROLS),
+        "OSPREY_MEASURE_LEAKS": str(leaks),
+    }
     return _run_live(tmp_path, conduit, extra, only="m10")
 
 
 def test_the_live_gate_passes_m10_when_nothing_hidden_shows(conduit: str, tmp_path: Path) -> None:
     done = _run_live_m10(conduit, tmp_path)
     assert done.returncode == 0 and "1 passed" in done.stdout, done.stdout[-1500:]
+    asked = {a for p, _b, a in _Conduit.seen if p.startswith("/v1/investigations/case-1/")}
+    assert asked == {"Bearer part", "Bearer cleared-unit-fiu"}, (
+        "asked as m10-part, never the measure"
+    )
 
 
 def test_the_live_gate_fails_m10_on_a_leak(conduit: str, tmp_path: Path) -> None:
@@ -559,3 +581,57 @@ def test_the_live_gate_fails_m10_on_a_leak(conduit: str, tmp_path: Path) -> None
     assert (
         done.returncode != 0 and "M10:" in done.stdout and "hid-1 is in the answer" in done.stdout
     )
+
+
+@pytest.mark.parametrize(
+    ("control", "said"),
+    [
+        ("unit-border", "does not name ['hid-1']"),  # another unit's control cannot see it
+        ("unit-covert", "no control token for 'unit-covert'"),
+        (None, "no control token for None"),
+    ],
+)
+def test_a_case_whose_control_cannot_name_its_record_fails_never_skips(
+    conduit: str, control: str | None, said: str
+) -> None:
+    _Conduit.leak_world = True
+    if control:
+        case = {**LEAKS[0], "control": control}
+    else:
+        case = {k: v for k, v in LEAKS[0].items() if k != "control"}
+    result = measure_search.measure_leaks(
+        base=conduit, case="case-1", token="part", controls=CONTROLS, cases=[case]
+    )
+    assert result["verdict"] == "not met" and len(result["failures"]) == 1
+    assert said in result["failures"][0] and "proves nothing" in result["failures"][0]
+
+
+def _never_join(conduit: str, **case: Any) -> dict[str, Any]:
+    _Conduit.leak_world = _Conduit.partner_only = True
+    leak = {"name": "a partner in another dataset", "control": "unit-fiu", "route": "search",
+            "query": "Kestral", "never_ids": ["hid-1"], **case}  # fmt: skip
+    return measure_search.measure_leaks(
+        base=conduit, case="case-1", token="part", controls=CONTROLS, cases=[leak]
+    )
+
+
+def test_a_never_join_case_s_control_asks_in_the_partner_s_case(conduit: str) -> None:
+    """The orchestrator's ruling (a): the partner is read only in its own case, so the control
+    asks there, and the test asks in the measured case."""
+    result = _never_join(conduit, partner_case="case-partner")
+    assert result["verdict"] == "met", result["failures"]
+    asked = [(p, a) for p, _b, a in _Conduit.seen]
+    assert ("/v1/investigations/case-partner/search", "Bearer cleared-unit-fiu") in asked
+    assert ("/v1/investigations/case-1/search", "Bearer part") in asked
+    assert ("/v1/investigations/case-partner/search", "Bearer part") not in asked
+
+
+def test_a_never_join_case_without_its_partner_case_proves_nothing(conduit: str) -> None:
+    result = _never_join(conduit)
+    assert result["verdict"] == "not met" and "proves nothing" in result["failures"][0]
+
+
+def test_a_never_join_partner_merged_into_the_answer_fails(conduit: str) -> None:
+    _Conduit.leak = "id"
+    result = _never_join(conduit, partner_case="case-partner")
+    assert any("hid-1 is in the answer" in f for f in result["failures"]), result["failures"]

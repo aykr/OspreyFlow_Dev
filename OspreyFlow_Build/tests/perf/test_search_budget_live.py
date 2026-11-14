@@ -16,11 +16,12 @@ discarded; M6 takes `OSPREY_MEASURE_LAG_N` (default 50) draws after 5, each wait
 indexer. Where no stack is named, each case is skipped and says why: there is nothing B-sized to
 measure. A class with no queries in a named stack's file fails rather than passing unmeasured.
 
-M10, the leak test at scale, is pass or fail: it needs two more, `OSPREY_MEASURE_CLEARED_TOKEN` (the
-fully cleared principal's, for each case's control) and `OSPREY_MEASURE_LEAKS` (a JSON-lines file of
-leak cases derived from B's truth, `measure_search.measure_leaks`), and is skipped with that reason
-where either is unset. M9 (the fallback) is not in this file yet: a case to be written for step 6's
-live run."""
+M10, the leak test at scale, is pass or fail, asked as m10-part (`OSPREY_MEASURE_PART_TOKEN`): it
+needs that, `OSPREY_MEASURE_CONTROLS` (a JSON
+object, each control subject's token by its name, one per R-owning unit; in the environment, never
+a file) and `OSPREY_MEASURE_LEAKS` (a JSON-lines file of leak cases derived from B's truth, each
+naming its `control`, `measure_search.measure_leaks`), and is skipped with that reason where either
+is unset. M9 (the fallback) is not in this file yet: a case to be written for step 6's live run."""
 
 from __future__ import annotations
 
@@ -90,16 +91,21 @@ def test_m6_a_drawn_node_reaches_the_index_within_its_failure_figure() -> None:
 def test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal() -> None:
     stack = _stack()
     missing = [
-        n for n in ("OSPREY_MEASURE_CLEARED_TOKEN", "OSPREY_MEASURE_LEAKS") if not os.environ.get(n)
+        n
+        for n in ("OSPREY_MEASURE_PART_TOKEN", "OSPREY_MEASURE_CONTROLS", "OSPREY_MEASURE_LEAKS")
+        if not os.environ.get(n)
     ]
     if missing:
-        pytest.skip(f"no leak cases named ({', '.join(missing)} unset): M10 needs both principals")
+        pytest.skip(
+            f"no leak cases named ({', '.join(missing)} unset): M10 needs the part-cleared "
+            "principal and the controls"
+        )
     lines = Path(os.environ["OSPREY_MEASURE_LEAKS"]).read_text(encoding="utf-8").splitlines()
     found = measure_search.measure_leaks(
         base=stack["OSPREY_MEASURE_BASE"],
         case=stack["OSPREY_MEASURE_CASE"],
-        token=stack["OSPREY_MEASURE_TOKEN"],
-        cleared_token=os.environ["OSPREY_MEASURE_CLEARED_TOKEN"],
+        token=os.environ["OSPREY_MEASURE_PART_TOKEN"],
+        controls=json.loads(os.environ["OSPREY_MEASURE_CONTROLS"]),
         cases=[json.loads(line) for line in lines if line.strip()],
     )
     assert found["verdict"] == "met", "M10: " + "; ".join(found["failures"][:20])
