@@ -10,7 +10,7 @@ WT = str(Path(__file__).resolve().parents[5])
 PY = f"{WT}/OspreyFlow_Core/.venv/bin/python"
 CACHES = tempfile.mkdtemp(prefix="v052-am20-pycache-")
 os.makedirs(CACHES, exist_ok=True)
-TESTS = ["tests/test_user_guide_am20.py", "tests/test_admin_guide_model_timeouts.py"]
+TESTS = ["tests/test_user_guide_am20.py", "tests/test_admin_guide_model_timeouts.py", "tests/test_guides_step5_freeze.py"]
 env = dict(os.environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994")
 for k in ("OSPREY_LANE", "PYTHONDONTWRITEBYTECODE"): env.pop(k, None)
 C, W = "OspreyFlow_Core/", "OspreyFlow_Core/apps/workspace/src/"
@@ -37,6 +37,13 @@ PLANTS = [
     ("a cluster without them", C + "harness/cluster.py", "    for name, seconds in MODEL_TIMEOUTS.items():\n        environment.setdefault(name, seconds)\n", "", ["cluster_and_the_platform_render_both"]),
     ("a setting for them in osprey.yaml", C + "packages/schemas/deployment.py", "class SearchBackend(StrEnum):", "#: hosted_timeout_seconds: a model call's bound\nclass SearchBackend(StrEnum):", ["cluster_and_the_platform_render_both"]),
     ("guide: the platform said to pass neither", AG, "the render puts both settings in the values at their defaults", "the render passes neither setting, so the defaults hold", ["cluster_and_the_platform_render_both"]),
+    # R7 after case's S7 and S8: the mark asks why, and is read back
+    ("the mark asking nothing", W + "canvas/GlassCanvas.tsx", '        why: "Why should it be suppressed? (required, kept with the mark)",\n', "", ["what_a_suppression_mark_does"]),
+    ("a blank reason accepted", C + "services/api/app.py", '        if not value.strip():\n            raise ValueError("a suppression mark needs a reason")\n', "", ["what_a_suppression_mark_does"]),
+    ("the marks not read back", W + "canvas/GlassCanvas.tsx", "if (live && Array.isArray(marks)) setSuppressionMarks(Object.fromEntries(marks.map((m) => [m.node_id, m.reason])));", "if (live && Array.isArray(marks)) void marks;", ["what_a_suppression_mark_does"]),
+    ("removing asking why too", W + "canvas/GlassCanvas.tsx", "      if (suppressionMarks[nodeId]) {\n        await writeSuppressionMark(nodeId, null, anchor);\n        return;\n      }\n", "", ["what_a_suppression_mark_does"]),
+    ("guide: the mark said to keep no reason", UG, 'It asks first "Why should it be suppressed?", which is required and kept with the mark;', "It asks nothing;", ["what_a_suppression_mark_does"]),
+    ("guide: the marks said not read back", UG, "The marks are read back from the case, so on a marked node the menu offers **Remove suppression mark** in its place, which asks nothing.", "After a reload the menu offers the mark again.", ["what_a_suppression_mark_does"]),
 ]
 def run():
     e = dict(env, PYTHONPYCACHEPREFIX=tempfile.mkdtemp(dir=CACHES))
