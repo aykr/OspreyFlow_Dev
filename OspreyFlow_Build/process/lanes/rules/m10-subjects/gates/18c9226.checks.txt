@@ -1,0 +1,25 @@
+rules-m10-subjects checks at 18c9226 (on main e4d72c7), on the Mac in the worktree, OSPREY_PORTS_SLOT=9 and closed ports 59991-59994, no stack, no server (the orchestrator's ruling, 14 Nov)
+== own tests
+..................................................................       [100%]
+66 passed in 22.18s
+-- own tests exit=0
+== citation-check
+doc-citations-check: 2938 file(s) scanned, every cited path exists.
+-- citation-check exit=0
+== test-file-coverage-check
+test-file-coverage-check: 1123 test file(s), 0 allowlisted, no new drift.
+-- test-file-coverage-check exit=0
+== ruff check .
+All checks passed!
+-- ruff check . exit=0
+== ruff format --check (the lane's Core files)
+6 files already formatted
+-- ruff format --check (the lane's Core files) exit=0
+== mypy packages services harness
+Success: no issues found in 493 source files
+-- mypy packages services harness exit=0
+== mypy (the lane's scripts)
+Success: no issues found in 6 source files
+-- mypy (the lane's scripts) exit=0
+checks rc=0
+exit=0 at 18c9226
