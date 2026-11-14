@@ -34,7 +34,7 @@ export function DemoPacks({ api }: { api: AdminApi }) {
           aria-label={pack.title}
           style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "grid", gap: "var(--sp-6)" }}
         >
-          <h4 className="value" style={{ margin: 0 }}>{pack.title}</h4>
+          <h2 className="value" style={{ margin: 0 }}>{pack.title}</h2>
           {pack.real_data && (
             <p role="note" style={{ margin: 0 }}>
               <strong>Real personal data.</strong> Real people&apos;s email, not made up. The command shows

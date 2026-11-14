@@ -38990,12 +38990,20 @@ not to regress. The orchestrator approved three choices:
      list's groups, and People's parts (*Refused organisation sign-ins*, *Guests*, *Add a person by object id*,
      *Invite a person*). Each is drawn smaller than the `h1`. In dark and light they keep the sizes main drew them
      as `h3` and `h4` (`--fs-14`, `--fs-13`); in GOV.UK they take `govuk-heading-s` or the scale.
-   - **Not yet on the other sections.** Their own headings still step from the `h1` to `h3`, `h4` or `h5`:
-     Roles, Dashboard identities, Datasets, Operations and its figures, System and Demo packs (the admin lane's).
-     This is left for a later step that measures each screen as People's was measured.
+   - **The other sections, the same** (the orchestrator's follow-up step, 14 November 2026). Each section's
+     headings step down from its `h1` one level at a time:
+     - Roles (its form's title), Dashboard identities (*Register a dashboard*), Operations (*What ages, and when*,
+       *Promotions waiting for review*, *Runs and what they cost*), System (*Dataset owners*, its one heading; its
+       other parts stay labelled sections) and Demo packs (each pack) head their parts with `h2`s;
+     - Datasets' details nest `h3`s beneath their dataset's `h2`, and Operations' figures nest `h3`s (*Run quotas*,
+       *The scheduler's health*, *External triggers*, *Budget alerts*) beneath *Runs and what they cost*.
+   - Every `h2` in a section is drawn at `--fs-13` and every `h3` at `--fs-12`
+     (`.admin-place__section h2, h3`): in dark and light 13px and 12px under a 16px `h1`, in GOV.UK 19px and 16px
+     under 36px. Outside Admin, the figures' own harness (`operations-figures-harness.html`) draws its headings at
+     the browser's sizes, with no `h1` to step from.
    - **Admin › Models and Admin › Maps head their parts with `h2`s beneath the section's `h1`** (What the
      installer declared, Engines, Each job's default engine, Usage, History; Providers, The local basemap,
-     Prefetch areas, History), each `className="value"`, so `.admin-place__section h2.value` draws them below
+     Prefetch areas, History), each `className="value"`, so `.admin-place__section h2` (which this step generalised from `h2.value`) draws them below
      the `h1` in every look (`--fs-13`; in GOV.UK 19px, below the 36px `h1`), as People's parts are. Held by the
      sections' own tests (`Models.test.tsx` and `Maps.test.tsx`: every heading an `h2` with `value`) and by
      `admin-look.spec.ts`'s Models and Maps cases in the dark, light and GOV.UK looks (one `h1`, levels [1, 2],
@@ -39032,6 +39040,8 @@ not to regress. The orchestrator approved three choices:
      | Dark and light | 66.5px → 30.5px | 122px → 141px |
      | GOV.UK | 112.5px → 32.5px | 267px → 153px |
 
+   - Under GOV.UK the row's links carry `govuk-link`, so a focused one takes GOV.UK's link focus state, yellow
+     with its black bar beneath, as the help link does. The side navigation draws its own.
    - *Other grants* is the column's visible name. Assistive technology reads it as "Other grants: custom roles,
      single rights and older roles".
 5. **A coming section is plain words.**
@@ -39061,6 +39071,16 @@ for its reason (`plants.log`).
     Tab reaching a coming item when that item is a button again.
   - The moved actions are activated by keyboard in the cases that held them before: Access, Disable and Enable,
     Reset sign-in, Remove, Super user, Save.
+- `keyboard/admin-sections-look.spec.ts`, for Roles (its form open), Dashboard identities, Datasets (a dataset's
+  details), System, Operations (its figures read, every part drawn) and Demo packs, in dark, light and GOV.UK:
+  - one `h1`, the section's name;
+  - no heading more than one level below the one before it;
+  - each drawn smaller than the `h1`.
+  It also checks each `h2` and `h3` at its token's size in each look, and that GOV.UK's whole link focus (its
+  yellow, and its shadow compared entire) reaches a person's row link. It was red first on main's sections (19
+  cases), and 8 plants are each red at their own assertion
+  (`process/lanes/admin/section_headings/plants.log`). `every-harness.spec.ts` also scans Dashboard identities and
+  Demo packs (`serve=packs`).
 - `AdminSections.test.tsx`, `adminWords.test.tsx` and `PeopleEntra.test.tsx` (*a person's row in Admin › People*).
 - `a11y/every-harness.spec.ts` scans People with every Admin right, in place of the open placeholder, in dark,
   light and GOV.UK, with `checkUndecidedContrast`.

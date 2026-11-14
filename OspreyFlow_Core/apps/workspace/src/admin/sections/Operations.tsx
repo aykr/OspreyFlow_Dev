@@ -49,7 +49,7 @@ export function Ageing({ api }: { api: AdminApi }) {
 
   return (
     <section aria-label="What ages" style={{ display: "grid", gap: "var(--sp-8)" }}>
-      <h4 style={{ margin: 0 }}>What ages, and when</h4>
+      <h2 style={{ margin: 0 }}>What ages, and when</h2>
       {ageing && (
         <ul style={{ margin: 0 }}>
           {(ageing.rules ?? []).map((rule) => (
@@ -70,7 +70,7 @@ export function Ageing({ api }: { api: AdminApi }) {
           </Button>
         </div>
       )}
-      <h4 style={{ margin: 0 }}>Promotions waiting for review</h4>
+      <h2 style={{ margin: 0 }}>Promotions waiting for review</h2>
       {ageing && !ageing.promotions_recorded && (
         <p className="label" style={{ margin: 0 }}>
           Promotions from drawing boards are not recorded yet, so none can wait. They are listed here, with their age,

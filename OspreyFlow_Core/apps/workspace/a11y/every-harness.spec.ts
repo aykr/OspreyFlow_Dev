@@ -315,6 +315,10 @@ const EXTRA_STATES: Record<string, string[]> = {
     // L1.9 (ADR-148): the S3 and Athena forms, their cloud role's words, and their rows in the table.
     "rights=administer_system&serve=connections&open=Connections&show=s3",
     "rights=administer_system&serve=connections&open=Connections&show=athena",
+    // The section headings step (ADR-145 Amendment 16): Dashboard identities' form and Demo packs' packs, each heading
+    // an h2 beneath the section's h1.
+    "rights=manage_dashboards,administer_system&serve=packs&open=Dashboard%20identities",
+    "rights=manage_dashboards,administer_system&serve=packs&open=Demo%20packs",
   ],
 };
 

@@ -14,6 +14,7 @@ import type {
   PersonCaseLevel,
   SignInDelivery,
 } from "../../../../../packages/schemas/generated";
+import { currentBrand } from "../../brand/brand";
 import { PLACE_NAME, placesFor } from "../../shell/places";
 import { LEVELS_TIP_ID, RoleAndLevelTips, grantWords, roleTip, roleTipId } from "../tips";
 import { Button, Input, Select } from "../../design/primitives";
@@ -548,30 +549,30 @@ function PersonRow({
             <div className="admin-row-actions__more">
               <button
                 type="button"
-                className="admin-row-actions__link"
+                className={rowLinkClass()}
                 aria-label={`Super user preset for ${person.username}`}
                 onClick={() => setChosen(new Set([...[...chosen].filter((r) => !ROLE_IDS.has(r)), ...SUPER_USER]))}
               >
                 Super user
               </button>
               {(!entra || administratorSets.length > 0) && (
-                <button type="button" className="admin-row-actions__link" aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
+                <button type="button" className={rowLinkClass()} aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
                   Access
                 </button>
               )}
               {person.enabled ? (
-                <button type="button" className="admin-row-actions__link" aria-label={`Disable ${person.username}`} aria-expanded={confirming} onClick={() => setConfirming(!confirming)}>
+                <button type="button" className={rowLinkClass()} aria-label={`Disable ${person.username}`} aria-expanded={confirming} onClick={() => setConfirming(!confirming)}>
                   Disable…
                 </button>
               ) : (
-                <button type="button" className="admin-row-actions__link" aria-label={`Enable ${person.username}`} onClick={() => act(enablePerson(api, person.id))}>
+                <button type="button" className={rowLinkClass()} aria-label={`Enable ${person.username}`} onClick={() => act(enablePerson(api, person.id))}>
                   Enable
                 </button>
               )}
               {!entra && (
                 <button
                   type="button"
-                  className="admin-row-actions__link"
+                  className={rowLinkClass()}
                   aria-label={`Reset sign-in for ${person.username}`}
                   onClick={() =>
                     void resetSignIn(api, person.id)
@@ -586,7 +587,7 @@ function PersonRow({
                 </button>
               )}
               {!entra && !person.system_account && (
-                <button type="button" className="admin-row-actions__link" aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
+                <button type="button" className={rowLinkClass()} aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
                   Remove
                 </button>
               )}
@@ -759,6 +760,12 @@ function Arrivals({
       </table>
     </section>
   );
+}
+
+/** A person's row links: link-styled buttons, with GOV.UK's own link class (and so its focus) under that brand
+ * (ADR-145 Amendment 16). */
+function rowLinkClass(): string {
+  return currentBrand() === "govuk" ? "admin-row-actions__link govuk-link" : "admin-row-actions__link";
 }
 
 /** ADR-148 Amendment 8: Entra ID holds the accounts. */

@@ -190,6 +190,16 @@ if (serving === "audit" || serving === "operations") {
     "/v1/admin/schedules": [{ recipe_id: "feed", label: "Daily custody export", case_id: "case-1", cron: "0 6 * * 1-5",
       timezone: "Europe/London", schedule: "every weekday at 06:00 (Europe/London)", owner: "approver-1",
       next_run: "2026-11-09T06:00:00Z", paused: false, paused_reason: null, flagged: false, last_run: null }],
+    // The section headings step: Operations' figures with every part drawn (the scheduler's health, an external
+    // trigger, a budget alert, a quota), so each of their headings is measured.
+    "/v1/admin/operations/runs": { days: 7, units: ["unit-1"],
+      rows: [{ day: "2026-11-10", pipeline_id: "r-calls", pipeline_label: "Wing phone calls", unit: "unit-1", trigger: "external",
+               runs: 2, succeeded: 1, refused: 1, failed: 0, wall_ms: 4200, rows_read: 120, graph_writes: 30, withheld: false }],
+      scheduler: { skipped: 1, missed: 0, running_now: 0, paused: [], refused: [{ reason: "the dataset's quota of 1 run a day is used", count: 1 }] },
+      external: [{ run_id: "SYN-RUN-1", pipeline_label: "Wing phone calls", service_identity: "syn-airflow", ran_as_name: "Sam Example",
+                   started_at: "2026-11-10T09:00:00Z", outcome: "succeeded", wall_ms: 2100, withheld: false }],
+      alerts: [{ scope: "dataset", key: "harbour-extract", day: "2026-11-10", words: "Harbour extract has used 80% of its 1 run a day." }],
+      quotas: [{ scope: "dataset", key: "harbour-extract", runs_per_day: 1, alert_at_share: 0.8 }] },
   };  // prettier-ignore
   window.fetch = async (input: RequestInfo | URL) => {
     const path = new URL(String(input)).pathname;
@@ -216,6 +226,21 @@ if (serving === "policies" || serving === "connections") {
     "/v1/admin/datasets": [{ id: "ds-a", name: "Prison records", owning_unit: "u", egress: "none", kind: "source",
                              promotion_policy: "author_promotes" }],
   };  // prettier-ignore
+  window.fetch = async (input: RequestInfo | URL) => {
+    const path = new URL(String(input)).pathname;
+    return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
+  };
+}
+// `?serve=packs` (the section headings step, 14 Nov): Demo packs with one synthetic pack loaded and one not, and
+// Dashboard identities with none registered, so each section's own headings are drawn. Synthetic (rule 9).
+if (serving === "packs") {
+  const PACK = { id: "fixture-a", title: "Fixture pack A (synthetic)", shows: "A small synthetic case.", delivery: "seed",
+                 licence: "CC0-1.0", case_name: "Fixture A", loaded_case_id: "case-a", command: "ospreyflow demo add fixture-a" };  // prettier-ignore
+  const served: Record<string, unknown> = {
+    "/v1/admin/demo-packs": [PACK, { ...PACK, id: "fixture-b", title: "Fixture pack B (synthetic)", loaded_case_id: null,
+                                    command: "ospreyflow demo add fixture-b" }],  // prettier-ignore
+    "/v1/admin/dashboards": [],
+  };
   window.fetch = async (input: RequestInfo | URL) => {
     const path = new URL(String(input)).pathname;
     return new Response(JSON.stringify(served[path] ?? []), { status: 200 });

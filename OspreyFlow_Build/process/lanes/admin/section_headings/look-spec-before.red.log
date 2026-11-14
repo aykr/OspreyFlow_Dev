@@ -1,0 +1,493 @@
+
+Running 19 tests using 1 worker
+
+[1/19] keyboard/admin-sections-look.spec.ts:29:5 › Roles in the dark look: one h1, no level skipped beneath it, each below the h1
+  1) keyboard/admin-sections-look.spec.ts:29:5 › Roles in the dark look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "New role h3",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Roles--61f24-eneath-it-each-below-the-h1/error-context.md
+
+
+[2/19] keyboard/admin-sections-look.spec.ts:29:5 › Dashboard identities in the dark look: one h1, no level skipped beneath it, each below the h1
+  2) keyboard/admin-sections-look.spec.ts:29:5 › Dashboard identities in the dark look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Register a dashboard h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Dashbo-4c78c-eneath-it-each-below-the-h1/error-context.md
+
+
+[3/19] keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the dark look: one h1, no level skipped beneath it, each below the h1
+  3) keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the dark look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Prison records h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Datase-e9c61-eneath-it-each-below-the-h1/error-context.md
+
+
+[4/19] keyboard/admin-sections-look.spec.ts:29:5 › System in the dark look: one h1, no level skipped beneath it, each below the h1
+  4) keyboard/admin-sections-look.spec.ts:29:5 › System in the dark look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Dataset owners h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-System-ec10d-eneath-it-each-below-the-h1/error-context.md
+
+
+[5/19] keyboard/admin-sections-look.spec.ts:29:5 › Operations in the dark look: one h1, no level skipped beneath it, each below the h1
+  5) keyboard/admin-sections-look.spec.ts:29:5 › Operations in the dark look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "What ages, and when h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Operat-90c8d-eneath-it-each-below-the-h1/error-context.md
+
+
+[6/19] keyboard/admin-sections-look.spec.ts:29:5 › Demo packs in the dark look: one h1, no level skipped beneath it, each below the h1
+  6) keyboard/admin-sections-look.spec.ts:29:5 › Demo packs in the dark look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Fixture pack A (synthetic) h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Demo-p-4b2ec-eneath-it-each-below-the-h1/error-context.md
+
+
+[7/19] keyboard/admin-sections-look.spec.ts:29:5 › Roles in the light look: one h1, no level skipped beneath it, each below the h1
+  7) keyboard/admin-sections-look.spec.ts:29:5 › Roles in the light look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "New role h3",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Roles--66de5-eneath-it-each-below-the-h1/error-context.md
+
+
+[8/19] keyboard/admin-sections-look.spec.ts:29:5 › Dashboard identities in the light look: one h1, no level skipped beneath it, each below the h1
+  8) keyboard/admin-sections-look.spec.ts:29:5 › Dashboard identities in the light look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Register a dashboard h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Dashbo-c3bee-eneath-it-each-below-the-h1/error-context.md
+
+
+[9/19] keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the light look: one h1, no level skipped beneath it, each below the h1
+  9) keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the light look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Prison records h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Datase-1627a-eneath-it-each-below-the-h1/error-context.md
+
+
+[10/19] keyboard/admin-sections-look.spec.ts:29:5 › System in the light look: one h1, no level skipped beneath it, each below the h1
+  10) keyboard/admin-sections-look.spec.ts:29:5 › System in the light look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Dataset owners h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-System-445a2-eneath-it-each-below-the-h1/error-context.md
+
+
+[11/19] keyboard/admin-sections-look.spec.ts:29:5 › Operations in the light look: one h1, no level skipped beneath it, each below the h1
+  11) keyboard/admin-sections-look.spec.ts:29:5 › Operations in the light look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "What ages, and when h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Operat-e9fa8-eneath-it-each-below-the-h1/error-context.md
+
+
+[12/19] keyboard/admin-sections-look.spec.ts:29:5 › Demo packs in the light look: one h1, no level skipped beneath it, each below the h1
+  12) keyboard/admin-sections-look.spec.ts:29:5 › Demo packs in the light look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Fixture pack A (synthetic) h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Demo-p-b6aa9-eneath-it-each-below-the-h1/error-context.md
+
+
+[13/19] keyboard/admin-sections-look.spec.ts:29:5 › Roles in the govuk look: one h1, no level skipped beneath it, each below the h1
+  13) keyboard/admin-sections-look.spec.ts:29:5 › Roles in the govuk look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "New role h3",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Roles--68aa4-eneath-it-each-below-the-h1/error-context.md
+
+
+[14/19] keyboard/admin-sections-look.spec.ts:29:5 › Dashboard identities in the govuk look: one h1, no level skipped beneath it, each below the h1
+  14) keyboard/admin-sections-look.spec.ts:29:5 › Dashboard identities in the govuk look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Register a dashboard h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Dashbo-4e8f7-eneath-it-each-below-the-h1/error-context.md
+
+
+[15/19] keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the govuk look: one h1, no level skipped beneath it, each below the h1
+  15) keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the govuk look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Prison records h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Datase-31384-eneath-it-each-below-the-h1/error-context.md
+
+
+[16/19] keyboard/admin-sections-look.spec.ts:29:5 › System in the govuk look: one h1, no level skipped beneath it, each below the h1
+  16) keyboard/admin-sections-look.spec.ts:29:5 › System in the govuk look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Dataset owners h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-System-07c4f-eneath-it-each-below-the-h1/error-context.md
+
+
+[17/19] keyboard/admin-sections-look.spec.ts:29:5 › Operations in the govuk look: one h1, no level skipped beneath it, each below the h1
+  17) keyboard/admin-sections-look.spec.ts:29:5 › Operations in the govuk look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "What ages, and when h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Operat-b1060-eneath-it-each-below-the-h1/error-context.md
+
+
+[18/19] keyboard/admin-sections-look.spec.ts:29:5 › Demo packs in the govuk look: one h1, no level skipped beneath it, each below the h1
+  18) keyboard/admin-sections-look.spec.ts:29:5 › Demo packs in the govuk look: one h1, no level skipped beneath it, each below the h1 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Fixture pack A (synthetic) h4",
+    + ]
+
+      39 |       expect(headings.filter((h) => h.level === 1).map((h) => h.text)).toEqual([section]);
+      40 |       const skips = headings.slice(1).filter((h, i) => h.level > headings[i].level + 1).map((h) => `${h.text} h${h.level}`);
+    > 41 |       expect(skips).toEqual([]);
+         |                     ^
+      42 |       const h1 = headings[0].size;
+      43 |       expect(headings.slice(1).filter((h) => h.size >= h1).map((h) => `${h.text} ${h.size}px`)).toEqual([]);
+      44 |     });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:41:21
+
+    Error Context: test-results/admin-sections-look-Demo-p-7bddd-eneath-it-each-below-the-h1/error-context.md
+
+
+[19/19] keyboard/admin-sections-look.spec.ts:48:1 › a person's row links take GOV.UK's link focus in the GOV.UK look
+  19) keyboard/admin-sections-look.spec.ts:48:1 › a person's row links take GOV.UK's link focus in the GOV.UK look 
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected value: "govuk-link"
+    Received array: ["admin-row-actions__link"]
+
+      54 |     return { classes: [...el.classList], background: cs.backgroundColor, shadow: cs.boxShadow };
+      55 |   });
+    > 56 |   expect(drawn.classes).toContain("govuk-link");
+         |                         ^
+      57 |   expect(drawn.background).toBe("rgb(255, 221, 0)"); // GOV.UK's focus yellow
+      58 |   expect(drawn.shadow).toContain("rgb(11, 12, 12)"); // and its black underline bar
+      59 | });
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin-sections-look.spec.ts:56:25
+
+    Error Context: test-results/admin-sections-look-a-pers-ce785-nk-focus-in-the-GOV-UK-look/error-context.md
+
+
+  19 failed
+    keyboard/admin-sections-look.spec.ts:29:5 › Roles in the dark look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Dashboard identities in the dark look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the dark look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › System in the dark look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Operations in the dark look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Demo packs in the dark look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Roles in the light look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Dashboard identities in the light look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the light look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › System in the light look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Operations in the light look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Demo packs in the light look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Roles in the govuk look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Dashboard identities in the govuk look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Datasets in the govuk look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › System in the govuk look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Operations in the govuk look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:29:5 › Demo packs in the govuk look: one h1, no level skipped beneath it, each below the h1 
+    keyboard/admin-sections-look.spec.ts:48:1 › a person's row links take GOV.UK's link focus in the GOV.UK look 

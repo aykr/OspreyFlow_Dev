@@ -126,7 +126,7 @@ export function Dashboards({ api }: { api: AdminApi }) {
         }}
         style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 420, border: "1px solid var(--border-subtle)", padding: "var(--sp-12)" }}
       >
-        <h4 className="value" style={{ margin: 0 }}>Register a dashboard</h4>
+        <h2 className="value" style={{ margin: 0 }}>Register a dashboard</h2>
         <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
           Name
           <Input aria-label="Dashboard name" value={name} onChange={(e) => setName(e.target.value)} />
