@@ -162,10 +162,13 @@ def test_user_guide_says_what_a_suppression_mark_does_as_built() -> None:
     canvas = fold(read("apps/workspace/src/canvas/GlassCanvas.tsx"))
     label = mark_label()
     assert label == "Mark for suppression (hides nothing yet)"
-    # The reason is the canvas's own, not asked for; the marks start empty and are never read back.
-    assert 'const reason = marked ? "" : "Marked from the canvas";' in canvas
-    assert "const [suppressionMarks, setSuppressionMarks] = useState< Record<string, string> >({});" in canvas
-    assert "/suppression-marks" not in canvas, "the canvas reads the marks back now"
+    # The reason is asked for (S8): the link menu's reason box, its own line; a mark is read back (S7), from the
+    # route that names only the reader's own canvas's marks.
+    assert 'why: "Why should it be suppressed? (required, kept with the mark)",' in canvas
+    code = re.sub(r"//[^\n]*", "", read("apps/workspace/src/canvas/GlassCanvas.tsx"))  # the code, not its comments
+    assert '"Marked from the canvas"' not in code, "the canvas's own fixed reason is back"
+    assert "/suppression-marks`," in canvas and 'graph.on("nodeAdded", again);' in canvas
+    assert 'raise ValueError("a suppression mark needs a reason")' in read("services/api/app.py")
     panel = read("apps/workspace/src/explore/ExplorePanel.tsx")
     assert "· marked for suppression by ${m.marked_by} · ${when(m.marked_at)} · “${m.reason}”" in panel
     # A mark is its own table's row, never a graph write: the store's one graph call reads.
@@ -180,9 +183,11 @@ def test_user_guide_says_what_a_suppression_mark_does_as_built() -> None:
     assert users == ["services/api/app.py"], users
     text = guide("user")
     assert f"Set picture… and {label};" in text
-    assert (f"**{label}** proposes a record for suppression, in the open: the node is marked, and the Explore panel "
-            'lists it, with who marked it, when, and "Marked from the canvas".') in text  # fmt: skip
+    assert (f"**{label}** proposes a record for suppression, in the open. It asks why first: type the reason in the "
+            'box ("Why should it be suppressed? (required, kept with the mark)"), then choose **Mark for '
+            "suppression**; the button stays off until there are words, and Escape leaves the node unmarked.") in text  # fmt: skip
+    assert "the Explore panel lists it, with who marked it, when, and the reason given." in text
     assert "A mark hides nothing and changes no record" in text
-    assert (f"In the session that made the mark, the menu offers **Remove suppression mark** in its place; after a "
-            f"reload, or for anyone else, it offers **{label}** again, and choosing it marks the node afresh.") in text  # fmt: skip
+    assert ("Once a node is marked, the menu offers **Remove suppression mark** in its place, after a reload too, "
+            "and to anyone else who may see the node.") in text  # fmt: skip
     assert "A suppression that takes effect, once its evidence is loaded through the Ingest Studio, is not built yet." in text

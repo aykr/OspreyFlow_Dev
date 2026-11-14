@@ -2296,8 +2296,8 @@ reason refused without words).
 - **A marker on the node and in the inspector**, the same list-row-plus-canvas-marker pairing §9.4
   already establishes for "something here needs a human's attention" — a marked node is *flagged*,
   never hidden. **Not built** (checked 14 November 2026): no marker is drawn on the node or in the inspector; Explore's
-  list of marks is the one place a mark is shown, and the menu's *Remove suppression mark* holds only for the session
-  that made the mark, since the Glass does not read marks back (`GlassCanvas.tsx`'s `suppressionMarks` starts empty).
+  list of marks is the one place a mark is shown. The menu's *Remove suppression mark* holds across a reload and for
+  every reader who may see the node, since the canvas reads the marks back (S7, above).
 - **Reversible**, which is why a mark is deliberately not a graph write: the graph is append-only
   (`01_DOMAIN_MODEL.md` §2.4), so marking and un-marking there would mint a revision for every
   change of mind and `superseded_by` would stop meaning "this was corrected".

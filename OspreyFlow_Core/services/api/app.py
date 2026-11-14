@@ -6094,7 +6094,15 @@ class SuppressionMarkInput(BaseModel):
         return value.strip()
 
 
-@app.get("/v1/investigations/{investigation_id}/suppression-marks")
+@app.get(
+    "/v1/investigations/{investigation_id}/suppression-marks",
+    # Weighed against ADR-145 Amendment 4 decision 10, 14 November 2026: a mark's reason is an
+    # analyst's note on a record, beyond the Reports Viewer's Figures and boards, and only the
+    # canvas reads it, which only a holder of `investigate` is offered (`offeredViews`). So it
+    # names `investigate`, and the Reports Viewer is refused 403 `right_required` with the rest
+    # (`test_reports_viewer_journey.py`'s sweep).
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def list_suppression_marks(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
