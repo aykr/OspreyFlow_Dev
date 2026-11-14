@@ -64,3 +64,17 @@ unit-intel-covert (5 % of cs-intel's reports, SECRET/R), unit-covert (cs-covert,
 unit-border (cs-watchlist, OFFICIAL-SENSITIVE/R). A hidden record without code R (cs-intel's SECRET/C
 reports, unit-intel) is read by any of the four cleared subjects. No token was minted or written
 anywhere: the issuer and the Conduit in front of stack d are step 4's setup.
+
+## Step 4's M10 case files (written 2026-11-14T08:44:04Z, server run 20261114T084404Z-4a3c8d22)
+
+`python -m scripts.client_size_leaks --from ~/osprey-load/b-1.0 --out ~/osprey-load/m10 --limit 500` on
+the test server's host, under the rules lane's lease of stack d (it reads B's files only, no store): 6 s,
+217 MB. The measure case is the intelligence reports' (`OSPREY_MEASURE_CASE`, `01M7C2SXAPP3RF8QRSR2SKEMJK`).
+
+| List | Eligible | Written | Kept out, and why |
+| --- | --- | --- | --- |
+| `leaks.jsonl`: a cs-intel record m10-part may not read, with its control | 12,126: 10,129 SECRET/C (control `m10-cleared-unit-fiu`), 1,997 SECRET/R unit-intel-covert (control `m10-cleared-unit-intel-covert`) | 500, chosen by a hash of the id | none: every hidden record of the case has a control that reads it |
+| `never_join.jsonl`: a planted SAME_AS (`truth` same) joining a visible cs-intel record to another dataset's | 18,115 | 500, the same way | no control: no principal searching the intel case reaches the other dataset (ADR-099 Am 2) |
+
+Both lists are checked before writing (`check_leaks`, `check_never_join`; plants L1 to L4 red,
+`leaks-red-first.txt`). `counts.json` beside them holds the same counts.
