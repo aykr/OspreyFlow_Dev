@@ -31,6 +31,11 @@ environment:
         --database <B's database> --repeat 3 "Tomasz Kellly" "Meagan Illiams" ...
 
 It prints one line per query and variant (each repeat's ms, then the median) and writes nothing.
+
+**A record of what ran, not a tool to run again.** Rules ran it on d at cbb7ad9 and at 6208ee7 (14
+November 2026, `STEP4_RECORD.md`'s M9 profile). ADR-124 Amendment 21 makes `SearchNodesBuilder` take
+the candidates' `record_ids`, so `current` here raises `TypeError` once that lands; the old query
+word for word is `process/lanes/rules/adr124-am21/equivalence.py`'s `old_query`.
 """
 
 from __future__ import annotations
