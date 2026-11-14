@@ -115,3 +115,4 @@ cc6d222 bebfc2f admin guests (audit 4b, Am 17), with registry-4b.diff; guide 2.0
 cb1178f d27da5f case live-fresh-case
 a95a94d f1bd574 platform v052-expiry (decision 5: sets at 34 days)
 4695349 015ed4c docs v052-expiry (2.03), PDF reprinted
+f9a1802 0a2ee97 platform v052-m10ctl
