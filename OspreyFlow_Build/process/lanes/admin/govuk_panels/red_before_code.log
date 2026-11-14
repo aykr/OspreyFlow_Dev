@@ -1,14 +1,16 @@
-# keyboard/glass-panels-look.spec.ts at 270ae39 with src/design/panelType.css not loaded (its @import taken out of primitives.css): the Glass page's panels as main draws them
+# keyboard/glass-panels-look.spec.ts at a1e75dd (on main f7e9606, with case-b's saved views panel), src/design/panelType.css not loaded: main's CSS
   1) keyboard/glass-panels-look.spec.ts:94:5 › the saved views panel, in its drawer in the dark look is on the page's type scale 
-    +   "15.21px (heading): Views in this case",
+    +   "15.21px (heading): Saved views in this case",
   2) keyboard/glass-panels-look.spec.ts:94:5 › the Save as a view form in the dark look is on the page's type scale 
     +   "19.5px (heading): Save as a view",
   3) keyboard/glass-panels-look.spec.ts:94:5 › the saved views panel, in its drawer in the light look is on the page's type scale 
-    +   "15.21px (heading): Views in this case",
+    +   "15.21px (heading): Saved views in this case",
   4) keyboard/glass-panels-look.spec.ts:94:5 › the Save as a view form in the light look is on the page's type scale 
     +   "19.5px (heading): Save as a view",
   5) keyboard/glass-panels-look.spec.ts:94:5 › the saved views panel, in its drawer in the govuk look is on the page's type scale 
-    +   "19px (heading): Views in this case",
+    +   "19px (heading): Saved views in this case",
+    +   "19px (text): The whole case",
+    +   "19px (meta): Open now",
     +   "19px (text): Alice's own",
     +   "19px (meta): Private",
     +   "16px (text): Open",
