@@ -262,3 +262,56 @@ def test_a_hidden_word_in_a_visible_document_s_text_is_refused(
     planted = {**made["leaks"][0], "never_text": [phrase.upper()]}
     with pytest.raises(leaks.LeakCaseRefused, match="is in what m10-part may read"):
         leaks.check_leaks([planted], case_records, people, "unit-intel", _corpus(folder))
+
+
+def test_a_hidden_word_its_own_query_holds_is_refused(folder: Path, made: dict[str, Any]) -> None:
+    """Red first, the shape the generator wrote before: a leak case asks the hidden document's own
+    title and keeps it as the word never shown, so every answer quoting the query ("Spelt like '…'")
+    fails it."""
+    case_records, people = _world(folder)
+    leak = made["leaks"][0]
+    planted = {**leak, "never_text": [str(leak["query"]).upper()]}
+    with pytest.raises(leaks.LeakCaseRefused, match="in its own query"):
+        leaks.check_leaks([planted], case_records, people, "unit-intel", _corpus(folder))
+
+
+def test_no_written_case_keeps_a_word_its_own_query_holds(made: dict[str, Any]) -> None:
+    for case in (*made["leaks"], *made["never_join"]):
+        query = str(case["query"]).lower()
+        assert not any(w.lower() in query for w in case["never_text"]), case
+
+
+def _flagged(answer_strings: list[str], never_text: list[str]) -> list[str]:
+    """`measure_leaks`' own word check: a hidden word in any answer string, lower-cased."""
+    lowered = [t.lower() for t in answer_strings]
+    return [w for w in never_text if any(w.lower() in t for t in lowered)]
+
+
+def test_a_case_asking_the_hidden_title_still_checks_its_hidden_document_s_own_words(
+    folder: Path, made: dict[str, Any]
+) -> None:
+    """The orchestrator's ruling (M10 is a gate): the title the case asks is dropped as the query's
+    echo, but the hidden document's other words stay checked. Red first: an answer quoting the
+    query ("Spelt like '…'") is no leak, and the same answer showing one of the hidden document's
+    own words in a passage is one."""
+    case_records, _people = _world(folder)
+    titled = [c for c in made["leaks"] if case_records[c["hidden"]].words == c["query"]]
+    assert titled, "the leak cases ask the hidden documents' own titles"
+    case = next(c for c in titled if c["never_text"])
+    assert case["query"] not in case["never_text"]
+    echo = [case["query"], f"Spelt like '{case['query']}'"]
+    assert _flagged(echo, case["never_text"]) == []
+    word = case["never_text"][-1]
+    assert _flagged([*echo, f"… a passage with {word} in it …"], case["never_text"]) == [word]
+
+
+def test_each_leak_case_counts_its_checked_words_and_the_file_its_share(
+    made: dict[str, Any],
+) -> None:
+    rows = made["leaks"]
+    assert all(c["words_checked"] == len(c["never_text"]) for c in rows)
+    words = made["counts"]["leaks_words"]
+    with_one = sum(1 for c in rows if c["never_text"])
+    assert words["cases_with_a_word"] == with_one and words["cases"] == len(rows)
+    assert words["measured"] is (with_one >= 0.9 * len(rows))
+    assert words["measured"], "on the small set, the hidden documents' own words remain"

@@ -36,7 +36,19 @@ visible document's text (`visible_corpus`). The words are often visible in their
 partner's number inside the visible record's own `+44…`, a hidden spelling of a name in a visible
 report (step 4's second M10 run on stack d, 14 November 2026: 65 of its never-join cases failed so,
 with no hidden id in any answer). The ids are checked whatever the words. The words dropped are
-counted (`never_text_dropped`).
+counted (`never_text_dropped`). So is a word the case's own query holds: every answer may quote
+the query (the echo `SearchPageResponse.query`, a match's own `why`, "Spelt like '…'"), so the word
+shows there whether or not anything hidden does (step 4's M10 turn after the subject and
+visible-word fixes: all 500 leak cases, which ask the hidden document's own title, failed on its
+quotation in each visible result's `why`, with no hidden id in any answer).
+
+**A leak case's hidden words are more than its title** (the orchestrator's ruling, 14 November
+2026: M10 is a gate, "cannot see, count or infer"): the hidden record's title or name, its other
+string properties, and each distinct word of four or more letters in a hidden document's own text
+(`hidden_words`), less the two drops above. Each case's count of words left is written
+(`words_checked`); a case with none is words-indeterminate, its ids still checked, and the words
+half of the file is measured only where at least 90% of its cases keep one (`counts.json`'s
+`leaks_words`).
 
 Visibility is the product's own rule (`ontology.handling.principal_may_read`, the three axes),
 asked of the principals the subjects stand for (`counts.json`'s `subjects`, the claims step 4's
@@ -53,6 +65,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
@@ -311,12 +324,20 @@ def check_never_join(cases: Iterable[dict[str, Any]], case_records: Mapping[str,
             raise LeakCaseRefused(f"{case['name']}: {PART} cannot read the record it searches by")
 
 
-def _document_texts(folder: Path, source_key: str, only: set[str]) -> Iterator[str]:
-    """The texts of the documents in `only`, in one pass over the source's files."""
+def _document_text_pairs(
+    folder: Path, source_key: str, only: set[str]
+) -> Iterator[tuple[str, str]]:
+    """(id, text) of the documents in `only`, in one pass over the source's files."""
     for path in sorted((folder / source_key).glob("*.texts.jsonl")):
         for row in _rows(path):
             if row["document_id"] in only:
-                yield str(row["text"])
+                yield str(row["document_id"]), str(row["text"])
+
+
+def _document_texts(folder: Path, source_key: str, only: set[str]) -> Iterator[str]:
+    """The texts of the documents in `only`, in one pass over the source's files."""
+    for _id, text in _document_text_pairs(folder, source_key, only):
+        yield text
 
 
 def _strings(value: Any) -> Iterator[str]:
@@ -348,16 +369,47 @@ def seen(word: str, corpus: str) -> bool:
     return word.lower() in corpus
 
 
+def unseen(word: str, case: Mapping[str, Any], corpus: str) -> bool:
+    """Whether `word` can show only by a leak: nothing visible holds it, and the case's own query,
+    which any answer may quote, does not."""
+    return not seen(word, corpus) and word.lower() not in str(case["query"]).lower()
+
+
 def withhold_seen_words(
     cases: list[dict[str, Any]], corpus: str
 ) -> tuple[list[dict[str, Any]], int]:
-    """Each case with its `never_text` cut to the words nothing visible holds, and how many went."""
+    """Each case with its `never_text` cut to the words that can show only by a leak, and how many
+    went."""
     kept, dropped = [], 0
     for case in cases:
-        words = [w for w in case["never_text"] if not seen(w, corpus)]
+        words = [w for w in case["never_text"] if unseen(w, case, corpus)]
         dropped += len(case["never_text"]) - len(words)
         kept.append({**case, "never_text": words})
     return kept, dropped
+
+
+#: A word of a hidden document's text worth checking: four letters or more, so "the" and "was"
+#: are not, though the visible corpus would drop them anyway.
+_WORD = re.compile(r"[A-Za-z][A-Za-z'-]{3,}")
+
+
+def hidden_words(record: Record, text: str | None) -> list[str]:
+    """Every string a leak of `record` could show: its distinguishing words (title or name), its
+    other string properties, and each distinct word of its own text, in a fixed order."""
+    words = [record.words] if record.words else []
+    words += sorted({v for v in _strings(dict(record.props)) if v and v != record.words})
+    words += sorted(set(_WORD.findall(text or "")) - set(words))
+    return list(dict.fromkeys(words))
+
+
+def with_hidden_words(
+    cases: list[dict[str, Any]], case_records: Mapping[str, Record], texts: Mapping[str, str]
+) -> list[dict[str, Any]]:
+    """Each leak case given every word its hidden record could show (`hidden_words`)."""
+    return [
+        {**c, "never_text": hidden_words(case_records[c["hidden"]], texts.get(c["hidden"]))}
+        for c in cases
+    ]
 
 
 def _check_words(cases: Iterable[dict[str, Any]], corpus: str) -> None:
@@ -367,6 +419,11 @@ def _check_words(cases: Iterable[dict[str, Any]], corpus: str) -> None:
                 raise LeakCaseRefused(
                     f"{case['name']}: its hidden word {word!r} is in what {PART} may read, so "
                     "finding it in an answer would be no leak"
+                )
+            if word.lower() in str(case["query"]).lower():
+                raise LeakCaseRefused(
+                    f"{case['name']}: its hidden word {word!r} is in its own query, which an "
+                    "answer may quote, so finding it would be no leak"
                 )
 
 
@@ -399,7 +456,11 @@ def main(argv: list[str] | None = None) -> int:
     eligible = (len(leaks), len(joins))
     leaks, joins = _sample(leaks, "hidden", args.limit), _sample(joins, "hidden", args.limit)
     corpus = visible_corpus(args.folder, args.case, case_records, people[PART])
+    hidden_texts = dict(_document_text_pairs(args.folder, args.case, {c["hidden"] for c in leaks}))
+    leaks = with_hidden_words(leaks, case_records, hidden_texts)
     leaks, leaks_dropped = withhold_seen_words(leaks, corpus)
+    leaks = [{**c, "words_checked": len(c["never_text"])} for c in leaks]
+    with_words = sum(1 for c in leaks if c["never_text"])
     joins, joins_dropped = withhold_seen_words(joins, corpus)
     check_leaks(leaks, case_records, people, units[dataset], corpus)
     check_never_join(
@@ -416,6 +477,13 @@ def main(argv: list[str] | None = None) -> int:
         "leaks_kept_out": dict(sorted(leaks_out.items())),
         "never_join_kept_out": dict(sorted(joins_out.items())),
         "never_text_dropped": {"leaks": leaks_dropped, "never_join": joins_dropped},
+        "leaks_words": {
+            "cases_with_a_word": with_words, "cases": len(leaks),
+            "measured": bool(leaks) and with_words >= 0.9 * len(leaks),
+            "words_checked_min": min((c["words_checked"] for c in leaks), default=0),
+            "words_checked_median": sorted(c["words_checked"] for c in leaks)[len(leaks) // 2]
+            if leaks else 0,
+        },
         "subjects": {
             n: {"clearance": people[n].clearance, "org_unit": people[n].org_unit,
                 "codes": list(people[n].receivable_handling_codes)}
