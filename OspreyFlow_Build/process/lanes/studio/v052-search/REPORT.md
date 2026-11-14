@@ -90,3 +90,30 @@ In progress. The studio lane, from 13 November 2026. The plan is `PLAN.md`; the 
 - **(t) `rules_index_fixes.diff` is gone:** rules landed both fixes in their own branch (3e7d1bc), with plants.
 - **(u) Listed, not fixed:** the query side's client is not closed at shutdown (needs a lifespan edit; the
   orchestrator accepted listing it).
+
+## Gates, at 47e9213 (rebased onto rules' a879b3c, which is on main 4dc97615)
+
+The order was the lane-reviewer and the orchestrator's review of d2b207a, both reviews' findings fixed together,
+the rebase, then the gates once. The raw output of each is in `process/lanes/studio/gates/`.
+
+- **Plants:** `v052-search/plants.py`, offline, each pytest with a fresh `PYTHONPYCACHEPREFIX`. All 38 are red for
+  their stated reason, and the restored tree is green (`PLANTS_RECORD.txt`).
+- **`make test`** (`47e9213.make-test.txt`, explained in `47e9213.make-test.explained.md`):
+  - **this step's:** the leak test's 19 cases, collected offline because the live file is not on the Makefile's
+    live-file `--ignore` list. `makefile_live_ignore.diff` fixes that.
+  - **main's:** 9 known reds.
+  - **environment (the orchestrator, 14 Nov):** 12 setup errors where Keycloak was not ready under load, and 3
+    vitest files timed out under load, which pass on the Mac (`47e9213.vitest-three-on-mac.txt`).
+- **`make -k ci`** (`47e9213.ci.txt`): every check passes but `test-file-coverage-check`, on rules'
+  `test_feed_live.py`, which their pending `ci.yml` diff fixes. With rules' diff, `ci_yml_live_listing.diff` and
+  `makefile_live_ignore.diff` applied: "1060 test file(s), 0 allowlisted, no new drift"
+  (`47e9213.coverage-with-diffs.txt`). The two diffs wait, beside rules' diff, for the owner's yes (MORNING item 1).
+- **Playwright on the Mac's slot 10:**
+  - `keyboard/top-bar.spec.ts`: 14 passed, including the limited line in dark, light and GOV.UK with axe
+    (`47e9213.playwright-top-bar.txt`). Its plant made those three cases red (`…red.txt`).
+  - `a11y/every-harness.spec.ts`'s top-bar harness: 8 passed (`47e9213.axe-top-bar-harness.txt`).
+- **The leased live run on stack f** (`47e9213.live.txt`, explained in `47e9213.live.explained.md`): 35 failed and
+  3574 passed. None of the failures is this step's or rules', and they are the same 35 as at 354d39c, line for line.
+  `test_route_rights.py`, the leak test (19) and rules' feed tests passed.
+
+The lane-reviewer reviewed d2b207a, and its findings and the orchestrator's are fixed at 47e9213.
