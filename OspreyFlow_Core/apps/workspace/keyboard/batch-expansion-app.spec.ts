@@ -110,14 +110,19 @@ for (const look of ["dark", "light", "govuk"] as const) {
       test.setTimeout(90_000);
       await openThePanelInTheApp(page, ending, look);
       await DRAWN[ending](page);
-      // Nothing of the App's covers the panel: its heading and each of its buttons is the topmost thing at its centre.
-      for (const target of [panel(page).getByRole("heading"), ...(await panel(page).getByRole("button").all())]) {
+      // Nothing of the App's covers the panel: its heading, each line of its words and each of its buttons is the
+      // topmost thing at its centre. Over the App's page, axe leaves the panel's words' contrast undecided
+      // ("elmPartiallyObscuring", the fixed panel over the canvas, in every state and look), so a scan reading only
+      // `violations` would pass them unmeasured; `checkUndecidedContrast` below measures each, and this holds that
+      // the panel, not the page under it, is what is read.
+      const lines = panel(page).locator(".batch-expansion__title, .batch-expansion__figure, .batch-expansion__status, .batch-expansion__message");
+      for (const target of [...(await lines.all()), ...(await panel(page).getByRole("button").all())]) {
         const onTop = await target.evaluate((el) => {
           const box = el.getBoundingClientRect();
           const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
           return hit !== null && (el === hit || el.contains(hit));
         });
-        expect(onTop, `${await target.textContent()} is covered by the App's layout`).toBe(true);
+        if ((await target.textContent())?.trim()) expect(onTop, `${await target.textContent()} is covered by the App's layout`).toBe(true);
       }
       // The look is still the one asked for when scanned (the App applies its own theme at load).
       if (look === "light") await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

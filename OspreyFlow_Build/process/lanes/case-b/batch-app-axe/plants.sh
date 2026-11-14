@@ -14,7 +14,7 @@ CSS=$WS/src/design/primitives.css
 : "${OSPREY_PORTS_SLOT:?set the Playwright slot of this lane}"
 git diff --quiet -- "$APP" "$CSS" || { echo "commit first: the plants restore from HEAD"; exit 2; }
 fails=0
-pw() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts "$1" --workers=1 --reporter=line ${2:+--grep "$2"} 2>&1); }
+pw() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts "$1" --workers=1 --reporter=line ${2:+--grep "$2"} 2>&1 | grep -v '^\[WebServer\]'); }
 
 plant() { # name, file, perl substitution, App case grep, App case title, harness grep
   local name="$1" file="$2" sub="$3" grep="$4" title="$5" harness="$6" app own
