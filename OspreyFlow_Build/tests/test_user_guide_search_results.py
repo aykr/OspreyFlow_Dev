@@ -315,7 +315,6 @@ def test_section_5_5_says_the_fallback_pages_only_while_records_remain_and_where
 # ---------------------------------------------------------------- the suggestions box (step 5's sweep, part 4)
 
 FILTERS = _read(SRC / "search" / "SearchFilters.tsx")
-GLOBAL_RAW = (SRC / "search" / "GlobalSearch.tsx").read_text(encoding="utf-8")
 
 
 def suggestions_text(guide: str = GUIDE) -> str:
@@ -358,7 +357,10 @@ def test_section_5_5_gives_the_box_s_limits_as_the_code_holds_them() -> None:
     """One character on screen, nothing asked of the Conduit; with an index, a *Starts with* prefix of at most
     `PREFIX_MAX_CHARS`, a longer one refused with a 422 the box shows as unavailable; the limited line for a
     *Starts with* the graph answered, never for *Contains* or *Exact*."""
-    assert "// Nothing is asked of the Conduit: the nodes are already here, so one character is enough" in GLOBAL_RAW
+    # On screen, the nodes are matched in the Glass before the two-character check is reached, and nothing is asked.
+    on_screen = BOX.index("if (using.onScreenOnly) {")
+    assert "const found = matchOnScreen(" in BOX[on_screen : on_screen + 400]
+    assert on_screen < BOX.index("if (value.length < SUGGEST_MIN_CHARS)")
     assert "Suggestions start at two characters (one, with **Only nodes on screen**)" in suggestions_text()
     mapping = (CORE / "services" / "search_index" / "mapping.py").read_text(encoding="utf-8")
     limit = re.search(r"^PREFIX_MAX_CHARS = (\d+)$", mapping, re.MULTILINE)
