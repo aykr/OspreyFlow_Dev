@@ -128,6 +128,13 @@ if [ "${LIVE_DIAG:-}" = 1 ]; then
     curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$CASE/suggest" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
       -d "{\"query\":\"$q\"}" | head -c 400; echo
   done
+  echo "== a record's resolution as the suggestion route and the search route each return it (Explain cluster needs it)"
+  for route in suggest search; do
+    printf '%s: ' "$route"
+    curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$CASE/$route" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+      -d '{"query":"QQ118439C","page":1,"page_size":20}' |
+      "$PY" -c 'import json,sys; b=json.load(sys.stdin); print([(n["id"], n.get("resolution")) for n in b.get("nodes", [])][:3])'
+  done
   echo "== the case's datasets"
   curl -s "http://127.0.0.1:$CP/v1/investigations/$CASE/datasets" -H "Authorization: Bearer $TOKEN" | head -c 900; echo
   echo "== the index asked directly for the identifier"
