@@ -555,9 +555,10 @@ with sources_in_full():
 
 The read is still made with the request's principal, so the access filter is applied in the adapter as
 before; only the sources are left in. The scope is a context variable, so it holds for the calling task
-alone, and the adapter and its test double honour it. The writers that do this today are
-`services/api/link_changes.py`, `services/api/entity_pictures.py`, `services/extract/writer.py`,
-`services/resolve/trigger.py`, `services/api/pipeline_run.py` and `services/api/alert_queue.py`. The
+alone, and the adapter and its test double honour it. The writers that do this today are `services/api/alert_queue.py`, `services/api/case_gazetteers.py`,
+`services/api/drawn_merge.py`, `services/api/entity_pictures.py`, `services/api/grading.py`,
+`services/api/link_changes.py`, `services/api/pipeline_run.py`, `services/extract/writer.py` and
+`services/resolve/trigger.py`. The
 working set's own writes are covered the same way.
 Never wrap a read whose result goes to the Glass.
 
@@ -790,7 +791,19 @@ Reports Viewer does neither. A composite case's layer is never merged, only dele
 layer on its own. Admin → Datasets' screen offers both as a dry run, and after the delete's dry run
 an administrator may delete the layer there too (section 9.1); the merge is done only here.
 
-**Coming:** merging a drawn dataset into another. A waiting promotion grows overdue after the days
+**Merging a drawn dataset into another.** In **4 Runs**, *Merge into a dataset…* is offered for a drawn dataset
+to someone who may merge it: an Author of the target dataset holding `merge_datasets`. It takes four steps.
+**1. Map the models**: each drawn type onto a type of the target's live model, or left out, saying why, and a
+retyped type's properties each placed in one of its new type's, or not carried. **2. Match**: the *Looks like a
+loaded item* pairs, read within the target alone, each chosen one written as a proposed match (inferred and scored)
+that a person confirms later; nothing is merged in storage. **3. Dry run**: what would be added and matched, with
+nothing written. **4. Merge**, or **4. Send for review** where the target's policy asks for a second person: one
+load into the target, all or nothing, under its highest marking, listed with its promotions and reverted as a
+promotion is. Afterwards the drawing's home case reads the target, and the drawn dataset read-only; each of its
+boards becomes a view, and what did not become data is shown on the view as annotations, each reader seeing only
+what their own handling allows.
+
+A waiting promotion grows overdue after the days
 set in Admin → Operations (administration guide, section 9.11).
 
 ## 8. Screening lists
@@ -800,7 +813,7 @@ Studio, **2 Sources → screening lists** imports a list once for the deployment
 its publisher's format, each import that changes its rows a new version, refreshed by hand or on a
 schedule (`load_screening_lists`); each dataset then **subscribes** to the lists its rules read
 (`add_ingest_files`). A list of real people is refused unless this device's real-data exceptions name
-it. How lists raise alerts is rewritten with the alerts journey (coming). A list can also be loaded,
+it. How a list raises alerts, through a rule on a screening list, is in the user guide, sections 7.4 to 7.6. A list can also be loaded,
 whole, from a YAML file on the server:
 
 ```

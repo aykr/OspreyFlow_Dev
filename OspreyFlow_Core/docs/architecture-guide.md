@@ -151,7 +151,9 @@ deployment's scheme and a source. A drawing started with no case makes a **drawn
 own, with its home case and a board. **Promotion** sends drawn items into the case's dataset as one
 load, checked against its highest marking and model, committed at once or reviewed by one of its
 Authors first, as the dataset's policy says; a removed case's layer is merged the same way or deleted.
-**Coming:** merging a drawn dataset into another.
+A drawn dataset is **merged into another** the same way, as one load into the target, after its types are
+mapped onto the target's model and its likely matches proposed as scored links for a person to confirm (never
+merged in storage); its boards then become views of the case.
 
 **Views, never branches.** A **case view** is a saved lens on a case: what was drawn, the filters and
 the period. Opening one reads the case through it, read-only. There are no branches and no copies of
