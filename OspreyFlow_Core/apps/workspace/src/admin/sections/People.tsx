@@ -494,11 +494,12 @@ function PersonRow({
   const [removing, setRemoving] = useState(false);
   const others = (person.roles ?? []).filter((r) => !ROLE_IDS.has(r) && !customIds.has(r));
   // Route A2: a box is decided as the Conduit decides the change it makes, over what the person holds now (their
-  // single grants and older roles too); a box already ticked can always be unticked, since that gives nothing.
+  // single grants and older roles too). A box already ticked adds nothing, so it is always offered: unticking gives
+  // nothing.
   const held = person.roles ?? [];
   const now = [...chosen, ...others];
   const withheld = (role: string) =>
-    chosen.has(role) ? [] : withheldRights([...now, role], held, ctx).filter((r) => !withheldRights(now, held, ctx).includes(r));
+    withheldRights([...now, role], held, ctx).filter((r) => !withheldRights(now, held, ctx).includes(r));
   const reasonId = (role: string) => `withheld-${person.id}-${role}`;
   const presetRoles = [...[...chosen].filter((r) => !ROLE_IDS.has(r)), ...SUPER_USER];
   const presetWithheld = withheldRights([...presetRoles, ...others], held, ctx);
