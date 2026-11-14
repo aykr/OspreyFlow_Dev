@@ -7,7 +7,8 @@
 // into one row (ADR-132 Amendment 8).
 //
 // In the Glass the banner is the case line (the owner's navigation decision of 13 November 2026, ADR-145
-// Amendment 15, replacing Amendment 13's mode toggle and note): "Case ‹switcher› · Views in this case · reads …".
+// Amendment 15, replacing Amendment 13's mode toggle and note; its words ADR-145 Amendment 17's): "Case ‹switcher›
+// › Saved view: ‹name› · Saved views (n) · reads …", the saved view named only while one is open.
 // Graph, Map, Drawing board and Reports are the top bar's one view switch. `sections` and `note` remain for a
 // place that has them; the Glass passes none. A section with no `onSelect` is drawn as coming. Not drawn in the Studio: its dataset
 // ("Dataset ‹name› ▾"), which the Studio chooses itself, in its own *Dataset* select
@@ -48,11 +49,27 @@ export interface ContextBannerProps {
   /** The names of the datasets the open case reads; `null` while read or when refused. */
   datasets?: readonly string[] | null;
   crossLink?: CrossLink | null;
-  /** The case line's *Views in this case* (the owner's navigation decision, ADR-145 Amendment 15): opens the Cases
-   * panel at its views list. In the Glass only. */
+  /** The case line's *Saved views (n)* (ADR-145 Amendment 17, amending Amendment 15's *Views in this case*): opens the
+   * saved views panel. In the Glass only. */
   onViews?: () => void;
-  /** Whether the Cases panel *Views in this case* opens is open (its `aria-expanded`). */
+  /** Whether the panel *Saved views* opens is open (its `aria-expanded`). */
   viewsOpen?: boolean;
+  /** How many saved views of the case this reader may see, for *Saved views (n)*; `null` while read or refused. */
+  savedViews?: number | null;
+  /** The saved view open over the canvas, named after the case as "› Saved view: ‹name›" (Amendment 17); none, nothing. */
+  openView?: string | null;
+}
+
+/** The case line's *Saved views* button, where focus goes back to from the strip's *Back to the whole case* and from the
+ * panel's *The whole case* (ADR-145 Amendment 17). */
+export const SAVED_VIEWS_BUTTON = "[data-saved-views-button]";
+export function focusSavedViewsButton(): void {
+  document.querySelector<HTMLElement>(SAVED_VIEWS_BUTTON)?.focus();
+}
+
+/** The case line's button's words: *Saved views (n)*, n as the reader may see them; *Saved views* while unread. */
+export function savedViewsLabel(count: number | null | undefined): string {
+  return typeof count === "number" ? `Saved views (${count.toLocaleString("en-GB")})` : "Saved views";
 }
 
 const YOU_ARE_IN: Record<PlaceId, string> = {
@@ -93,7 +110,7 @@ export function useCaseContext(
   return read && read.id === investigationId ? read : { name: null, datasets: null };
 }
 
-export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink, onViews, viewsOpen = false }: ContextBannerProps) {
+export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink, onViews, viewsOpen = false, savedViews, openView }: ContextBannerProps) {
   const govuk = currentBrand() === "govuk";
   // The place opens the line in both brands (ADR-132 Amendment 8 folded GOV.UK's title into it), so each
   // part after it is set off by a separator.
@@ -131,12 +148,14 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
         </>
       )}
       {place === "glass" && caseSwitcher && (
-        // The owner's navigation decision (ADR-145 Amendment 15): "Case ‹switcher› · Views in this case · reads …",
+        // The owner's navigation decision (ADR-145 Amendment 15, its words Amendment 17's): "Case ‹switcher› · Saved views (n) · reads …",
         // with the word "Case" visible; the switcher's name keeps its own "Case:" for a screen reader.
         <>
           {next()}
           <span className="context-banner__label" aria-hidden="true">Case</span>
           {caseSwitcher}
+          {/* ADR-145 Amendment 17: what is open, after the case's name; nothing while the whole case is. */}
+          {openView && <span className="context-banner__open-view">› Saved view: {openView}</span>}
           {onViews && (
             <>
               {next()}
@@ -145,9 +164,10 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
                 className={govuk ? "govuk-link context-banner__section" : "context-banner__section"}
                 aria-haspopup="dialog"
                 aria-expanded={viewsOpen}
+                data-saved-views-button=""
                 onClick={onViews}
               >
-                Views in this case
+                {savedViewsLabel(savedViews)}
               </button>
             </>
           )}

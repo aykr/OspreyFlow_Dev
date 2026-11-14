@@ -40018,3 +40018,51 @@ Left, in CARRIES (post-cut):
 - `transcribe()` and `embed()` keep their old paths. Both default to the deployment's own models.
 - The provider's 429 is measured through a stub answering Gemini's documented body, not a real exhausted
   quota. The bad-key refusal is a real Google answer.
+
+### ADR-145, Amendment 17 (14 November 2026) — "View" means a saved view only, and the way back to the whole case
+
+The owner's exception to the closed list, 14 November 2026: they tried the new Glass and got lost in it. The screen used
+"view" for three things (*More views*, other ways to show the case; *Views in this case*, saved selections; the graph
+toolbar's *Views*, the same saved selections), and *Clear view* was a fourth; once a saved view was open, the way back
+was a grey button in the middle of a strip, and nothing on the case line said a saved view was open. Amends Amendment
+15's words and case line; ADR-144 Amendment 6 withdraws the toolbar's *Views*.
+
+1. **"View" is kept for saved views.** The top bar's menu after the view switch says **More**, named for a screen reader
+   **More ways to show the case** (its panel too); while one of its own is open it says that one's name, as before, and
+   is named by it (WCAG 2.5.3). `shell/railLayout.ts`'s `MORE_LABEL` and `MORE_NAME`. The case line's *Views in this
+   case* is **Saved views (n)**, n the saved views of the case this reader may see (the case's own `GET …/views`, read
+   again whenever the views are; *Saved views* while unread). The toolbar's *Clear view* is **Clear the graph**; the
+   strip says **Saved view: ‹name›** and **Nothing in a saved view changes the case.**; the canvas's notice in a saved
+   view, **This is a saved view: nothing in it changes the case. Go back to the whole case to change it.**
+2. **The way back.** **Back to the whole case** is the strip's first item: a link's look, and under GOV.UK GOV.UK's
+   back link (`govuk-back-link`). The case line names what is open after the case: **› Saved view: ‹name›**, and
+   nothing while the whole case is. With no saved view open, the strip says **You are looking at the whole case.**
+3. **Focus.** Opening a saved view moves focus to the strip (its region, *Saved view*), so a keyboard user hears which
+   is open; *Back to the whole case* is the next Tab, and it returns focus to the case line's *Saved views*.
+4. **The panel** (built by case-b, `views/ViewsPanel.tsx` and App's drawer). From the case line the drawer is titled
+   **Saved views** and holds the views alone. Its list starts with **The whole case**, marked **Open now** while no
+   saved view is open, or offering **Open the whole case**, which does what the back link does; the open saved view is
+   tagged **Open now** and offers no *Open*. A view saved under the Glass's default name (*Selection of N node(s)*) is
+   told apart in the list by its first item and when it was saved: the Conduit answers each chosen-node view's
+   `first_item`, the first of its chosen nodes, in the order chosen, that this reader may see now. It is read by id
+   through the adapter's access step (rule 3) and named as the canvas names it. A node hidden from them is passed
+   over and never named, and none to show gives `null` ("Saved 14 Nov 2026, 12:01" alone). It is read once, within a
+   bound of 50 ids, whatever the reader may see. A view its creator named shows its name alone. Tests:
+   `test_case_views.py`'s first-item cases, `ViewsPanel.test.tsx`, `keyboard/saved-views-panel.spec.ts`.
+
+**Tests.** `src/App.views.test.tsx` (the real App: no toolbar *Views*; the whole-case strip and an empty case line; a
+saved view opened from *Saved views (1)* takes focus to the strip, whose first control is *Back to the whole case*, the
+case line names it; back puts the whole case and focus on *Saved views* again); `keyboard/views.spec.ts` (the same by
+keyboard alone in the dark, light and GOV.UK looks, the GOV.UK back link's class; rule 13), `keyboard/rules-place.spec.ts`
+and `keyboard/view-over-cap.spec.ts` (focus on the strip, *Back to the whole case* its first Tab), and every keyboard,
+jsdom and accessibility case that named the old words. The red record is
+`process/lanes/case/gates/saved-views-reds.<head>.log`.
+
+### ADR-144, Amendment 6 (14 November 2026) — Amendment 3's *Views* menu on the graph's toolbar is withdrawn
+
+On the owner's word, 14 November 2026 (ADR-145 Amendment 17): a second route to the same saved views, named *Views*,
+was one of the screen's four meanings of "view". The case line's **Saved views (n)** is the one route to a case's saved
+views. `views/ViewsMenu.tsx`, its test and `GlassCanvas`'s `viewsMenu` slot are removed; the keyboard registry's
+`open-a-view-from-views-by-the-graph-by-keyboard` becomes
+`open-a-saved-view-from-the-case-line-and-back-to-the-whole-case-by-keyboard` (`keyboard/views.spec.ts`).
+`src/App.views.test.tsx` holds that the toolbar has no *Views*.

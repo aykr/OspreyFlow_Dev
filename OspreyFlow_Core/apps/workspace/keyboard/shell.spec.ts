@@ -141,9 +141,9 @@ test("each view is chosen by keyboard: Graph, Map, Drawing board and Reports, th
     await page.keyboard.press("Enter");
   }
   for (const name of ["Matrix", "Figures", "Ownership", "Connection strength"]) {
-    await page.getByRole("button", { name: "More views" }).focus();
+    await page.getByRole("button", { name: "More ways to show the case" }).focus();
     await page.keyboard.press("Enter");
-    const more = page.getByRole("group", { name: "More views" });
+    const more = page.getByRole("group", { name: "More ways to show the case" });
     await expect(more.getByRole("button")).toHaveText(["Matrix", "Figures", "Ownership", "Connection strength"]);
     await more.getByRole("button", { name }).focus();
     await page.keyboard.press("Enter");
@@ -318,16 +318,16 @@ test("from Messages, the cross-link and a case change in the Studio come Back to
   await expect(page.getByText("glass, map, on case harrier")).toBeVisible();
 });
 
-// The owner's navigation decision (ADR-145 Amendment 15, rule 13): the case line, "You are in the Glass · Case ‹switcher›
-// · Views in this case · reads …", the word Case visible, no mode toggle and no note; Views in this case opens the
-// Cases panel by keyboard, and Escape returns focus to it.
-test("the case line's Views in this case opens the Cases panel by keyboard, and focus returns to it", async ({ page }) => {
+// The owner's navigation decision (ADR-145 Amendment 15, rule 13; its words Amendment 17's): the case line, "You are in
+// the Glass · Case ‹switcher› · Saved views (n) · reads …", the word Case visible, no mode toggle and no note; Saved
+// views opens its panel by keyboard, and Escape returns focus to it.
+test("the case line's Saved views opens its panel by keyboard, and focus returns to it", async ({ page }) => {
   await page.goto("/keyboard/places-harness.html?rights=investigate,read_alert_queue,triage_alerts");
   const region = page.getByRole("region", { name: "You are in the Glass" });
   await expect(region.getByRole("navigation")).toHaveCount(0);
   await expect(region).not.toHaveAttribute("aria-describedby");
-  await expect(region).toContainText(/You are in the Glass\s*·\s*Case\s*Case: Kestrel\s*▾\s*·\s*Views in this case\s*·\s*reads Prison intel/);
-  const views = region.getByRole("button", { name: "Views in this case" });
+  await expect(region).toContainText(/You are in the Glass\s*·\s*Case\s*Case: Kestrel\s*▾\s*·\s*Saved views \(2\)\s*·\s*reads Prison intel/);
+  const views = region.getByRole("button", { name: "Saved views (2)", exact: true });
   await views.focus();
   await page.keyboard.press("Enter");
   const panel = page.getByRole("dialog", { name: "Cases" });
@@ -372,9 +372,9 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     await group.getByRole("button", { name: "Reports", exact: true }).focus();
     await page.keyboard.press("Enter");
     await expect(pressed).toHaveText(["Reports"]);
-    await page.getByRole("button", { name: "More views" }).focus();
+    await page.getByRole("button", { name: "More ways to show the case" }).focus();
     await page.keyboard.press("Enter");
-    await page.getByRole("group", { name: "More views" }).getByRole("button", { name: "Ownership" }).focus();
+    await page.getByRole("group", { name: "More ways to show the case" }).getByRole("button", { name: "Ownership" }).focus();
     await page.keyboard.press("Enter");
     await expect(pressed).toHaveCount(0);
     await expect(page.locator(".menu-button--pressed")).toHaveText(/^Ownership/);
@@ -498,13 +498,13 @@ for (const place of ["glass", "ingest", "rules", "admin"] as const) {
     const rowSize = await region.evaluate((e) => getComputedStyle(e.querySelector(".govuk-notification-banner__content") ?? e).fontSize);
     expect.soft(await heading.evaluate(size), "the title at the row's size").toBe(rowSize);
     if (place === "glass") {
-      // ADR-145 Amendment 15: the case line, its Views in this case on the title's row and at its size (Graph left the row).
+      // ADR-145 Amendment 15: the case line, its Saved views (Amendment 17) on the title's row and at its size (Graph left the row).
       const title = await heading.boundingBox();
-      const views = region.getByRole("button", { name: "Views in this case", exact: true });
+      const views = region.getByRole("button", { name: /^Saved views/ });
       const caseLine = await views.boundingBox();
-      expect.soft(Math.abs(title!.y + title!.height / 2 - (caseLine!.y + caseLine!.height / 2)), "on the same row as Views in this case").toBeLessThan(6);
+      expect.soft(Math.abs(title!.y + title!.height / 2 - (caseLine!.y + caseLine!.height / 2)), "on the same row as Saved views").toBeLessThan(6);
       expect.soft(title!.x, "at the row's start").toBeLessThan(caseLine!.x);
-      expect.soft(await views.evaluate(size), "Views in this case at the row's size").toBe(rowSize);
+      expect.soft(await views.evaluate(size), "Saved views at the row's size").toBe(rowSize);
     }
   });
 }
@@ -516,12 +516,12 @@ for (const [width, most] of [[1440, 40], [1024, 72]] as const) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto("/keyboard/places-harness.html?banner=1&brand=govuk");
     const region = page.getByRole("region", { name: "You are in the Glass" });
-    const views = region.getByRole("button", { name: "Views in this case" });
+    const views = region.getByRole("button", { name: /^Saved views/ });
     await expect(views).toBeVisible();
     const box = (await region.boundingBox())!;
     const line = (await views.boundingBox())!;
     expect.soft(box.height, "the region's height").toBeLessThanOrEqual(most);
-    expect.soft(line.y >= box.y && line.y + line.height <= box.y + box.height, "Views in this case inside the region").toBe(true);
+    expect.soft(line.y >= box.y && line.y + line.height <= box.y + box.height, "Saved views inside the region").toBe(true);
   });
 }
 
@@ -751,7 +751,7 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     await expect(link).toHaveAttribute("href", "https://bi.example.invalid");
     await expect(link).toHaveAttribute("target", "_blank");
     await page.keyboard.press("Tab");
-    await expect(page.getByRole("button", { name: "More views" })).toBeFocused();
+    await expect(page.getByRole("button", { name: "More ways to show the case" })).toBeFocused();
     const box = (await link.boundingBox())!;
     expect(box.height).toBeGreaterThanOrEqual(24);
     registerCovered(REGISTRY, "build-a-report-by-keyboard");
@@ -776,17 +776,17 @@ for (const look of ["ospreyflow", "govuk"] as const) {
     for (const id of views) {
       await expect(group.getByRole("button", { name: names[id], exact: true })).toHaveCount(0);
       // The button names the view open when that is folded (Graph, in this harness, when Graph has folded).
-      await page.getByRole("button", { name: views.includes("graph") ? /^Graph/ : /^More views/ }).focus();
+      await page.getByRole("button", { name: views.includes("graph") ? /^Graph/ : /^More ways to show the case/ }).focus();
       await page.keyboard.press("Enter");
-      const more = page.getByRole("group", { name: "More views" });
+      const more = page.getByRole("group", { name: "More ways to show the case" });
       await more.getByRole("button", { name: names[id], exact: true }).focus();
       await page.keyboard.press("Enter");
       await expect(more).toHaveCount(0);
     }
     expect(await page.evaluate(() => window.__TOPBAR__?.views)).toEqual(views);
-    await page.getByRole("button", { name: views.includes("graph") ? /^Graph/ : /^More views/ }).focus();
+    await page.getByRole("button", { name: views.includes("graph") ? /^Graph/ : /^More ways to show the case/ }).focus();
     await page.keyboard.press("Enter");
-    const link = page.getByRole("group", { name: "More views" }).getByRole("link", { name: "Build a report (opens in new tab)" });
+    const link = page.getByRole("group", { name: "More ways to show the case" }).getByRole("link", { name: "Build a report (opens in new tab)" });
     await expect(link).toHaveAttribute("href", "https://bi.example.invalid");
     await expect(link).toHaveAttribute("target", "_blank");
     await link.focus();

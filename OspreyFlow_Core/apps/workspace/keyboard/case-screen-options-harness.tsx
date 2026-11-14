@@ -123,7 +123,7 @@ function Harness() {
         views={views}
         actions={
           <>
-            {(variant === "b" || variant === "c") && <MoreMenu label="More views" items={["Matrix", "Figures"]} />}
+            {(variant === "b" || variant === "c") && <MoreMenu label="More" items={["Matrix", "Figures"]} />}
             <button type="button" className="btn" aria-haspopup="dialog">Export <span aria-hidden="true">▾</span></button>
           </>
         }

@@ -12,7 +12,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vi
 
 import type { App as AppComponent } from "./App";
 import type { GlassCanvasProps } from "./canvas/GlassCanvas";
-import type { ReactElement } from "react";
 import type { LimitExceeded } from "./workingset/models";
 
 const canvasProps: { current: Partial<GlassCanvasProps> | null } = { current: null };
@@ -147,9 +146,9 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     await waitFor(() => expect(sent.find((s) => s.url.endsWith("/inv-1/batch-expansions"))).toBeTruthy());
     expect(sent.find((s) => s.url.endsWith("/inv-1/batch-expansions"))!.body).toEqual({ request: { node_ids: ["p1"], depth: 1, edge_types: null } });
     const open = await screen.findByRole("button", { name: "Open the view" }, { timeout: 5000 });
-    expect(screen.queryByRole("region", { name: "Open view" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Saved view" })).toBeNull();
     fireEvent.click(open);
-    const lens = await screen.findByRole("region", { name: "Open view" });
+    const lens = await screen.findByRole("region", { name: "Saved view" });
     expect(within(lens).getByText("Kestrel, expanded")).toBeTruthy();
     // Its work done, the panel closes; the lens says what is open.
     await waitFor(() => expect(panel()).toBeNull());
@@ -161,7 +160,7 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
     act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
     fireEvent.click(await screen.findByRole("button", { name: "Open the view" }, { timeout: 5000 }));
-    await screen.findByRole("region", { name: "Open view" });
+    await screen.findByRole("region", { name: "Saved view" });
     await waitFor(() => expect(canvasProps.current?.lens).toBe(true));
     expect(canvasProps.current?.onRunExpansionAsBatch).toBeUndefined();
    }, 15_000);
@@ -193,13 +192,14 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
     fireEvent.click(await screen.findByRole("button", { name: "Open the view" }, { timeout: 5000 }));
     await waitFor(() => expect(sent.some((s) => s.url.endsWith("/inv-1/views/v-batch"))).toBe(true));
-    const viewsMenu = canvasProps.current!.viewsMenu as ReactElement<{ onOpen: (view: { id: string }) => void }>;
-    act(() => viewsMenu.props.onOpen({ id: "v-shared" }));
-    const lens = await screen.findByRole("region", { name: "Open view" });
+    // Another saved view, opened the one way there is (ADR-144 Amendment 6): the case line's *Saved views (n)*.
+    fireEvent.click(await screen.findByRole("button", { name: "Saved views (1)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open Payments in March" }));
+    const lens = await screen.findByRole("region", { name: "Saved view" });
     expect(within(lens).getByText("Payments in March")).toBeTruthy();
     await act(async () => releaseBatchView());
     await new Promise((r) => setTimeout(r, 40));
-    expect(within(screen.getByRole("region", { name: "Open view" })).getByText("Payments in March")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Saved view" })).getByText("Payments in March")).toBeTruthy();
   }, 15_000);
 
   test("a second choice while the first runs opens its own panel, which follows the job the Conduit names", async () => {
@@ -259,9 +259,10 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
     act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
     expect(await screen.findByRole("button", { name: "Try the batch job again" }, { timeout: 5000 })).toBeTruthy();
-    const viewsMenu = canvasProps.current!.viewsMenu as ReactElement<{ onOpen: (view: { id: string }) => void }>;
-    act(() => viewsMenu.props.onOpen({ id: "v-shared" }));
-    await screen.findByRole("region", { name: "Open view" });
+    // Another saved view, opened the one way there is (ADR-144 Amendment 6): the case line's *Saved views (n)*.
+    fireEvent.click(await screen.findByRole("button", { name: "Saved views (1)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open Payments in March" }));
+    await screen.findByRole("region", { name: "Saved view" });
     expect(panel()).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Try the batch job again" })).toBeNull();
   }, 15_000);

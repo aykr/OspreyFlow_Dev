@@ -59,6 +59,15 @@
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); padding: var(--sp-6) var(--sp-12);
   background: var(--surface-raised); border-bottom: 1px solid var(--border); font-size: var(--fs-13); color: var(--text-primary);
 }
+.view-lens-banner:focus { outline: none; }
+.view-lens-banner:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: calc(-1 * var(--focus-width)); }
+/* ADR-145 Amendment 17: *Back to the whole case*, the strip's first item, a link's look with a 24 px target (WCAG 2.2,
+   2.5.8); under GOV.UK it is `govuk-back-link`, its chevron and focus GOV.UK's own. */
+.view-lens-banner__whole {
+  min-height: 24px; padding: 0; border: 0; background: none; color: var(--text-primary);
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font: inherit;
+}
+.view-lens-banner .govuk-back-link { margin: 0; }
 .view-lens-banner__name { font-weight: 600; }
 .view-lens-banner__note { color: var(--text-secondary); }
 .view-lens-banner__back { margin-left: auto; min-height: var(--h-control-24); }

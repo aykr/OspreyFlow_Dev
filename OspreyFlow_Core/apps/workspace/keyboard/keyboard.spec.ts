@@ -1411,7 +1411,7 @@ test("in an opened view the canvas offers nothing that changes the case, and say
   for (const name of ["Expand", "Remove from view", "Show links among these"]) {
     await expect(bar.getByRole("button", { name })).toHaveCount(0);
   }
-  for (const name of ["Clear view", "Add files", "Show links among all"]) {
+  for (const name of ["Clear the graph", "Add files", "Show links among all"]) {
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
       0,
     );
@@ -1444,7 +1444,7 @@ test("in an opened view the canvas offers nothing that changes the case, and say
   ]);
 });
 
-test("Clear view asks first, and clears only after Enter on the confirmation", async ({
+test("Clear the graph asks first, and clears only after Enter on the confirmation", async ({
   page,
 }) => {
   await page.goto("/keyboard/harness.html");
@@ -1459,10 +1459,10 @@ test("Clear view asks first, and clears only after Enter on the confirmation", a
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
-  await tabTo(page, page.getByRole("button", { name: "Clear view" }));
+  await tabTo(page, page.getByRole("button", { name: "Clear the graph" }));
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("alertdialog", { name: "Clear the view" }),
+    page.getByRole("alertdialog", { name: "Clear the graph" }),
   ).toBeVisible();
   expect(body).toBeNull();
 
@@ -2531,7 +2531,7 @@ test("a double-click inside a box folds the group, and a double-click on the Gro
   // to it pushes the rest left. A folded group can sit right under the strip, and the double-click
   // then lands on a button instead of on the Group Node. This case is about the gesture on the
   // canvas, not about the strip, so the strip is made to pass the pointer through for its length.
-  await page.getByRole("button", { name: "Clear view" }).evaluate((button) => {
+  await page.getByRole("button", { name: "Clear the graph" }).evaluate((button) => {
     const strip = button.parentElement?.parentElement;
     if (strip) strip.style.pointerEvents = "none";
   });

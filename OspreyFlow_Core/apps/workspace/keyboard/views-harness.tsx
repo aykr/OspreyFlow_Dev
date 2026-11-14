@@ -1,7 +1,7 @@
 // Case views keyboard harness (ADR-144; the owner's ruling of 8 November 2026, Amendment 2): the Cases
 // drawer's *Views in this case* and the cases list with their views, the *Save as a view* form, and
-// the banner over an opened view. `?show=menu` (Amendment 3): the graph's *Views ▾*, a view chosen there
-// opening the lens banner as `App.tsx`'s `openLens` does, and *Back to the case* closing it. The Conduit is a stand-in kept here, so that the axe scan of every
+// the strip over an opened saved view. `?show=way-back` (ADR-145 Amendment 17): the case line's *Saved views (n)*, a
+// saved view opened from its panel into the strip as `App.tsx`'s `openLens` does, and *Back to the whole case*. The Conduit is a stand-in kept here, so that the axe scan of every
 // harness (`a11y/every-harness.spec.ts`) sees the panel filled: it answers each reader as the store
 // does, Alice's private view to Alice alone (`?as=bob` reads as another member of the case). What was
 // sent and what was opened are on `window.__VIEWS__`.
@@ -13,8 +13,8 @@ import "../src/design/primitives.css";
 import { Drawer } from "../src/design/primitives/Drawer";
 import { CaseList } from "../src/investigation/CaseList";
 import { SaveViewForm } from "../src/views/SaveViewForm";
-import { ViewLensBanner } from "../src/views/ViewLensBanner";
-import { ViewsMenu } from "../src/views/ViewsMenu";
+import { ViewLensBanner, WholeCaseStrip } from "../src/views/ViewLensBanner";
+import { ContextBanner, focusSavedViewsButton } from "../src/shell/ContextBanner";
 import { ViewsPanel } from "../src/views/ViewsPanel";
 import { applyHarnessBrand } from "./brandHarness";
 
@@ -96,50 +96,54 @@ if (params.get("asking") === "delete") {
   requestAnimationFrame(ask);
 }
 
-/** The graph's *Views ▾* in its toolbar's View group, and the lens a chosen view opens (`?show=menu`). */
-function ByTheGraph() {
+/** The way back to the whole case (`?show=way-back`, ADR-145 Amendment 17), as `App.tsx` draws it: the case line with
+ * *Saved views (n)* and, while one is open, "› Saved view: ‹name›"; the saved views panel it opens (the real one); and
+ * the strip over the canvas, *Back to the whole case* first, or "You are looking at the whole case." with none open.
+ * Opening a saved view takes focus to the strip; the back link puts it on *Saved views* again. */
+function WayBack() {
   const [lens, setLens] = useState<{ id: string; name: string; shared: boolean } | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
   return (
     <>
-      {lens && (
+      <ContextBanner
+        place="glass"
+        caseSwitcher={<span className="value">Operation Ledger (synthetic demo)</span>}
+        onViews={() => setPanelOpen((open) => !open)}
+        viewsOpen={panelOpen}
+        savedViews={views.c1!.length}
+        openView={lens?.name ?? null}
+      />
+      {panelOpen && (
+        <ViewsPanel
+          apiBaseUrl="http://keyboard-test.invalid"
+          bearerToken="unused"
+          caseId="c1"
+          me={reader}
+          openViewId={lens?.id ?? null}
+          onOpen={(view) => {
+            window.__VIEWS__!.opened = view.id;
+            setPanelOpen(false);
+            setLens({ id: view.id, name: view.name, shared: view.shared });
+          }}
+        />
+      )}
+      {lens ? (
         <ViewLensBanner
+          key={lens.id}
           name={lens.name}
           shared={lens.shared}
           missing={0}
           onBack={() => {
             window.__VIEWS__!.back = true;
             setLens(null);
+            requestAnimationFrame(() => focusSavedViewsButton());
           }}
         />
+      ) : (
+        <WholeCaseStrip />
       )}
-      <div role="toolbar" aria-label="Canvas tools" className="canvas-toolbar">
-        <div role="group" aria-label="View" className="canvas-toolbar__group canvas-toolbar__group--end">
-          <ViewsMenu
-            apiBaseUrl="http://keyboard-test.invalid"
-            bearerToken="unused"
-            caseId="c1"
-            openViewId={lens?.id ?? null}
-            onOpen={(view) => {
-              window.__VIEWS__!.opened = view.id;
-              setLens({ id: view.id, name: view.name, shared: view.shared });
-            }}
-          />
-        </div>
-      </div>
-      {/* Room under the toolbar for the menu's panel, laid over the canvas in the Glass. */}
-      <div style={{ height: 160 }} />
     </>
   );
-}
-
-// `?show=menu&open=1`: the menu drawn open, for the axe scan.
-if (show === "menu" && params.get("open") === "1") {
-  const press = () => {
-    const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("Views"));
-    if (button) button.click();
-    else requestAnimationFrame(press);
-  };
-  requestAnimationFrame(press);
 }
 
 const listed = (
@@ -163,7 +167,7 @@ const listed = (
 
 createRoot(container).render(
   <div style={{ display: "grid", gap: "var(--sp-16)", padding: "var(--sp-12)", background: "var(--surface-panel)" }}>
-    {show === "menu" && <ByTheGraph />}
+    {show === "way-back" && <WayBack />}
     {show === "lens" && (
       <ViewLensBanner name="Payments in March" shared missing={2} onBack={() => (window.__VIEWS__!.back = true)} />
     )}
@@ -194,7 +198,7 @@ createRoot(container).render(
         onCancel={() => undefined}
       />
     )}
-    {params.get("in") === "drawer" ? (
+    {show === "way-back" ? null : params.get("in") === "drawer" ? (
       // ADR-145 Amendment 14 decision 1: `?in=drawer` draws the panel and the list as `App.tsx`'s Cases drawer
       // does, in the real 360 px drawer, where the owner saw Open cover the Private tag.
       <Drawer open onClose={() => undefined} title="Cases">

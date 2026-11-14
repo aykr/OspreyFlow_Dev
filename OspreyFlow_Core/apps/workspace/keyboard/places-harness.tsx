@@ -130,9 +130,11 @@ function Harness() {
       />
       <ContextBanner
         place={place}
-        // Amendment 15: no mode toggle and no note; the case line's *Views in this case* opens the Cases panel.
+        // Amendment 15: no mode toggle and no note; the case line's *Saved views (n)* opens the Cases panel (Amendment 17).
         onViews={place === "glass" ? () => toggle("cases") : undefined}
         viewsOpen={panels.has("cases")}
+        // ADR-145 Amendment 17: *Saved views (n)*, the harness's case holding two this reader may see.
+        savedViews={2}
         caseSwitcher={place === "admin" ? undefined : caseMenu}
         datasets={place === "glass" ? ["Prison intel"] : null}
         crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {
@@ -195,8 +197,8 @@ if (opening) {
       opening === "explore"
         ? document.querySelector<HTMLButtonElement>('nav[aria-label="Workspace"] button[aria-label="Explore"]')
         : opening === "cases"
-          ? [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Views in this case")
-          : [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("More views"));
+          ? [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("Saved views"))
+          : [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("More"));
     if (button) button.click();
     else setTimeout(press, 50);
   };

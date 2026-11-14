@@ -63,6 +63,13 @@ export const VIEW_LABELS: Record<SwitchView, string> = {
   strength: "Connection strength",
 };
 
+/** The menu after the view switch (the owner's wording of 14 November 2026, ADR-145 Amendment 17, amending
+ * Amendment 15's "More views"): "view" is kept for saved views alone, so the button says *More* and is named, for a
+ * screen reader, for what it holds. When a way of showing the case under it is open, the button says that one's name
+ * instead (and is named by it, WCAG 2.5.3). */
+export const MORE_LABEL = "More";
+export const MORE_NAME = "More ways to show the case";
+
 /** The views offered, split between the switch and More views, each in its order. Someone offered none of the
  * switch's (the built-in Administrator, offered Connection strength alone) has theirs in the switch itself. */
 export function splitViews<T extends { id: string }>(offered: readonly T[]): { main: T[]; more: T[] } {

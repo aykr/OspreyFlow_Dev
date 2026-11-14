@@ -113,18 +113,34 @@ afterEach(() => {
 });
 
 
-describe("Views ▾ by the graph (ADR-144 Amendment 3)", () => {
-  test("a view chosen from Views opens as the read-only lens, as the drawer opens it, and Back puts the case back", async () => {
+describe("saved views and the way back to the whole case (ADR-145 Amendment 17, ADR-144 Amendment 6)", () => {
+  test("a saved view opened from the case line takes focus to its strip, is named on the case line, and Back to the whole case puts the case back and focus on Saved views", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
-    const views = within(screen.getByRole("toolbar", { name: "Canvas tools" })).getByRole("button", { name: "Views" });
-    fireEvent.click(views);
-    fireEvent.click(await screen.findByRole("button", { name: /^Payments in March/ }));
-    const lens = await screen.findByRole("region", { name: "Open view" });
-    expect(within(lens).getByText("Payments in March")).toBeTruthy();
+    // The toolbar's Views menu is withdrawn (ADR-144 Amendment 6): the case line's button is the one way.
+    expect(within(screen.getByRole("toolbar", { name: "Canvas tools" })).queryByRole("button", { name: /^Views/ })).toBeNull();
+    const caseLine = screen.getByRole("region", { name: "You are in the Glass" });
+    // With none open, the strip says the whole case is on screen, and the case line names no saved view.
+    expect(within(screen.getByRole("region", { name: "The whole case" })).getByText("You are looking at the whole case.")).toBeTruthy();
+    expect(within(caseLine).queryByText(/› Saved view:/)).toBeNull();
+    const savedViews = await within(caseLine).findByRole("button", { name: "Saved views (1)" });
+    fireEvent.click(savedViews);
+    fireEvent.click(await screen.findByRole("button", { name: "Open Payments in March" }));
+    const strip = await screen.findByRole("region", { name: "Saved view" });
+    await vi.waitFor(() => expect(document.activeElement).toBe(strip));
+    // The way back is the first thing in the strip, then which saved view, and that it changes nothing.
+    const back = within(strip).getByRole("button", { name: "Back to the whole case" });
+    expect(strip.querySelector("button, a")).toBe(back);
+    expect(strip.textContent).toContain("Saved view: Payments in March");
+    expect(strip.textContent).toContain("Nothing in a saved view changes the case.");
+    expect(within(caseLine).getByText("› Saved view: Payments in March")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "The whole case" })).toBeNull();
     expect(asked.filter((url) => url.endsWith("/inv-1/views/v-shared"))).toHaveLength(1);
-    fireEvent.click(within(lens).getByRole("button", { name: /Back to the case/ }));
-    await vi.waitFor(() => expect(screen.queryByRole("region", { name: "Open view" })).toBeNull());
+    fireEvent.click(back);
+    await vi.waitFor(() => expect(screen.queryByRole("region", { name: "Saved view" })).toBeNull());
+    expect(within(caseLine).queryByText(/› Saved view:/)).toBeNull();
+    expect(screen.getByRole("region", { name: "The whole case" })).toBeTruthy();
+    await vi.waitFor(() => expect(document.activeElement).toBe(within(caseLine).getByRole("button", { name: "Saved views (1)" })));
   });
 
   // The owner's navigation decision (ADR-145 Amendment 15): the Cases panel is opened at its views list from the case
@@ -132,7 +148,7 @@ describe("Views ▾ by the graph (ADR-144 Amendment 3)", () => {
   test("the Cases drawer keeps its list of the case's views", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
-    fireEvent.click(within(screen.getByRole("region", { name: "You are in the Glass" })).getByRole("button", { name: "Views in this case" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "You are in the Glass" })).getByRole("button", { name: /^Saved views/ }));
     const list = await screen.findByRole("list", { name: "Saved views" });
     expect(within(list).getByText("Payments in March")).toBeTruthy();
   });
@@ -143,13 +159,13 @@ describe("Views ▾ by the graph (ADR-144 Amendment 3)", () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
     const caseLine = () => within(screen.getByRole("region", { name: "You are in the Glass" }));
-    fireEvent.click(caseLine().getByRole("button", { name: "Views in this case" }));
+    fireEvent.click(caseLine().getByRole("button", { name: /^Saved views/ }));
     const drawer = await screen.findByRole("dialog", { name: "Saved views" });
     await within(drawer).findByRole("list", { name: "Saved views" });
     expect(within(drawer).queryByRole("button", { name: "Browse all cases" })).toBeNull();
     fireEvent.click(await within(drawer).findByRole("button", { name: "Open Payments in March" }));
     await screen.findByRole("region", { name: "Open view" });
-    fireEvent.click(caseLine().getByRole("button", { name: "Views in this case" }));
+    fireEvent.click(caseLine().getByRole("button", { name: /^Saved views/ }));
     const again = await screen.findByRole("dialog", { name: "Saved views" });
     fireEvent.click(await within(again).findByRole("button", { name: "Open the whole case" }));
     await vi.waitFor(() => expect(screen.queryByRole("region", { name: "Open view" })).toBeNull());

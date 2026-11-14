@@ -66,11 +66,14 @@ test("the dialog appears on a view_over_cap; Try again resyncs from nothing; a s
   // The view is open as the lens: with no snapshot (the case is still past the cap), the dialog is
   // gone and holds no focus, so the view can be worked by keyboard.
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  // Focus is on the open view's own Back to the case, never left on the page body.
-  await expect(page.getByRole("button", { name: "Back to the case" })).toBeFocused();
+  // Focus is on the open saved view's strip (ADR-145 Amendment 17), never left on the page body; its first item is
+  // Back to the whole case.
+  await expect(page.getByRole("region", { name: "Saved view" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Back to the whole case" })).toBeFocused();
   registerCovered("VIEW_OVER_CAP_ACTIONS", "choose-a-type-and-save-a-view-by-keyboard");
 
-  // Back to the case, which is still past the cap: the dialog shows again.
+  // Back to the whole case, which is still past the cap: the dialog shows again.
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "Your view of this case is too large" })).toBeVisible();
 

@@ -132,7 +132,7 @@ describe("the rail's Help over every view the rail reaches", () => {
       fireEvent.click(direct);
       return;
     }
-    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^More ways to show the case/ }));
     fireEvent.click(await screen.findByRole("button", { name }));
   }
 

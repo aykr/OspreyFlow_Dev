@@ -126,10 +126,10 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
       // ADR-146 decision 2: Rules and Monitoring, with the count that left the banner.
       "Osprey, go to Home", "The Glass", "Ingest Studio", "Rules and Monitoring 3 open", "Admin",
       expect.stringMatching(/Search entities/), "Add many from a list", "Filters",
-      // Amendment 15: one view switch, Graph · Map · Drawing board · Reports, then More views.
-      "Graph", "Map", "Drawing board", "Reports", "More views▾", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
-      // The case line: Case ‹switcher› · Views in this case · reads …, then the cross-link.
-      expect.stringMatching(/^Case: Kestrel/), "Views in this case", "Open this case's data in the Ingest Studio ↗",
+      // Amendment 15: one view switch, Graph · Map · Drawing board · Reports, then More (Amendment 17), by its name.
+      "Graph", "Map", "Drawing board", "Reports", "More ways to show the case", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
+      // The case line: Case ‹switcher› · Saved views (n) · reads …, then the cross-link (Amendment 17).
+      expect.stringMatching(/^Case: Kestrel/), expect.stringMatching(/^Saved views/), "Open this case's data in the Ingest Studio ↗",
       // The rail: the panel openers alone, then Help and the names toggle; then the Graph's own toolbar.
       "Explore", "Ask & Chat", "History", "Help", "Show names",
       "Match strictness",
@@ -246,8 +246,8 @@ describe("the owner's navigation (ADR-145 Amendment 15)", () => {
     expect(pressedViews()).toEqual(["Graph"]);
     fireEvent.click(within(viewGroup()).getByRole("button", { name: "Reports" }));
     await vi.waitFor(() => expect(pressedViews()).toEqual(["Reports"]));
-    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
-    const more = within(await screen.findByRole("group", { name: "More views" }).catch(() => screen.getByRole("dialog", { name: "More views" })));
+    fireEvent.click(screen.getByRole("button", { name: /^More ways to show the case/ }));
+    const more = within(await screen.findByRole("group", { name: "More ways to show the case" }).catch(() => screen.getByRole("dialog", { name: "More ways to show the case" })));
     expect(more.getAllByRole("button").map((b) => b.textContent)).toEqual(["Matrix", "Figures", "Ownership", "Connection strength"]);
     fireEvent.click(more.getByRole("button", { name: "Ownership" }));
     await vi.waitFor(() => expect(pressedViews()).toEqual([]));
@@ -303,20 +303,20 @@ describe("the owner's navigation (ADR-145 Amendment 15)", () => {
     });
   }
 
-  test("the case line: You are in the Glass · Case ‹switcher› · Views in this case · reads …", async () => {
+  test("the case line: You are in the Glass · Case ‹switcher› · Saved views (n) · reads …", async () => {
     await ready();
     const region = await screen.findByRole("region", { name: "You are in the Glass" });
     await within(region).findByText("reads Prison intel");
     const parts = [...region.querySelectorAll(":scope > *, .govuk-notification-banner__content > *")]
       .filter((el) => !el.classList.contains("context-banner__sep") && !el.classList.contains("govuk-notification-banner__content"))
       .map((el) => (el.textContent ?? "").trim().replace(/\s+/g, " "));
-    expect(parts.slice(0, 5)).toEqual(["You are in the Glass", "Case", expect.stringMatching(/^Case: Kestrel/), "Views in this case", "reads Prison intel"]);
+    expect(parts.slice(0, 5)).toEqual(["You are in the Glass", "Case", expect.stringMatching(/^Case: Kestrel/), expect.stringMatching(/^Saved views/), "reads Prison intel"]);
   });
 
-  test("Views in this case opens the Cases panel at its views list", async () => {
+  test("Saved views opens its panel at the saved views list", async () => {
     await ready();
     const region = await screen.findByRole("region", { name: "You are in the Glass" });
-    fireEvent.click(within(region).getByRole("button", { name: "Views in this case" }));
+    fireEvent.click(within(region).getByRole("button", { name: /^Saved views/ }));
     // ADR-145 Amendment 17: opened from the case line it is *Saved views*, its list the case's saved views.
     const panel = await screen.findByRole("dialog", { name: "Saved views" });
     const views = await within(panel).findByRole("region", { name: "Saved views in this case" });
@@ -358,7 +358,7 @@ describe("Build a report beside Reports (ADR-145 Amendment 15)", () => {
     expect(found.getAttribute("rel")).toBe("noopener noreferrer");
     const reports = within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Reports" });
     expect(reports.compareDocumentPosition(found) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    const more = screen.getByRole("button", { name: /^More views/ });
+    const more = screen.getByRole("button", { name: /^More ways to show the case/ });
     expect(found.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -423,10 +423,10 @@ describe("Part B after review (ADR-145 Amendment 15)", () => {
     expect(document.activeElement).toBe(within(region).getByRole("button", { name: /^Case: Kestrel/ }));
   });
 
-  test("Views in this case is a toggle: expanded while its panel is open, a second press closes it", async () => {
+  test("Saved views is a toggle: expanded while its panel is open, a second press closes it", async () => {
     render(<App />);
     const region = await screen.findByRole("region", { name: "You are in the Glass" });
-    const views = await within(region).findByRole("button", { name: "Views in this case" });
+    const views = await within(region).findByRole("button", { name: /^Saved views/ });
     expect(views.getAttribute("aria-haspopup")).toBe("dialog");
     expect(views.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(views);
@@ -442,8 +442,8 @@ describe("Part B after review (ADR-145 Amendment 15)", () => {
     await vi.waitFor(() => expect(screen.getByRole("group", { name: "View" })).toBeTruthy());
     await vi.waitFor(() => expect(switchOf().main).toEqual(["Reports"]));
     // A Reports Viewer lands on Figures, so More views is named after it (Amendment 2).
-    fireEvent.click(screen.getByRole("button", { name: /^(More views|Figures)/ }));
-    const more = within(await screen.findByRole("group", { name: "More views" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(More ways to show the case|Figures)/ }));
+    const more = within(await screen.findByRole("group", { name: "More ways to show the case" }));
     expect(more.getAllByRole("button").map((b) => b.textContent)).toEqual(["Figures"]);
   });
 
@@ -452,8 +452,8 @@ describe("Part B after review (ADR-145 Amendment 15)", () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
     await vi.waitFor(() => expect(switchOf().main).toEqual(["Graph", "Map", "Drawing board"]));
-    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
-    const more = within(await screen.findByRole("group", { name: "More views" }));
+    fireEvent.click(screen.getByRole("button", { name: /^More ways to show the case/ }));
+    const more = within(await screen.findByRole("group", { name: "More ways to show the case" }));
     expect(more.getAllByRole("button").map((b) => b.textContent)).toEqual(["Matrix", "Connection strength"]);
   });
 
@@ -486,8 +486,8 @@ describe("Part B after review (ADR-145 Amendment 15)", () => {
     );
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
-    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
-    fireEvent.click(await within(await screen.findByRole("group", { name: "More views" })).findByRole("button", { name: "Ownership" }));
+    fireEvent.click(screen.getByRole("button", { name: /^More ways to show the case/ }));
+    fireEvent.click(await within(await screen.findByRole("group", { name: "More ways to show the case" })).findByRole("button", { name: "Ownership" }));
     await vi.waitFor(() => expect(screen.getByRole("button", { name: /^Ownership/ }).className).toContain("menu-button--pressed"));
     answer(["investigate"]);
     await vi.waitFor(() => expect(switchOf().main).toEqual(["Graph", "Map", "Drawing board"]));
@@ -516,10 +516,10 @@ describe("Part B after review (ADR-145 Amendment 15)", () => {
     for (const name of ["Map", "Drawing board", "Reports", "Graph"]) {
       fireEvent.click(within(group()).getByRole("button", { name }));
       await vi.waitFor(() => expect(pressed()).toEqual([name]));
-      expect(screen.getByRole("button", { name: /^More views/ }).className).not.toContain("menu-button--pressed");
+      expect(screen.getByRole("button", { name: /^More ways to show the case/ }).className).not.toContain("menu-button--pressed");
     }
-    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
-    fireEvent.click(await within(await screen.findByRole("group", { name: "More views" })).findByRole("button", { name: "Matrix" }));
+    fireEvent.click(screen.getByRole("button", { name: /^More ways to show the case/ }));
+    fireEvent.click(await within(await screen.findByRole("group", { name: "More ways to show the case" })).findByRole("button", { name: "Matrix" }));
     await vi.waitFor(() => expect(pressed()).toEqual([]));
     expect(screen.getByRole("button", { name: /^Matrix/ }).className).toContain("menu-button--pressed");
   });

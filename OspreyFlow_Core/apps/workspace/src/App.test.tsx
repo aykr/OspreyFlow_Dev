@@ -420,7 +420,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   // Connection strength is under the top bar's More views (the owner's navigation decision, ADR-145 Amendment 15).
   const openStrength = async () => {
     await screen.findByRole("group", { name: "View" });
-    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^More ways to show the case/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Connection strength" }));
   };
 
@@ -715,7 +715,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     fireEvent.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Reports" }));
     await screen.findByRole("region", { name: "Alert monitoring" });
     expect(screen.queryByRole("note", { name: "Opened from an alert" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^More ways to show the case/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Figures" }));
     await screen.findByRole("heading", { name: "Figures" });
     expect(screen.queryByRole("note", { name: "Opened from an alert" })).toBeNull();
@@ -781,12 +781,12 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       fireEvent.click(await screen.findByRole("button", { name: /Open alert:.*Structuring/ }));
       await vi.waitFor(() => expect(window.location.pathname).toBe("/alerts/a1"));
       fireEvent.click(await screen.findByRole("button", { name: "Open the evidence" }));
-      const banner = await screen.findByRole("region", { name: "Open view" });
+      const banner = await screen.findByRole("region", { name: "Saved view" });
       expect(saved).toEqual([{ name: "From alert: Structuring", node_ids: ["n1"] }]);
       expect(within(banner).getByText("From alert: Structuring")).toBeTruthy();
       expect(within(banner).getByText("Opened from an alert")).toBeTruthy();
-      // The way back has focus when the view opens, so a keyboard user is on it.
-      await vi.waitFor(() => expect(document.activeElement?.textContent).toBe("← Back to the alert"));
+      // ADR-145 Amendment 17: opening a saved view takes focus to its strip, whose ways back follow it.
+      await vi.waitFor(() => expect(document.activeElement).toBe(banner));
       expect(within(banner).getByText("Private")).toBeTruthy();
       expect(screen.getByRole("region", { name: "You are in the Glass" })).toBeTruthy();
       fireEvent.click(within(banner).getByRole("button", { name: "← Back to the alert" }));
@@ -796,7 +796,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
         expect(screen.getByRole("button", { name: /Open alert:.*Structuring/ }).getAttribute("aria-pressed")).toBe("true"),
       );
       expect(await screen.findByRole("button", { name: "Open the evidence" })).toBeTruthy();
-      expect(screen.queryByRole("region", { name: "Open view" })).toBeNull();
+      expect(screen.queryByRole("region", { name: "Saved view" })).toBeNull();
     } finally {
       window.history.replaceState(null, "", "/");
     }
@@ -839,7 +839,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       ).toBeTruthy();
       expect(window.location.pathname).toBe("/alerts/a1");
       expect(screen.getByRole("region", { name: "You are in Rules and Monitoring" })).toBeTruthy();
-      expect(screen.queryByRole("region", { name: "Open view" })).toBeNull();
+      expect(screen.queryByRole("region", { name: "Saved view" })).toBeNull();
       // Round 3: said on the alert only; the Glass, visited next, carries no stale "could not be opened".
       fireEvent.click(within(await screen.findByRole("navigation", { name: "Places" })).getByRole("button", { name: /^The Glass/ }));
       await vi.waitFor(() => expect(window.location.pathname).not.toBe("/alerts/a1"));
