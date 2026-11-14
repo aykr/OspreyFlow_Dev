@@ -196,3 +196,4 @@ cf4900e 345c457 studio v052-sql-interrupt
 c2e1aaf e5ba842 platform v052-measure
 44bec4b 50e91e5 rules-b route-collapse
 84c128d faa7c28 case-b v052-saved-views-panel
+a03de32 732b41c studio v052-no-internal-notes
