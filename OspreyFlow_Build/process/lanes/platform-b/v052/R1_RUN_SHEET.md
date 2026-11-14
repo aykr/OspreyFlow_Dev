@@ -18,7 +18,7 @@ Nothing touches osprey-small.
 | --- | --- | --- |
 | The verifier's plan on main's manifest | **50 checks, none pending**, so the run needs no `--allow-pending` | `install_verify.py plan` |
 | case-b's driver tests | 215 passed, 1 skipped, **1 failed**: `test_an_entry_still_pending_stops_the_run_unless_a_dry_run_allows_it` | see "Carried" below |
-| This lane's dashboards check, offline | 35 tests pass; each access assertion and fix shown red at its own site (14 plants) | `r1-review-tests.txt`, `r1-review-red-first.txt` beside this sheet |
+| This lane's dashboards check, offline | 43 tests pass; each access assertion and fix shown red at its own site (14 plants, then 6 for the RLS read) | `r1-review-tests.txt`, `r1-review-red-first.txt`, `r1-rls-red-first.txt` beside this sheet |
 | Spec 08 on poc (`spec08_poc.py table`) | **12 of 27 run, 15 skipped**, all for "no seed path on poc" | see "Waits on the owner" below |
 | Entra's signing stand-in (platform's v052-standin) | on main | `progress.tsv` done |
 | The OpenSearch domain stand-in (platform's v052-searchkind) | on main | `progress.tsv` done |
@@ -94,7 +94,7 @@ kubeconfig, the kind platform's folder, the checkout's Python). Every kubectl ca
 | 4 | B | **the upgrade**: `bash $G/r1_kind.sh py runbook INSTALL` again (Q1: the client's way), block by block, then the copy counts from row 3 restored if the install has not | `helm upgrade --install` of the candidate over v0.5.1, then INSTALL's own checks as the guide names them: **section 6's check that the Conduit reads Entra's settings, and section 7's `/healthz` through the Glass** | `UPGRADE.log` (see row 14) |
 | 4b | B | `bash $L/r1_live.sh survival verify` | **v0.5.1's data survived**: row 2b's case, hotlist, load (search finds the same), alert and files, each PASS or FAIL. It runs before row 5, whose `check` saves a new case over the old. | `survival.log` |
 | 5 | B | `bash $G/r1_kind.sh py check` | R1's checks on the candidate. It makes its own new case: what it shows is that the candidate works, not that v0.5.1's data survived (that is row 4b). | `check-candidate.log` |
-| 6 | B | `bash $L/r1_live.sh dashboards run` | Superset's sign-in through Entra for each role; building (Admin and Alpha may, Gamma may not); the report sync's identity and its first pull; the embed. **Every refusal `may_open` makes is asked**: no reports right (403 for the listing and the token); no level on the identity's case, another unit, and a lower clearance (each offered nothing, 404). | `dashboards.log` |
+| 6 | B | `bash $L/r1_live.sh dashboards run` | Superset's sign-in through Entra for each role; building (Admin and Alpha may, Gamma may not); the report sync's identity and its first pull; the embed. **The board's rows through the guest token** (its row-level security is this read path's access control, rules 3 and 4): a chart on the mart's `figures`; another identity's row (counted at SECRET) planted through the managed PostgreSQL and removed again; the guest token reads the identity's own rows and only them, while an administrator's own session sees both (the control). **Every refusal `may_open` makes is asked**: no reports right (403 for the listing and the token); no level on the identity's case, another unit, and a lower clearance (each offered nothing, 404). | `dashboards.log` |
 | 7 | B | `bash $L/r1_live.sh spec08 run` (the module unchanged; dispositions both ways) | 12 of 27 run (or more once the seed path lands) | `spec08.log` |
 | 7b | B | `bash $D/spec08_live.sh -k "door_opens or stream_opens_through_the_proxy or unknown_field_name_is_refused"` (case-b's, at the orchestrator's request: spec 08's two seed-free halves on poc) | **3 passed**, the rest deselected (A7's refusal arrives today as an unhandled 500, the ClickHouse adapter's ValueError reaching no handler; the half accepts it, held apart from 401, 403, 404 and 502–504; a product finding passed to the orchestrator): the analyst's door; the stream through the proxy with a ticket (ticket, upgrade, an empty snapshot through the poc ingress, and the first meeting of ADR-148 Am 8's Entra socket check); A7's unknown field name refused, not ignored | `spec08-halves.log` |
 | 7c | B | `bash $D/spec08_reds.sh` (case-b's) | **both halves red when planted, green as built**: A7 with the hostile field name made safe goes red on a 200; the stream asking `?token=` for its `?ticket=` goes red; then row 7b green again. Each planted copy is written beside the module and removed on exit. | `spec08-reds.log` |
@@ -119,8 +119,6 @@ under.
 - **`managed.rds.point_in_time_days`**: only AWS shows it, and the render check holds it.
 - **That the candidate came by an upgrade at all.** A fresh install of it passes alike. Rows 2b and 4b are what show
   it did, with v0.5.1's data kept.
-- **What the dashboards check does not read:** a chart's data through the guest token, so Superset's row-level
-  security under that token is not exercised. The board saved is empty. It is carried, below.
 
 **Time, an estimate.** R1's own run of 13 Nov took about 12 minutes from its INSTALL log to its decommission log
 (`process/lanes/platform/r1/run/20261113T175844Z-INSTALL.log` to `…/20261113T181017Z-DECOMMISSION.log`, 11 min 33 s, the cluster already up). The
@@ -165,7 +163,6 @@ From the orchestrator's review of this branch (14 November):
   rendered with its own copy's render, in step 3 (`terraform/` comes from the unpinned render), so "its pull
   request is applied before the install" belongs after step 3's render, not in step 2. The paragraph in
   `guide-6a-upgrade.diff` was mine, and the order was wrong in it.
-- **platform-b, carried:** the dashboards check reads no chart's data through the guest token, so Superset's
-  row-level security under that token is not exercised on the day (the review's should 9). The board saved is empty.
-  Exercising it needs a dataset on the mart, a chart on the board, and a chart-data read with the guest token: new
-  work with its own fakes, offered for after step 6 unless the orchestrator wants it before.
+- **platform-b, the RLS read: done** (the orchestrator, 14 November: it is a read path, so not a carry). The guest
+  token's chart data is read in row 6, with the identity's rows only and another identity's row absent. Built
+  red first: `r1-rls-red-first.txt`, six plants.
