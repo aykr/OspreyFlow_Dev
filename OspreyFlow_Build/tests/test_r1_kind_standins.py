@@ -197,15 +197,15 @@ def test_decommission_step_7_records_the_backups_choice_step_8_reads(
         ("maybe", "30", "no default"),
         ("keep", None, "retention"),
         ("keep", "0", "retention"),
-        ("destroy", None, "destroy"),
+        ("destroy", None, "NoSuchBucket"),
     ],
 )
 def test_decommission_step_7_refuses_what_its_block_refuses(
     backups, days, says, tmp_path: Path, monkeypatch
 ) -> None:  # type: ignore[no-untyped-def]
     """No choice, an unknown one, or keep without a retention stop step 7 before anything is
-    removed, as the block's own `:?` and `case` do; destroy, which the stand-in does not model
-    (R1 keeps), is refused by name rather than run as keep."""
+    removed, as the block's own `:?` and `case` do; destroy over no backups bucket is refused as
+    S3 refuses it (`test_r1_kind_decommission.py` has destroy's model whole)."""
     r1_kind = _r1_kind()
     given = _step7(r1_kind, tmp_path, monkeypatch)
     for name, value in (("BACKUPS", backups), ("BACKUP_RETENTION_DAYS", days)):

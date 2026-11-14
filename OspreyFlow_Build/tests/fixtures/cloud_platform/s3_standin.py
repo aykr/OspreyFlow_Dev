@@ -244,6 +244,9 @@ class StandIn:
     buckets: dict[str, Bucket] = field(default_factory=dict)
     #: Each KMS key's own policy, by its ARN (a key not here has the default key policy).
     keys: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: The keys whose deletion is scheduled (`"state": "PendingDeletion"` in the config): KMS
+    #: refuses every use of one until the deletion is cancelled (`KMSInvalidStateException`).
+    pending_deletion: set[str] = field(default_factory=set)
     sessions: dict[str, Principal] = field(default_factory=dict)
     uploads: dict[str, Upload] = field(default_factory=dict)
     #: Whether the connection in front is TLS (`aws:SecureTransport`): set when the stand-in
@@ -300,6 +303,9 @@ class StandIn:
                 else:
                     session.policies = role.policies
         stand_in.keys = {k["arn"]: k["policy"] for k in config.get("keys", [])}
+        stand_in.pending_deletion = {
+            k["arn"] for k in config.get("keys", []) if k.get("state") == "PendingDeletion"
+        }
         self.configure_domains(config.get("domains", []))
         stand_in.buckets.clear()
         for bucket in config.get("buckets", []):
@@ -518,6 +524,9 @@ class StandIn:
         refused. A key with none is the default key policy's: the role's IAM policy alone."""
         if key_arn == AWS_MANAGED_S3_KEY:
             return
+        if key_arn in self.pending_deletion:
+            # KMS refuses a key whose deletion is scheduled, whoever asks; S3 passes it on.
+            raise Refused(400, "KMS.KMSInvalidStateException", f"{key_arn} is pending deletion.")
         role = _role_of(principal.arn)
         context = {"aws:PrincipalArn": role, "kms:ViaService": f"s3.{self.region}.amazonaws.com"}
         iam = evaluate(principal.policies, action, key_arn, context)

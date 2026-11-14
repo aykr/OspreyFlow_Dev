@@ -1,0 +1,65 @@
+# v052-r1upgrade: the one uncaptured failure (1 failed / 68 passed, one run of five), hunted (the orchestrator's ask, 14 Nov)
+# The four changed files: tests/test_r1_kind_upgrade.py, tests/test_r1_kind_decommission.py,
+# tests/test_r1_kind_standins.py, tests/cloud_platform_backup/test_s3_standin.py (69 cases), at 326356a,
+# offline on closed ports 59991-59994, no OSPREY_LANE, a fresh PYTHONPYCACHEPREFIX for every run, each run's
+# output kept (-rA --durations=5 in the serial loop).
+
+## 1. Twenty runs in a row
+run 01: 69 passed in 26.14s
+run 02: 69 passed in 25.84s
+run 03: 69 passed in 26.10s
+run 04: 69 passed in 25.82s
+run 05: 69 passed in 26.28s
+run 06: 69 passed in 27.05s
+run 07: 69 passed in 25.96s
+run 08: 69 passed in 26.16s
+run 09: 69 passed in 24.86s
+run 10: 69 passed in 25.09s
+run 11: 69 passed in 24.81s
+run 12: 69 passed in 24.94s
+run 13: 69 passed in 24.85s
+run 14: 69 passed in 24.79s
+run 15: 69 passed in 25.17s
+run 16: 69 passed in 24.91s
+run 17: 69 passed in 25.23s
+run 18: 69 passed in 25.70s
+run 19: 69 passed in 25.30s
+run 20: 69 passed in 24.81s
+
+## 2. Two sessions at once, five pairs (one shared pytest temporary root, each pruning the others' older folders)
+pair 1: a 69 passed in 25.89s | b 69 passed in 25.89s
+pair 2: a 69 passed in 25.49s | b 69 passed in 25.80s
+pair 3: a 69 passed in 25.64s | b 69 passed in 25.88s
+pair 4: a 69 passed in 25.98s | b 69 passed in 25.98s
+pair 5: a 69 passed in 25.82s | b 69 passed in 25.68s
+
+## 3. Ten seeded random orders of the 69 node ids (each order confirmed honoured: 35 to 44 file switches, as asked)
+seed 1: 69 passed in 26.02s
+seed 2: 69 passed in 26.06s
+seed 3: 69 passed in 26.14s
+seed 4: 69 passed in 26.49s
+seed 5: 69 passed in 26.11s
+seed 6: 69 passed in 25.97s
+seed 7: 69 passed in 25.58s
+seed 8: 69 passed in 25.50s
+seed 9: 69 passed in 25.65s
+seed 10: 69 passed in 25.61s
+
+## Tally: 40 runs, 2,760 cases, 0 failed.
+
+## The four causes asked about, each ruled out:
+- a shared tmp path: every case's files are under its own tmp_path, and R1's STATE, FOLDER, KEPT and
+  RECORDS are monkeypatched to it. Two sessions at once, sharing pytest's temporary root: 10 of 10 green.
+- the stand-in's port: the S3 stand-in serves on port 0 (the system's choice), never a fixed one;
+  concurrent pairs, 10 of 10 green.
+- ordering: ten shuffled orders across all four files, 10 of 10 green.
+- a timing: no case waits on the wall clock. The stand-in's session and skew checks use its own
+  `clock`, moved by `later()`; the one real-time token lives 600 s; the slowest case took 0.76 s.
+
+## What the one failure most likely was (not proven):
+That run was the second after I stopped a wider run (TaskStop, task bam7cd8iq; the first, of 163 cases,
+passed in 63.85 s). The wider run covered
+tests/cloud_platform_backup whole, including its two docker-calling files. TaskStop ends the shell, and
+its pytest child may have run on alongside, which fits the failing run's 33 s against 25-27 s since.
+Its output was not kept, so the failing case is unknown. Not reproduced in 40 runs, alone, in pairs, or
+in any order; nothing to fix in the four files. For the 25th: one session at a time, the lane's rule.
