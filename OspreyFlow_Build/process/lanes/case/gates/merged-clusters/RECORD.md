@@ -24,9 +24,24 @@ The lease was taken 11:37Z, under the orchestrator's grant, and the stack was re
 - **fixture-corp live, run 2** (`3h-live-corp3.log`): **unmeasured.** The host's load was 56, the pages drew blank, and
   the status bar and search box never appeared. It is neither a pass nor a fail.
 
-## Still to run
+## The queue's turn (rebased onto origin/main f10e47a)
 
-In the orchestrator's order, after rules-b's full run and the osprey-small update:
-1. `make test`, then `make -k ci`, offline on the server.
-2. fixture-corp's explain case live on stack b, taken only when `uptime` shows a load under 16, with the load and the
-   lease recorded with the log.
+1. **First server run, at 74e6ce9** (`server.74e6ce9.log`): `make test` and `make -k ci` both exited 2.
+   - Lint: 26 new lines of mine ran past the 100-column limit.
+   - `make test`: 5 of 14,298 failed.
+     - `test_app` (2): its key sets pinned an answer's fields, and `clusters` is the reader's own clusters, not a count.
+     - Two store-only tests had a service with no graph.
+     - `test_core_stands_alone` flags `scripts/client_size_plan.py`. That is main's (ce5afbd, rules), not this branch's.
+   - Fixed at 122c923.
+2. **Second server run, at 122c923** (`server.122c923.log`):
+   - **`make -k ci`: exit 0.**
+   - `make test`: exit 2. The pytest suite's only failure is main's `test_core_stands_alone`, as above.
+   - test-js: one failure, `src/ingest/checks/ChecksScreen.test.tsx`'s "says a refusal in the server's words". It is a
+     1-second `findByRole` timeout, during studio's live reseed on stack f (the orchestrator's note), in a file this
+     branch does not touch. Rerun alone on the server, run 20261114T134504Z, 6 of 6 passed, the case in 27 ms. So it is
+     load, not a result.
+3. **fixture-corp live, at 122c923, on stack b** (`live-fixture-corp.122c923.log`):
+   - **5 of 5, explain on a merged cluster among them.**
+   - The lease was taken at 13:45Z and released afterwards.
+   - The host's load was 2.88 at the run, with nothing else full on the host.
+   - My queue line was deleted afterwards.
