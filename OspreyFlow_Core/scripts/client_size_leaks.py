@@ -29,6 +29,15 @@ the case, so it is no case: it is left out and counted (`kept_out`), never given
 another unit, which the case would refuse with a 404 and so prove nothing (step 4's first M10 run
 on stack d, 14 November 2026: every case refused so).
 
+**A hidden word is checked only where the reader could not see it anyway.** A case's `never_text`
+keeps a hidden record's words only where nothing `m10-part` may read in the measure case holds them,
+as a substring, case folded, as `measure_leaks` compares: no visible record's property and no
+visible document's text (`visible_corpus`). The words are often visible in their own right: a hidden
+partner's number inside the visible record's own `+44…`, a hidden spelling of a name in a visible
+report (step 4's second M10 run on stack d, 14 November 2026: 65 of its never-join cases failed so,
+with no hidden id in any answer). The ids are checked whatever the words. The words dropped are
+counted (`never_text_dropped`).
+
 Visibility is the product's own rule (`ontology.handling.principal_may_read`, the three axes),
 asked of the principals the subjects stand for (`counts.json`'s `subjects`, the claims step 4's
 issuer gives them, `process/lanes/rules/v052-load/B_RECORD.md`). Before anything is written every
@@ -264,7 +273,11 @@ def _opens(people: Mapping[str, Principal], name: str, unit: str, case: dict[str
 
 
 def check_leaks(cases: Iterable[dict[str, Any]], case_records: Mapping[str, Record],
-                people: Mapping[str, Principal], unit: str) -> None:  # fmt: skip
+                people: Mapping[str, Principal], unit: str,
+                corpus: str | None = None) -> None:  # fmt: skip
+    cases = list(cases)
+    if corpus is not None:
+        _check_words(cases, corpus)
     for case in cases:
         _opens(people, PART, unit, case, "the part-cleared")
         _opens(people, case["control"], unit, case, "its control")
@@ -279,7 +292,11 @@ def check_leaks(cases: Iterable[dict[str, Any]], case_records: Mapping[str, Reco
 
 def check_never_join(cases: Iterable[dict[str, Any]], case_records: Mapping[str, Record],
                      people: Mapping[str, Principal], others: Mapping[str, Record],
-                     units: Mapping[str, str], dataset: str) -> None:  # fmt: skip
+                     units: Mapping[str, str], dataset: str,
+                     corpus: str | None = None) -> None:  # fmt: skip
+    cases = list(cases)
+    if corpus is not None:
+        _check_words(cases, corpus)
     for case in cases:
         partner = others[case["hidden"]]
         _opens(people, PART, units[dataset], case, "the part-cleared")
@@ -292,6 +309,65 @@ def check_never_join(cases: Iterable[dict[str, Any]], case_records: Mapping[str,
             raise LeakCaseRefused(f"{case['name']}: both records are in the measure case's dataset")
         if not may_read(people[PART], case_records[case["visible"]]):
             raise LeakCaseRefused(f"{case['name']}: {PART} cannot read the record it searches by")
+
+
+def _document_texts(folder: Path, source_key: str, only: set[str]) -> Iterator[str]:
+    """The texts of the documents in `only`, in one pass over the source's files."""
+    for path in sorted((folder / source_key).glob("*.texts.jsonl")):
+        for row in _rows(path):
+            if row["document_id"] in only:
+                yield str(row["text"])
+
+
+def _strings(value: Any) -> Iterator[str]:
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, Mapping):
+        for inner in value.values():
+            yield from _strings(inner)
+    elif isinstance(value, list | tuple):
+        for inner in value:
+            yield from _strings(inner)
+
+
+def visible_corpus(
+    folder: Path, source_key: str, case_records: Mapping[str, Record], part: Principal
+) -> str:
+    """Everything `part` may read in the measure case that an answer could show, lower-cased, one
+    string: each visible record's properties and each visible document's text."""
+    visible = [r for r in case_records.values() if may_read(part, r)]
+    parts = [s for r in visible for s in _strings(dict(r.props))]
+    documents = {r.id for r in visible if r.type == "Document"}
+    parts += _document_texts(folder, source_key, documents)
+    return "\n".join(parts).lower()
+
+
+def seen(word: str, corpus: str) -> bool:
+    """Whether `word` shows in what the part-cleared reader may read, as `measure_leaks` compares
+    an answer's strings: a substring, lower-cased."""
+    return word.lower() in corpus
+
+
+def withhold_seen_words(
+    cases: list[dict[str, Any]], corpus: str
+) -> tuple[list[dict[str, Any]], int]:
+    """Each case with its `never_text` cut to the words nothing visible holds, and how many went."""
+    kept, dropped = [], 0
+    for case in cases:
+        words = [w for w in case["never_text"] if not seen(w, corpus)]
+        dropped += len(case["never_text"]) - len(words)
+        kept.append({**case, "never_text": words})
+    return kept, dropped
+
+
+def _check_words(cases: Iterable[dict[str, Any]], corpus: str) -> None:
+    for case in cases:
+        for word in case.get("never_text", []):
+            if seen(word, corpus):
+                raise LeakCaseRefused(
+                    f"{case['name']}: its hidden word {word!r} is in what {PART} may read, so "
+                    "finding it in an answer would be no leak"
+                )
 
 
 def _write(path: Path, cases: list[dict[str, Any]]) -> None:
@@ -322,6 +398,14 @@ def main(argv: list[str] | None = None) -> int:
     )  # fmt: skip
     eligible = (len(leaks), len(joins))
     leaks, joins = _sample(leaks, "hidden", args.limit), _sample(joins, "hidden", args.limit)
+    corpus = visible_corpus(args.folder, args.case, case_records, people[PART])
+    leaks, leaks_dropped = withhold_seen_words(leaks, corpus)
+    joins, joins_dropped = withhold_seen_words(joins, corpus)
+    check_leaks(leaks, case_records, people, units[dataset], corpus)
+    check_never_join(
+        joins, case_records, people, records(args.folder, only={c["hidden"] for c in joins}),
+        units, dataset, corpus,
+    )  # fmt: skip
     used = sorted({PART, *(c["control"] for c in (*leaks, *joins))})
     args.out.mkdir(parents=True, exist_ok=True)
     _write(args.out / "leaks.jsonl", leaks)
@@ -331,6 +415,7 @@ def main(argv: list[str] | None = None) -> int:
         "leaks_eligible": eligible[0], "never_join_eligible": eligible[1],
         "leaks_kept_out": dict(sorted(leaks_out.items())),
         "never_join_kept_out": dict(sorted(joins_out.items())),
+        "never_text_dropped": {"leaks": leaks_dropped, "never_join": joins_dropped},
         "subjects": {
             n: {"clearance": people[n].clearance, "org_unit": people[n].org_unit,
                 "codes": list(people[n].receivable_handling_codes)}

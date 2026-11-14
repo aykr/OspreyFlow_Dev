@@ -1,0 +1,9 @@
+# plants.py at a73f8ef, 2026-11-14T17:15:49Z, offline on the Mac (closed ports, slot 9, no stack, fresh pycache)
+built: GREEN - 15 passed in 1.51s
+W1 the hidden words not cut to the unseen (red at the build: the check refuses before writing): RED - 1 error in 0.83s
+W2 a never-join case's hidden word not checked against what is visible: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_leaks.py::test_a_hidden_word_inside_a_visible_number_is_refused | 1 failed in 0.98s
+W3 a leak case's hidden word not checked against what is visible: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_leaks.py::test_a_hidden_word_in_a_visible_document_s_text_is_refused | 1 failed in 0.94s
+W4 the comparison not case folded, as measure_leaks' is: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_leaks.py::test_a_hidden_word_in_a_visible_document_s_text_is_refused | 1 failed in 0.94s
+W5 the visible documents' texts left out of what is visible: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_leaks.py::test_a_hidden_word_in_a_visible_document_s_text_is_refused | 1 failed in 0.85s
+restored: GREEN - 15 passed in 1.09s
+exit=0
