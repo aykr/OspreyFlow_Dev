@@ -435,9 +435,21 @@ def _lane_worktree(tmp_path: Path) -> Path:
     return wt
 
 
-def _remote(lease, tmp_path: Path, cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+# The process table a run's reaper reads (`OSPREY_PROC_ROOT`, stack_lease.sh's REAPER). A run here that is not about
+# reaping reads an empty one of its own: the reaper reads every process on the host, one grep each, so on a server a
+# run's exit waited on every other lane's run there (9.4 s at 2,586 processes, against the 5 s these tests wait;
+# case-b's lease-tests record, 14 November 2026). A test about reaping passes REAL_PROC, and is red without it.
+REAL_PROC = "/proc"
+
+
+def _remote(
+    lease, tmp_path: Path, cwd: Path, *args: str, proc: str | None = None
+) -> subprocess.CompletedProcess[str]:
     lease("status", docker="all-up")  # writes the fixture's docker stand-in onto PATH
-    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+    if proc is None:
+        (tmp_path / "proc").mkdir(exist_ok=True)
+        proc = str(tmp_path / "proc")
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"), "OSPREY_PROC_ROOT": proc,
            "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
     return subprocess.run(["bash", str(SCRIPT), "remote", *args], cwd=cwd, env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
 
@@ -943,7 +955,7 @@ def test_a_run_reaps_a_server_that_left_its_process_group(lease, tmp_path: Path)
     pidfile = tmp_path / "server.pid"
     wt = _lane_worktree(tmp_path)
     ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--",
-                  "sh", "-c", f'python3 -c "$1" "{pidfile}"; exit 7', "sh", _DETACHED)  # fmt: skip
+                  "sh", "-c", f'python3 -c "$1" "{pidfile}"; exit 7', "sh", _DETACHED, proc=REAL_PROC)  # fmt: skip
     server = _pid_from(pidfile)
     try:
         assert ran.returncode == 0, ran.stderr
@@ -966,7 +978,7 @@ def test_the_reaper_leaves_every_process_outside_the_run_alone(lease, tmp_path: 
     plain = subprocess.Popen(["sleep", "300"], env={k: v for k, v in os.environ.items() if k != "OSPREY_RUN_TAG"})
     try:
         wt = _lane_worktree(tmp_path)
-        assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true").returncode == 0
+        assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true", proc=REAL_PROC).returncode == 0
         _finished_run(home)
         time.sleep(1)
         assert other.poll() is None and plain.poll() is None
@@ -1126,7 +1138,7 @@ def test_a_runs_log_holds_no_error_of_the_reapers_own_reading(lease, tmp_path: P
     lease("acquire", "case", "a run")
     home = _host(tmp_path)
     wt = _lane_worktree(tmp_path)
-    assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true").returncode == 0
+    assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true", proc=REAL_PROC).returncode == 0
     log = (_finished_run(home) / "log").read_text()
     assert "Permission denied" not in log and "No such file" not in log, log
 
@@ -1596,3 +1608,37 @@ def test_up_fails_when_postgres_never_answers(lease, tmp_path: Path) -> None:
     up = _up_with(lease, tmp_path, script, OSPREY_PG_READY_PAUSE="0", OSPREY_PG_READY_TRIES="3")
     assert up.returncode == 1
     assert "osprey-test-pg" in up.stderr and "did not answer" in up.stderr, up.stderr
+
+
+def _reaper_text() -> str:
+    """stack_lease.sh's REAPER, as cmd.sh and `reap` define it on the host."""
+    text = SCRIPT.read_text()
+    start = text.index("REAPER='") + len("REAPER='")
+    return text[start : text.index("\n}'", start) + 2]
+
+
+def test_the_reaper_reads_the_process_table_it_is_given(tmp_path: Path) -> None:
+    """`OSPREY_PROC_ROOT` is the table the reaper reads, so a run here that is not about reaping waits on no other
+    process of the host. A table listing one real sleep, tagged there and not in /proc: the reaper ends it only by
+    reading that table, and with an empty table the same tag ends nothing. Red if the reaper reads /proc whatever it
+    is given (its scan or its re-read before each signal)."""
+    tag = str(tmp_path / "the-run")
+    sleeper = subprocess.Popen(["sleep", "60"])
+    try:
+        table = tmp_path / "proc"
+        (table / str(sleeper.pid)).mkdir(parents=True)
+        (table / str(sleeper.pid) / "environ").write_bytes(f"PATH=/bin\0OSPREY_RUN_TAG={tag}\0".encode())
+        empty = tmp_path / "empty"
+        empty.mkdir()
+        script = _reaper_text() + '\nosprey_reap "$1"; echo "reaped $OSPREY_REAPED"\n'
+        none = subprocess.run(["bash", "-c", script, "reap", tag], env={**os.environ, "OSPREY_PROC_ROOT": str(empty)},
+                              capture_output=True, text=True, timeout=60, check=False)
+        assert none.stdout.strip() == "reaped 0", none.stdout + none.stderr
+        assert sleeper.poll() is None
+        ran = subprocess.run(["bash", "-c", script, "reap", tag], env={**os.environ, "OSPREY_PROC_ROOT": str(table)},
+                             capture_output=True, text=True, timeout=60, check=False)
+        assert ran.stdout.strip() == "reaped 1", ran.stdout + ran.stderr
+        assert sleeper.wait(timeout=10) is not None
+    finally:
+        if sleeper.poll() is None:
+            sleeper.kill()
