@@ -19,7 +19,8 @@ on. Identifiers are kept out of anything real by construction:
 
 The plan is pure: it builds rows. `scripts.generate_client_size` writes them to files and
 `scripts.load_client_size` loads the files. See
-`OspreyFlow_Build/process/lanes/rules/v052-load/DESIGN.md` for the sizes and why they are shaped so.
+the v052-load design record (`process/lanes/rules/v052-load/DESIGN.md` in the build folder)
+for the sizes and why they are shaped so.
 """
 
 from __future__ import annotations
