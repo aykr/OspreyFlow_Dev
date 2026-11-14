@@ -159,6 +159,12 @@ The items below are kept as they were written.
 
 ## Done overnight
 
+- **A Glass crash found live (case, 14 Nov), being fixed.** In scenario A's A12, choosing the search suggestion for
+  HMP-0003 throws "NotFoundError: Failed to execute 'insertBefore' on 'Node'", and React throws away the whole page
+  (#root empty). It happened on every run. Fixture Corp's suggestions don't crash. The lead is the search box's
+  three-hop draw into a 1,203-entity case. Case owns it and is fixing it red first. A whole-page crash is treated as a
+  release blocker for v0.5.2.
+
 - **B's load was interrupted at 04:40Z by the test server running out of memory** (59 of 62 GB used). Two lanes'
   `make test` runs had run at the same time, beside about 15 orphaned test-IdP Keycloak containers, and the kernel
   killed stack d's ArcadeDB in B's links stage. osprey-small was untouched. Nodes were complete (650,000).
