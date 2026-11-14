@@ -1,7 +1,7 @@
 // Shared helpers for the live tier. Nothing here mocks anything — that is the whole point of
 // the directory (`playwright.config.ts`'s own header has the reasoning).
 
-import { type APIRequestContext, test } from "@playwright/test";
+import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
 
 /** The opt-in gate. Skipped rather than failed when it is absent: a developer running the whole
  * workspace test suite has no stack up, and that is not a defect. */
@@ -97,4 +97,16 @@ export async function freshWorkspaceUrl(
   request: APIRequestContext,
 ): Promise<string> {
   return `/?investigation=${await freshInvestigation(request)}`;
+}
+
+/** The working set's counts as the status bar shows them (`statusbar/StatusBar.tsx`: "12 nodes 30
+ * edges …", each number en-GB, so "1,234"). Found by what it says, not as the page's first status:
+ * other live regions come before it, and `getByRole("status").first()` read one of them, or waited
+ * the whole test out where none was drawn yet (14 November 2026). Waits 30 seconds for it. */
+export async function workingSetCounts(page: Page): Promise<{ nodes: number; edges: number }> {
+  const bar = page.getByRole("status").filter({ hasText: /\bnodes\b/ }).first();
+  await expect(bar, "the status bar's counts were not drawn").toBeVisible({ timeout: 30_000 });
+  const text = (await bar.textContent()) ?? "";
+  const read = (words: string) => Number((new RegExp(`([\\d,]+)\\s*${words}`).exec(text)?.[1] ?? "0").replace(/,/g, ""));
+  return { nodes: read("nodes"), edges: read("edges") };
 }

@@ -23,7 +23,7 @@
 // `family_name`/`given_names`/`date_of_birth` only.
 import { expect, type Page, test } from "@playwright/test";
 
-import { freshWorkspaceUrl, liveOnly } from "./live";
+import { freshWorkspaceUrl, liveOnly, workingSetCounts } from "./live";
 
 test.beforeEach(liveOnly);
 
@@ -104,13 +104,11 @@ async function seedFromSearch(
 }
 
 async function edgeCountOf(page: Page): Promise<number> {
-  const text = (await page.getByRole("status").first().textContent()) ?? "";
-  return Number(/(\d+)\s*edges/.exec(text)?.[1] ?? 0);
+  return (await workingSetCounts(page)).edges;
 }
 
 async function nodeCount(page: Page): Promise<number> {
-  const text = (await page.getByRole("status").first().textContent()) ?? "";
-  return Number(/(\d+)\s*nodes/.exec(text)?.[1] ?? 0);
+  return (await workingSetCounts(page)).nodes;
 }
 
 async function selectBothByKeyboard(
