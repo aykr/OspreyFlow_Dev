@@ -1,0 +1,109 @@
+# every-harness -g admin-harness, dark, light and GOV.UK, at d45d3f3
+
+Running 104 tests using 1 worker
+
+[1/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html (dark) has no automated WCAG 2.2 A or AA violations
+[2/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html (light) has no automated WCAG 2.2 A or AA violations
+[3/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html (govuk) has no automated WCAG 2.2 A or AA violations
+[4/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html: every labelled field's name contains its visible label (2.5.3)
+[5/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html open=connections&rights=administer_system (dark) has no automated WCAG 2.2 A or AA violations
+[6/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html open=connections&rights=administer_system (light) has no automated WCAG 2.2 A or AA violations
+[7/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html open=connections&rights=administer_system (govuk) has no automated WCAG 2.2 A or AA violations
+[8/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html open=connections&rights=administer_system: every labelled field's name contains its visible label (2.5.3)
+[9/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&serve=people (dark) has no automated WCAG 2.2 A or AA violations
+[10/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&serve=people (light) has no automated WCAG 2.2 A or AA violations
+[11/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&serve=people (govuk) has no automated WCAG 2.2 A or AA violations
+[12/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&serve=people: every labelled field's name contains its visible label (2.5.3)
+[13/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=details (dark) has no automated WCAG 2.2 A or AA violations
+[14/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=details (light) has no automated WCAG 2.2 A or AA violations
+[15/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=details (govuk) has no automated WCAG 2.2 A or AA violations
+[16/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=administer_system&serve=datasets&show=details: every labelled field's name contains its visible label (2.5.3)
+[17/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=owner (dark) has no automated WCAG 2.2 A or AA violations
+[18/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=owner (light) has no automated WCAG 2.2 A or AA violations
+[19/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=owner (govuk) has no automated WCAG 2.2 A or AA violations
+[20/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=administer_system&serve=datasets&show=owner: every labelled field's name contains its visible label (2.5.3)
+[21/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=dry-run (dark) has no automated WCAG 2.2 A or AA violations
+[22/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=dry-run (light) has no automated WCAG 2.2 A or AA violations
+[23/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=dry-run (govuk) has no automated WCAG 2.2 A or AA violations
+[24/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=administer_system&serve=datasets&show=dry-run: every labelled field's name contains its visible label (2.5.3)
+[25/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=delete (dark) has no automated WCAG 2.2 A or AA violations
+[26/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=delete (light) has no automated WCAG 2.2 A or AA violations
+[27/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&show=delete (govuk) has no automated WCAG 2.2 A or AA violations
+[28/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=administer_system&serve=datasets&show=delete: every labelled field's name contains its visible label (2.5.3)
+[29/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&open=System (dark) has no automated WCAG 2.2 A or AA violations
+[30/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&open=System (light) has no automated WCAG 2.2 A or AA violations
+[31/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=datasets&open=System (govuk) has no automated WCAG 2.2 A or AA violations
+[32/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=administer_system&serve=datasets&open=System: every labelled field's name contains its visible label (2.5.3)
+[33/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people (dark) has no automated WCAG 2.2 A or AA violations
+[34/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people (light) has no automated WCAG 2.2 A or AA violations
+[35/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people (govuk) has no automated WCAG 2.2 A or AA violations
+[36/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_people&serve=people: every labelled field's name contains its visible label (2.5.3)
+[37/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=disable (dark) has no automated WCAG 2.2 A or AA violations
+[38/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=disable (light) has no automated WCAG 2.2 A or AA violations
+[39/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=disable (govuk) has no automated WCAG 2.2 A or AA violations
+[40/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_people&serve=people&show=disable: every labelled field's name contains its visible label (2.5.3)
+[41/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=entra (dark) has no automated WCAG 2.2 A or AA violations
+[42/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=entra (light) has no automated WCAG 2.2 A or AA violations
+[43/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=entra (govuk) has no automated WCAG 2.2 A or AA violations
+[44/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_people&serve=people&show=entra: every labelled field's name contains its visible label (2.5.3)
+[45/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles (dark) has no automated WCAG 2.2 A or AA violations
+[46/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles (light) has no automated WCAG 2.2 A or AA violations
+[47/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles (govuk) has no automated WCAG 2.2 A or AA violations
+[48/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_people&serve=people&open=Roles: every labelled field's name contains its visible label (2.5.3)
+[49/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=role-form (dark) has no automated WCAG 2.2 A or AA violations
+[50/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=role-form (light) has no automated WCAG 2.2 A or AA violations
+[51/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=role-form (govuk) has no automated WCAG 2.2 A or AA violations
+[52/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=role-form: every labelled field's name contains its visible label (2.5.3)
+[53/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=team (dark) has no automated WCAG 2.2 A or AA violations
+[54/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=team (light) has no automated WCAG 2.2 A or AA violations
+[55/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=team (govuk) has no automated WCAG 2.2 A or AA violations
+[56/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=team: every labelled field's name contains its visible label (2.5.3)
+[57/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=versions (dark) has no automated WCAG 2.2 A or AA violations
+[58/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=versions (light) has no automated WCAG 2.2 A or AA violations
+[59/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=versions (govuk) has no automated WCAG 2.2 A or AA violations
+[60/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_people&serve=people&open=Roles&show=versions: every labelled field's name contains its visible label (2.5.3)
+[61/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=refused (dark) has no automated WCAG 2.2 A or AA violations
+[62/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=refused (light) has no automated WCAG 2.2 A or AA violations
+[63/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=refused (govuk) has no automated WCAG 2.2 A or AA violations
+[64/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_people&serve=people&show=refused: every labelled field's name contains its visible label (2.5.3)
+[65/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=withheld (dark) has no automated WCAG 2.2 A or AA violations
+[66/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=withheld (light) has no automated WCAG 2.2 A or AA violations
+[67/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_people&serve=people&show=withheld (govuk) has no automated WCAG 2.2 A or AA violations
+[68/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_people&serve=people&show=withheld: every labelled field's name contains its visible label (2.5.3)
+[69/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=read_audit,read_rule_audit&serve=audit (dark) has no automated WCAG 2.2 A or AA violations
+[70/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=read_audit,read_rule_audit&serve=audit (light) has no automated WCAG 2.2 A or AA violations
+[71/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=read_audit,read_rule_audit&serve=audit (govuk) has no automated WCAG 2.2 A or AA violations
+[72/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=read_audit,read_rule_audit&serve=audit: every labelled field's name contains its visible label (2.5.3)
+[73/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=read_audit,read_rule_audit&serve=audit&show=rules (dark) has no automated WCAG 2.2 A or AA violations
+[74/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=read_audit,read_rule_audit&serve=audit&show=rules (light) has no automated WCAG 2.2 A or AA violations
+[75/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=read_audit,read_rule_audit&serve=audit&show=rules (govuk) has no automated WCAG 2.2 A or AA violations
+[76/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=read_audit,read_rule_audit&serve=audit&show=rules: every labelled field's name contains its visible label (2.5.3)
+[77/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=operate_schedules&serve=operations (dark) has no automated WCAG 2.2 A or AA violations
+[78/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=operate_schedules&serve=operations (light) has no automated WCAG 2.2 A or AA violations
+[79/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=operate_schedules&serve=operations (govuk) has no automated WCAG 2.2 A or AA violations
+[80/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=operate_schedules&serve=operations: every labelled field's name contains its visible label (2.5.3)
+[81/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=policies&open=Grading%20scheme (dark) has no automated WCAG 2.2 A or AA violations
+[82/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=policies&open=Grading%20scheme (light) has no automated WCAG 2.2 A or AA violations
+[83/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=policies&open=Grading%20scheme (govuk) has no automated WCAG 2.2 A or AA violations
+[84/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=administer_system&serve=policies&open=Grading%20scheme: every labelled field's name contains its visible label (2.5.3)
+[85/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=sql (dark) has no automated WCAG 2.2 A or AA violations
+[86/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=sql (light) has no automated WCAG 2.2 A or AA violations
+[87/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=sql (govuk) has no automated WCAG 2.2 A or AA violations
+[88/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=sql: every labelled field's name contains its visible label (2.5.3)
+[89/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=s3 (dark) has no automated WCAG 2.2 A or AA violations
+[90/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=s3 (light) has no automated WCAG 2.2 A or AA violations
+[91/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=s3 (govuk) has no automated WCAG 2.2 A or AA violations
+[92/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=s3: every labelled field's name contains its visible label (2.5.3)
+[93/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=athena (dark) has no automated WCAG 2.2 A or AA violations
+[94/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=athena (light) has no automated WCAG 2.2 A or AA violations
+[95/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=athena (govuk) has no automated WCAG 2.2 A or AA violations
+[96/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=administer_system&serve=connections&open=Connections&show=athena: every labelled field's name contains its visible label (2.5.3)
+[97/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_dashboards,administer_system&serve=packs&open=Dashboard%20identities (dark) has no automated WCAG 2.2 A or AA violations
+[98/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_dashboards,administer_system&serve=packs&open=Dashboard%20identities (light) has no automated WCAG 2.2 A or AA violations
+[99/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_dashboards,administer_system&serve=packs&open=Dashboard%20identities (govuk) has no automated WCAG 2.2 A or AA violations
+[100/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_dashboards,administer_system&serve=packs&open=Dashboard%20identities: every labelled field's name contains its visible label (2.5.3)
+[101/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_dashboards,administer_system&serve=packs&open=Demo%20packs (dark) has no automated WCAG 2.2 A or AA violations
+[102/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_dashboards,administer_system&serve=packs&open=Demo%20packs (light) has no automated WCAG 2.2 A or AA violations
+[103/104] a11y/every-harness.spec.ts:402:7 › admin-harness.html rights=manage_dashboards,administer_system&serve=packs&open=Demo%20packs (govuk) has no automated WCAG 2.2 A or AA violations
+[104/104] a11y/every-harness.spec.ts:444:5 › admin-harness.html rights=manage_dashboards,administer_system&serve=packs&open=Demo%20packs: every labelled field's name contains its visible label (2.5.3)
+  104 passed (1.5m)
