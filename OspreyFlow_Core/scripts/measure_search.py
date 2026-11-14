@@ -27,7 +27,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 #: The accepted budgets (ADR-149 Amendment 2; the orchestrator's decision 8, 14 November 2026), by
@@ -185,7 +185,8 @@ def measure_lag(
     is made once, outside the clock. Both requests are signed as one principal (a node on a
     private board is visible to its author). A worker's death mid-run hands the indexer's lease
     over after up to 30 s: a run that meets one is not the steady state, and is not to be read as
-    M6's figure. The drawn nodes stay in the case, each named `M6 <unique>`."""
+    M6's figure. No route removes a board or its items: the board and the drawn nodes stay in the
+    case, each named `M6 <unique>` (ADR-149 Amendment 2 records it)."""
     import uuid
 
     budget = budget or BUDGETS["lag"]
@@ -254,6 +255,89 @@ def _wait_for(
                 return ""
         time.sleep(poll)
     return "not searchable from the index in time"
+
+
+def _strings(value: Any) -> Iterator[str]:
+    """Every string in an answer, keys and values, at any depth: where an id or word could show."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, inner in value.items():
+            yield str(key)
+            yield from _strings(inner)
+    elif isinstance(value, list):
+        for inner in value:
+            yield from _strings(inner)
+
+
+def _leak_request(case: str, leak: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    if leak.get("route", "search") == "suggest":
+        return f"/v1/investigations/{case}/suggest", {"query": leak["query"], "limit": 10}
+    body: dict[str, Any] = {"query": leak["query"], "page": 1, "page_size": 20}
+    if "filters" in leak:
+        body["filters"] = leak["filters"]
+    return f"/v1/investigations/{case}/search", body
+
+
+def measure_leaks(
+    *, base: str, case: str, token: str, cleared_token: str, cases: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
+    """M10, the leak test at scale (requirement a; ADR-149 Amendment 2): each case a query, from
+    B's plants, that matches a record the part-cleared principal (`token`) may not see. As that
+    principal, through the routes the Glass calls, none of its `never_ids` and none of its
+    `never_text` (the record's distinguishing words, not ones it shares with visible look-alikes)
+    may appear anywhere in the answer: results, merged entities, passages, suggestions, labels or
+    filters. Where the truth gives them, `expect_total` and `expect_groups` ({key: count}) must be
+    the counts of what they may see. The answer must be the index's. **The control:** the same
+    request as the fully cleared principal (`cleared_token`) must name every `never_ids`, or the
+    case reaches nothing hidden and proves nothing, and fails as that. Pass or fail, not a time:
+    any leak fails M10."""
+    if not cases:
+        raise SystemExit("M10: no leak cases: the test would pass having asked nothing")
+    failures: list[str] = []
+    for i, leak in enumerate(cases):
+        name = leak.get("name") or f"case {i + 1} ({leak.get('route', 'search')} {leak['query']!r})"
+        path, body = _leak_request(case, leak)
+        _ms, control, error = _send(base, path, body, cleared_token)
+        seen = set(_strings(control)) if control is not None else set()
+        unreached = [n for n in leak["never_ids"] if not any(n in t for t in seen)]
+        if control is None or unreached:
+            failures.append(
+                f"{name}: the cleared principal's answer does not name {unreached or error}, so "
+                "the case reaches nothing hidden and proves nothing"
+            )
+            continue
+        _ms, answer, error = _send(base, path, body, token)
+        if answer is None:
+            failures.append(f"{name}: an error from the Conduit ({error})")
+            continue
+        if path.endswith("/search") and answer.get("source", "index") != "index":
+            failures.append(f"{name}: answered from the {answer.get('source')}, not the index")
+            continue
+        texts = list(_strings(answer))
+        for node in leak["never_ids"]:
+            if any(node in t for t in texts):
+                failures.append(f"{name}: the hidden record {node} is in the answer")
+        lowered = [t.lower() for t in texts]
+        for word in leak.get("never_text", []):
+            if any(word.lower() in t for t in lowered):
+                failures.append(f"{name}: the hidden record's words {word!r} are in the answer")
+        if "expect_total" in leak and answer.get("total") != leak["expect_total"]:
+            failures.append(
+                f"{name}: total {answer.get('total')}, but they may see {leak['expect_total']}"
+            )
+        if "expect_groups" in leak:
+            groups = {g["key"]: g["count"] for g in answer.get("groups") or []}
+            if groups != leak["expect_groups"]:
+                failures.append(
+                    f"{name}: groups {groups}, but they may see {leak['expect_groups']}"
+                )
+    return {
+        "measure": "M10",
+        "cases": len(cases),
+        "verdict": "not met" if failures else "met",
+        "failures": failures,
+    }
 
 
 def main(argv: Sequence[str] | None = None) -> int:

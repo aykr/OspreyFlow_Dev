@@ -38536,7 +38536,7 @@ index's speed: each makes its class fail.
 | M7 | Rebuild from the graph, B's whole load | no (the restore's rebuild) | measured, then the restore's bound set from it with a margin | the rebuild exceeds the bound the restore runbook gives it | Platform's finding F1: today's bound is a guess |
 | M8 | Drift check, B's whole load | no (its Job) | inside its Job's 4 GiB, its peak flat as the load grows, ≤ 1 h | out of memory, a peak growing with the documents, or over 1 h | The streaming check's bound by the page (ADR-124 Amendment 18's lane, 90442ba); finding F2 |
 | M9 | The fallback: OpenSearch stopped mid-session | no (the live search file) | the bar falls back and says so within the 5 s timeout | no message, or a wait over 5 s | ADR-149's fallback that says so |
-| M10 | The leak test at scale (the part-cleared principal) | no (the live search file) | nothing they may not see, count or infer, in results, counts, suggestions or snippets | any | Rule 3 (pass or fail, not a time) |
+| M10 | The leak test at scale (the part-cleared principal) | no (pass or fail: `measure_search.measure_leaks`, the live file's M10 case) | nothing they may not see, count or infer, in results, counts, suggestions or snippets | any | Rule 3 (pass or fail, not a time) |
 | M11 | Sizes: each container's peak working set during M1–M8 | no (the cluster's metrics) | peak ≤ 80% of its limit | at or over its limit, or killed | ADR-148 Amendment 12 decision 4: step 4 measures the manifest's sizes |
 
 **How each becomes a gate.** M1, M3, M4, M5 and M6 are judged by a live file, `tests/perf/test_search_budget_live.py`,
@@ -38548,7 +38548,20 @@ the Conduit (`POST …/boards/{board}/items`, the smallest write through the ada
 rules' advice of 14 November), from the request until the case's search answers it from the index, polled every
 100 ms, the board made once outside the clock. No route says the indexer has drained an event, and the analyst sees
 the search, so the search is the measure. A worker's death mid-run hands the indexer's 30 s lease over: such a run
-is not M6's steady state. M9 and M10 are live cases still to be written for step 6. M1, M3 and
+is not M6's steady state. **No route removes a board or its items, so step 4 leaves M6's board ("M6") and its drawn
+nodes (OFFICIAL Persons, each labelled `M6 <unique>`) in B's case**; they are synthetic, and B's case is a measurement
+load. M10 is the live file's pass-or-fail case, `measure_search.measure_leaks`. Each of its cases is a query, as the
+part-cleared principal, that matches a record they may not see. The record's ids and distinguishing words must appear
+nowhere in the answer (results, merged entities, passages, suggestions, labels, filters), the totals and group counts
+must be those of what they may see where the case gives them, and the answer must be the index's. **The control:** the
+same request as the fully cleared principal must name the hidden record, or the case reaches nothing hidden and fails
+as proving nothing. Its cases are derived from B's data, never typed by hand: from a SAME_AS truth row of "same" whose
+one record the part-cleared principal may see and whose other is SECRET, carries code R, or is in a case they are not
+granted (rules, 14 November). Two things B does not yet give, and M10 cannot run without: the two principals (a fully
+cleared one, SECRET with code R in every unit and granted every case, and a part-cleared one, OFFICIAL-SENSITIVE
+without R, in unit-records and unit-intel, granted the nominals and intel cases), and B's cases granted to them (its
+cases stage rerun with `--grant`, a change to stack d's data that takes the orchestrator's word). M9 is a live case
+still to be written for step 6. M1, M3 and
 M4 are also to become a CI regression gate on a fixed corpus of a million names (CI cannot hold B's load), shown red
 before it is wired (rule 15). M2 is to become a `perf/` case beside glass-perf. M7 and M8 set the restore runbook's
 and the drift check's bounds and memory, held by the render tests. M11 changes the manifest and the profile together.
