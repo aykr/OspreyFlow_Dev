@@ -39726,6 +39726,92 @@ measured.*
    5.8 s at 25,000, 8.1 s at 50,000, each answer exactly the fixture's links, none twice. One chunk's query at 1,000
    record ids took 1.5 s with `.profile()`.
 
+### ADR-124, Amendment 21 (14 November 2026) — `search_nodes` finds its candidates by SQL first
+
+*Reserved for the rules lane on 14 November (the orchestrator, on step 4's M9 result, for v0.5.2; the graph adapter is
+the rules lane's file, and platform proposed the shape). Amends Amendment 2's last point and Amendment 18 §3 for the
+exact search the fallback answers from, as Amendment 20 did for `edges_among`.*
+
+1. **What was wrong.** `SearchNodesBuilder` sent `g.V().<match_any_field's or()>.<access>.dedup().limit(n)`: an
+   `or()` of `has(field, value)` over every searchable field, from every vertex, with no label. Measured on stack d
+   under the rules lane's lease of 2026-11-14T03:27:42Z (B's load, 642,460 nodes; platform's
+   `process/lanes/platform/v052-measure/profile_m9.py`, runs 20261114T162936Z-90a75f73 and
+   20261114T164402Z-8bb511ed): 5.4 to 5.7 s for each of M9's five names, the same at `limit(20)` as at `limit(101)`,
+   so the read of the whole store was the cost; without the access step, 21 to 23 s. With OpenSearch stopped, M9's
+   fallback name searches took 5.3 to 5.5 s against its 5 s figure (step 4, run 20261114T143515Z-d6be4f56). The
+   same five as one labelled `has()` per type took 3 to 12 ms, and as one SQL lookup per type and field, then a
+   traversal from the records found, 67 to 70 ms.
+2. **What is built.** `search_nodes` first finds its candidates: one SQL query per stored vertex type and searchable
+   field that type keeps at its top level, `SELECT @rid AS rid FROM <type> WHERE <field> = :value`, the
+   value bound, sent together (`_search_candidates`, `render_field_record_id_lookup_sql`). It then sends, for each 1,000 of the
+   record ids found, `g.V(<record ids>).<match_any_field's or()>.<access>.dedup().limit(n).elementMap()`, and keeps
+   the first `n` nodes of the answers, none twice.
+   - **The match and the access step are in the traversal**, as before (rule 3), applied to every candidate; the
+     gazetteer guard (ADR-147 Amendments 1 and 2) is in that `or()` unchanged. The SQL lookup decides only where the
+     traversal starts, so a candidate it over-finds is dropped there, and nothing it finds leaves the adapter.
+   - **The same matches as before.** The query as built matched `has(field, value)` on a vertex of any
+     type, and a vertex holds a field at its top level only where its type lists it as an identifier
+     or marks it `indexed`, which the write flattens (`serialization._indexed_property_names`); any
+     other property stays inside `properties`, where `has` never matched it. An `Account` declares
+     `name` without indexing it, so it was never found by its name, and is not now (probed on stack
+     d, 14 November 2026). So each stored type is asked exactly those fields, each answered from the
+     type's own index. A field no request reader is matched on (`GAZETTEER_ONLY_IDENTIFIERS`, ADR-147
+     Amendment 3) is not looked up for one. As on every read by id (Amendment 2), a type without a
+     unique `id` index is not asked; every type the ontology applies has one.
+   - **Nothing cut** (rule 2): every chunk's traversal is sent, so the one-past row that says `more` is found
+     whichever chunk holds it, and the answer is cut at `n` after.
+   - **The round trips** depend only on how many vertices hold the value: one SQL query per type and field, and one
+     traversal per 1,000 candidates, `g.V().limit(0)` when there are none, so a value nobody holds costs what a value
+     only hidden nodes hold does. A value held by more than 1,000 vertices, hidden ones among them, costs a second
+     traversal, as the old query's time grew with the store.
+   - **Unchanged:** the fields searched (each type's identifiers and `indexed` properties, ADR round 13cd); exact
+     equality; no field set, no query; the order of the answer, which the port leaves unspecified.
+3. **Every caller keeps its contract** (`GraphPort.search_nodes`: exact matches on the searchable fields,
+   access-filtered in the adapter, at most `limit`): `services/api/search.py`'s `search` (the exact search, with
+   its normalised alternative), and through it `search_service._from_graph` (the fallback, at one past
+   `FALLBACK_DEPTH`); and the boards' match by value (`boards.py`, at `MATCH_LIMIT`). None depended on the order.
+4. **Held by** (rule 12):
+   - offline, `tests/adapters/graph_arcadedb/test_search_nodes_from_candidates.py`: no search starts from every
+     vertex; the match and the access step are in the traversal from the candidates; each type is asked the
+     fields it keeps flattened and no other (an `Account` its `account_number`, not its `name`), the value
+     bound and never in the text; a request reader looks up no gazetteer-only identifier,
+     the Conduit's own work does; a type the store does not hold is not asked; a value nobody holds still sends its
+     query; candidates past a chunk are all traversed and the answer cut at the limit, none twice; an empty field
+     set sends nothing. Six of its eight cases are red on main's adapter and builder; the other two hold there too,
+     as they should (`process/lanes/rules/adr124-am21/PLANTS_RECORD.offline.txt`);
+   - `tests/adapters/graph_arcadedb/test_gazetteer_name_only_match.py` and the live
+     `tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py`, the builder now given its candidates;
+   - the graph port's conformance suite's `search_nodes` and access cases, unchanged, live, and
+     `tests/conformance/graph_port/test_search_nodes_any_type.py`: with the deployment's ontology, an
+     Organisation found by its name, an Account by its `account_number` and not its name, each only by
+     the readers who may see it, and each answer equal to the query as built sent to the same store;
+   - live, on stack d, the equivalence (the orchestrator's ruling), in two steps:
+     - `process/lanes/rules/adr124-am21/equivalence.py`: the query as built beside the candidates found
+       from every field a type declares (the first version built), over step 4's first 100 M3 names and
+       200 M5 numbers and 200 values drawn from B that nodes hold (seed 21), as a request reader, a
+       restricted reader and, on the 200 drawn, an unlimited principal: 1,200 of 1,200 the same set of
+       ids and the same `more` (past the depth, the whole sets compared). Of the drawn, 194 of 200
+       matched at least one node as the request reader, 92 as the restricted one; of the M5 numbers 99
+       of 200 as the request reader; of the M3 names none, as an exact search of a whole name expects;
+     - `narrowing.py`: the candidates as built (the fields each type keeps flattened) beside that
+       first version, over the same 1,200, each the whole set of matches and `more`. The first version
+       equalled the query as built in all 1,200, so the version built equals it too wherever the two
+       versions agree;
+   - plants (`process/lanes/rules/adr124-am21/plants.py`), each red on its test: the start from every vertex, the
+     access step dropped, a field asked of every type that declares it (flattened or not), the gazetteer-only
+   identifiers looked up
+     for a request reader, a type the store does not hold asked, no query for a value nobody holds, only the first
+     chunk traversed, the answer not cut at the limit.
+
+   **Measured after** (stack d, B's load, the rules lane's lease; `process/lanes/rules/adr124-am21/gates/`):
+   M9 alone on the host (load 1.9), on the code as built, run 20261114T210905Z-74ac69e7: **met**, the five
+   fallback name searches 82 to 116 ms (5.3 to 5.5 s before), the five suggestions 1.11 to 1.43 s (against
+   2 s), the bar back in 9.2 s (against 120 s). Over the 1,200 comparisons, the new search took 76 to 96 ms
+   at the median and at most 107 ms at the 95th percentile, where the query as built took 7.3 to 22.2 s.
+   The narrowed candidates against the first version: 1,200 of 1,200 the same (579 matched at least one
+   node, 10 past the depth). The Account case live, with its plant (candidates by identifiers alone, so
+   the Organisation is not found by its name) red and restored green.
+
 ### ADR-150, Amendment 1 (14 November 2026) — The drift check streams
 
 *Reserved for the rules lane on 14 November (the orchestrator, before step B's load was checked). Amends decision 5's

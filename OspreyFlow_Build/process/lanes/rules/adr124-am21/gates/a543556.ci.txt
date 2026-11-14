@@ -1,0 +1,69 @@
+# Am 21's A on the server (offline, no stack, queue line A), kept raw.
+# Run 1, 17:12-17:37Z at a543556 (20261114T171206Z-92cfc2d9): make test then make -k ci. make test's output was cut to its last 40 lines by the command (the lane's error), so its failing part is unknown here; make -k ci: every target green but chart-check, main's own (test_cluster_render's every_secret: OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS and OSPREY_MODEL_TIMEOUT_SECONDS; the orchestrator's D2 render-timeouts.diff, platform fixing the cluster render).
+Running on ospreyflow-test (stack offline, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261114T171206Z-92cfc2d9/log: bash -c cd OspreyFlow_Build && echo "make test start $(date -u +%H:%M:%SZ)" && make test 2>&1 | tail -40; t=${PIPESTATUS[0]}; echo "make test exit=$t at $(date -u +%H:%M:%SZ)"; echo "make -k ci start $(date -u +%H:%M:%SZ)"; make -k ci 2>&1 | grep -E "^make(\[[0-9]+\])?: \*\*\*|Error|FAILED|passed|failed|error:" | tail -40; c=${PIPESTATUS[0]}; echo "make -k ci exit=$c at $(date -u +%H:%M:%SZ)"; [ $t -eq 0 ] && [ $c -eq 0 ]
+make test start 17:12:06Z
+[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m      Tests [22m [1m[32m51 passed[39m[22m[90m (51)[39m
+[2m   Start at [22m 17:22:47
+[2m   Duration [22m 1.37s[2m (environment 64%, tests 25%, import 9%, transform 1%)[22m
+
+
+Slowest 30 of 51 tests:
+   216 ms  src/screens/ModelsScreen.test.tsx > ModelsScreen > keeps the providers and defaults the configuration holds when it saves
+   193 ms  src/SummaryRail.test.tsx > SummaryRail's light and dark button > is there, as a real button, offering Light while the page is dark and Dark once it is light
+   188 ms  src/screens/ProfileScreen.test.tsx > ProfileScreen > asks Small for its https:// address and saves the profile and the address together
+   163 ms  src/screens/InstallScreens.test.tsx > ModeScreen > offers the three modes with one sentence each and saves the chosen one
+   152 ms  src/screens/GeospatialScreen.test.tsx > GeospatialScreen's Build > sends the region and the unit typed
+   144 ms  src/InstallApp.test.tsx > InstallApp > shows Lite's screens only for Lite
+    50 ms  src/InstallApp.test.tsx > the draft's profile and address (S11, the owner's ruling of 2 November 2026) > does not write Small's profile on choosing the mode, before its address is known
+    49 ms  src/InstallApp.test.tsx > InstallApp > says what OspreyFlow is above every screen
+    48 ms  src/InstallApp.test.tsx > InstallApp > shows Small's screens only for Small
+    40 ms  src/screens/ModelsScreen.test.tsx > ModelsScreen > sends the key to the install page, clears the field and shows key set — never the key
+    40 ms  src/InstallApp.test.tsx > the draft's profile and address (S11, the owner's ruling of 2 November 2026) > writes Small's profile and its https:// address together when the domain is saved
+    31 ms  src/screens/ModelsScreen.test.tsx > ModelsScreen > says why a key was refused, and keeps no key on the page
+    31 ms  src/screens/InstallScreens.test.tsx > ModeScreen's starter (ADR-138) > asks a GOV.UK starter for the service, offering a name for the whole service
+    28 ms  src/screens/GeospatialScreen.test.tsx > GeospatialScreen's Build > shows the refusal of a build without a unit in words
+    28 ms  src/screens/InstallScreens.test.tsx > ModeScreen > drops the cloud answers when Lite is chosen, which Lite refuses
+    27 ms  src/screens/ProfileScreen.test.tsx > ProfileScreen > saves Lite's profile alone
+    26 ms  src/screens/InstallScreens.test.tsx > ModeScreen's starter (ADR-138) > keeps the demo packs chosen for the same starter, and drops them when the starter changes
+    25 ms  src/screens/InstallScreens.test.tsx > ModeScreen > says in words why a save was refused
+    25 ms  src/screens/ModelsScreen.test.tsx > ModelsScreen > keeps the older single provider as well
+    24 ms  src/screens/ModelsScreen.test.tsx > ModelsScreen > shows each provider's privacy-contract mark and reference, and keeps the mark when it saves (ADR-136)
+    21 ms  src/screens/ModelsScreen.test.tsx > ModelsScreen > shows each provider read-only, with its models and the roles it is the default for, and says where keys are given
+    20 ms  src/screens/InstallScreens.test.tsx > ModeScreen's starter (ADR-138) > offers no starter first, then each starter, and saves the chosen one with the mode
+    19 ms  src/SummaryRail.test.tsx > SummaryRail's light and dark button > switches the page and saves the choice where the Glass and the launcher read it
+    18 ms  src/screens/InstallScreens.test.tsx > DemoPacksScreen with a starter (ADR-138) > ticks the starter's packs and keeps the starter and its look when it saves
+    18 ms  src/screens/InstallScreens.test.tsx > CloudScreen and DomainScreen > saves the provider, region and size under cloud
+    17 ms  src/screens/ModelsScreen.test.tsx > ModelsScreen > on the guided install, has a write-only key field per provider and says whether each key is set
+    16 ms  src/screens/InstallScreens.test.tsx > DemoPacksScreen > asks where the PaySim download is, and says how it is checked, once PaySim is ticked
+    16 ms  src/screens/InstallScreens.test.tsx > FoldersScreen > refuses the schema's backups placeholder off a server of your own, as the command does
+    13 ms  src/screens/InstallScreens.test.tsx > DemoPacksScreen > lists each pack with what it shows and its licence, and saves the ticked ones
+    12 ms  src/screens/InstallScreens.test.tsx > ReviewScreen > shows the answers in words, the doctor's lines and an Install button for Lite
+make[1]: Leaving directory '/root/osprey-runs/rules/OspreyFlow_Core'
+make test: a part above failed
+make: *** [Makefile:175: test] Error 1
+make test exit=2 at 17:22:49Z
+make -k ci start 17:22:49Z
+All checks passed!
+  34 passed (23.8s)
+licence-check: 94 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+============================== 8 passed in 5.36s ===============================
+Success! 9 passed, 0 failed.
+Success! 11 passed, 0 failed.
+Success! 12 passed, 0 failed.
+Success! 11 passed, 0 failed.
+1 chart(s) linted, 0 chart(s) failed
+E       AssertionError: assert {'OSPREY_HOST...ER': 'osprey'} == {'OSPREY_KEYC...ER': 'osprey'}
+../OspreyFlow_Build/tests/harness/test_cluster_render.py:143: AssertionError
+FAILED ../OspreyFlow_Build/tests/harness/test_cluster_render.py::test_every_secret_a_workload_reads_is_listed_for_the_install
+======================== 1 failed, 53 passed in 12.36s =========================
+make: *** [Makefile:238: chart-check] Error 1
+============ 393 passed, 8 skipped, 1 warning in 306.19s (0:05:06) =============
+================ 17 passed, 2 skipped, 785 deselected in 1.39s =================
+======================== 205 passed in 80.92s (0:01:20) ========================
+============================= 10 passed in 17.90s ==============================
+============================== 12 passed in 1.27s ==============================
+============================== 28 passed in 1.56s ==============================
+make -k ci exit=2 at 17:37:09Z
+Reaped 3 process(es) the run left behind (/root/osprey-runs/rules.meta/runs/20261114T171206Z-92cfc2d9).
+Wall time: 1506 s, exit 1 (no stack, no lease; set-up before it 11 s)

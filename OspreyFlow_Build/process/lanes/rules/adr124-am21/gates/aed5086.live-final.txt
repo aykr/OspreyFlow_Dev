@@ -1,0 +1,57 @@
+# Am 21's final line on stack d, 21:05-21:11Z, run tree aed5086 (lane/rules-adr124-am21 b6bbbd5, the narrowed candidates, + platform a28f93e), under the same lease, kept raw: the Account case, its live plant red and restored green; narrowed against widened over the 1,200; M9 alone on the code that ships.
+== C start 21:05:40Z at aed5086 (run tree for rules' Am 21 final line: lane/rules-adr124-am21 b6bbbd5 + platform a28f93e (not a branc)
+Running on ospreyflow-test (stack d, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261114T210550Z-051e20d2/log: bash -c A=OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py; cp $A /tmp/am21-adapter.saved; cd OspreyFlow_Core; echo '-- at head:'; .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q ../OspreyFlow_Build/tests/conformance/graph_port/test_search_nodes_any_type.py 2>&1 | grep -E '^E  |passed|failed' | head -8; cd ..; python3 - $A <<PY
+import sys; p=sys.argv[1]; s=open(p).read()
+old='asked & _indexed_property_names(entity)'
+assert s.count(old)==1; open(p,'w').write(s.replace(old,'asked & set(entity.identifiers)'))
+PY
+cd OspreyFlow_Core; echo '-- planted (candidates by identifiers only):'; .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q ../OspreyFlow_Build/tests/conformance/graph_port/test_search_nodes_any_type.py 2>&1 | grep -E '^E  |passed|failed' | head -6; cd ..; cp /tmp/am21-adapter.saved $A && cmp $A /tmp/am21-adapter.saved && echo 'restored from saved text'; cd OspreyFlow_Core; .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q ../OspreyFlow_Build/tests/conformance/graph_port/test_search_nodes_any_type.py 2>&1 | tail -1
+-- at head:
+1 passed in 2.02s
+-- planted (candidates by identifiers only):
+E               AssertionError: ('Harbour Ledger Holdings', 'cleared', set())
+E               assert set() == {'01M7DY35C9K...7VQMF35WN9V3'}
+E                 
+E                 Extra items in the right set:
+E                 '01M7DY35C9KBR87VQMF35WN9V2'
+E                 '01M7DY35C9KBR87VQMF35WN9V3'
+restored from saved text
+1 passed in 2.71s
+Wall time: 9 s, exit 0 (stack d, the lease rules took at 2026-11-14T03:27:42Z; set-up before it 9 s)
+== 1 the Account case, its live plant, restored exit=0 at 21:06:02Z
+Running on ospreyflow-test (stack d, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261114T210613Z-5949f240/log: bash -c cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/rules/adr124-am21/narrowing.py --from $HOME/osprey-load/b-1.0 --queries $HOME/osprey-load/step4/queries.jsonl --out $HOME/osprey-load/am21/narrowing.jsonl
+am21 narrowing: 1200 comparisons, narrowed against widened
+am21 narrowing: 1200 of 1200 the same, 0 different; 579 matched at least one node, 10 past the depth
+Wall time: 157 s, exit 0 (stack d, the lease rules took at 2026-11-14T03:27:42Z; set-up before it 10 s)
+== 2 narrowing exit=0 at 21:08:52Z
+== host before M9:  21:08:54 up 19 days,  5:47,  4 users,  load average: 1.87, 1.59, 1.58
+no-make
+nothing running
+Running on ospreyflow-test (stack d, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261114T210905Z-74ac69e7/log: bash -c cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/v052-measure/step4_stack.py --case 01M7C2SXAPP3RF8QRSR2SKEMJK -- bash -c "OSPREY_MEASURE_QUERIES=\$HOME/osprey-load/step4/queries.jsonl OSPREY_MEASURE_STOP_OPENSEARCH=osprey-test-d-opensearch OSPREY_MEASURE_RESULTS=\$HOME/osprey-load/step4/results-m9-am21-narrowed .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -rfs ../OspreyFlow_Build/tests/perf/test_search_budget_live.py -k m9"
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 7 items / 6 deselected / 1 selected
+
+../OspreyFlow_Build/tests/perf/test_search_budget_live.py .              [100%]
+
+============================= slowest 30 durations =============================
+16.43s call     tests/perf/test_search_budget_live.py::test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so
+0.31s setup    tests/perf/test_search_budget_live.py::test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+======================= 1 passed, 6 deselected in 16.86s =======================
+Wall time: 133 s, exit 0 (stack d, the lease rules took at 2026-11-14T03:27:42Z; set-up before it 11 s)
+== 3 M9 rerun alone, narrowed exit=0 at 21:11:20Z
+osprey-test-d-opensearch Up 13 seconds
+met [('search', 'Tomasz Kellly', 115.7), ('search', 'Meagan Illiams', 88.5), ('search', 'Steven Morlow', 83.5), ('search', 'Zoe Hralo', 82.6), ('search', 'Callum Quinik', 82.3), ('suggest', 'Ashham', 1434.0), ('suggest', 'Wrig', 1164.2), ('suggest', 'Renee', 1129.9), ('suggest', 'Siddi', 1165.2), ('suggest', 'St', 1114.4)] 9.2 []
+== C end 21:11:21Z
+
+[exited with code 0]

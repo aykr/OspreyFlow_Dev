@@ -92,6 +92,7 @@ from schemas.explore import (
     TypeCounts,
 )
 from schemas.ingest import LinkPriorState, stored_digest
+from schemas.mapconfig import GAZETTEER_ONLY_IDENTIFIERS
 from schemas.merge import merge_datasets, merge_interval, merge_properties, merge_provenance
 from schemas.strength import (
     SHARED_VALUE,
@@ -124,6 +125,7 @@ from .builders import (
     SuggestNodesBuilder,
     render_edges_among_gremlin,
     render_existing_ids_sql,
+    render_field_record_id_lookup_sql,
     render_get_edges_gremlin,
     render_get_nodes_gremlin,
     render_link_structure_gremlin,
@@ -153,6 +155,7 @@ from .naming import (
 from .schema import apply_schema as _apply_schema_ddl
 from .schema import drop_schema as _drop_schema_ddl
 from .serialization import (
+    _indexed_property_names,
     edge_from_element_map,
     edge_write_to_properties,
     node_from_element_map,
@@ -1034,9 +1037,61 @@ class GraphArcadeDBAdapter:
         identifier_fields = tuple(sorted(searchable_fields))
         if not identifier_fields:
             return []
-        builder = SearchNodesBuilder(identifier_fields, query, limit=limit)
-        results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
-        return [node_from_element_map(r, principal) for r in results]
+        # ADR-124 Amendment 21: the candidates first, by SQL, then the match and the access step
+        # in a traversal from them alone. `g.V().or(...)` read the whole store for each search.
+        rids = await self._search_candidates(schema, identifier_fields, query, principal)
+        found: dict[str, dict[str, Any]] = {}
+        for chunk in _id_chunks(rids) or [[]]:
+            builder = SearchNodesBuilder(
+                identifier_fields, query, limit=limit, record_ids=tuple(chunk)
+            )
+            for row in await self._client.gremlin(builder.render_gremlin(self._access, principal)):
+                found.setdefault(str(row.get("id")), row)
+        return [node_from_element_map(r, principal) for r in list(found.values())[:limit]]
+
+    async def _search_candidates(
+        self,
+        schema: OntologySchema,
+        identifier_fields: tuple[str, ...],
+        query: str,
+        principal: Principal,
+    ) -> list[str]:
+        """`search_nodes`' candidates (ADR-124 Amendment 21): the record ids of every vertex that
+        could match, one SQL query per stored vertex type and searchable field that type keeps at
+        its top level (its identifiers and indexed properties, `_indexed_property_names`, which the
+        write flattens; any other property stays inside `properties`, where `has(field, value)`
+        never matched it), run together, the value bound. A field matched for no request reader
+        (`GAZETTEER_ONLY_IDENTIFIERS`, ADR-147 Amendment 3) is not asked for one. A type the store
+        does not hold (no unique `id` index, Amendment 2) is not asked. Nothing here is
+        access-filtered, and the traversal from these records applies the match again, so a
+        candidate the lookup over-finds is dropped there; the result is ordered, without repeats,
+        so the chunks, and the round trips, depend only on how many vertices hold the value."""
+        asked = set(identifier_fields)
+        if principal.datasets is not None:
+            asked -= set(GAZETTEER_ONLY_IDENTIFIERS)
+        stored = set(await self._types_with_unique_id("vertex"))
+        pairs = [
+            (physical_type_name(entity.name), name)
+            for entity in schema.entity_types
+            if physical_type_name(entity.name) in stored
+            for name in sorted(asked & _indexed_property_names(entity))
+        ]
+        found = await asyncio.gather(
+            *(
+                self._client.sql(
+                    render_field_record_id_lookup_sql(type_name, name), params={"value": query}
+                )
+                for type_name, name in pairs
+            )
+        )
+        rids: set[str] = set()
+        for rows in found:
+            for row in rows:
+                rid = row.get("rid")
+                if not isinstance(rid, str) or not _RECORD_ID.match(rid):
+                    raise ValueError(f"not an ArcadeDB record id: {rid!r}")
+                rids.add(rid)
+        return sorted(rids)
 
     async def suggest_locations(
         self, name: str, principal: Principal, *, limit: int = 20

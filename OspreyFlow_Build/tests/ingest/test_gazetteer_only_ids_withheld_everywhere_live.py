@@ -39,8 +39,9 @@ from services.api.datasets import Dataset, PostgresDatasetStore
 
 from adapters.graph_arcadedb.access_filter import AccessFilter
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
-from adapters.graph_arcadedb.builders import SearchNodesBuilder
+from adapters.graph_arcadedb.builders import SearchNodesBuilder, render_record_id_lookup_sql
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+from adapters.graph_arcadedb.naming import physical_type_name
 from conduit_common.identity import new_node_id, now_utc
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
@@ -272,13 +273,24 @@ def test_at_the_adapter_no_node_is_matched_on_one_and_the_empty_step_keeps_none(
             suggested = await graph.suggest_nodes(OSM_ID, reader)
             assert suggested.nodes == [] and suggested.more is False
             assert [n.id for n in await graph.search_nodes(UPRN, reader)] == [world["place"]]
-            # The step a search on those fields alone is sent, run by ArcadeDB itself.
+            # The step a search on those fields alone is sent, run by ArcadeDB itself, from the
+            # place's own record (ADR-124 Amendment 21: a search starts from its candidates).
             access = AccessFilter(load_uk_le_scheme())
-            empty = SearchNodesBuilder(("osm_id",), OSM_ID).render_gremlin(access, reader)
+            located = await client.sql(
+                render_record_id_lookup_sql(physical_type_name("Location")),
+                params={"ids": [world["place"]]},
+            )
+            rids = tuple(str(row["rid"]) for row in located)
+            assert len(rids) == 1, located
+            empty = SearchNodesBuilder(("osm_id",), OSM_ID, record_ids=rids).render_gremlin(
+                access, reader
+            )
             assert "or(__.not(__.identity()))" in empty
             assert await client.gremlin(empty) == []
             unlimited = reader.model_copy(update={"datasets": None})
-            control = SearchNodesBuilder(("osm_id",), OSM_ID).render_gremlin(access, unlimited)
+            control = SearchNodesBuilder(("osm_id",), OSM_ID, record_ids=rids).render_gremlin(
+                access, unlimited
+            )
             found = await client.gremlin(control)
             assert [row["id"] for row in found] == [world["place"]], found
         finally:

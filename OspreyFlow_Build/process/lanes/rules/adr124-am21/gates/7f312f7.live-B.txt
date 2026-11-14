@@ -1,0 +1,162 @@
+# Am 21's B on stack d, 17:50-20:37Z, run tree 7f312f7 (lane/rules-adr124-am21 bfee348, the widened candidates, + platform c89afde), under the rules lane's lease of 2026-11-14T03:27:42Z, kept raw. The one failure, test_search_nodes_any_type, was the case's own premise (an Account by its unindexed name), found wrong by account_probe.py (debug/), and rewritten at 968f5ea; the equivalence (1,200 of 1,200) and M9 (met) are the widened version's.
+== B start 17:50:03Z at 7f312f7 (run tree for rules' Am 21 B turn: lane/rules-adr124-am21 bfee348 + platform c89a)
+Running on ospreyflow-test (stack d, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261114T175011Z-116c59a2/log: bash -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rfE ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py ../OspreyFlow_Build/tests/ingest/test_gazetteer_place_search_live.py ../OspreyFlow_Build/tests/ingest/test_gazetteer_ids_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_case_gazetteer_copies_live.py 2>&1 | tail -30
+18.83s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+18.56s call     tests/conformance/graph_port/test_suite.py::test_live_edges_touching_past_one_chunk_names_every_link[graph_arcadedb[gremlin]]
+17.80s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+17.27s call     tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph
+7.15s call     tests/conformance/graph_port/test_schema_batch_live.py::test_the_full_ontology_batched_dumps_as_one_at_a_time
+6.95s call     tests/conformance/graph_port/test_suite.py::test_a_hub_receiving_many_edges_across_batches_stores_each_edge_once[graph_arcadedb[gremlin]]
+5.98s setup    tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier
+5.96s call     tests/ingest/test_case_gazetteer_copies_live.py::test_a_region_is_copied_in_bounded_pages_and_timed
+5.90s call     tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_type_ahead_suggests_nothing_by_one_and_says_no_more
+5.73s call     tests/conformance/graph_port/test_schema_batch_live.py::test_the_dump_comparison_names_a_missing_index
+4.78s teardown tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_found_by_name_and_uprn_the_place_is_sent_with_its_uprn_alone
+4.62s teardown tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_a_load_s_match_reaches_no_node_the_reader_cannot_see
+4.58s teardown tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_at_the_adapter_no_node_is_matched_on_one_and_the_empty_step_keeps_none
+4.54s teardown tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier
+4.46s teardown tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_type_ahead_suggests_nothing_by_one_and_says_no_more
+4.43s teardown tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_working_set_s_seed_sends_neither
+4.00s setup    tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_at_the_adapter_no_node_is_matched_on_one_and_the_empty_step_keeps_none
+3.98s setup    tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_found_by_name_and_uprn_the_place_is_sent_with_its_uprn_alone
+3.95s setup    tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_working_set_s_seed_sends_neither
+3.94s setup    tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_a_load_s_match_reaches_no_node_the_reader_cannot_see
+3.82s setup    tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_type_ahead_suggests_nothing_by_one_and_says_no_more
+3.14s call     tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_working_set_s_seed_sends_neither
+3.00s call     tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_found_by_name_and_uprn_the_place_is_sent_with_its_uprn_alone
+2.97s call     tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier
+2.85s call     tests/conformance/graph_port/test_edges_among_at_scale.py::test_links_across_a_chunk_boundary_are_each_found_once
+2.72s call     tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_at_the_adapter_no_node_is_matched_on_one_and_the_empty_step_keeps_none
+2.19s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_search_nodes_any_type.py::test_a_node_is_found_by_a_searchable_field_its_own_type_does_not_index
+1 failed, 416 passed, 1 warning in 566.10s (0:09:26)
+Wall time: 568 s, exit 0 (stack d, the lease rules took at 2026-11-14T03:27:42Z; set-up before it 8 s)
+== 1 conformance and gazetteer live exit=0 at 17:59:41Z
+Running on ospreyflow-test (stack d, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261114T180009Z-aee33ea5/log: bash -c A=OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py; cp $A /tmp/am21-adapter.saved; python3 - $A <<PY
+import sys; p=sys.argv[1]; s=open(p).read()
+old="asked & ({p.name for p in entity.properties} | set(entity.identifiers))"
+assert s.count(old)==1; open(p,"w").write(s.replace(old,"asked & ({p.name for p in entity.properties if p.indexed} | set(entity.identifiers))"))
+PY
+cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q ../OspreyFlow_Build/tests/conformance/graph_port/test_search_nodes_any_type.py 2>&1 | grep -E "^E  |passed|failed" | head -6; cd .. && cp /tmp/am21-adapter.saved $A && cmp $A /tmp/am21-adapter.saved && echo "restored from saved text" && cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q ../OspreyFlow_Build/tests/conformance/graph_port/test_search_nodes_any_type.py 2>&1 | tail -1
+E           AssertionError: assert {'01M7DKF3VCVMAZ2X0GX256YJP8'} == {'01M7DKF3VB5...2X0GX256YJP9'}
+E             
+E             Extra items in the right set:
+E             '01M7DKF3VCVMAZ2X0GX256YJP7'
+E             '01M7DKF3VCVMAZ2X0GX256YJP9'
+E             '01M7DKF3VB5R2JCESEB50Z6TQG'
+restored from saved text
+1 failed in 1.15s
+Wall time: 4 s, exit 0 (stack d, the lease rules took at 2026-11-14T03:27:42Z; set-up before it 24 s)
+== 2 live plant A3 (red) and restored (green) exit=0 at 18:00:17Z
+Running on ospreyflow-test (stack d, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261114T180041Z-adaf17fe/log: bash -c mkdir -p $HOME/osprey-load/am21 && cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/rules/adr124-am21/equivalence.py --from $HOME/osprey-load/b-1.0 --queries $HOME/osprey-load/step4/queries.jsonl --out $HOME/osprey-load/am21/equivalence.jsonl
+am21 equivalence: 300 of step 4's, 200 drawn (seed 21), 1200 comparisons, two at a time
+  100 of 1200
+  200 of 1200
+  300 of 1200
+  400 of 1200
+  500 of 1200
+  600 of 1200
+  700 of 1200
+  800 of 1200
+  900 of 1200
+  1000 of 1200
+  1100 of 1200
+  1200 of 1200
+drawn          request    n=200 matched>=1: 194 more: 4 same: 200 old p50 22190 ms, new p50 81 ms p95 100 ms
+drawn          restricted n=200 matched>=1:  92 more: 2 same: 200 old p50 7285 ms, new p50 76 ms p95 97 ms
+drawn          unlimited  n=200 matched>=1: 194 more: 4 same: 200 old p50 17861 ms, new p50 96 ms p95 107 ms
+step4-exact    request    n=200 matched>=1:  99 more: 0 same: 200 old p50 22257 ms, new p50 83 ms p95 98 ms
+step4-exact    restricted n=200 matched>=1:   0 more: 0 same: 200 old p50 7287 ms, new p50 76 ms p95 98 ms
+step4-names    request    n=100 matched>=1:   0 more: 0 same: 100 old p50 22204 ms, new p50 81 ms p95 104 ms
+step4-names    restricted n=100 matched>=1:   0 more: 0 same: 100 old p50 7278 ms, new p50 76 ms p95 97 ms
+am21 equivalence: 1200 of 1200 the same, 0 different
+Wall time: 9257 s, exit 0 (stack d, the lease rules took at 2026-11-14T03:27:42Z; set-up before it 21 s)
+== 3 equivalence exit=0 at 20:35:01Z
+== host before M9:  20:35:02 up 19 days,  5:13,  4 users,  load average: 1.90, 2.15, 2.25
+no-make
+nothing of ours
+osprey-test-d-arcadedb osprey-test-d-opensearch osprey-test-d-clickhouse osprey-test-d-objectstore osprey-test-d-valkey osprey-test-d-pg Running on ospreyflow-test (stack d, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261114T203513Z-a7331cae/log: bash -c cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/v052-measure/step4_stack.py --case 01M7C2SXAPP3RF8QRSR2SKEMJK -- bash -c "OSPREY_MEASURE_QUERIES=\$HOME/osprey-load/step4/queries.jsonl OSPREY_MEASURE_STOP_OPENSEARCH=osprey-test-d-opensearch OSPREY_MEASURE_RESULTS=\$HOME/osprey-load/step4/results-m9-am21 .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -rfs ../OspreyFlow_Build/tests/perf/test_search_budget_live.py -k m9"
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 7 items / 6 deselected / 1 selected
+
+../OspreyFlow_Build/tests/perf/test_search_budget_live.py .              [100%]
+
+============================= slowest 30 durations =============================
+17.32s call     tests/perf/test_search_budget_live.py::test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so
+0.31s setup    tests/perf/test_search_budget_live.py::test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+======================= 1 passed, 6 deselected in 21.53s =======================
+Wall time: 134 s, exit 0 (stack d, the lease rules took at 2026-11-14T03:27:42Z; set-up before it 11 s)
+== 4 M9 rerun alone exit=0 at 20:37:29Z
+osprey-test-d-opensearch Up 17 seconds
+{
+  "measure": "M9",
+  "verdict": "met",
+  "timings": [
+    {
+      "route": "search",
+      "query": "Tomasz Kellly",
+      "ms": 104.8
+    },
+    {
+      "route": "search",
+      "query": "Meagan Illiams",
+      "ms": 92.1
+    },
+    {
+      "route": "search",
+      "query": "Steven Morlow",
+      "ms": 93.6
+    },
+    {
+      "route": "search",
+      "query": "Zoe Hralo",
+      "ms": 90.9
+    },
+    {
+      "route": "search",
+      "query": "Callum Quinik",
+      "ms": 91.4
+    },
+    {
+      "route": "suggest",
+      "query": "Ashham",
+      "ms": 1490.2
+    },
+    {
+      "route": "suggest",
+      "query": "Wrig",
+      "ms": 1122.1
+    },
+    {
+      "route": "suggest",
+      "query": "Renee",
+      "ms": 1088.6
+    },
+    {
+      "route": "suggest",
+      "query": "Siddi",
+      "ms": 1127.7
+    },
+    {
+      "route": "suggest",
+      "query": "St",
+      "ms": 1072.6
+    }
+  ],
+  "recovered_s": 9.2,
+  "failures": []
+}== B end 20:37:30Z
+
+[exited with code 0]

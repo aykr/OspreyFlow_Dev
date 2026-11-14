@@ -9,7 +9,7 @@ added later, with no change to the callers in `adapter.py`.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from schemas.domain import (
@@ -114,25 +114,55 @@ def match_any_field(
 class SearchNodesBuilder:
     """`GraphPort.search_nodes` — exact match against `identifier_fields`
     (every distinct property name any entity type in the applied ontology
-    declares as an `identifiers` entry), regardless of which type actually
-    carries it: `has(field,value)` alone, with no `hasLabel` restriction,
-    matches any vertex carrying that property — the same reasoning
-    `FindByIdentifierBuilder` uses for one named field, generalised across
-    the whole declared set with `or()` rather than one query per field."""
+    declares as an `identifiers` entry or marks `indexed`), regardless of
+    which type carries it, over the candidates at `record_ids` (ADR-124
+    Amendment 21): the vertices one SQL lookup per stored type and field
+    found holding the value (`render_field_record_id_lookup_sql`). The match
+    itself, `match_any_field`'s `or()` with its gazetteer guard, and the
+    access step are applied here, in the traversal, to every candidate, so
+    the lookup only narrows where the traversal starts and decides nothing a
+    reader is shown (rule 3).
+
+    Never `g.V().or(...)` from every vertex: that read the whole store for
+    each search, 5.4 to 5.7 s at B's 642,460 nodes on stack d (M9's fallback,
+    against its 5 s figure, 14 November 2026), whatever the limit. For no
+    record ids the query is still rendered, `g.V().limit(0)`, as
+    `render_edges_among_gremlin`'s is, so a value nobody holds costs the round
+    trip a hidden holder does."""
 
     identifier_fields: tuple[str, ...]
     query: str
     limit: int = 20
+    record_ids: tuple[str, ...] = field(kw_only=True)
 
     def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
         has_access = access.gremlin_has_step(principal)
         value_lit = groovy_string_literal(self.query)
         matched = match_any_field(
-            lambda field: f"__.has({groovy_string_literal(field)},{value_lit})",
+            lambda name: f"__.has({groovy_string_literal(name)},{value_lit})",
             self.identifier_fields,
             principal,
         )
-        return f"g.V().{matched}.{has_access}.dedup().limit({self.limit}).elementMap()"
+        source = (
+            f"g.V({groovy_string_list_literal(list(self.record_ids))})"
+            if self.record_ids
+            else "g.V().limit(0)"
+        )
+        return f"{source}.{matched}.{has_access}.dedup().limit({self.limit}).elementMap()"
+
+
+def render_field_record_id_lookup_sql(type_name: str, field_name: str) -> str:
+    """`search_nodes`' candidates (ADR-124 Amendment 21): the record ids of the vertices of one
+    stored type whose `field_name` equals the value bound to `:value`, answered from that type's
+    index on the field where it has one (and by a read of that type alone where it does not). The
+    value is a bound parameter, never part of the text; the type and field names are checked as
+    identifiers, since a name cannot be bound, and quoted in backticks. Nothing here is
+    access-filtered and nothing leaves the adapter: the traversal from these records applies the
+    match and the access step."""
+    return (
+        f"SELECT @rid AS rid FROM `{groovy_identifier(type_name)}`"
+        f" WHERE `{groovy_identifier(field_name)}` = :value"
+    )
 
 
 @dataclass(frozen=True)

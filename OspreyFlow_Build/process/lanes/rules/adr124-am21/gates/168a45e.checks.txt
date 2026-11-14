@@ -1,0 +1,28 @@
+rules-adr124-am21 checks at 168a45e (on main f585330), on the Mac in the worktree, slot 9 and closed ports, no stack, no server
+== offline adapter and search tests
+........................................................................ [ 80%]
+..................                                                       [100%]
+90 passed in 5.81s
+-- offline adapter and search tests exit=0
+== the live files collect
+tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_working_set_s_seed_sends_neither
+tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_a_load_s_match_reaches_no_node_the_reader_cannot_see
+
+7 tests collected in 0.67s
+-- the live files collect exit=0
+== citation-check
+doc-citations-check: 2979 file(s) scanned, every cited path exists.
+-- citation-check exit=0
+== test-file-coverage-check
+test-file-coverage-check: 1144 test file(s), 0 allowlisted, no new drift.
+-- test-file-coverage-check exit=0
+== ruff check .
+All checks passed!
+-- ruff check . exit=0
+== ruff format --check (the branch's Core files)
+2 files already formatted
+-- ruff format --check (the branch's Core files) exit=0
+== mypy packages services harness
+Success: no issues found in 493 source files
+-- mypy packages services harness exit=0
+checks rc=0
