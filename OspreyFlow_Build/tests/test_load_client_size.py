@@ -472,3 +472,28 @@ def test_a_folder_with_no_set_is_refused_before_any_store_is_opened(
     monkeypatch.setattr(socket.socket, "connect", no_network)
     assert loader.main(["--from", str(tmp_path)]) == 2
     assert "holds no manifest.json" in capsys.readouterr().err
+
+
+def test_a_grant_names_every_case_or_one_sources_case() -> None:
+    """`ACCOUNT=LEVEL` on every source's case; `SOURCE:ACCOUNT=LEVEL` on that source's alone; a
+    prefix naming no source refused (a misspelt key would leave a case unshared unsaid)."""
+    given = ["m10-cleared=viewer", "intel:m10-part=viewer", "nominals:m10-part=viewer"]
+    assert loader.grants_for("intel", given) == ["m10-cleared=viewer", "m10-part=viewer"]
+    assert loader.grants_for("covert", given) == ["m10-cleared=viewer"]
+    with pytest.raises(SystemExit, match="'intell' is not a source"):
+        loader.grants_for("intel", ["intell:m10-part=viewer"])
+
+
+def test_a_rerun_with_grants_shares_cases_already_made(folder: Path) -> None:
+    """The cases stage run again with a grant finds every recorded case again, so its grants are
+    set; without one, a recorded case is left alone."""
+    stack = Stack()
+    _load(folder, stack, stages=["cases"])
+    made = list(stack.cases)
+    stack.cases.clear()
+    _load(folder, stack, stages=["cases"])
+    assert stack.cases == []
+    deps = stack.deps()
+    deps.regrant = True
+    asyncio.run(loader.load(folder, deps, stages=["cases"]))
+    assert stack.cases == made

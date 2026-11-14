@@ -1,7 +1,7 @@
 """Loads the client-size synthetic dataset (`scripts.generate_client_size`) into a running stack
 once (ROUTE_052 step B, `v052-load`), resumably.
 
-    python -m scripts.load_client_size --from DIR [--grant ACCOUNT=LEVEL ...]
+    python -m scripts.load_client_size --from DIR [--grant [SOURCE:]ACCOUNT=LEVEL ...]
                                        [--stages cases,nodes,edges,same_as,texts,events,check]
 
 Run it where the stores are reachable (the stack's ArcadeDB, Postgres and analytics store, with
@@ -10,7 +10,10 @@ engine is DuckDB (its file lock). It writes through the paths the seeds use, nev
 
 - **cases**: each source's dataset is registered, held by the source's owning unit, and read by a
   case of its own (`case_seed.case_from_arguments`, as every seed makes its case), shared as
-  `--grant` says.
+  `--grant` says: `ACCOUNT=LEVEL` on every source's case, `SOURCE:ACCOUNT=LEVEL` (a source's key,
+  `nominals`, `intel`, …) on that source's alone. A case the ledger already records is granted
+  again when any `--grant` is given (a grant is set, not added, so twice is once), so the stage
+  can be rerun to share a loaded set.
 - **nodes**, then **edges**: each source's part files through the dataset-stamping graph
   (`stamping(adapter, dataset=...)`), so every element is stamped with its dataset; nodes by
   `upsert_nodes` in chunks of 40 (`seed_support.write_graph`), links through the adapter's bulk
@@ -101,6 +104,8 @@ class Deps:
     texts: TextStore
     ensure_case: Callable[[plan.Source], Awaitable[str]]
     scheme: HandlingScheme
+    #: Any `--grant` given: every case is made or found again, so its grants are set.
+    regrant: bool = False
     check: Callable[[Sequence[str]], Awaitable[int]] | None = None
     say: Callable[[str], None] = field(default=lambda line: print(line, flush=True))
 
@@ -483,7 +488,7 @@ async def load(
 
     if "cases" in stages:
         for source in plan.SOURCES:
-            if source.key not in ledger.cases:
+            if source.key not in ledger.cases or deps.regrant:
                 ledger.cases[source.key] = await deps.ensure_case(source)
                 ledger.save()
                 say(f"  cases: {source.dataset} is read by case {ledger.cases[source.key]}")
@@ -587,6 +592,24 @@ EDGE_TYPES = (
 # --- Running against a real stack ---------------------------------------------------------------
 
 
+def grants_for(source_key: str, grants: Sequence[str]) -> list[str]:
+    """The `ACCOUNT=LEVEL` grants for one source's case: each unprefixed grant, and each grant
+    prefixed with this source's key. A prefix naming no source is refused, so a misspelt key never
+    leaves a case unshared unsaid."""
+    known = {source.key for source in plan.SOURCES}
+    mine: list[str] = []
+    for text in grants:
+        key, colon, rest = text.partition(":")
+        if not colon or "=" in key:
+            mine.append(text)
+            continue
+        if key not in known:
+            raise SystemExit(f"--grant {text!r}: {key!r} is not a source ({', '.join(sorted(known))})")
+        if key == source_key:
+            mine.append(rest)
+    return mine
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m scripts.load_client_size", description=__doc__.split("\n\n")[0]
@@ -594,7 +617,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--from", dest="folder", required=True, type=Path)
     parser.add_argument("--state", type=Path, default=None)
     parser.add_argument("--stages", default=",".join(STAGES))
-    parser.add_argument("--grant", action="append", default=[], metavar="ACCOUNT=LEVEL")
+    parser.add_argument("--grant", action="append", default=[], metavar="[SOURCE:]ACCOUNT=LEVEL")
     args = parser.parse_args(argv)
     args.stages = [s for s in args.stages.split(",") if s]
     return args
@@ -677,7 +700,7 @@ async def _run(args: argparse.Namespace) -> int:
         case = await case_from_arguments(
             name=f"Client-size: {source.name}",
             seeder=seeder,
-            grant_texts=list(args.grant),
+            grant_texts=grants_for(source.key, args.grant),
             dataset=dataset,
         )
         return case.id
@@ -703,6 +726,7 @@ async def _run(args: argparse.Namespace) -> int:
             ensure_case=ensure_case,
             scheme=scheme,
             check=check,
+            regrant=bool(args.grant),
         )
         totals = await load(folder, deps, stages=args.stages, state=args.state)
     finally:

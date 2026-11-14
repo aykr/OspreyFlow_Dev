@@ -1,0 +1,4 @@
+G1 a recorded case never found again: 1 failed, 1 passed, 15 deselected in 1.39s
+G2 a prefixed grant applied to every case: 1 failed, 1 passed, 15 deselected in 1.42s
+G3 an unknown source's prefix accepted: 1 failed, 1 passed, 15 deselected in 1.49s
+restored: 17 passed in 6.93s
