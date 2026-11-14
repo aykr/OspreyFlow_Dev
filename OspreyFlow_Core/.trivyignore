@@ -107,3 +107,6 @@ CVE-2026-114613 exp:2026-12-14
 # dnspython (fixed in 2.9.0, which needs a newer Python than the image's 3.10): Superset does not
 # import it; it comes with an e-mail validator, and the deployment sends no mail from Superset.
 CVE-2026-114605 exp:2026-12-14
+# dnspython again (excessive memory and CPU use; fixed in 2.9.2, on the same newer-Python line as above):
+# found by v0.5.1's release scan on 14 November 2026 and accepted by the owner on the same ground.
+CVE-2026-128089 exp:2026-12-14
