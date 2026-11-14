@@ -39072,8 +39072,10 @@ Found reading the tree for this design: **`local-lite` runs no job worker.** The
 and registers its handlers (`app.py`, "this app process itself does not spin up that loop"). Only `cluster`
 and `cloud-platform` run the worker image (`harness/cluster.py`, `harness/cloud_platform/profile.yaml`). The
 service inventory's note ("Lite runs the same loop inside the Conduit") is not true of the code. A job
-submitted on `local-lite` today is never run. Decision 6 settles this for this job, and the note is corrected
-in the same change.
+submitted on `local-lite` today is never run. That is pre-existing and true of every job type
+(`supersede_node`, `resolve_entity_type`, `pattern_match`, `compute_metric`). The orchestrator has given it to
+the admin lane as a fix of its own: the Conduit's lifespan runs the job loop for every stream where no worker
+runs, with the inventory note corrected there (the orchestrator's ruling of 14 November 2026).
 
 ### Decision
 
@@ -39139,14 +39141,11 @@ in the same change.
      14:05".
    - It is ADR-144's live lens. Each opening re-reads the case as its reader may see it. A shared reader sees
      their own level, and `missing` counts the rest without naming them.
-6. **Where it runs.**
-   - `batch_expand` is registered in `worker_main.register_all`, so the worker image runs it in `cluster` and
-     `cloud-platform`.
-   - On a profile with no worker container (`local-lite`), the Conduit's lifespan drains the `batch_expand`
-     stream itself with the `JobWorker` it already builds. It drains that stream only.
-   - The consumer group gives each job to exactly one consumer, so a Conduit and a worker never both run it.
-   - The other job types are not started in the Conduit by this ADR. That their jobs never run on
-     `local-lite` is a finding for the orchestrator, not settled here.
+6. **Where it runs: where the job worker runs.** `batch_expand` is registered in `worker_main.register_all`,
+   so the worker image runs it in `cluster` and `cloud-platform`, and the Conduit's own loop runs it on
+   `local-lite` once the admin lane's fix lands. Nothing here special-cases it. Every consumer reads the stream
+   through the one consumer group (`workers`), so each job goes to exactly one consumer, even with a Conduit
+   and a worker both reading it.
 7. **Audit.**
    - Submission records `batch_expand`, with the request and the justification, as `expand` records its own.
    - The saved view records `save_case_view` with `{"view_id", "from_batch": job_id}` and the node count.
@@ -39166,7 +39165,13 @@ in the same change.
 - `test_another_members_batch_is_not_found`.
 - `test_a_failed_batch_says_this_adrs_words_not_the_exception`.
 - `test_the_saved_view_opens_as_the_lens`: done, it opens through `GET …/views/{id}` with the same nodes.
-- `test_lite_drains_batch_expand_in_the_conduit` and `test_the_worker_registers_batch_expand`.
+- `test_the_worker_registers_batch_expand`: `register_all` binds it, so the worker image and the Conduit
+  register the same handler.
+- `test_a_batch_view_opened_after_a_clearance_drop_hides_what_was_lost`: a node visible to the requester
+  when the job ran is in the saved selection. After their clearance drops, it is absent from their open of the
+  view, and `missing` counts it. It goes red with `open_view` returning the stored selection. This is the test
+  for the clearance snapshot in **Cost**. ADR-144's
+  `test_a_view_shows_the_rest_and_counts_the_missing` proves a different reader, not the same reader later.
 - The Glass's tests are case-b's: the cap dialog's third button, the progress, done and refused words, and
   *Open the view*, in `keyboard/view-over-cap.spec.ts`. Rule 13 applies.
 - Live on a leased stack: the leak test and the ten-minute bound against ArcadeDB. Each rule is planted alone
@@ -39175,7 +39180,6 @@ in the same change.
 ### Spec edits in the same change
 
 - `03_CONDUIT_MIDDLEWARE.md`: the two routes are added to §3.2, and §4 says where `promote_to_batch` leads.
-- `harness/service_inventory.py`'s worker note is corrected.
 - `08_ACCEPTANCE_SCENARIOS.md` gains a scenario: an expansion refused at the cap is promoted, saved as a
   private view, and opened.
 
@@ -39184,7 +39188,7 @@ in the same change.
 - **The principal is snapshotted at submission.** A clearance lowered at the IdP during the job's ten minutes
   is not seen until the view is next opened. The open re-reads under the reader's current principal, so the
   view never shows more than its reader may see. The node ids saved were chosen under the old clearance, and
-  `missing` counts them.
+  `missing` counts them (`test_a_batch_view_opened_after_a_clearance_drop_hides_what_was_lost`).
 - **`edges_among` over up to 50,000 ids has not been measured.** It is measured on the lease, and the ten-minute
   bound is set from what it shows.
 - **Not durable past 24 hours.** A job's record lives 24 hours (`JOB_TTL_SECONDS`), and the view it saved is
