@@ -38074,4 +38074,4 @@ By platform-b. An access step: two review rounds, listed for the owner (round 1'
    recorded and refused until set. It needs a stack lease, refused in this session's permissions; it is on the
    owner's list (MORNING.md). Until it runs, the route tests' tenant cases show the route's handling, not the store's
    SQL. Not shown by any test: two transactions racing (`FOR SHARE`/`FOR UPDATE` is by design). The administration
-   guide 1.96, §6a.7 and Appendix A, says the rest.
+   guide 1.98, §6a.7 and Appendix A, says the rest.
