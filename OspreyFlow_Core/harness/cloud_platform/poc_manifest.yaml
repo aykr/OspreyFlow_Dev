@@ -136,6 +136,13 @@ jobs:
     image: ospreyflow/api
     requests: {cpu: 500m, memory: 2Gi}
     limits: {cpu: "2", memory: 4Gi}
+  # The POC seed path (ADR-148 Amendment 14): spec 08's seeds, with the Conduit and the worker at none.
+  ospreyflow-seed:
+    kind: CronJob
+    schedule: suspended, started by the install runbook's optional seed block
+    image: ospreyflow/api
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
 
 # Each image's repository in the client's ECR, which `ospreyflow images push` fills.
 images:

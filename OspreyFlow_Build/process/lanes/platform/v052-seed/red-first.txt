@@ -1,0 +1,169 @@
+Red first (offline on the Mac, closed ports, no OSPREY_LANE; the ClickHouse cases need the live server and run in make test):
+E       AssertionError: seed_hmp_fixture opens DuckDB itself, whatever the deployment names
+../OspreyFlow_Build/tests/test_seed_analytics.py:44: AssertionError
+E       AssertionError: seed_scenarios opens DuckDB itself, whatever the deployment names
+../OspreyFlow_Build/tests/test_seed_analytics.py:44: AssertionError
+        graph) passed while the Glass, reading the analytics store, drew nothing — measured in a real
+E       AttributeError: 'AnalyticsDuckDBAdapter' object has no attribute 'execute'
+packages/adapters/analytics_duckdb/schema.py:181: AttributeError
+FAILED ../OspreyFlow_Build/tests/test_seed_analytics.py::test_the_seed_opens_the_deployments_store_never_duckdb_by_path[seed_hmp_fixture]
+FAILED ../OspreyFlow_Build/tests/test_seed_analytics.py::test_the_seed_opens_the_deployments_store_never_duckdb_by_path[seed_scenarios]
+FAILED ../OspreyFlow_Build/tests/test_seed_scenarios.py::test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads[duckdb]
+3 failed, 15 passed, 1 deselected in 0.80s
+
+Green at the change: test_seed_analytics, test_seed_scenarios, test_demo_fixtures_are_product, test_data_folder 55 passed (the ClickHouse parameter of B18 deselected offline: it needs the live ClickHouse; test_case_seed needs the live Postgres).
+E   ImportError: cannot import name 'seed_poc' from 'scripts' (unknown location)
+
+Plant 1 (seed_poc ignores a seed's non-zero exit):
+__________ test_a_failed_seed_stops_the_run_by_name_and_fails_the_job __________
+    def test_a_failed_seed_stops_the_run_by_name_and_fails_the_job(recorded, capsys) -> None:  # type: ignore[no-untyped-def]
+FAILED ../OspreyFlow_Build/tests/test_seed_poc.py::test_a_failed_seed_stops_the_run_by_name_and_fails_the_job
+1 failed, 4 passed in 0.76s
+Green at the change: tests/test_seed_poc.py 5 passed.
+
+The Author from the deployment's own settings (OSPREY_FIRST_ADMINISTRATORS), red first:
+FAILED tests/test_seed_poc.py::test_the_author_is_the_deployments_first_administrator_by_default
+1 failed, 5 passed
+
+The render (ADR-148 Amendment 14), red first: tests/harness/test_cloud_platform_seed.py did not collect (no SEED_JOB in harness.cloud_platform).
+The pinned list of pods outside the workloads then red as intended (seed added), updated:
+FAILED tests/harness/test_cloud_platform_egress.py::test_every_rendered_workload_has_its_row[development|production|poc]
+
+The manifest: its both-ways check did not see the new Job (its builder reads only the values keys it knows), so a guard in Helm's own output added (tests/cp_policy_check, server); the builder taught the seed, and its entry planted out:
+Plant (the seed's manifest entry removed, the builder reading it):
+FAILED tests/harness/test_poc_manifest.py::test_the_manifest_and_the_render_agree
+1 failed, 32 passed in 0.81s
+
+INSTALL.md's step 9, run as written against a stub kubectl, red first:
+_________ test_a_failed_seed_puts_the_conduit_back_then_stops_by_name __________
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5080/test_a_failed_seed_puts_the_co0')
+    def test_a_failed_seed_puts_the_conduit_back_then_stops_by_name(tmp_path) -> None:  # type: ignore[no-untyped-def]
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5080/test_a_failed_seed_puts_the_co0')
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_seed_block_is_the_pocs_alone_and_not_part_of_the_order
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_seed_runs_with_the_conduit_and_worker_at_none_then_puts_them_back
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_failed_seed_puts_the_conduit_back_then_stops_by_name
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_seed_is_refused_while_the_conduits_pods_are_still_there
+4 failed, 5 passed in 1.92s
+Green: tests/harness, tests/cp_policy_check (Helm's cases skipped on the Mac), the seed suites: 1709 passed, 448 skipped (ClickHouse's B18 parameter deselected offline). The Helm-backed cases (the seed's keys and token; every rendered CronJob listed) run on the server, with their red by the allowlist entry removed.
+
+=== The reviews of 062a352 (my lane-reviewer's and the orchestrator's), round 1 ===
+
+Corrections to this record's earlier claims: B18's ClickHouse parameter was deselected in every run above, so 'B18 held on the live ClickHouse' (3194b30's message, the first Am 14 and friction row) was not shown; it is a leased run below or the step is not done. The Helm-backed cases' red was claimed, not recorded: it is recorded from the server below.
+
+The ceiling refused before any write, the unit from the people store (refused unsigned-in), the seeds given the case's unit, red first:
+FAILED tests/test_seed_poc.py::test_the_seeds_markings_are_the_packs_declared_ones
+FAILED tests/test_seed_poc.py::test_the_unit_is_the_first_administrators_own_from_their_sign_in
+FAILED tests/test_seed_poc.py::test_a_first_administrator_not_yet_signed_in_is_refused[never recorded]
+FAILED tests/test_seed_poc.py::test_a_first_administrator_not_yet_signed_in_is_refused[added ahead of sign-in]
+4 failed, 1 passed, 9 errors in 1.72s
+(9 errors at setup: the fixture now patches seed_poc._unit, which did not exist)
+
+Step 9 (no trap; Jobs left running; copies at none; backups not held; rebuild unbounded), red first:
+        [("never-starts", "did not start"), ("overruns", "ran past"), ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and the
+        [("never-starts", "did not start"), ("overruns", "ran past"), ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and the
+E         seed-20261113t232112 failed: read its log above; the Conduit and the worker are back
+E       assert (1 != 0 and 'ran past' in 'seed: c1\nseed: done, hmp, fixture-corp, scenarios in case c1\nseed-20261113t232112 failed: read its log above; the Conduit and the worker are back\n')
+_ test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[seed-fails-failed] _
+scenario = 'seed-fails', says = 'failed'
+        [("never-starts", "did not start"), ("overruns", "ran past"), ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and the
+        [("never-starts", "did not start"), ("overruns", "ran past"), ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and the
+__________________ test_a_failed_rebuild_is_deleted_and_named __________________
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5629/test_a_failed_rebuild_is_delet0')
+    def test_a_failed_rebuild_is_deleted_and_named(tmp_path: Any) -> None:
+        assert code != 0 and "search-rebuild-" in said and "failed" in said
+E        +  where False = any(<generator object test_a_failed_rebuild_is_deleted_and_named.<locals>.<genexpr> at 0x10741b030>)
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[never-starts-did not start]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[overruns-ran past]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[seed-fails-failed]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[create-fails-could not be started]
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_backups_are_held_for_the_seeds_length
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_conduit_already_at_none_is_refused_before_anything_changes
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_failed_rebuild_is_deleted_and_named
+7 failed, 10 passed in 6.30s
+
+Plant (step 9 without its exit trap; fresh PYTHONPYCACHEPREFIX):
+_________ test_a_failed_seed_puts_the_conduit_back_then_stops_by_name __________
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5659/test_a_failed_seed_puts_the_co0')
+    def test_a_failed_seed_puts_the_conduit_back_then_stops_by_name(tmp_path) -> None:  # type: ignore[no-untyped-def]
+        assert code != 0 and "seed-" in said and "failed" in said
+            ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and
+            ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and
+_ test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[seed-fails-failed] _
+scenario = 'seed-fails', says = 'failed'
+            ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and
+            ("seed-fails", "failed"),
+        """A Job that did not start, ran past its bound or failed is deleted before the Conduit and
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_seed_runs_with_the_conduit_and_worker_at_none_then_puts_them_back
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_failed_seed_puts_the_conduit_back_then_stops_by_name
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[never-starts-did not start]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[overruns-ran past]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[seed-fails-failed]
+FAILED tests/harness/test_cloud_platform_seed.py::test_a_seed_that_does_not_succeed_is_deleted_before_the_conduit_is_back[create-fails-could not be started]
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_backups_are_held_for_the_seeds_length
+FAILED tests/harness/test_cloud_platform_seed.py::test_the_seed_is_refused_while_the_conduits_pods_are_still_there
+8 failed, 8 passed in 6.05s
+
+HMP's rerun at _run (the graph here, its events lost), red first:
+E           assert 0 == 1
+FAILED tests/test_seed_hmp_rerun.py::test_a_rerun_over_a_graph_whose_events_were_lost_refuses_in_words
+1 failed, 2 passed in 1.55s
+
+The restore's writers (the seed left out), red first: FAILED tests/harness/test_cloud_platform_seed.py::test_a_restore_refuses_to_run_beside_the_seed
+
+Green: tests/harness, tests/cp_policy_check, tests/cloud_platform_backup, the seed suites and scenarios/test_hmp_network: 1880 passed, 499 skipped (the ClickHouse parameters deselected offline; the Helm cases skipped on the Mac). One run of tests/cloud_platform_backup earlier showed 1 failed, 180 passed, not reproduced in two reruns (181 passed); its name was not captured, so it is watched in the gates.
+The live cases on the test server's stack g (stack_lease.sh acquire platform ... g, the orchestrator's yes; up, remote, down, release), run 20261114T015817Z-cbaa940a: 28 passed, among them test_seed_scenarios' B18 and test_seed_analytics' HMP events and places through the live ClickHouse (port 18129), and test_seed_poc_live's three cases against the live Postgres (the unit from a sign-in; one never signed in refused; another tenant's row not theirs).
+
+Red on the live ClickHouse (rule 15), the re-seed check planted out of load_sighting_events (missing = every event), run on stack g, fresh PYTHONPYCACHEPREFIX:
+        graph) passed while the Glass, reading the analytics store, drew nothing — measured in a real
+FAILED tests/test_seed_scenarios.py::test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads[duckdb]
+FAILED tests/test_seed_scenarios.py::test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads[clickhouse]
+2 failed in 7.56s
+Wall time: 13 s, exit 0 (stack g, the lease platform took at 2026-11-14T01:57:15Z; set-up before it 18 s)
+
+The Helm-backed cases on the server (stack_lease.sh offline platform), each plant restored after its run:
+== Plant 1: the gate's allowlist entry for the seed removed
+Running on ospreyflow-test (stack offline, osprey-runs/platform/), logged at osprey-runs/platform.meta/runs/20261114T020021Z-80215b36/log
+FAILED tests/cp_policy_check/test_cp_egress_order.py::test_the_seed_holds_the_graph_s_and_clickhouse_s_passwords_alone_and_no_token[poc]
+1 failed, 1 passed, 2 skipped, 39 deselected in 10.04s
+Wall time: 14 s, exit 0 (no stack, no lease; set-up before it 15 s)
+== Plant 2: the seed's manifest entry removed
+Running on ospreyflow-test (stack offline, osprey-runs/platform/), logged at osprey-runs/platform.meta/runs/20261114T020053Z-5c71295e/log
+FAILED tests/cp_policy_check/test_cp_egress_order.py::test_every_cronjob_the_poc_chart_renders_is_in_the_manifest
+1 failed, 1 passed, 2 skipped, 39 deselected in 11.01s
+Wall time: 15 s, exit 0 (no stack, no lease; set-up before it 16 s)
+== As built
+Running on ospreyflow-test (stack offline, osprey-runs/platform/), logged at osprey-runs/platform.meta/runs/20261114T020138Z-857205ff/log
+2 passed, 2 skipped, 39 deselected in 10.29s
+Wall time: 15 s, exit 0 (no stack, no lease; set-up before it 29 s)
+
+make -k test at 81deb23 on the server, run 20261114T020226Z-ed0c4a01: exit 2. pytest 6 failed, 3 errors, 13462 passed. Main's own: 6a8 (docs'), test_worker_isolation, test_write_store_marks. Mine: the two ClickHouse cases and test_seed_poc_live's three (errors) ran in make test, whose ports are closed, and test_test_file_coverage_check named test_seed_poc_live.py as wired nowhere. Fixed: the ClickHouse cases moved to tests/test_seed_clickhouse_live.py (the same cases, ClickHouse's adapter); both live files' wiring sent as v052-seed/live_wiring.diff (ci.yml's ClickHouse and Postgres live jobs and the test job's ignores; the Makefile's test ignores and its ClickHouse target), never committed: they are the owner's files. It applies cleanly (git apply --check); the coverage check's green waits on it. vitest: case's MatrixView.budget under load.
+
+# The owner's ruling on MORNING item 2, (a) (2026-11-14T06:23:40Z): a POC shown with spec 08's data declares
+# deployment.highest_marking: SECRET, the client's choice. Offline on closed ports 59991-59994, a fresh
+# PYTHONPYCACHEPREFIX. Red first, before the wording, the refusal and R1's config changed:
+tests/harness/test_cloud_platform_seed.py::test_step_9_says_a_poc_shown_with_spec_08_s_data_declares_secret: RED
+  assert '`deployment.highest_marking: SECRET`' in "## 9. Optional: spec 08's acceptance data (a POC alone) ..."
+tests/test_seed_poc.py::test_the_ceiling_s_refusal_says_what_the_client_would_declare: RED
+  the refusal named OFFICIAL-SENSITIVE and SECRET but not deployment.highest_marking: SECRET
+tests/test_r1_kind_standins.py::test_r1_s_poc_declares_secret_so_step_6_can_seed: RED
+  R1's render gave the Conduit OFFICIAL-SENSITIVE, and seed_poc._ceiling_refusal() refused it
+  (the failure at the real call site: the rendered settings the seed Job is given, read by the seed's own check)
+3 failed in 1.83s
+Green after: the three, with tests/harness/test_cloud_platform*.py, tests/cp_policy_check (less its two docker
+files, which make test runs on the server), the R1 kind, seed and admin-guide tests:
+529 passed, 43 skipped (the live cases) in 28.70s
+
+# Server gates at c3f0e61 (on main 0e46c66), with live_wiring.diff applied uncommitted in the run's tree, through
+# stack_lease.sh offline platform (no stack, no lease):
+- make -k test, run 20261114T072348Z-a7e494ba: exit 0. pytest 13884 passed, 38 skipped; vitest 380 files passed.
+- make -k ci, run 20261114T070444Z-7823bbb1: exit 2, its one failure main's own: trivy-image-superset, CVE-2026-128089
+  (dnspython 2.7.0, MORNING item 1's), in an image this branch does not touch; make lint and every other part green.
+- Round 1 at a0dd0e1 (on ed7baef) superseded: make lint's three findings in the seed path's lines (fixed, 1456046), and
+  the seed's live files run by make test without the wiring, whose first diff no longer applied (re-made, c3f0e61).

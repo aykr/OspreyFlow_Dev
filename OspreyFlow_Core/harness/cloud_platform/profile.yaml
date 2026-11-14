@@ -60,7 +60,7 @@ egress:
   # No KMS: S3 calls it on the backups' behalf (SSE-KMS), so none of P9's pods reaches it.
   # The pods rendered outside the workloads that have rows by their own pods' names: P9's backup
   # and restore (ADR-148 Amendment 7). A row whose pod is not rendered selects nothing.
-  others: [backup, backup-claims, restore, restore-claims, search-rebuild, search-drift]
+  others: [backup, backup-claims, restore, restore-claims, search-rebuild, search-drift, seed]
   reach:
     identity: [litellm]
     # Superset's sign-in and the report sync's token (ADR-148 Amendments 9 and 10) too.
@@ -77,7 +77,8 @@ egress:
     sources: [api]
   # The managed stores' networks (RDS, ElastiCache): the pods that read a store's details.
   # The search index's rebuild and drift check reach the OpenSearch domain on these networks (3a).
-  managed: [api, worker, report-sync, superset, litellm, search-rebuild, search-drift]
+  # The POC seed path's Job (ADR-148 Amendment 14) writes the case store.
+  managed: [api, worker, report-sync, superset, litellm, search-rebuild, search-drift, seed]
   # Their ports: RDS's PostgreSQL and ElastiCache's (the Terraform's own); the OpenSearch domain's
   # 443 is added when the deployment searches with it.
   managed_ports: [5432, 6379]
@@ -107,6 +108,7 @@ egress:
     # The search index's rebuild and drift check (ADR-150, v0.5.2 step 3a): the graph, and the domain.
     search-rebuild: [arcadedb]
     search-drift: [arcadedb]
+    seed: [arcadedb, clickhouse]
     restore-claims: [kube-api]
 
 # Decision 5 and the platform's quotas: what each container asks for and may use. A namespace on a

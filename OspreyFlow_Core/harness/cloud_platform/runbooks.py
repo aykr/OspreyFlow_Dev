@@ -380,7 +380,113 @@ stop and raise it with the client's Entra administrator before anyone else is to
    groups out of the token. Limit the claim to the groups assigned to the application.
 7. **Keys.** Entra rolls its signing key unannounced. The Conduit fetches the tenant's keys again
    within five minutes. A sign-in still refused for an unknown key after that is a fault: report it.
+{_seed_section(values)}"""
+
+
+#: The POC seed path's optional block (ADR-148 Amendment 14), run after step 7 if at all. Plain text,
+#: not an f-string: `<rebuild>` is the search index's rebuild where the deployment has one.
+_SEED_BLOCK = """\
+(
+set -e
+# The Conduit's and the worker's copies now, to put back. Either at none (a run cut short before, or
+# stopped by hand) is refused: start them at their copy counts first, so "back" means back.
+api=$(kubectl -n "$NS" get deployment/api -o jsonpath='{.spec.replicas}')
+worker=$(kubectl -n "$NS" get deployment/worker -o jsonpath='{.spec.replicas}')
+for n in "$api" "$worker"; do
+  case "$n" in ''|*[!0-9]*|0) echo "the Conduit or the worker is at none now (api $api, worker $worker): start them first; no seed"; exit 1 ;; esac
+done
+J="seed-$(date -u +%Y%m%dt%H%M%S)"
+seeded=0
+finish() {   # whatever happened, on the way out: a Job that did not succeed deleted, then all put back
+  set +e
+  if [ "$seeded" != 1 ]; then
+    kubectl -n "$NS" logs "job/$J" 2>/dev/null
+    kubectl -n "$NS" delete job "$J" --ignore-not-found --cascade=foreground --wait --timeout=5m
+  fi
+  kubectl -n "$NS" scale deployment/api --replicas="$api"
+  kubectl -n "$NS" scale deployment/worker --replicas="$worker"
+  for c in ospreyflow-backup ospreyflow-backup-claims; do
+    kubectl -n "$NS" patch cronjob "$c" -p '{"spec":{"suspend":false}}' 2>/dev/null
+  done
+  kubectl -n "$NS" rollout status deployment/api --timeout=10m \\
+    && kubectl -n "$NS" rollout status deployment/worker --timeout=10m \\
+    || echo "the Conduit or the worker is not back yet: kubectl -n $NS scale deployment/api --replicas=$api, deployment/worker --replicas=$worker"
+}
+trap finish EXIT
+# The daily backups held for the seed's length, so none catches it halfway; then the Conduit and the
+# worker to none (the seed writes the stores they hold open).
+for c in ospreyflow-backup ospreyflow-backup-claims; do
+  kubectl -n "$NS" patch cronjob "$c" -p '{"spec":{"suspend":true}}' 2>/dev/null || true
+done
+kubectl -n "$NS" scale deployment/api deployment/worker --replicas=0
+kubectl -n "$NS" wait --for=delete pod -l 'app.kubernetes.io/name in (api,worker)' --timeout=10m \\
+  || { echo "the Conduit's or the worker's pods are still running: no seed beside them"; exit 1; }
+kubectl -n "$NS" create job --from=cronjob/ospreyflow-seed "$J" \\
+  || { echo "$J could not be started (kubectl create job above says why)"; exit 1; }
+for i in $(seq 60); do   # started (or already ended) within five minutes
+  phase=$(kubectl -n "$NS" get pod -l job-name="$J" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || true)
+  case "$phase" in Running|Succeeded|Failed) break ;; esac
+  sleep 5
+done
+case "$phase" in Running|Succeeded|Failed) ;;
+  *) echo "$J did not start in five minutes (kubectl -n $NS describe pod -l job-name=$J says why); deleted"; exit 1 ;;
+esac
+kubectl -n "$NS" wait --for=jsonpath='{.status.conditions[0].status}'=True "job/$J" --timeout=30m \\
+  || { echo "$J ran past 30 minutes; deleted"; exit 1; }
+kubectl -n "$NS" get job "$J" -o jsonpath='{.status.succeeded}' | grep -qx 1 \\
+  || { echo "$J failed: its log above"; exit 1; }
+kubectl -n "$NS" logs "job/$J"   # every line the seeds report
+seeded=1
+)
+<rebuild>"""
+
+_SEED_REBUILD = """\
+# The search index rebuilt from the seeded graph (the seed writes the graph alone): five minutes to
+# start, 30 to finish, deleted and named if it does not.
+J="search-rebuild-$(date -u +%Y%m%dt%H%M%S)"
+kubectl -n "$NS" create job --from=cronjob/ospreyflow-search-rebuild "$J"
+for i in $(seq 60); do
+  phase=$(kubectl -n "$NS" get pod -l job-name="$J" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || true)
+  case "$phase" in Running|Succeeded|Failed) break ;; esac
+  sleep 5
+done
+ok=1
+case "$phase" in Running|Succeeded|Failed) ;; *) ok=0 ;; esac
+[ "$ok" = 1 ] && { kubectl -n "$NS" wait --for=jsonpath='{.status.conditions[0].status}'=True "job/$J" --timeout=30m || ok=0; }
+[ "$ok" = 1 ] && { kubectl -n "$NS" get job "$J" -o jsonpath='{.status.succeeded}' | grep -qx 1 || ok=0; }
+kubectl -n "$NS" logs "job/$J" --tail=1 2>/dev/null || true
+[ "$ok" = 1 ] || { kubectl -n "$NS" delete job "$J" --ignore-not-found --wait=false; echo "$J failed (it did not start, ran past 30 minutes or failed); deleted"; false; }
 """
+
+
+def _seed_section(values: dict[str, Any]) -> str:
+    """Step 9 of a poc's install runbook (ADR-148 Amendment 14): spec 08's acceptance data, if the
+    POC wants it. Not part of the order (`bash later`); nothing where the shape renders no seed."""
+    if "seed" not in values:
+        return ""
+    rebuild = _SEED_REBUILD if "searchIndex" in values else ""
+    return """
+## 9. Optional: spec 08's acceptance data (a POC alone)
+
+**Not part of the order, and never on a deployment holding real data.** For a proof of concept that is
+to be shown with spec 08's synthetic acceptance data: the HMP fixture, Fixture Corp and the acceptance
+scenarios, into one case named *Acceptance scenarios (spec 08)* whose first Author is the first
+administrator ({first}), in that administrator's own unit. Run it after step 7, once, after the first
+administrator has signed in (step 6): the seed is refused before it writes anything if they have not.
+Spec 08's data holds SECRET items (HMP's and Fixture Corp's), above this profile's default ceiling of
+OFFICIAL-SENSITIVE. So a POC shown with it declares `deployment.highest_marking: SECRET` in its
+osprey.yaml, rendered and applied before this step. That is the client's choice, for a POC holding
+synthetic data alone; otherwise the seed is refused before it writes anything, naming both values.
+It holds the daily backups and stops the Conduit and the worker for its length (a few
+minutes; the door answers 503 meanwhile), puts them all back whether or not it succeeded, and ends by
+naming what failed, if anything. A seed Job that did not finish is deleted before the Conduit is back.
+
+```bash later
+{block}```
+""".format(
+        first="the first of `cloud_platform.claims.first_administrators`",
+        block=_SEED_BLOCK.replace("<rebuild>", rebuild),
+    )
 
 
 def render_decommission(

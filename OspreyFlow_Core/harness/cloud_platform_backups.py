@@ -470,8 +470,11 @@ def add_backups(
     the backups added to `values` (the chart's `backups`, ArcadeDB's claim, ClickHouse's role, users
     file and backup user's password); returns the Terraform files it adds, `terraform/backups.tf`.
     A render without ArcadeDB and ClickHouse is returned unchanged."""
+    # The POC seed path's Job too (ADR-148 Amendment 14): it writes the graph and ClickHouse.
+    seed = [{"name": values["seed"]["label"]}] if values.get("seed") else []
     found = backups_values(
-        config, platform, values["workloads"], values["environment"], values.get("jobs") or []
+        config, platform, values["workloads"], values["environment"],
+        [*(values.get("jobs") or []), *seed],
     )
     if found is None:
         return {}

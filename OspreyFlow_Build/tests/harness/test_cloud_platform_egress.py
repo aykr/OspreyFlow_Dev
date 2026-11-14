@@ -44,10 +44,13 @@ def _rows(values: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def test_every_rendered_workload_has_its_row(values: dict[str, Any]) -> None:
     others = set(load_profile().egress.others)
-    # P9's backup and restore pods, and the search index's rebuild and drift check (v0.5.2 step 3a).
+    # P9's backup and restore pods, the search index's rebuild and drift check (v0.5.2 step 3a),
+    # and the POC seed path's Job (ADR-148 Amendment 14).
     assert others == {"backup", "backup-claims", "restore", "restore-claims", "search-rebuild",
-                      "search-drift"}  # fmt: skip
-    assert set(_rows(values)) == {w["name"] for w in values["workloads"]} | others
+                      "search-drift", "seed"}  # fmt: skip
+    # The seed's row only where its Job is rendered (the poc shape).
+    rendered_others = others if "seed" in values else others - {"seed"}
+    assert set(_rows(values)) == {w["name"] for w in values["workloads"]} | rendered_others
 
 
 def test_a_workload_reaches_only_what_its_rows_give_it(values: dict[str, Any]) -> None:

@@ -299,6 +299,33 @@ def search_index_values(
     }
 
 
+#: The POC seed path's standing Job (ADR-148 Amendment 14): spec 08's seeds, started by the install
+#: runbook's optional block with the Conduit and the worker scaled to none.
+SEED_JOB = "ospreyflow-seed"
+def seed_values(config: OspreyConfig, workloads: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """The chart's `seed` (the poc shape alone): the Conduit's image and size, the case store's
+    address and credentials as the Conduit has them, and the graph's and ClickHouse's passwords by
+    name; nothing else of ours, and no AWS identity. The case's unit is not rendered: `seed_poc`
+    reads the first administrator's own from the people store at the run."""
+    api = next(w for w in workloads if w["name"] == "api")
+    # The case store's, as the Conduit is given them: the platform's RDS secret's variables alone.
+    postgres = {
+        name for name, (secret, _key) in managed_variables(config).items() if secret == "postgres"
+    }
+    return {
+        "name": SEED_JOB,
+        "label": "seed",
+        "image": api["image"],
+        "resources": copy.deepcopy(api["resources"]),
+        "command": ["/app/.venv/bin/python", "-m", "scripts.seed_poc"],
+        "env": [
+            *(copy.deepcopy(e) for e in api.get("env", []) if e["name"] in postgres),
+            {"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"},
+            {"name": "CLICKHOUSE_PASSWORD", "secret": "CLICKHOUSE_PASSWORD"},
+        ],
+    }
+
+
 def person_given(config: OspreyConfig) -> set[str]:
     """Our Secret's keys a person holds and gives (a model engine's, a connection's, the mail
     server's password): the namespace's Terraform takes each as a sensitive variable."""
@@ -1208,7 +1235,10 @@ def render_cloud_platform(
         "podSecurity": {"user": UID, "group": UID},
         "networkPolicy": {"openEgress": False},
         # P9's backup and restore pods render beside the workloads; their rows by their names.
-        "egress": egress_policy(config, platform, profile, workloads, others=profile.egress.others),
+        # The seed's row only where its Job is rendered (the poc shape): no store admits a pod of
+        # that name elsewhere (ADR-148 Amendment 14).
+        "egress": egress_policy(config, platform, profile, workloads, others=[
+            o for o in profile.egress.others if o != "seed" or _cp(config).shape == "poc"]),
         "ingress": _ingress(config, platform, names, profile, environment),
         "environment": environment,
         "files": {
@@ -1223,6 +1253,8 @@ def render_cloud_platform(
     }
     if config.components.search is SearchBackend.OPENSEARCH:
         out["searchIndex"] = search_index_values(platform, workloads)
+    if _cp(config).shape == "poc":
+        out["seed"] = seed_values(config, workloads)
     # Decision 13 (ADR-148 Amendment 7, P9): the backups, added to these values, and its Terraform.
     from harness.cloud_platform_backups import add_backups
 

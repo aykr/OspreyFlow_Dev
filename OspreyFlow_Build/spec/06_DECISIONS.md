@@ -38279,3 +38279,110 @@ It still starts after two characters. Enter opens the results page (the owner's 
 results are grouped by type with counts of records. Suggestions under the box look as before, with the one
 "limited" line when the index did not answer (ADR-059 Amendment 1).
 - *Tests:* ADR-149 decisions 4, 6 and 7.
+
+### ADR-148, Amendment 14 (13 November 2026) — The POC seed path: spec 08's acceptance data on a cloud-platform POC, and the seeds' events in the deployment's own store
+
+**Context.** The owner ruled on 13 November 2026 that a proof of concept on the `cloud-platform` profile can
+be shown with spec 08's synthetic acceptance data, as a local deployment can (`harness.apply --seed`). The
+local path does not carry over:
+- It makes its case through the Conduit as Keycloak's verify identity, which Entra has no counterpart for.
+- It runs a one-shot container on the host's compose network.
+- Its seeds wrote their events to a DuckDB file whatever store the deployment named. On every
+  `cloud-platform` deployment (ClickHouse) the graph half would arrive and the events would be lost with the
+  seed's container, while it printed "loaded" (CLAUDE.md rule 2). Any local deployment on ClickHouse has the
+  same fault today.
+
+**Decision.**
+1. **The seeds write their events to the deployment's own store.** It is the one `OSPREY_ANALYTICS_ENGINE`
+   names, opened by the Conduit's own opener (`scripts/seed_analytics.py` → `services.api.analytics_store`).
+   An engine the Conduit does not know is refused in words, never taken for DuckDB. Re-seed checks read
+   through the port as the seed's principal, by event id. This applies to `seed_hmp_fixture` and
+   `seed_scenarios`; `seed_fixture_corp` writes the graph alone. The other seeders (Enron, PaySim, the
+   ledger, the public sets, `seed_support`) still open DuckDB themselves: a carry (CARRIES.md), not part of
+   this amendment.
+2. **HMP's events on a rerun.** HMP's graph and its events are two writes, and its network events carry the
+   edge ids the graph write returns. So a rerun that finds the graph already here writes no events. It
+   checks, by id through the port, that this case's HMP events are there. If they are not (an earlier run's
+   events write failed after its graph committed), it refuses in words and loads nothing, never "loaded" over
+   nothing. Recreating them would mean writing the graph twice, so the remedy is the backup taken before the
+   seed.
+3. **One entry, `python -m scripts.seed_poc`.** Two refusals come before anything is written:
+   - **The ceiling.** A deployment whose highest marking (`OSPREY_HIGHEST_MARKING`) is below the seeds' data
+     is refused, naming both. HMP's and Fixture Corp's data reach SECRET (`seed_internal.DATASETS`); the
+     scenarios' is OFFICIAL. The cloud-platform profile's default ceiling is OFFICIAL-SENSITIVE, so a default
+     poc is refused. **The owner ruled on 14 November 2026 (MORNING item 2, option (a))**: a POC shown with
+     spec 08's data declares `deployment.highest_marking: SECRET` in its `osprey.yaml`. That is the client's
+     choice, made for a POC holding synthetic data alone, and step 9 says so in those words. Otherwise the
+     seed is refused, naming both values and that setting. Nothing is loaded partly (option (b) was
+     declined: spec 08's rows resting on the SECRET items would be missing), and the packs are not re-marked
+     for a POC (option (c) was declined: the scenarios' access cases would then test handling codes, not
+     clearance). R1's kind deployment declares SECRET (`gates/r1_kind_osprey.yaml`), so its step 6 runs the
+     seed.
+   - **The case's unit.** The case is made in the first administrator's own unit, as Entra gave it at their
+     sign-in: the people store's record, this tenant's alone (`EntraPeopleStore.one`). Where the tenant's
+     groups map several units, it is the unit of the first of `OSPREY_FIRST_ADMINISTRATORS`; a person's unit
+     is the one their own token carried. A first administrator who has not signed in has none yet, and the
+     seed is refused. Off Entra the unit is given (`--org-unit`, no default).
+
+   It then makes or reuses one named case, *Acceptance scenarios (spec 08)*, through the
+   `InvestigationStore` the routes use. Its creator is a seed principal no person signs in as, its first
+   Author is that administrator, and its packs are the seeds' union. Each seed runs with `OSPREY_ORG_UNIT`
+   set to the case's unit, so **the datasets it registers are held by the case's unit** (ADR-099:
+   `case_seed.ensure_case_reads`), and the case reads them. A seed that fails, raises or exits stops the run
+   there, named, and the Job fails with it.
+4. **A standing Job, `ospreyflow-seed`, for the poc shape alone.** It is a CronJob held suspended, in the
+   Conduit's image at its size, bounded by `activeDeadlineSeconds` (35 minutes).
+   - **What it holds.** The case store's address and credentials (the platform's RDS secret's variables, as
+     `managed_variables` gives the Conduit), the graph's and ClickHouse's passwords by name, and nothing
+     else of ours. No service-account token: it calls nothing of AWS's.
+   - **Its egress.** ArcadeDB, ClickHouse and the managed networks; its row is rendered where the Job is,
+     never elsewhere.
+   - **The gate.** It admits those two keys to the Job and refuses it our Secret whole, another key or a
+     token.
+   - **The manifest.** The poc manifest lists the Job, and a test reading Helm's own output holds every
+     rendered CronJob to the manifest both ways. The manifest's builder had read only the values keys it
+     knew, so a new Job was invisible to its both-ways check.
+   - **The restore.** A restore refuses to run beside it (one of the backups' writers, Amendment 13).
+5. **Step 9 of the poc's install runbook, optional and outside the order (`bash later`).** It runs in a
+   subshell whose exit always deletes a seed Job that did not succeed, then puts the Conduit, the worker and
+   the daily backups back. So nothing it stopped is left stopped, and no seed writes beside a Conduit it
+   restarted. In order, it:
+   - refuses copies noted at none;
+   - holds the backups;
+   - scales the Conduit and the worker to none, and refuses while their pods remain;
+   - gives the Job five minutes to start and 30 to finish, then names what failed;
+   - where the deployment searches with OpenSearch, ends with the index's rebuild, which is bounded the
+     same way, and deleted and named if it fails.
+
+   The words say never on a deployment holding real data, and run after the first administrator has signed
+   in.
+
+**Consequences.** A POC can be shown with the acceptance scenarios on its own cluster, the events in the store
+its analytics read, where the client has declared SECRET as step 9 says. The seed's identity is not a person, so the case's
+access history names it as creator and the first administrator as the Author who shares it. The kind proof
+runs in v0.5.2's live R1 run, after rules' search index lands: the Job against R1's stand-ins, the case open
+to the first administrator, and B18's trail through the Glass's own sightings request.
+
+**Tests that fail if it is violated:**
+- `tests/test_seed_analytics.py`: no seeder imports DuckDB; the real DuckDB opener's file holding the events;
+  an unknown engine refused; HMP's events and places through each store.
+- `tests/test_seed_scenarios.py`: B18 through each store, with a re-seed not doubling the track.
+- `tests/test_seed_hmp_rerun.py`: at `_run`, a rerun over a graph whose events were lost refused; a failure
+  between the two writes failing the run.
+- `tests/test_seed_poc.py`: the ceiling and the unit refused before any write, the ceiling's refusal naming
+  `deployment.highest_marking: SECRET`; the case, its Author, unit and
+  packs; the seeds given the case's unit; the order, read from `harness/apply.py`'s own map; a failed,
+  raising or exiting seed stopping the Job.
+- `tests/test_seed_poc_live.py`: the unit from the real people store, this tenant's alone.
+- `tests/harness/test_cloud_platform_seed.py`: the render, its keys, egress, shape and the restore's writers;
+  step 9 saying a POC shown with spec 08's data declares SECRET, the client's choice;
+  step 9 run as written against a stub `kubectl` on success and on each failure (not started, overrun,
+  failed, not created, copies at none, pods remaining, rebuild failed), each putting everything back.
+- `tests/test_r1_kind_standins.py`: R1's own render gives the Conduit's settings a ceiling the seed's check
+  admits.
+- `tests/cp_policy_check/test_cp_egress_order.py`: the gate on the seed's keys and token, and every CronJob
+  held to the manifest both ways, with the seed's own suspended, bounded and tokenless.
+
+The ClickHouse cases (B18's and HMP's) and the live people store need the live stores: they run under a lease,
+and their record is in `process/lanes/platform/v052-seed/` (or the step is not done). Red first:
+`process/lanes/platform/v052-seed/red-first.txt`.

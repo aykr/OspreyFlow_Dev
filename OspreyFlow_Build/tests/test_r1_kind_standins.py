@@ -381,3 +381,24 @@ def test_the_terraform_stand_in_gives_reporting_s_variables_as_the_operator_woul
     tenant = r1_kind.entra_config()["clients"]
     assert data["SUPERSET_OIDC_CLIENT_SECRET"] == tenant[superset]["secret"]
     assert json.loads(data["REPORT_SYNC_DASHBOARDS"]) == []
+
+
+def test_r1_s_poc_declares_secret_so_step_6_can_seed(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The owner's ruling (MORNING item 2, (a)): R1's osprey.yaml declares the ceiling a POC shown
+    with spec 08's data declares, and the seed's own check passes on the ceiling R1 renders for
+    the Conduit's settings (the ones the seed Job is given), so step 6 can run step 9."""
+    from harness.render import render
+    from scripts import seed_poc
+    from tools.cp_policy_check import _resolver
+
+    from schemas.deployment import OspreyConfig
+
+    monkeypatch.setenv(
+        "OSPREY_PLATFORM_FOLDERS", str(Path(__file__).parent / "fixtures/cloud_platform/platforms")
+    )
+    raw = yaml.safe_load((GATES / "r1_kind_osprey.yaml").read_text(encoding="utf-8"))
+    values = yaml.safe_load(
+        render(OspreyConfig.model_validate(raw), resolver=_resolver).artefacts["values.yaml"]
+    )
+    monkeypatch.setenv("OSPREY_HIGHEST_MARKING", values["environment"]["OSPREY_HIGHEST_MARKING"])
+    assert seed_poc._ceiling_refusal() is None
