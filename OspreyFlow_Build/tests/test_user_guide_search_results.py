@@ -31,7 +31,9 @@ APP = _read(SRC / "App.tsx")
 OVERLAY = _read(SRC / "search" / "useSearchResultsOverlay.ts")
 COMBOBOX = _read(SRC / "design" / "primitives" / "Combobox.tsx")
 BOX = _read(SRC / "search" / "GlobalSearch.tsx")
+PANEL = _read(SRC / "questions" / "QuestionsPanel.tsx")
 SERVICE = (API / "search_service.py").read_text(encoding="utf-8")
+ROUTES = (API / "app.py").read_text(encoding="utf-8")
 
 
 def results_text(guide: str = GUIDE) -> str:
@@ -82,12 +84,14 @@ def test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggesti
     """Combobox's Enter submits the words only when no option is highlighted; the box's submit opens the results."""
     assert 'if (onSubmit && e.key === "Enter" && !(open && highlighted >= 0 && filtered[highlighted])) {' in COMBOBOX
     assert "const none = onSubmit ? -1 : 0;" in COMBOBOX, "nothing highlighted until the arrows move to an option"
+    chosen = '} else if (e.key === "Enter") { e.preventDefault(); const option = filtered[Math.min(highlighted, filtered.length - 1)]; if (option) select(option);'
+    assert chosen in COMBOBOX, "Enter on a suggestion moved to chooses it"
     assert "onSubmit={onSearch}" in BOX
     assert "onSearch={(query) => results.open(query," in APP
     text = results_text()
     assert "Press Enter on the words you typed, with no suggestion moved to, and the results fill the main area" in text
     assert "a suggestion moved to with the arrow keys is still chosen by Enter" in text
-    row = "| Search box | Enter | The search results page for the words typed; with a suggestion moved to by the arrows, that suggestion |"
+    row = "| The top bar's search box | Enter | The search results page for the words typed; with a suggestion moved to by the arrows, that suggestion |"
     assert row in GUIDE[GUIDE.index("## 12. Keys") :]
 
 
@@ -134,6 +138,10 @@ def test_section_5_5_names_the_groups_filters_and_pages_as_the_page_labels_them(
         "Previous page": "> Previous page </button>",
     }
     assert [label for label, code in labels.items() if code not in PAGE] == []
+    # The filters are what the answer offers: drawn only where it offers datasets or dates.
+    for offered in ("{counts && (counts.filters.datasets.length > 0 || counts.filters.dates) && (", "{counts.filters.datasets.length > 0 && (", "{counts.filters.dates && ("):
+        assert offered in PAGE, offered
+    assert "**Datasets** and **Dates** narrow it again to what the search offers" in results_text()
     text = results_text()
     assert [label for label in labels if f"**{label}**" not in text] == []
     # Clear filters is drawn only where a filter is on, beside the filters and in the empty state.
@@ -146,7 +154,9 @@ def test_section_5_5_says_the_box_s_filters_shape_suggestions_alone_and_the_page
     assert "const [group, setGroup] = useState<string | null>(null);" in PAGE
     assert "const [filters, setFilters] = useState<Filters>(NO_FILTERS);" in PAGE
     assert 'const NO_FILTERS: Filters = { datasets: [], dateFrom: "", dateTo: "" };' in PAGE
-    # Nothing of the box's own filters reaches the page: App gives it only the words.
+    # Nothing of the box's own filters reaches the page: it takes none, and App gives it only the words.
+    props = re.search(r"export interface SearchResultsProps \{(.*?)\} interface Filters", PAGE)
+    assert props and not re.search(r"\b(filters|group|types|entityTypes)\??:", props.group(1)), "the page takes no filter"
     element = APP[APP.index("<SearchResults") : APP.index("onShow={(nodes)")]
     assert "query={searching.query}" in element and "filters=" not in element and "group=" not in element
     assert "The search box's **Filters** shape its suggestions alone: the page starts at **All** with no filter." in results_text()
@@ -203,6 +213,8 @@ def test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_s
     m = re.search(r'onAsk=\{railEntries\(rights\)\.includes\("questions"\) \? \(words\) => \{(.*?)\} : undefined\}', APP)
     assert m, "App gives the page onAsk only where the rail offers Ask & Chat"
     assert m.group(1).strip() == "setQuestionDraft({ text: words, at: Date.now() }); setQuestionsOpen(true);", "and it sends nothing"
+    # Ask & Chat puts the words in its box and focuses it; asking stays the person's, by Ask.
+    assert "useEffect(() => { if (!draft) return; setQuestion(draft.text); questionBox.current?.focus(); }, [draft]);" in PANEL
     assert "const askLine = onAsk && (" in PAGE
     assert "Where Ask & Chat is offered to you, a last line" in results_text()
     assert "in the question box, sending nothing until you press **Ask**." in results_text()
@@ -231,6 +243,8 @@ def test_section_5_5_quotes_the_conduit_s_other_refusals_in_its_words() -> None:
     check = _function(SERVICE, "_check")
     assert 'raise ValueError("the date filter ends before it starts")' in check
     assert 'f"results are listed {q.MAX_DEPTH} deep at most; narrow the search to see further"' in check
+    route = _function(ROUTES, "search_route")
+    assert "except ValueError as exc: raise HTTPException(status_code=422, detail=str(exc)) from exc" in route, "the words reach the page as the detail"
     depth = _constants((API / "search_index_query.py").read_text(encoding="utf-8"))["MAX_DEPTH"]
     assert 'const detail = typeof body?.detail === "string" ? body.detail : tooLong(body?.detail, query);' in PAGE
     text = results_text()
@@ -254,7 +268,7 @@ def test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do() -> 
         "if request.filters.date_from or request.filters.date_to: reason += DATES_NOT_APPLIED",
     ):
         assert code in fallback, code
-    assert "{shown.limited_reason ?? " in PAGE, "the page shows the Conduit's line where it gives one"
+    assert "{shown?.limited && ( <p" in PAGE and "{shown.limited_reason ?? " in PAGE, "the page shows the Conduit's line where it gives one"
     text = results_text()
     assert f'the page says so in one line, such as "{reasons["no_index"]}"' in text
     assert f"looks no further than the first {depth} exact matches" in text
