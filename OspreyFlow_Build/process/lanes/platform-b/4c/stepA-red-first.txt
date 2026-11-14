@@ -1,13 +1,13 @@
-# 4c step A (ADR-148 Am 15): principal_auth's administrator source. Red first, each pytest with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a). Mac, offline, on v052-gate + admin's 7a84543.
+# 4c step A (ADR-148 Am 15): principal_auth's administrator source. Red first, each pytest with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a). Mac, offline, after round 1's review.
 
-== (a) a value never set given a default (the lowest clearance, no unit, no codes) instead of refused:
+== (a) a value never set given a default instead of refused:
 FAILED test_auth_entra_administrator_access.py::test_a_value_never_set_is_refused_in_words[clearance-clearance]
 FAILED test_auth_entra_administrator_access.py::test_a_value_never_set_is_refused_in_words[org_unit-organisational unit]
 FAILED test_auth_entra_administrator_access.py::test_a_value_never_set_is_refused_in_words[receivable_handling_codes-handling codes]
 FAILED test_auth_entra_administrator_access.py::test_a_person_first_seen_has_nothing_set_and_is_refused
 FAILED test_auth_entra_administrator_access.py::test_an_empty_set_of_codes_is_a_value_an_empty_clearance_is_not
 FAILED test_auth_entra_administrator_access.py::test_another_tenant_s_row_grants_nothing
-6 failed, 154 passed, 1 warning in 73.99s (0:01:13)
+6 failed, 154 passed, 1 warning in 74.38s (0:01:14)
 
 == (b) an administrator's value applied to a value the mapping reads from the token too:
 FAILED test_auth_entra_administrator_access.py::test_an_administrator_cannot_override_a_value_the_mapping_reads_from_the_token
@@ -16,11 +16,15 @@ FAILED test_auth_entra_administrator_access.py::test_a_value_never_set_is_refuse
 FAILED test_auth_entra_administrator_access.py::test_a_value_never_set_is_refused_in_words[receivable_handling_codes-handling codes]
 FAILED test_auth_entra_administrator_access.py::test_a_person_first_seen_has_nothing_set_and_is_refused
 FAILED test_auth_entra_administrator_access.py::test_another_tenant_s_row_grants_nothing
-6 failed, 154 passed, 1 warning in 73.58s (0:01:13)
+6 failed, 154 passed, 1 warning in 74.29s (0:01:14)
 
 == (c) an empty clearance or unit taken as set:
 FAILED test_auth_entra_administrator_access.py::test_an_empty_set_of_codes_is_a_value_an_empty_clearance_is_not
-1 failed, 159 passed, 1 warning in 73.07s (0:01:13)
+1 failed, 159 passed, 1 warning in 73.67s (0:01:13)
+
+== (d) round 1's should-fix 6: a token's own claim taken where it carries one (the fixed names, Keycloak's), the stored value otherwise:
+FAILED test_auth_entra_administrator_access.py::test_a_token_cannot_raise_an_administrator_set_value_by_carrying_a_claim
+1 failed, 159 passed, 1 warning in 74.04s (0:01:14)
 
 == green:
-160 passed, 1 warning in 73.74s (0:01:13)
+160 passed, 1 warning in 74.23s (0:01:14)

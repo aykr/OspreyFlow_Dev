@@ -208,9 +208,14 @@ function AccessEditor({
       )}
       <Button
         aria-label={`Save access for ${person.username}`}
-        disabled={!clearance || !unit.trim()}
+        disabled={(sets("clearance") && !clearance) || (sets("org_unit") && !unit.trim())}
         onClick={() =>
-          void setAccess(api, person.id, { clearance, org_unit: unit.trim(), receivable_handling_codes: [...codes] })
+          // ADR-148 Amendment 15: only the values set here; Entra's are not given, so never changed or checked.
+          void setAccess(api, person.id, {
+            ...(sets("clearance") ? { clearance } : {}),
+            ...(sets("org_unit") ? { org_unit: unit.trim() } : {}),
+            ...(sets("handling_codes") ? { receivable_handling_codes: [...codes] } : {}),
+          })
             .then((saved) => {
               setSaid("Saved.");
               onSaved(saved);

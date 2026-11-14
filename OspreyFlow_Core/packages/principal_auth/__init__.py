@@ -1402,9 +1402,12 @@ class PrincipalResolver:
 
     async def resolve_principal(self, token: str) -> Principal:
         """Every session's principal, as the Conduit asks for it. For an Entra mapping the token is
-        checked in full first (a refused token records nobody), then the person is read from the
-        store, within the timeout: a failure or a slow answer is `PrincipalLookupUnavailable` (a
-        503), never a principal with no roles. Nothing is kept between calls."""
+        checked in full first (a token refused by its own checks records nobody), then the person
+        is read from the store, within the timeout (ADR-148 Amendment 15: a person whose values
+        the administrator sets, not yet set, is recorded at that first sign-in, so People lists
+        them to set, and then refused in words): a failure or a slow answer is
+        `PrincipalLookupUnavailable` (a 503), never a principal with no roles. Nothing is kept
+        between calls."""
         # In a thread, bounded: a slow or unreachable identity provider never holds the event loop,
         # and is a 503 in words, never "token rejected" (ADR-148 Amendment 8).
         claims = await in_keys_thread(self._verified_claims, token)

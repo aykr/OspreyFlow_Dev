@@ -36,6 +36,7 @@ holds each one's secret. The deployment's own applications (the Glass's, the API
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -58,6 +59,7 @@ from schemas.admin import (
     DashboardIdentity,
     InviteInput,
     OrganisationArrival,
+    PersonAccessInput,
     PersonAccount,
     RegisteredDashboard,
     SignInDelivery,
@@ -150,6 +152,41 @@ ENTRA_HOLDS_ACCOUNTS = (
 )
 
 
+#: ADR-148 Amendment 15: what the first administrators hold, at install, of each value the claim
+#: mapping sources from the administrator (`cloud_platform.claims.first_administrator_access`).
+FIRST_ADMINISTRATOR_ACCESS_VARIABLE = "OSPREY_FIRST_ADMINISTRATOR_ACCESS"
+ACCESS_GRANT_ACTION = "grant_first_administrator_access"
+
+
+def first_administrator_access_from_env(by_administrator: Iterable[str]) -> dict[str, Any]:
+    """The first administrators' values for each field the administrator sets, refused at start when
+    one is missing: they could not sign in, and so nobody could set anyone's (Amendment 15)."""
+    sets = set(by_administrator)
+    if not sets:
+        return {}
+    raw = os.environ.get(FIRST_ADMINISTRATOR_ACCESS_VARIABLE, "")
+    try:
+        held = json.loads(raw) if raw else {}
+    except ValueError:
+        raise ValueError(f"{FIRST_ADMINISTRATOR_ACCESS_VARIABLE} is not JSON") from None
+    if not isinstance(held, dict) or (missing := sorted(sets - held.keys())):
+        raise ValueError(
+            f"{FIRST_ADMINISTRATOR_ACCESS_VARIABLE} gives the first administrators no "
+            f"{', '.join(missing) if isinstance(held, dict) else 'values'}: with those set by the "
+            "administrator, nobody could sign in (cloud_platform.claims.first_administrator_access)"
+        )
+    codes = held.get("handling_codes")
+    listed = isinstance(codes, list) and all(isinstance(c, str) for c in codes)
+    if "handling_codes" in sets and not listed:
+        raise ValueError(
+            f"{FIRST_ADMINISTRATOR_ACCESS_VARIABLE}: handling_codes is a list of codes"
+        )
+    for field in sets & {"clearance", "org_unit"}:
+        if not isinstance(held[field], str) or not held[field]:
+            raise ValueError(f"{FIRST_ADMINISTRATOR_ACCESS_VARIABLE}: {field} is not a value")
+    return {f: held[f] for f in sets}
+
+
 def first_administrators_from_env() -> list[str]:
     """`OSPREY_FIRST_ADMINISTRATORS`, each an object id. Empty, or any entry not an object id, is
     refused at start: an Entra deployment with no administrator named could never be administered,
@@ -176,6 +213,11 @@ ADMINISTRATOR_FIELDS = {"clearance": "admin_clearance", "org_unit": "admin_org_u
                         "handling_codes": "admin_codes"}  # fmt: skip
 
 
+class NoSuchPerson(IdentityAdminRefused):
+    """ADR-148 Amendment 15: no such person in this tenant's people store (404, never the identity
+    provider's own refusal)."""
+
+
 class AccessBeyondTheSetter(Exception):
     """ADR-148 Amendment 15, rule 3 in the store: a clearance above, or a handling code beyond, what
     the person setting it holds as this store has them. `error` and `detail` as the route's own
@@ -199,7 +241,11 @@ def _person(
         return row.get(ADMINISTRATOR_FIELDS[field]) if field in by_administrator else row[seen]
 
     codes = held("handling_codes", "receivable_handling_codes")
-    every_value_set_here = by_administrator >= ADMINISTRATOR_FIELDS.keys()
+    # Never stale when nothing of theirs is read from a token; stale (never read) when a value set
+    # here is missing, so nothing is sent to them on a clearance that is not there.
+    every_value_set_here = by_administrator >= ADMINISTRATOR_FIELDS.keys() and _all_set(
+        row, by_administrator
+    )
     return PersonAccount(
         id=oid,
         username=username,
@@ -211,8 +257,28 @@ def _person(
         email=row["email"],
         receivable_handling_codes=list(codes or []),
         signed_in=row["first_seen"] is not None,
-        access_read_at=None if every_value_set_here else (row["access_read_at"] or _NEVER),
+        access_read_at=(
+        None if every_value_set_here
+        else _NEVER if not _all_set(row, by_administrator)
+        else (row["access_read_at"] or _NEVER)
+    ),
     )
+
+
+def _all_set(row: Mapping[str, Any], by_administrator: frozenset[str]) -> bool:
+    """Whether every value the administrator sets is set for this person's row (Amendment 15): a
+    clearance or unit not empty, the codes a list (none is a value); otherwise they cannot sign
+    in."""
+    for field in by_administrator:
+        held = row.get(ADMINISTRATOR_FIELDS[field])
+        if held is None or (field != "handling_codes" and not held):
+            return False
+    return True
+
+
+def _held(person: PersonAccount) -> dict[str, Any]:
+    return {"clearance": person.clearance, "org_unit": person.org_unit,
+            "receivable_handling_codes": person.receivable_handling_codes}  # fmt: skip
 
 
 def _stored(row: Mapping[str, Any]) -> StoredPerson:
@@ -238,36 +304,39 @@ def _dashboard(row: Mapping[str, Any]) -> StoredDashboard:
 
 def check_administrator_access(
     by_administrator: frozenset[str],
-    setter: PersonAccount,
-    before: PersonAccount,
-    access: AccessInput,
+    setter: Mapping[str, Any] | None,
+    access: PersonAccessInput,
     classification: Sequence[str],
 ) -> None:
-    """ADR-148 Amendment 15: whether `setter` (as the people store holds them) may set `access` for
-    a person who now holds `before`, the store's own limits (rule 3), run inside its transaction:
+    """ADR-148 Amendment 15: whether the person `setter` (their row as the people store holds it)
+    may give `access`, the store's own limits (rule 3), run inside its transaction:
 
     - nothing is set where the mapping sources no value from the administrator, and a value Entra
-      sends cannot be changed here (409 `entra_holds_accounts`);
+      sends is never given here (409 `entra_holds_accounts`);
+    - the setter is recorded here and enabled, with every value of theirs set (403
+      `setter_cannot_set`);
     - no clearance above the setter's own, nor one the deployment does not know (403
       `above_your_clearance`);
     - no handling code beyond the setter's own (403 `handling_code_you_do_not_hold`)."""
     if not by_administrator:
         raise _refused("A person's clearance, unit and handling codes are changed in Entra ID.")
     given = {"clearance": access.clearance, "org_unit": access.org_unit,
-             "handling_codes": sorted(access.receivable_handling_codes)}  # fmt: skip
-    now_held = {"clearance": before.clearance, "org_unit": before.org_unit,
-                "handling_codes": sorted(before.receivable_handling_codes)}  # fmt: skip
-    if changed := [f for f in given if f not in by_administrator and given[f] != now_held[f]]:
-        raise _refused(f"Here {' and '.join(changed)} come from Entra ID, and are changed there.")
+             "handling_codes": access.receivable_handling_codes}  # fmt: skip
+    if entra_s := [f for f, v in given.items() if v is not None and f not in by_administrator]:
+        raise _refused(f"Here {' and '.join(entra_s)} come from Entra ID, and are changed there.")
+    if setter is None or setter["disabled"] or not _all_set(setter, by_administrator):
+        raise AccessBeyondTheSetter("setter_cannot_set", {})
+    mine = _person(setter, by_administrator)
     order = list(classification)
-    if "clearance" in by_administrator and (
-        setter.clearance not in order
+    if access.clearance is not None and (
+        mine.clearance not in order
         or access.clearance not in order
-        or order.index(access.clearance) > order.index(setter.clearance)
+        or order.index(access.clearance) > order.index(mine.clearance)
     ):
         raise AccessBeyondTheSetter("above_your_clearance", {"clearance": access.clearance})
-    beyond = sorted(set(access.receivable_handling_codes) - set(setter.receivable_handling_codes))
-    if "handling_codes" in by_administrator and beyond:
+    asked = set(access.receivable_handling_codes or [])
+    beyond = sorted(asked - set(mine.receivable_handling_codes))
+    if beyond:
         raise AccessBeyondTheSetter("handling_code_you_do_not_hold", {"codes": beyond})
 
 
@@ -474,7 +543,10 @@ class EntraPeopleStore:
     # --- the install's first administrators ---------------------------------------------------
 
     async def seed_first_administrators(
-        self, oids: Iterable[str], audit: AuditWriter | None = None
+        self,
+        oids: Iterable[str],
+        audit: AuditWriter | None = None,
+        access: Mapping[str, Any] | None = None,
     ) -> list[str]:
         """The named object ids given the Admin role at this start, which the caller audits:
 
@@ -500,7 +572,10 @@ class EntraPeopleStore:
                 "SELECT * FROM entra_people WHERE tenant_id = $1", self.tenant_id
             )
             custom = await rights_on(conn)
-            people = [_person(r, self.by_administrator) for r in rows]
+            # Amendment 15: a person whose values the administrator sets, not all set yet, cannot
+            # sign in, so cannot manage anyone.
+            sets = self.by_administrator
+            people = [_person(r, sets) for r in rows if _all_set(r, sets)]
             nobody_administers = not people_managers(people, custom)
             for oid in oids:
                 added = await conn.fetchval(
@@ -529,7 +604,42 @@ class EntraPeopleStore:
                             result_cardinality=1,
                             conn=conn,
                         )
+                if access:
+                    await self._seed_access(conn, oid, access, audit)
         return given
+
+    async def _seed_access(
+        self, conn: Any, oid: str, access: Mapping[str, Any], audit: AuditWriter | None
+    ) -> None:
+        """ADR-148 Amendment 15: a first administrator's values, each only where none is set, so an
+        administrator's later change stands and a restart never undoes it; audited when given."""
+        sets = self.by_administrator
+        set_now = await conn.fetchrow(
+            "UPDATE entra_people SET "
+            "admin_clearance = CASE WHEN $3 AND admin_clearance IS NULL THEN $4 "
+            "ELSE admin_clearance END, "
+            "admin_org_unit = CASE WHEN $5 AND admin_org_unit IS NULL THEN $6 "
+            "ELSE admin_org_unit END, "
+            "admin_codes = CASE WHEN $7 AND admin_codes IS NULL THEN $8::text[] "
+            "ELSE admin_codes END, "
+            "access_set_by = COALESCE(access_set_by, 'install'), "
+            "access_set_at = COALESCE(access_set_at, now()) "
+            "WHERE tenant_id = $1 AND oid = $2 AND ("
+            "($3 AND admin_clearance IS NULL) OR ($5 AND admin_org_unit IS NULL) "
+            "OR ($7 AND admin_codes IS NULL)) RETURNING oid",
+            self.tenant_id, oid,
+            "clearance" in sets, access.get("clearance"),
+            "org_unit" in sets, access.get("org_unit"),
+            "handling_codes" in sets, list(access.get("handling_codes") or []),
+        )  # fmt: skip
+        if set_now is not None and audit is not None:
+            await audit.record(
+                principal=FIRST_ADMINISTRATORS_PRINCIPAL,
+                action=ACCESS_GRANT_ACTION,
+                resolved_query={"user_id": oid, **{f: access[f] for f in sorted(sets)}},
+                result_cardinality=1,
+                conn=conn,
+            )
 
     # --- Admin › People -----------------------------------------------------------------------
 
@@ -565,44 +675,52 @@ class EntraPeopleStore:
         return _person(row, self.by_administrator)
 
     async def set_administrator_access(
-        self, oid: str, by: str, access: AccessInput, classification: Sequence[str]
+        self,
+        oid: str,
+        by: Principal,
+        access: PersonAccessInput,
+        classification: Sequence[str],
+        audit: AuditWriter | None = None,
     ) -> tuple[PersonAccount, PersonAccount]:
-        """ADR-148 Amendment 15: what the administrator `by` sets for `oid`, each value the mapping
-        sources from the administrator, in one transaction. The limits are this store's, read here
-        from `by`'s own row (rule 3, not only the route's): no clearance above theirs, no handling
-        code beyond theirs. A value Entra sends cannot be changed here (409 `entra_holds_accounts`).
+        """ADR-148 Amendment 15: what the administrator `by` gives `oid`, each value the mapping
+        sources from the administrator and given, in one transaction with its audit row. The
+        limits are this store's, read here from `by`'s own row (rule 3, not only the route's).
         Another tenant's row is never read. Answers (before, after)."""
         sets = self.by_administrator
         async with self.pool.acquire() as conn, conn.transaction():
             setter = await conn.fetchrow(
                 "SELECT * FROM entra_people WHERE tenant_id = $1 AND oid = $2 FOR SHARE",
-                self.tenant_id, by,
+                self.tenant_id, by.id,
             )  # fmt: skip
             target = await conn.fetchrow(
                 "SELECT * FROM entra_people WHERE tenant_id = $1 AND oid = $2 FOR UPDATE",
                 self.tenant_id, oid,
             )  # fmt: skip
             if target is None:
-                raise IdentityAdminRefused("no such person")
-            if setter is None:
-                raise AccessBeyondTheSetter("above_your_clearance", {"clearance": access.clearance})
-            mine, before = _person(setter, sets), _person(target, sets)
-            check_administrator_access(sets, mine, before, access, classification)
+                raise NoSuchPerson(f"{oid} is not in People here")
+            check_administrator_access(sets, setter, access, classification)
             row = await conn.fetchrow(
                 "UPDATE entra_people SET "
-                "admin_clearance = CASE WHEN $3 THEN $4 ELSE admin_clearance END, "
-                "admin_org_unit = CASE WHEN $5 THEN $6 ELSE admin_org_unit END, "
-                "admin_codes = CASE WHEN $7 THEN $8::text[] ELSE admin_codes END, "
-                "access_set_by = $9, access_set_at = now() "
+                "admin_clearance = COALESCE($3, admin_clearance), "
+                "admin_org_unit = COALESCE($4, admin_org_unit), "
+                "admin_codes = COALESCE($5::text[], admin_codes), "
+                "access_set_by = $6, access_set_at = now() "
                 "WHERE tenant_id = $1 AND oid = $2 RETURNING *",
-                self.tenant_id, oid,
-                "clearance" in sets, access.clearance,
-                "org_unit" in sets, access.org_unit,
-                "handling_codes" in sets, list(access.receivable_handling_codes),
-                by,
+                self.tenant_id, oid, access.clearance, access.org_unit,
+                access.receivable_handling_codes, by.id,
             )  # fmt: skip
-        assert row is not None
-        return before, _person(row, sets)
+            assert row is not None
+            before, after = _person(target, sets), _person(row, sets)
+            if audit is not None:
+                await audit.record(
+                    principal=by,
+                    action="set_person_access",
+                    resolved_query={"user_id": oid, "by_administrator": sorted(sets),
+                                    "before": _held(before), "after": _held(after)},  # fmt: skip
+                    result_cardinality=1,
+                    conn=conn,
+                )
+        return before, after
 
     async def add(self, oid: str, by: str) -> PersonAccount:
         async with self.pool.acquire() as conn:
@@ -686,14 +804,23 @@ class EntraPeopleAdmin:
         return frozenset(getattr(self.store, "by_administrator", frozenset()))
 
     async def set_administrator_access(
-        self, user_id: str, by: str, access: AccessInput, classification: Sequence[str]
-    ) -> tuple[PersonAccount, PersonAccount]:
+        self,
+        user_id: str,
+        by: Principal,
+        access: PersonAccessInput,
+        classification: Sequence[str],
+        audit: AuditWriter | None = None,
+    ) -> PersonAccount:
         """ADR-148 Amendment 15: the values the mapping sources from the administrator, set by `by`
-        within what the store holds for them (the store's own limits, rule 3). (before, after).
-        Without the fallback, refused in Entra's words before the store is asked, as before."""
+        within what the store holds for them (the store's own limits, rule 3), audited in the
+        store's transaction. Without the fallback, refused in Entra's words before the store is
+        asked, as before."""
         if not self.by_administrator:
             raise _refused("A person's clearance, unit and handling codes are changed in Entra ID.")
-        return await self.store.set_administrator_access(user_id, by, access, classification)
+        _before, after = await self.store.set_administrator_access(
+            user_id, by, access, classification, audit
+        )
+        return after
 
     async def reset_sign_in(self, user_id: str) -> SignInDelivery:
         raise _refused("A sign-in is reset in Entra ID.")
@@ -786,7 +913,8 @@ async def open_people_store(
     ]  # fmt: skip
     store = await EntraPeopleStore.connect(dsn, mapping.tenant_id, by_administrator)
     try:
-        await store.seed_first_administrators(first, audit)
+        access = first_administrator_access_from_env(store.by_administrator)
+        await store.seed_first_administrators(first, audit, access)
     except BaseException:
         await store.close()
         raise

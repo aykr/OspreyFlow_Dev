@@ -165,6 +165,8 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "invite_person",
         "add_person_by_object_id",
         "grant_first_administrator",
+        # ADR-148 Amendment 15: the first administrators' values at install, on the poc fallback.
+        "grant_first_administrator_access",
         "set_person_roles",
         "set_person_access",
         "disable_person",

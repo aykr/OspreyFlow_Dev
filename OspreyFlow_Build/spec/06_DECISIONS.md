@@ -38027,37 +38027,51 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
 ### ADR-148, Amendment 15 (14 November 2026) — The administrator fallback on Entra ID: a person's clearance, unit or handling codes set in Admin › People, the poc shape alone
 
 *v0.5.2 (the ADR-148 audit's ruling 4c, 13 November 2026: the client page offers it, Amendment 8 point 3 refused it).
-By platform-b. An access step: two review rounds, listed for the owner.*
+By platform-b. An access step: two review rounds, listed for the owner (round 1's findings are answered below).*
 
 1. **A third source in the claim mapping.** `clearance`, `org_unit` and `handling_codes` each name exactly one of a
    claim, a group table, or `{administrator: true}` (`principal_auth.ValueSource`, `CodesSource`); an Entra mapping
    alone may name the third. For such a value the token is never read: the resolver checks the token in full, reads
    the stored person, and takes the value an administrator set; one never set is refused in words ("your clearance
-   has not been set in this deployment: ask an administrator to set it in Admin › People"), never a default. A token
-   carrying a claim for it cannot raise it, and an administrator cannot override a value the mapping reads from the
-   token. Tests: `tests/services/api/test_auth_entra_administrator_access.py`. Record:
-   `process/lanes/platform-b/4c/stepA-red-first.txt`.
-2. **The poc shape alone.** The render refuses `{administrator: true}` on any other shape, in words naming the
-   fields and what Entra should send instead. Tests: `test_cloud_platform_entra.py`'s
-   `test_the_administrator_fallback_renders_on_poc` and `…_is_refused_on_any_other_shape`. Record: `stepB-red-first.txt`.
-3. **The people store keeps what an administrator set apart** (`admin_clearance`, `admin_org_unit`, `admin_codes`,
-   `access_set_by`, `access_set_at`, added in place), never written at sign-in, so a token cannot overwrite it.
-   `StoredPerson` and `standing()` carry it; Admin › People shows it for those values (and a person whose every value
-   is set here never ages under `ACCESS_FRESH`, since nothing of theirs was read from a token).
-4. **Setting it is the store's own decision** (rule 3; `entra_people.check_administrator_access`, inside the store's
-   transaction with the setter's row read `FOR SHARE` and the person's `FOR UPDATE`): no clearance above, and no
-   handling code beyond, what the setter holds **as the store holds them**, whatever their token or the route says
-   (403 `above_your_clearance`, `handling_code_you_do_not_hold`); a value Entra sends is not changed here (409
-   `entra_holds_accounts`); without the fallback, Access on Entra is refused as before. The route's own check stays.
-   Audited as `set_person_access` with the values before and after. An open delta socket closes (1008) when a value
-   set here no longer matches the principal it opened with. Another tenant's rows are never read or written. Tests:
-   `test_entra_people_administrator_access.py` (the route, the store's decision, the socket; plant (a) shows a
-   route-only check would have set SECRET for a setter whose token says SECRET and whose stored clearance is lower).
-   Record: `stepCD-red-first.txt`.
-5. **Admin › People on Entra** is told which values it sets (`GET /v1/admin/sign-in`'s `administrator_sets`), says so
-   in words, and offers **Access** for those alone, showing and sending back Entra's as they are. Tests:
+   has not been set in this deployment: ask an administrator to set it in Admin › People"), never a default. Such a
+   person is recorded at that first sign-in, so People lists them for an administrator to set. A token carrying a
+   claim for it cannot raise it, and an administrator cannot override a value the mapping reads from the token.
+   Tests: `tests/services/api/test_auth_entra_administrator_access.py`. Record: `process/lanes/platform-b/4c/stepA-red-first.txt`.
+2. **The poc shape alone, at render.** The render refuses `{administrator: true}` on any other shape, in words naming
+   the fields and what Entra should send instead. The Conduit itself accepts the source on any Entra mapping: the
+   poc-only rule is the render's, as the ruling asked. Tests: `test_cloud_platform_entra.py`'s administrator-fallback
+   cases. Record: `stepB-red-first.txt`.
+3. **The first administrators are given their values at install** (`cloud_platform.claims.first_administrator_access`,
+   rendered as `OSPREY_FIRST_ADMINISTRATOR_ACCESS`; required whenever a value is the administrator's, or the render is
+   refused and the Conduit will not start), seeded under the people lock beside their Admin role and audited
+   (`grant_first_administrator_access`), each value only where none is set, so a later change stands across
+   restarts. Without it nobody could sign in to set anyone's values (round 1's must-fix 1). A person whose values the
+   administrator sets, not all set, is not counted among those who can manage people.
+4. **The people store keeps what an administrator set apart** (`admin_clearance`, `admin_org_unit`, `admin_codes`,
+   `access_set_by`, `access_set_at`, added in place), never written at sign-in. `StoredPerson` and `standing()` carry
+   it; People shows it for those values. A person whose every value is set here never ages under `ACCESS_FRESH`
+   (nothing of theirs is read from a token); one with a value missing reads as stale, so nothing is sent to them.
+5. **Setting it is the store's own decision** (rule 3; `entra_people.check_administrator_access`, inside the store's
+   transaction, the setter's row read `FOR SHARE` and the person's `FOR UPDATE`, the audit row written on the same
+   connection): only the values the mapping sources from the administrator are given, one not given left as it is
+   (`PersonAccessInput`), a value Entra sends never given here (409 `entra_holds_accounts`); the setter recorded here,
+   enabled and with their own values set (403 `setter_cannot_set`); no clearance above, and no handling code beyond,
+   what the setter holds **as the store holds them**, whatever their token or the route says (403
+   `above_your_clearance`, `handling_code_you_do_not_hold`); a person not here is a 404 (`no_such_person`). The
+   route's own check stays, on the values given alone, so a partial fallback is not refused for what Entra sends.
+   Keycloak's Access is unchanged (clearance and unit together). An open delta socket closes (1008) when a value set
+   here no longer matches the principal it opened with. Tests: `test_entra_people_administrator_access.py` (the
+   route over a store keeping the real table's rows and the real decision; plant (a) shows a route-only check would
+   have set SECRET for a setter whose token says SECRET and whose stored clearance is lower). Record:
+   `stepCD-red-first.txt`.
+6. **Admin › People on Entra** is told which values it sets (`GET /v1/admin/sign-in`'s `administrator_sets`), says so
+   in words, and offers **Access** for those alone, sending only them. Tests:
    `apps/workspace/src/admin/PeopleEntraAdministrator.test.tsx`. Record: `stepE-red-first.txt`.
-6. **Not yet run against the real table:** `test_entra_people_live.py`'s Amendment 15 section (the columns, a sign-in
-   never overwriting what was set, the transaction's limits from the setter's own row, tenant isolation, the resolver
-   with a real token) needs a stack lease, refused in this session's permissions; it is on the owner's list
-   (MORNING.md). The administration guide 1.96, §6a.7 and Appendix A, says the rest.
+7. **What only the real table shows is `test_entra_people_live.py`'s Amendment 15 section, not yet run**: the
+   columns, a sign-in never overwriting what was set, the transaction's limits from the setter's own row, the audit
+   row on the store's connection, the tenant clause (another tenant's rows never read or written), the first
+   administrator resolving on a fresh store and a later change surviving a restart, and a person with none set
+   recorded and refused until set. It needs a stack lease, refused in this session's permissions; it is on the
+   owner's list (MORNING.md). Until it runs, the route tests' tenant cases show the route's handling, not the store's
+   SQL. Not shown by any test: two transactions racing (`FOR SHARE`/`FOR UPDATE` is by design). The administration
+   guide 1.96, §6a.7 and Appendix A, says the rest.

@@ -189,6 +189,7 @@ from schemas.admin import (
     OrganisationArrival,
     OrganisationLinkInput,
     PauseScheduleInput,
+    PersonAccessInput,
     PersonAccount,
     PromotionAlertSetting,
     RegisteredDashboard,
@@ -709,6 +710,7 @@ from .entra_people import (
     STALE_ACCESS_WORDS,
     AccessBeyondTheSetter,
     EntraPeopleAdmin,
+    NoSuchPerson,
     access_current,
 )
 from .event_scope import own_events_only
@@ -16995,20 +16997,22 @@ async def person_ownership_route(
 
 
 def _within_your_reach(
-    principal: Principal, access: AccessInput, handling_scheme: HandlingScheme
+    principal: Principal, access: AccessInput | PersonAccessInput, handling_scheme: HandlingScheme
 ) -> None:
     """Nobody is given more than the administrator holds (ADR-114 Amendment 5) — the dashboard rule
     (rule 3) for people: a clearance above one's own, or a handling code one cannot receive, would
-    be a way to read above them. Checked before the identity provider is asked."""
+    be a way to read above them. Checked before the identity provider is asked. A value not given
+    (ADR-148 Amendment 15: one Entra sends) is not being given, so is not checked."""
     order = list(handling_scheme.classification)
-    if access.clearance not in order:
+    if access.clearance is not None and access.clearance not in order:
         raise UnknownRoleError(f"{access.clearance} is not a classification of this deployment")
-    codes = access.receivable_handling_codes
+    codes = access.receivable_handling_codes or []
     unknown = [c for c in codes if c not in handling_scheme.handling_codes]
     if unknown:
         raise UnknownRoleError(f"not a handling code of this deployment: {', '.join(unknown)}")
-    if principal.clearance not in order or order.index(access.clearance) > order.index(
-        principal.clearance
+    if access.clearance is not None and (
+        principal.clearance not in order
+        or order.index(access.clearance) > order.index(principal.clearance)
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -17128,38 +17132,32 @@ async def add_person_by_object_id_route(
 )
 async def set_person_access_route(
     user_id: str,
-    body: AccessInput,
+    body: PersonAccessInput,
     principal: PrincipalDep,
     identity_admin: IdentityAdminDep,
     handling_scheme: HandlingSchemeDep,
     audit: AuditDep,
 ) -> PersonAccount:
     """A person's clearance, unit and receivable handling codes — none above the administrator's."""
-    _within_your_reach(principal, body, handling_scheme)
     if isinstance(identity_admin, EntraPeopleAdmin):
         # ADR-148 Amendment 15: on Entra ID, only the values the claim mapping sources from the
-        # administrator, within the setter's own as the people store holds them (rule 3).
-        before, person = await identity_admin.set_administrator_access(
-            user_id, principal.id, body, list(handling_scheme.classification)
+        # administrator, within the setter's own as the people store holds them (rule 3), audited
+        # in the store's own transaction.
+        _within_your_reach(principal, body, handling_scheme)
+        return await identity_admin.set_administrator_access(
+            user_id, principal, body, list(handling_scheme.classification), audit
         )
-        def held(p: PersonAccount) -> dict[str, Any]:
-            return {"clearance": p.clearance, "org_unit": p.org_unit,
-                    "receivable_handling_codes": p.receivable_handling_codes}  # fmt: skip
-
-        await audit.record(
-            principal=principal,
-            action="set_person_access",
-            resolved_query={"user_id": user_id,
-                            "by_administrator": sorted(identity_admin.by_administrator),
-                            "before": held(before), "after": held(person)},  # fmt: skip
-            result_cardinality=1,
-        )
-        return person
-    person = await identity_admin.set_access(user_id, body)
+    if body.clearance is None or body.org_unit is None:
+        raise UnknownRoleError("Access sets a clearance and a unit together here")
+    codes = body.receivable_handling_codes or []
+    access = AccessInput(clearance=body.clearance, org_unit=body.org_unit,
+                         receivable_handling_codes=codes)  # fmt: skip
+    _within_your_reach(principal, access, handling_scheme)
+    person = await identity_admin.set_access(user_id, access)
     await audit.record(principal=principal, action="set_person_access",
-                       resolved_query={"user_id": user_id, "clearance": body.clearance,
-                                       "org_unit": body.org_unit,
-                                       "receivable_handling_codes": body.receivable_handling_codes},
+                       resolved_query={"user_id": user_id, "clearance": access.clearance,
+                                       "org_unit": access.org_unit,
+                                       "receivable_handling_codes": codes},
                        result_cardinality=1)  # fmt: skip
     return person
 
@@ -19457,6 +19455,12 @@ async def _identity_admin_refused(request: Request, exc: IdentityAdminRefused) -
     return JSONResponse(
         status_code=502, content={"error": "identity_provider_refused", "detail": str(exc)}
     )
+
+
+@app.exception_handler(NoSuchPerson)
+async def _no_such_person(request: Request, exc: NoSuchPerson) -> JSONResponse:
+    """ADR-148 Amendment 15: a person not recorded in this tenant's people store."""
+    return JSONResponse(status_code=404, content={"error": "no_such_person", "detail": str(exc)})
 
 
 @app.exception_handler(AccessBeyondTheSetter)

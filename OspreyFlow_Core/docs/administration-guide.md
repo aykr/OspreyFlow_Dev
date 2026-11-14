@@ -18,7 +18,7 @@ is made from the deployment's own schema, and is checked against it on every cha
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 2.00 | 2026-11-14 | §6a.7, the administrator fallback on the poc shape (ADR-148 Amendment 15): `{administrator: true}` as the source of a person's clearance, unit or handling codes, set in *Admin › People* with Access (none above the setter's own), a person with none set unable to sign in, refused on any other shape; Appendix A's three claim sources. PDF reprinted alone. |
+| 2.00 | 2026-11-14 | §6a.7, the administrator fallback on the poc shape (ADR-148 Amendment 15): `{administrator: true}` as the source of a person's clearance, unit or handling codes, set in *Admin › People* with Access (none above the setter's own), a person with none set unable to sign in until set, the first administrators' values at install (`first_administrator_access`), refused on any other shape; Appendix A's three claim sources and `first_administrator_access`. PDF reprinted alone. |
 | 1.98 | 2026-11-14 | Scheduled runs on Entra ID as built (ADR-148 Amendment 16, the audit's ruling 1, option A). §6a.7: a run acts as its owner as *Admin › People* holds them, roles and disabled read at each run, clearance, unit and codes as at their last sign-in; refused, in its own words, for a disabled owner, one not held, one not signed in within 24 hours (never counted toward pausing) and a store that cannot be read, never as "could not be reached", each followed by what happens next for its caller; the 24 hours run from the last recorded access (worked from a Friday to a Tuesday); a leaver to be disabled in *Admin › People* too; a stopped watch shows no reason yet. §8, §9.5, §9.11 and §6a.10 to match. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 1.97 | 2026-11-14 | §6a, v0.5.2's reporting on the cloud-platform profile (ADR-148 Amendments 9 to 11): Superset and the report sync rendered when switched on, one copy each in development; Superset signing in with Entra ID as its own registration, its role from the person's rights (a holder of `manage_dashboards` its builder, Alpha); the dashboard identities' app-only tokens (Viewer on a case at most; their grants removed with them); their egress, copies and secrets; the `superset` database beside `ospreyflow` and `litellm`; the line saying reporting is not available on Entra ID removed; Power BI reading the mart as an option. Appendix A: `cloud_platform.claims.superset_client_id`. PDF reprinted alone. |
 | 1.96 | 2026-11-13 | §6a.8: what a backup set holds, as ADR-148 Amendment 13 decision 4 and the render have it: the claims part holds, in every shape, the shared volume's published pipelines, model settings and map settings with the map key file, beside the poc shape's Ingest root, and `ospreyflow-backup-claims` runs in every shape; what is not in a set, the tiles and, in the standard shape, the Ingest root on the shared volume; "the shared volume is not backed up" struck. Held by `tests/test_guides_cloud_platform.py`, which reads the rendered values. PDF made by the orchestrator at merge. |
@@ -1589,10 +1589,13 @@ People* with **Access**, which on Entra ID offers those values alone and shows t
 sends them. Nobody can be given a clearance above, or a handling code beyond, what the
 administrator setting it holds as this deployment holds them; the change is audited
 (`set_person_access`, before and after), and a person's open live updates close and reconnect
-with it. **Until it is set, the person cannot sign in**, and is told so in words. A sign-in never
-changes it, and a token carrying a claim for it is not read. The render refuses
-`{administrator: true}` on any shape but `poc`: a production namespace reads every value from
-Entra ID.
+with it. **Until it is set, the person cannot sign in**, and is told so in words; they appear in
+People at that first sign-in, for you to set. A sign-in never changes it, and a token carrying a
+claim for it is not read. **The first administrators are given theirs at install**, from
+`cloud_platform.claims.first_administrator_access` (`{clearance: ..., org_unit: ..., handling_codes:
+[...]}`, each value the administrator sets), which the render requires; a restart never overwrites
+a value an administrator has since changed. The render refuses `{administrator: true}` on any shape
+but `poc`: a production namespace reads every value from Entra ID.
 
 **A run acts as its owner as Admin › People holds them** (ADR-148 Amendment 16). Entra ID has no
 way for the Conduit to sign in as a person who is not present, so whatever runs as its owner uses
@@ -3172,6 +3175,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `cloud_platform.claims.handling_codes` | mapping | required | Where the handling codes come from: {claim: ...}, {groups: {<id>: [codes]}}, or {administrator: true} (the poc shape alone) |
 | `cloud_platform.claims.groups_claim` | str | `groups` | The token claim listing the person's Entra group ids, which a {groups: ...} table above is read from |
 | `cloud_platform.claims.first_administrators` | list of str | required | The people given the Admin role at install, by Entra object id (at least one) |
+| `cloud_platform.claims.first_administrator_access` | mapping or none | none | With {administrator: true} for clearance, org_unit or handling_codes: what the first administrators hold of each such value at install, {clearance: ..., org_unit: ..., handling_codes: [...]}, so they can sign in and set everyone else's; required then |
 | `cloud_platform.claims.claims_mapping_policy` | bool | false | Whether a claims-mapping policy signs the API's tokens with its own key (the keys are then read with ?appid=<api_client_id>) |
 | `cloud_platform.connector_hosts` | list of str | — | The hosts a SQL or API connection may reach, each as host or host:port (a name, not an IPv6 literal), with its networks in egress_nets under the host alone. The namespace's egress allows each host on its ports; the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a port not listed here passes the Conduit and times out at the egress. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432). A host given twice with two ports is reached on both |
 | `cloud_platform.connector_sources` | section | — | The S3 buckets and Athena workgroups an S3 or Athena connection may read: each the Conduit's own egress row and the namespace role's read (ADR-140 Amendment 21). |

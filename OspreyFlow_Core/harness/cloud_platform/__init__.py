@@ -193,6 +193,15 @@ def _refuse(config: OspreyConfig) -> None:
                              ("handling_codes", mapping.handling_codes))
         if source.administrator
     ]  # fmt: skip
+    held = claims.first_administrator_access or {}
+    if by_administrator and (missing := [f for f in by_administrator if f not in held]):
+        # Amendment 15: nobody could sign in to set anyone's values, the first administrators
+        # included.
+        raise CloudPlatformNotRenderable(
+            f"cloud_platform.claims sets {', '.join(by_administrator)} by the administrator, and "
+            f"first_administrator_access gives the first administrators no {', '.join(missing)}: "
+            "without it nobody can sign in to set anyone's"
+        )
     if by_administrator and _cp(config).shape != "poc":
         # ADR-148 Amendment 15: the fallback is the proof of concept's, while the client's Entra
         # cannot yet send the values; a production namespace reads every one from Entra ID.
@@ -216,6 +225,13 @@ def entra_settings(config: OspreyConfig) -> dict[str, str]:
         "OIDC_JWKS_URL": claims.jwks_url,
         "OSPREY_CLAIM_MAPPING": json.dumps(claims.claim_mapping(), sort_keys=True),
         "OSPREY_FIRST_ADMINISTRATORS": ",".join(claims.first_administrators),
+        # ADR-148 Amendment 15: what they hold of each value the administrator sets, at install.
+        **(
+            {"OSPREY_FIRST_ADMINISTRATOR_ACCESS": json.dumps(claims.first_administrator_access,
+                                                             sort_keys=True)}  # fmt: skip
+            if claims.first_administrator_access
+            else {}
+        ),
         "SUPERSET_SIGN_IN": "entra",
         **_reporting_on_entra(config, claims),
     }

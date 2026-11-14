@@ -57,8 +57,10 @@ def test_the_values_are_the_ones_the_administrator_set(keypair, jwks_url) -> Non
 
 def test_a_token_cannot_raise_an_administrator_set_value_by_carrying_a_claim(keypair, jwks_url) -> None:
     stored = StoredPerson(roles=(), disabled=False, clearance="OFFICIAL", org_unit="unit-2", receivable_handling_codes=())
+    # The mapping's own extension claims and the fixed names alike (`clearance`, Keycloak's): none is read.
     _, principal = _as(jwks_url, keypair, stored, **{f"{EXT}_clearance": "SECRET", f"{EXT}_orgUnit": "unit-1",
-                                                      f"{EXT}_handlingCodes": ["R", "S"]})  # fmt: skip
+                                                      f"{EXT}_handlingCodes": ["R", "S"], "clearance": "SECRET",
+                                                      "org_unit": "unit-1", "receivable_handling_codes": ["R"]})  # fmt: skip
     assert (principal.clearance, principal.org_unit, principal.receivable_handling_codes) == ("OFFICIAL", "unit-2", [])
 
 

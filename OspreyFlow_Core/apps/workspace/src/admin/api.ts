@@ -3,7 +3,7 @@
 // provider directly. Shapes are the generated ones.
 import { rightName, rolesHolding, whyNotByRole, type Right } from "../help/roles";
 import type {
-  AccessInput,
+  PersonAccessInput,
   AdminPeopleRows,
   AuditSectionPage,
   ConnectionTest,
@@ -52,6 +52,10 @@ async function failure(response: Response): Promise<Error> {
   }
   if (typeof detail === "object" && detail?.error === "handling_code_you_do_not_hold") {
     return new Error(`You cannot give a handling code you do not hold yourself (${(detail.codes ?? []).join(", ")}).`);
+  }
+  // ADR-148 Amendment 15: the people store's own refusal of a setter it holds nothing for, or disabled.
+  if (typeof detail === "object" && detail?.error === "setter_cannot_set") {
+    return new Error("You cannot set anyone's access until your own is set here, and while your account is enabled.");
   }
   if (typeof detail === "object" && detail?.error === "cannot_disable_yourself") {
     return new Error("You cannot disable your own account.");
@@ -126,7 +130,7 @@ export const signInKind = (api: AdminApi) => call<SignInKind>(api, "sign-in");
 export const dashboardsSignInKind = (api: AdminApi) => call<SignInKind>(api, "dashboards/sign-in");
 export const addPersonByObjectId = (api: AdminApi, objectId: string) =>
   call<PersonAccount>(api, "people/by-object-id", { method: "POST", body: JSON.stringify({ object_id: objectId }) });
-export const setAccess = (api: AdminApi, userId: string, access: AccessInput) =>
+export const setAccess = (api: AdminApi, userId: string, access: PersonAccessInput) =>
   call<PersonAccount>(api, person(userId, "access"), { method: "PUT", body: JSON.stringify(access) });
 export const disablePerson = (api: AdminApi, userId: string) =>
   call<PersonAccount>(api, person(userId, "disable"), { method: "POST" });

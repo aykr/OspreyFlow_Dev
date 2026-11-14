@@ -313,9 +313,12 @@ def test_a_restore_stops_superset_and_the_report_sync_with_the_other_writers() -
 # --- ADR-148 Amendment 15: the administrator fallback, poc alone ---------------------------------------
 
 
+FIRST_ACCESS = {"clearance": "OFFICIAL-SENSITIVE", "org_unit": "unit-1", "handling_codes": ["P"]}
+
+
 def _poc_with(**sources: object) -> dict[str, object]:
     raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
-    raw["cloud_platform"]["claims"] |= sources
+    raw["cloud_platform"]["claims"] |= {"first_administrator_access": FIRST_ACCESS, **sources}
     return raw
 
 
@@ -323,12 +326,23 @@ def _poc_with(**sources: object) -> dict[str, object]:
 def test_the_administrator_fallback_renders_on_poc(field: str) -> None:
     environment = _values(OspreyConfig.model_validate(_poc_with(**{field: {"administrator": True}})))["environment"]
     assert json.loads(environment["OSPREY_CLAIM_MAPPING"])[field] == {"administrator": True}
+    # The first administrators can sign in to set everyone else's (Amendment 15).
+    assert json.loads(environment["OSPREY_FIRST_ADMINISTRATOR_ACCESS"]) == FIRST_ACCESS
+
+
+@pytest.mark.parametrize("given", [None, {"org_unit": "unit-1"}], ids=["none", "not-the-clearance"])
+def test_the_fallback_without_the_first_administrators_values_is_refused(given: object) -> None:
+    """Nobody could sign in to set anyone's values, the first administrators included."""
+    raw = _poc_with(clearance={"administrator": True})
+    raw["cloud_platform"]["claims"]["first_administrator_access"] = given  # type: ignore[index]
+    with pytest.raises(CloudPlatformNotRenderable, match="first_administrator_access gives the first administrators no clearance"):
+        _artefacts(OspreyConfig.model_validate(raw))
 
 
 @pytest.mark.parametrize("field", ["clearance", "org_unit", "handling_codes"])
 def test_the_administrator_fallback_is_refused_on_any_other_shape(field: str) -> None:
     raw = _raw()
-    raw["cloud_platform"]["claims"] |= {field: {"administrator": True}}
+    raw["cloud_platform"]["claims"] |= {field: {"administrator": True}, "first_administrator_access": FIRST_ACCESS}
     assert raw["cloud_platform"].get("shape", "standard") != "poc"
     with pytest.raises(CloudPlatformNotRenderable, match=f"sets {field} by the administrator.*only the poc shape"):
         _artefacts(OspreyConfig.model_validate(raw))

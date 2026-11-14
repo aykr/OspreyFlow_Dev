@@ -1,4 +1,4 @@
-# 4c step E (ADR-148 Am 15): People on Entra offers Access for the values set here alone, told by GET /v1/admin/sign-in. Red first; each pytest with a fresh PYTHONPYCACHEPREFIX. Mac, offline.
+# 4c step E (ADR-148 Am 15): People on Entra offers Access for the values set here alone and sends only them. Red first, each pytest with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a). Mac, offline, after round 1's review.
 
 == (a) Access offered on Entra whatever the deployment sets:
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
@@ -11,10 +11,15 @@
  FAIL  src/admin/PeopleEntraAdministrator.test.tsx > Admin › People on Entra ID with the administrator fallback > says which values are set here, and Access offers those alone, sending Entra's back un
       Tests  1 failed | 8 passed (9)
 
-== (c) the Conduit not saying which values are set here:
+== (c) round 1's must-fix 3: Entra's values sent back with those set here:
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/admin/PeopleEntraAdministrator.test.tsx > Admin › People on Entra ID with the administrator fallback > says which values are set here, and Access offers those alone, sending Entra's back un
+      Tests  1 failed | 8 passed (9)
+
+== (d) the Conduit not saying which values are set here:
 FAILED test_entra_people_administrator_access.py::test_people_is_told_which_values_are_set_here[fallback]
-1 failed, 13 passed, 1 warning in 4.37s
+1 failed, 25 passed, 1 warning in 4.58s
 
 == green:
       Tests  9 passed (9)
-14 passed, 1 warning in 3.98s
+26 passed, 1 warning in 4.52s

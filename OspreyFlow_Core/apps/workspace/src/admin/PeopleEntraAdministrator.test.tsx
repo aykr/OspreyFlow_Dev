@@ -62,10 +62,10 @@ describe("Admin › People on Entra ID with the administrator fallback", () => {
     expect(screen.getByText("Handling codes P, from Entra ID")).toBeTruthy();
     fireEvent.click(screen.getByLabelText(`Save access for ${ANA.username}`));
     await screen.findByText("Saved.");
+    // Entra's codes are not given, so never changed or checked by the Conduit.
     expect(sent.find((s) => s.path === `PUT people/${OID}/access`)?.body).toEqual({
       clearance: "OFFICIAL-SENSITIVE",
       org_unit: "unit-2",
-      receivable_handling_codes: ["P"],
     });
   });
 
@@ -79,8 +79,8 @@ describe("Admin › People on Entra ID with the administrator fallback", () => {
     fireEvent.click(await screen.findByLabelText(`Edit access for ${ANA.username}`));
     await waitFor(() => expect(screen.getByRole("option", { name: "OFFICIAL-SENSITIVE" })).toBeTruthy());
     fireEvent.click(screen.getByLabelText(`Save access for ${ANA.username}`));
-    await waitFor(() => expect(screen.queryByText("Saved.")).toBeNull());
-    expect(await screen.findByRole("status")).toBeTruthy();
+    expect(await screen.findByText("You cannot give a clearance above your own (OFFICIAL-SENSITIVE asked).")).toBeTruthy();
+    expect(screen.queryByText("Saved.")).toBeNull();
   });
 
   it("without the fallback, Entra's People offers no Access (the control)", async () => {

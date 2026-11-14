@@ -505,24 +505,39 @@ async def test_the_store_refuses_an_owner_read_for_another_tenant(world) -> None
 # --- ADR-148 Amendment 15: the administrator fallback, against the real table (platform-b) ---------
 #
 # What an administrator set is kept apart from what a token said, and a sign-in never overwrites it;
-# the store's limits read the setter's own row (rule 3); another tenant's row is never read or
-# written; the resolver, with a real token, takes the values set here and refuses a person with none.
+# the store's limits read the setter's own row inside its transaction (rule 3), with the audit row in
+# the same transaction; another tenant's row is never read or written (the store's own tenant clause);
+# the first administrators are given their values at install, never over a later change; the resolver,
+# with a real token, takes the values set here and refuses a person with none, recorded for People.
 
-from services.api.entra_people import AccessBeyondTheSetter  # noqa: E402
+from services.api.entra_people import AccessBeyondTheSetter, NoSuchPerson  # noqa: E402
 
 from ontology.handling import load_uk_le_scheme  # noqa: E402
-from schemas.admin import AccessInput  # noqa: E402
+from schemas.admin import PersonAccessInput  # noqa: E402
+from schemas.domain import Principal  # noqa: E402
 
 AM15_SETTER = "50000000-0000-4000-8000-000000000001"
 AM15_PERSON = "50000000-0000-4000-8000-000000000002"
-EVERY = ("clearance", "org_unit", "handling_codes")
-CLASSES = list(load_uk_le_scheme().classification)
-#: Every value from the administrator (the poc's fallback), the codes a claim being no matter.
+AM15_EVERY = ("clearance", "org_unit", "handling_codes")
+AM15_CLASSES = list(load_uk_le_scheme().classification)
+AM15_FIRST = {"clearance": "OFFICIAL-SENSITIVE", "org_unit": "unit-1", "handling_codes": ["P", "R"]}
+#: Every value from the administrator (the poc's fallback).
 AM15_MAPPING = ClaimMapping(tenant_id=TENANT, client_id=GLASS, clearance=ValueSource(administrator=True),
-                       org_unit=ValueSource(administrator=True),
-                       handling_codes={"administrator": True})  # type: ignore[arg-type]  # fmt: skip
+                            org_unit=ValueSource(administrator=True),
+                            handling_codes={"administrator": True})  # type: ignore[arg-type]  # fmt: skip
 AM15_SEEN = SeenPerson(name="Synthetic", username="person@example.test", email=None, clearance=None,
-                  org_unit=None, receivable_handling_codes=None)  # fmt: skip
+                       org_unit=None, receivable_handling_codes=None)  # fmt: skip
+AM15_BY = Principal(id=AM15_SETTER, clearance="SECRET", org_unit="unit-1", roles=[ADMIN_ROLE],
+                    receivable_handling_codes=["P", "R", "C"])  # the token's: more than the store holds  # fmt: skip
+
+
+class _Am15Audit:
+    def __init__(self) -> None:
+        self.records: list[dict[str, object]] = []
+
+    async def record(self, **kwargs: object) -> None:
+        assert kwargs.get("conn") is not None, "the audit row is written in the store's own transaction"
+        self.records.append(kwargs)
 
 
 @pytest.fixture
@@ -533,8 +548,8 @@ async def am15_world() -> AsyncIterator[SimpleNamespace]:
     await conn.execute(f'CREATE SCHEMA "{name}"')
     await conn.close()
     dsn = f"{base}?search_path={name}"
-    store = await EntraPeopleStore.connect(dsn, TENANT, EVERY)
-    other = await EntraPeopleStore.connect(dsn, OTHER_TENANT, EVERY)
+    store = await EntraPeopleStore.connect(dsn, TENANT, AM15_EVERY)
+    other = await EntraPeopleStore.connect(dsn, OTHER_TENANT, AM15_EVERY)
     try:
         yield SimpleNamespace(store=store, other=other, dsn=dsn)
     finally:
@@ -545,24 +560,55 @@ async def am15_world() -> AsyncIterator[SimpleNamespace]:
         await conn.close()
 
 
-async def _setter_holds(store: EntraPeopleStore, clearance: str, codes: list[str]) -> None:
-    """The setter as the store holds them: recorded, with what an administrator set for them."""
-    await store.add(AM15_SETTER, "install")
-    async with store.pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE entra_people SET admin_clearance = $3, admin_org_unit = 'unit-1', admin_codes = $4 "
-            "WHERE tenant_id = $1 AND oid = $2", store.tenant_id, AM15_SETTER, clearance, codes,
-        )  # fmt: skip
+def _am15_token(keypair, oid: str) -> str:  # type: ignore[no-untyped-def]
+    now = int(time.time())
+    return sign_token(keypair[0], {
+        "aud": API, "iss": ISSUER, "iat": now, "nbf": now, "exp": now + 3600, "ver": "2.0", "tid": TENANT,
+        "oid": oid, "azp": GLASS, "sub": "pairwise", "scp": "access_as_user", "name": "Synthetic",
+        "ext_clearance": "SECRET", "ext_unit": "unit-9",  # claims the fallback never reads
+    })  # fmt: skip
 
 
-def _access(clearance: str = "OFFICIAL", unit: str = "unit-2", codes: tuple[str, ...] = ("P",)) -> AccessInput:
-    return AccessInput(clearance=clearance, org_unit=unit, receivable_handling_codes=list(codes))
+def _am15_resolver(jwks_url: str, store: EntraPeopleStore) -> PrincipalResolver:
+    return PrincipalResolver(_config(jwks_url, oidc_issuer=ISSUER, oidc_audience=API),
+                             claim_mapping=AM15_MAPPING, role_source=store)  # fmt: skip
 
 
-async def test_set_values_are_kept_apart_and_a_sign_in_never_overwrites_them(am15_world) -> None:
-    await _setter_holds(am15_world.store, "OFFICIAL-SENSITIVE", ["P", "R"])
+async def test_am15_the_first_administrator_resolves_on_a_fresh_store_and_can_set_others(am15_world, keypair, jwks_url) -> None:
+    audit = _Am15Audit()
+    await am15_world.store.seed_first_administrators([AM15_SETTER], audit, AM15_FIRST)  # type: ignore[arg-type]
+    assert [r["action"] for r in audit.records] == ["grant_first_administrator", "grant_first_administrator_access"]
+    resolver = _am15_resolver(jwks_url, am15_world.store)
+    try:
+        principal = await resolver.resolve_principal(_am15_token(keypair, AM15_SETTER))
+    finally:
+        await resolver.aclose()
+    assert (principal.clearance, principal.org_unit, principal.receivable_handling_codes) == ("OFFICIAL-SENSITIVE", "unit-1", ["P", "R"])
+    assert ADMIN_ROLE in principal.roles
     await am15_world.store.person(TENANT, AM15_PERSON, AM15_SEEN)
-    before, after = await am15_world.store.set_administrator_access(AM15_PERSON, AM15_SETTER, _access(), CLASSES)
+    await am15_world.store.set_administrator_access(
+        AM15_PERSON, AM15_BY, PersonAccessInput(clearance="OFFICIAL", org_unit="unit-2", receivable_handling_codes=["P"]),
+        AM15_CLASSES, audit,
+    )  # fmt: skip
+    assert audit.records[-1]["action"] == "set_person_access"
+
+
+async def test_am15_seeding_never_overwrites_a_later_change(am15_world) -> None:
+    await am15_world.store.seed_first_administrators([AM15_SETTER], None, AM15_FIRST)  # type: ignore[arg-type]
+    async with am15_world.store.pool.acquire() as conn:
+        await conn.execute("UPDATE entra_people SET admin_clearance = 'OFFICIAL' WHERE tenant_id = $1 AND oid = $2",
+                           TENANT, AM15_SETTER)  # fmt: skip
+    await am15_world.store.seed_first_administrators([AM15_SETTER], None, AM15_FIRST)  # type: ignore[arg-type]
+    assert (await am15_world.store.standing(AM15_SETTER)).clearance == "OFFICIAL"
+
+
+async def test_am15_set_values_are_kept_apart_and_a_sign_in_never_overwrites_them(am15_world) -> None:
+    await am15_world.store.seed_first_administrators([AM15_SETTER], None, AM15_FIRST)  # type: ignore[arg-type]
+    await am15_world.store.person(TENANT, AM15_PERSON, AM15_SEEN)
+    before, after = await am15_world.store.set_administrator_access(
+        AM15_PERSON, AM15_BY, PersonAccessInput(clearance="OFFICIAL", org_unit="unit-2", receivable_handling_codes=["P"]),
+        AM15_CLASSES,
+    )  # fmt: skip
     assert (before.clearance, after.clearance, after.org_unit, after.receivable_handling_codes) == (None, "OFFICIAL", "unit-2", ["P"])
     seen_again = SeenPerson(**{**AM15_SEEN.__dict__, "clearance": "SECRET", "org_unit": "unit-9",
                                "receivable_handling_codes": ("R",)})  # fmt: skip
@@ -571,52 +617,54 @@ async def test_set_values_are_kept_apart_and_a_sign_in_never_overwrites_them(am1
     assert (await am15_world.store.standing(AM15_PERSON)) == stored
     shown = await am15_world.store.one(AM15_PERSON)
     assert (shown.clearance, shown.org_unit, shown.access_read_at) == ("OFFICIAL", "unit-2", None)
-    async with am15_world.store.pool.acquire() as conn:
-        by = await conn.fetchval("SELECT access_set_by FROM entra_people WHERE tenant_id = $1 AND oid = $2", TENANT, AM15_PERSON)
-    assert by == AM15_SETTER
 
 
 @pytest.mark.parametrize(
     ("access", "error"),
-    [(_access(clearance="SECRET"), "above_your_clearance"), (_access(codes=("C",)), "handling_code_you_do_not_hold")],
+    [(PersonAccessInput(clearance="SECRET"), "above_your_clearance"),
+     (PersonAccessInput(receivable_handling_codes=["C"]), "handling_code_you_do_not_hold")],
     ids=["clearance", "codes"],
-)
-async def test_the_store_s_limits_read_the_setter_s_own_row(am15_world, access: AccessInput, error: str) -> None:
-    """Rule 3 in the store: the caller passes only who is setting; what they hold is read here."""
-    await _setter_holds(am15_world.store, "OFFICIAL-SENSITIVE", ["P", "R"])
+)  # fmt: skip
+async def test_am15_the_store_s_limits_read_the_setter_s_own_row(am15_world, access: PersonAccessInput, error: str) -> None:
+    """Rule 3 in the store: the setter's token (AM15_BY) says SECRET and C; the store holds them at
+    OFFICIAL-SENSITIVE with P and R, and refuses."""
+    await am15_world.store.seed_first_administrators([AM15_SETTER], None, AM15_FIRST)  # type: ignore[arg-type]
     await am15_world.store.person(TENANT, AM15_PERSON, AM15_SEEN)
     with pytest.raises(AccessBeyondTheSetter, match=error):
-        await am15_world.store.set_administrator_access(AM15_PERSON, AM15_SETTER, access, CLASSES)
+        await am15_world.store.set_administrator_access(AM15_PERSON, AM15_BY, access, AM15_CLASSES)
     assert (await am15_world.store.standing(AM15_PERSON)).clearance is None
 
 
-async def test_another_tenant_s_row_is_never_read_or_written(am15_world) -> None:
-    """The same object ids in the other tenant: an administrator there holds nothing here, and what
-    is set here is never the other tenant's."""
-    await _setter_holds(am15_world.other, "SECRET", ["P", "R", "C"])
+async def test_am15_another_tenant_s_row_is_never_read_or_written(am15_world) -> None:
+    """The same object ids in the other tenant: an administrator there holds nothing here, a person
+    only there is no one here, and what is set here is never the other tenant's."""
+    await am15_world.other.seed_first_administrators([AM15_SETTER], None, {**AM15_FIRST, "clearance": "SECRET"})  # type: ignore[arg-type]
     await am15_world.store.person(TENANT, AM15_PERSON, AM15_SEEN)
-    with pytest.raises(AccessBeyondTheSetter):  # the setter is not recorded in this tenant
-        await am15_world.store.set_administrator_access(AM15_PERSON, AM15_SETTER, _access(), CLASSES)
-    await _setter_holds(am15_world.store, "OFFICIAL", ["P"])
+    with pytest.raises(AccessBeyondTheSetter, match="setter_cannot_set"):
+        await am15_world.store.set_administrator_access(AM15_PERSON, AM15_BY, PersonAccessInput(clearance="OFFICIAL"), AM15_CLASSES)
+    await am15_world.store.seed_first_administrators([AM15_SETTER], None, AM15_FIRST)  # type: ignore[arg-type]
+    await am15_world.other.person(OTHER_TENANT, "50000000-0000-4000-8000-0000000000ff", AM15_SEEN)
+    with pytest.raises(NoSuchPerson):
+        await am15_world.store.set_administrator_access("50000000-0000-4000-8000-0000000000ff", AM15_BY,
+                                                        PersonAccessInput(clearance="OFFICIAL"), AM15_CLASSES)  # fmt: skip
     await am15_world.other.person(OTHER_TENANT, AM15_PERSON, AM15_SEEN)
-    await am15_world.store.set_administrator_access(AM15_PERSON, AM15_SETTER, _access(), CLASSES)
+    await am15_world.store.set_administrator_access(AM15_PERSON, AM15_BY, PersonAccessInput(clearance="OFFICIAL"), AM15_CLASSES)
     assert (await am15_world.other.standing(AM15_PERSON)).clearance is None
 
 
-async def test_the_resolver_takes_what_was_set_and_refuses_a_person_with_none(am15_world, keypair, jwks_url) -> None:
-    now = int(time.time())
-    token = sign_token(keypair[0], {
-        "aud": API, "iss": ISSUER, "iat": now, "nbf": now, "exp": now + 3600, "ver": "2.0", "tid": TENANT,
-        "oid": AM15_PERSON, "azp": GLASS, "sub": "pairwise", "scp": "access_as_user", "name": "Synthetic",
-    })  # fmt: skip
-    resolver = PrincipalResolver(_config(jwks_url, oidc_issuer=ISSUER, oidc_audience=API),
-                                 claim_mapping=AM15_MAPPING, role_source=am15_world.store)  # fmt: skip
+async def test_am15_a_person_with_none_set_is_recorded_for_people_and_refused_until_set(am15_world, keypair, jwks_url) -> None:
+    await am15_world.store.seed_first_administrators([AM15_SETTER], None, AM15_FIRST)  # type: ignore[arg-type]
+    resolver = _am15_resolver(jwks_url, am15_world.store)
     try:
         with pytest.raises(PrincipalResolutionError, match="has not been set in this deployment"):
-            await resolver.resolve_principal(token)
-        await _setter_holds(am15_world.store, "OFFICIAL-SENSITIVE", ["P", "R"])
-        await am15_world.store.set_administrator_access(AM15_PERSON, AM15_SETTER, _access("OFFICIAL-SENSITIVE", "unit-3", ("R",)), CLASSES)
-        principal = await resolver.resolve_principal(token)
+            await resolver.resolve_principal(_am15_token(keypair, AM15_PERSON))
+        assert AM15_PERSON in [p.id for p in await am15_world.store.rows()]
+        await am15_world.store.set_administrator_access(
+            AM15_PERSON, AM15_BY,
+            PersonAccessInput(clearance="OFFICIAL-SENSITIVE", org_unit="unit-3", receivable_handling_codes=["R"]),
+            AM15_CLASSES,
+        )  # fmt: skip
+        principal = await resolver.resolve_principal(_am15_token(keypair, AM15_PERSON))
     finally:
         await resolver.aclose()
     assert (principal.clearance, principal.org_unit, principal.receivable_handling_codes) == ("OFFICIAL-SENSITIVE", "unit-3", ["R"])

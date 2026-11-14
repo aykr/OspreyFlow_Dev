@@ -1,10 +1,21 @@
-# 4c step B (ADR-148 Am 15): the render refuses the administrator fallback off the poc shape. Red first, fresh PYTHONPYCACHEPREFIX per pytest. Mac, offline.
+# 4c step B (ADR-148 Am 15): the render: the fallback on poc alone, and the first administrators' values required. Red first, each pytest with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a). Mac, offline, after round 1's review.
 
-== plant: the shape not asked:
+== (a) the shape not asked:
 FAILED test_cloud_platform_entra.py::test_the_administrator_fallback_is_refused_on_any_other_shape[clearance]
 FAILED test_cloud_platform_entra.py::test_the_administrator_fallback_is_refused_on_any_other_shape[org_unit]
 FAILED test_cloud_platform_entra.py::test_the_administrator_fallback_is_refused_on_any_other_shape[handling_codes]
-3 failed, 24 passed in 6.16s
+3 failed, 26 passed in 6.51s
+
+== (b) round 1's must-fix 1: the first administrators' values not required:
+FAILED test_cloud_platform_entra.py::test_the_fallback_without_the_first_administrators_values_is_refused[none]
+FAILED test_cloud_platform_entra.py::test_the_fallback_without_the_first_administrators_values_is_refused[not-the-clearance]
+2 failed, 27 passed in 6.38s
+
+== (c) the first administrators' values not rendered for the Conduit:
+FAILED test_cloud_platform_entra.py::test_the_administrator_fallback_renders_on_poc[clearance]
+FAILED test_cloud_platform_entra.py::test_the_administrator_fallback_renders_on_poc[org_unit]
+FAILED test_cloud_platform_entra.py::test_the_administrator_fallback_renders_on_poc[handling_codes]
+3 failed, 26 passed in 6.12s
 
 == green:
-27 passed in 5.81s
+29 passed in 6.23s
