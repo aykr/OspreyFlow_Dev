@@ -1,0 +1,8 @@
+# plant: stored_owner_unit_from_nowhere (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k acted_as_with_their_stored_access
+# RED
+E       AssertionError: assert ('50000000-00...VE', 'unit-1') == ('50000000-00...VE', 'unit-2')
+E         
+E         At index 2 diff: 'unit-1' != 'unit-2'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_a_held_owner_signed_in_today_is_acted_as_with_their_stored_access
+1 failed, 27 deselected in 2.78s

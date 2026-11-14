@@ -1,0 +1,5 @@
+# plant: watch_out_of_date_as_unreachable (services/api/monitor_schedule.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k watch_s_owner
+# RED
+E       AssertionError: assert ('has not signed in to OspreyFlow within the last 24 hours, so their clearance and unit are out of date: it runs at its next slot after they sign in' in 'watch watch-1: the identity provider could not be reached')
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_a_watch_s_owner_out_of_date_is_logged_in_the_24_hour_words_and_its_slot_kept
+1 failed, 27 deselected in 2.69s

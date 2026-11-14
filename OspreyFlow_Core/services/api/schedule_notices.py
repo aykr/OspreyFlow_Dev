@@ -15,7 +15,7 @@ NOTICE_RULE_PREFIX = "schedule:"
 #: carry a host, a table or a source row's key (rule 7), and it stays in the ledger and the log.
 NoticeKind = Literal[
     "failed", "timed_out", "refused_reach", "refused_rights", "sign_in_unavailable",
-    "in_progress", "keyless_refresh", "refused_quota",
+    "in_progress", "keyless_refresh", "refused_quota", "owner_out_of_date",
 ]  # fmt: skip
 
 _NOTICE_ENDINGS: dict[str, str] = {
@@ -27,6 +27,11 @@ _NOTICE_ENDINGS: dict[str, str] = {
     "refused_reach": "was refused: it no longer reaches its case or its dataset.",
     "refused_rights": "was refused: its owner may no longer run it.",
     "sign_in_unavailable": "could not run: the sign-in service did not answer.",
+    # ADR-148 Amendment 16: on Entra ID, a run acts as its owner's access as at their last sign-in.
+    "owner_out_of_date": (
+        "did not run: its owner has not signed in to OspreyFlow within the last 24 hours. It runs "
+        "again once they sign in."
+    ),
     "in_progress": "did not run: an earlier run into its case was still going.",
     "keyless_refresh": (
         "was refused: its pipeline has no deduplication key, so a refresh would load its rows "

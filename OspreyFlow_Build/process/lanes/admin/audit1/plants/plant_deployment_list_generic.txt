@@ -1,0 +1,10 @@
+# plant: deployment_list_generic (services/api/app.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k deployment_wide
+# RED
+E         
+E         - the schedule's owner, 50000000-0000-4000-8000-000000000009, can no longer sign in
+E         + OspreyFlow could not act as the schedule's owner, 50000000-0000-4000-8000-000000000009
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_a_deployment_wide_list_s_schedule_says_each_refusal_in_its_own_words[out-of-date]
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_a_deployment_wide_list_s_schedule_says_each_refusal_in_its_own_words[not-held]
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_a_deployment_wide_list_s_schedule_says_each_refusal_in_its_own_words[store-unread]
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_a_deployment_wide_list_s_schedule_says_each_refusal_in_its_own_words[revoked]
+4 failed, 24 deselected in 4.15s

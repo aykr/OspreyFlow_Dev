@@ -37718,3 +37718,99 @@ development tenant is Amendment 6's list.
   `api://` URI) and the audience. The duplicate audience check is removed, so no defence stands only behind another.
 - **Access through the real `get_principal`** against the real case store (`test_investigation_access_store.py`):
   granted Viewer on case A, a dashboard lists A alone and pulls A's feed, and B is refused as a case that does not exist.
+
+### ADR-148, Amendment 16 (14 November 2026) — Scheduled runs on Entra ID: a run acts as its owner's stored identity
+
+Status: decided by the owner (13 November 2026, the ADR-148 audit's ruling 1, option A; `process/lanes/AUDIT_ADR148_2026-11-13.md`,
+"Ruling 1's options"). Built by the admin lane (v0.5.2, audit 1). Corrects Amendment 8 point 4, which left a scheduled
+run unable to act as its owner on Entra ID.
+
+**The option, as ruled.** "Run as the owner's stored identity. Roles and disabled status are read live from Admin ›
+People; clearance, unit and codes as at their last sign-in, refused if older than 24 hours." Rule 3 (never more than
+its owner has now): "Yes. The same 24-hour rule already accepted." What the client creates in Entra: nothing.
+
+**The limit, stated plainly.** A run is refused once the owner's access was last recorded more than 24 hours before it.
+Access is recorded at sign-in and again at most hourly while they use OspreyFlow, so the 24 hours run from their last
+use, not from the day. An owner last active on Friday at 17:00 with a daily slot at 06:00: Saturday's run goes ahead,
+Sunday's and Monday's are refused (Monday's comes before they sign in), and Tuesday's goes ahead. What follows a
+refusal depends on the caller:
+- a schedule's slot, or a watch's run, runs at its next slot after they sign in;
+- *Run now* and `ospreyflow run` must be asked for again;
+- the daily KYC check does not come back for that day: its lapses are left to the rule's next load;
+- at a load, the owner's hotlists and watches are marked stopped until a load after they sign in.
+A leaver disabled in Entra keeps having runs act as them for up to 24 hours unless also disabled in Admin › People,
+which the guide tells administrators to do. Lifting the limit means reading the owner afresh from Microsoft Graph at
+each run, which needs a Graph application permission the client would grant: a separate decision for the owner, not
+part of this amendment.
+
+**Decisions.**
+
+1. **One path.** Everything that acts as a person who is not present already asks
+   `PrincipalResolver.resolve_for_owner(_detailed)`: a pipeline's schedule and watched folder, *Run now* in
+   *Admin › Operations* and `ospreyflow run` (through `ScheduleExecutor._resolve`), a scheduled rule, the daily KYC
+   check, a screening list's refresh schedule (a subscribed list's and a deployment-wide one's), a watch's runs, and at a
+   load anyone else's rules, hotlists and watches and the Rescreener.
+   On an Entra mapping it no longer refuses outright: it reads the owner from the people store (`RoleSource.owner`,
+   `EntraPeopleStore.owner`), without recording anyone, within the store's tenant and the role lookup's timeout, fresh
+   at every call.
+2. **What is read, and when it refuses.** The roles and the disabled flag are the store's, as they are now. The
+   clearance, unit and codes are those the owner's last sign-in recorded (`access_read_at`), trusted for
+   `principal_auth.ACCESS_FRESH`, 24 hours: the one constant `entra_people`'s transfer and promotion rules now read too.
+   - Disabled here: `PrincipalRevoked`, as on Keycloak; it counts toward the three refusals that pause a schedule.
+   - Not held: `OwnerNotHeld`, a `PrincipalExchangeRefused`; it counts, as a refusal of the owner's rights does.
+   - A store wired to another tenant raises, as `person` does, so it is the store unread, never every owner not held.
+   - Signed in more than 24 hours ago, or never (added by object id): `PrincipalAccessOutOfDate`, a
+     `PrincipalExchangeUnavailable`. It decides nothing about the owner, so it never counts toward pausing; a watch keeps
+     its slot and is tried again.
+   - The store unread, slow or answering something not a person: `OwnerRecordUnavailable`, also unavailable, never
+     counted.
+   The principal is built by `principal_from_claims` (decision 9's one construction path), from the stored owner.
+3. **True words.** No refusal on Entra says "the identity provider could not be reached", since Entra is not asked.
+   - The 24-hour refusal says `ACCESS_OUT_OF_DATE_WORDS` after the owner's id, then what happens next, each caller's
+     own:
+     - a slot of a pipeline's, a rule's or a list's schedule (a subscribed list's and a deployment-wide one's, from one
+       wording, `list_schedule.owner_refusal_words`) and a watch's log line: `NEXT_SLOT_WORDS`. The scheduler's reads:
+       "the schedule's owner, <id>, has not signed in to OspreyFlow within the last 24 hours, so their clearance and
+       unit are out of date: it runs at its next slot after they sign in";
+     - *Run now* (the 409's detail) and `ospreyflow run`: `RUN_AGAIN_WORDS`, "run it again once they have signed in";
+     - the daily KYC check's audit: `KYC_OUT_OF_DATE_NEXT`, that day's lapses not judged by the check.
+   - At a load, the callers that collapse a refusal to `None` (anyone else's rules, hotlists and watches, and the
+     Rescreener) say what they said before, that the owner could not be resolved, and leave the owner's items out: a
+     hotlist or watch is marked stopped until a load after the owner signs in, as ADR-044's path has always done. The
+     watch list shows *Stopped* without a reason, for this as for every ADR-044 stop: saying why is a CARRIES row.
+   - An owner not held is said as "is not a person Admin › People holds".
+   - The schedule's notice has a kind of its own, `owner_out_of_date`: "did not run: its owner has not signed in to
+     OspreyFlow within the last 24 hours. It runs again once they sign in."
+   - The store unread is said as *Admin › People*'s store.
+   - Keycloak's unreachable exchange keeps its words, and the KYC check's faults are logged and named as before.
+   - **Who `<id>` is.** The owner's account id as the schedule records it (`schedule_owner`, the rule's or list's owner,
+     `Principal.id`): on Entra the person's object id, which is how *Admin › People* names a person there and what
+     Operations' owner column already shows; on Keycloak the account's id, as before. It is OspreyFlow's own id for one
+     of its people, not a source system's identifier for a record (rule 7). It appears only where the owner's id is
+     already shown to those who manage schedules: the run's ledger words (Operations' runs, *Run now*'s refusal, a
+     list's *Latest refreshes*), the rule audit and the Conduit's log. The schedule's notice in the owner's own inbox
+     names no one: its sentence is fixed.
+4. **The docs lane's two call sites** (`process/lanes/docs/v052-sweep/README.md`, rows 1 and 2, and D1):
+   - the misleading "could not be reached" refusal is replaced as in decision 3;
+   - *Run now* in Operations runs as its owner on Entra too; while the owner is out of date it is refused in the
+     24-hour words, ending "run it again once they have signed in".
+   The guides follow D1: administration guide §6a.7 (the rule, its refusals and the limit), §8, §9.5, §9.11 and
+   §6a.10; developer guide §6.3; user guide §7.5 and §7.11. The check that every owner run "stops on Entra" is
+   inverted, so no guide says so, and its planted red is kept.
+
+**Tests.**
+- `tests/services/api/test_schedule_executor.py` (live): four out-of-date slots refused in the words and never paused,
+  then run once the owner is current; `tests/ingest/test_kyc_rules.py` (live) runs the sweep through `deployer_of`.
+- `tests/services/api/test_owner_on_entra.py`, offline against a fake store that refuses as the real one does:
+  - the stored access, and the roles and disabled flag read live at every run;
+  - the 24-hour edge both ways; never signed in; not held; disabled;
+  - the store failing or slow;
+  - each caller's words: the scheduler (never counted), *Run now* and the external trigger, a rule, both list
+    schedulers, a watch (its slot kept), the KYC check (and its faults logged as before), the notice, an owner not held,
+    a store of another tenant.
+  Each rule is planted alone and red (`process/lanes/admin/audit1/`).
+- `test_auth_entra_claims.py`: an owner on Entra is read from the store and never exchanged, even with an exchange
+  configured that would grant; the one-construction check still passes.
+- `test_entra_people_live.py`: the real store's `owner`, its tenant guard planted.
+- `test_guides_cloud_platform.py`: §6a.7 quotes the words and the 24 hours as the code holds them; no guide says an
+  owner run stops on Entra.

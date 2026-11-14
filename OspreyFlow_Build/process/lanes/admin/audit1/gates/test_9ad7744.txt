@@ -1,0 +1,11 @@
+# make -k test SKIP_JS=1, offline on the server (the orchestrator's slot), at 9ad7744 on main 1958316. The three failures are not this branch's: test_docs_pdf (the guides' PDFs, made by the orchestrator at merge); test_worker_isolation, test_write_store_marks and live-collect (main's Makefile names tests/services/search_index/test_feed_live.py, which main does not hold).
+FAILED ../OspreyFlow_Build/tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step
+FAILED ../OspreyFlow_Build/tests/test_worker_isolation.py::test_every_live_file_that_starts_a_conduit_or_seeder_or_uses_valkey_db_0_is_serial@serial
+FAILED ../OspreyFlow_Build/tests/test_write_store_marks.py::test_every_live_file_here_can_be_marked_and_read_back
+==== 3 failed, 13581 passed, 36 skipped, 120 warnings in 586.17s (0:09:46) =====
+ERROR: file or directory not found: ../OspreyFlow_Build/tests/services/search_index/test_feed_live.py
+make[2]: *** [Makefile:181: live-collect] Error 4
+make[1]: *** [Makefile:175: test] Error 1
+make: *** [Makefile:19: test] Error 2
+Wall time: 589 s, exit 2 (no stack, no lease; set-up before it 11 s)
+test exit 2

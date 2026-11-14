@@ -45,6 +45,11 @@ EXPECTED = {
     "keyless_refresh": (
         "was refused: its pipeline has no deduplication key, so a refresh would load its rows again."
     ),
+    # ADR-148 Amendment 16: on Entra ID, an owner not signed in within the last 24 hours.
+    "owner_out_of_date": (
+        "did not run: its owner has not signed in to OspreyFlow within the last 24 hours. It runs again "
+        "once they sign in."
+    ),
 }
 
 

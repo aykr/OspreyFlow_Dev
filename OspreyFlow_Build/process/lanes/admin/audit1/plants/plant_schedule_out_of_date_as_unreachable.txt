@@ -1,0 +1,8 @@
+# plant: schedule_out_of_date_as_unreachable (services/api/scheduler.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k schedule_s_owner_out_of_date
+# RED
+E       assert "the identity...edule's owner" == "the schedule... they sign in"
+E         
+E         - the schedule's owner, 50000000-0000-4000-8000-000000000009, has not signed in to OspreyFlow within the last 24 hours, so their clearance and unit are out of date: it runs at its next slot after they sign in
+E         + the identity provider could not be reached to act as the schedule's owner
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_a_schedule_s_owner_out_of_date_is_refused_in_the_24_hour_words_and_never_pauses
+1 failed, 27 deselected in 2.71s

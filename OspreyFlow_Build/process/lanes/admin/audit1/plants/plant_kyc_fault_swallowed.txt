@@ -1,0 +1,7 @@
+# plant: kyc_fault_swallowed (services/api/kyc_sweep.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k fault_resolving
+# RED
+E       AssertionError: assert False
+E        +  where False = <built-in method endswith of str object at 0x135c68930>('it could not be run as its deployer (RuntimeError)')
+E        +    where <built-in method endswith of str object at 0x135c68930> = 'rule rule-1 in case case-1: its deployer could not be resolved, so it could not run as them'.endswith
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_a_fault_resolving_the_kyc_deployer_is_logged_and_named_as_before
+1 failed, 27 deselected in 2.74s

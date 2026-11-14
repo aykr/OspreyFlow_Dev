@@ -31,6 +31,11 @@ from valkey.asyncio import Valkey
 from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme
 from ports.graph import GraphPort
+from principal_auth import (
+    ACCESS_OUT_OF_DATE_WORDS,
+    PrincipalAccessOutOfDate,
+    PrincipalExchangeError,
+)
 from schemas.domain import Principal
 
 from .alerts import AlertStore
@@ -44,6 +49,12 @@ from .typology_rules import TypologyRuleStore
 
 _LAST_SWEPT = "kyc:sweep:last"
 _CLAIM = "kyc:sweep:claimed:"
+#: ADR-148 Amendment 16: the sweep closes its day whatever happened, so a deployer out of date
+#: leaves that day's lapses unjudged by the sweep; the rule's next load judges its customers.
+KYC_OUT_OF_DATE_NEXT = (
+    "the documents that lapsed are not judged by this day's check; the rule judges its customers "
+    "afresh at its next load"
+)
 log = logging.getLogger(__name__)
 
 
@@ -68,7 +79,12 @@ async def sweep(
     principal_for_owner: Callable[[str], Awaitable[Principal | None]],
     sweeper: Principal,
     datasets: DatasetStore | None = None,
+    deployer_of: Callable[[str], Awaitable[Principal]] | None = None,
 ) -> SweepReport:
+
+    """`deployer_of` (`resolve_for_owner_detailed`), when given, is how each rule's deployer is
+    acted as, so a refusal can say why: on Entra ID, a deployer not signed in within 24 hours is
+    said so (ADR-148 Amendment 16). Without it, `principal_for_owner`'s `None` is the one answer."""
     raw = await reply(valkey.get(_LAST_SWEPT))
     last = date.fromisoformat(raw.decode() if isinstance(raw, bytes) else raw) if raw else None
     report = SweepReport(day=day)
@@ -99,8 +115,21 @@ async def sweep(
                 loader=sweeper,
             )
             unjudged_all = sum(len(d) for d in customers.values())
+            why = "its deployer could not be resolved, so it could not run as them"
             try:
-                deployer = await principal_for_owner(rule.owner_id)
+                if deployer_of is None:
+                    deployer = await principal_for_owner(rule.owner_id)
+                else:
+                    try:
+                        deployer = await deployer_of(rule.owner_id)
+                    except PrincipalAccessOutOfDate:
+                        deployer = None
+                        why = (
+                            f"its deployer, {rule.owner_id}, {ACCESS_OUT_OF_DATE_WORDS}: "
+                            f"{KYC_OUT_OF_DATE_NEXT}"
+                        )
+                    except PrincipalExchangeError:  # refused or unreachable: as the None answer
+                        deployer = None
                 if deployer is not None and datasets is not None:
                     # As a request is, by what the case reads: in a case reading a composite its
                     # alert goes into the case's layer (ADR-099 Amendment 15 item 2).
@@ -111,8 +140,6 @@ async def sweep(
                 log.exception("KYC sweep: rule %s, case %s, could not be scoped", rule.id, case)
                 deployer = None
                 why = f"it could not be run as its deployer ({type(error).__name__})"
-            else:
-                why = "its deployer could not be resolved, so it could not run as them"
             if deployer is None:
                 report.failures.append(f"rule {rule.id} in case {case}: {why}")
                 await _say_unjudged(audit, sweeper, case, rule.id, day, 0, unjudged_all, why)

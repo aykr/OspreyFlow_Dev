@@ -44,7 +44,15 @@ from typing import Any
 
 import asyncpg
 
-from principal_auth import ClaimMapping, SeenPerson, StoredDashboard, StoredPerson, is_object_id
+from principal_auth import (
+    ACCESS_FRESH,
+    ClaimMapping,
+    SeenPerson,
+    StoredDashboard,
+    StoredOwner,
+    StoredPerson,
+    is_object_id,
+)
 from schemas.admin import (
     AccessInput,
     DashboardIdentity,
@@ -73,10 +81,9 @@ from .identity_admin import (
 #: The role the first administrators are given (`schemas.rights.ROLE_RIGHTS`).
 ADMIN_ROLE = "osprey-admin"
 
-#: How long a clearance, unit and handling codes read from a token are trusted for anything sent to
-#: the person (a transfer, a promotion's alert): an Entra access token's longest life, plus a margin
-#: (ADR-148 Amendment 8; the orchestrator's ruling, 12 November 2026). Display is unchanged.
-ACCESS_FRESH = timedelta(hours=24)
+#: `ACCESS_FRESH` (imported above, `principal_auth`'s): how long a clearance, unit and handling
+#: codes read from a token are trusted for anything sent to the person (a transfer, a promotion's
+#: alert) or done as them (a run as its owner, ADR-148 Amendment 16). Display is unchanged.
 #: How often a session brings the stored access's time up to date when nothing in it changed.
 ACCESS_REFRESH = timedelta(hours=1)
 #: An Entra person whose access was never read (added by object id) or read before the column.
@@ -345,6 +352,31 @@ class EntraPeopleStore:
         if row is None:
             return None
         return StoredPerson(roles=tuple(row["roles"]), disabled=bool(row["disabled"]))
+
+    async def owner(self, tenant_id: str, oid: str) -> StoredOwner | None:
+        """A person as held, for a run acting as them (ADR-148 Amendment 16): read without
+        recording anyone, and only within this store's tenant. None for a person not held; asked for
+        another tenant, it raises, as `person` does: a store wired to the wrong tenant is a fault,
+        never every owner "not held"."""
+        if tenant_id != self.tenant_id:
+            raise IdentityAdminRefused("the people store is another tenant's")
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT roles, disabled, clearance, org_unit, receivable_handling_codes, "
+                "access_read_at FROM entra_people WHERE tenant_id = $1 AND oid = $2",
+                self.tenant_id,
+                oid,
+            )
+        if row is None:
+            return None
+        return StoredOwner(
+            roles=tuple(row["roles"]),
+            disabled=bool(row["disabled"]),
+            clearance=row["clearance"],
+            org_unit=row["org_unit"],
+            receivable_handling_codes=tuple(row["receivable_handling_codes"]),
+            access_read_at=row["access_read_at"],
+        )
 
     # --- the install's first administrators ---------------------------------------------------
 

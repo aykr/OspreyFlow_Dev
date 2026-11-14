@@ -1,0 +1,3 @@
+# test_entra_people_live.py on stack e (the lease admin took 14 Nov ~03:50Z), fresh PYTHONPYCACHEPREFIX; code as at 876383a
+head 876383a
+23 passed in 10.34s

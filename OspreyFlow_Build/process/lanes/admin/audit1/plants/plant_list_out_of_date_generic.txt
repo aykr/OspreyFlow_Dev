@@ -1,0 +1,10 @@
+# plant: list_out_of_date_generic (services/api/list_schedule.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k list_refresh or deployment_wide
+# RED
+E         + OspreyFlow could not act as the schedule's owner, 50000000-0000-4000-8000-000000000009
+E       AssertionError: assert 'The schedule...ft as it was.' == 'The schedule...ft as it was.'
+E         
+E         - The scheduled refresh was refused: the schedule's owner, 50000000-0000-4000-8000-000000000009, has not signed in to OspreyFlow within the last 24 hours, so their clearance and unit are out of date: it runs at its next slot after they sign in. The list was left as it was.
+E         + The scheduled refresh was refused: OspreyFlow could not act as the schedule's owner, 50000000-0000-4000-8000-000000000009. The list was left as it was.
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_a_deployment_wide_list_s_schedule_says_each_refusal_in_its_own_words[out-of-date]
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_a_list_refresh_s_owner_out_of_date_is_refused_in_the_24_hour_words
+2 failed, 3 passed, 23 deselected in 4.14s

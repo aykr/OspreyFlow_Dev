@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.34** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.35** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.35 | 2026-11-14 | §6.3: where people sign in with Entra ID, a schedule or watched folder runs as the person who set it while they have signed in within the last 24 hours (administration guide §6a.7; ADR-148 Amendment 16). PDF made by the orchestrator at merge. |
 | 1.34 | 2026-11-13 | §6.3: where people sign in with Entra ID (a shared platform), neither a schedule nor a watched folder runs: loads are started by hand (administration guide §6a.7; docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
 | 1.33 | 2026-11-10 | Describes v0.5.0. §3: Releases as built (studio's L1.7), no longer *coming*. |
 | 1.32 | 2026-11-10 | Admin's L2.5c as built. §7.8: after the delete's dry run, an administrator may delete a removed case's layer on Admin → Datasets' screen; the merge is still the Ingest Studio's only. |
@@ -458,9 +459,10 @@ run that is refused — they can no longer sign in, have lost the right, are no 
 are cleared below the source — tells them on their alerts; **three refusals in a row pause it**.
 Admin → Operations lists every one, and 4 Runs every one of the dataset's.
 
-**Where people sign in with Entra ID** (a deployment on a shared platform), nothing can act as the
-person who set it, so neither a schedule nor a watched folder runs there: each run is refused, and
-loads are started by hand with **Run now** (administration guide, §6a.7).
+**Where people sign in with Entra ID** (a deployment on a shared platform), a schedule or watched
+folder runs as the person who set it only while they have used OspreyFlow within the last 24 hours.
+Otherwise each slot is refused, in those words, and runs at its next slot after they sign in; such a
+refusal never counts toward the three that pause a schedule (administration guide, §6a.7).
 
 ### 6.4 Reverting a load
 

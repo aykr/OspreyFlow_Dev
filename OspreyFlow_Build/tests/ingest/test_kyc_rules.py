@@ -381,6 +381,8 @@ async def test_a_document_the_reader_cannot_see_verifies_no_one_for_them(stores:
 from services.api.kyc_expiries import KycExpiryStore  # noqa: E402
 from services.api.kyc_sweep import sweep  # noqa: E402
 
+from principal_auth import PrincipalExchangeRefused  # noqa: E402
+
 
 async def _swept(stores: dict[str, Any], graph: Any, expiries: KycExpiryStore, day: date) -> Any:
     known = {OFFICER.id: OFFICER}
@@ -388,10 +390,17 @@ async def _swept(stores: dict[str, Any], graph: Any, expiries: KycExpiryStore, d
     async def principal_for_owner(owner_id: str) -> Principal | None:
         return known.get(owner_id)
 
+    async def deployer_of(owner_id: str) -> Principal:
+        # As production wires it (`resolve_for_owner_detailed`, ADR-148 Amendment 16): the deployer
+        # resolved, or refused as the real resolver refuses.
+        if owner_id not in known:
+            raise PrincipalExchangeRefused(f"owner {owner_id!r} is not known")
+        return known[owner_id]
+
     return await sweep(
         day=day, expiries=expiries, rules=stores["rules"], graph=graph, scheme=SCHEME,
         alert_store=stores["alerts"], audit=stores["audit"], valkey=stores["valkey"],
-        principal_for_owner=principal_for_owner, sweeper=OFFICER,
+        principal_for_owner=principal_for_owner, sweeper=OFFICER, deployer_of=deployer_of,
     )  # fmt: skip
 
 

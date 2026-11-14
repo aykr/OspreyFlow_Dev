@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.52** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.53** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.53 | 2026-11-14 | §7.5 and §7.11: where people sign in with Entra ID, your watches, hotlists and rules run as you, and a scheduled rule's run acts as you, while you have signed in within the last 24 hours (administration guide §6a.7; ADR-148 Amendment 16). PDF made by the orchestrator at merge. |
 | 1.52 | 2026-11-14 | §6, Ask & Chat, as v0.5.2's Part D built it (ADR-098 Amendment 7, rules-b's wording): **Read from** (*Selected items*, *Everything on the graph*, *Whole case* not available yet), the *About* and *Will read* lines and the engine before anything is sent, an answer from links and events when there is no document; *Ask the model about these…* on any selection saves a private view and asks there; asking needs Editor, no longer a document. Held by `tests/test_user_guide_ask_chat.py`. PDF made by the orchestrator at merge. |
 | 1.51 | 2026-11-13 | §7.5 and §7.11: where people sign in with Entra ID (a shared platform), a load judges only its starter's rules, hotlists and watches, a watch's own runs do not happen, and a scheduled rule is refused (administration guide §6a.7; docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
 | 1.50 | 2026-11-13 | §3, §4, §5 and §5.13–5.14: the Glass's mode toggle is **Graph · Drawing board** (it was *Case · Boards*), with a line saying what each mode is (ADR-145 Amendment 13); **Views ▾** by the graph lists the case's saved views and opens one, the Cases drawer keeping its list (ADR-144 Amendment 3). PDF reprinted alone. |
@@ -1085,9 +1086,11 @@ An alert on another analyst's hotlist is listed to you only when its owner share
 and says "read from data this case does not read", with no file and no row (section 5.6): a file name
 is as much a source as a row.
 
-**Where people sign in with Entra ID** (a deployment on a shared platform), a load judges only the
-rules, hotlists and watches of the person who started it, and a watch's own runs do not happen: the
-administration guide, §6a.7, says why.
+**Where people sign in with Entra ID** (a deployment on a shared platform), your rules, hotlists and
+watches are judged at another person's load, and your watch's own runs happen, only while you have
+used OspreyFlow within the last 24 hours. Otherwise, at a load your hotlists and watches are marked
+*Stopped*, without a reason shown, until the first load after you sign in again: the administration
+guide, §6a.7, says why.
 
 ### 7.6 The rule editor: a rule written as a sentence
 
@@ -1291,8 +1294,10 @@ as you see it, and raises an alert for each new finding, once.
   says why. Changing the rule starts it again.
 - A rule for the whole deployment does not run on a schedule: it is judged within each case as that
   case's data loads.
-- **Where people sign in with Entra ID** (a deployment on a shared platform), a rule cannot act as
-  you while you are away, so its scheduled runs are refused (the administration guide, §6a.7).
+- **Where people sign in with Entra ID** (a deployment on a shared platform), a rule's scheduled run
+  acts as you only while you have used OspreyFlow within the last 24 hours. Otherwise it is recorded
+  as not run, in those words, and runs at its next slot after you sign in; this never stops the
+  schedule (the administration guide, §6a.7).
 
 ### 7.12 A second person's approval
 

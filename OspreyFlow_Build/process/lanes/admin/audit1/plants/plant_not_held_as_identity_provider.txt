@@ -1,0 +1,8 @@
+# plant: not_held_as_identity_provider (services/api/scheduler.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k not_held_is_said
+# RED
+E       assert 'the identity...-000000000009' == "the schedule... People holds"
+E         
+E         - the schedule's owner, 50000000-0000-4000-8000-000000000009, is not a person Admin › People holds
+E         + the identity provider refused to act as the schedule's owner, 50000000-0000-4000-8000-000000000009
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_an_owner_not_held_is_said_as_people_and_counted
+1 failed, 27 deselected in 2.75s

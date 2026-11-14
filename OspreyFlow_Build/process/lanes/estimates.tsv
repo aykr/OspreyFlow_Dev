@@ -1,4 +1,4 @@
-# as of 2026-11-14T03:25Z
+# as of 2026-11-14T05:40Z
 rules	lists	third pass: the audit read filtered by list clearance (MUST 3), shoulds 4-7, live records at the new head; then the orchestrator's re-check	13 Nov, evening	B
 admin	refresh	done: a refresh keeps you signed in and where you were (ADR-050 Am 3)	done	B
 admin	pg	done: Small's Postgres connections (ADR-114 Am 43), after refresh	done	B
@@ -10,9 +10,10 @@ admin	T1	part 5 merged 12 Nov; left: marks, sleeps, the ArcadeDB waits	after v0.
 demo	fixes-13nov	done: everything of 13 Nov live on osprey-small at 02f9337; the memory cap after the demo	done	A
 platform-b	gate-b	done: banner, key prompt, footer, one prompt, rail + Help all live	done	A
 platform-b	v052-superset	Superset on Entra, embedding, the render, runbooks (steps 1,4-7)	Wed 18 Nov	B
-admin	v052-identities	ready-to-merge at 4e83010: dashboard identities and report sync on Entra (steps 2-3)	14 Nov, on merge	B
+admin	v052-identities	done: dashboard identities and report sync on Entra (merged 5bfe374)	done	B
 platform	v052-standin	the stand-in signs (step 8)	Sat 14 Nov	B
 platform-b	v052-r1	R1 for v0.5.2 with a dashboards check (step 9)	Thu 19 Nov	B
 platform	part3	ospreyflow.app beside the GOV.UK demo (after v0.5.2's stand-in)	after v0.5.1	A
 admin	hb2	done: heartbeat stages per step, built-waiting-to-merge (merged as 7addbe6)	done	A
-admin	audit-1	scheduled runs on Entra (option A) with docs' two call sites; then 4b (guests)	15 Nov	B
+admin	audit-1	ready-to-merge at 9ad7744 (+ records): scheduled runs on Entra act as the owner's stored identity (ADR-148 Am 16); then 4b (guests)	14 Nov, on merge	B
+admin	idp-labels	done: test-IdP containers labelled and reaped by run (landed 1958316)	done	A

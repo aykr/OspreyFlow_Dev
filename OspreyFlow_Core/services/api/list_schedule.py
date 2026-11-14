@@ -26,7 +26,14 @@ from valkey.asyncio import Valkey
 from conduit_common.identity import new_id
 from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme
-from principal_auth import PrincipalRevoked
+from principal_auth import (
+    ACCESS_OUT_OF_DATE_WORDS,
+    NEXT_SLOT_WORDS,
+    OwnerNotHeld,
+    OwnerRecordUnavailable,
+    PrincipalAccessOutOfDate,
+    PrincipalRevoked,
+)
 from schemas.domain import Principal
 from schemas.monitoring import ListSchedule
 from schemas.rights import Right, rights_for
@@ -62,6 +69,22 @@ class ScheduledLists(Protocol):
     async def hidden(self, list_name: str, *, cleared: ListClearance) -> bool: ...
 
 
+def owner_refusal_words(error: BaseException, owner_id: str) -> str:
+    """Why a list's scheduled refresh may not run as its owner, in words: the one wording for both
+    list schedulers, a subscribed list's (`ListRefreshExecutor`) and a deployment-wide list's
+    (`app._deployment_list_scheduler`). On Entra ID each refusal says what happened (ADR-148
+    Amendment 16): never "could not be reached", since Entra is not asked."""
+    if isinstance(error, PrincipalRevoked):
+        return f"the schedule's owner, {owner_id}, can no longer sign in"
+    if isinstance(error, PrincipalAccessOutOfDate):
+        return f"the schedule's owner, {owner_id}, {ACCESS_OUT_OF_DATE_WORDS}: {NEXT_SLOT_WORDS}"
+    if isinstance(error, OwnerNotHeld):
+        return f"the schedule's owner, {owner_id}, is not a person Admin › People holds"
+    if isinstance(error, OwnerRecordUnavailable):
+        return "Admin › People's store could not be read to act as the schedule's owner"
+    return f"OspreyFlow could not act as the schedule's owner, {owner_id}"
+
+
 @dataclass
 class ListRefreshExecutor:
     lists: ScheduledLists
@@ -93,13 +116,8 @@ class ListRefreshExecutor:
             return
         try:
             owner = await self.resolve_owner(scheduled.owner)
-        except PrincipalRevoked:
-            await self._refused(scheduled, f"the schedule's owner, {scheduled.owner}, can no "
-                                           "longer sign in")  # fmt: skip
-            return
-        except Exception:  # noqa: BLE001 - the exchange refused or unreachable: said, not raised
-            await self._refused(scheduled, "OspreyFlow could not act as the schedule's owner, "
-                                           f"{scheduled.owner}")  # fmt: skip
+        except Exception as error:  # noqa: BLE001 - the exchange refused or unreachable: said, not raised
+            await self._refused(scheduled, owner_refusal_words(error, scheduled.owner))
             return
         if Right.LOAD_SCREENING_LISTS not in rights_for(owner.roles):
             await self._refused(scheduled, f"the schedule's owner, {scheduled.owner}, no longer "
@@ -130,4 +148,9 @@ class ListRefreshExecutor:
         )
 
 
-__all__ = ["ListRefreshExecutor", "ListScheduleRefused", "check_list_schedule"]
+__all__ = [
+    "ListRefreshExecutor",
+    "ListScheduleRefused",
+    "check_list_schedule",
+    "owner_refusal_words",
+]
