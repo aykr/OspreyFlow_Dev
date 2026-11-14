@@ -57,5 +57,16 @@ the counts, the eligible records per class and B's manifest's sha256.
 
 ## The run
 
+**A first run stopped before anything was timed, and the deviation it caused.** Run 20261114T142042Z-90e982c3,
+started by rules at the repository root as the command list said, stopped at 14:21Z after "step4: the realm is up
+with its subjects", with "step4: docker build failed: ERROR: failed to build: resolve : lstat services: no such
+file or directory". The runner gave docker `-f services/api/Dockerfile`, which docker reads from the process's own
+directory, not from the build context (`OspreyFlow_Core`); on stack f the runner had been started from
+`OspreyFlow_Core`, so the gap never showed. Nothing was left on d (no step4 containers; the stores up). Rules
+reran with the runner started from `OspreyFlow_Core` and the inner pytest line less its own `cd OspreyFlow_Core`,
+the one change from the list: every other path in the runner goes through `ROOT`, `CORE` or `FIXTURES`, so the
+run is otherwise as listed. Platform fixed the runner on this branch (9464862: `build_argv` gives docker
+`CORE / dockerfile`; red first, plant 14 in `plants_step4.py`, 14/14 red), so a later run starts from either.
+
 (To be filled in from rules' results: each run's id, start and end, the server's state before it, the runner's lines,
 pytest's summary, M9's agreement with its time, and what each figure means for v0.5.2.)
