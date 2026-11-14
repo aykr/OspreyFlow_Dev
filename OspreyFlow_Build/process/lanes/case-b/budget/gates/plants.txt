@@ -1,0 +1,12 @@
+AS IT MUST BE (red): guard: main's timed cases in the parallel run
++   "src/canvas/communityLinks.test.ts",
++   "src/canvas/settledAnchor.test.ts",
+AS IT MUST BE (red): plant: settledAnchors 1.1 s slower, budget run alone
+AssertionError: expected 1134.887875 to be less than 1000
+AS IT MUST BE (red): plant: packBubbles 2.1 s slower, budget run alone
+AssertionError: expected 2131.797791 to be less than 2000
+AS IT MUST BE (green): unplanted: the guard and the two ordinary files
+AS IT MUST BE (green): unplanted: the budget run
+ Test Files  3 passed (3)
+      Tests  3 passed (3)
+every plant red, unplanted green
