@@ -325,9 +325,36 @@ test("a record a result names but the answer does not hold is said, and the rest
   expect(props.onShow).toHaveBeenCalledWith([expect.objectContaining({ id: "p1" }), expect.objectContaining({ id: "p2" })]);
 });
 
+// The owner, 14 November 2026: the counts are per group by design (a Document can be in two groups, a Person and
+// Mentioned in documents), so All need not equal their sum, and the page says so where there is more than one group.
+const PER_GROUP = "Each group counts its own records, and a record can be in more than one, so All need not be the groups added up.";
+
+test("says the counts are each group's own where there is more than one group", async () => {
+  serve(PAGE({ total: 50 }));
+  draw();
+  const groups = await screen.findByRole("group", { name: "Result groups" });
+  const said = screen.getByText(PER_GROUP);
+  // Beside the groups it explains, after them in reading order.
+  expect(groups.compareDocumentPosition(said) & window.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+test("says nothing of it with one group, where All and the group count the same records", async () => {
+  serve(PAGE({ total: 12, groups: [{ key: "Person", label: "People", count: 12 }] }));
+  draw();
+  await screen.findByRole("group", { name: "Result groups" });
+  expect(screen.queryByText(PER_GROUP)).toBeNull();
+});
+
 describe("under the GOV.UK brand", () => {
   beforeEach(() => document.documentElement.setAttribute("data-brand", "govuk"));
   afterEach(() => document.documentElement.removeAttribute("data-brand"));
+
+  test("says the counts are each group's own in the GOV.UK look's body text", async () => {
+    serve(PAGE());
+    draw();
+    await screen.findByRole("group", { name: "Result groups" });
+    expect(screen.getByText(PER_GROUP).className).toContain("govuk-body-s");
+  });
 
   test("the pages are GOV.UK pagination: Next page and Previous page as its links", async () => {
     const { sent } = serve(PAGE(), PAGE({ page: 2, more: false }));

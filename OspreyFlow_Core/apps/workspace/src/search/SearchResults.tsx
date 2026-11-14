@@ -215,6 +215,15 @@ export function SearchResults({
               ))}
             </div>
           )}
+          {/* The counts are each group's own, by design (the owner, 14 November 2026): a Document can be in two
+              groups, as a Document and as Mentioned in documents, so All need not equal the groups added up. Said
+              where there is more than one group; with one, All and it count the same records. */}
+          {counts && counts.groups.length > 1 && (
+            <p className={govuk ? "govuk-body-s search-results__per-group" : "search-results__per-group"}>
+              Each group counts its own records, and a record can be in more than one, so All need not be the groups
+              added up.
+            </p>
+          )}
           {shown && shown.results.length > 0 && (
             <ul aria-label="Results" className={govuk ? "govuk-list search-results__list" : "search-results__list"}>
               {shown.results.map((result) => (
