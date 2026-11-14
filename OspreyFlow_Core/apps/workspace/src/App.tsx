@@ -2867,11 +2867,8 @@ export function App() {
               openViewId={lens?.opened.view.id ?? null}
               refreshKey={viewsRead}
               takeFocus={casesOpen === "views"}
-              // The whole case, from the list: what the strip's *Back to the whole case* does.
-              onOpenWholeCase={() => {
-                setCasesOpen(false);
-                closeLens();
-              }}
+              // The whole case, from the list: what the strip's *Back to the whole case* does, focus back on *Saved views*.
+              onOpenWholeCase={backToTheWholeCase}
               onOpen={(chosen) => {
                 setCasesOpen(false);
                 void openLens(chosen.id);

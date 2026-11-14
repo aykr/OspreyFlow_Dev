@@ -164,11 +164,12 @@ describe("saved views and the way back to the whole case (ADR-145 Amendment 17, 
     await within(drawer).findByRole("list", { name: "Saved views" });
     expect(within(drawer).queryByRole("button", { name: "Browse all cases" })).toBeNull();
     fireEvent.click(await within(drawer).findByRole("button", { name: "Open Payments in March" }));
-    await screen.findByRole("region", { name: "Open view" });
+    await screen.findByRole("region", { name: "Saved view" });
     fireEvent.click(caseLine().getByRole("button", { name: /^Saved views/ }));
     const again = await screen.findByRole("dialog", { name: "Saved views" });
     fireEvent.click(await within(again).findByRole("button", { name: "Open the whole case" }));
-    await vi.waitFor(() => expect(screen.queryByRole("region", { name: "Open view" })).toBeNull());
+    await vi.waitFor(() => expect(screen.queryByRole("region", { name: "Saved view" })).toBeNull());
     expect(screen.queryByRole("dialog", { name: "Saved views" })).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(caseLine().getByRole("button", { name: /^Saved views/ })));
   });
 });
