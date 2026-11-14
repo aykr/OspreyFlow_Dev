@@ -37404,8 +37404,17 @@ decommission:**
    settings and the map settings with the map key file (ADR-147), each a part of the set's claims part beside the Ingest
    root, read-only to the backup; the pods that mount them are writers a restore refuses to run beside. The tiles and the
    uploads' scratch are made again or are the Ingest's, and are not.
-5. **RDS keeps point in time for 35 days** (`backup_retention_period`), the sets' own expiry
-   (`cloud_platform_backups.EXPIRE_DAYS`), in every shape, so every kept set can be met by a point-in-time restore.
+5. **RDS keeps point in time for 35 days** (`backup_retention_period`, `cloud_platform_backups.POINT_IN_TIME_DAYS`;
+   AWS's maximum), in every shape, **and the sets expire a day sooner, at 34** (`EXPIRE_DAYS`), so every kept set can
+   be met by a point-in-time restore. *Amended 14 November 2026 (MORNING item 5, option (a), decided under the
+   owner's standing rule):* as first written the sets expired at 35, the same as RDS's window, and at the edge that
+   was optimistic. RDS's earliest restorable point lags its retention by up to about a day, and S3's expiry rounds up
+   to midnight UTC, so a set in its last day could fall outside the window. RDS cannot keep more than 35 days, so the
+   sets give up the day. Option (b), keeping 35 and saying a set's last day may not be restorable with its database,
+   was declined. Held by `tests/harness/test_cloud_platform_data_safety.py`, reading the rendered Terraform both ways
+   (`test_rds_keeps_point_in_time_a_day_longer_than_the_sets_are_kept`), the recovery runbook's words and the
+   decommission's; and by `tests/test_guides_cloud_platform.py`'s §6a.8 case, which reads the guide's numbers from
+   the same render.
 6. **The decommission has no default for the backups.** Its step 7 refuses until `BACKUPS=keep` or `BACKUPS=destroy` is
    given, and touches nothing before. `keep` sets the agreed retention on the bucket (Amendment 7's path, unchanged);
    `destroy` empties and removes the bucket and schedules the key's deletion (thirty days, cancellable) there and then,
