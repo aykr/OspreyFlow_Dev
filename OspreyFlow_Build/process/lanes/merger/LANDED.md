@@ -74,3 +74,4 @@ f7891fb e5fab5a platform-b caddy-mark (main's NEEDS_CADDY red)
 b9957c7 f896864 platform v052-backupsfix (main's seven Helm reds)
 ad4cc89 3de0896 platform v052-runbookclaims
 5178332 82504af platform v052-bedrockkeys
+661a588 14f7680 rules-b v052D (Part D), with audit, spec03, registry and bar patches
