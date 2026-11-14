@@ -78,3 +78,28 @@ plant 6: the table's M6 failure figure changed alone
 The earlier plants rerun after the change: plants_budgets 6/6 red, plants_live 3/3 red.
 Green after: test_measure_search and tests/perf 19 passed, 5 skipped (no stack named); with test_adr_reservations,
 test_test_file_coverage_check and test_write_store_marks 60 passed, 5 skipped; doc-citations-check: every cited path exists.
+
+# M10, the leak test at scale (2026-11-14T08:04:39Z): measure_search.measure_leaks and the live file's M10 case.
+# Each case a hidden record's query as the part-cleared principal, the fully cleared principal's answer its control.
+# Built, then shown red one plant per check at its real call site (plants_leaks.py), each restored after its run:
+plant 1: the control dropped: a case reaching nothing hidden passes
+  tests/test_measure_search.py -k 'cannot_reach': RED (1 failed, 27 deselected in 1.27s)
+plant 2: the hidden ids not looked for
+  tests/test_measure_search.py -k 'seen_or_counted and id': RED (1 failed, 3 passed, 24 deselected in 2.78s)
+plant 3: the hidden words not looked for
+  tests/test_measure_search.py -k 'seen_or_counted and text': RED (1 failed, 27 deselected in 1.41s)
+plant 4: the totals not compared
+  tests/test_measure_search.py -k 'seen_or_counted and count': RED (1 failed, 3 passed, 24 deselected in 2.83s)
+plant 5: a fallback answer taken as the index's
+  tests/test_measure_search.py -k 'fallback_answer_is_not_the_index_s_for_m10': RED (1 failed, 27 deselected in 1.35s)
+plant 6: no cases taken as a pass
+  tests/test_measure_search.py -k 'no_leak_cases': RED (1 failed, 27 deselected in 1.20s)
+plant 7: the live file's M10 verdict dropped
+  tests/test_measure_search.py -k 'fails_m10_on_a_leak': RED (1 failed, 27 deselected in 2.37s)
+7/7 red
+The earlier plants rerun after the change: plants_budgets 6/6, plants_live 3/3 (its third anchor made unique), plants_lag 6/6.
+Green after: with test_adr_reservations, test_test_file_coverage_check and test_write_store_marks, 69 passed, 6 skipped
+(no stack named); doc-citations-check: every cited path exists.
+Not yet runnable on B (rules, 14 Nov): B has no leak cases with an answer key and no accounts. Its cases are to be derived
+from B's SAME_AS truth rows (same, one side visible, the other SECRET, code R or in an ungranted case) once the two principals
+are minted and B's cases granted (the cases stage rerun with --grant, the orchestrator's word).

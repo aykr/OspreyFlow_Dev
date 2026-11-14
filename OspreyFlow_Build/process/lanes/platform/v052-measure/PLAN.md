@@ -75,7 +75,11 @@ end-to-end is measured separately, in a browser.
 - **M1, M3 and M4 in CI:** a regression gate on a fixed 1-million-name corpus (CI cannot hold B's load). It fails if
   a p95 grows by more than 50% over its recorded baseline, as glass-perf is a regression gate.
 - **M2:** a case in `perf/`, beside glass-perf, against the live stack in a granted browser slot.
-- **M5:** in the same live file (every exact identifier first). **M10:** a pass/fail live case still to be written.
+- **M5:** in the same live file (every exact identifier first). **M10:** the same file's pass/fail case
+  (`measure_search.measure_leaks`), each case a hidden record's query as the part-cleared principal with the fully
+  cleared one's control. Its cases are derived from B's SAME_AS truth and source table, once B's two principals are
+  minted and its cases granted (ADR-149 Amendment 2). Step 4 leaves M6's board and its drawn nodes in B's case (no route
+  removes them).
 - **M7 and M8:** they set the runbooks' and the CronJobs' bounds and memory, held by the render tests.
 - **M11:** changes the manifest and the profile together, as ADR-148 Amendment 12 decision 4 says.
 

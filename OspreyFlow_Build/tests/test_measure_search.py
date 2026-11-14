@@ -31,13 +31,20 @@ class _Conduit(BaseHTTPRequestHandler):
     lag = 0.0
     refuse_draw = False
     drawn: dict[str, tuple[str, float]] = {}
+    # M10: a world with one hidden record, hid-1 ("Ravenscar Kestral"), which the cleared token
+    # sees; `leak` makes the part-cleared answer leak it as an id, its words, or a count, and
+    # "unreached" makes the cleared answer miss it (a case that proves nothing).
+    leak_world = False
+    leak = ""
 
     def do_POST(self) -> None:  # noqa: N802 - http.server's name
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.seen.append((self.path, body, self.headers.get("Authorization", "")))
         time.sleep(self.delay)
         status = 200
-        if self.path.endswith("/suggest"):
+        if self.leak_world and self.path.endswith(("/search", "/suggest")):
+            answer = self._leak_answer(self.headers.get("Authorization", "") == "Bearer cleared")
+        elif self.path.endswith("/suggest"):
             answer: dict[str, Any] = {"nodes": [{"id": "n1"}], "more": False}
         elif self.path.endswith("/boards"):
             status, answer = 201, {"id": "board-1", "name": body["name"]}
@@ -71,6 +78,32 @@ class _Conduit(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _leak_answer(self, cleared: bool) -> dict[str, Any]:
+        hidden = cleared and self.leak != "unreached"
+        visible = [{"node_ids": ["vis-1"], "match": {"band": "name_exact"}, "passage": []}]
+        if self.path.endswith("/suggest"):
+            nodes = [{"id": "vis-1", "label": "Kestral"}]
+            if hidden or (not cleared and self.leak == "id"):
+                nodes.append({"id": "hid-1", "label": "Ravenscar Kestral"})
+            return {"nodes": nodes, "more": False}
+        results = list(visible)
+        if hidden:
+            results.append({"node_ids": ["hid-1"], "match": {"band": "name_exact"}, "passage": []})
+        elif self.leak == "id":
+            results[0] = {**results[0], "node_ids": ["vis-1", "hid-1"]}  # a merged entity
+        elif self.leak == "text":
+            results[0] = {**results[0], "passage": [{"text": "paid by Ravenscar Holdings"}]}
+        total = len(results) + (1 if not cleared and self.leak == "count" else 0)
+        return {
+            "source": self.source,
+            "limited": False,
+            "total": total,
+            "counts_exact": True,
+            "groups": [{"key": "Person", "label": "People", "count": total}],
+            "results": results,
+            "nodes": [],
+        }
+
     def log_message(self, *args: Any) -> None:
         pass
 
@@ -79,6 +112,7 @@ class _Conduit(BaseHTTPRequestHandler):
 def conduit() -> Iterator[str]:
     _Conduit.delay, _Conduit.source, _Conduit.exact_first, _Conduit.seen = 0.0, "index", True, []
     _Conduit.lag, _Conduit.refuse_draw, _Conduit.drawn = 0.0, False, {}
+    _Conduit.leak_world, _Conduit.leak = False, ""
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Conduit)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -283,7 +317,9 @@ def test_full_text_is_sent_to_the_search_route_and_judged_at_m4(conduit: str) ->
 _LIVE = Path(__file__).resolve().parent / "perf/test_search_budget_live.py"
 
 
-def _run_live(tmp_path: Path, base: str | None) -> subprocess.CompletedProcess[str]:
+def _run_live(
+    tmp_path: Path, base: str | None, extra: dict[str, str] | None = None, only: str = ""
+) -> subprocess.CompletedProcess[str]:
     import sys
 
     queries = tmp_path / "queries.jsonl"
@@ -308,8 +344,10 @@ def _run_live(tmp_path: Path, base: str | None) -> subprocess.CompletedProcess[s
             "OSPREY_MEASURE_WARMUP": "1",
         }
     env["PYTHONPYCACHEPREFIX"] = str(tmp_path / "pyc")
+    env |= extra or {}
     return subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-rfs", str(_LIVE)],
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-rfs", str(_LIVE)]
+        + (["-k", only] if only else []),
         cwd=_LIVE.parents[2],
         env=env,
         capture_output=True,
@@ -323,7 +361,7 @@ def test_the_live_gate_passes_a_conduit_within_every_failure_figure(
 ) -> None:
     done = _run_live(tmp_path, conduit)
     assert done.returncode == 0, done.stdout[-2000:]
-    assert "5 passed" in done.stdout
+    assert "5 passed, 1 skipped" in done.stdout  # M10: no leak cases named
 
 
 def test_the_live_gate_fails_a_suggestion_over_its_failure_figure(
@@ -339,7 +377,7 @@ def test_the_live_gate_fails_a_suggestion_over_its_failure_figure(
 
 def test_the_live_gate_is_skipped_with_its_reason_where_no_stack_is_named(tmp_path: Path) -> None:
     done = _run_live(tmp_path, None)
-    assert done.returncode == 0 and "5 skipped" in done.stdout
+    assert done.returncode == 0 and "6 skipped" in done.stdout
     assert "no B-sized stack named" in done.stdout
 
 
@@ -427,3 +465,97 @@ def test_the_live_gate_fails_m6_when_no_drawn_node_reaches_the_index(
     done = _run_live(tmp_path, conduit)
     assert done.returncode != 0 and "FAILED" in done.stdout and "M6 lag" in done.stdout
     assert "4 passed" in done.stdout, "the query classes are not M6's"
+
+
+# ---- M10, the leak test at scale (measure_leaks)
+
+LEAKS = [
+    {
+        "name": "a hidden namesake",
+        "route": "search",
+        "query": "Kestral",
+        "never_ids": ["hid-1"],
+        "never_text": ["Ravenscar"],
+        "expect_total": 1,
+        "expect_groups": {"Person": 1},
+    },
+    {
+        "name": "a hidden namesake's prefix",
+        "route": "suggest",
+        "query": "kes",
+        "never_ids": ["hid-1"],
+    },
+]
+
+
+def _leaks(base: str) -> dict[str, Any]:
+    _Conduit.leak_world = True
+    return measure_search.measure_leaks(
+        base=base, case="case-1", token="part", cleared_token="cleared", cases=LEAKS
+    )
+
+
+def test_nothing_hidden_seen_or_counted_meets_m10(conduit: str) -> None:
+    result = _leaks(conduit)
+    assert result["verdict"] == "met", result["failures"]
+    tokens = {(p, a) for p, _b, a in _Conduit.seen}
+    assert ("/v1/investigations/case-1/search", "Bearer cleared") in tokens, "the control asked"
+    assert ("/v1/investigations/case-1/suggest", "Bearer part") in tokens
+
+
+@pytest.mark.parametrize(
+    ("leak", "said"),
+    [
+        ("id", "hid-1 is in the answer"),
+        ("text", "'Ravenscar' are in the answer"),
+        ("count", "total 2, but they may see 1"),
+    ],
+)
+def test_a_hidden_record_seen_or_counted_fails_m10(conduit: str, leak: str, said: str) -> None:
+    _Conduit.leak = leak
+    result = _leaks(conduit)
+    assert result["verdict"] == "not met"
+    assert any(said in f for f in result["failures"]), result["failures"]
+
+
+def test_a_case_the_cleared_principal_cannot_reach_proves_nothing_and_fails(conduit: str) -> None:
+    _Conduit.leak = "unreached"
+    result = _leaks(conduit)
+    assert result["verdict"] == "not met"
+    assert all("proves nothing" in f for f in result["failures"]) and len(result["failures"]) == 2
+
+
+def test_a_fallback_answer_is_not_the_index_s_for_m10(conduit: str) -> None:
+    _Conduit.source = "fallback"
+    result = _leaks(conduit)
+    assert any("not the index" in f for f in result["failures"])
+
+
+def test_no_leak_cases_is_refused(conduit: str) -> None:
+    with pytest.raises(SystemExit, match="asked nothing"):
+        measure_search.measure_leaks(
+            base=conduit, case="c", token="part", cleared_token="cleared", cases=[]
+        )
+
+
+def _run_live_m10(conduit: str, tmp_path: Path) -> subprocess.CompletedProcess[str]:
+    _Conduit.leak_world = True
+    leaks = tmp_path / "leaks.jsonl"
+    leaks.write_text("\n".join(json.dumps(c) for c in LEAKS))
+    extra = {"OSPREY_MEASURE_CLEARED_TOKEN": "cleared", "OSPREY_MEASURE_LEAKS": str(leaks)}
+    return _run_live(tmp_path, conduit, extra, only="m10")
+
+
+def test_the_live_gate_passes_m10_when_nothing_hidden_shows(conduit: str, tmp_path: Path) -> None:
+    done = _run_live_m10(conduit, tmp_path)
+    assert done.returncode == 0 and "1 passed" in done.stdout, done.stdout[-1500:]
+
+
+def test_the_live_gate_fails_m10_on_a_leak(conduit: str, tmp_path: Path) -> None:
+    """Rule 15 at the real call site: the file step 6 runs, red for a hidden id in a merged
+    entity."""
+    _Conduit.leak = "id"
+    done = _run_live_m10(conduit, tmp_path)
+    assert (
+        done.returncode != 0 and "M10:" in done.stdout and "hid-1 is in the answer" in done.stdout
+    )

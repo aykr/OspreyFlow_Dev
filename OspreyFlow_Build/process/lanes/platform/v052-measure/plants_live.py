@@ -18,7 +18,7 @@ PLANTS = [
      "    assert found", "over_its_failure_figure"),
     ("a class with no queries passed unmeasured", '    assert queries, (',
      "    if not queries:\n        return\n    assert queries, (", "leaves_out"),
-    ("the gate run without a named stack, against a default", '        pytest.skip(', '        return {name: os.environ.get(name, "") for name in _NAMED}\n        pytest.skip(', "no_stack_is_named"),
+    ("the gate run without a named stack, against a default", '        pytest.skip(\n            f"no B-sized stack named', '        return {name: os.environ.get(name, "") for name in _NAMED}\n        pytest.skip(\n            f"no B-sized stack named', "no_stack_is_named"),
 ]
 env = {**os.environ, "ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "POSTGRES_PASSWORD": "throwaway",
        "VALKEY_PORT": "59993", "CLICKHOUSE_HTTP_PORT": "59994"}
