@@ -86,7 +86,7 @@ window.fetch = (async (url: string, init?: RequestInit) => {
   // `?limited=1`: the suggestions came from today's prefix read, not the search index (ADR-059
   // Amendment 1), so the box shows its one "limited" line.
   const body = String(url).endsWith("/suggest")
-    ? { nodes: SUGGESTIONS, more: true, ...(wantsLimited ? { source: "graph", limited: true } : {}) }
+    ? { nodes: SUGGESTIONS, more: true, ...(wantsLimited ? { source: "graph", limited: true, limited_why: "unreachable" } : {}) }
     : CASES;
   return { ok: true, status: 200, json: async () => body };
 }) as unknown as typeof fetch;

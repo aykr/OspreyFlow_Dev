@@ -665,9 +665,45 @@ def test_a_case_sensitive_suggestion_is_narrowed_and_says_there_may_be_more() ->
     graph = _Graph([_typed("a", family_name="Smythe"), _typed("b", family_name="smyth")])
     out = _suggest(SuggestRequest(query="Smy", limit=1), graph, _Index(_suggest_reply(["b", "a"])))
     assert [n.id for n in out.nodes] == ["a"]
-    index = _Index({"hits": {"hits": [_hit(f"x{i}", 2900) for i in range(9)]}})
-    out = _suggest(SuggestRequest(query="Smy", limit=2), _Graph(), index)
-    assert out.nodes == [] and out.more is True  # the index had more than asked; none kept
+
+
+class _Paged:
+    """The index's reply, page by page: the hits from `from` to `from + size`, as OpenSearch pages
+    them by score then node id."""
+
+    def __init__(self, ids: list[str]) -> None:
+        self.ids = ids
+        self.froms: list[int] = []
+
+    async def __call__(self, body: dict[str, Any], timeout: float) -> dict[str, Any]:
+        start, size = body.get("from", 0), body["size"]
+        self.froms.append(start)
+        return {"hits": {"hits": [_hit(i, 2900) for i in self.ids[start : start + size]]}}
+
+
+def test_a_case_sensitive_suggestion_pages_on_until_its_page_is_full() -> None:
+    """The orchestrator's list, defect 1: the top-scored matches were all in the other case, so the
+    page came back empty with "more match" while matches existed. It now pages on."""
+    other = [_typed(f"o{i:02d}", family_name=f"smyth{i}") for i in range(30)]
+    wanted = [_typed("w1", family_name="Smythe"), _typed("w2", family_name="Smyth-Jones")]
+    graph = _Graph([*other, *wanted])
+    index = _Paged([n.id for n in other] + ["w1", "w2"])
+    out = _suggest(SuggestRequest(query="Smy", limit=2), graph, index)  # type: ignore[arg-type]
+    assert [n.id for n in out.nodes] == ["w1", "w2"]
+    assert out.more is False and out.source == "index"
+    assert index.froms[0] == 0 and len(index.froms) > 1
+
+
+def test_a_case_sensitive_suggestion_never_says_more_with_nothing_shown() -> None:
+    """Where paging cannot fill the page before its bound, the graph's own case-sensitive prefix
+    read answers: exact, so never an empty list with "more match"."""
+    other = [_typed(f"o{i:03d}", family_name=f"smyth{i}") for i in range(400)]
+    graph = _Graph(other)
+    index = _Paged([n.id for n in other])
+    out = _suggest(SuggestRequest(query="Smy", limit=2), graph, index)  # type: ignore[arg-type]
+    assert graph.suggested == ["Smy"]
+    assert not (out.nodes == [] and out.more)
+    assert (out.source, out.limited) == ("graph", False)
 
 
 def test_a_case_sensitive_suggestion_looks_only_at_identifiers_and_names() -> None:
@@ -705,8 +741,47 @@ def test_a_suggestion_the_graph_answers_says_it_is_limited() -> None:
         assert (out.source, out.limited) == ("graph", True)
 
 
+def test_a_limited_suggestion_says_why() -> None:
+    """The orchestrator's list, defect 2: the box said "limited just now" where no index is
+    configured at all. The reply names why, so the box can say it truly."""
+    cases: list[tuple[_Index | None, dict[str, Any] | None, bool, str]] = [
+        (None, ACCESS, True, "no_index"),
+        (_Index(_suggest_reply([])), None, True, "no_index"),
+        (_Index(error=s.IndexUnavailable("down")), ACCESS, True, "unreachable"),
+        (_Index(_suggest_reply([])), ACCESS, False, "catching_up"),
+    ]
+    for index, access, complete, why in cases:
+        out = _suggest(
+            SuggestRequest(query="Smy"), _Graph(), index, access, pending_complete=complete
+        )
+        assert out.limited_why == why
+    contains = _suggest(SuggestRequest(query="Smy", mode="contains"), _Graph(), None)
+    assert (contains.limited, contains.limited_why) == (False, None)
+
+
 def test_an_unknown_type_is_refused_as_today() -> None:
     with pytest.raises(ValueError, match="Nonsense"):
         _suggest(
             SuggestRequest(query="Smy", types=["Nonsense"]), _Graph(), _Index(_suggest_reply([]))
         )
+
+
+def test_more_is_said_when_any_asked_prefix_has_more() -> None:
+    """A number's canonical form is asked as a second prefix (ADR-128). `more` holds when the first
+    prefix's matches run past the page, whatever the second finds."""
+    first = [_typed(f"a{i}", value_normalised=f"07700{i}") for i in range(15)]
+    graph = _Graph(first)
+
+    class _ByPrefix:
+        async def __call__(self, body: dict[str, Any], timeout: float) -> dict[str, Any]:
+            clause = body["query"]["bool"]["must"][0]["dis_max"]["queries"][0]
+            prefix = clause["constant_score"]["filter"]["match"]["identifiers"]["query"]
+            ids = [n.id for n in first] if prefix == "07700 900123" else []
+            return {"hits": {"hits": [_hit(i, 2900) for i in ids[: body["size"]]]}}
+
+    out = _suggest(
+        SuggestRequest(query="07700 900123", ignore_case=True, limit=10),
+        graph,
+        _ByPrefix(),  # type: ignore[arg-type]
+    )
+    assert len(out.nodes) == 10 and out.more is True

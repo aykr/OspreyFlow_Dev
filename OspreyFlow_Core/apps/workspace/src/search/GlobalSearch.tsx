@@ -44,20 +44,40 @@ const SUGGEST_LIMIT = 10;
 /** ADR-059 Amendment 1, the owner's requirement c: the one line the box shows under its suggestions
  * when the Conduit answered them without the search index (from today's prefix read). It does not
  * fade: it is a fact about every answer while it stands. */
-export const LIMITED_SUGGESTIONS =
-  "Suggestions are limited just now: only the exact start of a name or identifier matches.";
+export type LimitedWhy = "no_index" | "unreachable" | "catching_up";
+/** The line's words, by why the suggestions are limited (the Conduit's `limited_why`). Only the
+ * passing reasons say "just now": where the deployment has no search index it is so for good. An
+ * older Conduit's reply, which gives no reason, says it is limited without saying for how long. */
+export const LIMITED_SUGGESTIONS: Record<LimitedWhy | "unknown", string> = {
+  no_index: "Suggestions match only the exact start of a name or identifier: this deployment has no search index.",
+  unreachable: "Suggestions are limited just now: only the exact start of a name or identifier matches.",
+  catching_up:
+    "Suggestions are limited just now, while the search index catches up: only the exact start of a name or identifier matches.",
+  unknown: "Suggestions are limited: only the exact start of a name or identifier matches.",
+};
 
 /** How long the "more match" hint stays in view before it fades. It is not a state to act on, only
  * a nudge, so it should not sit over the page for as long as the list is open. */
 export const SEARCH_HINT_MS = 4000;
 
-type Outcome = "idle" | "short" | "found" | "none" | "unavailable";
+type Outcome = "idle" | "short" | "found" | "none" | "unavailable" | "refused";
 
 /** `spec/02_GLASS_FRONTEND.md`'s workspace layout: "⌘K — Search entities,
  * identifiers, documents". ADR-059: from the third character, after a pause, the box asks
  * `POST /v1/suggest` for nodes whose identifiers *start with* what is typed (`/v1/search` stays an
  * exact match). An answer to a question the analyst has already moved past is dropped, a list cut
  * off at ten says so, and an unanswered question says so instead of leaving the last list standing. */
+/** A 422's words, when the Conduit gave them as a sentence (`detail` a string); `null` when it gave a
+ * validation list or nothing readable, which the box treats as a failure. */
+async function refusalWords(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    return typeof body.detail === "string" && body.detail.trim() ? body.detail : null;
+  } catch {
+    return null;
+  }
+}
+
 export function GlobalSearch({
   apiBaseUrl,
   bearerToken,
@@ -73,7 +93,9 @@ export function GlobalSearch({
   const [results, setResults] = useState<Node[]>([]);
   const [query, setQuery] = useState("");
   const [more, setMore] = useState(false);
-  const [limited, setLimited] = useState(false);
+  /** The Conduit's own words when it refuses what was typed (a 422), shown as they are (rule 2). */
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [limited, setLimited] = useState<LimitedWhy | "unknown" | null>(null);
   const [outcome, setOutcome] = useState<Outcome>("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const latest = useRef(0);
@@ -85,7 +107,7 @@ export function GlobalSearch({
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  function settle(next: Outcome, nodes: Node[], hasMore: boolean, isLimited = false): void {
+  function settle(next: Outcome, nodes: Node[], hasMore: boolean, isLimited: LimitedWhy | "unknown" | null = null): void {
     setOutcome(next);
     setResults(nodes);
     setMore(hasMore);
@@ -101,12 +123,23 @@ export function GlobalSearch({
       });
       if (mine !== latest.current) return;
       if (!response.ok) {
-        settle("unavailable", [], false);
+        // A refusal of what was typed (a 422 with the Conduit's words, such as the 50-character
+        // limit) is said in its words; anything else is a failure, and says so.
+        const detail = response.status === 422 ? await refusalWords(response) : null;
+        if (mine !== latest.current) return;
+        setRefusal(detail);
+        settle(detail ? "refused" : "unavailable", [], false);
         return;
       }
-      const body = (await response.json()) as { nodes: Node[]; more: boolean; limited?: boolean };
+      const body = (await response.json()) as {
+        nodes: Node[];
+        more: boolean;
+        limited?: boolean;
+        limited_why?: LimitedWhy | null;
+      };
       if (mine !== latest.current) return;
-      settle(body.nodes.length > 0 ? "found" : "none", body.nodes, body.more, body.limited === true);
+      const why = body.limited === true ? (body.limited_why ?? "unknown") : null;
+      settle(body.nodes.length > 0 ? "found" : "none", body.nodes, body.more, why);
     } catch {
       if (mine === latest.current) settle("unavailable", [], false);
     }
@@ -149,7 +182,9 @@ export function GlobalSearch({
   }, [options]);
 
   const status =
-    outcome === "unavailable"
+    outcome === "refused" && refusal
+      ? refusal
+      : outcome === "unavailable"
       ? "Suggestions are unavailable."
       : outcome === "short"
         ? `Type at least ${SUGGEST_MIN_CHARS} characters to search.`
@@ -163,7 +198,8 @@ export function GlobalSearch({
 
   // Only the nudge fades. "Nothing matches" and "could not answer" are answers to what was typed and
   // stay while it stands. A new answer (a new `results`) brings the nudge back.
-  const nudge = status !== null && outcome !== "none" && outcome !== "unavailable" && outcome !== "short";
+  const nudge =
+    status !== null && outcome !== "none" && outcome !== "unavailable" && outcome !== "short" && outcome !== "refused";
   const [faded, setFaded] = useState(false);
   useEffect(() => {
     setFaded(false);
@@ -257,7 +293,7 @@ export function GlobalSearch({
           className="global-search__status"
           data-faded={nudge && faded && !limited ? "true" : undefined}
         >
-          {limited && <span className="global-search__limited">{LIMITED_SUGGESTIONS}</span>}
+          {limited && <span className="global-search__limited">{LIMITED_SUGGESTIONS[limited]}</span>}
           {limited && status && " "}
           {status}
         </div>

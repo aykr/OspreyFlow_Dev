@@ -281,10 +281,12 @@ def build_suggest_body(
     limit: int,
     types: Sequence[str] | None = None,
     pending: Sequence[str] = (),
+    start: int = 0,
 ) -> dict[str, Any]:
     """Suggestions as the analyst types (ADR-059 Amendment 1): the stored prefixes of node
     documents' identifiers and names, never a prefix query (rule 2 above). The prefix is asked as
-    typed, as the graph's prefix read asks it."""
+    typed, as the graph's prefix read asks it. `start` pages on: the order (score, then node id) is
+    total, so the pages never overlap."""
     access = _require_filter(access_filter)
     if len(prefix) < SUGGEST_MIN_CHARS:
         raise ValueError(f"a suggestion needs at least {SUGGEST_MIN_CHARS} characters")
@@ -327,6 +329,7 @@ def build_suggest_body(
         },
         "sort": [{"_score": {"order": "desc"}}, {"node_id": {"order": "asc"}}],
         "track_scores": True,
+        "from": start,
         "size": limit + 1,
         "_source": ["node_id"],
     }
