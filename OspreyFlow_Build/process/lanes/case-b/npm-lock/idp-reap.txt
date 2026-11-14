@@ -1,0 +1,13 @@
+The reap the orchestrator allowed after make test at ed4f729 (14 November 2026): listed first; nothing provably case-b's, so nothing removed.
+listed at 2026-11-14T04:50:51Z on gpu-1
+== containers
+== networks
+osprey-test-idp-fdedea91 created=2026-11-11 07:00:38.45502686 +0000 UTC containers=0
+== pytest sessions of root made since 04:25Z
+pytest-7797 2026-11-14T04:49
+pytest-7809 2026-11-14T04:46
+pytest-7810 2026-11-14T04:47
+pytest-7811 2026-11-14T04:47
+pytest-current 2026-11-14T04:47
+pytest-of-root 2026-11-14T04:47
+Wall time: 1 s, exit 0 (no stack, no lease; set-up before it 11 s)
