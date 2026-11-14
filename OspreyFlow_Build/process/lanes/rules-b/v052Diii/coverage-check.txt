@@ -1,0 +1,10 @@
+# rules' v052-index_ci_yml.diff, studio's ci_yml_live_listing.diff and makefile_live_ignore.diff applied, then rules-b's ci-yml-v052Diii.patch and makefile-v052Diii.patch
+## all applied:
+test-file-coverage-check: 1063 test file(s), 0 allowlisted, no new drift.
+exit=0
+## red: ci-yml-v052Diii.patch left out (makefile patch kept):
+test-file-coverage-check: `Makefile`'s `test` target ignores these but `ci.yml`'s `test` job does not: tests/services/search_index/test_ask_whole_case_leak_live.py
+(exit status not captured: zsh has no PIPESTATUS; the line above is the check's own verdict)
+## red: makefile-v052Diii.patch left out (ci patch kept):
+test-file-coverage-check: `ci.yml`'s `test` job ignores these but `Makefile`'s `test` target does not: tests/services/search_index/test_ask_whole_case_leak_live.py
+(exit status not captured: zsh has no PIPESTATUS; the line above is the check's own verdict)
