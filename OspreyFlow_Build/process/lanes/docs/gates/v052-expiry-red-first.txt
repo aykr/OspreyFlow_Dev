@@ -1,0 +1,12 @@
+lane/docs-v052-expiry on lane/platform-v052-expiry eb7befd: tests/test_guides_cloud_platform.py's §6a.8 case, offline, closed ports 59991-59994
+== red: the guide at eb7befd (sets' 35) against the render's 34
+E       assert "against the sets' 34:" in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `helm upgrade`, since its new backups claim cannot be added in place; the runbook gives the commands. '
+1 failed, 2 passed, 9 deselected in 2.53s
+== red: the 'not longer' sentence struck
+E       assert ("may be shorter but not longer: a set kept longer would outlive RDS's point-in-time window (below), 35 days" in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `helm upgrade`, since its new backups claim cannot be added in place; the runbook gives the commands. ') is (34 < 35)
+E        +  where 34 = int('34')
+== red: the render's sets planted at 35 again (cloud_platform_backups.py EXPIRE_DAYS = POINT_IN_TIME_DAYS)
+E       assert "against the sets' 35:" in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `helm upgrade`, since its new backups claim cannot be added in place; the runbook gives the commands. '
+1 failed, 2 passed, 9 deselected in 2.51s
+== green
+14 passed in 3.15s
