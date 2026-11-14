@@ -79,13 +79,15 @@ _ATTRIBUTE = re.compile(r"""\b[a-z][a-z0-9:_-]*\s*=\s*(?:"([^"]*)"|'([^']*)'|([^
 
 
 def readable(source: str) -> str:
-    """What a page shows, with its tags read as spaces, and also what it carries unseen: each comment's text and
-    every attribute's value (an address, a file name, alternative text), however the value is quoted."""
+    """What a page shows, read twice: with its tags as spaces ("Will</span> <span>Forbes") and with its tags taken
+    out, as a browser joins the letters of one word around them ("Forb<span>es</span>"); and also what it carries
+    unseen: each comment's text and every attribute's value (an address, a file name, alternative text), however the
+    value is quoted."""
     comments = re.findall(r"<!--(.*?)-->", source, flags=re.DOTALL)
     values = [next(v for v in m.groups() if v is not None) for m in _ATTRIBUTE.finditer(source)]
     shown = re.sub(r"<!--.*?-->", " ", source, flags=re.DOTALL)
-    shown = re.sub(r"<[^>]+>", " ", shown)
-    return " . ".join(html.unescape(part) for part in [shown, *comments, *values])
+    spaced, joined = re.sub(r"<[^>]+>", " ", shown), re.sub(r"<[^>]+>", "", shown)
+    return " . ".join(html.unescape(part) for part in [spaced, joined, *comments, *values])
 
 
 def _words(text: str) -> str:

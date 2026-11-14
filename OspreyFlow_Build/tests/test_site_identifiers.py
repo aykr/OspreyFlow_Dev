@@ -157,7 +157,8 @@ def test_an_empty_hash_file_publishes_nothing(site: Path, hashes: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "shape", ["Graham <em>Burnside</em>", "Will</span> <span>Forbes", "Gra&shy;ham Burnside", "Ayan<br>Kar"]
+    "shape", ["Graham <em>Burnside</em>", "Will</span> <span>Forbes", "Forb<span>es</span>", "Graham Burn&shy;side",
+              "Lau\u200brence Rawl\u200bings"]
 )
 def test_a_team_name_split_by_markup_or_an_invisible_character_is_refused(site: Path, shape: str) -> None:
     _plant(site / "features.html", "</main>", f"<p><span>{shape}</span></p>")
