@@ -24,14 +24,15 @@ PLANTS = [
      [(SAVED, "govuk"), (STRIP, "govuk")]),
     ("a panel's bare heading left at the browser's size", [(TYPE, ":where(h2, h3, h4, h5, h6):where(.label) {", ":where(h6.not-this) {")],
      [(SAVED, "dark"), (SAVED, "light")]),
-    ("GOV.UK's body classes left at the Design System's size", [(TYPE, ".govuk-summary-list__key, ", "")],
+    ("GOV.UK's summary list left at the Design System's size",
+     [(TYPE, ".govuk-summary-list, .govuk-summary-list__key, .govuk-summary-list__value, .govuk-summary-list__actions,", "")],
      [(SAVED, "govuk")]),
     ("a menu's items drawn off the scale", [(TYPE, "/* GOV.UK Frontend's type classes, on the page's scale",
-                                            ".menu-panel__item { font-size: var(--fs-16); }\n/* GOV.UK Frontend's type classes, on the page's scale")],
+                                            ".menu-panel .menu-panel__item { font-size: var(--fs-16); }\n/* GOV.UK Frontend's type classes, on the page's scale")],
      [(MORE, "dark"), (MORE, "light"), (MORE, "govuk"), (NARROW, "dark"), (NARROW, "light"), (NARROW, "govuk"),
       (CASE, "dark"), (CASE, "light"), (CASE, "govuk")]),
     ("GOV.UK's links left at the Design System's size", [(TYPE, ".govuk-link, .govuk-back-link, ", ".govuk-back-link, ")],
-     [(SAVED, "govuk"), (NARROW, "govuk")]),
+     [(SAVED, "govuk")]),
 ]
 
 
