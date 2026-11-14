@@ -17,6 +17,9 @@
 #                                                     lane with its stages, the steps left one line a group,
 #                                                     the release, housekeeping, and one row per lane;
 #                                                     --full: every group's block and every merge in full
+#   lanes_heartbeat.sh --steps                        the route with every step on its own line (the default
+#                                                     view collapses the done ones: a number's sub-steps,
+#                                                     the whole-number steps and the fixes, a line each)
 #   lanes_heartbeat.sh --lanes [--full]               lane by lane (the same as `show`)
 #   lanes_heartbeat.sh show                           one table: every lane, the lease, what needs you
 #   lanes_heartbeat.sh summary                        the older short view: one line of totals, what needs
@@ -743,7 +746,7 @@ route_view() {
     printf '%s\t%s\t%s\n' "$lane" "${st:--}" "$note" >> "$lanes"
   done
   P_CLOCK="$(clock)" P_NOW="$(now)" P_PROGRESS="$PROGRESS" P_ROUTE="$ROUTE" P_OWNER_DUE="$OWNER_DUE" \
-    P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_DIR="$DIR" perl -CSD -e "$STAGES_PL$ROUTE_PL"
+    P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_DIR="$DIR" P_STEPS="${P_STEPS:-}" perl -CSD -e "$STAGES_PL$ROUTE_PL"
   rm -f "$lanes" "$needs"
   # shellcheck disable=SC2064   # this file, now
   trap "rm -f '$GIT_PROGRESS' '$GIT_PROGRESS.tmp'" EXIT
@@ -764,9 +767,11 @@ sub plural { my ($n, $one) = @_; return "$n $one" . ($n == 1 ? "" : "s") }
 sub names { my ($note, $step) = @_; return $note =~ /(?<![A-Za-z0-9.\-])\Q$step\E(?![A-Za-z0-9\-])/ }
 
 my $today = floor($ENV{P_NOW} / 86400);
-my ($release, $target) = ("the release", undef);
+my ($release, $target, %as_step) = ("the release", undef);
 if (open(my $h, "<:encoding(UTF-8)", $ENV{P_ROUTE})) {
-  while (<$h>) { chomp; ($release, $target) = ($1, $2) if /^# target\t([^\t]+)\t(\d{4}-\d\d-\d\d)/ } }
+  while (<$h>) { chomp; ($release, $target) = ($1, $2) if /^# target\t([^\t]+)\t(\d{4}-\d\d-\d\d)/;
+    # The letter ids that are steps, not fixes (route.tsv`s "# steps" line; the owner, 14 Nov: done rows collapse).
+    $as_step{$_} = 1 for /^# steps\t(.*)/ ? grep { /\S/ } split /[\s,]+/, $1 : () } }
 my @route = grep { @$_ >= 8 } rows($ENV{P_ROUTE});
 my @progress = grep { @$_ >= 5 } rows($ENV{P_PROGRESS});
 my %status; $status{"$_->[0]:$_->[1]"} = $_->[3] for @progress;
@@ -848,6 +853,30 @@ for my $r (@route) {
     bar($frac, 6), join(" · ", @said), $title);
   push @rows, [cut($line, 120), $listed];
 }
+# The done rows collapse (the owner, 14 November 2026: 47 rows, most done, hard to read): a number`s done sub-steps
+# (3a … 3i, the number itself with them) to one line, the done whole-number steps (with the letters route.tsv`s
+# "# steps" line names) to one, the done fixes (every other id) to one, each where its first done row was. A step
+# not done keeps its own row, in route order. The ids are listed, wrapped, never cut; --steps shows every row.
+unless ($ENV{P_STEPS}) {
+  my %sub; for (@route) { $sub{$1} = 1 if $_->[0] =~ /^(\d+)\D/ }
+  my $group = sub { my ($id) = @_; return "n$1" if $id =~ /^(\d+)/ && $sub{$1};
+    return $id =~ /^\d+$/ || $as_step{$id} ? "steps" : "fixes" };
+  my (%of, %done_of, %said);
+  for (@route) { my $g = $group->($_->[0]); push @{ $of{$g} }, $_->[0];
+    push @{ $done_of{$g} }, $_->[0] if $_->[8] eq "done" }
+  my @kept;
+  for my $i (0 .. $#route) {
+    if ($route[$i][8] ne "done") { push @kept, $rows[$i]; next }
+    my $g = $group->($route[$i][0]); next if $said{$g}++;
+    my @m = @{ $of{$g} }; my @d = @{ $done_of{$g} }; my ($head, @ids);
+    if ($g =~ /^n/) { my $span = @m > 1 ? "$m[0]–$m[-1]" : $m[0];
+      if (@d == @m) { push @kept, ["  $span ✓ " . scalar(@d) . " done", []]; next }
+      ($head, @ids) = ("  $span ✓ " . scalar(@d) . " of " . scalar(@m) . " done:", @d) }
+    else { ($head, @ids) = ("  $g ✓ " . scalar(@d) . " done:", @d) }
+    my $line = $head;
+    for (@ids) { if (length("$line $_") > 120) { push @kept, [$line, []]; $line = "     " } $line .= " $_" }
+    push @kept, [$line, []] }
+  @rows = @kept }
 sub stage_line { my ($n, $st, $name, $nt) = @{ $_[0] };
   return cut(sprintf("        %s %s. %s%s", $mark{$st} // "?", $n, $name, defined $nt && $nt ne "" ? " · $nt" : ""), 120) }
 sub lines_of { my ($fold, $listed) = @_; my @s = @$listed; return () unless @s;
@@ -893,7 +922,7 @@ listed(3, map { "$_: " . join(", ", @{ $outside{$_} }) } @lanes);
 my $merged = grep { $_->[3] eq "done" } @progress;
 printf "FINISHED %s %d of %d steps merged\n", bar(@progress ? $merged / @progress : 0, 20), $merged,
   scalar @progress;
-print "Other views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n";
+print "Other views: lanes_heartbeat.sh --steps · --overview · --full · --lanes · summary\n";
 select($screen); close $tail_fh; $tail = Encode::decode("UTF-8", $tail);
 my $room = 40 - $head_lines - 1 - scalar(split /\n/, $tail);
 my ($fold, @under, $shown, $hidden) = (0);
@@ -949,9 +978,10 @@ watch_loop() {
 
 # shellcheck disable=SC2064   # this file, now
 trap "rm -f '$GIT_PROGRESS' '$GIT_PROGRESS.tmp'" EXIT
-case "${1:-}" in "" | --overview | --full | --lanes | show | summary) read_git ;; esac
+case "${1:-}" in "" | --steps | --overview | --full | --lanes | show | summary) read_git ;; esac
 case "${1:-}" in
   "") if [ -f "$ROUTE" ]; then route_view; else overview; fi ;;
+  --steps) if [ -f "$ROUTE" ]; then P_STEPS=1 route_view; else overview; fi ;;
   --overview) overview ;;
   --full) overview --full ;;
   stages) shift; stages "$@" ;;
@@ -961,5 +991,5 @@ case "${1:-}" in
   show) shift; show "${1:-}" ;;
   summary) summary ;;
   watch) shift; case "${1:-}" in --full) watch_loop "${2:-300}" --full ;; *) watch_loop "${1:-300}" "${2:-}" ;; esac ;;
-  *) echo "usage: lanes_heartbeat.sh [--full] | --lanes [--full] | beat <lane> <state> \"<note>\" | stages <lane> \"<step>\" \"<n>|<state>|<name>[|<note>]\" ... | stages <lane> --clear \"<step>\" | stages <lane> --clear --all | nudge <lane> \"<message>\" | show | summary | watch [seconds] [--full] | watch --full [seconds]" >&2; exit 2 ;;
+  *) echo "usage: lanes_heartbeat.sh [--steps | --full] | --lanes [--full] | beat <lane> <state> \"<note>\" | stages <lane> \"<step>\" \"<n>|<state>|<name>[|<note>]\" ... | stages <lane> --clear \"<step>\" | stages <lane> --clear --all | nudge <lane> \"<message>\" | show | summary | watch [seconds] [--full] | watch --full [seconds]" >&2; exit 2 ;;
 esac
