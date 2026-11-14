@@ -204,6 +204,17 @@ async def test_a_stopped_hotlist_keeps_why_until_it_is_active_again(store) -> No
     await store.set_status(hotlist.id, "active")
     active = await store.get_authorized(hotlist.id, OWNER)
     assert (active.status, active.status_detail, active.stopped_why) == ("active", None, None)
-    # Set active with a reason given by mistake: an active row never carries one.
+    # Set active with a reason given by mistake: an active row never carries one, in the column itself
+    # (not only as served: the read hides an active row's reason too, so each is held on its own).
     await store.set_status(hotlist.id, "active", "revoked")
+    assert (await store.get_authorized(hotlist.id, OWNER)).status_detail is None
+    import asyncpg
+
+    conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    try:
+        assert await conn.fetchval("SELECT status_detail FROM hotlists WHERE id = $1", hotlist.id) is None
+    finally:
+        await conn.close()
+    # A later stop with no reason given is served with none, never the one before it.
+    await store.set_status(hotlist.id, "stopped")
     assert (await store.get_authorized(hotlist.id, OWNER)).status_detail is None

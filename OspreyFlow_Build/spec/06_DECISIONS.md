@@ -38754,6 +38754,9 @@ left unbuilt; its escalation (three consecutive unreachable evaluations) is not 
    owner, account or source-system identifier; Entra's out-of-date owner uses `principal_auth.ACCESS_OUT_OF_DATE_WORDS`
    (Amendment 16's). None says "could not be reached". The Glass's `StatusBadge` shows it beside *Stopped*, and nothing
    beside *Active*.
+4. **What comes next maps here too.** When platform-b's step 4c (the administrator fallback, ADR-148) lands, its
+   refusal for a clearance or unit with no value set is one more reason, with its own words, mapped in
+   `watch_status.reason_of`; until then such an owner is refused as any other and stopped with that reason.
 
 **Tests.**
 - `tests/services/api/test_stopped_why.py` (offline):
