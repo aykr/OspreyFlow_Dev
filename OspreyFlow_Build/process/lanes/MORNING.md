@@ -50,6 +50,18 @@ count records).
    to say a set in its last day may not be restorable with its database; (c) something else. The guide follows the
    ADR as it stands until then.
 
+## Decided by the lanes, for you to overrule if you wish
+
+- **Case, Build a report for the Administrator (ADR-145 Am 15 decision 5):** a builder without the Reports
+  view follows their own view switch to it.
+- **Case, the search results page (Am 15 Part A item 6):**
+  - Show on graph leaves the results for the graph.
+  - Open keeps the results, hidden under the reader.
+  - Results come 20 to a page.
+- **Rules-b, Ask & Chat:**
+  - Ask stays enabled while the "Will read" summary loads, since the answer says what it read.
+  - A refusal's dataset names are scrubbed for a caller who may not see them.
+
 ## Done overnight
 
 - Landed and pushed: deps-opensearch, step 2 (the manifest), step 3a with data safety and docs' D2/D3/D8,
