@@ -2953,9 +2953,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `cloud_platform.claims.api_id_uri` | str or none | none | The API's application id URI, which the Glass's scope names |
 | `cloud_platform.claims.token_version` | `2.0` \| `1.0` | `2.0` | The access token version the API's registration is issued (accessTokenAcceptedVersion): the issuer and audience the Conduit checks follow it |
 | `cloud_platform.claims.scope` | str | `access_as_user` | The delegated scope the Glass asks the API for |
-| `cloud_platform.claims.clearance` | mapping | required | Where clearance comes from: {claim: <name>} or {groups: {<group id>: <value>}} |
-| `cloud_platform.claims.org_unit` | mapping | required | Where the organisational unit comes from: {claim: ...} or {groups: {...}} |
-| `cloud_platform.claims.handling_codes` | mapping | required | Where the handling codes come from: {claim: ...} or {groups: {<id>: [codes]}} |
+| `cloud_platform.claims.clearance` | mapping | required | Where clearance comes from: {claim: <name>}, {groups: {<group id>: <value>}}, or {administrator: true}, set in Admin › People |
+| `cloud_platform.claims.org_unit` | mapping | required | Where the organisational unit comes from: {claim: ...}, {groups: {...}}, or {administrator: true} (the poc shape alone) |
+| `cloud_platform.claims.handling_codes` | mapping | required | Where the handling codes come from: {claim: ...}, {groups: {<id>: [codes]}}, or {administrator: true} (the poc shape alone) |
 | `cloud_platform.claims.groups_claim` | str | `groups` | The token claim listing the person's Entra group ids, which a {groups: ...} table above is read from |
 | `cloud_platform.claims.first_administrators` | list of str | required | The people given the Admin role at install, by Entra object id (at least one) |
 | `cloud_platform.claims.claims_mapping_policy` | bool | false | Whether a claims-mapping policy signs the API's tokens with its own key (the keys are then read with ?appid=<api_client_id>) |

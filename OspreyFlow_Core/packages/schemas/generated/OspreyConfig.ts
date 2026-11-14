@@ -846,19 +846,19 @@ export interface EntraSignInConfig {
   claims_mapping_policy?: ClaimsMappingPolicy;
 }
 /**
- * Where clearance comes from: {claim: <name>} or {groups: {<group id>: <value>}}
+ * Where clearance comes from: {claim: <name>}, {groups: {<group id>: <value>}}, or {administrator: true}, set in Admin › People (the poc shape alone, ADR-148 Amendment 15)
  */
 export interface Clearance {
   [k: string]: unknown;
 }
 /**
- * Where the organisational unit comes from: {claim: ...} or {groups: {...}}
+ * Where the organisational unit comes from: {claim: ...}, {groups: {...}}, or {administrator: true} (the poc shape alone)
  */
 export interface OrgUnit {
   [k: string]: unknown;
 }
 /**
- * Where the handling codes come from: {claim: ...} or {groups: {<id>: [codes]}}
+ * Where the handling codes come from: {claim: ...}, {groups: {<id>: [codes]}}, or {administrator: true} (the poc shape alone)
  */
 export interface HandlingCodes {
   [k: string]: unknown;
