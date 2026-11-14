@@ -1,0 +1,23 @@
+branch head 5058c4f (the server copy's own commit is named below)
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261114T033211Z-4a9f19a2/log: bash process/lanes/case-b/lease-tests/plants.sh
+head d0e713d of the copy, on gpu-1, processes 496
+AS IT MUST BE (red): plant: every run's table a busy host's
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[as ps prints it]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[padded, as on the server]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_two_runs_named_alike_are_refused_in_words_not_shared
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_two_runs_of_one_lane_in_one_second_never_share_a_folder
+AS IT MUST BE (red): plant: test_a_run_reaps_a_server_that_left_its_process_group on the empty table
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_a_run_reaps_a_server_that_left_its_process_group
+AS IT MUST BE (red): plant: test_the_reaper_leaves_every_process_outside_the_run_alone on the empty table
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_reaper_leaves_every_process_outside_the_run_alone
+AS IT MUST BE (red): plant: test_a_runs_log_holds_no_error_of_the_reapers_own_reading on the empty table
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_a_runs_log_holds_no_error_of_the_reapers_own_reading
+AS IT MUST BE (red): plant: main's script (the table not read)
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_reaper_reads_the_process_table_it_is_given
+AS IT MUST BE (red): plant: the re-read before each signal reads /proc
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_reaper_reads_the_process_table_it_is_given
+busy: processes 2504, burners 8 of 16 cores
+AS IT MUST BE (green): unplanted, the host busy: the whole file: 88 passed in 96.45s (0:01:36)
+?? ../OspreyFlow_Core/osprey-runs/
+every plant red, unplanted green
+Wall time: 151 s, exit 0 (no stack, no lease; set-up before it 10 s)
