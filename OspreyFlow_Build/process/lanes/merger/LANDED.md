@@ -91,3 +91,4 @@ f193666 e00a09c platform v052-r1upgrade
 8412c67 6fcdb62 admin idp-labels, with stack_lease_reap.diff
 b925385 cb54a90 case-b lease-tests, with its stack_lease.sh diff
 1d331f8 e28565f case-b npm-lock, with its stack_lease.sh diff
+2d3fe2f 6d1a5cf rules-b analytics-field (A7's 500)
