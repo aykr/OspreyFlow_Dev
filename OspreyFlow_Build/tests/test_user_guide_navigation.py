@@ -7,7 +7,7 @@ words turns the guide red (rule 12):
 - the rail's entries, in order, by their names (`ON_THE_RAIL`, `RAIL_LABELS`), and nothing said to be on
   the rail that is not;
 - the view switch and its **More**, in order, by their names (`VIEW_SWITCH`, `MORE_VIEWS`, `VIEW_LABELS`, and the
-  More button's own label in `TopBar.tsx`, ADR-145 Amendment 17);
+  More button's own label, `MORE_LABEL`, ADR-145 Amendment 17);
 - the case line's parts, its *Saved views (n)* and the open saved view, and its cross-link (`ContextBanner.tsx`);
 - the selection bar's words in order (`SELECTION_WORDS`), the node menu's heading and the keys that open it
   (`GlassCanvas.tsx`).
@@ -62,8 +62,9 @@ def view_names() -> tuple[list[str], list[str]]:
 def more_label() -> str:
     """The top bar's More button as it reads when none of its views is open (ADR-145 Amendment 17: "More", its
     accessible name "More ways to show the case")."""
-    m = re.search(r'label=\{moreOpen \? moreOpen\.label : "([^"]+)"\}', TOPBAR)
-    assert m, "TopBar.tsx's More button"
+    assert "label={moreOpen ? moreOpen.label : MORE_LABEL}" in TOPBAR and "buttonName={moreOpen ? undefined : MORE_NAME}" in TOPBAR
+    m = re.search(r'^export const MORE_LABEL = "([^"]+)";$', RAIL, re.MULTILINE)
+    assert m, "railLayout.ts's MORE_LABEL"
     return m.group(1)
 
 
@@ -106,7 +107,7 @@ def test_section_5_names_the_view_switch_and_more_views_in_order() -> None:
     switch, more = view_names()
     row = _row("Top bar")
     more_name = more_label()
-    assert more_name == "More" and 'aria-label="More ways to show the case"' in TOPBAR
+    assert more_name == "More" and 'export const MORE_NAME = "More ways to show the case";' in RAIL
     m = re.search(rf"the view switch \((.*?) under \*\*{re.escape(more_name)}\*\*", row)
     assert m, "the top bar's view switch"
     named = _bold_in_order(m.group(1))

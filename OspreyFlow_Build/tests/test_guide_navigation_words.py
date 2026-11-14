@@ -23,7 +23,6 @@ CORE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core"
 DOCS = CORE / "docs"
 SRC = CORE / "apps" / "workspace" / "src"
 LAYOUT = (SRC / "shell" / "railLayout.ts").read_text(encoding="utf-8")
-TOPBAR = (SRC / "shell" / "TopBar.tsx").read_text(encoding="utf-8")
 USER_GUIDE = DOCS / "user-guide.md"
 SITES_BUILD = Path(__file__).resolve().parents[1] / "marketing_site" / "sites" / "build.py"
 #: Every place held here, by name.
@@ -52,8 +51,8 @@ def _labels(name: str) -> dict[str, str]:
 
 
 ON_THE_RAIL = _list("ON_THE_RAIL")
-_more = re.search(r'label=\{moreOpen \? moreOpen\.label : "([^"]+)"\}', TOPBAR)
-MORE = _more.group(1) if _more else "(TopBar.tsx's More button, not found)"
+_more = re.search(r'^export const MORE_LABEL = "([^"]+)";$', LAYOUT, re.MULTILINE)
+MORE = _more.group(1) if _more else "(railLayout.ts's MORE_LABEL, not found)"
 VIEW_SWITCH, MORE_VIEWS = _list("VIEW_SWITCH"), _list("MORE_VIEWS")
 RAIL_LABELS, VIEW_LABELS = _labels("RAIL_LABELS"), _labels("VIEW_LABELS")
 ADMIN_SECTIONS = [
