@@ -103,3 +103,4 @@ fa383e5 3ad0803 docs 6a-upgrade (1.99), PDF reprinted
 d8888d8 2730b69 docs 6a-search (2.00), PDF reprinted
 c42c1e4 9f22c21 platform-b v051-upg (the rehearsal, the real update and its rollback)
 77ee8fb e964d4c platform-b v052-dayplan
+175776c a86a9c1 docs v052-admin-fixes (2.01), PDF reprinted
