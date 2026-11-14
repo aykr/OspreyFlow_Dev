@@ -17,7 +17,6 @@ No read here counts what it left out: a figure for what the reader may not read 
 from __future__ import annotations
 
 import asyncio
-import re
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Literal
@@ -143,7 +142,8 @@ from .gremlin_literals import (
     groovy_string_list_literal,
     groovy_string_literal,
 )
-from .lookup import vertex_records
+from .lookup import RECORD_ID as _RECORD_ID
+from .lookup import unique_id_types, vertex_records
 from .naming import (
     logical_type_name,
     physical_edge_labels,
@@ -181,7 +181,6 @@ _ID_CHUNK = 1000
 
 #: What ArcadeDB calls a record: `#<bucket>:<position>`. Checked before one is put in a Gremlin
 #: literal, though the store is what said it.
-_RECORD_ID = re.compile(r"^#\d+:\d+$")
 
 
 #: How many links `strip_provenance_references` reads at a time.
@@ -297,14 +296,16 @@ class GraphArcadeDBAdapter:
         return self._schema
 
     async def _find_existing_node(
-        self, node_id: NodeId, *, session_id: TxId
+        self, node_id: NodeId, *, session_id: TxId, type_name: str | None = None
     ) -> dict[str, Any] | None:
         """Unfiltered by design — an internal lookup during a trusted write, the same as
-        `_node_type`'s and `supersede_node`'s own. A second `upsert_nodes` call for the same id
+        `supersede_node`'s own. A second `upsert_nodes` call for the same id
         (a re-ingested load; the same fixture seeded twice, `tests/conformance/graph_port/
         test_suite.py`'s own case for this) must find and update the existing node, never insert
         a duplicate that collides on the same declared `id` property."""
-        found = await self._vertex_records([node_id], tx=session_id)
+        found = await self._vertex_records(
+            [node_id], tx=session_id, types=None if type_name is None else [type_name]
+        )
         if node_id not in found:
             return None
         rid_lit = groovy_string_literal(found[node_id][0])
@@ -333,10 +334,16 @@ class GraphArcadeDBAdapter:
         """
         schema = self._require_schema()
         ids: list[NodeId] = []
-        # The call's ids resolved once, by SQL through each vertex type's unique `id` index
-        # (ADR-124 Amendment 18); an id written earlier in this call is resolved again, since its
-        # record is new.
-        known = await self._vertex_records([write.id for write in nodes], tx=tx)
+        # The call's ids resolved once, by SQL through the unique `id` index of each type the call
+        # writes (ADR-124 Amendment 18): a node is looked for in its own type, which is where its
+        # write goes (`UPDATE` or `INSERT INTO` that type below), so one read of the store's types
+        # and one query per type written, never one per type in the store. An id written earlier in
+        # this call is resolved again, since its record is new.
+        known = await self._vertex_records(
+            [write.id for write in nodes],
+            tx=tx,
+            types=sorted({physical_type_name(write.type) for write in nodes}),
+        )
         written: set[str] = set()
         for write in nodes:
             entity_type = schema.entity_type(write.type)
@@ -346,7 +353,9 @@ class GraphArcadeDBAdapter:
 
             node_id = write.id
             if node_id in written:
-                existing = await self._find_existing_node(node_id, session_id=tx)
+                existing = await self._find_existing_node(
+                    node_id, session_id=tx, type_name=physical_type_name(write.type)
+                )
             elif node_id in known:
                 rid_lit = groovy_string_literal(known[node_id][0])
                 found = await self._client.gremlin(f"g.V({rid_lit}).elementMap()", session_id=tx)
@@ -426,10 +435,6 @@ class GraphArcadeDBAdapter:
             ids.append(node_id)
         await self._index_pending(ids, tx)  # ADR-150 decision 1: a load
         return ids
-
-    async def _node_type(self, node_id: NodeId, *, session_id: TxId) -> str | None:
-        found = await self._vertex_records([node_id], tx=session_id)
-        return logical_type_name(found[node_id][1]) if node_id in found else None
 
     async def _find_existing_edge(
         self,
@@ -603,9 +608,7 @@ class GraphArcadeDBAdapter:
         corpus_totals: dict[str, int] = {}
         # Every end of the call's edges, by SQL through each vertex type's unique `id` index, once
         # (ADR-124 Amendment 18): the store is never scanned by `id` once per edge.
-        ends = await self._vertex_records(
-            [i for write in edges for i in (write.source, write.target)], tx=tx
-        )
+        ends = await self._edge_ends(edges, schema, tx=tx)
         for write in edges:
             edge_type = schema.edge_type(write.type)
             if edge_type is None:
@@ -849,16 +852,7 @@ class GraphArcadeDBAdapter:
         on `id` alone. Not this process's applied ontology: a link type another process created
         since (a proposal's own storage type) would be left out, and its links would read as
         absent. A type without that index is not asked, since asking would scan it."""
-        types = await self._client.sql("SELECT name, type, indexes FROM schema:types")
-        return [
-            t["name"]
-            for t in types
-            if t.get("type") == kind
-            and any(
-                i.get("unique") is True and i.get("properties") == ["id"]
-                for i in t.get("indexes") or []
-            )
-        ]
+        return await unique_id_types(self._client, kind)
 
     async def _record_ids(
         self, type_names: Sequence[str], ids: list[str], *, tx: TxId | None = None
@@ -885,12 +879,42 @@ class GraphArcadeDBAdapter:
         return rids
 
     async def _vertex_records(
-        self, node_ids: Sequence[NodeId], *, tx: TxId | None
+        self,
+        node_ids: Sequence[NodeId],
+        *,
+        tx: TxId | None,
+        types: Sequence[str] | None = None,
     ) -> dict[str, tuple[str, str]]:
-        """Each id's vertex as (record id, stored type), through every vertex type's unique `id`
-        index (`lookup.vertex_records`, ADR-124 Amendment 18): the write path's lookups, never
-        `g.V().has("id", …)`, which scanned every vertex once per item."""
-        return await vertex_records(self._client, [str(i) for i in node_ids], tx=tx)
+        """Each id's vertex as (record id, stored type), through the unique `id` index of each
+        vertex type in `types`, or of every one (`lookup.vertex_records`, ADR-124 Amendment 18):
+        the write path's lookups, never `g.V().has("id", …)`, which scanned every vertex once per
+        item."""
+        return await vertex_records(self._client, [str(i) for i in node_ids], tx=tx, types=types)
+
+    async def _edge_ends(
+        self, edges: Sequence[EdgeWrite], schema: OntologySchema, *, tx: TxId
+    ) -> dict[str, tuple[str, str]]:
+        """The ends of a call's edges, asked first of the types the ontology lets those edges join
+        (ADR-124 Amendment 18), so a call costs one query per type its links can reach rather than
+        one per type in the store. An end not found there is asked again of every type, so an end
+        of a type the link does not allow is still found, and refused for its type, not reported
+        missing; a type that joins anything (`*`) asks every type at once."""
+        ids = [i for write in edges for i in (write.source, write.target)]
+        types: set[str] | None = set()
+        for write in edges:
+            edge_type = schema.edge_type(write.type)
+            allowed = [] if edge_type is None else edge_type.from_types + edge_type.to_types
+            if edge_type is None or "*" in allowed:
+                types = None
+                break
+            types.update(physical_type_name(t) for t in allowed)
+        ends = await self._vertex_records(
+            ids, tx=tx, types=None if types is None else sorted(types)
+        )
+        missing = [i for i in ids if i not in ends]
+        if missing and types is not None:
+            ends.update(await self._vertex_records(missing, tx=tx))
+        return ends
 
     async def get_nodes(self, node_ids: Sequence[NodeId], principal: Principal) -> list[Node]:
         found: dict[str, Node] = {}
