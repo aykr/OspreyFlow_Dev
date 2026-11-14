@@ -186,11 +186,14 @@ async def test_the_unreachable_count_outlives_a_restart_and_any_status_puts_it_b
     saved = await pattern_store.save(OWNER, pattern_id=None, name="Monitor fixture unreachable",
                                      definition=_pattern())  # fmt: skip
     monitor = None
-    restarted = await MonitorStore.connect(PostgresConfig.from_env().dsn)
+    restarted = None
     try:
         monitor = await store.create(OWNER, pattern_id=saved.pattern_id)
         assert monitor.unreachable_in_a_row == 0
-        assert await store.count_unreachable(monitor.id) == 1
+        first = await MonitorStore.connect(PostgresConfig.from_env().dsn)
+        assert await first.count_unreachable(monitor.id) == 1
+        await first.close()  # the Conduit that counted it gone; a new one reads what it left
+        restarted = await MonitorStore.connect(PostgresConfig.from_env().dsn)
         read = await restarted.get_authorized(monitor.id, OWNER)
         assert (read.unreachable_in_a_row, read.status_note) == (1, active_note(1))
         assert await restarted.count_unreachable(monitor.id) == 2
@@ -200,7 +203,8 @@ async def test_the_unreachable_count_outlives_a_restart_and_any_status_puts_it_b
         async with restarted._pool.acquire() as conn:
             assert await conn.fetchval("SELECT unreachable_in_a_row FROM monitors WHERE id = $1", monitor.id) == 0
     finally:
-        await restarted.close()
+        if restarted is not None:
+            await restarted.close()
         if monitor is not None:
             async with store._pool.acquire() as conn:
                 await conn.execute("DELETE FROM monitors WHERE id = $1", monitor.id)

@@ -133,7 +133,7 @@ async def test_two_in_a_row_leave_it_active_counted_twice(kind, watch, loads) ->
 async def test_the_third_in_a_row_stops_it_unreachable(kind, watch, loads) -> None:  # type: ignore[no-untyped-def]
     store = _Store(watch())
     await loads(store, DOWN, DOWN, DOWN)
-    assert store.told == [("stopped", "unreachable")]
+    assert store.told == [("stopped", "unreachable")] and store.in_a_row == 0
     assert "three loads in a row" in STOPPED_WHY["unreachable"]
 
 
@@ -167,6 +167,19 @@ async def test_a_schedule_giving_its_slot_back_neither_counts_nor_resets() -> No
     assert store.told == [] and store.in_a_row == 2
 
 
+@pytest.mark.parametrize("dataset", [None, "ds-1"], ids=["no-dataset", "dataset-not-reached"])
+async def test_a_schedule_that_acts_as_the_owner_puts_the_count_back_even_matching_nothing(dataset) -> None:  # type: ignore[no-untyped-def]
+    """A scheduled run that resolves its owner reached them, as a load that can act as its owner does: the count
+    goes back to 0 whether or not the run then matches (a watch with no dataset, or one its owner no longer
+    reaches, matches nothing), so "in a row" stays true of the loads the owner sees counted."""
+    store = _Store(_monitor().model_copy(update={"dataset_id": dataset}))
+    await _monitor_loads(store, DOWN, DOWN)
+    executor = MonitorScheduleExecutor(monitors=store, valkey=_Claims(), resolve_owner=_owner_answers(None),  # type: ignore[arg-type]
+                                       match=_Nothing(), reaches_dataset=_no_reach)  # type: ignore[arg-type]  # fmt: skip
+    await executor._consider(store.watch, NOW)
+    assert store.told == [("active", None)] and store.in_a_row == 0
+
+
 def test_the_words_for_an_active_watch_with_misses_and_none_without() -> None:
     assert UNREACHABLE_STOPS_AT == 3
     assert active_note(0) is None
@@ -181,3 +194,29 @@ def test_the_words_for_an_active_watch_with_misses_and_none_without() -> None:
     assert STOPPED_WHY["unreachable"] == (
         "Its owner's sign-in could not be checked at three loads in a row. It is tried again at the next."
     )
+
+
+# --- ADR-044's own named tests (its decision, 2026), as Amendment 2 builds them -----------------------------------
+
+
+@pytest.mark.parametrize(("kind", "watch", "loads"), LOADS, ids=KINDS)
+async def test_three_consecutive_unreachable_evaluations_escalate_status_to_stopped_while_status_detail_stays_unreachable(  # noqa: E501
+    kind, watch, loads  # type: ignore[no-untyped-def]
+) -> None:
+    """ADR-044's first named test. Its "status_detail stays unreachable throughout" is Amendment 2's: the first two
+    leave the status active with no reason (Amendment 1 keeps a reason only with stopped) and the count and its
+    note say it; the third stops it, its reason `unreachable`."""
+    store = _Store(watch())
+    await loads(store, DOWN, DOWN)
+    assert store.told == [] and store.in_a_row == 2
+    await loads(store, DOWN)
+    assert store.told == [("stopped", "unreachable")]
+
+
+@pytest.mark.parametrize(("kind", "watch", "loads"), LOADS, ids=KINDS)
+async def test_a_successful_evaluation_resets_the_consecutive_unreachable_count(kind, watch, loads) -> None:  # type: ignore[no-untyped-def]
+    """ADR-044's second named test: two unreachable, one that acts as the owner, then two more unreachable leave it
+    active (the count started again), where without the reset the fourth unreachable in all would stop it."""
+    store = _Store(watch())
+    await loads(store, DOWN, DOWN, None, DOWN, DOWN)
+    assert store.told == [("active", None)] and store.in_a_row == 2

@@ -39090,6 +39090,9 @@ Each rule is planted alone and red (`process/lanes/admin/stopped_why/`).
 Status: the owner's ruling (14 November 2026: fix in v0.5.2), with the orchestrator's ruling on a scheduled slot.
 Scoped by the admin lane, built by the case-b lane. Builds the escalation ADR-044 decided and Amendment 1 left as it
 was: until now one load that could not check the owner's sign-in (`unreachable`) stopped a hotlist or a watch at once.
+It supersedes one clause of ADR-044's: "`status_detail` stays `unreachable` throughout". Amendment 1 keeps a reason
+only with *stopped*, so during the first two the status is *active* with no reason, and the count and its note
+(decision 5) say what ADR-044 meant the reason to.
 
 **Decisions.**
 
@@ -39106,7 +39109,17 @@ was: until now one load that could not check the owner's sign-in (`unreachable`)
    that can act as its owner.
 4. **A schedule that gives its slot back is not an evaluation** (the orchestrator's ruling). A watch's schedule
    (`monitor_schedule.py`) that finds the owner unreachable gives the slot's claim back and tries the same slot at
-   the next tick, as before; it neither counts nor resets the count.
+   the next tick, as before; it neither counts nor resets the count. A schedule that does act as the owner reached
+   them, as a load that can does: it sets the watch active, the count back to 0, whether or not it then matches (a
+   watch with no dataset, or one its owner no longer reaches, matches nothing).
+6. **What counts.** An evaluation is what a load into the deployment, or an analyst's own write evaluated as one
+   (`_evaluate_watches_best_effort`), asks of every watch, before any dataset is read: "at the last load" names the
+   usual one, and a watch made in one case is counted by a load into another, as its owner's sign-in is the same.
+   `unreachable_in_a_row` is served with the row for a client that wants the figure; the Glass shows the note alone.
+   The count belongs to the watch, not its owner: a watch transferred to another person (Admin › People) keeps it,
+   and the first load that acts as the new owner puts it back to 0. Two evaluations of one watch at once may cross
+   (one stops it at its third while another, reaching the owner, has set it active); the next load settles it,
+   which this accepts.
 5. **In true words, never an id** (rule 7). Stopped, `STOPPED_WHY["unreachable"]` is now "Its owner's sign-in could not
    be checked at three loads in a row. It is tried again at the next." Active with one or two, the row is served
    `status_note` (`watch_status.active_note`): "Its owner's sign-in could not be checked at the last load. It stops if
@@ -39115,15 +39128,27 @@ was: until now one load that could not check the owner's sign-in (`unreachable`)
    beside *Active*, and the reason beside *Stopped*, never the one for the other.
 
 **Tests.**
-- `tests/services/api/test_unreachable_in_a_row.py` (offline, the evaluator's own shape, for hotlists and watches,
-  the stores doubles keeping the count as the real ones do): one unreachable load leaves it active, counted once,
-  nothing matched; two leave it active, counted twice; the third stops it `unreachable`; unreachable, reachable,
-  unreachable leaves it active at one; any other reason after two stops it at once with that reason and puts the
-  count back; a schedule giving its slot back neither counts nor resets; the words. Each red on main.
-- `test_hotlists.py` and `test_monitors.py` (live, Postgres): the count kept across a restart (a new store over the
-  same database reads it), put back to 0 by `set_status`, and served with the row's words while active.
+- ADR-044's own two named tests, `test_three_consecutive_unreachable_evaluations_escalate_status_to_stopped_while_status_detail_stays_unreachable`
+  and `test_a_successful_evaluation_resets_the_consecutive_unreachable_count`, in
+  `tests/services/api/test_unreachable_in_a_row.py`, as built here (the first's "throughout" read as above).
+- The same file (offline, the evaluator's own shape, for hotlists and watches, the stores' doubles keeping the count
+  as the real ones do): one unreachable load leaves it active, counted once, nothing matched; two leave it active,
+  counted twice; the third stops it `unreachable`, the count back to 0; unreachable, reachable, unreachable leaves it
+  active at one; any other reason after two stops it at once with that reason and puts the count back, and at the
+  first load is never counted; a schedule giving its slot back neither counts nor resets, and one acting as the owner
+  resets it, with a dataset or none; the words. Those of the evaluator and the schedule are red on main; the words'
+  case is the change's own, and another reason stopping at once is what main already did, both shown red by
+  planting instead.
+- `test_hotlists.py` and `test_monitors.py` (live, Postgres): the count kept across a restart (a store closed, a new
+  one over the same database reads it), put back to 0 by `set_status`, and served with the row's words while active;
+  two evaluators counting at once get distinct counts; a stopped hotlist is still listed for evaluation.
 - `StatusBadge.test.tsx`, `HotlistPanel.test.tsx` and `MonitorPanel.test.tsx`: the note beside *Active*, never beside
   *Stopped*.
+- `test_stopped_why.py`: the user guide quotes the stopped sentence and the two notes whole, and the administration
+  guide's §16 the stopped one.
+
+Each rule is planted alone and shown red: in the evaluator, the schedule and the words offline, in the stores' SQL on
+a leased stack, and in the Glass.
 
 ### ADR-149, Amendment 3 (14 November 2026) — the fallback offers a further page only when it holds records, and says where its depth stops the list
 

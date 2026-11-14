@@ -23,7 +23,7 @@ plant() { # name, file, perl substitution, the case that must go red (a substrin
   if cmp -s "$file" "$SAVED/$(basename "$file")"; then echo "PLANT DID NOT APPLY: $name"; fails=1; return; fi
   out="$(run)"; restore
   if grep -qE "^FAILED .*::$case" <<<"$out"; then
-    echo "AS IT MUST BE (red): $name"; grep -m1 -E "^FAILED .*::$case" <<<"$out" | sed -E 's/^FAILED [^:]+::/    /'
+    echo "AS IT MUST BE (red): $name"; grep -E "^FAILED .*::$case" <<<"$out" | sed -E 's/^FAILED [^:]+::/    /; s/ - .*//'
   else echo "NOT RED FOR ITS REASON: $name (wanted $case)"; grep -E "^FAILED|passed|failed" <<<"$out" | head -5; fails=1; fi
 }
 plant "one unreachable load stops it (ADR-044 before Amendment 2)" "$EVAL" \
@@ -44,6 +44,9 @@ plant "a schedule giving its slot back counts" "$SCHED" \
 plant "a schedule giving its slot back resets" "$SCHED" \
   's/(            await reply\(self.valkey.delete\(claim\)\)\n            return)/            await self.monitors.set_status(monitor.id, "active")\n$1/' \
   "test_a_schedule_giving_its_slot_back_neither_counts_nor_resets"
+plant "a schedule acting as the owner leaves the count (resets only where it matches)" "$SCHED" \
+  's/        await self.monitors.set_status\(monitor.id, "active"\)\n        if monitor.dataset_id is None:/        if monitor.dataset_id is None:/' \
+  "test_a_schedule_that_acts_as_the_owner_puts_the_count_back_even_matching_nothing"
 plant "the active note says nothing of how many" "$WORDS" \
   's/"Its owner.s sign-in could not be checked at the last two loads. "/"Its owner\x27s sign-in could not be checked at the last load. "/' \
   "test_the_words_for_an_active_watch_with_misses_and_none_without"

@@ -193,7 +193,6 @@ class MonitorStore:
                 detail,
             )
 
-
     async def set_schedule(
         self, monitor_id: str, principal: Principal, schedule: MonitorScheduleInput
     ) -> Monitor:

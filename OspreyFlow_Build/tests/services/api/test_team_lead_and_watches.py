@@ -40,7 +40,7 @@ from schemas.admin import Team
 from schemas.dataset_model import HomeCase
 from schemas.domain import Alert, AlertMode, Monitor, Node, PatternQuery, Principal, SavedPattern, Subgraph
 from tests.services.api.test_alert_evidence_withheld import CASE, TriageStore, _node, _world
-from tests.services.api.watch_status_fake import kept
+from tests.services.api.watch_status_fake import UnreachableCount, kept
 
 NOW = datetime(2026, 11, 9, 9, tzinfo=UTC)
 TODAY = NOW.date()
@@ -224,6 +224,7 @@ def _monitor(**update: Any) -> Monitor:
 class _Monitors:
     def __init__(self, monitor: Monitor) -> None:
         self.monitor, self.slots, self.status = monitor, [], []  # type: ignore[var-annotated]
+        self.count = UnreachableCount()
 
     async def list_all_active(self) -> list[Monitor]:
         return [self.monitor]
@@ -235,9 +236,14 @@ class _Monitors:
         self.slots.append(slot)
 
     async def set_status(self, monitor_id: str, status: str, detail: str | None = None) -> None:
-        # As the real store keeps it (ADR-044 Amendment 1): the status, and a reason with stopped.
+        # As the real store keeps it (ADR-044 Amendments 1 and 2): the status, a reason with stopped,
+        # and the count of unreachable loads put back to 0.
         kept_status, self.reason = kept(status, detail)
         self.status.append(kept_status)
+        self.count.reset(monitor_id)
+
+    async def count_unreachable(self, monitor_id: str) -> int:
+        return self.count.count(monitor_id)
 
 
 class _Valkey:
@@ -444,7 +450,9 @@ async def test_a_scheduled_watch_whose_owner_has_lost_its_dataset_alerts_on_noth
     await executor.tick(NOW)
     assert saves.saved == []
     assert cases.asked == [("case-1", "owner")], "asked for the owner, of ds-1's case alone"
-    assert len(monitors.slots) == 1 and monitors.status == [], "the slot is spent; the watch is not stopped"
+    # The slot is spent and the watch is not stopped: set active, its owner reached (ADR-044 Amendment 2's
+    # reset of the unreachable count), never stopped for the dataset it no longer reaches.
+    assert len(monitors.slots) == 1 and monitors.status == ["active"], "the slot is spent; the watch is not stopped"
     # Given the case back, the next slot alerts again.
     cases.members["case-1"].add("owner")
     monitors.slots.clear()

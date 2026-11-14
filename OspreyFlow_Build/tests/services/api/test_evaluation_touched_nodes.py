@@ -39,7 +39,7 @@ from services.api.evaluation import (
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import Hotlist, Monitor, PatternNode, PatternQuery, Principal, Subgraph
 from schemas.ingest import LoadReport
-from tests.services.api.watch_status_fake import kept
+from tests.services.api.watch_status_fake import UnreachableCount, kept
 
 SCHEME = load_uk_le_scheme()
 OWNER = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
@@ -80,14 +80,20 @@ class _Hotlists:
     def __init__(self, *hotlists: Hotlist) -> None:
         self.hotlists = list(hotlists)
         self.statuses: list[str] = []
+        self.count = UnreachableCount()
 
     async def list_all_active(self) -> list[Hotlist]:
         return list(self.hotlists)
 
     async def set_status(self, hotlist_id: str, status: str, detail: str | None = None) -> None:
-        # As the real store keeps it (ADR-044 Amendment 1): the status, and a reason with stopped.
+        # As the real store keeps it (ADR-044 Amendments 1 and 2): the status, a reason with stopped,
+        # and the count of unreachable loads put back to 0.
         kept_status, self.reason = kept(status, detail)
         self.statuses.append(kept_status)
+        self.count.reset(hotlist_id)
+
+    async def count_unreachable(self, hotlist_id: str) -> int:
+        return self.count.count(hotlist_id)
 
 
 class _Lock:
@@ -325,8 +331,15 @@ async def test_a_monitor_is_evaluated_for_a_run_that_only_referenced_nodes(
                 )  # fmt: skip
             ]
 
+        def __init__(self) -> None:
+            self.count = UnreachableCount()
+
         async def set_status(self, monitor_id: str, status: str, detail: str | None = None) -> None:
             kept(status, detail)
+            self.count.reset(monitor_id)  # ADR-044 Amendment 2, as the real store does
+
+        async def count_unreachable(self, monitor_id: str) -> int:
+            return self.count.count(monitor_id)
 
     class _Patterns:
         async def get_authorized(self, pattern_id: str, principal: Principal) -> Any:

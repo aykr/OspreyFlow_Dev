@@ -111,6 +111,11 @@ class MonitorScheduleExecutor:
             await reply(self.valkey.delete(claim))
             return
         await self.monitors.record_slot(monitor.id, latest)
+        # ADR-044 Amendment 2: its owner was acted as, so this run reached them, as a load
+        # that can act as its owner does: active, the count of unreachable loads back to 0,
+        # whether or not it then matches (no dataset, or one its owner no longer reaches,
+        # matches nothing below).
+        await self.monitors.set_status(monitor.id, "active")
         if monitor.dataset_id is None:
             return  # no dataset, nothing to read
         # Narrowed to the watch's dataset only once the owner is shown still to reach it: an owner

@@ -36,4 +36,10 @@ plant "the watch's count not put back by set_status" "$M" \
 plant "the watch's count answered, not kept" "$M" \
   's/"UPDATE monitors SET unreachable_in_a_row = unreachable_in_a_row \+ 1 WHERE id = \$1 "\n                "RETURNING unreachable_in_a_row"/"SELECT unreachable_in_a_row + 1 FROM monitors WHERE id = \$1"/' \
   "test_the_unreachable_count_outlives_a_restart_and_any_status_puts_it_back"
+plant "the hotlist's count read, then written, in two statements (two evaluators read the same count)" "$H" \
+  's/            count = await conn.fetchval\(\n                "UPDATE hotlists SET unreachable_in_a_row = unreachable_in_a_row \+ 1 WHERE id = \$1 "\n                "RETURNING unreachable_in_a_row",\n                hotlist_id,\n            \)/            seen = await conn.fetchval("SELECT unreachable_in_a_row FROM hotlists WHERE id = \$1", hotlist_id)\n            import asyncio\n            await asyncio.sleep(0.2)\n            count = (seen or 0) + 1\n            await conn.execute("UPDATE hotlists SET unreachable_in_a_row = \$2 WHERE id = \$1", hotlist_id, count)/' \
+  "test_two_evaluators_counting_at_once_never_read_the_same_count"
+plant "a stopped hotlist left out of evaluation" "$H" \
+  's/                f"SELECT \{_COLUMNS\} "\n                "FROM hotlists"\n/                f"SELECT {_COLUMNS} "\n                "FROM hotlists WHERE status = \x27active\x27"\n/' \
+  "test_a_stopped_hotlist_is_still_listed_for_evaluation"
 [ "$fails" = 0 ] && echo "every live plant red for its reason" || { echo "SOME PLANT WRONG"; exit 1; }

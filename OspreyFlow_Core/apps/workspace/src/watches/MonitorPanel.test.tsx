@@ -42,6 +42,15 @@ describe("a watch in the list", () => {
     expect(screen.queryByText(WHY)).toBeNull();
   });
   // ADR-044 Amendment 2: active, with loads in a row that could not check its owner's sign-in.
+  it("shows a stopped one's reason, never an active note left with it", async () => {
+    const why = "Its owner's sign-in could not be checked at three loads in a row. It is tried again at the next.";
+    const note = "Its owner's sign-in could not be checked at the last two loads. It stops if the next is the third in a row.";
+    serve([watch({ status: "stopped", status_detail: "unreachable", stopped_why: why, unreachable_in_a_row: 0, status_note: note })]);
+    render(<MonitorPanel apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" />);
+    expect(await screen.findByText(why)).toBeTruthy();
+    expect(screen.queryByText(note)).toBeNull();
+  });
+
   it("says, while active, how many loads could not check its owner's sign-in", async () => {
     const note = "Its owner's sign-in could not be checked at the last two loads. It stops if the next is the third in a row.";
     serve([watch({ unreachable_in_a_row: 2, status_note: note })]);

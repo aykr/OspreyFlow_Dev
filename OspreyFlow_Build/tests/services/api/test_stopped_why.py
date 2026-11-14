@@ -221,6 +221,10 @@ def test_the_user_guide_gives_each_reason_in_the_conduit_s_words() -> None:
     start = guide.index("### 7.5")
     section = re.sub(r"\s+", " ", guide[start : guide.index("\n### ", start + 1)])
     assert [r for r, words in STOPPED_WHY.items() if f'"{words}"' not in section] == []
+    # ADR-044 Amendment 2: and the two notes an active watch shows beside the word, whole.
+    from services.api.watch_status import active_note
+
+    assert [n for n in (1, 2) if f'"{active_note(n)}"' not in section] == []
 
 
 def test_the_administration_guide_s_troubleshooting_row_quotes_the_unreachable_reason_as_served() -> None:
