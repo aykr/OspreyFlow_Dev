@@ -339,6 +339,19 @@ def test_the_fallback_without_the_first_administrators_values_is_refused(given: 
         _artefacts(OspreyConfig.model_validate(raw))
 
 
+@pytest.mark.parametrize(
+    ("field", "given"),
+    [("handling_codes", "P"), ("handling_codes", ["P", ""]), ("clearance", ""), ("org_unit", ["unit-1"])],
+    ids=["codes-a-word", "codes-an-empty-one", "clearance-empty", "unit-a-list"],
+)  # fmt: skip
+def test_a_first_administrators_value_of_the_wrong_shape_is_refused_at_render(field: str, given: object) -> None:
+    """Refused here in words, not by a Conduit that will not start (round 2's should-fix 6)."""
+    raw = _poc_with(**{f: {"administrator": True} for f in ("clearance", "org_unit", "handling_codes")})
+    raw["cloud_platform"]["claims"]["first_administrator_access"] = FIRST_ACCESS | {field: given}  # type: ignore[index]
+    with pytest.raises(CloudPlatformNotRenderable, match=f"first_administrator_access: {field} is not a value"):
+        _artefacts(OspreyConfig.model_validate(raw))
+
+
 @pytest.mark.parametrize("field", ["clearance", "org_unit", "handling_codes"])
 def test_the_administrator_fallback_is_refused_on_any_other_shape(field: str) -> None:
     raw = _raw()

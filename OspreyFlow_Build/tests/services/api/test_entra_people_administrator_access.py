@@ -13,6 +13,8 @@ Amendment 15 section. Synthetic values only (rule 9).
 from __future__ import annotations
 
 import asyncio
+import re
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -25,13 +27,17 @@ from services.api.app import (
     get_identity_admin,
     get_principal,
 )
+from services.api.custom_roles import people_managers
 from services.api.entra_people import (
     AccessBeyondTheSetter,
     EntraPeopleAdmin,
     NoSuchPerson,
     _held,
     _person,
+    EntraPeopleStore,
+    access_current,
     check_administrator_access,
+    open_people_store,
     first_administrator_access_from_env,
 )
 
@@ -216,6 +222,16 @@ def test_it_is_refused_without_manage_people() -> None:
     assert _put(_client(_Store(), analyst), clearance="OFFICIAL").status_code == 403
 
 
+def test_an_access_that_sets_nothing_is_refused_and_writes_nothing() -> None:
+    """Round 2's could 10: no "set by", and no audit row whose before equals its after."""
+    store = _Store()
+    client = _client(store, _admin())
+    before = dict(store.rows[(TENANT, PERSON)])
+    response = client.put(f"/v1/admin/people/{PERSON}/access", json={})
+    assert response.status_code == 422 and "at least one" in response.json()["detail"], response.text
+    assert store.rows[(TENANT, PERSON)] == before and client.audit.records == []  # type: ignore[attr-defined]
+
+
 def test_keycloak_s_access_still_sets_clearance_and_unit_together() -> None:
     class _Keycloak:
         async def set_access(self, user_id: str, access: Any) -> Any:  # pragma: no cover - refused first
@@ -241,6 +257,23 @@ def test_the_decision_is_the_store_s_whatever_the_caller_checked() -> None:
         check_administrator_access(EVERY, None, PersonAccessInput(clearance="OFFICIAL"), CLASSES)
 
 
+@pytest.mark.parametrize(
+    "set_here", [(None, None, None), ("OFFICIAL", None, ["P"]), ("OFFICIAL", "unit-1", None)],
+    ids=["nothing-set", "the-unit-unset", "the-codes-unset"],
+)  # fmt: skip
+def test_a_person_with_a_value_unset_is_stale_and_counts_as_no_manager(set_here: tuple[Any, Any, Any]) -> None:
+    """Refused at sign-in after being recorded, so never signed in: nothing is sent to them (stale),
+    and no lock-out check counts them among those who manage people, every route's included, since
+    every route's people come through `_person` (round 2's should-fix 3 and 8)."""
+    row = _row(PERSON, set_here=set_here, roles=("osprey-admin",)) | {"first_seen": datetime.now(UTC)}
+    person = _person(row, EVERY)
+    assert person.signed_in is False and access_current(person) is False
+    assert people_managers([person], {}) == []
+    # Every value set: they sign in, are current, and do manage people.
+    whole = _person(row | {"admin_clearance": "OFFICIAL", "admin_org_unit": "unit-1", "admin_codes": []}, EVERY)
+    assert whole.signed_in and access_current(whole) and people_managers([whole], {}) == [PERSON]
+
+
 # --- the first administrators' values at install ---
 
 
@@ -252,15 +285,88 @@ def test_the_first_administrators_values_are_read_from_the_environment(monkeypat
 
 
 @pytest.mark.parametrize(
-    "raw", ["", '{"clearance": "SECRET"}', '{"clearance": "", "org_unit": "u", "handling_codes": []}', "not json",
-            '{"clearance": "S", "org_unit": "u", "handling_codes": "P"}'],
-    ids=["none", "a-field-missing", "an-empty-clearance", "not-json", "codes-not-a-list"],
+    ("raw", "says"),
+    [
+        ("", "gives the first administrators no clearance, handling_codes, org_unit"),
+        ('{"clearance": "SECRET"}', "gives the first administrators no handling_codes, org_unit"),
+        # The presence check's own case: every other check would pass a missing list's absence
+        # only by refusing it as "not a list", in other words.
+        ('{"clearance": "SECRET", "org_unit": "u"}', "gives the first administrators no handling_codes:"),
+        ('{"clearance": "", "org_unit": "u", "handling_codes": []}', "clearance is not a value"),
+        ("not json", "is not JSON"),
+        ('{"clearance": "S", "org_unit": "u", "handling_codes": "P"}', "handling_codes is a list of codes"),
+    ],
+    ids=["none", "two-fields-missing", "the-codes-missing", "an-empty-clearance", "not-json", "codes-not-a-list"],
 )  # fmt: skip
-def test_a_start_with_the_fallback_and_no_first_administrators_values_is_refused(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
-    """Nobody could sign in to set anyone's values, the first administrators included."""
+def test_a_start_with_the_fallback_and_no_first_administrators_values_is_refused(
+    monkeypatch: pytest.MonkeyPatch, raw: str, says: str
+) -> None:
+    """Nobody could sign in to set anyone's values, the first administrators included. Each case
+    matches its own refusal's words, so a case refused by another branch fails (rule 15)."""
     monkeypatch.setenv("OSPREY_FIRST_ADMINISTRATOR_ACCESS", raw)
-    with pytest.raises(ValueError, match="OSPREY_FIRST_ADMINISTRATOR_ACCESS"):
+    with pytest.raises(ValueError, match=re.escape(says)):
         first_administrator_access_from_env(EVERY)
+
+
+@pytest.mark.parametrize(
+    ("raw", "says"),
+    [
+        ('{"clearance": "SECERT", "org_unit": "u", "handling_codes": ["P"]}', "clearance 'SECERT' is not a classification"),
+        ('{"clearance": "SECRET", "org_unit": "u", "handling_codes": ["P", "Q9"]}', "handling codes Q9 are not this deployment's"),
+    ],
+    ids=["a-clearance-the-scheme-does-not-know", "a-code-the-scheme-does-not-know"],
+)  # fmt: skip
+def test_a_first_administrators_value_the_scheme_does_not_know_is_refused_at_start(
+    monkeypatch: pytest.MonkeyPatch, raw: str, says: str
+) -> None:
+    """Seeded only where nothing is set, a typo could never be put right from the config, and no
+    Access would be within the first administrators' reach (round 2's should-fix 6)."""
+    monkeypatch.setenv("OSPREY_FIRST_ADMINISTRATOR_ACCESS", raw)
+    with pytest.raises(ValueError, match=re.escape(says)):
+        first_administrator_access_from_env(EVERY, load_uk_le_scheme())
+    # The same values with the deployment's own words pass.
+    monkeypatch.setenv("OSPREY_FIRST_ADMINISTRATOR_ACCESS",
+                       '{"clearance": "SECRET", "org_unit": "u", "handling_codes": ["P"]}')  # fmt: skip
+    assert first_administrator_access_from_env(EVERY, load_uk_le_scheme())["clearance"] == "SECRET"
+
+
+def test_the_start_seeds_the_first_administrators_values_it_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`open_people_store` with the fallback hands the values it read, checked against the scheme, to
+    the seed; dropping them there would leave the first administrators unable to sign in. The seed's
+    own SQL is the live section's (`test_entra_people_live.py`, am15)."""
+    from principal_auth import ClaimMapping, ValueSource
+
+    seeded: list[tuple[list[str], Any]] = []
+
+    class _Seeding:
+        by_administrator = EVERY
+
+        async def seed_first_administrators(self, oids: Any, audit: Any, access: Any = None) -> list[str]:
+            seeded.append((list(oids), access))
+            return []
+
+        async def close(self) -> None:
+            pass
+
+    async def connect(dsn: str, tenant: str, by_administrator: Any) -> _Seeding:
+        assert set(by_administrator) == EVERY
+        return _Seeding()
+
+    monkeypatch.setattr(EntraPeopleStore, "connect", staticmethod(connect))
+    monkeypatch.setenv("OSPREY_FIRST_ADMINISTRATORS", SETTER)
+    monkeypatch.setenv("OSPREY_FIRST_ADMINISTRATOR_ACCESS",
+                       '{"clearance": "SECRET", "org_unit": "unit-1", "handling_codes": ["P"]}')  # fmt: skip
+    mapping = ClaimMapping(tenant_id=TENANT, client_id="00000000-0000-4000-8000-0000000000c1",
+                           clearance=ValueSource(administrator=True), org_unit=ValueSource(administrator=True),
+                           handling_codes={"administrator": True})  # type: ignore[arg-type]  # fmt: skip
+    asyncio.run(open_people_store("postgresql://unused", mapping, _Audit(), load_uk_le_scheme()))  # type: ignore[arg-type]
+    assert seeded == [([SETTER], {"clearance": "SECRET", "org_unit": "unit-1", "handling_codes": ["P"]})]
+    # A clearance the scheme does not know stops the start before anything is seeded.
+    monkeypatch.setenv("OSPREY_FIRST_ADMINISTRATOR_ACCESS",
+                       '{"clearance": "SECERT", "org_unit": "unit-1", "handling_codes": ["P"]}')  # fmt: skip
+    with pytest.raises(ValueError, match="not a classification"):
+        asyncio.run(open_people_store("postgresql://unused", mapping, _Audit(), load_uk_le_scheme()))  # type: ignore[arg-type]
+    assert len(seeded) == 1
 
 
 # --- an open socket ---

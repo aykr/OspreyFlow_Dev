@@ -17142,7 +17142,10 @@ async def set_person_access_route(
     if isinstance(identity_admin, EntraPeopleAdmin):
         # ADR-148 Amendment 15: on Entra ID, only the values the claim mapping sources from the
         # administrator, within the setter's own as the people store holds them (rule 3), audited
-        # in the store's own transaction.
+        # in the store's own transaction. A body that sets nothing changes nothing, so writes no
+        # "set by" and no audit row with before equal to after.
+        if (body.clearance, body.org_unit, body.receivable_handling_codes) == (None, None, None):
+            raise UnknownRoleError("Access sets at least one of clearance, unit and handling codes")
         _within_your_reach(principal, body, handling_scheme)
         return await identity_admin.set_administrator_access(
             user_id, principal, body, list(handling_scheme.classification), audit

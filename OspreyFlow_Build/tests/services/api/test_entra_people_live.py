@@ -668,3 +668,66 @@ async def test_am15_a_person_with_none_set_is_recorded_for_people_and_refused_un
     finally:
         await resolver.aclose()
     assert (principal.clearance, principal.org_unit, principal.receivable_handling_codes) == ("OFFICIAL-SENSITIVE", "unit-3", ["R"])
+
+
+async def test_am15_the_start_itself_seeds_the_first_administrator_who_then_signs_in(
+    am15_world, keypair, jwks_url, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Round 2's must-fix 1: through `open_people_store` with the fallback's mapping and its
+    environment, as the Conduit starts, not the seed called by hand."""
+    from services.api.entra_people import open_people_store
+
+    monkeypatch.setenv("OSPREY_FIRST_ADMINISTRATORS", AM15_SETTER)
+    monkeypatch.setenv("OSPREY_FIRST_ADMINISTRATOR_ACCESS", json.dumps(AM15_FIRST))
+    audit = _Am15Audit()
+    store = await open_people_store(am15_world.dsn, AM15_MAPPING, audit, load_uk_le_scheme())  # type: ignore[arg-type]
+    assert store is not None
+    resolver = _am15_resolver(jwks_url, store)
+    try:
+        principal = await resolver.resolve_principal(_am15_token(keypair, AM15_SETTER))
+    finally:
+        await resolver.aclose()
+        await store.close()
+    assert (principal.clearance, principal.org_unit) == ("OFFICIAL-SENSITIVE", "unit-1")
+    assert [r["action"] for r in audit.records] == ["grant_first_administrator", "grant_first_administrator_access"]
+
+
+async def test_am15_a_recorded_person_is_not_seeded_while_someone_manages_people(am15_world) -> None:
+    """Round 2's should-fix 4: the values follow the role gate. A person an administrator left
+    unset, later named a first administrator, gets nothing at the restart while the first one
+    can manage people."""
+    await am15_world.store.seed_first_administrators([AM15_SETTER], None, AM15_FIRST)  # type: ignore[arg-type]
+    async with am15_world.store.pool.acquire() as conn:
+        await conn.execute("UPDATE entra_people SET first_seen = now() WHERE tenant_id = $1 AND oid = $2",
+                           TENANT, AM15_SETTER)  # fmt: skip
+    await am15_world.store.person(TENANT, AM15_PERSON, AM15_SEEN)
+    await am15_world.store.seed_first_administrators([AM15_SETTER, AM15_PERSON], None, AM15_FIRST)  # type: ignore[arg-type]
+    held = await am15_world.store.standing(AM15_PERSON)
+    assert (held.clearance, held.org_unit, held.receivable_handling_codes) == (None, None, None)
+
+
+@pytest.mark.parametrize("fails_on", ["grant_first_administrator_access", "set_person_access"])
+async def test_am15_a_value_is_never_kept_without_its_audit_row(am15_world, fails_on: str) -> None:
+    """Round 2's should-fix 7: the seed's values and Access's change are each one transaction with
+    their audit row, so an audit write that fails takes the values back with it."""
+    from services.api.audit import AuditWriteError
+
+    class _Failing:
+        async def record(self, **kwargs: object) -> None:
+            if kwargs["action"] == fails_on:
+                raise AuditWriteError(f"audit write failed for action {fails_on!r}")
+
+    if fails_on == "grant_first_administrator_access":
+        with pytest.raises(AuditWriteError):
+            await am15_world.store.seed_first_administrators([AM15_SETTER], _Failing(), AM15_FIRST)  # type: ignore[arg-type]
+        assert await am15_world.store.standing(AM15_SETTER) is None  # the grant went back too
+        return
+    await am15_world.store.seed_first_administrators([AM15_SETTER], None, AM15_FIRST)  # type: ignore[arg-type]
+    await am15_world.store.person(TENANT, AM15_PERSON, AM15_SEEN)
+    with pytest.raises(AuditWriteError):
+        await am15_world.store.set_administrator_access(
+            AM15_PERSON, AM15_BY, PersonAccessInput(clearance="OFFICIAL", org_unit="unit-2", receivable_handling_codes=["P"]),
+            AM15_CLASSES, _Failing(),
+        )  # fmt: skip
+    held = await am15_world.store.standing(AM15_PERSON)
+    assert (held.clearance, held.org_unit, held.receivable_handling_codes) == (None, None, None)

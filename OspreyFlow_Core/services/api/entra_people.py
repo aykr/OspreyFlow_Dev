@@ -45,6 +45,7 @@ from typing import Any
 
 import asyncpg
 
+from ontology.handling import HandlingScheme
 from principal_auth import (
     ACCESS_FRESH,
     ClaimMapping,
@@ -158,9 +159,14 @@ FIRST_ADMINISTRATOR_ACCESS_VARIABLE = "OSPREY_FIRST_ADMINISTRATOR_ACCESS"
 ACCESS_GRANT_ACTION = "grant_first_administrator_access"
 
 
-def first_administrator_access_from_env(by_administrator: Iterable[str]) -> dict[str, Any]:
+def first_administrator_access_from_env(
+    by_administrator: Iterable[str], scheme: HandlingScheme | None = None
+) -> dict[str, Any]:
     """The first administrators' values for each field the administrator sets, refused at start when
-    one is missing: they could not sign in, and so nobody could set anyone's (Amendment 15)."""
+    one is missing: they could not sign in, and so nobody could set anyone's (Amendment 15). With
+    the deployment's handling scheme, a clearance or code it does not know is refused too: seeded
+    only where nothing is set, such a value could never be put right by the config, and no Access
+    would be within the first administrators' reach."""
     sets = set(by_administrator)
     if not sets:
         return {}
@@ -184,6 +190,18 @@ def first_administrator_access_from_env(by_administrator: Iterable[str]) -> dict
     for field in sets & {"clearance", "org_unit"}:
         if not isinstance(held[field], str) or not held[field]:
             raise ValueError(f"{FIRST_ADMINISTRATOR_ACCESS_VARIABLE}: {field} is not a value")
+    if scheme is not None:
+        if "clearance" in sets and held["clearance"] not in scheme.classification:
+            raise ValueError(
+                f"{FIRST_ADMINISTRATOR_ACCESS_VARIABLE}: clearance {held['clearance']!r} is not a "
+                f"classification of this deployment ({', '.join(scheme.classification)})"
+            )
+        unknown = sorted(set(held.get("handling_codes") or []) - scheme.handling_codes.keys())
+        if "handling_codes" in sets and unknown:
+            raise ValueError(
+                f"{FIRST_ADMINISTRATOR_ACCESS_VARIABLE}: handling codes {', '.join(unknown)} are "
+                "not this deployment's"
+            )
     return {f: held[f] for f in sets}
 
 
@@ -256,7 +274,10 @@ def _person(
         org_unit=held("org_unit", "org_unit"),
         email=row["email"],
         receivable_handling_codes=list(codes or []),
-        signed_in=row["first_seen"] is not None,
+        # A person whose values set here are not all set is refused at sign-in after being
+        # recorded (`first_seen`), so has never signed in: counted by no lock-out check
+        # (`people_managers`, every route's as well as the seed's).
+        signed_in=row["first_seen"] is not None and _all_set(row, by_administrator),
         access_read_at=(
         None if every_value_set_here
         else _NEVER if not _all_set(row, by_administrator)
@@ -573,9 +594,8 @@ class EntraPeopleStore:
             )
             custom = await rights_on(conn)
             # Amendment 15: a person whose values the administrator sets, not all set yet, cannot
-            # sign in, so cannot manage anyone.
-            sets = self.by_administrator
-            people = [_person(r, sets) for r in rows if _all_set(r, sets)]
+            # sign in, so cannot manage anyone (`_person`'s `signed_in`).
+            people = [_person(r, self.by_administrator) for r in rows]
             nobody_administers = not people_managers(people, custom)
             for oid in oids:
                 added = await conn.fetchval(
@@ -604,7 +624,9 @@ class EntraPeopleStore:
                             result_cardinality=1,
                             conn=conn,
                         )
-                if access:
+                # Only where the role gate above admits them: a person already recorded while
+                # someone can manage people keeps what an administrator set, values unset included.
+                if access and (added is not None or nobody_administers):
                     await self._seed_access(conn, oid, access, audit)
         return given
 
@@ -892,7 +914,7 @@ GRANT_ACTION = "grant_first_administrator"
 
 
 async def open_people_store(
-    dsn: str, mapping: ClaimMapping, audit: AuditWriter
+    dsn: str, mapping: ClaimMapping, audit: AuditWriter, scheme: HandlingScheme | None = None
 ) -> EntraPeopleStore | None:
     """The people store, its first administrators seeded, for an Entra mapping; None otherwise.
     Refuses to start an Entra deployment that names no first administrator. Each Admin role the
@@ -913,7 +935,7 @@ async def open_people_store(
     ]  # fmt: skip
     store = await EntraPeopleStore.connect(dsn, mapping.tenant_id, by_administrator)
     try:
-        access = first_administrator_access_from_env(store.by_administrator)
+        access = first_administrator_access_from_env(store.by_administrator, scheme)
         await store.seed_first_administrators(first, audit, access)
     except BaseException:
         await store.close()

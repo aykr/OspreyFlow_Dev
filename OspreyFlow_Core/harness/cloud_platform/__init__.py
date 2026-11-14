@@ -202,6 +202,22 @@ def _refuse(config: OspreyConfig) -> None:
             f"first_administrator_access gives the first administrators no {', '.join(missing)}: "
             "without it nobody can sign in to set anyone's"
         )
+    # The shapes the Conduit's start takes (`first_administrator_access_from_env`), refused here
+    # in the same words rather than by a Conduit that will not start.
+    wrong = [
+        f
+        for f in by_administrator
+        if not (
+            isinstance(held[f], list) and all(isinstance(c, str) and c for c in held[f])
+            if f == "handling_codes"
+            else isinstance(held[f], str) and held[f]
+        )
+    ]
+    if wrong:
+        raise CloudPlatformNotRenderable(
+            f"cloud_platform.claims.first_administrator_access: {', '.join(wrong)} is not a value "
+            "(clearance and org_unit each a word, handling_codes a list of codes)"
+        )
     if by_administrator and _cp(config).shape != "poc":
         # ADR-148 Amendment 15: the fallback is the proof of concept's, while the client's Entra
         # cannot yet send the values; a production namespace reads every one from Entra ID.

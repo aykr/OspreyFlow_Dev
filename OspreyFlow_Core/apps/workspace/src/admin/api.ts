@@ -57,6 +57,8 @@ async function failure(response: Response): Promise<Error> {
   if (typeof detail === "object" && detail?.error === "setter_cannot_set") {
     return new Error("You cannot set anyone's access until your own is set here, and while your account is enabled.");
   }
+  // ADR-148 Amendment 15: a person no longer recorded here (removed since People was read).
+  if (body.error === "no_such_person") return new Error("That person is no longer in People here: refresh the list.");
   if (typeof detail === "object" && detail?.error === "cannot_disable_yourself") {
     return new Error("You cannot disable your own account.");
   }

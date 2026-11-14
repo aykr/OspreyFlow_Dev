@@ -83,6 +83,23 @@ describe("Admin › People on Entra ID with the administrator fallback", () => {
     expect(screen.queryByText("Saved.")).toBeNull();
   });
 
+  it.each([
+    [403, { detail: { error: "setter_cannot_set" } },
+     "You cannot set anyone's access until your own is set here, and while your account is enabled."],
+    [404, { error: "no_such_person", detail: `${OID} is not in People here` },
+     "That person is no longer in People here: refresh the list."],
+  ])("shows the store's refusal %i in its words", async (status, body, words) => {
+    serve(["clearance", "org_unit", "handling_codes"], (path, init) =>
+      path === `people/${OID}/access` && init?.method === "PUT" ? json(status, body) : null,
+    );
+    place();
+    fireEvent.click(await screen.findByLabelText(`Edit access for ${ANA.username}`));
+    await waitFor(() => expect(screen.getByRole("option", { name: "OFFICIAL-SENSITIVE" })).toBeTruthy());
+    fireEvent.click(screen.getByLabelText(`Save access for ${ANA.username}`));
+    expect(await screen.findByText(words)).toBeTruthy();
+    expect(screen.queryByText("Saved.")).toBeNull();
+  });
+
   it("without the fallback, Entra's People offers no Access (the control)", async () => {
     serve([]);
     place();
