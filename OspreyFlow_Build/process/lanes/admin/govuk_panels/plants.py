@@ -45,7 +45,7 @@ PLANTS = [
     ("synthetic: a menu's items drawn off the scale",
      [(TYPE, "/* GOV.UK Frontend's type classes, on the page's scale",
        ".menu-panel .menu-panel__item { font-size: var(--fs-16); }\n/* GOV.UK Frontend's type classes, on the page's scale")],
-     [(m, lk) for m in (MORE, NARROW, SWITCHER) for lk in ALL]),
+     [(m, lk) for m in (MORE, NARROW, SWITCHER, NEWCASE) for lk in ALL]),
     ("synthetic: a drawer's body drawn off the scale",
      [(TYPE, "/* GOV.UK Frontend's type classes, on the page's scale",
        ".drawer .panel__body * { font-size: var(--fs-16) !important; }\n/* GOV.UK Frontend's type classes, on the page's scale")],
