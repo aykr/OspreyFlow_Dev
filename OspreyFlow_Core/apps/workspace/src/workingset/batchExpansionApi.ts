@@ -12,6 +12,11 @@
 //                     nodes, links, refusal: {code, cap_kind?, cap?, would_be?} | null}
 // It decides nothing: `words` is always a whole sentence and is shown as given; the Glass adds only
 // what it itself did (opened the view, or could not).
+import type {
+  BatchExpansion,
+  BatchExpansionInput,
+  BatchRefusal,
+} from "../../../../packages/schemas/generated";
 import type { CaseView } from "../views/viewsApi";
 import type { LimitExceeded } from "./models";
 
@@ -24,17 +29,16 @@ export interface BatchExpansionRequest {
   refused: LimitExceeded;
 }
 
-export type RefusalCode = "too_many_nodes" | "too_many_links" | "found_nothing" | "no_longer_an_editor" | "took_too_long";
+export type RefusalCode = BatchRefusal["code"];
 
-export interface BatchExpansionJob {
-  id: string;
-  state: "queued" | "running" | "done" | "refused" | "failed";
-  words: string;
+/** The Conduit's `BatchExpansion` (packages/schemas/batch_expansion.py, generated), its optional
+ * fields made present: a field the server left out is read as null. */
+export type BatchExpansionJob = Required<Omit<BatchExpansion, "view" | "refusal" | "nodes" | "links">> & {
   view: CaseView | null;
   nodes: number | null;
   links: number | null;
-  refusal: { code: RefusalCode; cap_kind?: "nodes" | "edges"; cap?: number; would_be?: number } | null;
-}
+  refusal: BatchRefusal | null;
+};
 
 export type Started =
   | { ok: true; job: BatchExpansionJob }
@@ -56,7 +60,12 @@ export type Read =
   | { ok: false; kind: "refused"; message: string }
   | { ok: false; kind: "unknown"; message: string };
 
-const STATES = new Set(["queued", "running", "done", "refused", "failed"]);
+// Every state the schema names, and only those: a state added to it fails to compile here.
+const STATE_LIST = ["queued", "running", "done", "refused", "failed"] as const satisfies readonly BatchExpansion["state"][];
+type MissingState = Exclude<BatchExpansion["state"], (typeof STATE_LIST)[number]>;
+const EVERY_STATE: [MissingState] extends [never] ? true : MissingState = true;
+void EVERY_STATE;
+const STATES = new Set<string>(STATE_LIST);
 
 function batchUrl(apiBaseUrl: string, caseId: string, tail = ""): string {
   return `${apiBaseUrl}/v1/investigations/${encodeURIComponent(caseId)}/batch-expansions${tail}`;
@@ -106,7 +115,7 @@ export async function startBatchExpansion(
           depth: request.depth,
           edge_types: request.edgeType ? [request.edgeType] : null,
         },
-      }),
+      } satisfies BatchExpansionInput),
     });
     const body = await bodyOf(response);
     if (response.ok) {

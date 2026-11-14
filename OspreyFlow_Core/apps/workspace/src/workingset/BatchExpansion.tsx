@@ -35,7 +35,7 @@ type Shown =
   | { phase: "opened"; words: string; name: string }
   | { phase: "stopped"; words: string; again: boolean };
 
-function what(kind: "nodes" | "edges" | undefined): string {
+function what(kind: "nodes" | "edges" | null | undefined): string {
   return kind === "edges" ? "links" : "nodes";
 }
 
@@ -43,7 +43,7 @@ function what(kind: "nodes" | "edges" | undefined): string {
 function refusalWords(job: BatchExpansionJob): string {
   if (job.words) return job.words;
   const refusal = job.refusal;
-  if (refusal && refusal.cap !== undefined && refusal.would_be !== undefined) {
+  if (refusal && refusal.cap != null && refusal.would_be != null) {
     return `The batch expansion was refused: ${COUNT.format(refusal.would_be)} ${what(refusal.cap_kind)} against a limit of ${COUNT.format(refusal.cap)}. Nothing was saved. Narrow it by link type, depth or dates and try again.`;
   }
   return "The batch expansion was refused, and nothing was saved. Narrow it by link type, depth or dates and try again.";
