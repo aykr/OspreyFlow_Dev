@@ -1,58 +1,58 @@
-# admin-sections-look, admin-look, admin.spec and operations-figures at f0305b4
+# admin-sections-look, admin-look, admin.spec and operations-figures at 91cf662
 
 Running 80 tests using 4 workers
 
-[1/80] keyboard/admin-sections-look.spec.ts:33:5 › Roles in the dark look: one h1, no level skipped beneath it, each below the h1
-[2/80] keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links
-[3/80] keyboard/operations-figures.spec.ts:21:1 › a unit's run quota is saved by keyboard, and the figures read again
-[4/80] keyboard/admin.spec.ts:212:1 › a person's roles are saved by keyboard
+[1/80] keyboard/operations-figures.spec.ts:21:1 › a unit's run quota is saved by keyboard, and the figures read again
+[2/80] keyboard/admin.spec.ts:212:1 › a person's roles are saved by keyboard
+[3/80] keyboard/admin-sections-look.spec.ts:34:5 › Roles in the dark look: one h1, no level skipped beneath it, each below the h1
+[4/80] keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links
 [5/80] keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links
-[6/80] keyboard/operations-figures.spec.ts:43:1 › a refused quota save is said in words, by keyboard
-[7/80] keyboard/admin.spec.ts:223:1 › a dashboard is registered and removed by keyboard
-[8/80] keyboard/admin-sections-look.spec.ts:33:5 › Dashboard identities in the dark look: one h1, no level skipped beneath it, each below the h1
+[6/80] keyboard/admin.spec.ts:223:1 › a dashboard is registered and removed by keyboard
+[7/80] keyboard/operations-figures.spec.ts:43:1 › a refused quota save is said in words, by keyboard
+[8/80] keyboard/admin-sections-look.spec.ts:34:5 › Dashboard identities in the dark look: one h1, no level skipped beneath it, each below the h1
 [9/80] keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links
 [10/80] keyboard/operations-figures.spec.ts:56:1 › every registered Operations figures action has its own proving test case above
-[11/80] keyboard/admin-sections-look.spec.ts:33:5 › Datasets in the dark look: one h1, no level skipped beneath it, each below the h1
-[12/80] keyboard/admin-look.spec.ts:112:1 › Admin's People in the GOV.UK look: the Design System's scale, and a person at most 60% of their old height
-[13/80] keyboard/admin.spec.ts:238:1 › a dataset's egress is set by keyboard
-[14/80] keyboard/admin-look.spec.ts:121:3 › Admin's People in the dark look keeps main's sizes
-[15/80] keyboard/admin-sections-look.spec.ts:33:5 › System in the dark look: one h1, no level skipped beneath it, each below the h1
+[11/80] keyboard/admin-sections-look.spec.ts:34:5 › Datasets in the dark look: one h1, no level skipped beneath it, each below the h1
+[12/80] keyboard/admin.spec.ts:238:1 › a dataset's egress is set by keyboard
+[13/80] keyboard/admin-look.spec.ts:112:1 › Admin's People in the GOV.UK look: the Design System's scale, and a person at most 60% of their old height
+[14/80] keyboard/admin-sections-look.spec.ts:34:5 › System in the dark look: one h1, no level skipped beneath it, each below the h1
+[15/80] keyboard/admin-look.spec.ts:121:3 › Admin's People in the dark look keeps main's sizes
 [16/80] keyboard/admin.spec.ts:275:1 › a dataset's owners are changed by keyboard
-[17/80] keyboard/admin-look.spec.ts:121:3 › Admin's People in the light look keeps main's sizes
-[18/80] keyboard/admin-sections-look.spec.ts:33:5 › Operations in the dark look: one h1, no level skipped beneath it, each below the h1
+[17/80] keyboard/admin-sections-look.spec.ts:34:5 › Operations in the dark look: one h1, no level skipped beneath it, each below the h1
+[18/80] keyboard/admin-look.spec.ts:121:3 › Admin's People in the light look keeps main's sizes
 [19/80] keyboard/admin.spec.ts:294:1 › a dataset's promotion policy is set by keyboard
 [20/80] keyboard/admin-look.spec.ts:134:5 › Admin's Models in the dark look: one h1, its parts h2s drawn below it
-[21/80] keyboard/admin-sections-look.spec.ts:33:5 › Demo packs in the dark look: one h1, no level skipped beneath it, each below the h1
-[22/80] keyboard/admin-look.spec.ts:134:5 › Admin's Models in the light look: one h1, its parts h2s drawn below it
-[23/80] keyboard/admin.spec.ts:313:1 › a removed case's layer is merged, as a dry run, by keyboard
-[24/80] keyboard/admin-sections-look.spec.ts:33:5 › Roles in the light look: one h1, no level skipped beneath it, each below the h1
-[25/80] keyboard/admin-look.spec.ts:134:5 › Admin's Models in the govuk look: one h1, its parts h2s drawn below it
-[26/80] keyboard/admin-look.spec.ts:134:5 › Admin's Maps in the dark look: one h1, its parts h2s drawn below it
-[27/80] keyboard/admin.spec.ts:327:1 › a removed case's layer is deleted, as a dry run, by keyboard
-[28/80] keyboard/admin-sections-look.spec.ts:33:5 › Dashboard identities in the light look: one h1, no level skipped beneath it, each below the h1
-[29/80] keyboard/admin-look.spec.ts:134:5 › Admin's Maps in the light look: one h1, its parts h2s drawn below it
-[30/80] keyboard/admin.spec.ts:340:1 › a removed case's layer is deleted by keyboard after its dry run
-[31/80] keyboard/admin-sections-look.spec.ts:33:5 › Datasets in the light look: one h1, no level skipped beneath it, each below the h1
-[32/80] keyboard/admin-look.spec.ts:134:5 › Admin's Maps in the govuk look: one h1, its parts h2s drawn below it
-[33/80] keyboard/admin.spec.ts:356:1 › who may own a dataset is set in System by keyboard
-[34/80] keyboard/admin-sections-look.spec.ts:33:5 › System in the light look: one h1, no level skipped beneath it, each below the h1
+[21/80] keyboard/admin-sections-look.spec.ts:34:5 › Demo packs in the dark look: one h1, no level skipped beneath it, each below the h1
+[22/80] keyboard/admin.spec.ts:313:1 › a removed case's layer is merged, as a dry run, by keyboard
+[23/80] keyboard/admin-look.spec.ts:134:5 › Admin's Models in the light look: one h1, its parts h2s drawn below it
+[24/80] keyboard/admin-sections-look.spec.ts:34:5 › Roles in the light look: one h1, no level skipped beneath it, each below the h1
+[25/80] keyboard/admin.spec.ts:327:1 › a removed case's layer is deleted, as a dry run, by keyboard
+[26/80] keyboard/admin-look.spec.ts:134:5 › Admin's Models in the govuk look: one h1, its parts h2s drawn below it
+[27/80] keyboard/admin-sections-look.spec.ts:34:5 › Dashboard identities in the light look: one h1, no level skipped beneath it, each below the h1
+[28/80] keyboard/admin-look.spec.ts:134:5 › Admin's Maps in the dark look: one h1, its parts h2s drawn below it
+[29/80] keyboard/admin.spec.ts:340:1 › a removed case's layer is deleted by keyboard after its dry run
+[30/80] keyboard/admin-sections-look.spec.ts:34:5 › Datasets in the light look: one h1, no level skipped beneath it, each below the h1
+[31/80] keyboard/admin-look.spec.ts:134:5 › Admin's Maps in the light look: one h1, its parts h2s drawn below it
+[32/80] keyboard/admin.spec.ts:356:1 › who may own a dataset is set in System by keyboard
+[33/80] keyboard/admin-look.spec.ts:134:5 › Admin's Maps in the govuk look: one h1, its parts h2s drawn below it
+[34/80] keyboard/admin-sections-look.spec.ts:34:5 › System in the light look: one h1, no level skipped beneath it, each below the h1
 [35/80] keyboard/admin.spec.ts:372:1 › the system is asked again by keyboard
-[36/80] keyboard/admin-sections-look.spec.ts:33:5 › Operations in the light look: one h1, no level skipped beneath it, each below the h1
+[36/80] keyboard/admin-sections-look.spec.ts:34:5 › Operations in the light look: one h1, no level skipped beneath it, each below the h1
 [37/80] keyboard/admin.spec.ts:383:1 › a person is invited by keyboard and their one-time code is shown
-[38/80] keyboard/admin-sections-look.spec.ts:33:5 › Demo packs in the light look: one h1, no level skipped beneath it, each below the h1
+[38/80] keyboard/admin-sections-look.spec.ts:34:5 › Demo packs in the light look: one h1, no level skipped beneath it, each below the h1
 [39/80] keyboard/admin.spec.ts:399:1 › a person is added by Entra object id by keyboard
-[40/80] keyboard/admin-sections-look.spec.ts:33:5 › Roles in the govuk look: one h1, no level skipped beneath it, each below the h1
+[40/80] keyboard/admin-sections-look.spec.ts:34:5 › Roles in the govuk look: one h1, no level skipped beneath it, each below the h1
 [41/80] keyboard/admin.spec.ts:410:1 › guest accounts are admitted by keyboard
-[42/80] keyboard/admin-sections-look.spec.ts:33:5 › Dashboard identities in the govuk look: one h1, no level skipped beneath it, each below the h1
+[42/80] keyboard/admin-sections-look.spec.ts:34:5 › Dashboard identities in the govuk look: one h1, no level skipped beneath it, each below the h1
 [43/80] keyboard/admin.spec.ts:425:1 › a person's access is edited by keyboard
-[44/80] keyboard/admin-sections-look.spec.ts:33:5 › Datasets in the govuk look: one h1, no level skipped beneath it, each below the h1
+[44/80] keyboard/admin-sections-look.spec.ts:34:5 › Datasets in the govuk look: one h1, no level skipped beneath it, each below the h1
 [45/80] keyboard/admin.spec.ts:435:1 › a person is disabled and enabled again by keyboard
-[46/80] keyboard/admin-sections-look.spec.ts:33:5 › System in the govuk look: one h1, no level skipped beneath it, each below the h1
-[47/80] keyboard/admin-sections-look.spec.ts:33:5 › Operations in the govuk look: one h1, no level skipped beneath it, each below the h1
+[46/80] keyboard/admin-sections-look.spec.ts:34:5 › System in the govuk look: one h1, no level skipped beneath it, each below the h1
+[47/80] keyboard/admin-sections-look.spec.ts:34:5 › Operations in the govuk look: one h1, no level skipped beneath it, each below the h1
 [48/80] keyboard/admin.spec.ts:447:1 › a person's sign-in is reset by keyboard and the new code shown
-[49/80] keyboard/admin-sections-look.spec.ts:33:5 › Demo packs in the govuk look: one h1, no level skipped beneath it, each below the h1
+[49/80] keyboard/admin-sections-look.spec.ts:34:5 › Demo packs in the govuk look: one h1, no level skipped beneath it, each below the h1
 [50/80] keyboard/admin.spec.ts:457:1 › a person is removed by keyboard once the removal is confirmed
-[51/80] keyboard/admin-sections-look.spec.ts:55:1 › a person's row links take GOV.UK's link focus in the GOV.UK look
+[51/80] keyboard/admin-sections-look.spec.ts:56:1 › a person's row links take GOV.UK's link focus in the GOV.UK look
 [52/80] keyboard/admin.spec.ts:470:1 › a refused organisation arrival is joined to an account by keyboard
 [53/80] keyboard/admin.spec.ts:486:1 › a demo pack's command is copied by keyboard
 [54/80] keyboard/admin.spec.ts:498:1 › a schedule is paused and resumed by keyboard
@@ -61,10 +61,10 @@ Running 80 tests using 4 workers
 [57/80] keyboard/admin.spec.ts:531:1 › a schedule is changed by keyboard, keeping its owner
 [58/80] keyboard/admin.spec.ts:548:1 › a connection is named by keyboard
 [59/80] keyboard/admin.spec.ts:563:1 › a SQL and a JSON connection are named with their fields by keyboard
-[WebServer] 12:24:18 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 12:29:05 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
 
 [60/80] keyboard/admin.spec.ts:601:1 › an S3 and an Athena connection are named with their fields by keyboard
-[WebServer] 12:24:19 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 12:29:05 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
 
 [61/80] keyboard/admin.spec.ts:645:1 › the grading scheme is read and its change command copied by keyboard
 [62/80] keyboard/admin.spec.ts:660:1 › an API connection is named with its fields, and a connection tested, by keyboard
@@ -86,4 +86,4 @@ Running 80 tests using 4 workers
 [78/80] keyboard/admin.spec.ts:946:1 › when promotions are overdue is set in Operations by keyboard
 [79/80] keyboard/admin.spec.ts:964:1 › a role's, a team lead's and a dataset's Authors' tips are read with their controls by keyboard
 [80/80] keyboard/admin.spec.ts:987:1 › every registered Admin action has its own proving test case above
-  80 passed (13.8s)
+  80 passed (13.6s)
