@@ -253,7 +253,7 @@ def m0():
     o = []
     tiers = [(30, 'The Glass', "The analyst's workspace", ['React · TypeScript', 'Sigma.js', 'MapLibre GL', 'Apache ECharts', 'GOV.UK Frontend'], K['indigo']),
              (180, 'The Conduit', 'Stateless API and access control', ['Python · FastAPI', 'Access control', 'Entity resolution', 'Extraction'], K['brass']),
-             (368, 'The Vault', 'Stores and engines', ['ArcadeDB', 'DuckDB or ClickHouse', 'OpenSearch or PostgreSQL', 'Valkey', 'Object storage', 'LiteLLM'], K['jade'])]
+             (368, 'The Vault', 'Stores and engines', ['ArcadeDB', 'DuckDB or ClickHouse', 'OpenSearch, PostgreSQL', 'Valkey', 'Object storage', 'LiteLLM'], K['jade'])]
     for i, (y, n, role, cs, col) in enumerate(tiers):
         d = round(.4 + i * .9, 2)
         g = [rect(40, y, 1120, 104, K['panel'], K['bSub'], rx=10), rect(40, y, 8, 104, col, rx=4), text(72, y + 44, n, 26, K['t1'], 700), text(72, y + 72, role, 14, K['t3'])]

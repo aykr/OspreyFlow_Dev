@@ -1,8 +1,8 @@
-# Step 5, Tue 17 Nov: the wording sweep, its checklist
+# Step 5: the wording sweep, its checklist (run on 14 November, when the owner called the freeze)
 
 The docs lane, prepared 14 November 2026 at the orchestrator's word, against main 760ff5b. The route's step 5 row:
 "Feature freeze (the moment the last open feature merges) and the wording sweep at once". It is docs', after 3f, 3f′,
-3g, 3h and U, and before step 6's install test on Wed 18. It brings the sweep forward from Tue 24.
+3g, 3h and U, and before step 6's install test (the route: Mon 16). It brings the sweep forward from Tue 24.
 
 **Sources:**
 - the route (`process/lanes/route.tsv`);
@@ -30,10 +30,10 @@ The docs lane, prepared 14 November 2026 at the orchestrator's word, against mai
 
 | Step | What | Guide words to write | Status |
 | --- | --- | --- | --- |
-| 3f, 3f′ | An expansion past the cap promoted to a batch job, ADR-151: the choice on the cap refusal, its progress and result (rules-b, case-b) | User guide §5.2's expand-at-the-cap words (the over-cap dialog), and whatever right or limit it names in the administration guide | to do when merged |
-| 3g | The administrator fallback on Entra, audit 4c, ADR-148 Amendment 15 (platform-b) | Administration guide §9's "No administrator can give a missing clearance or unit instead" becomes the fallback as built (part one's D6, 4c); §6a.7 to match | to do when merged |
-| 3h | A merged pair arrives as one cluster when nodes enter the working set, rule 6 (case) | User guide: where it says how resolved records are drawn (§5.2, and §5.5's *Show on graph*): check the words against the fix | check when merged |
-| U | An upgrade or a fresh install builds the search index, ADR-150 decision 4 (platform) | Administration guide §6a.1's *Moving to a new release* steps and §13's restore: where the index is built on install and upgrade | to do when merged |
+| 3f, 3f′ | An expansion past the cap promoted to a batch job, ADR-151: the choice on the cap refusal, its progress and result (rules-b, case-b) | User guide §5.2's expand-at-the-cap words (the over-cap dialog), and whatever right or limit it names in the administration guide | done on lane/docs-v052-sweep-early (EARLY_FACTS.md §1) |
+| 3g | The administrator fallback on Entra, audit 4c, ADR-148 Amendment 15 (platform-b) | Administration guide §9's "No administrator can give a missing clearance or unit instead" becomes the fallback as built (part one's D6, 4c); §6a.7 to match | done on lane/docs-v052-sweep-early (EARLY_FACTS.md §1) |
+| 3h | A merged pair arrives as one cluster when nodes enter the working set, rule 6 (case) | User guide: where it says how resolved records are drawn (§5.2, and §5.5's *Show on graph*): check the words against the fix | done on lane/docs-v052-sweep-early (EARLY_FACTS.md §1) |
+| U | An upgrade or a fresh install builds the search index, ADR-150 decision 4 (platform) | Administration guide §6a.1's *Moving to a new release* steps and §13's restore: where the index is built on install and upgrade | done on lane/docs-v052-sweep-early (EARLY_FACTS.md §1) |
 
 ## 2. The version headers (the orchestrator's ruling: at the cut)
 
@@ -93,7 +93,7 @@ and the sites were not.
   - D8, OpenSearch on the poc: done in part (AG 2.00), the rest in section 4.
   - D5, the manifest's tables: check whether the command exists yet.
   - D6: 4b done (AG 2.02), 4c with 3g, 4d not ruled.
-  - D7, acceptance: not until step 6 runs (Wed 18), after this sweep.
+  - D7, acceptance: not until step 6 runs (Mon 16), after this sweep.
 
 ## 6. The sites
 

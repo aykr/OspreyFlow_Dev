@@ -598,13 +598,18 @@ conformance test suite in `tests/conformance/`, and a component is only supporte
 its suite. Adding a new backend means writing an adapter and turning the suite green — no
 changes above the port.
 
-Two narrower ports sit beside the four, each also a `Protocol` with its suite written first, but
-neither is a tier boundary the way the four are: **`RecognisePort`** (`packages/ports/recognise.py`,
+Three narrower ports sit beside the four, each also a `Protocol` with its suite (the first two's written
+first), but none is a tier boundary the way the four are: **`RecognisePort`** (`packages/ports/recognise.py`,
 ADR-098 decision 2), the fast named-entity pass *Extract entities* runs, served by Stanza in its own
 `ner` sidecar — and, since ADR-108, by spaCy and transformers adapters a pipeline's extract node may
-name (`recognise_spacy`, `recognise_transformers`) — whose findings are proposals like a model's; and **`MediaStore`**
+name (`recognise_spacy`, `recognise_transformers`) — whose findings are proposals like a model's; **`MediaStore`**
 (`packages/ports/media.py`, ADR-094), which keeps a file's bytes in the object store under a
-reference, never in the graph.
+reference, never in the graph; and **`IndexFeedSource`** (`packages/ports/index_feed.py`, ADR-150 decisions 1 and 2),
+through which the search indexer alone drains the graph adapter's outbox and reads each node as stored, unfiltered
+by design, to build its one search document. It is a `Protocol` apart from `GraphPort` so that no route, which is
+given a `GraphPort`, can reach that read: its conformance cases are `tests/conformance/graph_port/test_index_outbox.py`,
+and the reach test is `tests/services/search_index/test_index_feed_reach.py`. Access is applied in the query to the
+index instead (ADR-149, `services/api/search_access.py`).
 
 ### 2.1 GraphPort
 

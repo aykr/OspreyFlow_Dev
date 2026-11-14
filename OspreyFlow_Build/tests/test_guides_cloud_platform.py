@@ -42,13 +42,17 @@ def section(text: str, heading: str) -> str:
 
 
 def _literals(path: Path, call: str) -> list[str]:
-    """Every string literal passed as the first argument of `call(...)` in a module, joined as Python joins them."""
+    """Every string passed as the first argument of `call(...)` in a module, joined as Python joins them; an f-string
+    with each value it fills in written "…", as the guides quote one."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     found = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == call:
-            if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                found.append(node.args[0].value)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == call and node.args:
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                found.append(first.value)
+            elif isinstance(first, ast.JoinedStr):
+                found.append("".join(p.value if isinstance(p, ast.Constant) else "…" for p in first.values))
     return found
 
 
@@ -145,15 +149,49 @@ def entra_refusals() -> list[str]:
     return words
 
 
+def refusals_left_out(people: str) -> list[str]:
+    """Each refusal `entra_people.py` raises that §9 does not quote."""
+    folded = re.sub(r"\s+", " ", people)
+    return [w for w in dict.fromkeys(entra_refusals()) if w not in folded]
+
+
 def test_section_9_quotes_each_entra_people_refusal() -> None:
-    people = section(ADMIN, "## 9. People")
-    assert [w for w in entra_refusals() if w not in re.sub(r"\s+", " ", people)] == []
+    assert refusals_left_out(section(ADMIN, "## 9. People")) == []
+    assert "Here … come from Entra ID, and are changed there." in entra_refusals(), "an f-string's refusal is read"
+
+
+def guide_entra_refusals(people: str) -> list[str]:
+    """The refusals §9 lists as Entra's, each quoted in brackets in its one sentence ("What Entra holds is refused
+    here, in words, …")."""
+    m = re.search(r"What Entra holds is refused here, in words, each followed by \"([^\"]+)\": (.*?)\. \*\*", people)
+    assert m, "§9's sentence listing what Entra holds"
+    return re.findall(r'\("([^"]+)"\)', m.group(2))
+
+
+def test_section_9_quotes_no_entra_refusal_the_code_does_not_raise() -> None:
+    """The other way round: a refusal the code dropped must leave the guide too (the v0.5.0 survey's gap: a
+    dashboard identity's refusal stayed in §9 after the code stopped raising it)."""
+    people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People"))
+    source = re.sub(r"\s+", " ", (CORE / "services/api/entra_people.py").read_text(encoding="utf-8"))
+    quoted = guide_entra_refusals(people)
+    assert len(quoted) >= 4
+    assert [q for q in quoted if q not in entra_refusals()] == []
+    lead = re.search(r'each followed by "([^"]+)…"', people)
+    assert lead and lead.group(1) in source, "the words each refusal opens with"
+
+
+def test_the_people_check_flags_a_refusal_the_code_no_longer_raises() -> None:
+    people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People"))
+    planted = people.replace('and joining ("', 'dashboards ("Dashboard identities are not registered on this deployment yet."), and joining ("', 1)
+    assert [q for q in guide_entra_refusals(planted) if q not in entra_refusals()] == [
+        "Dashboard identities are not registered on this deployment yet."]
 
 
 def test_the_people_check_flags_a_refusal_left_out() -> None:
-    first = entra_refusals()[0]
-    people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People")).replace(first, "")
-    assert first not in people
+    """§9 without the f-string's refusal, the one this check could not read before the sweep."""
+    people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People"))
+    planted = people.replace('("Here … come from Entra ID, and are changed there.")', "")
+    assert refusals_left_out(planted) == ["Here … come from Entra ID, and are changed there."]
 
 
 # ---------------------------------------------------------------- the code's numbers
@@ -268,3 +306,16 @@ def test_section_6a7_quotes_the_guest_refusal_and_the_audit_action_as_the_code_h
     assert 'action="set_guest_sign_in"' in app and "`set_guest_sign_in`" in text
     assert "Admit guest accounts" in text
     assert "Admitting guests would need a setting that does not exist" not in text
+
+
+def test_section_9_says_a_missing_value_is_given_only_by_the_administrator_fallback() -> None:
+    """§9's sentence qualified after the lane review: the administrator fallback (ADR-148 Amendment 15) gives what a
+    token does not carry, and only where the mapping names `{administrator: true}`."""
+    source = (CORE / "packages/principal_auth/__init__.py").read_text(encoding="utf-8")
+    assert re.search(r"^    administrator: bool = False$", source, re.MULTILINE), "a claim's source may be the administrator"
+    render = (CORE / "harness/cloud_platform/__init__.py").read_text(encoding="utf-8")
+    assert 'if by_administrator and _cp(config).shape != "poc":' in render, "and only on the poc shape"
+    people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People"))
+    assert ("Unless the mapping names `{administrator: true}` for a value (the poc shape's fallback, section 6a.7), "
+            "no administrator can give a missing clearance or unit instead") in people  # fmt: skip
+    assert "deployment's own application, the Glass's or the API's. No administrator can give" not in people

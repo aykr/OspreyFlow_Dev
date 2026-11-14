@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.60** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.61** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.61 | 2026-11-14 | Step 5's wording sweep. §5.2: records arrive shown as one where they match, worked out for you alone (ADR-124 Amendment 19); *Mark for suppression (hides nothing yet)* as built, a mark that hides nothing, kept for the session that made it, the suppression itself not built; the batch job's limits (the Editor level, the expand right, ten minutes). §5.5: the limited line's reason, a 50-character search refused in the Conduit's words, and each group counting its own records. Then the early part. §2: a refresh keeps you signed in and where you were, for the tab alone, forgotten at sign-out (ADR-050 Amendment 3). §3: under GOV.UK, the slim header and phase banner and the one-row context banner on every screen but Home and sign-in (ADR-132 Amendment 8). §5.5: the box's filters as it labels them (Ignore case, Match, Entity types, Only nodes on screen, Reset filters), its more line, its limited line (a *Starts with* search alone), one character with *Only nodes on screen*, and a *Starts with* search of at most 50 characters where there is an index. §6: Ask & Chat for Ask the case. Held by `tests/test_guides_v051_gaps.py`, `test_user_guide_search_results.py` and `test_guide_navigation_words.py`. PDF made by the orchestrator at merge. |
 | 1.60 | 2026-11-14 | §5.2: an expansion past the working set's limit may be **run as a batch job** (ADR-151): run on the server as you, saved as a private view of the case, or refused with its figures past a view's own limit of 50,000 nodes and 250,000 links; its result opens as your private view when it is done, and the job carries on with the panel closed. Held by `tests/test_user_guide_batch_expansion.py`. PDF made by the orchestrator at merge. |
 | 1.59 | 2026-11-14 | §5.5: the fallback's depth line as studio's fix words it, "Only the first 100 matches are listed, and the filters apply to those alone.", shown only where the search found more than 100: the fallback asks one past its depth, so exactly 100 matches is a whole list. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
 | 1.58 | 2026-11-14 | §5.5: the fallback's paging as studio's fix built it: *Next page* offered only while a further page holds records, and where the search reached the fallback's 100, the last page's line adds, even with a dataset or a group chosen, "Only the first 100 matches are listed: narrow the search to see others." in the Conduit's words. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
@@ -144,6 +145,11 @@ your session has ended (you have been away, or your administrator has ended it),
 the selection, the map and anything you have typed, stays as it is. If the sign-in service cannot be
 reached, it says so and offers **Try again**.
 
+**Refreshing the page** keeps you signed in and where you were. It asks the sign-in service's own session
+first, without showing you anything, and shows the sign-in page only when that session has ended. Home stays Home, a case stays that case (on the view it had, where that is the graph, the map, the Matrix
+or Figures; on any other view, the Glass's first), and Admin, the Ingest Studio and Rules and Monitoring stay
+themselves; a place your roles do not open is shown as Home. This is kept for the tab alone, and **Sign out** forgets it, so the next person to sign in there does not start where you were.
+
 **Signing out**: the account button at the top right (your name and clearance) has **Sign out**.
 
 ## 3. Home
@@ -192,6 +198,10 @@ in the top bar's view switch, not here (section 5). Elsewhere it says "You are i
 "You are in Rules and Monitoring" or "You are in Admin". If you can open both the Glass and the Ingest
 Studio, the banner offers **Open this case's data in the Ingest Studio ↗**, and from there **← Back to
 case ‹name› in the Glass**, which brings you back to the same case and view.
+
+**Under the GOV.UK theme**, on every screen but Home and the sign-in page, the GOV.UK header and the
+phase banner are slim, and the context banner, a GOV.UK notification banner, is folded into one row,
+"You are in …" at its start, so the canvas has more of the window.
 
 ## 4. Cases
 
@@ -325,7 +335,7 @@ it first. The selection's own actions come first, in the bar's words. **Expand b
 each kind of relationship with how many links it has, so you can draw just one; the kinds with none
 fold into one line ("7 types with no links") that opens in place. **Actions** holds what the item
 offers, as its type allows: Explain cluster, View messages, Expand group, Read full screen, Add files
-held by this…, Set picture… and Mark for suppression; with two selected, only the pair's own: Link
+held by this…, Set picture… and Mark for suppression (hides nothing yet); with two selected, only the pair's own: Link
 to…, Split from… and Find paths to…. In a view, the menu offers only what changes nothing in the
 case. An expansion that would add more than
 **500** nodes asks first, offering one relationship at a time, all of them, or nothing. An expansion
@@ -334,9 +344,18 @@ batch job**. A batch job runs the same expansion on the server as you, reading o
 and saves what it finds as a private view of the case; nothing is added to the case's own graph. When
 it is done, its result opens as your private view; if it cannot be opened, it stays in *Views in this
 case*. A result too large for a view to show, more than **50,000** nodes or **250,000** links, is
-refused with its figures and saves nothing: narrow it by link type, depth or dates. One batch job of
-yours runs in a case at a time, and its panel says so: "Closing this does not stop the job. While it
+refused with its figures and saves nothing: narrow it by link type, depth or dates. A batch job needs the Editor level on the case, since its result is saved as a view of it, and the right to
+expand; without either the panel says why and starts nothing. While it runs the panel says "The batch job is under
+way."; one that would take longer than ten minutes is stopped and saves nothing. One batch job of yours runs in a
+case at a time, and its panel says so: "Closing this does not stop the job. While it
 runs, asking for a batch expansion in this case again follows it."
+
+**Mark for suppression (hides nothing yet)** proposes a record for suppression, in the open: the node is marked,
+and the Explore panel lists it, with who marked it, when, and "Marked from the canvas". A mark hides nothing and
+changes no record: the node is still shown, cited and exported as before, to everyone who may see it. In the
+session that made the mark, the menu offers **Remove suppression mark** in its place; after a reload, or for anyone
+else, it offers **Mark for suppression (hides nothing yet)** again, and choosing it marks the node afresh. A
+suppression that takes effect, once its evidence is loaded through the Ingest Studio, is not built yet.
 
 **Reading a link.** A link's stroke says where it came from: **solid** from a record, **dashed**
 inferred by a model, **dotted** unresolved. Hovering names its type and how many such links join the
@@ -373,6 +392,9 @@ are dots.
 and **Explain this link**. Confirming or marking needs a reason, kept in the audit with your name.
 **Match strictness** at the top of the graph sets how sure a match must be to show records as one —
 Strict, Balanced (the default) or Broad — and says how many merged and split.
+Records drawn into the graph, by a search, an expansion or a list, arrive already shown as one where they
+match at the case's strictness, with **Explain cluster** on them. What is shown as one is worked out for you
+alone, from the records you may see: a record hidden from you joins nothing. When someone else on the case changes the strictness, your graph shows it in full when the case is loaded again; an expansion brings it only for the records it adds.
 
 **Groups.** **Communities** boxes groups of closely linked entities; fold a group from its box, or
 press `G` on a node in it. **Layout** offers Organic, Force-directed tree, and Clustered bubbles;
@@ -443,19 +465,26 @@ it.
 <!-- needs a new capture: shows the rail and banner before ADR-145 Amendment 15 -->
 ![Search: suggestions after two characters](images/user/16-search.png)
 
-Press `/` anywhere (outside a text box) to search. Suggestions start at two characters, across names,
-identifiers and titles; choosing one puts it in the case and draws it with what is near it (three
-links out), counting first and asking if it is a lot. Cancelling a large draw leaves the chosen node in
-the case on its own. **Filters** narrow by entity type, how the text matches, and whether to look only at what
-is already drawn. A phone number or account reference is read the same way however you type it, so
-`07700 900640` finds the number held as `+447700900640`.
+Press `/` anywhere (outside a text box) to search. Suggestions start at two characters (one, with **Only nodes on screen**), across names, identifiers and titles; choosing one puts it in the case and draws it with what is near it (three links
+out), counting first and asking if it is a lot. Cancelling a large draw leaves the chosen node in the case
+on its own. **Filters** narrow them: **Ignore case**; **Match**, *Starts with*, *Contains* or *Exact*;
+**Entity types** (none ticked searches every type); and **Only nodes on screen**. **Reset filters** puts
+them back. When more match than are shown, the box says "Showing the first …; more match. Keep typing to
+narrow." Where the search index cannot answer a *Starts with* search, the box says why: "Suggestions match only the exact
+start of a name or identifier: this deployment has no search index.", or, while the index cannot be reached or
+catches up with recent changes, that suggestions are limited just now. A *Starts with* search is at most 50
+characters where there is an index; a longer one is refused in the Conduit's words, "a suggestion is at most 50
+characters". A phone number or account reference is read the same way
+however you type it, so `07700 900640` finds the number held as `+447700900640`.
 
 **The results page.** Press Enter on the words you typed, with no suggestion moved to, and the results
 fill the main area over the view you were on, which waits beneath them as it was and cannot be reached
 until you leave them; a suggestion moved to with the arrow keys is still chosen by Enter. The page is
 headed "Search results for '…'", with the number of records under it as the Conduit counts them: the
 total, or a group's own count once you choose one, and "(counts may be incomplete)" when the Conduit
-cannot be sure. **All**, then each group with its count, narrows the list. Beside it, under the page's
+cannot be sure. **All**, then each group with its count, narrows the list. Each group counts its own records, and a record can
+be in more than one (a document is both a Document and *Mentioned in documents*), so **All** need not be the groups
+added up; the page says so where there is more than one group. Beside it, under the page's
 own filters, **Datasets** and **Dates** narrow it again to what the search offers, and **Clear filters**
 undoes them. The search box's **Filters** shape its suggestions alone: the page starts at **All** with
 no filter. Results come 20 a page, with **Next page** and **Previous page**. Each gives its name as the
@@ -907,7 +936,7 @@ example "Answered by Gemini (gemini/gemini-2.5-flash)" or "Answered by This depl
 (qwen2.5:7b-instruct)". It is what the deployment says it used, not what you chose. An answer kept
 before engines were named has no such line. **Ask to search** shows the same choice and line, and the
 choice applies there too: your question is about the case, so it goes under the case's handling and
-from the case's datasets, through the same two checks as Ask the case. It reaches the engine you chose
+from the case's datasets, through the same two checks as Ask & Chat. It reaches the engine you chose
 only when the case's material, as you see it, may leave the deployment and every dataset of the case
 allows that engine; otherwise the deployment's own model answers, and its line says so.
 

@@ -310,3 +310,86 @@ def test_section_5_5_says_the_fallback_pages_only_while_records_remain_and_where
     text = results_text()
     assert "**Next page** is offered only while a further page holds records" in text
     assert f"where the search found more than {depth}, the last page's line adds \"{line.format(depth=depth).strip()}\", even when a dataset or a group has narrowed the list." in text
+
+
+# ---------------------------------------------------------------- the suggestions box (step 5's sweep, part 4)
+
+FILTERS = _read(SRC / "search" / "SearchFilters.tsx")
+
+
+def suggestions_text(guide: str = GUIDE) -> str:
+    """§5.5's first paragraph, the box's suggestions, whitespace folded."""
+    start = guide.index("Press `/` anywhere (outside a text box) to search.")
+    assert guide.index("### 5.5 Search") < start < guide.index("**The results page.**")
+    return fold(guide[start : guide.index("\n\n", start)])
+
+
+def test_section_5_5_names_the_box_s_filters_as_the_box_labels_them() -> None:
+    modes = re.findall(r'\{ value: "[a-z_]+", label: "([^"]+)" \}', FILTERS)
+    assert modes == ["Starts with", "Contains", "Exact"], "SearchFilters.tsx's MODES"
+    for label in ('{" "} Ignore case </label>', "<legend>Match</legend>", "<legend>Entity types</legend>",
+                  "<small>None ticked searches every type.</small>", '{" "} Only nodes on screen </label>', "> Reset filters </button>"):  # fmt: skip
+        assert label in FILTERS, label
+    text = suggestions_text()
+    assert "**Filters** narrow them: **Ignore case**; **Match**, " + ", ".join(f"*{m}*" for m in modes[:-1]) + f" or *{modes[-1]}*;" in text
+    assert "**Entity types** (none ticked searches every type); and **Only nodes on screen**. **Reset filters** puts them back." in text
+
+
+def test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line() -> None:
+    more = re.search(r"\? `(Showing the first \$\{results\.length\}; more match\. Keep typing to narrow\.)`", BOX)
+    assert more and f'the box says "{_template(more.group(1))}"' in suggestions_text()
+    lines = dict(re.findall(r'(no_index|unreachable|catching_up|unknown):\s*"([^"]+)",', BOX))
+    assert set(lines) == {"no_index", "unreachable", "catching_up", "unknown"}, "GlobalSearch.tsx's LIMITED_SUGGESTIONS"
+    # Shown only when the Conduit says the suggestions are limited, in the words for why.
+    assert '{limited && <span className="global-search__limited">{LIMITED_SUGGESTIONS[limited]}</span>}' in BOX
+    assert 'const why = body.limited === true ? (body.limited_why ?? "unknown") : null;' in BOX
+    assert re.search(r"^    limited: bool = False$", (API / "search.py").read_text(encoding="utf-8"), re.MULTILINE)
+    text = suggestions_text()
+    assert f'Where the search index cannot answer a *Starts with* search, the box says why: "{lines["no_index"]}"' in text
+    assert all(lines[w].startswith("Suggestions are limited just now") for w in ("unreachable", "catching_up"))
+    assert "or, while the index cannot be reached or catches up with recent changes, that suggestions are limited just now." in text
+
+
+def test_section_5_5_gives_the_box_s_two_characters() -> None:
+    m = re.search(r"export const SUGGEST_MIN_CHARS = (\d+);", BOX)
+    words = {1: "one", 2: "two", 3: "three"}
+    assert m and f"Suggestions start at {words[int(m.group(1))]} characters" in suggestions_text()
+
+
+def test_section_5_5_gives_the_box_s_limits_as_the_code_holds_them() -> None:
+    """One character on screen, nothing asked of the Conduit; with an index, a *Starts with* prefix of at most
+    `PREFIX_MAX_CHARS`, a longer one refused in the Conduit's own words, which the box shows; the limited line for a
+    *Starts with* the graph answered, never for *Contains* or *Exact*."""
+    # On screen, the nodes are matched in the Glass before the two-character check is reached, and nothing is asked.
+    on_screen = BOX.index("if (using.onScreenOnly) {")
+    assert "const found = matchOnScreen(" in BOX[on_screen : on_screen + 400]
+    assert on_screen < BOX.index("if (value.length < SUGGEST_MIN_CHARS)")
+    assert "Suggestions start at two characters (one, with **Only nodes on screen**)" in suggestions_text()
+    mapping = (CORE / "services" / "search_index" / "mapping.py").read_text(encoding="utf-8")
+    limit = re.search(r"^PREFIX_MAX_CHARS = (\d+)$", mapping, re.MULTILINE)
+    query = fold((API / "search_index_query.py").read_text(encoding="utf-8"))
+    refusal = 'raise ValueError(f"a suggestion is at most {PREFIX_MAX_CHARS} characters")'
+    assert limit and "if len(prefix) > PREFIX_MAX_CHARS: " in query and refusal in query
+    # The route sends the words as the 422's detail, and the box shows a 422's words.
+    assert "except ValueError as exc: raise HTTPException(status_code=422, detail=str(exc)) from exc" in fold(
+        (API / "app.py").read_text(encoding="utf-8")
+    )
+    assert "const detail = response.status === 422 ? await refusalWords(response) : null;" in BOX
+    assert 'settle(detail ? "refused" : "unavailable", [], false);' in BOX
+    assert 'outcome === "refused" && refusal ? refusal' in BOX
+    assert (f"A *Starts with* search is at most {limit.group(1)} characters where there is an index; a longer one is "
+            f'refused in the Conduit\'s words, "a suggestion is at most {limit.group(1)} characters".') in suggestions_text()  # fmt: skip
+    assert 'limited = request.mode == "starts_with"' in SERVICE
+    assert "Where the search index cannot answer a *Starts with* search, the box says why" in suggestions_text()
+
+
+def test_section_5_5_says_the_groups_count_their_own_records_as_the_page_does() -> None:
+    """K (the owner, 14 November 2026): each group counts its own records, so All need not be their sum, said where
+    there is more than one group."""
+    assert "{counts && counts.groups.length > 1 && ( <p" in PAGE
+    assert ("Each group counts its own records, and a record can be in more than one, so All need not be the groups "
+            "added up.") in PAGE  # fmt: skip
+    text = results_text()
+    assert ("Each group counts its own records, and a record can be in more than one (a document is both a Document and "
+            "*Mentioned in documents*), so **All** need not be the groups added up; the page says so where there is "
+            "more than one group.") in text  # fmt: skip

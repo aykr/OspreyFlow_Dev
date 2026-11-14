@@ -2259,12 +2259,10 @@ status-chip radius §8 already specifies), and a corresponding marker on the fla
 currently on the canvas — the same list-row-plus-canvas-marker pairing the resolution-conflict
 pattern already establishes for "something here needs a human's attention."
 
-### 9.5 Marking a node for suppression — owner ruling R7, 27 September 2026, TENTATIVE
+### 9.5 Marking a node for suppression — owner ruling R7, 27 September 2026, confirmed 14 November 2026
 
-**The owner is revisiting this after their own usability walkthrough**, and it is written down in
-that state rather than held back, because a ruling that lives only in a conversation is lost by
-the next session — a genuine decision belongs in the spec, not in chat alone. `06_DECISIONS.md`
-ADR-046's addendum carries the full ruling.
+**The owner confirmed R7 on 14 November 2026**: step one, the mark, stays as built; step two is not in v0.5.2 and
+gets an ADR of its own after the cut. `06_DECISIONS.md` ADR-046's addendum carries the full ruling.
 
 Retraction becomes two steps. An analyst **marks** a node for suppression from the canvas — the
 radial menu's own `Mark for suppression (hides nothing yet)` item, worded so it says what it does
@@ -2282,7 +2280,9 @@ DELETE /v1/investigations/{id}/nodes/{node_id}/suppression-mark
 
 - **A marker on the node and in the inspector**, the same list-row-plus-canvas-marker pairing §9.4
   already establishes for "something here needs a human's attention" — a marked node is *flagged*,
-  never hidden.
+  never hidden. **Not built** (checked 14 November 2026): no marker is drawn on the node or in the inspector; Explore's
+  list of marks is the one place a mark is shown, and the menu's *Remove suppression mark* holds only for the session
+  that made the mark, since the Glass does not read marks back (`GlassCanvas.tsx`'s `suppressionMarks` starts empty).
 - **Reversible**, which is why a mark is deliberately not a graph write: the graph is append-only
   (`01_DOMAIN_MODEL.md` §2.4), so marking and un-marking there would mint a revision for every
   change of mind and `superseded_by` would stop meaning "this was corrected".

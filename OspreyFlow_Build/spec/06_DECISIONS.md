@@ -5326,10 +5326,18 @@ silently removing its own support misrepresents the assertion's warrant, which t
 worse than either full suppression or full disclosure of the gap. See ADR-048 for the reasoning
 that also produced ADR-038's identical shape for a different reason and ADR-045's opposite answer.
 
-**Addendum, 27 September 2026 — owner ruling R7. TENTATIVE: the owner has recorded this as
+**Addendum, 27 September 2026 — owner ruling R7. TENTATIVE when written; confirmed on 14 November 2026 (below). The owner recorded this as
 subject to revisiting after their own usability walkthrough, and it is written down here in that
 state deliberately rather than held back until it firms up, because a ruling that lives only in a
 conversation is lost by the next session (standing rule 11).**
+
+**Confirmed, 14 November 2026 (the owner, at v0.5.2's step 5 wording sweep): R7 is no longer tentative.**
+- **Step 1, the mark, stays as built:** *Mark for suppression* in the node menu, reversible, with its reason, never a
+  graph write. The user guide says what it does in plain words (§5.2: a mark hides nothing and changes no record, and
+  the suppression itself is not built), held by `tests/test_guides_step5_freeze.py`.
+- **Step 2 is not in v0.5.2.** The suppression taking effect when its evidence arrives through the Ingest Studio gets
+  an ADR of its own after the cut, which makes the two decisions this addendum names below first: ingest made able to
+  supersede a record, and the retraction record's type.
 
 **What produced it.** Running Scenario A against a rendered deployment through the analyst's own
 door for the first time (`tests/scenarios/test_phase8_exit_over_the_wire.py`, owner ruling R5)
@@ -5382,7 +5390,7 @@ called the flagging function directly and re-read the store, never the route —
 | R7's part | State |
 | --- | --- |
 | Hide-in-full narrowed; a superseded citation resolves forward | **Built**, proven in-process and over the wire |
-| Mark a node for suppression — reversible, markered, keyboard-reachable | **Built** (`02_GLASS_FRONTEND.md` §9.5) |
+| Mark a node for suppression — reversible, keyboard-reachable | **Built** (`02_GLASS_FRONTEND.md` §9.5); its marker on the node and in the inspector **not built** (checked 14 November 2026: Explore's list alone shows a mark) |
 | The suppression takes effect when its evidence arrives through the Studio | **Not built** — see below |
 
 **Why the third part is not built, and what it would take.** It is not effort: it is two real
@@ -5400,9 +5408,8 @@ decisions this record should make before anyone writes the code.
    `ontology_version` bump, which every recipe, `apply_schema` call, conformance fixture and
    generated TypeScript type moves with.
 
-Both are decisions, not tasks, and this ruling is **tentative** — the owner is revisiting it after
-a usability walkthrough, and the ingest half is the part such a walkthrough is most likely to
-revise. Recorded here so that whoever builds it starts from the decision rather than rediscovering
+Both are decisions, not tasks. This ruling was **tentative** when written; the owner confirmed it on 14 November
+2026, with the ingest half out of v0.5.2 and given an ADR of its own. Recorded here so that whoever builds it starts from the decision rather than rediscovering
 the two obstacles.
 
 **The test that fails if this is violated**, per rule 12: `test_scenario_a_over_the_wire`'s own

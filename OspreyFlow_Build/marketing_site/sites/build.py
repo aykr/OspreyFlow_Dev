@@ -52,7 +52,7 @@ SHOTS = {  # output name: (source file, alt text)
  'connections': ('cap-a1-j5.jpg', 'Find connections: the routes between two people, listed beside the network'),
  'communities': ('cap-a1-j6.jpg', 'The network clustered into communities, with a ranking beside it'),
  'map-time': ('cap-a2-c4-b.jpg', 'Events on a map of a site, with a heat map of the hours and weekdays they happen'),
- 'questions': ('cap-a2-c8-v6.jpg', 'Questions: an answer that cites documents and graph facts, with the engine that produced it'),
+ 'questions': ('cap-a2-c8-v6.jpg', 'Ask & Chat: an answer that cites documents and graph facts, with the engine that produced it'),
  'document': ('cap-a2-c5.jpg', 'A document open in a case, with the names a model found waiting to be accepted or rejected'),
  'studio': ('cap-m1-a.jpg', 'The Ingest Studio: a list of published pipelines, one per source'),
  'verify': ('cap-a2-c3-v3.jpg', 'Verify in the Ingest Studio: what a file would create, and the rows it would reject, before it loads'),
@@ -73,7 +73,7 @@ def esc(s): return html.escape(s, quote=True)
 
 def fig(name, caption=None, cls=''):
     alt = SHOTS[name][1]
-    cap = f'<figcaption>{caption or alt + "."} <span class="syn">{SYN}</span></figcaption>'
+    cap = f'<figcaption>{caption or esc(alt) + "."} <span class="syn">{SYN}</span></figcaption>'
     return (f'<figure class="shot {cls}"><a href="assets/{name}.jpg"><img src="assets/{name}.jpg" alt="{esc(alt)}" '
             f'width="1280" height="800" loading="lazy"></a>{cap}</figure>')
 
@@ -297,7 +297,7 @@ def org_index():
                    '<strong>Map and time.</strong> Events placed on a site or a city, and on the hours and weekdays they happen.',
                    '<strong>Matrix.</strong> The whole network as accessible tables, for a keyboard or a screen reader.',
                    '<strong>Reports.</strong> Trends and report packs, published inside OspreyFlow or exported.',
-                   '<strong>Questions.</strong> Ask a model about the case; the answer cites the documents and graph facts it drew on.']) +
+                   '<strong>Ask &amp; Chat.</strong> Ask a model about the case; the answer cites the documents and graph facts it drew on.']) +
                    '<p class="more"><a href="features.html">Every feature</a></p>', fig('communities')))
     b += sec('Four places, each with one job', cards(PLACES, 4), 'tint',
              intro='People see only the places their roles open, and a banner always says where they are.')
@@ -364,7 +364,7 @@ def org_features():
         'An analyst can propose a new link type; a data engineer decides whether it joins the domain model.',
         'A withdrawn item is kept in the record, never erased.']) + '</div></div>', 'tint', 'boards')
     b += sec('Models and questions', split(ul([
-        "<strong>Questions.</strong> Ask about the documents and the graph around your selection. Each cited fact is a button that selects it on the canvas.",
+        "<strong>Ask &amp; Chat.</strong> Ask about the documents and the graph around your selection. Each cited fact is a button that selects it on the canvas.",
         '<strong>Extraction.</strong> Names, numbers and places found in documents arrive as inferred, to accept or reject. On the shared-platform profile, a second, open-source extraction engine for structured facts in documents is installed and runs; no screen uses it yet.',
         '<strong>Local by default.</strong> Extraction, vision, transcription and embeddings run on the deployment itself.',
         "<strong>Hosted engines, by permission.</strong> Each dataset has an egress setting, and material leaves only when that and its handling code both allow it. On the shared-platform profile, your organisation's own AI gateway, or Amazon Bedrock in London, checked so far against a stand-in gateway, not yet against AWS or an organisation's own.",
@@ -381,7 +381,7 @@ def org_features():
     b += sec('Architecture', '<p class="intro">Three tiers, separated by four typed ports, so an engine can be swapped without touching what sits above it.</p>' + cards([
         ('The Glass', 'React and TypeScript. Sigma.js and Graphology for the network, MapLibre GL with PMTiles for maps, Apache ECharts for charts, GOV.UK Frontend for the GOV.UK theme.'),
         ('The Conduit', 'Python and FastAPI. The API, access control, entity resolution, extraction and model routing. Stateless.'),
-        ('The Vault', 'ArcadeDB for the graph, DuckDB or ClickHouse for analytics, OpenSearch or PostgreSQL for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage or Azure Blob, LiteLLM as the model gateway.')]) +
+        ('The Vault', 'ArcadeDB for the graph, DuckDB or ClickHouse for analytics, OpenSearch for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage or Azure Blob, LiteLLM as the model gateway.')]) +
         '<p>The four ports are the graph, analytics, compute and models. An adapter is supported once it passes the same conformance suite as every other adapter behind that port.</p>', ident='architecture')
     b += sec('On main, coming with the next release', ul([
         'On the shared-platform profile, scheduled runs: a pipeline\'s schedule and watched folder, rules, watches and list refreshes running as their owner, while the owner has signed in within the last 24 hours.',

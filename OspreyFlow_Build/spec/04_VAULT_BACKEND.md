@@ -391,6 +391,15 @@ in production and discovering the differences during an investigation.
 > `upsert_*`; one element and many give the same stored result; a pair already stored is handed back, not merged or
 > dropped; `revert_load` removes exactly what the load wrote; and the count of ids stored twice is reported.
 
+> **The index feed's section (ADR-150 decisions 1 and 2; `tests/conformance/graph_port/test_index_outbox.py`).**
+> The graph adapter also serves the narrower `IndexFeedSource` (`packages/ports/index_feed.py`), through which the
+> search indexer alone reads. Its 13 cases, on real ArcadeDB, prove: every adapter write records the nodes it
+> touched in the index outbox, in the write's own transaction, by event type (load, merge, new version,
+> promotion, deletion); a rolled-back write records nothing; and the narrow read gives each node as stored, whole,
+> or `None` for one that is not live. It is unfiltered by design, so it is a port apart from GraphPort, and no
+> route may name it (`tests/services/search_index/test_index_feed_reach.py`); access is applied in the query to the
+> index instead (ADR-149, `services/api/search_access.py`).
+
 ## 7. Capacity guidance
 
 Starting points, to be replaced by measurements from your own data.
