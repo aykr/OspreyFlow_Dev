@@ -314,3 +314,70 @@ def test_the_namespaces_pods_never_reach_the_opensearch_pod_past_the_domain(
     egress = values["egress"]
     assert egress["managedPorts"] == [443, 5432, 6379]
     assert "9200" not in json.dumps(egress)
+
+
+# -- reporting on, as the client's poc has it (v0.5.2 step 6; ADR-148 Amendments 9 to 11) ----------
+
+
+def test_r1_s_render_is_the_manifest_s_both_ways(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """R1 verifies the cluster against the poc manifest
+    (`harness/cloud_platform/poc_manifest.yaml`), which lists the client's deployment with
+    Superset and the report sync on. R1's own osprey.yaml must render that same list, or its
+    verify fails on what kind's deployment never made (with reporting off: Superset, the report
+    sync, their two images and Superset's database)."""
+    from harness.cloud_platform import manifest
+    from tools.cp_policy_check import _resolver
+
+    from schemas.deployment import OspreyConfig
+
+    monkeypatch.setenv(
+        "OSPREY_PLATFORM_FOLDERS", str(Path(__file__).parent / "fixtures/cloud_platform/platforms")
+    )
+    raw = yaml.safe_load((GATES / "r1_kind_osprey.yaml").read_text(encoding="utf-8"))
+    rendered = manifest.rendered(OspreyConfig.model_validate(raw), resolver=_resolver)
+    assert manifest.differences(manifest.load(), rendered) == []
+
+
+def test_superset_signs_in_as_the_entra_stand_in_s_registration() -> None:
+    """The deployment names Superset's registration as the stand-in tenant knows it, so a sign-in
+    at Superset is answered rather than refused with AADSTS700016 (an unknown application)."""
+    config = yaml.safe_load((GATES / "r1_kind_osprey.yaml").read_text(encoding="utf-8"))
+    extra = yaml.safe_load((GATES / "r1_kind_entra.yaml").read_text(encoding="utf-8"))
+    assert config["reporting"] == {"sync": True, "superset": True}
+    claims = config["cloud_platform"]["claims"]
+    assert claims["superset_client_id"] == extra["superset"]["client_id"]
+
+
+def test_the_terraform_stand_in_gives_reporting_s_variables_as_the_operator_would(
+    tmp_path: Path, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    """Install step 2 with reporting on: the operator gives Superset's client secret (its own
+    registration's, which the stand-in tenant made for this run) and `report_sync_dashboards`, `[]`
+    until step 6a registers a dashboard identity (the install runbook's words). Run over R1's
+    render."""
+    r1_kind = _r1_kind()
+    folder = _kind_render(tmp_path, monkeypatch)
+    monkeypatch.setattr(r1_kind, "STATE", tmp_path / "state")
+    applied: list[dict] = []
+    discovery = '{"issuer": "https://kubernetes.default.svc.cluster.local"}'
+    monkeypatch.setattr(
+        r1_kind,
+        "kubectl",
+        lambda *a, **k: '{"keys": []}' if a[-1] == "/openid/v1/jwks" else discovery,
+    )
+    monkeypatch.setattr(r1_kind, "apply", applied.extend)
+    monkeypatch.setattr(r1_kind, "s3_standin", lambda config: None)
+    monkeypatch.setattr(r1_kind, "irsa_webhook", lambda roles: None)
+    monkeypatch.setattr(r1_kind, "coredns", lambda names: None)
+    monkeypatch.setattr(r1_kind, "entra_keys", lambda: {"jwk": {}})
+    r1_kind.terraform(folder)
+    [secret] = [
+        d
+        for d in applied
+        if d["kind"] == "Secret" and d["metadata"]["name"] == "ospreyflow-secrets"
+    ]
+    data = {k: base64.b64decode(v).decode() for k, v in secret["data"].items()}
+    superset = yaml.safe_load((GATES / "r1_kind_entra.yaml").read_text())["superset"]["client_id"]
+    tenant = r1_kind.entra_config()["clients"]
+    assert data["SUPERSET_OIDC_CLIENT_SECRET"] == tenant[superset]["secret"]
+    assert json.loads(data["REPORT_SYNC_DASHBOARDS"]) == []
