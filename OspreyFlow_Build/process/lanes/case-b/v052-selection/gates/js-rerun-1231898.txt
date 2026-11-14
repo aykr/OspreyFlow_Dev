@@ -1,0 +1,80 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261114T021712Z-00f28b00/log: bash -c cd ../OspreyFlow_Core/apps/workspace && npx vitest run src/App.chrome.test.tsx src/App.test.tsx src/canvas/settledAnchor.test.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/root/osprey-runs/case-b/OspreyFlow_Core/apps/workspace[39m
+
+ [32m✓[39m src/canvas/settledAnchor.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 610[2mms[22m[39m
+   [32m✓[39m settledAnchors: where an arriving node starts [2m(3)[22m
+     [33m[2m✓[22m[39m is linear in the links: the perf fixture's 50,000 nodes and 250,000 links take well under a second[33m 597[2mms[22m[39m
+[90mstderr[2m | src/App.chrome.test.tsx[2m > [22m[2mthe scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4)[2m > [22m[2mthe scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+[22m[39mEach child in a list should have a unique "key" prop.
+
+Check the render method of `AlertQueue`. See https://react.dev/link/warning-keys for more information.
+
+ [32m✓[39m src/App.test.tsx [2m([22m[2m48 tests[22m[2m)[22m[33m 15787[2mms[22m[39m
+   [32m✓[39m 06_DECISIONS.md ADR-050 — the sign-in gate [2m(7)[22m
+     [33m[2m✓[22m[39m an unauthenticated load shows the sign-in screen and issues no /v1 call[33m 440[2mms[22m[39m
+   [32m✓[39m the tab the launcher asked for is the tab the Glass opens on [2m(19)[22m
+     [33m[2m✓[22m[39m after a reload in the Studio, Back returns to the Glass's last view on the open case[33m 439[2mms[22m[39m
+     [33m[2m✓[22m[39m the switcher and the cross-link move between the places, and coming back returns to the view that was open[33m 399[2mms[22m[39m
+     [33m[2m✓[22m[39m Open the evidence, then Back to the alert, returns to the same alert, still open[33m 589[2mms[22m[39m
+     [33m[2m✓[22m[39m Open the evidence says so on the alert when the view cannot be opened[33m 355[2mms[22m[39m
+   [32m✓[39m windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) [2m(6)[22m
+     [33m[2m✓[22m[39m a token near expiry is renewed in the background, with no navigation, and the next call carries it[33m 972[2mms[22m[39m
+     [33m[2m✓[22m[39m an unattended window lets its token lapse: no renewal, and nothing asked[33m 2557[2mms[22m[39m
+ [32m✓[39m src/App.chrome.test.tsx [2m([22m[2m30 tests[22m[2m)[22m[33m 16044[2mms[22m[39m
+   [32m✓[39m the case screen's chrome, variant B (ADR-145 Amendment 2) [2m(3)[22m
+     [33m[2m✓[22m[39m 25 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15)[33m 816[2mms[22m[39m
+     [33m[2m✓[22m[39m the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name[33m 317[2mms[22m[39m
+     [33m[2m✓[22m[39m the column opens with the Inspector only, the other panels folded in their order[33m 464[2mms[22m[39m
+   [32m✓[39m the owner's navigation (ADR-145 Amendment 15) [2m(10)[22m
+     [33m[2m✓[22m[39m the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current[33m 312[2mms[22m[39m
+     [33m[2m✓[22m[39m Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it[33m 342[2mms[22m[39m
+     [33m[2m✓[22m[39m Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it[33m 341[2mms[22m[39m
+     [33m[2m✓[22m[39m the case switcher's last entry is All cases, which opens the Cases panel[33m 1253[2mms[22m[39m
+   [32m✓[39m Part B after review (ADR-145 Amendment 15) [2m(9)[22m
+     [33m[2m✓[22m[39m in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel[33m 1179[2mms[22m[39m
+     [33m[2m✓[22m[39m the Cases panel opened from All cases returns focus to the case menu's button when it closes[33m 1220[2mms[22m[39m
+     [33m[2m✓[22m[39m Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current[33m 368[2mms[22m[39m
+     [33m[2m✓[22m[39m exactly one view is current: one pressed in the switch, or none there and More views naming its own[33m 649[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m81 passed[39m[22m[90m (81)[39m
+[2m   Start at [22m 02:17:14
+[2m   Duration [22m 18.58s[2m (tests 87%, environment 8%, transform 2%, import 2%)[22m
+
+
+Slowest 30 of 81 tests:
+  2557 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > an unattended window lets its token lapse: no renewal, and nothing asked
+  1253 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the case switcher's last entry is All cases, which opens the Cases panel
+  1220 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > the Cases panel opened from All cases returns focus to the case menu's button when it closes
+  1179 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel
+   972 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a token near expiry is renewed in the background, with no navigation, and the next call carries it
+   816 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > 25 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15)
+   649 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > exactly one view is current: one pressed in the switch, or none there and More views naming its own
+   597 ms  src/canvas/settledAnchor.test.ts > settledAnchors: where an arriving node starts > is linear in the links: the perf fixture's 50,000 nodes and 250,000 links take well under a second
+   589 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence, then Back to the alert, returns to the same alert, still open
+   464 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the column opens with the Inspector only, the other panels folded in their order
+   440 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > an unauthenticated load shows the sign-in screen and issues no /v1 call
+   439 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > after a reload in the Studio, Back returns to the Glass's last view on the open case
+   399 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > the switcher and the cross-link move between the places, and coming back returns to the view that was open
+   368 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current
+   355 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence says so on the alert when the view cannot be opened
+   342 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it
+   341 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it
+   317 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name
+   312 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current
+   294 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > a refresh on Home with a case in the tab lands on Home; in the case, in that case
+   263 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > History opens its panel without changing the view, a second press closes it, and closing returns focus to it
+   261 ms  src/App.chrome.test.tsx > the dataset named once (ADR-145 Amendment 14 decision 4) > a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it
+   255 ms  src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+   247 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > a case chosen on Home, carried over a full-page sign-in, opens that case, not the Home the tab kept
+   247 ms  src/App.chrome.test.tsx > Build a report beside Reports (ADR-145 Amendment 15) > is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab
+   216 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > an alert of another case is opened by a reload into that case, on the alert's address
+   214 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > a drawing board chosen before the rights arrive gives way when they say the person may not investigate
+   213 ms  src/App.chrome.test.tsx > the dataset named once (ADR-145 Amendment 14 decision 4) > the badge names the scope when the case's datasets cannot be read
+   195 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views
+   194 ms  src/App.chrome.test.tsx > the dataset named once (ADR-145 Amendment 14 decision 4) > the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it
+Wall time: 22 s, exit 0 (no stack, no lease; set-up before it 16 s)
