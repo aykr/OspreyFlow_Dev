@@ -220,6 +220,33 @@ def test_roles_are_written_to_the_store_and_audited(client: Any) -> None:
     assert [r["action"] for r in client.audit.records] == ["set_person_roles"]
 
 
+#: A person who may manage people and nothing more: route A2's giver.
+PEOPLE_MANAGER = Principal(id="50000000-0000-4000-8000-000000000009", clearance="OFFICIAL", org_unit="unit-1",
+                           roles=["right:manage_people"])  # fmt: skip
+
+
+@pytest.mark.parametrize("roles", [["osprey-admin"], ["right:administer_system"]], ids=["admin-role", "single-right"])
+def test_on_entra_a_people_manager_alone_cannot_give_administration(client: Any, roles: list[str]) -> None:
+    """Route A2, rule 4, on the Entra backend (the Keycloak one is test_admin_roles_routes.py's): the giver rule
+    (`_may_give`, ADR-145 Amendment 5) refuses an administration right newly given by someone who does not hold
+    it, before the people store is written, and an administrator is allowed."""
+    client.store.people[(TENANT, NEW)] = _row(NEW, ["analyst"])
+    _as(PEOPLE_MANAGER)
+    refused = client.put(f"/v1/admin/people/{NEW}/roles", json={"roles": ["analyst", *roles]})
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["detail"]["error"] == "beyond_your_rights"
+    assert "administer_system" in refused.json()["detail"]["rights"]
+    assert client.store.people[(TENANT, NEW)].roles == ["analyst"]
+    assert client.audit.records == []
+    # What they may give, they give.
+    gave = client.put(f"/v1/admin/people/{NEW}/roles", json={"roles": ["reports_viewer"]})
+    assert gave.status_code == 200, gave.text
+    _as(ADMIN)
+    allowed = client.put(f"/v1/admin/people/{NEW}/roles", json={"roles": ["reports_viewer", *roles]})
+    assert allowed.status_code == 200, allowed.text
+    assert client.store.people[(TENANT, NEW)].roles == ["reports_viewer", *roles]
+
+
 def test_an_unknown_role_is_refused_before_the_store(client: Any) -> None:
     _as(ADMIN)
     client.store.people[(TENANT, NEW)] = _row(NEW, [])
