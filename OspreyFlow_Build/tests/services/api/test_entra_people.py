@@ -13,6 +13,8 @@ Every value is synthetic (rule 9).
 
 from __future__ import annotations
 
+import re
+
 import time
 from typing import Any, cast
 
@@ -236,6 +238,9 @@ def test_on_entra_a_people_manager_alone_cannot_give_administration(client: Any,
     assert refused.status_code == 409, refused.text
     assert refused.json()["detail"]["error"] == "beyond_your_rights"
     assert "administer_system" in refused.json()["detail"]["rights"]
+    # In words (the right's name on screen once route W's Amendment 19 lands; its id before).
+    assert refused.json()["detail"]["message"].startswith("you cannot give a right you do not hold: ")
+    assert re.search(r"(Administer system|administer_system)", refused.json()["detail"]["message"])
     assert client.store.people[(TENANT, NEW)].roles == ["analyst"]
     assert client.audit.records == []
     # What they may give, they give.

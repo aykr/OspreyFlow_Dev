@@ -71,39 +71,53 @@ interface Context {
   custom: CustomRole[];
   builtIn: Record<string, string[]>;
   rows: AdminPeopleRows | null;
-  /** The signed-in giver's rights (`GET /v1/me/rights`); `null` while unknown, when everything is offered and
-   * the Conduit refuses what it must. */
+  /** The signed-in giver's rights (`GET /v1/me/rights`); `null` while unknown. While they, or the roles' catalogue
+   * (`builtIn`, `custom`), are not yet read, every role is offered and the Conduit refuses what it must. */
   giver?: ReadonlySet<string> | null;
 }
 
-/** The rights a role confers: a built-in role's, a single grant's, or a custom role's current ones. */
-function roleRights(role: string, ctx: Context): string[] {
-  if (role.startsWith("right:")) return [role.slice("right:".length)];
-  const custom = ctx.custom.find((c) => `role:${c.id}` === role);
-  return custom ? [...custom.rights] : (ctx.builtIn[role] ?? []);
+/** The rights a set of roles confers, as the Conduit reads them (`rights_for`): a built-in role's, a single grant's
+ * (`right:<name>`), and a custom role's current ones. */
+export function rightsOf(roles: Iterable<string>, ctx: Context): Set<string> {
+  const rights = new Set<string>();
+  for (const role of roles) {
+    for (const r of ctx.builtIn[role] ?? []) rights.add(r);
+    if (role.startsWith("right:")) rights.add(role.slice("right:".length));
+    const custom = ctx.custom.find((c) => `role:${c.id}` === role);
+    for (const r of custom?.rights ?? []) rights.add(r);
+  }
+  return rights;
 }
 
-/** The administration rights `role` would give that the giver does not hold (route A2): the Conduit refuses such
- * a role newly given (`_may_give`), so the Glass does not offer it. */
-export function withheldRights(role: string, ctx: Context): string[] {
-  if (!ctx.giver) return [];
-  return roleRights(role, ctx).filter((r) => ADMINISTRATION.has(r) && !ctx.giver!.has(r));
+/** Route A2, the Conduit's own giver rule (`_may_give`, ADR-145 Amendment 5): the administration rights that
+ * setting a person's roles to `roles` would newly give, over what their roles `held` give now, which the giver does
+ * not hold. The Conduit refuses such a change, so the Glass does not offer it. Nothing is withheld while the giver's
+ * rights or the roles' catalogue are not yet read: the Conduit refuses what it must. */
+export function withheldRights(roles: Iterable<string>, held: Iterable<string>, ctx: Context): string[] {
+  const giver = ctx.giver;
+  if (!giver) return [];
+  const before = rightsOf(held, ctx);
+  return [...rightsOf(roles, ctx)].filter((r) => ADMINISTRATION.has(r) && !before.has(r) && !giver.has(r)).sort();
 }
 
 const listed = (words: string[]) =>
   words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 
-/** Why a role is not offered: "You cannot give Admin: it carries Administer system and Read audit, which you do
- * not hold." */
+/** Why a role is not offered, said on its own box, naming roles and rights, never people (Admin's words, ADR-145
+ * Amendment 4 decision 12): "You cannot give Admin here: it would give Administer system and Read audit, which you
+ * do not hold." */
 export function withheldWords(label: string, rights: string[]): string {
-  return `You cannot give ${label}: it carries ${listed(rights.map(rightName))}, which you do not hold.`;
+  return `You cannot give ${label} here: it would give ${listed(rights.map(rightName))}, which you do not hold.`;
 }
 
-/** Where the words for every role not offered are said; each such box is described by it. */
+/** The one visible line saying the rule, when any role is not offered; each box not offered also says its own why. */
 export const WITHHELD_ID = "people-withheld-roles";
+export const WITHHELD_RULE =
+  "A role that would give an administration right you do not hold is not offered: only someone who holds the right " +
+  "can give it. Each such box says which.";
 
-const describedBy = (tip: string | undefined, withheld: boolean) =>
-  [tip, withheld ? WITHHELD_ID : undefined].filter(Boolean).join(" ") || undefined;
+const describedBy = (...ids: (string | undefined)[]) => ids.filter(Boolean).join(" ") || undefined;
+const NOT_OFFERED_STYLE = { opacity: 0.45, cursor: "not-allowed" } as const;
 
 /** "Author of Kestrel, Harrier; Editor of Heron through Intel" (R3). */
 export function levelWords(levels: PersonCaseLevel[]): string {
@@ -122,13 +136,7 @@ export function levelWords(levels: PersonCaseLevel[]): string {
 /** The places a person's roles open (ADR-145 decision 1), from the roles' rights as the Conduit gives
  * them; a custom role by its current version. */
 export function placesWords(roles: string[], ctx: Context): string {
-  const rights = new Set<string>();
-  for (const role of roles) {
-    for (const r of ctx.builtIn[role] ?? []) rights.add(r);
-    if (role.startsWith("right:")) rights.add(role.slice("right:".length));
-    const custom = ctx.custom.find((c) => `role:${c.id}` === role);
-    for (const r of custom?.rights ?? []) rights.add(r);
-  }
+  const rights = rightsOf(roles, ctx);
   const places = placesFor(rights);
   return places.length ? `Opens ${places.map((p) => PLACE_NAME[p]).join(", ")}` : "Opens no place";
 }
@@ -485,8 +493,15 @@ function PersonRow({
   const [confirming, setConfirming] = useState(false);
   const [removing, setRemoving] = useState(false);
   const others = (person.roles ?? []).filter((r) => !ROLE_IDS.has(r) && !customIds.has(r));
-  // A role they hold already stays offered: taking it away gives nothing (route A2).
-  const notOffered = (role: string) => !(person.roles ?? []).includes(role) && withheldRights(role, ctx).length > 0;
+  // Route A2: a box is decided as the Conduit decides the change it makes, over what the person holds now (their
+  // single grants and older roles too); a box already ticked can always be unticked, since that gives nothing.
+  const held = person.roles ?? [];
+  const now = [...chosen, ...others];
+  const withheld = (role: string) =>
+    chosen.has(role) ? [] : withheldRights([...now, role], held, ctx).filter((r) => !withheldRights(now, held, ctx).includes(r));
+  const reasonId = (role: string) => `withheld-${person.id}-${role}`;
+  const presetRoles = [...[...chosen].filter((r) => !ROLE_IDS.has(r)), ...SUPER_USER];
+  const presetWithheld = withheldRights([...presetRoles, ...others], held, ctx);
   const offered = [...ROLES.map((r) => r.id), ...customIds];
   const changed = offered.some((id) => chosen.has(id) !== (person.roles ?? []).includes(id));
   const levels = ctx.rows?.rows.find((r) => r.id === person.id)?.levels ?? [];
@@ -538,16 +553,24 @@ function PersonRow({
             <input
               type="checkbox"
               aria-label={`${role.label} for ${person.username}`}
-              aria-describedby={describedBy(roleTip(role.id) ? roleTipId(role.id) : undefined, notOffered(role.id))}
-              disabled={notOffered(role.id)}
+              aria-describedby={describedBy(roleTip(role.id) ? roleTipId(role.id) : undefined,
+                withheld(role.id).length ? reasonId(role.id) : undefined)}
+              aria-disabled={withheld(role.id).length ? true : undefined}
+              style={withheld(role.id).length ? NOT_OFFERED_STYLE : undefined}
               checked={chosen.has(role.id)}
               onChange={(e) => {
+                if (withheld(role.id).length) return;
                 const next = new Set(chosen);
                 if (e.target.checked) next.add(role.id);
                 else next.delete(role.id);
                 setChosen(next);
               }}
             />
+            {withheld(role.id).length > 0 && (
+              <span id={reasonId(role.id)} className="visually-hidden">
+                {withheldWords(role.label, withheld(role.id))}
+              </span>
+            )}
           </td>
         ))}
         <td className="label">
@@ -556,10 +579,12 @@ function PersonRow({
               <input
                 type="checkbox"
                 aria-label={`${c.name} for ${person.username}`}
-                aria-describedby={notOffered(`role:${c.id}`) ? WITHHELD_ID : undefined}
-                disabled={notOffered(`role:${c.id}`)}
+                aria-describedby={withheld(`role:${c.id}`).length ? reasonId(`role:${c.id}`) : undefined}
+                aria-disabled={withheld(`role:${c.id}`).length ? true : undefined}
+                style={withheld(`role:${c.id}`).length ? NOT_OFFERED_STYLE : undefined}
                 checked={chosen.has(`role:${c.id}`)}
                 onChange={(e) => {
+                  if (withheld(`role:${c.id}`).length) return;
                   const next = new Set(chosen);
                   if (e.target.checked) next.add(`role:${c.id}`);
                   else next.delete(`role:${c.id}`);
@@ -567,6 +592,11 @@ function PersonRow({
                 }}
               />{" "}
               {c.team ? `${c.name} (team)` : c.name}
+              {withheld(`role:${c.id}`).length > 0 && (
+                <span id={reasonId(`role:${c.id}`)} className="visually-hidden">
+                  {withheldWords(c.name, withheld(`role:${c.id}`))}
+                </span>
+              )}
             </label>
           ))}
           {others.length ? others.map(grantWords).join(", ") : ctx.custom.length ? null : "—"}
@@ -597,10 +627,21 @@ function PersonRow({
                 type="button"
                 className={rowLinkClass()}
                 aria-label={`Super user preset for ${person.username}`}
-                onClick={() => setChosen(new Set([...[...chosen].filter((r) => !ROLE_IDS.has(r)), ...SUPER_USER]))}
+                aria-describedby={presetWithheld.length ? reasonId("super-user") : undefined}
+                aria-disabled={presetWithheld.length ? true : undefined}
+                style={presetWithheld.length ? NOT_OFFERED_STYLE : undefined}
+                onClick={() => {
+                  if (presetWithheld.length) return;
+                  setChosen(new Set(presetRoles));
+                }}
               >
                 Super user
               </button>
+              {presetWithheld.length > 0 && (
+                <span id={reasonId("super-user")} className="visually-hidden">
+                  {withheldWords("the Super user preset", presetWithheld)}
+                </span>
+              )}
               {(!entra || administratorSets.length > 0) && (
                 <button type="button" className={rowLinkClass()} aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
                   Access
@@ -964,6 +1005,9 @@ function InviteForm({
   const [unit, setUnit] = useState("");
   const [codes, setCodes] = useState(new Set<string>());
   const [roles, setRolesChosen] = useState(new Set<string>());
+  // Route A2: an invitation gives every role it names; a box is decided over the roles already chosen.
+  const inviteWithheld = (role: string) =>
+    roles.has(role) ? [] : withheldRights([...roles, role], [], ctx).filter((r) => !withheldRights(roles, [], ctx).includes(r));
   const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => {
     if (!clearance && scheme.levels[0]) setClearance(scheme.levels[0]);
@@ -1046,10 +1090,12 @@ function InviteForm({
               <input
                 type="checkbox"
                 aria-label={`Invite as ${role.label}`}
-                aria-describedby={withheldRights(role.id, ctx).length ? WITHHELD_ID : undefined}
-                disabled={withheldRights(role.id, ctx).length > 0}
+                aria-describedby={inviteWithheld(role.id).length ? `withheld-invite-${role.id}` : undefined}
+                aria-disabled={inviteWithheld(role.id).length ? true : undefined}
+                style={inviteWithheld(role.id).length ? NOT_OFFERED_STYLE : undefined}
                 checked={roles.has(role.id)}
                 onChange={(e) => {
+                  if (inviteWithheld(role.id).length) return;
                   const next = new Set(roles);
                   if (e.target.checked) next.add(role.id);
                   else next.delete(role.id);
@@ -1057,6 +1103,11 @@ function InviteForm({
                 }}
               />
               {role.label}
+              {inviteWithheld(role.id).length > 0 && (
+                <span id={`withheld-invite-${role.id}`} className="visually-hidden">
+                  {withheldWords(role.label, inviteWithheld(role.id))}
+                </span>
+              )}
             </label>
           ))}
         </span>
@@ -1133,6 +1184,8 @@ function WithoutAuthor({
 export function People({ api, rights = null }: { api: AdminApi; rights?: ReadonlySet<string> | null }) {
   const [people, setPeople] = useState<PersonAccount[] | null>(null);
   const [ctx, setCtx] = useState<Context>({ custom: [], builtIn: {}, rows: null, giver: rights });
+  // The giver's rights are read again at each new token (App's /v1/me/rights): the offer follows them.
+  useEffect(() => setCtx((x) => (x.giver === rights ? x : { ...x, giver: rights })), [rights]);
   const [problem, setProblem] = useState<string | null>(null);
   const [delivered, setDelivered] = useState<SignInDelivery | null>(null);
   const [removed, setRemoved] = useState<PersonAccount | null>(null);
@@ -1278,20 +1331,16 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
   );
 }
 
-/** The roles this giver is not offered, each with why (route A2); nothing when every role is offered. */
+/** The rule, said once above the table when any role is not offered to this giver for someone holding none of its
+ * rights (route A2); each box not offered says its own why. */
 function WithheldRoles({ ctx }: { ctx: Context }) {
-  const roles = [
-    ...ROLES.map((r) => [r.id, r.label] as const),
-    ...ctx.custom.map((c) => [`role:${c.id}`, c.name] as const),
-  ];
-  const said = roles
-    .map(([id, label]) => [label, withheldRights(id, ctx)] as const)
-    .filter(([, rights]) => rights.length > 0)
-    .map(([label, rights]) => withheldWords(label, rights));
-  if (!said.length) return null;
+  const any = [...ROLES.map((r) => r.id), ...ctx.custom.map((c) => `role:${c.id}`)].some(
+    (role) => withheldRights([role], [], ctx).length > 0,
+  );
+  if (!any) return null;
   return (
     <p className="label" id={WITHHELD_ID} style={{ margin: 0 }}>
-      {said.join(" ")}
+      {WITHHELD_RULE}
     </p>
   );
 }

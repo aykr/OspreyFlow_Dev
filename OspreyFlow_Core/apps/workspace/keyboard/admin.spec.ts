@@ -38,6 +38,8 @@ const CATALOGUE = {
   built_in: [
     { id: "analyst", label: "Analyst", rights: ["investigate", "triage_alerts"], gives: [] },
     { id: "data_engineer", label: "Data Engineer", rights: ["edit_pipelines", "review_promotions"], gives: [] },
+    // Route A2: Admin carries administration rights, so a giver without them is not offered it.
+    { id: "osprey-admin", label: "Admin", rights: ["administer_system", "manage_people"], gives: [] },
     { id: "super_user", label: "Super user", rights: ["investigate", "edit_pipelines"], gives: ["analyst", "data_engineer", "rule_author"] },
   ],
   custom: [{ id: "r1", name: "Intel desk", version: 1, rights: ["investigate"], changed_by: "a", changed_at: "", holders: 1, team: TEAM }],
@@ -961,6 +963,23 @@ test("when promotions are overdue is set in Operations by keyboard", async ({ pa
 
 // L2.7 (ADR-145 Amendment 4 decision 12; rule 13): the tips of People, Roles and Datasets, each read
 // with the control it explains as that control takes focus, in roles' names and never people.
+// Route A2: a role the giver may not give is not offered, yet its box stays in the Tab order and says why; Space
+// leaves it as it was (the Conduit would refuse the change).
+test("why a role is not offered is read with its box by keyboard, and Space leaves it", async ({ page }) => {
+  await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await open(page, "People and roles");
+  const box = page.getByRole("checkbox", { name: "Admin for osprey-demo-analyst" });
+  await box.focus();
+  await expect(box).toBeFocused();
+  await expect(box).toHaveAttribute("aria-disabled", "true");
+  await expect(box).toHaveAccessibleDescription(/You cannot give Admin here: it would give Administer system, which you do not hold\./);
+  await page.keyboard.press("Space");
+  await expect(box).not.toBeChecked();
+  await expect(page.getByText(/A role that would give an administration right you do not hold is not offered/)).toBeVisible();
+  registerCovered(REGISTRY, "read-why-a-role-is-not-offered-by-keyboard");
+});
+
 test("a role's, a team lead's and a dataset's Authors' tips are read with their controls by keyboard", async ({ page }) => {
   await serve(page);
   await page.goto("/keyboard/admin-harness.html?rights=manage_people,administer_system");
