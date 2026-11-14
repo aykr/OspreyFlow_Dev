@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.15** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.16** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.16 | 2026-11-14 | §10: *How long a model is waited for*, a hosted engine 120 seconds and the deployment's own model 900, each set in `deployment.env` on Lite and Small; a call past its bound stopped, and a provider's refusal said, naming the engine, nothing recorded (ADR-135 Amendment 13, D2). §6a.9: the defaults hold on this profile. Held by `tests/test_admin_guide_model_timeouts.py`. PDF made by the orchestrator at merge. |
 | 2.15 | 2026-11-14 | The refusals quoted in §6a.7 and §9 name *Admin › People and roles* as the side list names it ("is not held in Admin › People and roles", "the people store behind …"), and on Entra ID a value Entra sends is refused in words, saying which values are set here (ADR-148 Amendment 19). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.14 | 2026-11-14 | The Lite row: `ospreyflow start --build` rebuilds the search index from the graph as its last step (ADR-150 Amendment 2). |
 | 2.13 | 2026-11-14 | §16: a watch stays active through two unreachable evaluations in a row, with a note saying so, and stops at the third (ADR-044 Amendment 2). |
@@ -1961,7 +1962,9 @@ place; the runbook gives the commands.
 
 Every call to a hosted model goes through **the model gateway (LiteLLM)**, its own pod, `litellm`,
 rendered on this profile always, with or without an engine (section 6a.1). The Conduit and Laurium
-call it; nothing else does. Local models are not rendered here (the platform has no GPU). On this
+call it; nothing else does. Local models are not rendered here (the platform has no GPU). A call is waited for as section 10's
+*How long a model is waited for* says, at its defaults (120 seconds for a hosted engine): this profile's render does
+not pass either setting. On this
 profile an engine is one of three kinds (ADR-135 Amendments 4 and 7):
 
 - **Your organisation's own AI gateway** (`kind: gateway`), an OpenAI-compatible endpoint at its
@@ -2844,6 +2847,15 @@ recorded in the audit log — who made it, when, and from what to what.
 > a dataset's egress to `contracted` or `any`. Every existing dataset, demo packs included, starts
 > at `none`; until you change one, every question runs on the deployment's own models, whatever
 > engine an analyst chooses. Set only the datasets you are entitled to send.
+
+**How long a model is waited for.** A call to a hosted engine (any engine but the deployment's own) is waited
+for 120 seconds, `OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS`; a call to the deployment's own model 900 seconds,
+`OSPREY_MODEL_TIMEOUT_SECONDS`. On Lite and Small each is set in the deployment's env file (`deployment.env`), and
+`ospreyflow apply` passes it to the Conduit. A call past its bound is stopped, and the person is told the engine did
+not answer in the time this deployment allows, with the bound; nothing is recorded. When an engine's provider
+refuses (its own rate limit or quota, a key it does not accept, or no answer after the gateway's own retries), the
+person is told which, in words naming the engine; nothing is recorded then either. A limit set in *Admin › Models*
+is said as before.
 
 **Who chooses.** The administrator sets each role's default. An analyst may choose, for each
 question in Ask & Chat, among the engines offered — the local engine and each enabled provider
