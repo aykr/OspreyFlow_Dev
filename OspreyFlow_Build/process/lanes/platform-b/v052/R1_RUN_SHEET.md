@@ -168,6 +168,16 @@ records do not time.
 | 16:35 | 13b, 14 | the CI run on the candidate's exact commit recorded by id; `UPGRADE.log` committed with docs' guide sentence (row 14) | 15 min | E |
 | ~16:50 | — | the report to the orchestrator: every row's record, the leases each ran under | 15 min | — |
 
+**The server's queue** (the orchestrator, 14 November: the owner's rule is one full run at a time). Before rows 0,
+11b and 13, and before any other run on the server:
+1. Read `/root/osprey-runs/QUEUE` (on the server).
+2. Check that `pgrep -x make` on the server shows nothing.
+3. Go only when platform-b's line is first and nothing is running.
+4. Delete platform-b's line when the day's last server run is done.
+
+Only the orchestrator adds or reorders lines, so platform-b's line for Wed 18 is asked for before the day. If it is
+not first at 08:00, the day starts when it is, and the times above move with it.
+
 **Start at 08:00 sharp, and if a fix is needed after about 13:00, tell the orchestrator before rerunning** (the orchestrator, 14 November: a FAIL costs 1.5 to 2 h, and the 15:30 finish has little slack). **About 8.75 h with no fix**, ending about 16:50 (the token version's live row adds about 20 min); the fresh install's verify and spec 08 (row 11b) add about 50 min to the plan of 14 November. A failure in copy B's command costs one more pass of rows 4 to 10,
 about 1.5 to 2 h, and the day still ends within it. Row 13 does not touch the cluster, but it is kept until after row
 12 because both load one server (a 32 GiB node and the suite's workers). The two cold builds (rows 1 and 4) are the
