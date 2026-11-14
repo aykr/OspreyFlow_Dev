@@ -197,7 +197,9 @@ test("A13–A15 — a judgement is recorded against the investigation", async ({
 
   // The composer is open and offers all three assessment kinds — the trio A13–A15 names,
   // asserted together because the panel builds them from one control.
-  const dialog = page.getByRole("dialog");
+  // By its name: the keys panel the Glass shows by itself on a first visit is a dialog too
+  // ("Welcome back"), so a bare `getByRole("dialog")` matched two (14 November 2026).
+  const dialog = page.getByRole("dialog", { name: "Record an assessment" });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText(/judgement/i);
 });
@@ -216,10 +218,9 @@ test("A15 — export names what it blocked, and takes a justification", async ({
     .toBeGreaterThan(0);
 
   await page.getByRole("button", { name: /^Export/ }).click();
-  const drawer = page
-    .getByRole("dialog")
-    .or(page.getByRole("complementary"))
-    .first();
+  // By its name (`ExportPanel`'s drawer, "Export"): `.first()` over every dialog could take the keys
+  // panel the Glass shows by itself on a first visit and pass without the drawer at all.
+  const drawer = page.getByRole("dialog", { name: "Export" });
   await expect(drawer).toBeVisible();
 
   // The export kinds Phase 8 built, all three present.
