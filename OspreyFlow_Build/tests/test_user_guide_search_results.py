@@ -288,7 +288,11 @@ def test_section_5_5_says_the_fallback_pages_only_while_records_remain_and_where
         "more=more,",
     ):
         assert code in fallback, code
-    assert "{shown && (shown.page > 1 || shown.more) && (" in PAGE and "{more && (" in PAGE
+    assert fallback.count("more =") == 1, "more set once, so nothing later offers a page past the records"
+    # `reached` is of the 100 before the dataset and group filters: the line stands on a narrowed list's last page too.
+    assert fallback.index("reached = len(found) >= FALLBACK_DEPTH") < fallback.index("if wanted: found = [")
+    assert "{shown && (shown.page > 1 || shown.more) && (" in PAGE and "more={shown.more}" in PAGE
+    assert "{more && (" in PAGE and '{more && <div className="govuk-pagination__next">' in PAGE, "Next on more alone, in both pagers"
     text = results_text()
     assert "**Next page** is offered only while a further page holds records" in text
-    assert f"where the {depth} end the list, its last page's line adds \"{line.format(depth=depth).strip()}\"" in text
+    assert f"where the search reached its {depth}, the last page's line adds \"{line.format(depth=depth).strip()}\", even when a dataset or a group has narrowed the list." in text
