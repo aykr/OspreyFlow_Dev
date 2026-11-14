@@ -2075,7 +2075,7 @@ Also asked by the lanes:
 ## 14 November 2026, evening (3): the owner's answers on the demo and Part 3
 
 1. **release.yml refuses a tag that differs from OspreyFlow_Core/VERSION**: applied on the owner's word (platform-b's release_yml.diff, ADR-114 Am 47); the candidate commit sets VERSION to v0.5.2.
-2. **Visitors get a "Demo visitor" role**: a custom role in Admin › Roles, the analyst's rights minus create_case, share_case, remove_case and export; made at the demo update, its rights recorded. No code.
+2. **Visitors get a "Demo visitor" role**: a custom role in Admin › Roles, the analyst's rights minus create_case, share_case, remove_case, export and export_override (studio: drop both export rights); made at the demo update, its rights recorded. No code.
 3. **Isolation: a case each over the shared demo datasets**, the visitor its Editor; visitors removed in Admin › People at the end, never by a restore.
 4. **The model's spend: one shared limit for now**, set to what the owner will spend; a per-visitor allowance (an ADR-135 amendment and code) after the cut if wanted.
 5. **No harness command to add a visitor**: Admin › People is enough; the orchestrator writes the owner's steps with the demo update.
