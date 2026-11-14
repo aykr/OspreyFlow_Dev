@@ -108,12 +108,12 @@ platform-b	v052-r1	L	todo	v0.5.2: R1 on kind with a dashboards check (with platf
 platform	v052-manifest	M	done	v0.5.2 step 2: the poc manifest and its render test
 platform	v052-opensearch	M	done	v0.5.2 step 3a: OpenSearch on poc
 rules	v052-index	L	done	v0.5.2 step 3c: the index feed, rebuild, drift check
-rules	v052-load	M	review	v0.5.2 B: client-size synthetic data, loaded once
+rules	v052-load	M	done	v0.5.2 B: client-size synthetic data, loaded once
 studio	v052-search	L	done	v0.5.2 step 3d: the search service
 case	v052-fixes	S	done	v0.5.2 step 3e: the Glass's screen fixes
 case	v052-results	M	done	v0.5.2 step 3e′: the search results layout
-platform	v052-measure	S	todo	v0.5.2 step 4: the measurement session
-docs	v052-sweep	S	todo	v0.5.2 step 5: the wording sweep
+platform	v052-measure	S	building	v0.5.2 step 4: the measurement session
+docs	v052-sweep	S	building	v0.5.2 step 5: the wording sweep
 admin	v052-heartbeat	M	done	The heartbeat's route view (the owner, 13 Nov) (merged ee440c1)
 case-b	v052-r1-driver	M	done	v0.5.2 step 6's driver: the manifest verifier and spec 08 runner, built ahead
 docs	v052-sweep-draft	S	todo	v0.5.2 step 5 drafted ahead: the non-search wording
@@ -121,8 +121,10 @@ rules-b	v052-ask	L	done	v0.5.2 Part D: Ask & Chat (panel, server, Whole case)
 case-b	v052-selection	M	done	v0.5.2 Parts C and E: one set of actions for the selection; the typeface
 orchestrator	v051-cut	S	done	v0.5.1 cut: CI at the candidate, the upgrade rehearsal, the CHANGELOG, publish when green (the owner's word)
 platform	v052-searchkind	M	done	v0.5.2: the OpenSearch domain on R1's kind (stand-in wired, its limits, the run's domain check)
-platform-b	v052-4c	M	building	The administrator fallback on Entra, poc alone (ADR-148 Am 15; audit 4c)
+platform-b	v052-4c	M	done	The administrator fallback on Entra, poc alone (ADR-148 Am 15; audit 4c)
 rules-b	v052-batch	M	done	v0.5.2: promote an expansion to a batch job at the cap (ADR-151, the owner's ruling)
 case-b	v052-batch-ui	S	done	v0.5.2: the batch job's choice, progress and result in the Glass (ADR-151)
 platform	v052-upgrade-index	S	done	v0.5.2: an upgrade or fresh install builds the search index (route step U)
 case	v052-cluster-on-entry	M	done	v0.5.2: a merged pair arrives as one cluster (route step 3h)
+rules-b	v052-am20	M	building	v0.5.2: edges_among in chunks of record ids (ADR-124 Am 20; the owner's ruling, 14 Nov, after the 50k run): no id list in a script, so a set past ~10k ids answers
+orchestrator	v052-ci	S	building	v0.5.2: main's CI green: Core names no Build folder (6835a1b), the batch routes in the rights table (rules-b), the top bar one line on Linux (case), report sync's one token a pass (platform-b)
