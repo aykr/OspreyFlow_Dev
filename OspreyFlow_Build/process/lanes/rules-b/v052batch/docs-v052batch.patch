@@ -1,9 +1,9 @@
 diff --git a/OspreyFlow_Build/tests/test_user_guide_batch_expansion.py b/OspreyFlow_Build/tests/test_user_guide_batch_expansion.py
 new file mode 100644
-index 0000000..a8ba7b4
+index 0000000..e60abb2
 --- /dev/null
 +++ b/OspreyFlow_Build/tests/test_user_guide_batch_expansion.py
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,45 @@
 +"""The user guide's §5.2 on the cap's third choice (ADR-151), held to the code: the view's limits are
 +the working set's own figures, and each claim the guide makes about the job is one the code keeps.
 +Red with the guide's old sentence (reduce, or save a smaller view, and nothing of a batch job), and
@@ -32,8 +32,14 @@ index 0000000..a8ba7b4
 +    flat = re.sub(r"\s+", " ", section)
 +    assert "saves what it finds as a private view of the case" in flat
 +    assert "nothing is added to the case's own graph" in flat
-+    assert "One batch job of yours runs in a case at a time." in flat
-+    assert "Closing the panel does not stop the job" in flat
++    assert "its result opens as your private view" in flat
++    assert "One batch job of yours runs in a case at a time" in flat
++    # The Glass panel's own sentence, quoted whole (case-b's BatchExpansion.tsx, after its review):
++    # the Conduit's 409 follows the reader's running batch in the case, and only while it runs.
++    assert (
++        '"Closing this does not stop the job. While it runs, asking for a batch expansion in this '
++        'case again follows it."' in flat
++    )
 +
 +
 +def test_the_guides_figures_are_the_views_limits() -> None:
@@ -44,7 +50,7 @@ index 0000000..a8ba7b4
 +    assert "Narrow it by link type, depth or dates" in batch_expansion._NARROW  # noqa: SLF001
 +    assert "narrow it by link type, depth or dates" in flat
 diff --git a/OspreyFlow_Core/docs/user-guide.md b/OspreyFlow_Core/docs/user-guide.md
-index 63be8e8..02eae9a 100644
+index 63be8e8..07b074b 100644
 --- a/OspreyFlow_Core/docs/user-guide.md
 +++ b/OspreyFlow_Core/docs/user-guide.md
 @@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
@@ -56,22 +62,23 @@ index 63be8e8..02eae9a 100644
  
  | Version | Date | What changed |
  | --- | --- | --- |
-+| 1.57 | 2026-11-14 | §5.2: an expansion past the working set's limit may be **run as a batch job** (ADR-151): run on the server as you, saved as a private view of the case, or refused with its figures past a view's own limit of 50,000 nodes and 250,000 links; the job carries on with the panel closed. Held by `tests/test_user_guide_batch_expansion.py`. PDF made by the orchestrator at merge. |
++| 1.57 | 2026-11-14 | §5.2: an expansion past the working set's limit may be **run as a batch job** (ADR-151): run on the server as you, saved as a private view of the case, or refused with its figures past a view's own limit of 50,000 nodes and 250,000 links; its result opens as your private view when it is done, and the job carries on with the panel closed. Held by `tests/test_user_guide_batch_expansion.py`. PDF made by the orchestrator at merge. |
  | 1.56 | 2026-11-14 | §7.5: a *Stopped* hotlist or watch says why beside the word, each reason in the Conduit's words (ADR-044 Amendment 1). PDF made by the orchestrator at merge. |
  | 1.55 | 2026-11-14 | §6, Ask & Chat: **Whole case** as v0.5.2's Part D(iii) built it (ADR-098 Amendment 9, ADR-129 Amendment 5, rules-b's wording): the case searched with the question's own words, as you, by names and words, not meaning; a question past 200 characters refused with what to do; a document on the canvas read whole, one elsewhere by its passage; each other record a source, `[S-n]`, selecting its records. Held by `tests/test_user_guide_ask_chat.py`. PDF made by the orchestrator at merge. |
  | 1.54 | 2026-11-14 | The Glass's navigation as the owner decided it on 13 November (ADR-145 Amendment 15) and the selection's actions as Part C built them (ADR-078 Amendment 1). §3: the banner is the case line, "Case ‹name› ▾ · Views in this case · reads ‹dataset›", *All cases* opening the Cases panel, the cross-link *Open this case's data in the Ingest Studio ↗*; no mode lines. §4: the case switcher and the Cases panel in place of the rail's Cases drawer; *Roles, teams and Authors* from Admin and the Studio. §5's table: the rail Explore, Ask & Chat and History; the view switch Graph, Map, Drawing board and Reports, with Matrix, Figures, Ownership and Connection strength under More views; *Build a report*. §5.2: the selection bar's words and order, the menu's *Expand by link type*, the fold of types with no links, the selection's actions first, the menu key and Shift+F10. §5.12, §5.13, §5.14, §7.1, §8, §9 and §12 follow. Five screenshots marked for a new capture. Held by `tests/test_user_guide_navigation.py`. PDF made by the orchestrator at merge. |
-@@ -325,7 +326,13 @@ held by this…, Set picture… and Mark for suppression; with two selected, onl
+@@ -325,7 +326,14 @@ held by this…, Set picture… and Mark for suppression; with two selected, onl
  to…, Split from… and Find paths to…. In a view, the menu offers only what changes nothing in the
  case. An expansion that would add more than
  **500** nodes asks first, offering one relationship at a time, all of them, or nothing. An expansion
 -past the working set's own limit is refused; reduce what is drawn, or save a smaller view, and try again.
 +past the working set's own limit is refused; reduce what is drawn, save a smaller view, or **Run as a
 +batch job**. A batch job runs the same expansion on the server as you, reading only what you may see,
-+and saves what it finds as a private view of the case, which you open from its panel when it is done;
-+nothing is added to the case's own graph. A result too large for a view to show, more than **50,000**
-+nodes or **250,000** links, is refused with its figures and saves nothing: narrow it by link type,
-+depth or dates. Closing the panel does not stop the job; run the same expansion again as a batch job to
-+follow it. One batch job of yours runs in a case at a time.
++and saves what it finds as a private view of the case; nothing is added to the case's own graph. When
++it is done, its result opens as your private view; if it cannot be opened, it stays in *Views in this
++case*. A result too large for a view to show, more than **50,000** nodes or **250,000** links, is
++refused with its figures and saves nothing: narrow it by link type, depth or dates. One batch job of
++yours runs in a case at a time, and its panel says so: "Closing this does not stop the job. While it
++runs, asking for a batch expansion in this case again follows it."
  
  **Reading a link.** A link's stroke says where it came from: **solid** from a record, **dashed**
  inferred by a model, **dotted** unresolved. Hovering names its type and how many such links join the
