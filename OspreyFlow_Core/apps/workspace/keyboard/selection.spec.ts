@@ -222,14 +222,14 @@ test("the menu's Show links looks as far as the bar's stepper reads, the same ac
   registerCovered("SELECTION_ACTIONS", "show-links-within-the-bars-degrees-from-its-menu");
 });
 
-test("the selection's menu Ask the model about these… saves the view named for its documents and asks in it", async ({ page }) => {
+test("the selection's menu Ask the model about these… saves the view named for its items and asks in it", async ({ page }) => {
   let body: { node_ids: string[]; name?: string } | null = null;
   await page.route("**/*/investigations/*/views", async (route) => {
     body = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "view-q", case_id: "keyboard-fixture", name: "Questions on 1 document", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
+      body: JSON.stringify({ id: "view-q", case_id: "keyboard-fixture", name: "Questions on 2 items", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
     });
   });
   await page.goto("/keyboard/harness.html?fixture=emails");
@@ -242,10 +242,12 @@ test("the selection's menu Ask the model about these… saves the view named for
   await expect.poll(() => focused(page)).toBe("email:ev-1");
   await page.keyboard.press(" ");
   await expect.poll(() => selection(page)).toContain("email:ev-1");
+  const chosen = (await selection(page)).length;
   await page.keyboard.press("\\");
   await arrowToEntry(page, "Ask the model about these…");
   await page.keyboard.press("Enter");
-  await expect.poll(() => body?.name).toBe("Questions on 1 document");
+  // Named for the items, as the bar names it (ADR-098 Amendment 7).
+  await expect.poll(() => body?.name).toBe(`Questions on ${chosen} item${chosen === 1 ? "" : "s"}`);
   expect(body!.node_ids).toContain("email:ev-1");
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __KEYBOARD__?: { askedIn?: string | null } }).__KEYBOARD__?.askedIn))
