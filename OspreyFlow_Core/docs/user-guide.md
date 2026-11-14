@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.56** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.57** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.57 | 2026-11-14 | §5.5: the search results page as v0.5.2's step 3e′ built it (ADR-145 Amendment 15 Part A, spec 02 §2.0c): Enter on the typed words opens it over the view; the heading, the Conduit's total and its groups, the datasets and dates to filter by, 20 a page; each result's *Show on graph* and, for a document, *Open*; *Back to ‹view›*; the Ask line; a search over 200 characters refused with its limit named, never cut; the fallback's one line, as the Conduit words it. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
 | 1.56 | 2026-11-14 | §7.5: a *Stopped* hotlist or watch says why beside the word, each reason in the Conduit's words (ADR-044 Amendment 1). PDF made by the orchestrator at merge. |
 | 1.55 | 2026-11-14 | §6, Ask & Chat: **Whole case** as v0.5.2's Part D(iii) built it (ADR-098 Amendment 9, ADR-129 Amendment 5, rules-b's wording): the case searched with the question's own words, as you, by names and words, not meaning; a question past 200 characters refused with what to do; a document on the canvas read whole, one elsewhere by its passage; each other record a source, `[S-n]`, selecting its records. Held by `tests/test_user_guide_ask_chat.py`. PDF made by the orchestrator at merge. |
 | 1.54 | 2026-11-14 | The Glass's navigation as the owner decided it on 13 November (ADR-145 Amendment 15) and the selection's actions as Part C built them (ADR-078 Amendment 1). §3: the banner is the case line, "Case ‹name› ▾ · Views in this case · reads ‹dataset›", *All cases* opening the Cases panel, the cross-link *Open this case's data in the Ingest Studio ↗*; no mode lines. §4: the case switcher and the Cases panel in place of the rail's Cases drawer; *Roles, teams and Authors* from Admin and the Studio. §5's table: the rail Explore, Ask & Chat and History; the view switch Graph, Map, Drawing board and Reports, with Matrix, Figures, Ownership and Connection strength under More views; *Build a report*. §5.2: the selection bar's words and order, the menu's *Expand by link type*, the fold of types with no links, the selection's actions first, the menu key and Shift+F10. §5.12, §5.13, §5.14, §7.1, §8, §9 and §12 follow. Five screenshots marked for a new capture. Held by `tests/test_user_guide_navigation.py`. PDF made by the orchestrator at merge. |
@@ -438,6 +439,27 @@ links out), counting first and asking if it is a lot. Cancelling a large draw le
 the case on its own. **Filters** narrow by entity type, how the text matches, and whether to look only at what
 is already drawn. A phone number or account reference is read the same way however you type it, so
 `07700 900640` finds the number held as `+447700900640`.
+
+**The results page.** Press Enter on the words you typed, with no suggestion moved to, and the results
+fill the main area over the view you were on, which waits beneath them as it was; a suggestion moved to
+with the arrow keys is still chosen by Enter. The page is headed "Search results for '…'", with the
+total in records under it, counted by the Conduit, and "(counts may be incomplete)" where it cannot be
+sure. **All**, then each group with its count, narrows the list; **Datasets** and **Dates** beside it
+filter it, and **Clear filters** undoes them. The search box's own **Filters** shape its suggestions
+alone: the page starts at **All** with no filter. Results come 20 a page, with **Next page** and
+**Previous page**. Each gives its name as the canvas names it, its type, why it matched and its date,
+and for a document the passage with the matched words marked. **Show on graph** puts every record the
+result stands for on the graph and takes you there; **Open**, for a document, reads it over the
+results, which are there again when you close it. **Back to ‹view›** returns to the view as you left
+it. With nothing found it says "No records match '…'.", with **Clear filters** where a filter is on.
+Where Ask & Chat is offered to you, a last line, "Ask a question about '…' instead", opens it with your
+words in the question box, sending nothing until you press **Ask**.
+
+A search can be at most 200 characters. A longer one is refused, saying the limit and how many
+characters yours has, and is never cut short: shorten it and press Enter again. Where the search index
+cannot answer, the page says so in one line, such as "Search is limited to exact identifiers: this
+deployment has no search index.", and its counts may be incomplete; a date filter cannot be applied
+then, and the line adds "The date filter is not applied."
 
 **Add many from a list.** The list button beside the search box (**Add many from a list**), and the fold
 of that name in **Where to start**, take a list of identifiers and draw what is found. Adding needs
