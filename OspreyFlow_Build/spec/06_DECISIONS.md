@@ -33389,6 +33389,16 @@ Each case is red on the shape it replaces:
 
 The records are `process/lanes/rules/l2.10/RED_RECORD.md` §12 to §12b.
 
+**Note (14 November 2026, rules-b, the orchestrator's out-of-map change): what a route answers.**
+Every route answers the refusal 422 `amount_total_out_of_range`, in the port's words
+(`AMOUNT_TOTAL_RULE`). The words name the limit, never the total or an amount. Before this note,
+no handler caught it, and a rule preview holding such a total answered a bare 500. Point 3's
+"what a rule's evaluation does" is unchanged: a rule run as data loads meets the same exception
+as before. (`test_a_total_past_the_decimals_range_is_refused_never_wrapped` now also asserts the
+words on every adapter; `test_a_preview_whose_total_is_too_large_to_count_is_refused_in_words` in
+`tests/services/api/test_rule_sentence_routes.py`.) The records are
+`process/lanes/rules-b/analytics-field/`.
+
 Open: none.
 
 ### ADR-146, Amendment 5 (10 November 2026) — the rule's standards as built (L2.11a): the BPMN 2.0 and DMN files, their refusals, caps and rights; the files stored beside each rule version
