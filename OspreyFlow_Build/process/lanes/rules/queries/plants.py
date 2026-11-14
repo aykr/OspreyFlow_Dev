@@ -63,6 +63,22 @@ PLANTS = [
         "names_row(visible[i], seed, CHANGES[int(hashlib.sha256(i.encode()).hexdigest(), 16) % 3])",
         "test_names_rows_change_the_name_each_of_three_ways",
     ),
+    (
+        "Q8 a variant changing only case or word order (the register form) let through",
+        """        if record.type != "Person" or _folded(query) == _folded(
+            f"{_first_given(record)} {_family(record)}"
+        ):""",
+        """        if record.type != "Person" or query == f"{_first_given(record)} {_family(record)}":""",
+        "test_a_names_row_changing_only_case_or_word_order_is_refused",
+    ),
+    (
+        "Q9 the variants drawn as the register form, not from B's spelling groups (red at the set's build: each folds to the name, so names cannot fill its count)",
+        '    if not options:\n        return f"{given} {family}"\n'
+        "    other_given, other_family = r.choice(options)\n"
+        '    return f"{other_given} {other_family}"\n',
+        '    return f"{family.upper()} {given}"\n',
+        "test_names_rows_change_the_name_each_of_three_ways",
+    ),
 ]
 
 

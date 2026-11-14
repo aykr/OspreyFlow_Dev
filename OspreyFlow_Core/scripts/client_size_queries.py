@@ -13,7 +13,9 @@ check below and for a reader of the file, and is not read by the runner.
   the source spells it.
 - **`names`** (M3): a Person's name ("given family") with one change, a third each: a keying slip
   (`client_size_plan.slip`), a sound-alike (`client_size_plan.sound_alike`), or a spelling variant
-  (the family name as a register writes it, in capitals and first: "FAMILY Given").
+  (another spelling of the forename or surname from its group, `client_size_plan.FORENAME_GROUPS`
+  and `SURNAME_GROUPS`, as B's generator spells the same person in other records). A change of case
+  or word order alone is refused: the search folds both, so it would time an exact name.
 - **`fulltext`** (M4): a phrase of 2 to 6 words from a document's text, with `filters` naming the
   case's dataset and dates bracketing the document's `sent_at` ("with a dataset and a date filter").
 - **`exact`** (M5): a phone number as a person types it (its `value_raw` or its E.164), whose
@@ -109,7 +111,27 @@ def _variant(given: str, family: str, kind: str, r: random.Random) -> str:
         # The family name where a rule applies to it, else the given name.
         heard = plan.sound_alike(family, r)
         return f"{given} {heard}" if heard != family else f"{plan.sound_alike(given, r)} {family}"
-    return f"{family.upper()} {given}"
+    # Another spelling of the same name in its group, as B's generator gives other records of the
+    # same person (`client_size_plan.spell`'s "variant"), never one differing only in case.
+    options = [(a, family) for a in _alternatives(given, plan.FORENAME_GROUPS)] + [
+        (given, a) for a in _alternatives(family, plan.SURNAME_GROUPS)
+    ]
+    if not options:
+        return f"{given} {family}"
+    other_given, other_family = r.choice(options)
+    return f"{other_given} {other_family}"
+
+
+def _alternatives(name: str, groups: Sequence[Sequence[str]]) -> list[str]:
+    for group in groups:
+        if name in group:
+            return [a for a in group if a.casefold() != name.casefold()]
+    return []
+
+
+def _folded(name: str) -> list[str]:
+    """A name as an analyser that folds case and word order reads it."""
+    return sorted(name.casefold().split())
 
 
 def names_row(record: Record, seed: int, kind: str) -> dict[str, Any] | None:
@@ -120,7 +142,7 @@ def names_row(record: Record, seed: int, kind: str) -> dict[str, Any] | None:
     if not given or not family:
         return None
     query = _variant(given, family, kind, _rng(seed, "names", record.id))
-    if query == f"{given} {family}":
+    if _folded(query) == _folded(f"{given} {family}"):
         return None
     return {"class": "names", "query": query, "change": kind, "from": record.id}
 
@@ -292,8 +314,13 @@ def _check_class(
                 f"the suggest row {query!r} is not a 2 to 6 character prefix of {record.id}'s names"
             )
     elif kind == "names":
-        if record.type != "Person" or query == f"{_first_given(record)} {_family(record)}":
-            raise QuerySetRefused(f"the names row {query!r} is not a changed name of a Person")
+        if record.type != "Person" or _folded(query) == _folded(
+            f"{_first_given(record)} {_family(record)}"
+        ):
+            raise QuerySetRefused(
+                f"the names row {query!r} is not a changed name of a Person "
+                "(a change of case or word order alone is the name itself to the search)"
+            )
     elif kind == "fulltext":
         text = case_texts.get(record.id, "")
         f = row.get("filters") or {}

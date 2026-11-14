@@ -113,6 +113,14 @@ def test_names_rows_change_the_name_each_of_three_ways(
         person = world["records"][row["from"]]
         given = str(person.props["given_names"]).split(" ")[0]
         assert row["query"] != f"{given} {person.props['family_name']}"
+    for row in (r for r in rows if r["change"] == "variant"):
+        person = world["records"][row["from"]]
+        given = str(person.props["given_names"]).split(" ")[0]
+        changed = set(row["query"].split()) - {given, person.props["family_name"]}
+        assert len(changed) == 1, row
+        word = changed.pop()
+        groups = (*q.plan.FORENAME_GROUPS, *q.plan.SURNAME_GROUPS)
+        assert any(word in g and (given in g or person.props["family_name"] in g) for g in groups)
     changes = Counter(r["change"] for r in rows)
     assert set(changes) == set(q.CHANGES)
     assert max(changes.values()) - min(changes.values()) <= 1, "a third each"
@@ -230,3 +238,16 @@ def test_the_command_writes_nothing_when_the_set_is_too_small(folder: Path, tmp_
     with pytest.raises(q.QuerySetRefused, match="too few rows"):
         q.main(["--from", str(folder), "--out", str(out), "--per-class", "100000"])
     assert not (out / "queries.jsonl").exists()
+
+
+def test_a_names_row_changing_only_case_or_word_order_is_refused(
+    made: dict[str, Any], world: dict[str, Any]
+) -> None:
+    """Red first: the register form ("FAMILY Given") is the name itself to an analyser folding case
+    and order, so it would time an exact name as M3."""
+    row = next(r for r in _by_class(made, "names") if r["change"] == "variant")
+    person = world["records"][row["from"]]
+    given = str(person.props["given_names"]).split(" ")[0]
+    planted = {**row, "query": f"{str(person.props['family_name']).upper()} {given}"}
+    with pytest.raises(q.QuerySetRefused, match="case or word order alone"):
+        _check([*_one_each(made)[:1], planted, *_one_each(made)[2:]], world)
