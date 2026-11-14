@@ -1,7 +1,7 @@
 # Step 6 (`v052-r1`) · the install test on the candidate · run sheet
 
 Prepared offline on 14 November 2026 by platform-b, on `lane/platform-b-v052-r1` (main 78564d2 merged in). The day is
-**Mon 16 Nov from 08:00Z** (the owner's word, 14 November; Tue 17 to Thu 19 are its spare days, and the cut is Thu 19; it was the 18th, and before that the 25th). **The candidate** is main after the wording sweep, am20 and the CI fixes, with CI green on it; the orchestrator sends its commit by Sunday evening. If it is not ready by then, the day starts at the first 08:00Z after it is. ROUTE_052's brief: install v0.5.1, upgrade to the
+**Mon 16 Nov from 08:00Z** (the owner's word, 14 November; Tue 17 to Thu 19 are its spare days; **the cut is when step 6 passes**, Mon 16 evening or Tue 17, and Thu 19 ends the spare days; it was the 18th, and before that the 25th). **The candidate** is main after the wording sweep, am20 and the CI fixes, with CI green on it; the orchestrator sends its commit by Sunday evening. If it is not ready by then, the day starts at the first 08:00Z after it is. ROUTE_052's brief: install v0.5.1, upgrade to the
 candidate, **verify every manifest entry**, run spec 08's scenarios that apply to the shape, then decommission, with
 the operator choosing keep or destroy for the backups. "The full suite runs once, at step 6."
 
@@ -48,7 +48,9 @@ Nothing touches osprey-small.
 7. **Server memory.**
    - R1's node is capped at 32 GiB, beside osprey-small (about 24) on the 62 GiB server.
    - **Rules' B stack, kept up under a long lease for step 4 (23 Nov), must be down before the run** (by the evening of
-     Sun 15 now that the run is on Mon 16: to confirm with the orchestrator), or the node cannot be given its 32.
+     Sun 15 at the latest: the orchestrator confirms the time with rules, once step 4 and rules-b's am20 no longer need
+     stack d), or the node cannot be given its 32. Step 6 uses its own data on R1's cluster and none of d's: only d's
+     memory matters.
 8. **Platform's two R1 fixes: done** (r1upgrade on main, the fix 326356a, its record e00a09c).
    - `runbook INSTALL` renders the candidate's own copy every time. Another release's kept render is set aside as
      `render.before-upgrade` and never run, and the candidate's render is the kept one after.
