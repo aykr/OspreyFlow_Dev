@@ -1,0 +1,41 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T162242Z-6a581170/log: sh -c export PATH=$HOME/.local/node/bin:$PATH && PLANT_HEAD=353aa8e python3 OspreyFlow_Build/process/lanes/case/gates/suppression_marks_reds.py
+# suppression-marks reds at 353aa8e (the local checkout's, passed in); each plant restored from the file's own text
+## 1. the canvas marks read over the whole working set, not the reader's projection
+plant in OspreyFlow_Core/services/api/suppression.py; -p no:cacheprovider -q tests/services/api/working_set/test_suppression_marks_read.py::test_a_mark_on_a_node_the_reader_may_not_see_is_never_asked_about; exit 1
+>       assert [m.node_id for m in found] == ["p-a"]
+E       AssertionError: assert ['p-a', 'p-z'] == ['p-a']
+tests/services/api/working_set/test_suppression_marks_read.py:102: AssertionError
+FAILED tests/services/api/working_set/test_suppression_marks_read.py::test_a_mark_on_a_node_the_reader_may_not_see_is_never_asked_about
+1 failed in 1.40s
+## 2. the canvas never reading its marks back
+plant in OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx; keyboard/keyboard.spec.ts -g a\ mark\ read\ back\ after\ a\ reload\ offers\ Remove --workers=1; exit 1
+  ✘  1 keyboard/keyboard.spec.ts:917:1 › a mark read back after a reload offers Remove, never the mark again over its reason (v0.5.2 S7) (6.1s)
+    Error: expect(locator).toBeVisible() failed
+    Expected: visible
+    Error: element(s) not found
+  1 failed
+## 3. the fixed reason again, nothing asked
+plant in OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx; keyboard/keyboard.spec.ts -g the\ radial\ list\ reaches\ Mark\ for\ suppression,\ and\ the\ mark\ toggles --workers=1; exit 1
+  ✘  1 keyboard/keyboard.spec.ts:822:1 › the radial list reaches Mark for suppression, and the mark toggles (6.2s)
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Error: element(s) not found
+  1 failed
+## 4. the server taking a reason of spaces alone
+plant in OspreyFlow_Core/services/api/app.py; -p no:cacheprovider -q tests/services/api/test_explore_routes.py::test_a_suppression_mark_needs_words_and_keeps_them_trimmed; exit 1
+>           assert (
+E           AssertionError: assert 200 == 422
+tests/services/api/test_explore_routes.py:597: AssertionError
+FAILED tests/services/api/test_explore_routes.py::test_a_suppression_mark_needs_words_and_keeps_them_trimmed
+1 failed, 1 warning in 3.35s
+## 5. the route asking the working set with a principal not the case's
+plant in OspreyFlow_Core/services/api/app.py; -p no:cacheprovider -q tests/services/api/test_explore_routes.py::test_the_canvas_marks_are_read_as_the_case_reader_and_audited; exit 1
+        assert response.status_code == 200
+        assert [(m["node_id"], m["reason"]) for m in response.json()] == [
+>       assert [p.datasets for p in seen] == [READS]
+E       AssertionError: assert [None] == [['enron', 'layer-e']]
+tests/services/api/test_explore_routes.py:565: AssertionError
+FAILED tests/services/api/test_explore_routes.py::test_the_canvas_marks_are_read_as_the_case_reader_and_audited
+1 failed, 1 warning in 3.15s
+# 5 of 5 red
+Wall time: 29 s, exit 0 (no stack, no lease; set-up before it 8 s)
