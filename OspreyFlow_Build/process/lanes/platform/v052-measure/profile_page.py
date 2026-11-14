@@ -13,7 +13,8 @@ ways:
   own `took` (the by-type counts, the mentions and the dataset counts are aggregations of that one
   request, `query.py`, not queries of their own); reading the reply (`read_search_response`); every
   graph read by port method (`get_nodes`, the hits' hydration, and `edges_among`, the merge's links
-  among the shown nodes), each with how many SQL and Gremlin calls it sent and their time; building
+  among the shown nodes), each with how many SQL and Gremlin calls it sent and their time (the
+  store's list of types, `SELECT … FROM schema:types`, read by each, apart); building
   the results (`_result`); the merge (`_merged`); and the answer's serialisation
   (`model_dump_json`).
 
@@ -121,11 +122,14 @@ class _TimedClient:
             return found
 
         async def call(*args: Any, **kwargs: Any) -> Any:
+            # The store's list of types (`lookup.unique_id_types`, read on every read by id, all
+            # types with all their indexes) apart from the per-type lookups it leads to.
+            what = "sql schema:types" if args and "schema:types" in str(args[0]) else name
             started = time.perf_counter()
             try:
                 return await found(*args, **kwargs)
             finally:
-                LEDGER.add(f"{_stage.get()} · {name}", (time.perf_counter() - started) * 1000)
+                LEDGER.add(f"{_stage.get()} · {what}", (time.perf_counter() - started) * 1000)
 
         return call
 
