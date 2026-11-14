@@ -1369,8 +1369,23 @@ stays `sub`.
 - an `oid` that is not an object id, or another tenant's token;
 - an app-only token (no delegated `scp`, or `idtyp: app`), which is a program, not a person;
 - a guest from another directory (`acct` of `1`, or an `idp` naming another tenant or a provider
-  that is not Entra). `acct` is an optional claim the app registration must ask for, so `idp` is the
-  check that works without configuration. Admitting guests would need a setting that does not exist.
+  that is not Entra), **while this deployment does not admit guests**, in these words: "this is a
+  guest account, homed in another organisation's Entra ID, and this deployment does not admit
+  guests: an administrator can admit them in Admin › People". `acct` is an optional claim the app
+  registration must ask for, so `idp` is the check that works without configuration.
+
+**Guests are admitted only when an administrator turns it on** (ADR-148 Amendment 17). In
+*Admin › People*, **Admit guest accounts** is off on a new deployment; only someone holding
+`manage_people` can change it, and each change is recorded in the audit log
+(`set_guest_sign_in`, with what it was and what it is now). While it is on, a guest signs in as
+any person does: through the same mapping, so with the clearance, unit and handling codes their own
+token gives (a guest's token from another directory often carries none of your extension attributes
+or groups, and is then refused as anyone missing a clearance or unit is), and the roles you give them
+in *People and roles*, which marks them as a guest. Nothing gives a guest more than a member with the
+same token would have. Turning it off refuses every guest at their next request, an open live view
+included, and a run acting as a guest as its owner stops, counted as an owner who can no longer
+sign in (above). Turning it off is refused while every enabled person who has signed in and can
+manage people is a guest.
 
 On a deployment using the fixed names (Keycloak), a token carrying `tid` is refused, in these
 words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
@@ -1494,8 +1509,9 @@ one real token from the organisation's development tenant is to settle each:
   the real token carries.
 - **A claims-mapping policy** has its tokens signed with an application's own key, read with
   `?appid=<api_client_id>` (`claims_mapping_policy: true`).
-- **Guests**: that a real guest's token carries `idp` (and `acct` of `1`, where it is asked for) and
-  is refused, while a member's resolves.
+- **Guests**: that a real guest's token carries `idp` (and `acct` of `1`, where it is asked for), and
+  so is refused while guests are not admitted and signs in once they are, while a member's resolves
+  either way.
 - **Access tokens, not ID tokens**: the Glass is to send an access token for this API. An ID token
   carries no `scp`, and is refused as app-only.
 
@@ -1945,7 +1961,8 @@ Without an application id it is refused ("on Entra ID a dashboard identity is it
 registration: give its application id (the registration holds its secret)"), and so is the
 deployment's own application, the Glass's or the API's. No administrator can give a missing clearance or unit instead: a person
 whose token carries neither is refused at sign-in (section 6a.7). A person is shown by object id,
-not by name.
+not by name. A guest account, homed in another organisation's Entra ID, signs in only while
+**Admit guest accounts** is on, below the list (section 6a.7), and is marked as a guest in it.
 
 ### 9.1 The Admin place
 

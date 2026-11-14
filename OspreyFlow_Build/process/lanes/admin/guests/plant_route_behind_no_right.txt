@@ -1,0 +1,8 @@
+# plant: route_behind_no_right (services/api/app.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k refused_without_manage_people
+# RED
+E       AssertionError: assert 200 == 403
+E        +  where 200 = <Response [200 OK]>.status_code
+E        +    where <Response [200 OK]> = put('/v1/admin/sign-in/guests', **{'json': {'admitted': True}})
+E        +      where put = getattr(<starlette.testclient.TestClient object at 0x140d59f70>, 'put')
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people.py::test_the_guest_setting_is_refused_without_manage_people_and_left_as_it_was[put]
+1 failed, 2 passed, 64 deselected in 4.43s

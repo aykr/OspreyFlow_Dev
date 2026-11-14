@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.01** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.02** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.02 | 2026-11-14 | Guests on Entra ID as built (ADR-148 Amendment 17, the audit's ruling 4b). §6a.7: a guest account is refused, in its own words, until an administrator of people turns on *Admit guest accounts* in *Admin › People*; each change audited; admitted, a guest signs in through the same mapping and is given nothing a member with the same token would not be; turned off, every guest is refused at their next request, and a run as a guest owner stops; the untried guest token's shape restated. §9: the setting, and guests marked in the list. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 2.01 | 2026-11-14 | §9: on Entra ID a dashboard identity is registered by its app registration's application id, with no secret shown (ADR-148 Amendment 10), and its refusals quoted as `entra_people.py` words them; the refusal of every dashboard identity, which the code no longer raises, struck. §6a.1: the decommission's backups bucket and its key by a choice with no default, `BACKUPS=keep` or `BACKUPS=destroy`, as the rendered `DECOMMISSION.md` makes it (ADR-148 Amendment 13 decision 6). Held by `tests/test_guide_v052_admin.py`. PDF made by the orchestrator at merge. |
 | 2.00 | 2026-11-14 | §6a on search, as ADR-148 Amendment 13 and the render have it: §6a.1, the poc shape makes the platform's OpenSearch domain as the standard shape does (the refusal struck), `postgres-fulltext` makes none, and the Conduit, the workers and the index's two Jobs are given its address; the shared folders in the standard shape, the Ingest root and no staging; §6a.3, `opensearch.tf` in every shape; §6a.8, the restore's step 6 names the backups' CronJobs it resumes, and step 7, the index rebuilt and the drift check, the index not in a set. §6a.2: the index's rebuild and drift check sized as the Conduit (0.5 CPU, 2 GiB, a 4 GiB limit; the poc's CPU limit 2). §6a.5: their way out, ArcadeDB, the managed stores' networks (OpenSearch on 443), S3 and STS. §13: a local restore's last step rebuilds the index from the graph where there is an OpenSearch (no longer "holds no index of OspreyFlow's yet"). Held by `tests/test_guides_cloud_platform_search.py`, which reads the render, `profile.yaml`'s rows and `restore.py`. PDF made by the orchestrator at merge. |
 | 1.99 | 2026-11-14 | §6a.1: *Moving to a new release (poc shape)*, platform-b's paragraph checked against the rendered runbooks: `INSTALL.md` run again from the new release's copy, the backup first as the runbook's *Before an upgrade* does it (the report sync stopped too), the Terraform's pull request applied after the new release's render that makes it (step 3, not step 2), the install's own checks named, v0.5.2's install test planned for 25 November and not yet run, going back not rehearsed. §6a.8: the report sync is rendered only with reporting on. Held by `tests/test_guide_6a_upgrade.py`. PDF made by the orchestrator at merge. |
@@ -1558,8 +1559,23 @@ stays `sub`.
 - an `oid` that is not an object id, or another tenant's token;
 - an app-only token (no delegated `scp`, or `idtyp: app`), which is a program, not a person;
 - a guest from another directory (`acct` of `1`, or an `idp` naming another tenant or a provider
-  that is not Entra). `acct` is an optional claim the app registration must ask for, so `idp` is the
-  check that works without configuration. Admitting guests would need a setting that does not exist.
+  that is not Entra), **while this deployment does not admit guests**, in these words: "this is a
+  guest account, homed in another organisation's Entra ID, and this deployment does not admit
+  guests: an administrator can admit them in Admin › People". `acct` is an optional claim the app
+  registration must ask for, so `idp` is the check that works without configuration.
+
+**Guests are admitted only when an administrator turns it on** (ADR-148 Amendment 17). In
+*Admin › People*, **Admit guest accounts** is off on a new deployment; only someone holding
+`manage_people` can change it, and each change is recorded in the audit log
+(`set_guest_sign_in`, with what it was and what it is now). While it is on, a guest signs in as
+any person does: through the same mapping, so with the clearance, unit and handling codes their own
+token gives (a guest's token from another directory often carries none of your extension attributes
+or groups, and is then refused as anyone missing a clearance or unit is), and the roles you give them
+in *People and roles*, which marks them as a guest. Nothing gives a guest more than a member with the
+same token would have. Turning it off refuses every guest at their next request, an open live view
+included, and a run acting as a guest as its owner stops, counted as an owner who can no longer
+sign in (above). Turning it off is refused while every enabled person who has signed in and can
+manage people is a guest.
 
 On a deployment using the fixed names (Keycloak), a token carrying `tid` is refused, in these
 words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
@@ -1683,8 +1699,9 @@ one real token from the organisation's development tenant is to settle each:
   the real token carries.
 - **A claims-mapping policy** has its tokens signed with an application's own key, read with
   `?appid=<api_client_id>` (`claims_mapping_policy: true`).
-- **Guests**: that a real guest's token carries `idp` (and `acct` of `1`, where it is asked for) and
-  is refused, while a member's resolves.
+- **Guests**: that a real guest's token carries `idp` (and `acct` of `1`, where it is asked for), and
+  so is refused while guests are not admitted and signs in once they are, while a member's resolves
+  either way.
 - **Access tokens, not ID tokens**: the Glass is to send an access token for this API. An ID token
   carries no `scp`, and is refused as app-only.
 
@@ -2134,7 +2151,8 @@ Without an application id it is refused ("on Entra ID a dashboard identity is it
 registration: give its application id (the registration holds its secret)"), and so is the
 deployment's own application, the Glass's or the API's. No administrator can give a missing clearance or unit instead: a person
 whose token carries neither is refused at sign-in (section 6a.7). A person is shown by object id,
-not by name.
+not by name. A guest account, homed in another organisation's Entra ID, signs in only while
+**Admit guest accounts** is on, below the list (section 6a.7), and is marked as a guest in it.
 
 ### 9.1 The Admin place
 

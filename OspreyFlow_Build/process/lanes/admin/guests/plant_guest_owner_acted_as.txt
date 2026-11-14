@@ -1,0 +1,5 @@
+# plant: guest_owner_acted_as (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k guest_owner
+# RED
+E       Failed: DID NOT RAISE PrincipalRevoked
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_run_as_a_guest_owner_is_refused_once_guests_are_no_longer_admitted
+1 failed, 12 deselected in 1.69s

@@ -1,0 +1,8 @@
+# plant: guests_always_admitted (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; closed ports; -k refused_in_true_words or already_recorded
+# RED
+E       Failed: DID NOT RAISE PrincipalResolutionError
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_guest_is_refused_in_true_words_while_guests_are_not_admitted_and_nothing_is_recorded[acct]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_guest_is_refused_in_true_words_while_guests_are_not_admitted_and_nothing_is_recorded[acct-text]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_guest_is_refused_in_true_words_while_guests_are_not_admitted_and_nothing_is_recorded[idp-other]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_guests.py::test_a_guest_already_recorded_is_refused_again_once_guests_are_no_longer_admitted
+4 failed, 9 deselected in 3.34s
