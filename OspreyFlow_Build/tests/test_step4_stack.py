@@ -170,3 +170,15 @@ def test_each_subject_s_principal_id_is_its_name_as_the_grants_name_it() -> None
     for user in step4.realm_users():
         assert user["id"] == user["username"]
 
+
+def test_a_run_tag_that_is_a_folder_gives_names_docker_takes_and_keeps_its_label_whole() -> None:
+    """stack_lease.sh gives OSPREY_RUN_TAG as the run's folder (found on stack f, 14 November: the
+    first proof's docker run refused its name); the reaper matches the label, so it stays whole."""
+    import re
+
+    run = "/root/osprey-runs/platform.meta/runs/20261114T091020Z-0f15af13"
+    name = f"osprey-step4-idp-{step4.slug(run)}"
+    assert re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]*", name)
+    assert step4.slug(run) == "20261114t091020z-0f15af13"
+    assert f"osprey.run={run}" in step4.keycloak_argv(run, name, 1)
+

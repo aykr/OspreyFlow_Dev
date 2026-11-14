@@ -91,6 +91,15 @@ def poc_limits(workload: str) -> tuple[str, str]:
     return str(limits["cpu"]), memory
 
 
+def slug(run: str) -> str:
+    """The run as Docker allows a name or tag ([a-z0-9][a-z0-9_.-]*): its last path part, as
+    `stack_lease.sh` gives OSPREY_RUN_TAG as the run's folder. The label keeps the run whole."""
+    import re
+
+    last = run.rstrip("/").rsplit("/", 1)[-1].lower()
+    return re.sub(r"[^a-z0-9_.-]", "-", last).lstrip("-_.") or "run"
+
+
 def run_labels(run: str) -> list[str]:
     return ["--label", f"osprey.lane={LANE}", "--label", f"osprey.run={run}"]
 
@@ -322,7 +331,7 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
     admin_password = secrets.token_urlsafe(16)
     env |= {"KC_BOOTSTRAP_ADMIN_USERNAME": "admin", "KC_BOOTSTRAP_ADMIN_PASSWORD": admin_password}
     kp = _free_port()
-    stack.docker(*keycloak_argv(stack.run, f"osprey-step4-idp-{stack.run}", kp), env=env)
+    stack.docker(*keycloak_argv(stack.run, f"osprey-step4-idp-{slug(stack.run)}", kp), env=env)
     origin = f"http://127.0.0.1:{kp}"
     _wait(f"{origin}/realms/master/.well-known/openid-configuration", 240, "Keycloak")
     secret = secrets.token_urlsafe(24)
@@ -337,7 +346,7 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
         if given:
             images[workload] = given
             continue
-        tag = f"ospreyflow/{workload}:step4-{stack.run.lower()}"
+        tag = f"ospreyflow/{workload}:step4-{slug(stack.run)}"
         stack.docker("build", "-q", "-f", dockerfile, "-t", tag, str(CORE))
         stack.images.append(tag)
         images[workload] = tag
@@ -346,12 +355,17 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
         "OIDC_ISSUER": issuer,
         "OIDC_JWKS_URL": f"{issuer}/protocol/openid-connect/certs",
         "OIDC_AUDIENCE": "osprey-conduit",
-        "OSPREY_WORKER_NAME": f"step4-{stack.run}",
+        "OSPREY_WORKER_NAME": f"step4-{slug(stack.run)}",
     }
-    stack.docker(*service_argv(stack.run, f"osprey-step4-api-{stack.run}", images["api"], "api",
-                               env, conduit_command(cp)), env=env)  # fmt: skip
-    stack.docker(*service_argv(stack.run, f"osprey-step4-worker-{stack.run}", images["worker"],
-                               "worker", env, WORKER_COMMAND), env=env)  # fmt: skip
+    name = slug(stack.run)
+    api = service_argv(
+        stack.run, f"osprey-step4-api-{name}", images["api"], "api", env, conduit_command(cp)
+    )
+    worker = service_argv(
+        stack.run, f"osprey-step4-worker-{name}", images["worker"], "worker", env, WORKER_COMMAND
+    )
+    stack.docker(*api, env=env)
+    stack.docker(*worker, env=env)
     base = f"http://127.0.0.1:{cp}"
     _wait(f"{base}/healthz", 240, "the Conduit")
     print(f"step4: the Conduit and the worker are up at the poc's limits {poc_limits('api')}",

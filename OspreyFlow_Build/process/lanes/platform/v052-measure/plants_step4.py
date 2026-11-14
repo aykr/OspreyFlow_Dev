@@ -32,6 +32,8 @@ PLANTS = [
      '         "codes": ["P", "C", "R"], "use": "control"}', '         "codes": ["P", "C"], "use": "control"}', "rules_granted"),
     ("each user's id left to Keycloak", RUNNER,
      '            "id": s["username"],\n', "", "principal_id_is_its_name"),
+    ("the run's folder put into a name", RUNNER,
+     '    last = run.rstrip("/").rsplit("/", 1)[-1].lower()', '    last = run.lower()', "names_docker_takes"),
     ("the realm's users left as the deployment's", RUNNER,
      '    realm["users"] = realm_users()\n    return realm', "    return realm", "subjects_alone"),
 ]
