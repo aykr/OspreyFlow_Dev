@@ -487,6 +487,9 @@ def test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease(le
     assert text.count("nohup setsid") == 1, text
     mirrored = [l for l in log.read_text().splitlines() if "case.meta/lease/stack-b.lease/info" in l]
     assert mirrored, log.read_text()
+    # The tests' own process table (`_remote` sets OSPREY_PROC_ROOT here) never reaches the host: no call and no line
+    # sent sets it or names the folder, so a real run's reaper scans /proc.
+    assert "OSPREY_PROC_ROOT=" not in text and str(tmp_path / "proc") not in text, text
 
 
 def test_remote_is_refused_for_a_local_stack_and_for_a_lane_holding_none(lease, tmp_path: Path) -> None:
@@ -884,7 +887,8 @@ def _alive(pid: int) -> bool:
     return not (stat.exists() and stat.read_text().split(") ", 1)[1].startswith("Z"))
 
 
-def _gone_within(pid: int, seconds: float = 8.0) -> bool:
+def _gone_within(pid: int, seconds: float = 20.0) -> bool:
+    # 20 s: a server is signalled only once the scan of the host's whole table is done (14 November 2026).
     for _ in range(int(seconds / 0.1)):
         if not _alive(pid):
             return True
@@ -931,7 +935,8 @@ def _host(tmp_path: Path) -> Path:
 
 def _finished_run(home: Path) -> Path:
     runs = home / "osprey-runs" / "case.meta" / "runs"
-    for _ in range(200):
+    # 30 s: a reaping run's exit waits on the scan of the host's whole table, then the reaper's 2 s (14 November 2026).
+    for _ in range(600):
         done = [p for p in runs.iterdir() if p.name != "last" and (p / "exit").exists()] if runs.exists() else []
         if done:
             return done[0]
@@ -1630,35 +1635,40 @@ def test_up_fails_when_postgres_never_answers(lease, tmp_path: Path) -> None:
     assert "osprey-test-pg" in up.stderr and "did not answer" in up.stderr, up.stderr
 
 
-def _reaper_text() -> str:
-    """stack_lease.sh's REAPER, as cmd.sh and `reap` define it on the host."""
-    text = SCRIPT.read_text()
-    start = text.index("REAPER='") + len("REAPER='")
-    return text[start : text.index("\n}'", start) + 2]
 
-
+@_REAPS
 def test_the_reaper_reads_the_process_table_it_is_given(tmp_path: Path) -> None:
-    """`OSPREY_PROC_ROOT` is the table the reaper reads, so a run here that is not about reaping waits on no other
-    process of the host. A table listing one real sleep, tagged there and not in /proc: the reaper ends it only by
-    reading that table, and with an empty table the same tag ends nothing. Red if the reaper reads /proc whatever it
-    is given (its scan or its re-read before each signal)."""
+    """`OSPREY_PROC_ROOT` is the table the reaper's scan reads, so a run here that is not about reaping waits on no
+    other process of the host; the re-read before each signal reads /proc, so the table never gets a process
+    signalled that does not hold the tag. A sleep tagged in its real environment: an empty table ends nothing (red if
+    the scan reads /proc whatever it is given), and a table listing it ends it. An untagged sleep listed with the tag
+    in the table is spared (red if the re-read reads the table, which would signal whatever real process has the pid)."""
     tag = str(tmp_path / "the-run")
-    sleeper = subprocess.Popen(["sleep", "60"])
+    tagged = subprocess.Popen(["sleep", "60"], env={**os.environ, "OSPREY_RUN_TAG": tag})
+    plain = subprocess.Popen(["sleep", "60"], env={k: v for k, v in os.environ.items() if k != "OSPREY_RUN_TAG"})
     try:
-        table = tmp_path / "proc"
-        (table / str(sleeper.pid)).mkdir(parents=True)
-        (table / str(sleeper.pid) / "environ").write_bytes(f"PATH=/bin\0OSPREY_RUN_TAG={tag}\0".encode())
-        empty = tmp_path / "empty"
-        empty.mkdir()
-        script = _reaper_text() + '\nosprey_reap "$1"; echo "reaped $OSPREY_REAPED"\n'
-        none = subprocess.run(["bash", "-c", script, "reap", tag], env={**os.environ, "OSPREY_PROC_ROOT": str(empty)},
-                              capture_output=True, text=True, timeout=60, check=False)
-        assert none.stdout.strip() == "reaped 0", none.stdout + none.stderr
-        assert sleeper.poll() is None
-        ran = subprocess.run(["bash", "-c", script, "reap", tag], env={**os.environ, "OSPREY_PROC_ROOT": str(table)},
-                             capture_output=True, text=True, timeout=60, check=False)
-        assert ran.stdout.strip() == "reaped 1", ran.stdout + ran.stderr
-        assert sleeper.wait(timeout=10) is not None
+
+        def table(name: str, *pids: int) -> str:
+            folder = tmp_path / name
+            folder.mkdir()
+            for pid in pids:
+                (folder / str(pid)).mkdir()
+                (folder / str(pid) / "environ").write_bytes(f"PATH=/bin\0OSPREY_RUN_TAG={tag}\0".encode())
+            return str(folder)
+
+        def reap(root: str) -> str:
+            ran = subprocess.run(_reaper_shell(f'osprey_reap "{tag}"', 'echo "reaped $OSPREY_REAPED"'),
+                                 env={**os.environ, "OSPREY_PROC_ROOT": root}, capture_output=True, text=True,
+                                 timeout=60, check=False)
+            return ran.stdout.strip() + ran.stderr
+
+        assert reap(table("empty")).startswith("reaped 0")
+        assert tagged.poll() is None, "an empty table ended a process: the scan read /proc"
+        assert reap(table("listing-the-untagged", plain.pid)).startswith("reaped 0")
+        assert plain.poll() is None, "a process without the tag was signalled: the re-read read the table"
+        assert reap(table("listing-the-tagged", tagged.pid)).startswith("reaped 1")
+        assert tagged.wait(timeout=20) is not None, "the tagged process the table lists outlived the reap"
     finally:
-        if sleeper.poll() is None:
-            sleeper.kill()
+        for sleeper in (tagged, plain):
+            if sleeper.poll() is None:
+                sleeper.kill()
