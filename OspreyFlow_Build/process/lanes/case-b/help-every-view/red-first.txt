@@ -1,0 +1,22 @@
+CARRIES 224 (the owner's demo walk-through, 13 November 2026): the rail's Help (?) opened the Welcome panel in
+the Graph view alone, and did nothing when the panel was already open.
+
+Found already fixed on main (dcd9e88): platform-b's dad3d39 made `welcomeOpen` true for a panel asked for by Help
+in any view (`welcome === "asked" || (welcome === "auto" && view === "graph" && !lens)`), and Help toggles it.
+What was missing was rule 13's case for it in the real Glass: `shell.spec.ts` proves Help over the top bar's
+harness, which has one view, and `App.help.test.tsx` proves it in jsdom over Reports alone.
+
+The new case, keyboard/help-every-view.spec.ts: the real `/` signed in (keyboard/fakeIdentityProvider.ts), a
+case kept in the tab, each of the eight views reached by keyboard (the switch's buttons, More views' items), and
+in each Help pressed on the rail opens the panel, the panel takes focus, and Help closes it. All eight views are
+required (`offered` must equal the list), so a view no longer offered cannot pass by being skipped.
+
+Green on main's code (no App change). Red first by planting the defect as CARRIES 224 describes it, slot 3:
+- the panel opened by Help in the Graph alone (`view === "graph" && (welcome === "asked" || ...)`):
+  FAILED — "Help did not open its panel in Map" (plant-graph-only.log).
+- Help never closing an open panel (toggleWelcome always asking): FAILED — "Help did not close its panel in
+  Graph" (plant-no-toggle.log).
+Unplanted: help-every-view.spec.ts and shell.spec.ts, 62 passed (unplanted.log).
+
+The registry id (HELP_ACTIONS: open-help-from-every-view-by-keyboard) is registry-help.patch here, for the
+orchestrator to commit before the merge (actionRegistry.ts is shared); the spec does not typecheck without it.

@@ -1,0 +1,100 @@
+
+Running 2 tests using 1 worker
+
+[1/2] keyboard/help-every-view.spec.ts:70:1 › the rail's Help opens and closes its panel by keyboard from every view of the real Glass
+[WebServer] 14:56:35 [vite] (client) [Unhandled rejection] Error: POST .../geobins failed: 404
+[WebServer]  > postJson src/analytics/api.ts:36:10
+[WebServer]     34 |    });
+[WebServer]     35 |    if (!response.ok) {
+[WebServer]     36 |      throw new Error(`${action} failed: ${response.status}`);
+[WebServer]        |            ^
+[WebServer]     37 |    }
+[WebServer]     38 |    return (await response.json()) as T;
+[WebServer]  > refresh src/crossfilter/mapBins.ts:27:17
+[WebServer] 
+[WebServer] 14:56:35 [vite] (client) [Unhandled rejection] Error: POST .../histogram failed: 404
+[WebServer]  > postJson src/analytics/api.ts:36:10
+[WebServer]     34 |    });
+[WebServer]     35 |    if (!response.ok) {
+[WebServer]     36 |      throw new Error(`${action} failed: ${response.status}`);
+[WebServer]        |            ^
+[WebServer]     37 |    }
+[WebServer]     38 |    return (await response.json()) as T;
+[WebServer]  > src/timeline/Timeline.tsx:260:20
+[WebServer] 
+
+[WebServer] 14:56:35 [vite] (client) [Unhandled rejection] Error: POST .../histogram failed: 404
+[WebServer]  > postJson src/analytics/api.ts:36:10
+[WebServer]     34 |    });
+[WebServer]     35 |    if (!response.ok) {
+[WebServer]     36 |      throw new Error(`${action} failed: ${response.status}`);
+[WebServer]        |            ^
+[WebServer]     37 |    }
+[WebServer]     38 |    return (await response.json()) as T;
+[WebServer]  > src/timeline/Timeline.tsx:260:20
+[WebServer] 
+
+[WebServer] 14:56:35 [vite] (client) [Unhandled error] Error: Sigma: Container has no width. You can set the allowInvalidContainer setting to true to stop seeing this error.
+[WebServer]  > Sigma.resize ../../node_modules/sigma/dist/sigma.esm.js:3191:75
+[WebServer]  > Sigma.render ../../node_modules/sigma/dist/sigma.esm.js:2426:11
+[WebServer]  > Sigma.refresh ../../node_modules/sigma/dist/sigma.esm.js:3310:52
+[WebServer]  > src/canvas/cameraMoves.ts:10:38
+[WebServer]     8  |    void move.then(() => {
+[WebServer]     9  |      // One frame later, so the move has been counted as finished by the time it is drawn.
+[WebServer]     10 |      requestAnimationFrame(() => sigma.refresh());
+[WebServer]        |                                        ^
+[WebServer]     11 |    });
+[WebServer]     12 |  }
+[WebServer] 
+
+  1) keyboard/help-every-view.spec.ts:70:1 › the rail's Help opens and closes its panel by keyboard from every view of the real Glass 
+
+    Error: Help did not open its panel in Map
+
+    expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Welcome back' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Help did not open its panel in Map getByRole('dialog', { name: 'Welcome back' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Welcome back' })
+
+
+      80 |     await help.focus();
+      81 |     await page.keyboard.press("Enter");
+    > 82 |     await expect(panel, `Help did not open its panel in ${view}`).toBeVisible();
+         |                                                                   ^
+      83 |     await expect(panel, `the panel opened in ${view} did not take focus`).toBeFocused();
+      84 |     await help.focus();
+      85 |     await page.keyboard.press("Enter");
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/help-every-view.spec.ts:82:67
+
+    Error Context: test-results/help-every-view-the-rail-s-d96f9-very-view-of-the-real-Glass/error-context.md
+
+
+[2/2] keyboard/help-every-view.spec.ts:93:1 › every registered Help action has its own proving test case above
+  2) keyboard/help-every-view.spec.ts:93:1 › every registered Help action has its own proving test case above 
+
+    Error: HELP_ACTIONS: keyboard action(s) registered with no proving test case: open-help-from-every-view-by-keyboard
+
+       at actionRegistry.ts:73
+
+      71 |   const missing = actions.filter((id) => !seen.has(id));
+      72 |   if (missing.length > 0) {
+    > 73 |     throw new Error(
+         |           ^
+      74 |       `${registryName}: keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
+      75 |     );
+      76 |   }
+        at assertAllCovered (/Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts:73:11)
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/help-every-view.spec.ts:94:3
+
+    Error Context: test-results/help-every-view-every-regi-66d76-own-proving-test-case-above/error-context.md
+
+
+  2 failed
+    keyboard/help-every-view.spec.ts:70:1 › the rail's Help opens and closes its panel by keyboard from every view of the real Glass 
+    keyboard/help-every-view.spec.ts:93:1 › every registered Help action has its own proving test case above 

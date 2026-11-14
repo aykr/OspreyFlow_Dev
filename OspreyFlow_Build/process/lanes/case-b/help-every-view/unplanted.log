@@ -1,0 +1,142 @@
+
+Running 62 tests using 1 worker
+
+[1/62] keyboard/help-every-view.spec.ts:70:1 › the rail's Help opens and closes its panel by keyboard from every view of the real Glass
+[WebServer] 14:57:04 [vite] (client) [Unhandled rejection] Error: POST .../geobins failed: 404
+[WebServer]  > postJson src/analytics/api.ts:36:10
+[WebServer]     34 |    });
+[WebServer]     35 |    if (!response.ok) {
+[WebServer]     36 |      throw new Error(`${action} failed: ${response.status}`);
+[WebServer]        |            ^
+[WebServer]     37 |    }
+[WebServer]     38 |    return (await response.json()) as T;
+[WebServer]  > refresh src/crossfilter/mapBins.ts:27:17
+[WebServer] 
+
+[WebServer] 14:57:04 [vite] (client) [Unhandled rejection] Error: POST .../histogram failed: 404
+[WebServer]  > postJson src/analytics/api.ts:36:10
+[WebServer]     34 |    });
+[WebServer]     35 |    if (!response.ok) {
+[WebServer]     36 |      throw new Error(`${action} failed: ${response.status}`);
+[WebServer]        |            ^
+[WebServer]     37 |    }
+[WebServer]     38 |    return (await response.json()) as T;
+[WebServer]  > src/timeline/Timeline.tsx:260:20
+[WebServer] 
+
+[WebServer] 14:57:04 [vite] (client) [Unhandled rejection] Error: POST .../histogram failed: 404
+[WebServer]  > postJson src/analytics/api.ts:36:10
+[WebServer]     34 |    });
+[WebServer]     35 |    if (!response.ok) {
+[WebServer]     36 |      throw new Error(`${action} failed: ${response.status}`);
+[WebServer]        |            ^
+[WebServer]     37 |    }
+[WebServer]     38 |    return (await response.json()) as T;
+[WebServer]  > src/timeline/Timeline.tsx:260:20
+[WebServer] 
+
+[WebServer] 14:57:04 [vite] (client) [Unhandled rejection] Error: POST .../histogram failed: 404
+[WebServer]  > postJson src/analytics/api.ts:36:10
+[WebServer]     34 |    });
+[WebServer]     35 |    if (!response.ok) {
+[WebServer]     36 |      throw new Error(`${action} failed: ${response.status}`);
+[WebServer]        |            ^
+[WebServer]     37 |    }
+[WebServer]     38 |    return (await response.json()) as T;
+[WebServer]  > src/timeline/Timeline.tsx:260:20
+[WebServer] 
+
+[WebServer] 14:57:04 [vite] (client) [Unhandled rejection] Error: POST .../histogram failed: 404
+[WebServer]  > postJson src/analytics/api.ts:36:10
+[WebServer]     34 |    });
+[WebServer]     35 |    if (!response.ok) {
+[WebServer]     36 |      throw new Error(`${action} failed: ${response.status}`);
+[WebServer]        |            ^
+[WebServer]     37 |    }
+[WebServer]     38 |    return (await response.json()) as T;
+[WebServer]  > src/timeline/Timeline.tsx:260:20
+[WebServer] 
+
+[WebServer] 14:57:04 [vite] (client) [Unhandled rejection] Error: POST .../histogram failed: 404
+[WebServer]  > postJson src/analytics/api.ts:36:10
+[WebServer]     34 |    });
+[WebServer]     35 |    if (!response.ok) {
+[WebServer]     36 |      throw new Error(`${action} failed: ${response.status}`);
+[WebServer]        |            ^
+[WebServer]     37 |    }
+[WebServer]     38 |    return (await response.json()) as T;
+[WebServer]  > src/timeline/Timeline.tsx:260:20
+[WebServer] 
+[WebServer] 14:57:04 [vite] (client) [Unhandled rejection] Error: POST .../histogram failed: 404
+[WebServer]  > postJson src/analytics/api.ts:36:10
+[WebServer]     34 |    });
+[WebServer]     35 |    if (!response.ok) {
+[WebServer]     36 |      throw new Error(`${action} failed: ${response.status}`);
+[WebServer]        |            ^
+[WebServer]     37 |    }
+[WebServer]     38 |    return (await response.json()) as T;
+[WebServer]  > src/timeline/Timeline.tsx:260:20
+[WebServer] 
+
+[2/62] keyboard/help-every-view.spec.ts:93:1 › every registered Help action has its own proving test case above
+[3/62] keyboard/shell.spec.ts:14:1 › / outside a text field moves focus to search
+[4/62] keyboard/shell.spec.ts:23:1 › add many from a list is opened from the search box, counted and cancelled, by keyboard
+[5/62] keyboard/shell.spec.ts:48:1 › add many from a list, added from the search box by keyboard, puts the nodes on the canvas
+[6/62] keyboard/shell.spec.ts:76:1 › the marking strip and the top bar take 20 and 44 pixels, and the rail 48 with 36px buttons
+[7/62] keyboard/shell.spec.ts:90:1 › each rail entry is reached and pressed by keyboard
+[8/62] keyboard/shell.spec.ts:106:1 › each rail panel is opened and closed by keyboard, the view kept and focus returned to its opener
+[9/62] keyboard/shell.spec.ts:134:1 › each view is chosen by keyboard: Graph, Map, Drawing board and Reports, the rest under More views
+[10/62] keyboard/shell.spec.ts:160:1 › the column opens with the Inspector only, and each folded panel opens with one keypress
+[11/62] keyboard/shell.spec.ts:173:1 › the rail shows its names, and hides them again, by keyboard
+[12/62] keyboard/shell.spec.ts:189:1 › the rail's Help opens and closes the keys panel by keyboard, as ? and Esc do
+[13/62] keyboard/shell.spec.ts:226:3 › ospreyflow: the place switcher lists only the places the rights open, and moves between them by keyboard
+[14/62] keyboard/shell.spec.ts:226:3 › govuk: the place switcher lists only the places the rights open, and moves between them by keyboard
+[15/62] keyboard/shell.spec.ts:249:1 › a reader's switcher offers the Glass alone
+[16/62] keyboard/shell.spec.ts:258:1 › Rules and Monitoring carries the count, and the Glass is returned to its last view by keyboard
+[17/62] keyboard/shell.spec.ts:284:1 › the banner's cross-link goes to the Studio and back to the same case and view by keyboard
+[18/62] keyboard/shell.spec.ts:305:1 › from Messages, the cross-link and a case change in the Studio come Back to the view before it
+[19/62] keyboard/shell.spec.ts:324:1 › the case line's Views in this case opens the Cases panel by keyboard, and focus returns to it
+[20/62] keyboard/shell.spec.ts:345:1 › the case menu's All cases opens the Cases panel by keyboard, and focus returns to the case menu
+[21/62] keyboard/shell.spec.ts:366:3 › ospreyflow dark: exactly one view is current, and a rail panel changes none of it
+[22/62] keyboard/shell.spec.ts:366:3 › ospreyflow light: exactly one view is current, and a rail panel changes none of it
+[23/62] keyboard/shell.spec.ts:366:3 › govuk light: exactly one view is current, and a rail panel changes none of it
+[24/62] keyboard/shell.spec.ts:390:1 › an alert on Home, focused, is opened at its address by Enter
+[25/62] keyboard/shell.spec.ts:402:1 › Rules and Monitoring's card opens by its key, and a case is chosen for it by keyboard
+[26/62] keyboard/shell.spec.ts:421:1 › Home's cards are the places the rights open, each reached by Tab and opened by keyboard
+[27/62] keyboard/shell.spec.ts:442:3 › ospreyflow: the skip link is the first Tab stop, visible on focus, and Enter moves focus to the main content
+[28/62] keyboard/shell.spec.ts:442:3 › govuk: the skip link is the first Tab stop, visible on focus, and Enter moves focus to the main content
+[29/62] keyboard/shell.spec.ts:472:1 › govuk: a case's workspace gains at least 100 px of height, the strip and toolbar untouched
+[30/62] keyboard/shell.spec.ts:487:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (glass)
+[31/62] keyboard/shell.spec.ts:487:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (ingest)
+[32/62] keyboard/shell.spec.ts:487:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (rules)
+[33/62] keyboard/shell.spec.ts:487:3 › govuk: the context bar is one row, "You are in" at its start, its region and name kept (admin)
+[34/62] keyboard/shell.spec.ts:515:3 › govuk 1440: the context row with the case line is at most 40 px, its parts inside the region
+[35/62] keyboard/shell.spec.ts:515:3 › govuk 1024: the context row with the case line is at most 72 px, its parts inside the region
+[36/62] keyboard/shell.spec.ts:529:3 › ospreyflow dark: a case's workspace top is as it was
+[37/62] keyboard/shell.spec.ts:529:3 › ospreyflow light: a case's workspace top is as it was
+[38/62] keyboard/shell.spec.ts:539:3 › govuk: Home keeps the full header and banner
+[39/62] keyboard/shell.spec.ts:539:3 › govuk: the sign-in page keeps the full header and banner
+[40/62] keyboard/shell.spec.ts:551:3 › govuk off gov.uk: the header's crown is not drawn, the GOV.UK link kept
+[41/62] keyboard/shell.spec.ts:551:3 › govuk on gov.uk: the header's crown is drawn, the GOV.UK link kept
+[42/62] keyboard/shell.spec.ts:559:1 › govuk: the header, the Glass and the footer are reached by Tab in that order
+[43/62] keyboard/shell.spec.ts:588:3 › ospreyflow dark: the deployment's banner words add no Tab stop and are read in their region
+[44/62] keyboard/shell.spec.ts:588:3 › ospreyflow light: the deployment's banner words add no Tab stop and are read in their region
+[45/62] keyboard/shell.spec.ts:588:3 › govuk light: the deployment's banner words add no Tab stop and are read in their region
+[46/62] keyboard/shell.spec.ts:602:1 › govuk off gov.uk: the one-line footer's links are reached by Tab, and nothing of the Crown is drawn
+[47/62] keyboard/shell.spec.ts:614:1 › govuk on gov.uk: the full footer, Crown copyright reached by Tab
+[48/62] keyboard/shell.spec.ts:628:1 › govuk: the GOV.UK logo is not underlined at rest
+[49/62] keyboard/shell.spec.ts:640:1 › govuk: no service-name band is drawn, and the page title names the service
+[50/62] keyboard/shell.spec.ts:656:5 › govuk: the sign-in page's content lines up with the GOV.UK header at 1440px
+[51/62] keyboard/shell.spec.ts:656:5 › govuk: the sign-in page's content lines up with the GOV.UK header at 800px
+[52/62] keyboard/shell.spec.ts:656:5 › govuk: the sign-in page's content lines up with the GOV.UK header at 375px
+[53/62] keyboard/shell.spec.ts:656:5 › govuk: the start page's content lines up with the GOV.UK header at 1440px
+[54/62] keyboard/shell.spec.ts:656:5 › govuk: the start page's content lines up with the GOV.UK header at 800px
+[55/62] keyboard/shell.spec.ts:656:5 › govuk: the start page's content lines up with the GOV.UK header at 375px
+[56/62] keyboard/shell.spec.ts:695:3 › ospreyflow dark: an open drawer starts under the top bar and the context row, the navigation above it uncovered
+[57/62] keyboard/shell.spec.ts:695:3 › ospreyflow light: an open drawer starts under the top bar and the context row, the navigation above it uncovered
+[58/62] keyboard/shell.spec.ts:695:3 › govuk light: an open drawer starts under the top bar and the context row, the navigation above it uncovered
+[59/62] keyboard/shell.spec.ts:740:3 › ospreyflow dark: Build a report follows Reports by keyboard, a link to Superset in a new tab
+[60/62] keyboard/shell.spec.ts:740:3 › ospreyflow light: Build a report follows Reports by keyboard, a link to Superset in a new tab
+[61/62] keyboard/shell.spec.ts:740:3 › govuk light: Build a report follows Reports by keyboard, a link to Superset in a new tab
+[62/62] keyboard/shell.spec.ts:758:1 › every registered shell action has its own proving test case above
+  62 passed (14.8s)
