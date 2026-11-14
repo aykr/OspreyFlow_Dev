@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.04** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.05** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.05 | 2026-11-14 | §6a.8: the Ingest root in the set in every shape (ADR-148 Amendment 13 point 4, amended 14 November): in the standard shape the shared volume's `ingest` folder is a part of its own, so it is no longer among what no set holds, and an upload no longer disagrees with a restore's stores. Held by `tests/test_guides_cloud_platform.py`, reading the render both ways. PDF made by the orchestrator at merge. |
 | 2.04 | 2026-11-14 | §6a.7 and §16's table of what to do when something is wrong: a stopped hotlist or watch says why beside *Stopped*, in the Conduit's words for its owner (ADR-044 Amendment 1). PDF made by the orchestrator at merge. |
 | 2.03 | 2026-11-14 | §6a.8: the backup sets kept 34 days, a day inside RDS's 35-day point-in-time window, since RDS's earliest restorable point lags by up to about a day and the sets' expiry rounds up to midnight UTC (ADR-148 Amendment 13 point 5, amended 14 November); platform's diff, with the retention said to be no longer than that. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 2.02 | 2026-11-14 | Guests on Entra ID as built (ADR-148 Amendment 17, the audit's ruling 4b). §6a.7: a guest account is refused, in its own words, until an administrator of people turns on *Admit guest accounts* in *Admin › People*; each change audited; admitted, a guest signs in through the same mapping and is given nothing a member with the same token would not be; turned off, every guest is refused at their next request, and a run as a guest owner stops; the untried guest token's shape restated. §9: the setting, and guests marked in the list. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
@@ -1716,12 +1717,12 @@ platform's, under its own snapshots and versioning. **The deployment backs up wh
 (ADR-148 Amendments 7 and 13): ArcadeDB, ClickHouse and the claims part. **The claims part holds, in
 every shape, the shared volume's folders the deployment cannot make again**: the published
 pipelines (`data/recipes`), the model settings (`model-settings`) and the map settings with the map
-key file (`map-settings`, ADR-147); and, in the poc shape, the Ingest root's claim. Each is
+key file (`map-settings`, ADR-147); and the Ingest root (uploads and the drop folder) beside them:
+in the poc shape its own claim, and in the standard shape the shared volume's folder of it (`ingest`,
+a part of its own). Uploads can be large, so the claims run's size and time grow with them. Each is
 read-only to the backup, and the pods that mount them are writers a restore refuses to run beside.
 **Not in a set**: the rest of the shared volume, `ospreyflow-shared`: the tiles (`tiles`), made
-again, and, in the standard shape, the Ingest root (`ingest`: uploads and the drop folder), which
-there is a folder of the shared volume, not a claim of its own. A restore leaves those as they are,
-so in the standard shape an upload can disagree with the stores it brings back. The
+again. A restore leaves those as they are. The
 recovery runbook that ships with the product, `deploy/RUNBOOK.md`, has the whole procedure under *The
 `cloud-platform` profile*, with every command; this section says what it does.
 

@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from harness.cloud_platform.runbooks import command_blocks
@@ -43,6 +44,55 @@ def test_the_shared_claim_s_three_folders_are_parts_of_the_set() -> None:
     ]
     # Every pod that mounts one of them is a writer a restore refuses to run beside.
     assert {"api", "worker"} <= set(backups["writers"])
+
+
+@pytest.mark.parametrize("fixture", ["development", "production"])
+def test_the_ingest_root_joins_the_set_wherever_it_is_not_a_claim_of_its_own(fixture: str) -> None:
+    """MORNING item 6, (a): outside poc the Ingest root (the uploads and the drop folder) is a
+    folder of the shared claim, so it is the set's fourth shared part, read-only to the backup and
+    put back by restore-claims. Without it a restore brings back loads citing uploads that are not there."""
+    values = _values(_config(fixture))
+    api = next(w for w in values["workloads"] if w["name"] == "api")
+    assert not any(m.get("claim") for m in api["shared"]), "the Ingest root has no claim here"
+    assert values["backups"]["shared"] == [
+        {"name": "shared-recipes", "subPath": "data/recipes"},
+        {"name": "shared-model-settings", "subPath": "model-settings"},
+        {"name": "shared-map-settings", "subPath": "map-settings"},
+        {"name": "shared-ingest", "subPath": "ingest"},
+    ]
+
+
+def test_the_poc_s_ingest_root_is_its_own_claim_and_not_a_shared_part_too() -> None:
+    values = _values(_config("poc"))
+    assert {"name": "ingest", "size": values["storage"]["claims"][0]["size"]} in values["storage"][
+        "claims"
+    ]
+    assert "shared-ingest" not in [part["name"] for part in values["backups"]["shared"]]
+
+
+@pytest.mark.parametrize("fixture", ["development", "production"])
+def test_every_pod_writing_the_shared_ingest_folder_is_a_writer(fixture: str) -> None:
+    """A restore refuses to run beside a pod that writes the part it puts back: every workload or
+    Job mounting the shared `ingest` folder, or a folder inside it (`ingest/uploaded`), by the
+    render's own mounts."""
+    from harness.cloud_platform_backups import shared_parts, writers
+
+    values = _values(_config(fixture))
+    pods = [*values["workloads"], *values.get("jobs", [])]
+    def mounts(w: dict[str, Any]) -> list[dict[str, Any]]:
+        inits = [m for c in w.get("initContainers", []) for m in c.get("shared") or []]
+        return [*(w.get("shared") or []), *inits]
+
+    mounting = {
+        str(w["name"])
+        for w in pods
+        for m in mounts(w)
+        if str(m.get("subPath", "")).split("/")[0] == "ingest"
+    }
+    assert mounting and mounting <= set(values["backups"]["writers"])
+    # A pod mounting only a folder inside the part (the uploads) is one too.
+    dropper = {"name": "dropper", "shared": [{"subPath": "ingest/uploaded", "mountPath": "/u"}]}
+    assert "dropper" in writers([*pods, dropper], {}, parts=shared_parts(pods))
 
 
 def test_the_shared_folders_are_the_conduit_s_own_paths() -> None:
@@ -188,7 +238,7 @@ def test_the_recovery_runbook_says_the_claims_run_is_every_shapes_and_what_it_ho
     decision 4) and, in the poc shape, the Ingest root's claim beside them. The recovery runbook
     says so, naming each part as
     the render names it (`cloud_platform_backups.SHARED_PARTS`), never 'in the poc shape' alone."""
-    from harness.cloud_platform_backups import SHARED_PARTS
+    from harness.cloud_platform_backups import INGEST_PART, SHARED_PARTS
 
     section = _recovery_cloud_section()
     schedule = section[section.index("**The schedule.**") :]
@@ -197,6 +247,9 @@ def test_the_recovery_runbook_says_the_claims_run_is_every_shapes_and_what_it_ho
     for part in SHARED_PARTS:
         assert f"`{part['subPath']}`" in section, part["subPath"]
     assert "`ospreyflow-ingest`" in section  # the poc shape's own claim, beside them
+    # MORNING item 6, (a): elsewhere the Ingest root is a shared folder, and a part of its own.
+    words = re.sub(r"\s+", " ", section)
+    assert f"`{INGEST_PART['subPath']}` folder" in words and f"`{INGEST_PART['name']}`" in words
 
 
 def test_the_manifest_lists_the_claims_jobs_whenever_the_chart_renders_them() -> None:

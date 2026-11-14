@@ -231,7 +231,7 @@ def test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up() -> Non
     text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.8"))
     folders = sorted({f for found in parts.values() for f in found})
 
-    holds = re.search(r"cannot make again\*\*: (.*?); and, in the poc shape", text)
+    holds = re.search(r"cannot make again\*\*: (.*?) Each is read-only to the backup", text)
     assert holds, "§6a.8's sentence naming the set's folders"
     assert sorted(set(re.findall(r"\(`([^`]+)`", holds.group(1)))) == folders
     every = all(parts.values())
@@ -239,7 +239,12 @@ def test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up() -> Non
     assert ("`ospreyflow-backup-claims` (the claims part, in every shape" in text) is every
     assert ("in the poc shape, `ospreyflow-backup-claims`" in text) is (not every)
     poc_alone = bool(claims["poc"]) and not any(claims[s] for s in standard)
-    assert ("; and, in the poc shape, the Ingest root's claim" in text) is poc_alone
+    assert ("the Ingest root (uploads and the drop folder) beside them: in the poc shape its own claim" in text) is (
+        poc_alone and "ingest" in claims["poc"])
+    # Where the Ingest root is no claim of its own, the shared volume's folder of it is a part of the set.
+    part_in_standard = all("ingest" in parts[s] for s in standard) and "ingest" not in parts["poc"]
+    assert ("in the standard shape the shared volume's folder of it (`ingest`, a part of its own)" in text) is (
+        part_in_standard)
 
     outside = re.search(r"\*\*Not in a set\*\*: (.*?) A restore leaves those", text)
     assert outside, "§6a.8's sentence naming what no set holds"
@@ -247,6 +252,7 @@ def test_section_6a8_names_what_the_set_holds_as_the_render_backs_it_up() -> Non
     assert named == left_out("poc") | {f for s in standard for f in left_out(s)}
     in_standard_only = all("ingest" in left_out(s) for s in standard) and "ingest" not in left_out("poc")
     assert ("in the standard shape, the Ingest root (`ingest`" in outside.group(1)) is in_standard_only
+    assert ("an upload can disagree with the stores it brings back" in text) is any("ingest" in left_out(s) for s in values)
     assert bool(re.search(r"`ospreyflow-shared`[^.]{0,40}is not backed up", text)) is (not folders)
 
 

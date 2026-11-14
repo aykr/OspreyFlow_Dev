@@ -332,31 +332,61 @@ def database_names(environment: dict[str, Any]) -> tuple[str, str]:
 #: The ADR-148 audit's ruling 3 (v0.5.2): the shared claim's folders the deployment cannot make
 #: again, each a part of the set's claims part: the published pipelines (the recipes repository,
 #: under the Conduit's data folder), the model settings, and the map settings with the map key file
-#: (ADR-147). The rest of the shared claim (the tiles, the uploads' scratch) is made again or is
-#: the Ingest's.
+#: (ADR-147). The tiles and the uploads' scratch are made again; the Ingest root is a claim of its
+#: own on poc, and elsewhere a part of its own (`INGEST_PART`).
 SHARED_PARTS = (
     {"name": "shared-recipes", "subPath": "data/recipes"},
     {"name": "shared-model-settings", "subPath": "model-settings"},
     {"name": "shared-map-settings", "subPath": "map-settings"},
 )
+#: MORNING item 6, (a) (ADR-148 Amendment 13 point 4): where the Ingest root (the uploads and the
+#: drop folder) is not a claim of its own, it is the shared claim's `ingest` folder, and a fourth
+#: shared part: a restore that put the stores back without it would bring back loads citing uploads
+#: no longer there, or drop-folder files without the loads that read them. Read-only to the backup,
+#: put back by restore-claims, its size and time growing with the uploads.
+INGEST_PART = {"name": "shared-ingest", "subPath": "ingest"}
+
+
+def shared_parts(workloads: list[dict[str, Any]]) -> tuple[dict[str, str], ...]:
+    """The set's shared parts for this render: `SHARED_PARTS`, and the Ingest root's folder unless
+    a workload mounts it from a claim of its own (poc's `storage.claims`), by the render's own
+    mounts, never by the shape's name."""
+    for workload in workloads:
+        mounts = [*(workload.get("shared") or [])]
+        for init in workload.get("initContainers", []):
+            mounts += init.get("shared") or []
+        for mount in mounts:
+            root = str(mount.get("subPath", "")).split("/")[0]
+            if root == INGEST_PART["subPath"] and mount.get("claim"):
+                return SHARED_PARTS
+    return (*SHARED_PARTS, INGEST_PART)
+
+
 STOPPED_STORES = ("arcadedb",)
 RUNNING_STORES = ("clickhouse", "clickhouse-keeper")
 #: P9's own runs, which a restore must not run beside: a backup reads what is being replaced.
 OWN_RUNS = ("backup", "backup-claims")
 
 
-def _holds_a_shared_part(sub_path: str) -> bool:
-    """A mount of the shared claim that holds a part of the set (the folder, or one above it)."""
+def _holds_a_shared_part(sub_path: str, parts: tuple[dict[str, str], ...] = SHARED_PARTS) -> bool:
+    """A mount of the shared claim that holds a part of the set, or lies within one: the folder,
+    one above it, or one inside it (`ingest/uploaded` writes the `ingest` part)."""
     if not sub_path:
         return False
+    sub_path = sub_path.rstrip("/")
     return any(
-        part["subPath"] == sub_path or part["subPath"].startswith(sub_path.rstrip("/") + "/")
-        for part in SHARED_PARTS
+        part["subPath"] == sub_path
+        or part["subPath"].startswith(sub_path + "/")
+        or sub_path.startswith(part["subPath"] + "/")
+        for part in parts
     )
 
 
 def writers(
-    workloads: list[dict[str, Any]], paths: dict[str, list[str]] | None = None
+    workloads: list[dict[str, Any]],
+    paths: dict[str, list[str]] | None = None,
+    *,
+    parts: tuple[dict[str, str], ...] = SHARED_PARTS,
 ) -> list[str]:
     """Every pod a restore refuses to run beside, from the render (rule 12: a workload added
     later is caught by the same rule): the store replaced stopped (ArcadeDB); every workload or
@@ -376,7 +406,9 @@ def writers(
         mounts = [*(workload.get("shared") or [])]
         for init in workload.get("initContainers", []):
             mounts += init.get("shared") or []
-        if any(m.get("claim") or _holds_a_shared_part(str(m.get("subPath", ""))) for m in mounts):
+        if any(
+            m.get("claim") or _holds_a_shared_part(str(m.get("subPath", "")), parts) for m in mounts
+        ):
             found.add(str(workload["name"]))
     targets = found | {"clickhouse"}
     while True:
@@ -416,6 +448,7 @@ def backups_values(
     claim = give_arcadedb_its_backups_claim(arcadedb)
     clickhouse_writes_as_its_backup_role(clickhouse, platform.aws_region)
     graph_db, analytics_db = database_names(environment)
+    parts = shared_parts([*workloads, *(jobs or [])])
     # Every container's: the region, the bucket and its key, which the runner needs to start.
     env: list[dict[str, Any]] = [
         {"name": "AWS_REGION", "value": platform.aws_region},
@@ -449,11 +482,12 @@ def backups_values(
         "deadlineSeconds": DEADLINE_SECONDS,
         "resources": copy.deepcopy(api.get("resources") or {}),
         "env": env,
-        # The audit's ruling 3: the shared claim's parts, beside the claims of their own.
-        "shared": [dict(part) for part in SHARED_PARTS],
+        # The audit's ruling 3: the shared claim's parts, beside the claims of their own (and the
+        # Ingest root's folder where it is not a claim of its own, MORNING item 6).
+        "shared": [dict(part) for part in parts],
         "clickhouse": {"env": clickhouse_env},
         # The pods a restore refuses to run beside (the orchestrator's ruling 4), from the render.
-        "writers": writers([*workloads, *(jobs or [])]),
+        "writers": writers([*workloads, *(jobs or [])], parts=parts),
         # The restore is proven for one copy of each store (Amendment 7); beyond it the render
         # refuses the restore's Jobs, in words naming P9b (the orchestrator's round 2, item 13).
         "restorable": int(arcadedb.get("replicas", 1)) == 1
