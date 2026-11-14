@@ -42,3 +42,25 @@ Try 2 (`drain.try2.txt`, server run 20261114T062953Z-83fb5d52), uncontended:
 | Final drift check | none, nothing pending: 570,460 nodes in the graph, 642,460 documents in the index; 711 s, 169 MB max |
 
 Memory in the drain: available never under 29 GB (06:44:54Z, during the drift check).
+
+## Step 4's M10 subjects (granted 2026-11-14T08:37:44Z, server run 20261114T083744Z-a6eacc0f)
+
+By the orchestrator's ruling (with platform's revision: a principal holds one `org_unit`, and a code-R
+record is read only in its own unit), the cases stage was rerun on stack d under the rules lane's lease
+of 2026-11-14T03:27:42Z with `--grant` (the loader's `SOURCE:` form for one source's case). It made no
+case; it found the same twelve and set 51 grants, listed back from `investigation_grants`:
+
+| Subject | Level | Cases | Claims for step 4's issuer |
+| --- | --- | --- | --- |
+| `m10-cleared-unit-fiu` | viewer | all twelve Client-size cases | SECRET, codes P C R, unit-fiu |
+| `m10-cleared-unit-intel-covert` | viewer | all twelve | SECRET, codes P C R, unit-intel-covert |
+| `m10-cleared-unit-covert` | viewer | all twelve | SECRET, codes P C R, unit-covert |
+| `m10-cleared-unit-border` | viewer | all twelve | SECRET, codes P C R, unit-border |
+| `m10-part` | viewer | Nominal index, Intelligence reports | OFFICIAL-SENSITIVE, codes P C, unit-records |
+| `m10-measure` | editor | Intelligence reports (`01M7C2SXAPP3RF8QRSR2SKEMJK`), the measure case, where M6 draws | OFFICIAL-SENSITIVE, codes P C, unit-intel |
+
+The units owning code-R records in B (`scripts/client_size_plan.py`): unit-fiu (cs-sars, SECRET/R),
+unit-intel-covert (5 % of cs-intel's reports, SECRET/R), unit-covert (cs-covert, SECRET/R) and
+unit-border (cs-watchlist, OFFICIAL-SENSITIVE/R). A hidden record without code R (cs-intel's SECRET/C
+reports, unit-intel) is read by any of the four cleared subjects. No token was minted or written
+anywhere: the issuer and the Conduit in front of stack d are step 4's setup.
