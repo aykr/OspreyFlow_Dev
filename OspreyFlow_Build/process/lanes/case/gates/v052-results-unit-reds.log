@@ -1,0 +1,176 @@
+# v052-fixes jsdom reds at bc3a371; each plant restored with `git checkout -- <file>`
+## 1. the request without page_size (today's limit alone)
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t "asks the case's search in the frozen shape"; exit 1
+   × asks the case's search in the frozen shape, page 1 of 20, All and no filters 68ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected { query: 'Kestrel', group: null, …(2) } to deeply equal { query: 'Kestrel', group: null, …(3) }
+## 2. the heading not focused on opening
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'the heading takes focus'; exit 1
+   × the heading takes focus and the total is the Conduit's, in records 1073ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <body><div>…(1)</div></body> to be <h2 id="_r_0_" tabindex="-1" …(1)></h2> // Object.is equality
+## 3. uncertain counts not said
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'counts that may be incomplete say so'; exit 1
+   × counts that may be incomplete say so 1021ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 4. All counted from the page, not the Conduit's total (rule 7)
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t "the groups are All then the Conduit's"; exit 1
+   × the groups are All then the Conduit's, each with its count; choosing one asks again for that group 83ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'All 2', 'People 12', …(2) ] to deeply equal [ 'All 57', 'People 12', …(2) ]
+## 5. a result named by its id, not nodeLabel
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'each result is named as the canvas names it'; exit 1
+   × each result is named as the canvas names it, with its type and why it matched 73ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'p1' to be 'Kestrel' // Object.is equality
+## 6. the passage's match not marked
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'a document shows its passage with the match marked'; exit 1
+   × a document shows its passage with the match marked, and Open; a person has no Open 73ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected undefined to be 'Kestrel' // Object.is equality
+## 7. Open offered for every result
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'a document shows its passage with the match marked'; exit 1
+   × a document shows its passage with the match marked, and Open; a person has no Open 75ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <button type="button" …(2)></button> to be null
+## 8. Show on graph with the first record alone
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'Show on graph hands over every record'; exit 1
+   × Show on graph hands over every record the result stands for 85ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected "vi.fn()" to be called with arguments: [ [ …(2) ] ]
+## 9. the Ask line without the words
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'the Ask line hands the words to Ask & Chat'; exit 1
+   × the Ask line hands the words to Ask & Chat and sends nothing itself 84ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'Kestrel' ]
+## 10. the Ask line drawn with nothing to hand to
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'with no Ask & Chat to hand the words to'; exit 1
+   × with no Ask & Chat to hand the words to, there is no Ask line 85ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <button type="button" …(1)></button> to be null
+## 11. Back doing nothing
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'Back to the view the person left'; exit 1
+   × Back to the view the person left calls back 73ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected "vi.fn()" to be called at least once
+## 12. the date filter not sent
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'a dataset and a date range filter the search'; exit 1
+   × a dataset and a date range filter the search; Clear filters asks again without them 1101ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected { query: 'Kestrel', group: null, …(3) } to match object { filters: { …(3) } }
+## 13. Next page asking the same page
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'more results are a page away'; exit 1
+   × more results are a page away: Next page asks page 2 1085ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected undefined to match object { page: 2 }
+## 14. no results saying nothing
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'no results says so'; exit 1
+   × no results says so, offers the Ask line, and Clear filters where a filter is on 1094ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 15. the fallback's line not shown
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'on the fallback one line says the results are limited'; exit 1
+   × on the fallback one line says the results are limited, in the Conduit's words 1026ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 16. a dataset the fallback cannot count shown as 0
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t 'a dataset the fallback cannot count'; exit 1
+   × a dataset the fallback cannot count is listed without a count 85ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 17. a refusal in the Glass's words, not the Conduit's
+plant in src/search/SearchResults.tsx; npx vitest run src/search/SearchResults.test.tsx -t "a refusal is said in the Conduit's words"; exit 1
+   × a refusal is said in the Conduit's words 74ms
+      Tests  1 failed | 15 skipped (16)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'The search could not be done (422).' to contain 'Narrow the search: only the first 1,0…'
+## 18. Combobox choosing the first option with onSubmit (main's highlighted 0)
+plant in src/design/primitives/Combobox.tsx; npx vitest run src/design/primitives/Combobox.test.tsx -t 'with onSubmit, Enter on the typed words submits them'; exit 1
+   × with onSubmit, Enter on the typed words submits them while the options show, choosing none 66ms
+      Tests  1 failed | 2 skipped (3)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected '_r_0_-option-0' to be null
+## 19. Combobox ignoring an option moved to
+plant in src/design/primitives/Combobox.tsx; npx vitest run src/design/primitives/Combobox.test.tsx -t 'with onSubmit, an option moved to'; exit 1
+   × with onSubmit, an option moved to with the arrow keys is chosen by Enter 67ms
+      Tests  1 failed | 2 skipped (3)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'p1' ]
+## 20. GlobalSearch not passing Enter on (main's box)
+plant in src/search/GlobalSearch.tsx; npx vitest run src/App.search.test.tsx -t 'Enter in the search box opens the results'; exit 1
+     × Enter in the search box opens the results in the main area, the heading focused, no view current 1152ms
+      Tests  1 failed | 9 skipped (10)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 21. a view still current while the results show
+plant in src/App.tsx; npx vitest run src/App.search.test.tsx -t 'Enter in the search box opens the results'; exit 1
+     × Enter in the search box opens the results in the main area, the heading focused, no view current 201ms
+      Tests  1 failed | 9 skipped (10)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ 'Graph' ] to deeply equal []
+## 22. the view left in reach beneath the results
+plant in src/App.tsx; npx vitest run src/App.search.test.tsx -t 'Enter in the search box opens the results'; exit 1
+     × Enter in the search box opens the results in the main area, the heading focused, no view current 214ms
+      Tests  1 failed | 9 skipped (10)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected null not to be null
+## 23. Back leaving focus where it was
+plant in src/App.tsx; npx vitest run src/App.search.test.tsx -t 'Back to Graph returns to the graph as it was'; exit 1
+     × Back to Graph returns to the graph as it was, and focus to the search box 246ms
+      Tests  1 failed | 9 skipped (10)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <body><div>…(1)</div></body> to be <input class="input" …(6)></input> // Object.is equality
+## 24. the back link always naming the Graph
+plant in src/App.tsx; npx vitest run src/App.search.test.tsx -t 'the back link names the view the person left'; exit 1
+     × the back link names the view the person left 1144ms
+      Tests  1 failed | 9 skipped (10)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+## 25. choosing a view leaving the results showing
+plant in src/App.tsx; npx vitest run src/App.search.test.tsx -t 'choosing a view leaves the results'; exit 1
+     × choosing a view leaves the results, that view current 1184ms
+      Tests  1 failed | 9 skipped (10)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <h2 id="_r_i_" tabindex="-1" …(1)></h2> to be null
+## 26. the Ask line not carrying the words
+plant in src/App.tsx; npx vitest run src/App.search.test.tsx -t 'the Ask line opens Ask & Chat with the words'; exit 1
+     × the Ask line opens Ask & Chat with the words carried over, and nothing is asked of a model 219ms
+      Tests  1 failed | 9 skipped (10)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected '' to be 'Kestrel' // Object.is equality
+## 27. Ask & Chat ignoring the words carried
+plant in src/questions/QuestionsPanel.tsx; npx vitest run src/App.search.test.tsx -t 'the Ask line opens Ask & Chat with the words'; exit 1
+     × the Ask line opens Ask & Chat with the words carried over, and nothing is asked of a model 228ms
+      Tests  1 failed | 9 skipped (10)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected '' to be 'Kestrel' // Object.is equality
+## 28. the Ask line offered without ask_model
+plant in src/App.tsx; npx vitest run src/App.search.test.tsx -t 'someone not offered Ask & Chat'; exit 1
+     × someone not offered Ask & Chat (no ask_model) has no Ask line 202ms
+      Tests  1 failed | 9 skipped (10)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <button type="button" …(1)></button> to be null
+## 29. Show on graph not seeding
+plant in src/App.tsx; npx vitest run src/App.search.test.tsx -t 'Show on graph seeds every record'; exit 1
+     × Show on graph seeds every record the result stands for and returns to the graph 1267ms
+      Tests  1 failed | 9 skipped (10)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected false to be true // Object.is equality
+## 30. the results drawn over the reader (not hidden while a document is read)
+plant in src/App.tsx; npx vitest run src/App.search.test.tsx -t 'Open reads a document over the view'; exit 1
+     × Open reads a document over the view, the results kept beneath and shown again when it closes 1226ms
+      Tests  1 failed | 9 skipped (10)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected <h2 id="_r_i_" tabindex="-1" …(1)></h2> to be null
+# 30 of 30 red
