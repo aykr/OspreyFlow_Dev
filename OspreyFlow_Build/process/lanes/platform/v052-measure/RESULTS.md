@@ -36,7 +36,7 @@ Not results: the void and masked runs (`results-expired-20261114T142209Z/`, `res
 
 ## What each figure means for v0.5.2
 
-- **M1, M3, M4, M5:** met at client size (B, 642,460 nodes) under the poc's limits (the Conduit at 2 CPUs and 4 GB). M3 to M5 sit at about 860 ms p50, close to the 1 s budget. That run predates ADR-124 Amendment 20, and a page measured since takes about 100 ms (`STEP4_RECORD.md`, the page's profile); the gap is being measured, so these rows stand as measured and are not revised from the profile.
+- **M1, M3, M4, M5:** met at client size (B, 642,460 nodes) under the poc's limits (the Conduit at 2 CPUs and 4 GB). M3 to M5 sit at about 860 ms p50, close to the 1 s budget. That run predates ADR-124 Amendment 20: measured since (`STEP4_RECORD.md`, the gap), the same 200 exact sends take 896 ms p50 on step 4's own tree and 115 ms on today's, both at the poc's limits, the difference the merge's old `edges_among`, which read the whole store on every page of two or more hits (808 ms of it, 43 ms as built now). These rows stand as measured; the candidate, which carries Amendment 20, pages at about 100–130 ms, an eighth of them.
 - **M6:** a drawn node is searchable within 3 s, inside the 5 s budget.
 - **M9:** met with ADR-124 Amendment 21, merged to main as 4693457 (the orchestrator, 14 Nov) and so in the candidate: without it, a search with OpenSearch down takes over 5 s at client size and the bar's own timeout is passed.
 - **M10:** no leak at scale: no hidden id, count or word reached the part-cleared reader in 1,000 cases, with the check shown to fire. The never-join file is at the 90% floor exactly; the orchestrator's ruling holds the floor where it is.
