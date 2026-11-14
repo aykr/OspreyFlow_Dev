@@ -1,7 +1,7 @@
 # Step 6 (`v052-r1`) · the install test on the candidate · run sheet
 
 Prepared offline on 14 November 2026 by platform-b, on `lane/platform-b-v052-r1` (main 78564d2 merged in). The day is
-**Wed 18 Nov** (the owner's cut moved to Thu 19, 14 November; it was the 25th). ROUTE_052's brief: install v0.5.1, upgrade to the
+**Mon 16 Nov from 08:00Z** (the owner's word, 14 November; Tue 17 to Thu 19 are its spare days, and the cut is Thu 19; it was the 18th, and before that the 25th). **The candidate** is main after the wording sweep, am20 and the CI fixes, with CI green on it; the orchestrator sends its commit by Sunday evening. If it is not ready by then, the day starts at the first 08:00Z after it is. ROUTE_052's brief: install v0.5.1, upgrade to the
 candidate, **verify every manifest entry**, run spec 08's scenarios that apply to the shape, then decommission, with
 the operator choosing keep or destroy for the backups. "The full suite runs once, at step 6."
 
@@ -48,7 +48,7 @@ Nothing touches osprey-small.
 7. **Server memory.**
    - R1's node is capped at 32 GiB, beside osprey-small (about 24) on the 62 GiB server.
    - **Rules' B stack, kept up under a long lease for step 4 (23 Nov), must be down before the run** (by the evening of
-     Tue 17 now that the run is on the 18th: to confirm with the orchestrator), or the node cannot be given its 32.
+     Sun 15 now that the run is on Mon 16: to confirm with the orchestrator), or the node cannot be given its 32.
 8. **Platform's two R1 fixes: done** (r1upgrade on main, the fix 326356a, its record e00a09c).
    - `runbook INSTALL` renders the candidate's own copy every time. Another release's kept render is set aside as
      `render.before-upgrade` and never run, and the candidate's render is the kept one after.
@@ -134,7 +134,7 @@ day adds the following:
 So allow **most of the day**, and the full suite on top: about 80 minutes for CI's run, from its recent runs on main,
 not measured here.
 
-## The day plan (Wed 18 Nov), in order, with times
+## The day plan (Mon 16 Nov), in order, with times
 
 **M** is measured: R1's own records of 13 November, `process/lanes/platform/r1/run/`, on a warm cluster with our
 images already built (INSTALL 17:58:44 to its check 18:04:25; the check to the restore's record about 1.5 min; the
@@ -175,7 +175,7 @@ records do not time.
 3. Go only when platform-b's line is first and nothing is running.
 4. Delete platform-b's line when the day's last server run is done.
 
-Only the orchestrator adds or reorders lines, so platform-b's line for Wed 18 is asked for before the day. If it is
+Only the orchestrator adds or reorders lines; platform-b's line is booked for Mon 16 from 08:00Z, with Tue 17 to Thu 19 as spare days. If it is
 not first at 08:00, the day starts when it is, and the times above move with it.
 
 **Start at 08:00 sharp, and if a fix is needed after about 13:00, tell the orchestrator before rerunning** (the orchestrator, 14 November: a FAIL costs 1.5 to 2 h, and the 15:30 finish has little slack). **About 8.75 h with no fix**, ending about 16:50 (the token version's live row adds about 20 min); the fresh install's verify and spec 08 (row 11b) add about 50 min to the plan of 14 November. A failure in copy B's command costs one more pass of rows 4 to 10,
