@@ -46,7 +46,7 @@ PLANTS = [
     ("the poc's files not mounted", RUNNER,
      '        *(a for host, at in mounts for a in ("-v", f"{host}:{at}:ro")),\n', "", "own_files_where"),
     ("the realm's users left as the deployment's", RUNNER,
-     '    realm["users"] = realm_users()\n    return realm', "    return realm", "subjects_alone"),
+     '    realm["users"] = realm_users()\n', "", "subjects_alone"),
     ("m10-part outside the measured case's unit", RUNNER,
      '    {"username": "m10-part", "clearance": "OFFICIAL-SENSITIVE", "org_unit": "unit-intel",',
      '    {"username": "m10-part", "clearance": "OFFICIAL-SENSITIVE", "org_unit": "unit-records",', "rules_granted"),
