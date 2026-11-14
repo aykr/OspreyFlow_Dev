@@ -80,3 +80,4 @@ cf09c42 5e89793 platform v052-searchkind, with v052-standin
 7af832b 425a54a platform v052-pgmemory (main's render-memory red)
 2b8c642 5f0f64e case-b v052-selection (Parts C and E), with tokens, registry and every-harness diffs
 d97dde2 5f2aec7 docs 6a8 (main's 6a8 red), admin guide PDF reprinted
+7a0cad7 c3f4600 docs 6a8-shared, admin guide PDF reprinted (1.96)
