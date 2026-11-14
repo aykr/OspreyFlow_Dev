@@ -96,6 +96,24 @@ Main's own CI will meet the same finding at its next image scan.
    - Three or more: the selection's actions alone.
    - The heading always says what the menu applies to.
 
+8. **Search's performance budgets, for step 4 on Mon 23 (platform's plan, lane/platform-v052-measure,
+   `process/lanes/platform/v052-measure/PLAN.md`).** The spec states no search budget beyond ADR-059's ~300 ms for a
+   suggestion. Proposed, each with its basis and the figure that fails it:
+   - suggestions p95 ≤ 300 ms at the Conduit (fail above, or any over 2 s); in the Glass ≤ 400 ms (fail above 600);
+   - a name search ≤ 1 s (fail above 2);
+   - full text with highlights and filters ≤ 1.5 s (fail above 3);
+   - an exact identifier ranked first every time;
+   - index lag ≤ 5 s (fail above 30);
+   - the rebuild measured, which then sets the restore's bound;
+   - the drift check inside its 4 GiB in ≤ 1 h;
+   - the fallback shown within 5 s;
+   - the leak test passed at scale;
+   - each container's peak ≤ 80% of its limit.
+
+   These would become a live test at step 6 and at each release, plus a CI regression gate on a 1M-name corpus.
+   Accept as proposed, or change any figure. Suggestions are measured on what B loads (your ruling of 13 Nov), not
+   at tens of millions.
+
 ## Decided by the lanes, for you to overrule if you wish
 
 - **Case, Build a report for the Administrator (ADR-145 Am 15 decision 5):** a builder without the Reports
