@@ -189,7 +189,7 @@ def test_a_person_never_signed_in_has_their_values_set() -> None:
 def test_a_value_entra_sends_is_never_given_here() -> None:
     response = _put(_client(_Store(frozenset({"clearance"})), _admin()), clearance="OFFICIAL", org_unit="unit-2")
     assert response.status_code == 409 and response.json()["error"] == "entra_holds_accounts", response.text
-    assert "org_unit" in response.json()["detail"]
+    assert response.json()["detail"].startswith("Here a person's unit comes from Entra ID, and is changed there. ")
 
 
 def test_without_the_fallback_access_is_entra_s_as_before() -> None:
@@ -487,7 +487,7 @@ def test_a_value_not_set_here_is_said_as_such_never_as_signing_in() -> None:
     assert refused.value.unset == ("unit", "handling codes")
     said = owner_refusal_words(refused.value, SETTER)
     assert said == (f"the schedule's owner, {SETTER}, an administrator has not set unit and handling codes for this person in "
-                    "Admin › People: it runs at its next slot once an administrator has set it")  # fmt: skip
+                    "Admin › People and roles: it runs at its next slot once an administrator has set it")  # fmt: skip
     assert "sign in" not in said and "signed in" not in said
     assert out_of_date_next(refused.value, by_hand=True) == "run it again once an administrator has set it"
     # A token's values out of date are still said as before.
@@ -499,7 +499,7 @@ def test_a_run_asked_for_by_hand_is_told_what_to_do_in_the_refusal_s_own_words()
     from services.api.scheduler import _asked_for, _Refused
 
     told = _Refused("slot words", kind="owner_out_of_date", about_the_owner=False,
-                    asked_for="the schedule's owner, x, an administrator has not set unit for this person in Admin › People: "
+                    asked_for="the schedule's owner, x, an administrator has not set unit for this person in Admin › People and roles: "
                               "run it again once an administrator has set it")  # fmt: skip
     assert _asked_for(told, None) == told.asked_for  # type: ignore[arg-type]
 

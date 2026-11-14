@@ -227,7 +227,7 @@ async def test_an_owner_not_held_is_said_as_people_and_counted() -> None:
     executor = _schedules(lambda _o: _raises(OwnerNotHeld("gone")))
     with pytest.raises(ScheduleRefused) as refused:
         await executor._resolve(OWNER)
-    assert str(refused.value) == f"the schedule's owner, {OWNER}, is not a person Admin › People holds"
+    assert str(refused.value) == f"the schedule's owner, {OWNER}, is not held in Admin › People and roles"
     assert "identity provider" not in str(refused.value)
     assert refused.value.about_the_owner is True and refused.value.kind == "refused_rights"
 
@@ -251,8 +251,8 @@ async def test_run_now_and_ospreyflow_run_say_to_run_it_again_once_the_owner_sig
     ("error", "words"),
     [
         (PrincipalAccessOutOfDate(OWNER, None), f"the schedule's owner, {OWNER}, {ACCESS_OUT_OF_DATE_WORDS}: {NEXT_SLOT_WORDS}"),
-        (OwnerNotHeld("gone"), f"the schedule's owner, {OWNER}, is not a person Admin › People holds"),
-        (OwnerRecordUnavailable("down"), "Admin › People's store could not be read to act as the schedule's owner"),
+        (OwnerNotHeld("gone"), f"the schedule's owner, {OWNER}, is not held in Admin › People and roles"),
+        (OwnerRecordUnavailable("down"), "the people store behind Admin › People and roles could not be read to act as the schedule's owner"),
         (PrincipalRevoked("disabled"), f"the schedule's owner, {OWNER}, can no longer sign in"),
     ],
     ids=["out-of-date", "not-held", "store-unread", "revoked"],
