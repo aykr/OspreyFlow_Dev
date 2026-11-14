@@ -83,14 +83,15 @@ Each rule has a case that plants a violation and shows the check fails. The firs
 
 ## Before the owner publishes
 
-- [ ] The two repositories exist, and their addresses are written where the publish script reads them (item 5's
-      proposal, `process/lanes/docs/sites-proposal/`).
+- [ ] The two repositories exist, and their addresses are written in `sites/REPOSITORIES`, one line a site
+      (`org https://github.com/<owner>/<repository>`). Until then `publish_pages.sh --site org|net` refuses in words
+      (item 5, applied 14 November 2026; `tests/test_publish_pages.py`).
 - [ ] Each domain's DNS points at GitHub Pages, both domains are verified on the account, and HTTPS is enforced.
 - [ ] The service centre knows to expect OspreyFlow enquiries and security reports, and who they go to.
 - [ ] The client's names are added with `client_hashes.py`, and the check is shown red with each name planted, in a
       session the owner runs.
-- [ ] The publish script's identifier rule allows the Team page's six names (item 4's proposal). Until then it refuses
-      `team.html`.
+- [x] The publish script's identifier rule allows the Team page's six names, in their own cards and nowhere else
+      (item 4, applied 14 November 2026: `../identifier_check.py`, `../TEAM_NAMES`, `tests/test_site_identifiers.py`).
 - [ ] The images are fresh captures from the rebuilt demonstration (item 6).
 - [ ] What each page marks as in the release, and as only on `main`, is still true for the release then current.
       These pages were checked against v0.5.0 and `main` on 12 November 2026.
