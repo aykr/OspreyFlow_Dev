@@ -1,6 +1,8 @@
+diff --git a/OspreyFlow_Build/Makefile b/OspreyFlow_Build/Makefile
+index 799c688..925f9af 100644
 --- a/OspreyFlow_Build/Makefile
 +++ b/OspreyFlow_Build/Makefile
-@@ -169,7 +169,7 @@
+@@ -169,7 +169,7 @@ docs-pdf:
  TEST_FAILED := $(CURDIR)/.make-test-failed
  test:
  	@rm -f $(TEST_FAILED)
