@@ -731,3 +731,24 @@ async def test_am15_a_value_is_never_kept_without_its_audit_row(am15_world, fail
         )  # fmt: skip
     held = await am15_world.store.standing(AM15_PERSON)
     assert (held.clearance, held.org_unit, held.receivable_handling_codes) == (None, None, None)
+
+
+async def test_am15_a_run_acts_as_its_owner_with_the_values_set_here(am15_world) -> None:
+    """Amendment 16 meets 15 on the real table: `owner` reads the administrator's columns for the values
+    the mapping sources from them, so a run of the first administrator, who never signed in, acts with the
+    values the start seeded; a person with a value unset is refused, never acting on a token's or none."""
+    from principal_auth import PrincipalAccessOutOfDate
+
+    await am15_world.store.seed_first_administrators([AM15_SETTER], None, AM15_FIRST)  # type: ignore[arg-type]
+    held = await am15_world.store.owner(TENANT, AM15_SETTER)
+    assert (held.clearance, held.org_unit, list(held.receivable_handling_codes)) == ("OFFICIAL-SENSITIVE", "unit-1", ["P", "R"])
+    resolver = PrincipalResolver(_config("http://127.0.0.1:9/keys", oidc_issuer=ISSUER, oidc_audience=API),
+                                 claim_mapping=AM15_MAPPING, role_source=am15_world.store)  # fmt: skip
+    try:
+        owner = await resolver.resolve_for_owner_detailed(AM15_SETTER)
+        assert (owner.clearance, owner.org_unit, owner.receivable_handling_codes) == ("OFFICIAL-SENSITIVE", "unit-1", ["P", "R"])
+        await am15_world.store.person(TENANT, AM15_PERSON, AM15_SEEN)  # recorded by a sign-in, nothing set here
+        with pytest.raises(PrincipalAccessOutOfDate):
+            await resolver.resolve_for_owner_detailed(AM15_PERSON)
+    finally:
+        await resolver.aclose()

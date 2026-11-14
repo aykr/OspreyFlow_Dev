@@ -1,0 +1,16 @@
+# 4c: a run acting as its owner reads the values set here (Amendment 16 meets 15), each plant at _owner, a fresh PYTHONPYCACHEPREFIX per run
+unplanted: exit 0: 5 passed, 34 deselected, 1 warning in 4.54s
+== Amendment 16's own read: the token's columns for every field
+  planted: exit 1: 2 failed, 3 passed, 34 deselected, 1 warning in 4.99s
+    test_entra_people_administrator_access.py::test_a_run_acts_with_every_value_set_here_and_they_never_age
+    test_entra_people_administrator_access.py::test_a_partial_fallback_takes_the_value_set_here_and_the_token_s_others_within_the_day
+== an owner whose every value is set here not counted current
+  planted: exit 1: 1 failed, 4 passed, 34 deselected, 1 warning in 5.19s
+    test_entra_people_administrator_access.py::test_a_run_acts_with_every_value_set_here_and_they_never_age
+== a run allowed with a value set by the administrator unset
+  planted: exit 1: 1 failed, 4 passed, 34 deselected, 1 warning in 4.59s
+    test_entra_people_administrator_access.py::test_a_value_set_by_the_administrator_but_not_set_yet_refuses_the_run[every-set-here-codes-unset]
+== a partial fallback counted current too
+  planted: exit 1: 1 failed, 4 passed, 34 deselected, 1 warning in 5.03s
+    test_entra_people_administrator_access.py::test_a_partial_fallback_takes_the_value_set_here_and_the_token_s_others_within_the_day
+restored: exit 0: 5 passed, 34 deselected, 1 warning in 4.52s

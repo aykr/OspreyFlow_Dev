@@ -29,9 +29,15 @@ lane-reviewer briefed without the lane's own conclusions.
 - **The live section: run** on 14 November on test stack b under platform-b's lease. The owner acquired, brought up,
   ran, brought down and released it from this worktree's window. The whole live file passed, 32 of 32, and three
   live plants each went red for their own test, with 11 passing again once restored (`am15-live.txt`).
-- **Found by the rebase onto main (Amendment 16):** a run acting as its owner reads the token's columns, never the
-  administrator's, so under the fallback every run is refused as "out of date". This went to the orchestrator with a
-  fix proposed (14 November).
+- **Found by the rebase onto main (Amendment 16), and fixed in 4c** (the orchestrator's word, 14 November): a run
+  acting as its owner read only the token's columns, so under the fallback every run was refused as "out of date".
+  `owner()` now reads the administrator's values through `_owner`. With every value set here, the owner is current;
+  with some set here, the token's values still need a sign-in within the day; a value set here but not set yet
+  refuses the run.
+  - Offline: five tests, and four plants red (`owner-red-first.txt`).
+  - Live: `test_am15_a_run_acts_as_its_owner_with_the_values_set_here`, written, not yet run. It waits for the
+    owner's next acquire.
+  - ADR-148 Amendment 15 has point 8, and §6a.7 a sentence, mirrored.
 - **Round 2's could 9** is carried: the stale-access words (`STALE_ACCESS_WORDS`) advise "sign in
   again", where the fix for a person with a value unset is an administrator setting it. The words are
   shared by three refusals and their tests.

@@ -302,6 +302,37 @@ def _held(person: PersonAccount) -> dict[str, Any]:
             "receivable_handling_codes": person.receivable_handling_codes}  # fmt: skip
 
 
+def _owner(
+    row: Mapping[str, Any], by_administrator: frozenset[str], now: datetime | None = None
+) -> StoredOwner:
+    """A run's owner as held (ADR-148 Amendments 15 and 16): each value the mapping sources from
+    the administrator is the one set here, the others the token's last. A value set here never
+    ages, so an owner whose every value is set here is current at this read; with only some set
+    here, the token's still need a sign-in within the day (`access_read_at`, judged by the
+    resolver). One set by the administrator but not set yet refuses the run, as the person's own
+    sign-in is refused (no clearance and no time are given)."""
+    sets = by_administrator
+
+    def held(field: str, seen: str) -> Any:
+        return row.get(ADMINISTRATOR_FIELDS[field]) if field in sets else row[seen]
+
+    read_at = row["access_read_at"]
+    clearance, org_unit = held("clearance", "clearance"), held("org_unit", "org_unit")
+    codes = held("handling_codes", "receivable_handling_codes")
+    if sets and not _all_set(row, sets):
+        clearance, read_at = None, None
+    elif sets >= ADMINISTRATOR_FIELDS.keys():
+        read_at = now or datetime.now(UTC)
+    return StoredOwner(
+        roles=tuple(row["roles"]),
+        disabled=bool(row["disabled"]),
+        clearance=clearance,
+        org_unit=org_unit,
+        receivable_handling_codes=tuple(codes or ()),
+        access_read_at=read_at,
+    )
+
+
 def _stored(row: Mapping[str, Any]) -> StoredPerson:
     """The resolver's and the socket's read: roles, disabled, and what the administrator set (None
     where nothing was), whatever the mapping sources; the resolver takes only what it sources so."""
@@ -546,20 +577,15 @@ class EntraPeopleStore:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT roles, disabled, clearance, org_unit, receivable_handling_codes, "
-                "access_read_at FROM entra_people WHERE tenant_id = $1 AND oid = $2",
+                "access_read_at, admin_clearance, admin_org_unit, admin_codes "
+                "FROM entra_people WHERE tenant_id = $1 AND oid = $2",
                 self.tenant_id,
                 oid,
             )
         if row is None:
             return None
-        return StoredOwner(
-            roles=tuple(row["roles"]),
-            disabled=bool(row["disabled"]),
-            clearance=row["clearance"],
-            org_unit=row["org_unit"],
-            receivable_handling_codes=tuple(row["receivable_handling_codes"]),
-            access_read_at=row["access_read_at"],
-        )
+        # Amendment 15: the values the administrator sets are this deployment's, never a token's.
+        return _owner(row, self.by_administrator)
 
     # --- the install's first administrators ---------------------------------------------------
 

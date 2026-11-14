@@ -38077,3 +38077,22 @@ By platform-b. An access step: two review rounds, listed for the owner (round 1'
    its role gate, the Access write's audit row after its transaction commits, and the store's clearance limit
    removed. Not shown by any test: two transactions racing (`FOR SHARE`/`FOR UPDATE` is by design). The
    administration guide 2.00, §6a.7 and Appendix A, says the rest.
+
+8. **A run acting as its owner (Amendment 16) takes the values set here.** `EntraPeopleStore.owner` reads the
+   administrator's columns for each value the mapping sources from the administrator, and the token's columns for
+   the rest, through the same rule as a sign-in.
+   - **Every value set here:** a value set here never ages, so the owner is current at each read, even one who never
+     signed in. A first administrator's run acts with the values the start seeded.
+   - **Some values set here:** the token's own values still need a sign-in within `ACCESS_FRESH`.
+   - **A value the administrator sets but has not set yet:** the run is refused, as the person's sign-in is.
+   Found by 4c's rebase onto Amendment 16, whose `owner` read the token's columns alone, so under the fallback every
+   run was refused as out of date, and its words told the owner to sign in again, which could never help.
+
+   Tests:
+   - offline: `test_entra_people_administrator_access.py`, the real `_owner` through the real resolver, its four
+     plants red (`process/lanes/platform-b/4c/owner-red-first.txt`);
+   - live: `test_entra_people_live.py`'s `test_am15_a_run_acts_as_its_owner_with_the_values_set_here`, written and
+     not yet run: it waits on a lease, which the owner acquires.
+
+   A refused run's words are Amendment 16's `ACCESS_OUT_OF_DATE_WORDS`, which advise signing in. For a value not set
+   here they mislead, as do the stale-access words carried from 4c's second review (could 9).

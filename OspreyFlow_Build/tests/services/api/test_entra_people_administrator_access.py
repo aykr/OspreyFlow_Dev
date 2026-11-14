@@ -407,3 +407,69 @@ def test_people_is_told_which_values_are_set_here(sets: frozenset[str]) -> None:
     response = _client(_Store(sets), _admin()).get("/v1/admin/sign-in")
     assert response.status_code == 200, response.text
     assert response.json() == {"kind": "entra", "administrator_sets": sorted(sets)}
+
+
+# --- a run acting as its owner, with values set here (Amendment 16 meets Amendment 15) ----------
+
+
+def _owner_resolver(sets: frozenset[str], row: dict[str, Any]) -> Any:
+    """The real resolver's `_stored_owner`, over a store whose `owner` is the real `_owner` on a row of
+    `entra_people` as the table holds it (rule 15: the store's own decision, not a stand-in's)."""
+    from principal_auth import ClaimMapping, PrincipalResolver, ValueSource
+    from services.api.entra_people import _owner
+    from tests.services.api.test_auth_entra_claims import TENANT as CLAIMS_TENANT
+    from tests.services.api.test_auth_entra_claims import _entra_config
+
+    source = lambda field: ValueSource(administrator=True) if field in sets else ValueSource(claim=f"ext_{field}")  # noqa: E731
+    codes = {"administrator": True} if "handling_codes" in sets else {"claim": "ext_codes"}
+    mapping = ClaimMapping(tenant_id=CLAIMS_TENANT, client_id="00000000-0000-4000-8000-0000000000c1",
+                           clearance=source("clearance"), org_unit=source("org_unit"), handling_codes=codes)  # type: ignore[arg-type]  # fmt: skip
+
+    class _Owners:
+        async def owner(self, tenant_id: str, oid: str) -> Any:
+            return _owner(row, sets)
+
+    return PrincipalResolver(_entra_config("http://127.0.0.1:9/keys"), claim_mapping=mapping, role_source=_Owners(),
+                             role_lookup_timeout_seconds=0.5)  # fmt: skip
+
+
+def _owner_row(*, set_here: tuple[Any, Any, Any], seen: tuple[Any, Any, Any] = (None, None, []), read_hours_ago: float | None = None) -> dict[str, Any]:
+    from datetime import timedelta
+
+    read = None if read_hours_ago is None else datetime.now(UTC) - timedelta(hours=read_hours_ago)
+    return {"roles": ["analyst"], "disabled": False, "clearance": seen[0], "org_unit": seen[1], "receivable_handling_codes": seen[2],
+            "admin_clearance": set_here[0], "admin_org_unit": set_here[1], "admin_codes": set_here[2], "access_read_at": read}  # fmt: skip
+
+
+def test_a_run_acts_with_every_value_set_here_and_they_never_age() -> None:
+    """The token's columns stay empty under the fallback, and an owner who never signed in has no time:
+    a run still acts with the values Access set, which do not age."""
+    row = _owner_row(set_here=("SECRET", "unit-7", ["P", "R"]), read_hours_ago=None)
+    owner = asyncio.run(_owner_resolver(EVERY, row).resolve_for_owner_detailed(SETTER))
+    assert (owner.clearance, owner.org_unit, owner.receivable_handling_codes, owner.roles) == ("SECRET", "unit-7", ["P", "R"], ["analyst"])
+
+
+def test_a_partial_fallback_takes_the_value_set_here_and_the_token_s_others_within_the_day() -> None:
+    sets = frozenset({"clearance"})
+    fresh = _owner_row(set_here=("SECRET", None, None), seen=("PUBLIC", "unit-1", ["R"]), read_hours_ago=2)
+    owner = asyncio.run(_owner_resolver(sets, fresh).resolve_for_owner_detailed(SETTER))
+    assert (owner.clearance, owner.org_unit, owner.receivable_handling_codes) == ("SECRET", "unit-1", ["R"])
+    from principal_auth import PrincipalAccessOutOfDate
+
+    stale = _owner_row(set_here=("SECRET", None, None), seen=("PUBLIC", "unit-1", ["R"]), read_hours_ago=25)
+    with pytest.raises(PrincipalAccessOutOfDate):
+        asyncio.run(_owner_resolver(sets, stale).resolve_for_owner_detailed(SETTER))
+
+
+@pytest.mark.parametrize(
+    ("sets", "set_here"),
+    [(EVERY, ("SECRET", "unit-7", None)), (EVERY, ("SECRET", None, ["P"])), (frozenset({"clearance"}), (None, None, None))],
+    ids=["every-set-here-codes-unset", "every-set-here-unit-unset", "partial-its-own-value-unset"],
+)  # fmt: skip
+def test_a_value_set_by_the_administrator_but_not_set_yet_refuses_the_run(sets: frozenset[str], set_here: tuple[Any, Any, Any]) -> None:
+    """As the person's own sign-in is refused, never acting on a token's value or on none."""
+    from principal_auth import PrincipalAccessOutOfDate
+
+    row = _owner_row(set_here=set_here, seen=("OFFICIAL", "unit-1", ["R"]), read_hours_ago=1)
+    with pytest.raises(PrincipalAccessOutOfDate):
+        asyncio.run(_owner_resolver(sets, row).resolve_for_owner_detailed(SETTER))

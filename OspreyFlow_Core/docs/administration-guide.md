@@ -1595,7 +1595,9 @@ claim for it is not read. **The first administrators are given theirs at install
 `cloud_platform.claims.first_administrator_access` (`{clearance: ..., org_unit: ..., handling_codes:
 [...]}`, each value the administrator sets), which the render requires; a restart never overwrites
 a value an administrator has since changed. The render refuses `{administrator: true}` on any shape
-but `poc`: a production namespace reads every value from Entra ID.
+but `poc`: a production namespace reads every value from Entra ID. **A run acting as its owner uses
+the values set here**, and the token's for the rest, from a sign-in within the day. A value set here
+never ages, and one not set yet refuses the run.
 
 **A run acts as its owner as Admin › People holds them** (ADR-148 Amendment 16). Entra ID has no
 way for the Conduit to sign in as a person who is not present, so whatever runs as its owner uses
