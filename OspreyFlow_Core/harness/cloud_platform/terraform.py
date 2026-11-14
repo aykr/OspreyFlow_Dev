@@ -21,7 +21,7 @@ from typing import Any
 
 from harness.cloud_platform.connections import POSTGRES_MAX_CONNECTIONS
 from harness.cloud_platform.settings import PlatformSettings
-from harness.cloud_platform_backups import EXPIRE_DAYS
+from harness.cloud_platform_backups import POINT_IN_TIME_DAYS
 from schemas.deployment import OspreyConfig, SearchBackend
 
 #: The buckets the services use (`packages/conduit_common/s3.py`'s `<prefix><name>`), as the
@@ -192,9 +192,10 @@ def render_terraform(
                     ("db_subnet_group_name", "aws_db_subnet_group.postgres.name"),
                     ("parameter_group_name", "aws_db_parameter_group.postgres.name"),
                     ("vpc_security_group_ids", "[aws_security_group.postgres.id]"),
-                    # The ADR-148 audit's ruling 3: point in time as far back as the oldest set
-                    # (the sets' own expiry), so the stores and PostgreSQL meet at any set's time.
-                    ("backup_retention_period", str(EXPIRE_DAYS)),
+                    # The ADR-148 audit's ruling 3: point in time beyond the oldest set (35 days,
+                    # AWS's maximum; the sets expire a day sooner), so the stores and PostgreSQL
+                    # meet at any set's time.
+                    ("backup_retention_period", str(POINT_IN_TIME_DAYS)),
                     ("deletion_protection", "true" if production else "false"),
                     ("skip_final_snapshot", "false" if production else "true"),
                     (

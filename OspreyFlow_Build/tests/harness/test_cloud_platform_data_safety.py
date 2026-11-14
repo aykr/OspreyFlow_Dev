@@ -3,8 +3,9 @@
 1. **The shared claim joins the backup set and its restore**: the published pipelines (the recipes
    repository, `data/recipes`), the model settings and the map settings (with the map key file), each
    a part of the set's claims part beside the Ingest root;
-2. **RDS's point-in-time restore reaches every set**: `backup_retention_period` is the sets' own 35 days
-   (`cloud_platform_backups.EXPIRE_DAYS`), so a set's finish time is always within RDS's window;
+2. **RDS's point-in-time restore reaches every set**: `backup_retention_period` is 35 days, AWS's
+   maximum (`cloud_platform_backups.POINT_IN_TIME_DAYS`), and the sets expire a day sooner, at 34
+   (`EXPIRE_DAYS`; MORNING item 5, (a)), so a set's finish time is always within RDS's window;
 3. **The decommission has no default**: the operator chooses `keep` or `destroy` for the backups bucket
    and its KMS key, and the record (the leftover check's output) states which.
 
@@ -12,7 +13,7 @@ What a mistake would do, and the case that catches it (rule 12):
 - a restore that brings back the stores but not the pipelines or the settings that make sense of them
   — `test_the_shared_claim_s_three_folders_are_parts_of_the_set`;
 - a set older than RDS's window, so the stores and PostgreSQL cannot be brought to one time —
-  `test_rds_keeps_point_in_time_for_as_long_as_the_sets_are_kept`;
+  `test_rds_keeps_point_in_time_a_day_longer_than_the_sets_are_kept`;
 - a decommission that keeps (or destroys) the backups because nobody said otherwise —
   `test_step_7_refuses_until_keep_or_destroy_is_chosen` and the two cases after it.
 """
@@ -25,7 +26,7 @@ from pathlib import Path
 
 import pytest
 from harness.cloud_platform.runbooks import command_blocks
-from harness.cloud_platform_backups import BUCKET_SUFFIX, EXPIRE_DAYS
+from harness.cloud_platform_backups import BUCKET_SUFFIX, EXPIRE_DAYS, POINT_IN_TIME_DAYS
 from tools.cp_policy_check import _resolver
 
 from tests.harness.test_cloud_platform_render import _artefacts, _config, _values
@@ -62,17 +63,31 @@ def test_the_shared_folders_are_the_conduit_s_own_paths() -> None:
 
 
 @pytest.mark.parametrize("fixture", ["poc", "development", "production"])
-def test_rds_keeps_point_in_time_for_as_long_as_the_sets_are_kept(fixture: str) -> None:
-    rds = _artefacts(_config(fixture))["terraform/rds.tf"]
-    found = re.search(r"backup_retention_period\s*=\s*(\d+)", rds)
-    assert found and int(found.group(1)) == EXPIRE_DAYS == 35
+def test_rds_keeps_point_in_time_a_day_longer_than_the_sets_are_kept(fixture: str) -> None:
+    """MORNING item 5, (a): RDS's earliest restorable point lags its retention by up to a day, and
+    S3's expiry rounds up to midnight UTC, so a set kept as long as RDS's window may fall outside it
+    in its last day. RDS cannot keep more than 35 days (AWS's maximum), so the sets expire at 34:
+    read from the rendered Terraform both ways, never from the constants alone."""
+    artefacts = _artefacts(_config(fixture))
+    rds = re.search(r"backup_retention_period\s*=\s*(\d+)", artefacts["terraform/rds.tf"])
+    sets = re.findall(r"^\s*days\s*=\s*(\d+)\s*$", artefacts["terraform/backups.tf"], re.MULTILINE)
+    assert rds and int(rds.group(1)) == POINT_IN_TIME_DAYS == 35
+    assert sets == [str(EXPIRE_DAYS)] and EXPIRE_DAYS == 34
+    assert int(sets[0]) + 1 <= int(rds.group(1)), "a set's last day outside RDS's window"
 
 
-def test_the_recovery_runbook_says_the_window_is_the_sets_own() -> None:
+def test_the_recovery_runbook_says_the_sets_expire_a_day_inside_the_window() -> None:
     from harness.render import REPO_ROOT
 
-    text = (REPO_ROOT / "deploy/RUNBOOK.md").read_text(encoding="utf-8")
-    assert "35 days" in text and "point in time" in text
+    text = re.sub(r"\s+", " ", (REPO_ROOT / "deploy/RUNBOOK.md").read_text(encoding="utf-8"))
+    assert f"lifecycle rule {EXPIRE_DAYS} days after they were written" in text
+    assert f"RDS keeps point in time for {POINT_IN_TIME_DAYS} days" in text
+    assert "35 days after they were written" not in text and "the total, 35 days" not in text
+
+
+def test_the_decommission_names_the_sets_own_expiry() -> None:
+    text = re.sub(r"\s+", " ", _artefacts(_config("poc"))["DECOMMISSION.md"])
+    assert f"own {EXPIRE_DAYS}-day rule" in text and "own 35-day rule" not in text
 
 
 # ---- 3. the decommission's choice --------------------------------------------------------------

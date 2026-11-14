@@ -1,0 +1,16 @@
+# v052-expiry (MORNING item 5, (a), the orchestrator's decision under the owner's standing rule), 2026-11-14T06:50:12Z
+# Offline on closed ports 59991-59994, OSPREY_LANE unset, a fresh PYTHONPYCACHEPREFIX each run.
+Red first, against main's behaviour (EXPIRE_DAYS 35, RDS's retention from it), POINT_IN_TIME_DAYS added as a constant alone so the module imported:
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_rds_keeps_point_in_time_a_day_longer_than_the_sets_are_kept[poc]
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_rds_keeps_point_in_time_a_day_longer_than_the_sets_are_kept[development]
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_rds_keeps_point_in_time_a_day_longer_than_the_sets_are_kept[production]
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_the_recovery_runbook_says_the_sets_expire_a_day_inside_the_window
+FAILED tests/harness/test_cloud_platform_data_safety.py::test_the_decommission_names_the_sets_own_expiry
+5 failed, 12 deselected in 2.15s
+
+Green after: tests/harness/test_cloud_platform*.py, tests/cp_policy_check (less its two docker files, on the server),
+test_backups_render, test_s3_standin, test_guides_cloud_platform and the R1 kind suites: 422 passed, 39 skipped;
+failing, neither this change's: test_with_bedrock_enabled_the_gateway_runs_as_its_own_account and test_cloud_platform_gateway.py's
+import (the Mac's venv lacks opensearchpy, which main's search_service imports; the server's make test judges them);
+and test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days, red until docs takes admin_guide.diff
+(with it applied: test_guides_cloud_platform and test_admin_guide 74 passed; then reverted, the guide being docs').

@@ -68,11 +68,18 @@ CLICKHOUSE_USERS_FILE = "clickhouse-backup-users.xml"
 #: Daily at 02:15 UTC. **The retention is the total** (the orchestrator's ruling): a set's objects
 #: expire by the bucket's lifecycle rule EXPIRE_DAYS after they were written; an object overwritten
 #: keeps its previous version for NONCURRENT_DAYS more, a window to recover an overwrite, not a
-#: second retention; expired delete markers are removed. Thirty-five days: a month of failed runs
+#: second retention; expired delete markers are removed. Thirty-four days: a month of failed runs
 #: before the last good set goes, for the alert (P9b) to be heard. The client's retention is to be
 #: agreed; a proposal, not a measurement.
+#:
+#: RDS keeps point in time for POINT_IN_TIME_DAYS (35, AWS's maximum), and the sets expire a day
+#: sooner (ADR-148 Amendment 13 point 5; MORNING item 5, (a)): RDS's earliest restorable point lags
+#: its retention by up to a day, and S3's expiry rounds up to midnight UTC, so a set kept as long as
+#: RDS's window could fall outside it in its last day. A day sooner, every set still kept can be
+#: restored with its database.
 SCHEDULE = "15 2 * * *"
-EXPIRE_DAYS = 35
+POINT_IN_TIME_DAYS = 35
+EXPIRE_DAYS = POINT_IN_TIME_DAYS - 1
 NONCURRENT_DAYS = 7
 #: The backups bucket's name after the deployment's prefix (`<prefix>backups`).
 BUCKET_SUFFIX = "backups"

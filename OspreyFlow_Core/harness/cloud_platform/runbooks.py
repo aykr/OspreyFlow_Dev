@@ -39,7 +39,7 @@ from harness.cloud_platform.connections import (  # noqa: F401 - the figures, re
 from harness.cloud_platform.decommission_check import DISK_NAMESPACE_TAG, KINDS
 from harness.cloud_platform.settings import PlatformSettings
 from harness.cloud_platform.terraform import BUCKETS, RDS_INSTANCE_CLASS, ecr_repositories
-from harness.cloud_platform_backups import BUCKET_SUFFIX, KEPT_AT_DECOMMISSION
+from harness.cloud_platform_backups import BUCKET_SUFFIX, EXPIRE_DAYS, KEPT_AT_DECOMMISSION
 from schemas.deployment import OspreyConfig, SearchBackend, generated_folder
 
 RELEASE = "ospreyflow"
@@ -542,7 +542,7 @@ test -z "$failed"
 have. The choice is written to `$WORK/backups`, and step 8's record states it.
 
 - **keep**: the kept bucket's lifecycle rule is set to the retention you agree, so the deployment's
-  own 35-day rule cannot expire the sets this decommission keeps (give it, in days, as
+  own {EXPIRE_DAYS}-day rule cannot expire the sets this decommission keeps (give it, in days, as
   `BACKUP_RETENTION_DAYS`). The sets stay readable: step 9 removes them when that retention ends,
   and step 10 restores one.
 - **destroy**: every set goes now, and cannot be had back. The bucket's policy is removed, every

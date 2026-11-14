@@ -177,8 +177,8 @@ finished. A set without it is unfinished and is never restored from. Every objec
 backups bucket's own KMS key (`alias/<namespace>-backups`). Two roles write it, each to its own prefix
 (ClickHouse's own, for its part; the runner's, for the rest), and no key is stored anywhere. Neither role
 can erase a set: the bucket is versioned, so an object overwritten keeps its previous version for 7 days,
-and a set's objects expire by the bucket's lifecycle rule 35 days after they were written (the retention
-is the total, 35 days). A run killed part-way leaves ArcadeDB's zip on its backups claim; the next run
+and a set's objects expire by the bucket's lifecycle rule 34 days after they were written (the retention
+is the total, 34 days). A run killed part-way leaves ArcadeDB's zip on its backups claim; the next run
 removes it before it starts.
 
 **Is last night's backup there?** A backup Job that completed wrote a finished set (the manifest is its
@@ -272,7 +272,9 @@ restore refuses part-way for space.
 ClickHouse to a set while PostgreSQL stays as it is now would bring back, visible under today's grants,
 anything withdrawn or deleted since the set. So PostgreSQL (RDS) is restored point in time to the set's finish
 time (`sets` prints it), by the platform team's own RDS procedure. RDS keeps point in time for 35 days
-(`backup_retention_period`), the sets' own expiry, so every set kept in the bucket can be met by it. That brings
+(`backup_retention_period`, AWS's maximum), and the sets expire a day sooner, at 34: RDS's earliest restorable
+point lags its retention by up to a day, and S3's expiry rounds up to midnight UTC, so every set kept in the bucket
+can be met by it. That brings
 back every database on the instance together: `ospreyflow` (with the report mart, the schema `osprey_reports`),
 the gateway's `litellm` and, with Superset on, Superset's `superset` (ADR-148 Amendment 11); Superset and the
 report sync are among the writers step 2 stops, so neither writes to the old instance meanwhile. The new instance may be started at once,
