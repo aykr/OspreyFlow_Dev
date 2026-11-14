@@ -189,3 +189,4 @@ d58a0b7 cb8fe5c case v052-suppress-reload
 38d0817 3129961 studio demo-signins
 55a44d5 bff2ca9 rules v052-measure-m10
 760c2c8 310c697 rules v052-measure-m10
+4693457 21fb2dd rules v052-search-from-rids
