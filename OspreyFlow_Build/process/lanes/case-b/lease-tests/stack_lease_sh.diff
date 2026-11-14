@@ -1,11 +1,11 @@
 diff --git a/OspreyFlow_Build/scripts/stack_lease.sh b/OspreyFlow_Build/scripts/stack_lease.sh
-index 3d6d0f7..99a2f66 100755
+index 3cddde7..61b094a 100755
 --- a/OspreyFlow_Build/scripts/stack_lease.sh
 +++ b/OspreyFlow_Build/scripts/stack_lease.sh
-@@ -207,16 +207,22 @@ for d,ds,fs in os.walk(\".\"):
- # newline never matches, and with no redirection that could print its own error. Each pid's environment is read
- # again before TERM and before KILL: a pid that ended and was given to another process is never signalled.
- # OSPREY_REAPED holds how many were ended, for the caller's words.
+@@ -210,16 +210,22 @@ for d,ds,fs in os.walk(\".\"):
+ # Then the Docker objects the run left, by its label (`osprey.run=<tag>`, which tests/harness/run_owned.py gives the
+ # test-IdP containers and network; the orchestrator's ruling of 14 November 2026): containers first, then networks,
+ # which Docker refuses to remove while a container is on them. Another run's, and unlabelled ones, are never touched.
 +# The scan reads $OSPREY_PROC_ROOT's pid folders when it is set, else /proc's; the re-read before each signal always
 +# reads /proc, so a pid listed there is signalled only when the real process holds the tag. Nothing on a host sets
 +# it, and neither cmd.sh's export line nor ssh carries it there (tests/test_stack_lease.py shows both), so a real run
