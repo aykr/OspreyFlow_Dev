@@ -1,3 +1,47 @@
+# admin · v052-identities (v0.5.2 steps 2-3) · report (14 November 2026): dashboard identities and the report sync on Entra ID
+
+ADR-148 Amendment 10. A dashboard on Entra ID is one app registration, registered by application id. Its role is
+Dashboard.Read, and its narrow principal reaches the two dashboard routes alone, through one route gate; it never
+submits runs, and the case stream is closed to it. The report sync asks with the API's scope.
+
+**What changed after the lane reviews:**
+- A dashboard holds Viewer and nothing more, on Entra as on Keycloak.
+- Its name is a unique slug.
+- Its grants are revoked before its registration goes (`revoke_everywhere`), so a failed revoke leaves it registered
+  and a retry finishes the job.
+- The deployment's own applications are refused.
+- The read of a dashboard's store is bounded (503).
+- Client claims are read as strings only.
+- Each own-client defence is held, and planted, on its own.
+- Admin › Dashboards has its own `GET /v1/admin/dashboards/sign-in`.
+
+**Proof:**
+- 30 offline plants at 7a84543, each pytest with a fresh PYTHONPYCACHEPREFIX, every one red (`v052/plants_7a84543/`).
+- Live on stack b at a2c5670: the two live files 65 passed, and three plants red: the case gate opened, the revoke
+  deleting nothing, the tenant pin removed (`v052/*_live_a2c5670.txt`). `test_route_rights` 5 passed.
+- Live run 1 at 2b42dea found two defects in this lane's own tests, fixed in a2c5670. The full selection was
+  stopped on the orchestrator's word: the full suite runs once, at step 6.
+
+**Gates at 4e83010** (on main 424e47a):
+- `make -k ci`: exit 0. Round 1 at c47e45d failed `route-coverage-check` on the new route, so the check was shown red
+  on it; fixed.
+- `make -k test`: 13,474 passed, 2 failed. Both failures and `live-collect` are main's: the Makefile names
+  `tests/services/search_index/test_feed_live.py`, which main does not hold.
+- Local vitest, `src/admin`: 188 passed.
+- Records are in `v052/gates/`.
+
+**Carried, not fixed:**
+- The Glass does not show a dashboard's name.
+- The 409's key is still labelled `client_id`.
+- No migration for 009a889's table (never merged).
+- A KeyError is still possible from IdentityAdmin.
+- The v1.0 token test is not fully Entra-shaped.
+
+**Shared files:** `packages/schemas/{admin,domain}.py` and their generated TS; `spec/03`, `spec/06` and
+`ADR_RESERVATIONS.md`.
+
+**Questions for the owner:** none.
+
 # admin · pg (Step 2 of BRIEF.md) · report (13 November 2026): a deployment's own PostgreSQL allows what its services may hold
 
 `lane/admin-pg` over main `20fab33`, gated at `6074baf`. ADR-114 Amendment 43 (written). Reviewed twice by
