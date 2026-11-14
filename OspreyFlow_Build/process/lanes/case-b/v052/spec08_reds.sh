@@ -28,7 +28,7 @@ PY
 }
 plant "A7's refusal half with the hostile field name made safe" \
   's = s.replace("\"item_type\x27); DROP TABLE events; --\"", "\"item_type\"", 1)' \
-  "unknown_field_name_is_refused" "a field name carrying SQL was accepted: 200"
+  "unknown_field_name_is_refused" "a field name carrying SQL was not refused in words: 200"
 plant "the stream's seed-free half asking with ?token= in place of its ticket" \
   's = s.replace("?ticket={ticket.json()[\x27ticket\x27]}", "?token={ticket.json()[\x27ticket\x27]}", 1)' \
   "stream_opens_through_the_proxy" "stream_opens_through_the_proxy"
