@@ -55,29 +55,46 @@ def test_register_all_registers_exactly_the_registry() -> None:
     assert set(worker._handlers) == set(registered_job_types())
 
 
-def _rendered_worker(profile: str) -> bool:
-    from harness.cloud_platform import DEVELOPMENT_REPLICAS as CLOUD_REPLICAS
-    from harness.cluster import REPLICAS as CLUSTER_REPLICAS
-
-    return (profile == "cluster" and "worker" in CLUSTER_REPLICAS) or (
-        profile == "cloud-platform" and "worker" in CLOUD_REPLICAS
-    )
-
-
-@pytest.mark.parametrize("profile", ["local-lite", "small", "cluster", "cloud-platform"])
-def test_the_render_says_the_conduit_runs_the_jobs_exactly_where_it_renders_no_worker(profile: str) -> None:
-    from harness.render import job_worker_place
-
-    assert job_worker_place(profile) == ("service" if _rendered_worker(profile) else "conduit")
-
-
-def test_lite_s_deployment_env_names_the_conduit_as_the_job_loop() -> None:
-    from harness.render import _render_env
+def _rendered(profile: str) -> tuple[bool, str]:
+    """A profile rendered for real: whether it runs a job worker of its own (a `worker` service in
+    compose, a `worker` workload in the chart's values), and what its environment tells the Conduit."""
+    import yaml
+    from harness.render import render
 
     from schemas.deployment import OspreyConfig
 
-    env = _render_env(OspreyConfig.model_validate({"profile": "local-lite"}))
-    assert "OSPREY_JOB_WORKER=conduit" in env.splitlines()
+    if profile in ("local-lite", "small"):
+        network = {"public_origin": "https://osprey.example.org"} if profile == "small" else {}
+        artefacts = render(OspreyConfig.model_validate({"profile": profile, **({"network": network} if network else {})}),
+                           allow_unpinned=True).artefacts  # fmt: skip
+        services = yaml.safe_load(artefacts["compose.yaml"])["services"]
+        worker = "worker" in services or any("worker_main" in str(s.get("command", "")) for s in services.values())
+        env = dict(line.split("=", 1) for line in artefacts["deployment.env"].splitlines() if "=" in line and not line.startswith("#"))
+        return worker, env.get("OSPREY_JOB_WORKER", "")
+    if profile == "cluster":
+        from tests.harness.test_cluster_render import _resolver, cluster_config
+
+        values = yaml.safe_load(render(cluster_config(), resolver=_resolver).artefacts["values.yaml"])
+    else:
+        from tools.cp_policy_check import FIXTURES, _resolver
+
+        fixture = FIXTURES / "development.yaml"
+        values = yaml.safe_load(render(OspreyConfig.model_validate(yaml.safe_load(fixture.read_text())),
+                                       resolver=_resolver).artefacts["values.yaml"])  # fmt: skip
+    return "worker" in {w["name"] for w in values["workloads"]}, values["environment"].get("OSPREY_JOB_WORKER", "")
+
+
+@pytest.mark.parametrize("profile", ["local-lite", "small", "cluster", "cloud-platform"])
+def test_each_profile_s_rendered_job_loop_agrees_with_whether_it_renders_a_worker(profile: str) -> None:
+    """Both ways (the orchestrator's check, 14 Nov): a profile rendering a worker is told `service`, so
+    the Conduit never consumes beside it; one rendering none is told `conduit`, so its jobs run. Small
+    renders no worker (05 §3: one host, the Conduit beside its stores)."""
+    from harness.render import job_worker_place
+
+    has_worker, told = _rendered(profile)
+    expected = "service" if has_worker else "conduit"
+    assert told == expected and job_worker_place(profile) == expected
+    assert has_worker is (profile in ("cluster", "cloud-platform"))
 
 
 @pytest.mark.parametrize(("value", "runs"), [("conduit", True), ("service", False), ("", False), (None, False)],
