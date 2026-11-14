@@ -88,7 +88,7 @@ test("a node moved by hand stays where it was put when an expansion re-arranges 
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ candidate_node_count: 2, candidate_edge_count: 2 }),
+      body: JSON.stringify({ candidate_node_count: 2, candidate_edge_count: 2, link_count: 2 }),
     }),
   );
   await page.goto("/keyboard/harness.html");

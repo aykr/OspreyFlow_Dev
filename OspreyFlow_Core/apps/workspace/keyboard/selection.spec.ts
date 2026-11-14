@@ -162,6 +162,99 @@ test("the selection bar's Ask the model about these… saves the selection as a 
   registerCovered("SELECTION_ACTIONS", "ask-the-model-about-the-selected-documents-from-the-selection-bar");
 });
 
+/** ADR-078 Amendment 1: the menu's own arrow keys to an entry, at most once round. */
+async function arrowToEntry(page: Page, name: string) {
+  const list = page.locator(".radial-menu__list[role='menu']");
+  const entry = list.getByRole("menuitem", { name, exact: true });
+  await expect(entry).toBeVisible();
+  const n = await list.getByRole("menuitem").count();
+  for (let i = 0; i <= n; i += 1) {
+    if (await entry.evaluate((el) => el === document.activeElement)) return;
+    await page.keyboard.press("ArrowDown");
+  }
+  await expect(entry).toBeFocused();
+}
+
+test("the selection's menu Show links asks for the links among the selected nodes, as the bar does", async ({ page }) => {
+  let body: { node_ids: string[] | null } | null = null;
+  await page.route("**/*/investigations/*/links-among", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ added: 0, delta: { seq: 8, op: "add", nodes: [], edges: [] } }),
+    });
+  });
+  const second = await selectTwo(page);
+  await page.keyboard.press("\\");
+  await expect(page.locator(".radial-menu__list[role='menu']")).toHaveAttribute("aria-label", "2 selected");
+  await arrowToEntry(page, "Show links");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => body?.node_ids?.slice().sort()).toEqual(["n0", second].sort());
+  await expect(page.getByText("No more links among these.")).toBeVisible();
+  registerCovered("SELECTION_ACTIONS", "show-links-among-the-selection-from-its-menu");
+});
+
+test("the menu's Show links looks as far as the bar's stepper reads, the same action in the same words", async ({ page }) => {
+  let body: { node_ids: string[] | null; degree?: number } | null = null;
+  await page.route("**/*/investigations/*/links-among", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        added: 2, added_nodes: 1, degree: 3, unconnected_pairs: 0, more_routes_pairs: 0,
+        delta: { seq: 8, op: "add", nodes: [], edges: [] },
+      }),
+    });
+  });
+  await selectTwo(page);
+  const bar = page.getByRole("toolbar", { name: "Selection" });
+  await bar.getByRole("button", { name: "More degrees" }).focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await expect(bar.locator(".selection-bar__reading")).toHaveText("within 3");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await page.keyboard.press("\\");
+  await arrowToEntry(page, "Show links");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => body?.degree).toBe(3);
+  registerCovered("SELECTION_ACTIONS", "show-links-within-the-bars-degrees-from-its-menu");
+});
+
+test("the selection's menu Ask the model about these… saves the view named for its items and asks in it", async ({ page }) => {
+  let body: { node_ids: string[]; name?: string } | null = null;
+  await page.route("**/*/investigations/*/views", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ id: "view-q", case_id: "keyboard-fixture", name: "Questions on 2 items", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
+    });
+  });
+  await page.goto("/keyboard/harness.html?fixture=emails");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await expect.poll(() => selection(page)).not.toEqual([]);
+  for (let i = 0; i < 8; i++) {
+    if ((await focused(page)) === "email:ev-1") break;
+    await page.keyboard.press("Control+Shift+ArrowRight");
+  }
+  await expect.poll(() => focused(page)).toBe("email:ev-1");
+  await page.keyboard.press(" ");
+  await expect.poll(() => selection(page)).toContain("email:ev-1");
+  const chosen = (await selection(page)).length;
+  await page.keyboard.press("\\");
+  await arrowToEntry(page, "Ask the model about these…");
+  await page.keyboard.press("Enter");
+  // Named for the items, as the bar names it (ADR-098 Amendment 7).
+  await expect.poll(() => body?.name).toBe(`Questions on ${chosen} item${chosen === 1 ? "" : "s"}`);
+  expect(body!.node_ids).toContain("email:ev-1");
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __KEYBOARD__?: { askedIn?: string | null } }).__KEYBOARD__?.askedIn))
+    .toBe("view-q");
+  registerCovered("SELECTION_ACTIONS", "ask-the-model-about-the-selected-documents-from-its-menu");
+});
+
 test("the selection bar's Expand asks to expand each selected node", async ({ page }) => {
   const asked: string[] = [];
   page.on("request", (request) => {

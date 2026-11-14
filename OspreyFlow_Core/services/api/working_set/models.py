@@ -426,10 +426,17 @@ class CardinalityPreview(BaseModel):
     `expand` with this request would hit — the same `LimitExceeded` shape,
     computed without writing anything. Both counts are over the reader's own projected view
     plus what the request adds (ADR-124 decision 2), so they are the same with and without a
-    stored item the reader may not read."""
+    stored item the reader may not read.
+
+    `link_count` (ADR-098 Amendment 8): the links of the asked type at the asked node that the
+    reader may see, as the adapter's own expand returned them (rule 3), a link counted only when
+    its far end was returned too, and one already on the canvas counted. The right-click menu
+    shows it per type and folds a type with none into one line; it is not what the expansion
+    would add, which the two counts above give."""
 
     candidate_node_count: int
     candidate_edge_count: int
+    link_count: int
     would_breach: LimitExceeded | None = None
 
 

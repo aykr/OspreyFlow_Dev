@@ -36,6 +36,9 @@ const HARNESS_ONLY: Record<string, string[]> = {
 // Glass's, where it once drew the other two gated (the live audit of 1 November 2026 found their text
 // at 4.25:1); the state is kept so Home with a single card is scanned too.
 const EXTRA_STATES: Record<string, string[]> = {
+  // ADR-078 Amendment 1: the canvas's right-click menu open on one node (the selection's actions, its link
+  // types, its own) and on two (the selection's, the pair's), opened by the keyboard's own route.
+  "harness.html": ["menu=node", "menu=two"],
   // ADR-135 Amendment 2: Admin › Models with an engine being added, a key being entered, and a
   // local-only deployment (platform lane P1); Amendment 3: an engine's limits being set, the usage's
   // own days drawn, and the gateway not giving its usage (P2; the usage table is on every other state).
@@ -391,6 +394,12 @@ for (const name of pages) {
         await page.goto(`/keyboard/${name}${query ? `?${query}` : ""}`);
         await page.waitForLoadState("networkidle");
         await page.evaluate(() => document.fonts.ready);
+        // The menu open on what the state names: one node (headed with its name) or two ("2 selected").
+        if (state.startsWith("menu="))
+          await expect(page.locator(".radial-menu__list[role='menu']")).toHaveAttribute(
+            "aria-label",
+            state === "menu=two" ? "2 selected" : "n0",
+          );
         if (variant === "light") {
           await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
         }

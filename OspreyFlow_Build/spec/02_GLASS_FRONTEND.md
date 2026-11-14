@@ -738,11 +738,11 @@ the rest.
 
 | Requirement | Implementation |
 | --- | --- |
-| Expand a node's relationships | Context menu on right-click, headed with the node's type and name and closed by a click elsewhere or Escape (a list, so long edge-type names stay readable; the browser's own menu is suppressed); items generated from the ontology's edge types valid for the node's type, each with a live count, or `count unavailable` if the preview failed; actions with no count show none. A double-click on a node (or Enter on a focused one) expands its neighbours across every edge type, except on a Document, which opens to read (ADR-092; its right-click menu still expands it) |
+| Expand a node's relationships | Context menu on right-click, headed with the node's type and name and closed by a click elsewhere or Escape (a list, so long edge-type names stay readable; the browser's own menu is suppressed); items generated from the ontology's edge types valid for the node's type, each with a live count of its links the reader may see (ADR-098 Amendment 8), or `count unavailable` if the preview failed; actions with no count show none. A double-click on a node (or Enter on a focused one) expands its neighbours across every edge type, except on a Document, which opens to read (ADR-092; its right-click menu still expands it) |
 | Search Around | Multi-step, filtered traversal builder — `Person → uses → Endpoint → communicated with (≥5 events, in brush window) → Endpoint → used by → Person`. Preview count before committing to the canvas |
 | Pathfinder | Select two nodes, get k-shortest paths; paths render with the on-path node state (2px primary stroke, edges thickened), everything else dims to 32% |
 | Find connections | A side panel (ADR-116): From and To by search or from the selected node; the fewest degrees connecting them said in words, routes listed by degree and widened one degree at a time to eight, ten of more said as such; a route put on the canvas marks its nodes with their degree from From |
-| Subgraph isolation | Select nodes (by lasso, or by clicking with Shift, Ctrl or Cmd held to add one at a time; a plain click selects one node alone), then *Save as a view* on the selection bar, or *Save selected (n) as a view…* in any selected node's right-click menu (ADR-144 decision 4, ADR-097 step 1) — and the selection is kept as a private view of the case, listed in *Views in this case* and opened as a read-only lens (§3.1h); the case is untouched. A bounding-box selection has no implementation yet |
+| Subgraph isolation | Select nodes (by lasso, or by clicking with Shift, Ctrl or Cmd held to add one at a time; a plain click selects one node alone), then *Save as a view* on the selection bar or in the right-click menu's selection actions (ADR-144 decision 4 and Amendment 5, ADR-097 step 1) — and the selection is kept as a private view of the case, listed in *Views in this case* and opened as a read-only lens (§3.1h); the case is untouched. A bounding-box selection has no implementation yet |
 | Undo | Every canvas mutation is a step in an addressable history; the history panel is a list of named steps, not a stack of arrows |
 
 **Expansion budget.** Every expansion previews its cardinality before executing. Above 500 new
@@ -904,14 +904,22 @@ view." when the type was chosen, or "No links from this node." when nothing came
 message is a notice, not an error (no alert, no error colour) and `Escape` closes it. When the
 expansion brings in anything new, there is no message. `keyboard/keyboard.spec.ts` proves it.
 
-### 3.1d The right-click menu (ADR-078)
+### 3.1d The right-click menu (ADR-078, Amendment 1; ADR-098 Amendment 8)
 
-Right-click on a node (or `\`) opens a list headed by the node's type and name. The relationship
-types sit under a **Show links** heading, each with its count in a quieter tone at the right edge;
-everything else (link, split, find paths, explain cluster, view messages, mark for suppression) sits
-under **Actions**, below a hairline. The order in which the entries are reached by keyboard is
-unchanged; the headings are not focusable. The menu is drawn above the canvas's own layers, so none of
-its labels or nodes show through it. All colours and spacing are from the tokens.
+Right-click on a node (or `\`, the ContextMenu key, or Shift+F10 on a focused one) opens a list. A node
+not in the selection is selected first, so the menu is always the selection's, and its heading says what
+it applies to: "2 selected", or the node's name. It opens with **the selection's actions, the bottom
+bar's own, in its words and order** (`canvas/selectionActions.ts`; *Undo select what is lit* while it
+stands, *Expand*, *Show links* for two or more, *Ask the model about these…*,
+*Save as a view*, *Remove from view*, *Clear*). With one node selected, its own entries follow: **Expand by link type**, each type with
+the count of its links the reader may see (the preview's `link_count`) in a quieter tone at the right edge,
+the types with none folded into one line ("7 types with no links") that opens in place; then
+**Actions** (explain cluster, view messages, mark for suppression and the rest), below a hairline. With
+two selected, the pair's own (*Link to*, *Split from*, *Find paths to*) follow instead; with more, the
+selection's actions alone. In the menu the arrow keys step through the entries, Home and End go to the
+ends; the headings are not focusable. The menu never opens over the bottom bar: once drawn it moves up
+clear of it. It is drawn above the canvas's own layers, so none of its labels or nodes show through it;
+its heading is in the page's own face (ADR-097 Amendment 3). All colours and spacing are from the tokens.
 
 ### 3.1e Icons on nodes (ADR-079)
 
@@ -1107,9 +1115,9 @@ selection as it was, and × takes it out. Proved by keyboard in `keyboard/select
 (registry `SELECTION_ACTIONS`); the ring by painted pixels in `keyboard/selection-look.spec.ts`.
 
 The selection is built with the lasso, or by clicking nodes with Shift, Ctrl or Cmd held (each adds the
-node, or takes it out again). *Save as a view* is on the selection bar and, for any node that is in the
-selection, *Save selected (n) as a view…* is an entry in that node's own right-click menu; a node outside
-the selection does not offer it. Both open the same form; `keyboard/keyboard.spec.ts` proves each by
+node, or takes it out again). *Save as a view* is on the selection bar and, as one of the selection's
+actions, in the right-click menu (ADR-144 Amendment 5); a right-click on a node outside the selection
+selects it first. Both open the same form; `keyboard/keyboard.spec.ts` proves each by
 keyboard.
 
 **Opening one: a read-only lens (the owner's ruling of 8 November 2026, ADR-144 Amendment 2).** An
@@ -1954,7 +1962,7 @@ Not negotiable and cheaper to build in than to retrofit.
   ring immediately, with no keypress needed after arriving. `Ctrl`/`Cmd`+`ArrowRight`/`Left`
   cycles the focused node through an already-built ring (needed for a lasso-selected set of
   non-adjacent nodes plain arrow-walk cannot reach); plain arrow keys walk edges, moving focus
-  only, never the ring itself; `Enter` expands; `\` opens the radial menu as a list; `Space`
+  only, never the ring itself; `Enter` expands; `\`, the ContextMenu key and Shift+F10 open the radial menu as a list (arrows, Home and End move in it; ADR-078 Amendment 1); `Space`
   toggles the focused node's own membership in the selection ring (added for manual link/split,
   the first action needing a keyboard-built multi-node selection at all). **`Ctrl`/`Cmd`+`Shift`+
   `ArrowRight`/`Left` walks every node in the working set, adjacency or not** — added after a real

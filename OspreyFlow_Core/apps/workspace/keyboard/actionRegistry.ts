@@ -151,6 +151,15 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   // selection bar (reached by Tab like Remove from view and Clear) and from a selected node's menu.
   "save-selected-as-a-view-from-the-selection-bar",
   "save-selected-as-a-view-from-a-selected-nodes-menu",
+  // ADR-078 Amendment 1 (the owner's Part C, 13 November 2026): the menu is the selection's, opened by the
+  // ContextMenu key and Shift+F10 as by `\`, moved through by the arrows, Home and End, offering the bar's
+  // actions in its words, and folding the link types with no links into a line that opens in place.
+  "menu-opens-on-the-context-menu-key",
+  "menu-opens-on-shift-f10",
+  "menu-arrows-home-and-end-move-through-it",
+  "menu-offers-the-selections-actions-in-the-bars-words",
+  "menu-folds-types-with-no-links-and-opens-them-in-place",
+  "undo-select-what-is-lit-from-the-selections-menu",
   // 26 October 2026 (ADR-128 decision 2, B3): a window set by Set exact dates lights part of the
   // canvas; Select what is lit replaces the selection with it, Save as a view then keeps
   // only that slice, and one undo gives the earlier selection back.
@@ -383,6 +392,8 @@ export const LINK_NOTES_ACTIONS = defineActionRegistry("LINK_NOTES_ACTIONS", [
  */
 export const LINK_MENU_ACTIONS = defineActionRegistry("LINK_MENU_ACTIONS", [
   "backslash-opens-the-menu-of-a-selected-same-as-link",
+  // ADR-078 Amendment 1: the ContextMenu key and Shift+F10 open it too.
+  "context-menu-key-and-shift-f10-open-a-selected-links-menu",
   "collapse-folds-the-matched-nodes-into-one",
   "group-node-menu-expands-the-group",
   "confirm-asks-why-and-sends-the-reason",
@@ -432,6 +443,10 @@ export const SELECTION_ACTIONS = defineActionRegistry("SELECTION_ACTIONS", [
   "show-links-within-degrees-from-the-selection-bar",
   // ADR-098 decision 4.
   "ask-the-model-about-the-selected-documents-from-the-selection-bar",
+  // ADR-078 Amendment 1: the same actions from the selection's right-click menu, by keyboard.
+  "show-links-among-the-selection-from-its-menu",
+  "ask-the-model-about-the-selected-documents-from-its-menu",
+  "show-links-within-the-bars-degrees-from-its-menu",
   // ADR-115 E4.
   "clear-the-selection-with-escape-on-the-canvas",
 ] as const);
