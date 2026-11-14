@@ -62,14 +62,21 @@ def run(specs, grep):
 
 
 def red_for_its_reason(out: str, why: str) -> tuple[bool, str]:
-    failures = re.findall(r"^\s+\d+\) ", out, re.M)
-    pointers = re.findall(r"^\s+> \d+ \|(.*)$", out, re.M)
-    off = [p.strip() for p in pointers if not re.search(why, p)]
-    if not failures:
+    """Red only when every failure stopped at the plant's own assertion. Each failure's block names the spec line
+    it stopped at (`at <spec>:<line>:<col>`, present even where Playwright prints no code frame); that line of the
+    spec, read from disk, must match `why`."""
+    blocks = re.split(r"^\s+\d+\) ", out, flags=re.M)[1:]
+    if not blocks:
         return False, "GREEN - the check misses it"
-    if len(pointers) != len(failures) or off:
-        return False, f"red for another reason ({len(failures)} failed, {len(pointers)} pointed, off: {off})"
-    return True, f"RED at its assertion in {len(failures)} test(s)"
+    off = []
+    for block in blocks:
+        at = re.search(r"at (\S+\.spec\.ts):(\d+):\d+", block)
+        line = Path(at.group(1)).read_text().splitlines()[int(at.group(2)) - 1].strip() if at else "(no spec line)"
+        if not re.search(why, line):
+            off.append(line)
+    if off:
+        return False, f"red for another reason ({len(blocks)} failed; stopped at: {off})"
+    return True, f"RED at its assertion in {len(blocks)} test(s)"
 
 
 def main() -> int:
