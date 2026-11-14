@@ -91,6 +91,9 @@ class FakeOpenSearch:
         self.busy = False
         self.blocked = False
         self.flood_stage = False
+        self.max_result_window = 10_000
+        #: Each sorted page's hits reversed: an order the caller must refuse, not compare.
+        self.unordered = False
         self.closed: set[str] = set()
         self.transport = type("T", (), {"serializer": JSONSerializer()})()
         self.docs: dict[str, dict[str, dict[str, Any]]] = {}
@@ -215,6 +218,10 @@ class FakeOpenSearch:
         """A `term` query on one field (or `match_all`), sorted ascending by one field, at most
         `size` hits after `search_after`, as OpenSearch pages a sorted search; a scroll gives every
         hit at once (the only use left is a test's)."""
+        if size > self.max_result_window:
+            # `index.max_result_window`, 10,000 by default: a page larger is refused, as OpenSearch
+            # refuses it (search_after pages past it; a single page never does).
+            raise TransportError(400, "illegal_argument_exception", {"reason": "Result window is too large"})
         if scroll is not None:
             hits = [{"_id": d, "_source": s} for i in self.resolve(index)
                     for d, s in self.docs[i].items()]  # fmt: skip
@@ -235,6 +242,8 @@ class FakeOpenSearch:
             ),
             key=lambda t: t[0],
         )
+        if self.unordered:
+            chosen.reverse()
         return {"hits": {"hits": [{"_id": d, "_source": s, "sort": [k]} for k, d, s in chosen]}}
 
     async def mget(self, *, index: str, body: Any) -> dict[str, Any]:

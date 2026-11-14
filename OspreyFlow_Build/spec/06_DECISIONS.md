@@ -38083,10 +38083,14 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    held every id would fail on memory on the load it checks. Its counts are exact; its id lists keep the first
    `DRIFT_IDS_KEPT` (1,000) of each kind, the count beside them, and the command says how many more (rule 2). Any of
    the three streams out of strictly ascending order raises `DriftOrderError`, rather than calling every document
-   after it missing. `tests/services/search_index/test_drift_streams.py` holds each sentence: its peak memory at ten
-   times the graph under twice that at one (red first on the whole-set check, 0.32 MB to 3.18 MB:
-   `process/lanes/rules/v052-index/drift-stream-red-first.txt`), each difference found across pages, the cut lists,
-   the order; plants V78 (the whole index in one page) to V82.
+   after it missing, and the command says so and exits 3, never 1: a rebuild cannot mend it, so it is not drift. A
+   page holds each document's whole source, a text's included, so its memory is the page's documents, not the
+   graph's. `tests/services/search_index/test_drift_streams.py` holds each sentence: its peak memory at ten
+   times the graph under twice that at one, with texts and missing and refused documents in it (red first on the
+   whole-set check, 0.32 MB to 3.18 MB: `process/lanes/rules/v052-index/drift-stream-red-first.txt`), each difference
+   found across pages, an extra before the first id and a node listed but not live, the cut lists, each stream's
+   order and the command's exit; live, `test_feed_live.py`'s drift case pages by one and two, so `search_after` is
+   sent to the real cluster; plants V78 (the whole index in one page) to V86.
 6. **Red first, each event type:** for each of load, merge, new version, promotion and deletion, a live case writes
    through the adapter's real method and finds the index changed (and a plant that removes that method's outbox
    write turns it red); the rebuild and the drift check each have a case that plants a difference and finds it.
@@ -39122,14 +39126,18 @@ reads is its own record") for the write path.*
    twice per row in its write script. A load of n items into a graph of N therefore cost n × N, and a client-size
    load grew with its square.
 2. **What is built.** Each call resolves the ids it touches once, by SQL through every vertex type's unique `id`
-   index (`SELECT @rid AS rid, id FROM <type> WHERE id IN :ids`, one query per type per 1,000 ids, run together,
-   in the write's own transaction), and every traversal starts from those record ids: `GraphArcadeDBAdapter.
-   _vertex_records` for `upsert_nodes` and `upsert_edges`, `GremlinBulkTransport._vertices` for the bulk loader. A
-   link to merge into is found by its record id from its own type's index (`_edge_record`); a target is still
-   matched by `id` among its source's own neighbours, which reads no other vertex. An id written earlier in the same
-   call is resolved again, since its record is new. A bulk row whose end is not in the graph is refused in words
-   (it was dropped unsaid: the `addE` from an empty start wrote nothing). Unfiltered by design, as the lookups it
-   replaces were: an internal lookup during a trusted write; no record id leaves the adapter.
+   index (`SELECT @rid AS rid, id FROM <type> WHERE id IN :ids`, one query per type per 1,000 ids, in the write's
+   own transaction, which sends them one after another; outside one they go together), and every traversal starts
+   from those record ids: `lookup.vertex_records`, used by `upsert_nodes`, `upsert_edges` (its ends resolved once
+   per call and passed to each link's degree query) and the bulk loader. A link to merge into is written as a
+   traversal reaches it, from its source's record id through its own adjacency (`g.V(<source>).outE(<type>)
+   .has("id", …)`), never by its record in the type's `id` index: ArcadeDB keeps some links twice (ADR-056
+   Amendments 15, 16 and 19), the index may answer with the stray second record no traversal reaches, and a merge
+   written there would be read by nothing. A target is matched by `id` among its source's own neighbours, which reads
+   no other vertex. An id written earlier in the same call is resolved again, since its record is new. A bulk row
+   whose end is not in the graph is refused in words, with how many ends are missing (it was dropped unsaid: the
+   `addE` from an empty start wrote nothing). Unfiltered by design, as the lookups it replaces were: an internal
+   lookup during a trusted write; no record id leaves the adapter.
 3. **What it does not change.** The per-call corpus total (`g.V().outE(<type>)…sum()`, read once per call and type,
    ADR-056 Amendment 22) is a whole-corpus traversal by design, not a lookup by id; the reads outside the write path
    that still start by `has("id")` (supersede and clone, `shared_contacts`) are not a load's, and stay as they are.
@@ -39139,8 +39147,13 @@ reads is its own record") for the write path.*
      `test_write_onto_a_reverted_node.py` and the stray-records store), and `test_gremlin_bulk_transport_shapes.py`'s
      `test_no_lookup_scans_the_store_by_id` holds the bulk path's four lookups and its write: red first, 40 offline
      tests on the old write path (`process/lanes/rules/adr124-am18/red-first.txt`);
+   - offline, `CountingStore` keeps a stray second record of a link that its `id` index answers with, and
+     `test_a_merge_is_written_to_the_link_a_traversal_reaches_not_a_stray_record` holds the merge to the reached one;
+     `test_a_rows_end_not_in_the_graph_is_refused_in_words_never_dropped` holds the bulk refusal;
    - live, `tests/conformance/graph_port/test_write_path_scale.py`: the same load (200 nodes, 200 links, 200 more in
      bulk) in a graph padded with 2,000 vertices and then with 22,000 takes less than three times as long (a scan
-     takes about ten), its times printed;
-   - plants A1 to A8 (`process/lanes/rules/adr124-am18/plants.py`), each lookup put back to its scanning shape, each
-     red (`PLANTS_RECORD.txt`).
+     takes about ten), its times printed and recorded with the lease they were taken under; and
+     `test_one_call_writing_one_node_twice_ends_as_one_node`, one call that writes a node twice in one transaction;
+   - plants A1 to A13 (`process/lanes/rules/adr124-am18/plants.py`), each lookup put back to its scanning shape, A5
+     to the record in the index, each red (`PLANTS_RECORD.txt`); A9 to A11 list the scale test alone, so it is shown
+     red by its own measure, not by an offline refusal.

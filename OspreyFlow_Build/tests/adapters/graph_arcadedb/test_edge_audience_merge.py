@@ -208,3 +208,19 @@ def test_a_new_links_id_is_checked_against_the_types_unique_index_not_by_a_scan(
         assert command == "SELECT id FROM `mx_TRANSACTED` WHERE id IN :ids"
         assert set(params) == {"ids"} and len(params["ids"]) == 1
     assert not [q for q in store.queries if 'has("id"' in q and "count()" in q]
+
+
+def test_a_merge_is_written_to_the_link_a_traversal_reaches_not_a_stray_record() -> None:
+    """ADR-124 Amendment 18, ADR-056 Amendments 15, 16 and 19: ArcadeDB keeps some links twice, and
+    the `id` index can answer with the stray second record no traversal reaches. A merge written by
+    that record id would be kept where nothing reads it; the write path reaches the link from its
+    source instead, so the merge lands on the record every read sees."""
+    from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter, make_edge
+
+    store = CountingStore()
+    graph = make_adapter(store)
+    asyncio.run(graph.upsert_edges([make_edge("a", "b", 1)], "tx"))
+    (link,) = store.links
+    store.strays[link["id"]] = {}
+    asyncio.run(graph.upsert_edges([make_edge("a", "b", 2)], "tx"))
+    assert link["occurrences"] == 2 and store.strays[link["id"]] == {}

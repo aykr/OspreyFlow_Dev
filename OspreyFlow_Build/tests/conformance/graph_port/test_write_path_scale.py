@@ -89,3 +89,24 @@ async def test_a_loads_time_grows_with_the_load_not_the_graph(graph: GraphArcade
     large = await _load(graph)
     print(f"ADR-124 Am 18: the load at 2,000 padding {small:.2f} s, at 22,000 {large:.2f} s")
     assert large < 3 * small, (small, large)
+
+
+async def test_one_call_writing_one_node_twice_ends_as_one_node(graph: GraphArcadeDBAdapter) -> None:
+    """ADR-124 Amendment 18: an id written earlier in the same call is found again by SQL through
+    its type's index in the call's own transaction (the scan it replaces saw the transaction's
+    uncommitted insert; the index lookup must too), so one `upsert_nodes` call that writes a node
+    twice leaves one node, at revision 2, holding both writes' sources."""
+    from schemas.domain import Principal
+
+    first = _person(0)
+    other_source = SourceRef(document_id="files/people.csv", locator="row 2", excerpt_hash="f" * 64)
+    second = first.model_copy(
+        update={"provenance": PROVENANCE.model_copy(update={"sources": [other_source]})}
+    )
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes([first, second], tx)
+    await graph.commit_transaction(tx)
+    reader = Principal(id="r", clearance="OFFICIAL", org_unit="unit-1", datasets=["Z2001ZZ"])
+    (node,) = await graph.get_nodes([first.id], reader)
+    assert node.audit.revision == 2
+    assert {s.locator for s in node.provenance.sources} == {"row 1", "row 2"}

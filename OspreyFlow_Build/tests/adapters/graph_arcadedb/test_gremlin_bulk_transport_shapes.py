@@ -152,3 +152,26 @@ def test_the_taken_id_lookup_is_sql_against_the_types_unique_id_index_and_binds_
     assert command == f"SELECT id FROM `{LABEL}` WHERE id IN :ids"
     assert params == {"ids": ["id-1", "id-2"]}
     assert "reverted" not in command and "superseded_by" not in command
+
+
+def test_a_rows_end_not_in_the_graph_is_refused_in_words_never_dropped() -> None:
+    """ADR-124 Amendment 18: the bulk write starts each row from its ends' record ids, so a row
+    whose end is not in the graph is refused, with how many ends are missing (it was dropped
+    unsaid: an `addE` from an empty start writes nothing)."""
+    import pytest
+
+    from ontology.errors import OntologyError
+
+    class _NoVertices(_RecordingClient):
+        async def sql(self, command: str, *, params: Any = None, session_id: Any = None) -> Any:
+            if command.startswith("SELECT @rid AS rid, id FROM "):
+                known = {"a-0", "a-1"}
+                return [{"rid": f"#1:{n}", "id": i} for n, i in enumerate(params["ids"]) if i in known]
+            return await super().sql(command, params=params, session_id=session_id)
+
+    client = _NoVertices()
+    transport = GremlinBulkTransport(client)  # type: ignore[arg-type]
+    rows = [{"s": "a-0", "t": f"gone-{n}", "p": {"id": f"e-{n}"}} for n in range(7)]
+    with pytest.raises(OntologyError, match=r"^7 of the links' ends are not in the graph: .* and 2 more"):
+        asyncio.run(transport.write_chunk(LABEL, rows, "tx"))
+    assert client.sent == []

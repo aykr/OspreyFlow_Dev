@@ -19,8 +19,6 @@ cannot prove that a Groovy script runs. The spike sends exactly these shapes, fr
 
 from __future__ import annotations
 
-import asyncio
-import re
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -35,14 +33,13 @@ from ports.graph import BulkEdgeResult
 from schemas.domain import AuditStub, EdgeWrite, OntologySchema, WeightComponents
 from schemas.merge import AggregatedEdge, aggregate_edge_writes
 
-from .builders import render_existing_ids_sql, render_record_id_and_id_lookup_sql
+from .builders import render_existing_ids_sql
 from .client import ArcadeDBClient
 from .gremlin_literals import groovy_identifier
+from .lookup import vertex_records
 from .naming import logical_type_name, physical_type_name
 from .serialization import edge_write_to_properties
 from .weight import compute_weight
-
-_RECORD_ID = re.compile(r"^#\d+:\d+$")
 
 #: How many ids go into one batched lookup. Bounded so a script's parameter list stays small.
 LOOKUP_BATCH = 500
@@ -382,38 +379,9 @@ class GremlinBulkTransport:
         self._client = client
 
     async def _vertices(self, ids: Sequence[str]) -> dict[str, tuple[str, str]]:
-        """Each id's vertex as (record id, stored type), by SQL through every vertex type's unique
-        `id` index (ADR-124 Amendment 18): Gremlin's `has("id", within(…))` scans every vertex, so a
-        load that asked it per chunk grew with the graph's square. One query per type, together."""
-        wanted = sorted({str(i) for i in ids})
-        if not wanted:
-            return {}
-        types = await self._client.sql("SELECT name, type, indexes FROM schema:types")
-        vertex_types = [
-            str(t["name"])
-            for t in types
-            if t.get("type") == "vertex"
-            and any(
-                i.get("unique") is True and i.get("properties") == ["id"]
-                for i in t.get("indexes") or []
-            )
-        ]
-        found: dict[str, tuple[str, str]] = {}
-        for start in range(0, len(wanted), 1000):
-            chunk = wanted[start : start + 1000]
-            answers = await asyncio.gather(
-                *(
-                    self._client.sql(render_record_id_and_id_lookup_sql(t), params={"ids": chunk})
-                    for t in vertex_types
-                )
-            )
-            for type_name, rows in zip(vertex_types, answers, strict=True):
-                for row in rows:
-                    rid = row.get("rid")
-                    if not isinstance(rid, str) or not _RECORD_ID.match(rid):
-                        raise ValueError(f"not an ArcadeDB record id: {rid!r}")
-                    found[str(row["id"])] = (rid, type_name)
-        return found
+        """Each id's vertex as (record id, stored type), through every vertex type's unique `id`
+        index (`lookup.vertex_records`, ADR-124 Amendment 18), never `has("id", within(…))`."""
+        return await vertex_records(self._client, ids)
 
     async def vertex_labels(self, ids: Sequence[str]) -> dict[str, str]:
         return {i: type_name for i, (_, type_name) in (await self._vertices(ids)).items()}
@@ -514,7 +482,10 @@ class GremlinBulkTransport:
         ends = await self._vertices([i for r in rows for i in (r["s"], r["t"])])
         missing = sorted({i for r in rows for i in (r["s"], r["t"])} - set(ends))
         if missing:
-            raise OntologyError(f"a link's end is not in the graph: {missing[:5]}")
+            more = f" and {len(missing) - 5} more" if len(missing) > 5 else ""
+            raise OntologyError(
+                f"{len(missing)} of the links' ends are not in the graph: {missing[:5]}{more}"
+            )
         rows = [{**r, "sr": ends[r["s"]][0], "tr": ends[r["t"]][0]} for r in rows]
         script = (
             "rows.each { r ->"

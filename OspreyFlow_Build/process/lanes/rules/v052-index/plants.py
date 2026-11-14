@@ -345,9 +345,9 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      '        "max_retries": max_retries,\n', "",
      [f"{CLIENT}::test_the_query_side_can_ask_for_no_retries"]),
     # --- decision 5: the drift check streams -------------------------------------------------------
-    ("V78 the drift check holds the whole index in memory", REBUILD,
+    ("V78 the drift check holds the whole index in one page", REBUILD,
      '    nodes_stream = _Stream(client, alias, "node", "id", page)\n',
-     '    nodes_stream = _Stream(client, alias, "node", "id", 10**9)\n',
+     '    nodes_stream = _Stream(client, alias, "node", "id", 10_000)\n',
      [f"{DRIFT}::test_its_memory_is_bounded_by_the_page_not_the_graph"]),
     ("V79 the graph's order not checked", REBUILD,
      "            if previous is not None and node_id <= previous:\n", "            if False:\n",
@@ -361,6 +361,19 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ("V82 a refused document reported missing", REBUILD,
      "        if doc_id in reasons:\n", "        if False:\n",
      [f"{REFUSED}::test_a_document_over_the_cap_is_set_aside_and_the_outbox_moves_on"]),
+    ("V83 the text stream in one page", REBUILD,
+     '    texts_stream = _Stream(client, alias, "text", "node_id", page)\n',
+     '    texts_stream = _Stream(client, alias, "text", "node_id", 10_000)\n',
+     [f"{DRIFT}::test_its_memory_is_bounded_by_the_page_not_the_graph"]),
+    ("V84 every missing id held to the end", REBUILD,
+     "            if len(missing) >= page:\n", "            if False:\n",
+     [f"{DRIFT}::test_its_memory_is_bounded_by_the_page_not_the_graph"]),
+    ("V85 the index streams' order not checked", REBUILD,
+     "            if before is not None and self.head[0] <= before[0]:\n", "            if False:\n",
+     [f"{DRIFT}::test_an_index_stream_out_of_order_is_raised"]),
+    ("V86 an order fault reported as drift", "OspreyFlow_Core/scripts/search_index_drift.py",
+     "            return ORDER_FAULT\n", "            return 1\n",
+     [f"{DRIFT}::test_the_command_says_an_order_fault_and_exits_3_never_1"]),
 ]
 
 

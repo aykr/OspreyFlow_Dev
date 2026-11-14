@@ -131,7 +131,6 @@ from .builders import (
     render_live_node_ids_sql,
     render_recent_loads_gremlin,
     render_recently_confirmed_gremlin,
-    render_record_id_and_id_lookup_sql,
     render_record_id_lookup_sql,
     render_shared_contacts_gremlin,
     render_type_counts_gremlin,
@@ -144,6 +143,7 @@ from .gremlin_literals import (
     groovy_string_list_literal,
     groovy_string_literal,
 )
+from .lookup import vertex_records
 from .naming import (
     logical_type_name,
     physical_edge_labels,
@@ -526,6 +526,7 @@ class GraphArcadeDBAdapter:
         *,
         session_id: TxId,
         corpus_total: int | None = None,
+        ends: Mapping[str, tuple[str, str]] | None = None,
     ) -> tuple[int, int, int]:
         """Occurrences-weighted degree of `source` and `target` and the
         corpus-wide total for this edge type, *before* this write's own
@@ -540,7 +541,8 @@ class GraphArcadeDBAdapter:
         asked: the total is a whole-corpus traversal, and `upsert_edges` reads it once per call and
         carries it forward rather than once per edge (ADR-056 Amendment 22)."""
         label_lit = groovy_string_literal(type_name)
-        ends = await self._vertex_records([source, target], tx=session_id)
+        if ends is None:
+            ends = await self._vertex_records([source, target], tx=session_id)
 
         async def degree(node_id: NodeId) -> int:
             if node_id not in ends:
@@ -683,6 +685,7 @@ class GraphArcadeDBAdapter:
                 now=now,
                 session_id=tx,
                 corpus_total=corpus_totals.get(type_name),
+                ends=ends,
             )
             # `corpus_total_occurrences` is the total with this write's delta in it, which is what
             # the store would answer for the next edge of this type once this one is written.
@@ -718,12 +721,18 @@ class GraphArcadeDBAdapter:
                 for key in props
             )
             if existing is not None:
-                # ADR-110 Amendment 18: its own type alone, never another type holding the id; and
-                # by its record id from that type's unique `id` index (ADR-124 Amendment 18).
-                rid = await self._edge_record(type_name, edge_id, tx=tx)
-                if rid is None:
-                    raise OntologyError(f"the link {edge_id!r} to merge into is not of {type_name}")
-                command = f"g.E({groovy_string_literal(rid)}){property_steps}"
+                # ADR-110 Amendment 18: its own type alone, never another type holding the id. The
+                # link a traversal reached (`_find_existing_edge`), from its source's record id
+                # through its own adjacency (ADR-124 Amendment 18): never by the type's `id` index,
+                # which may hold a stray second record of the link that no traversal reaches
+                # (ADR-056 Amendments 15, 16 and 19), where the merge would be written and read by
+                # nothing; and never by `g.E().hasLabel(…).has("id", …)`, which scans every edge.
+                step = "outE" if edge_type.directed else "bothE"
+                command = (
+                    f"g.V({groovy_string_literal(ends[write.source][0])})"
+                    f".{step}({groovy_string_literal(type_name)})"
+                    f'.has("id",{groovy_string_literal(edge_id)}){property_steps}'
+                )
                 await self._client.gremlin(command, params=bound_params, session_id=tx)
                 if merged_interval is not None and merged_interval.valid_to is None:
                     # ADR-127 decision 11: a merge that leaves the span open writes no flattened
@@ -781,13 +790,19 @@ class GraphArcadeDBAdapter:
         now: datetime,
         session_id: TxId,
         corpus_total: int | None = None,
+        ends: Mapping[str, tuple[str, str]] | None = None,
     ) -> tuple[float, WeightComponents]:
         """`01_DOMAIN_MODEL.md` §6.1. `merged_occurrences` already reflects
         this write; the corpus-wide degree/total queries do not yet, since
         the store has not been updated at the point they run — so this
         write's own delta (`write.occurrences`) is added to each below."""
         source_degree, target_degree, corpus_total = await self._corpus_edge_stats(
-            type_name, write.source, write.target, session_id=session_id, corpus_total=corpus_total
+            type_name,
+            write.source,
+            write.target,
+            session_id=session_id,
+            corpus_total=corpus_total,
+            ends=ends,
         )
         delta = write.occurrences
         # A link from a node to itself is read back twice from that node (`bothE`), so the stored
@@ -873,46 +888,9 @@ class GraphArcadeDBAdapter:
         self, node_ids: Sequence[NodeId], *, tx: TxId | None
     ) -> dict[str, tuple[str, str]]:
         """Each id's vertex as (record id, stored type), through every vertex type's unique `id`
-        index by SQL (ADR-124 Amendment 18): the write path's lookups, which as Gremlin
-        `g.V().has("id", …)` scanned every vertex once per item, so a load grew with the graph's
-        square. One query per type per 1,000 ids, run together, in the write's own transaction (so
-        a node written earlier in it is found). Unfiltered: an internal lookup during a trusted
-        write, as `_find_existing_node`'s always was; nothing leaves the adapter."""
-        wanted = sorted({str(i) for i in node_ids})
-        found: dict[str, tuple[str, str]] = {}
-        if not wanted:
-            return found
-        types = await self._types_with_unique_id("vertex")
-        for chunk in _id_chunks(wanted):
-            rows = await asyncio.gather(
-                *(
-                    self._client.sql(
-                        render_record_id_and_id_lookup_sql(t), params={"ids": chunk}, session_id=tx
-                    )
-                    for t in types
-                )
-            )
-            for type_name, result in zip(types, rows, strict=True):
-                for row in result:
-                    rid = row.get("rid")
-                    if not isinstance(rid, str) or not _RECORD_ID.match(rid):
-                        raise ValueError(f"not an ArcadeDB record id: {rid!r}")
-                    found[str(row["id"])] = (rid, type_name)
-        return found
-
-    async def _edge_record(self, type_name: str, edge_id: EdgeId, *, tx: TxId) -> str | None:
-        """The record id of the edge of this type holding `edge_id`, by SQL through the type's
-        unique `id` index (ADR-124 Amendment 18), not `g.E().hasLabel(…).has("id", …)`, which
-        scans every edge whatever the label."""
-        rows = await self._client.sql(
-            render_record_id_and_id_lookup_sql(type_name), params={"ids": [edge_id]}, session_id=tx
-        )
-        for row in rows:
-            rid = row.get("rid")
-            if not isinstance(rid, str) or not _RECORD_ID.match(rid):
-                raise ValueError(f"not an ArcadeDB record id: {rid!r}")
-            return rid
-        return None
+        index (`lookup.vertex_records`, ADR-124 Amendment 18): the write path's lookups, never
+        `g.V().has("id", …)`, which scanned every vertex once per item."""
+        return await vertex_records(self._client, [str(i) for i in node_ids], tx=tx)
 
     async def get_nodes(self, node_ids: Sequence[NodeId], principal: Principal) -> list[Node]:
         found: dict[str, Node] = {}

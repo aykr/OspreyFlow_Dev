@@ -42,11 +42,13 @@ RESERVED_PARAMETER_NAMES = frozenset(
 #: The stand-in refuses it (rule 15: what the real store does badly enough to fail a load at size,
 #: it refuses), so the write path must resolve ids through each type's unique `id` index by SQL
 #: and start from record ids (ADR-124 Amendment 18).
-_SCANS = re.compile(r'^g\.(V|E)\(\)(\.hasLabel\([^)]*\))?\.has\("id"')
+_SCANS = re.compile(r'(^g|\.)(V|E)\(\)(\.hasLabel\([^)]*\))?\.has\("id"')
 
 
 def refuse_scans(query: str) -> None:
-    if _SCANS.match(query):
+    """Refused wherever it starts a traversal: at the head of the query, or mid-way (`.V().has("id",
+    …)`, which also reads the whole store)."""
+    if _SCANS.search(query):
         raise AssertionError(f"a lookup by id that scans the whole store (ADR-124 Am 18): {query}")
 
 
@@ -71,6 +73,10 @@ class CountingStore:
         #: Every vertex id asked for is a vertex of `NODE_TYPE` (the stand-in stores no vertices),
         #: each with a record id of its own, as ArcadeDB gives one.
         self._vertex_rids: dict[str, str] = {}
+        #: Links ArcadeDB holds twice, whose `id` index answers with the stray second record, which
+        #: no traversal reaches (ADR-056 Amendments 15, 16 and 19): a write by that record id is
+        #: kept there, and no read sees it.
+        self.strays: dict[str, dict[str, Any]] = {}
 
     def vertex_rid(self, node_id: str) -> str:
         return self._vertex_rids.setdefault(node_id, f"#1:{len(self._vertex_rids)}")
@@ -114,7 +120,7 @@ class CountingStore:
             if lookup.group(1) == physical_type_name(NODE_TYPE):
                 return [{"rid": self.vertex_rid(i), "id": i} for i in params["ids"]]
             return [
-                {"rid": f"#2:{n}", "id": link["id"]}
+                {"rid": f"#9:{n}" if link["id"] in self.strays else f"#2:{n}", "id": link["id"]}
                 for n, link in enumerate(self.links)
                 if link["id"] in params["ids"]
             ]
@@ -175,6 +181,24 @@ class CountingStore:
             return []
         # A merge into an existing edge, by the record id its own type's index gave (ADR-110
         # Amendment 18, ADR-124 Amendment 18).
+        stray = re.match(r"g\.E\('#9:(\d+)'\)", query)
+        if stray is not None and params is not None:
+            # Written onto the stray second record: kept there, read by nothing.
+            self.strays[self.links[int(stray.group(1))]["id"]].update(params)
+            return []
+        through = re.match(r"g\.V\('(#1:\d+)'\)\.(outE|bothE)\('\w+'\)\.has\(\"id\",'([^']+)'\)\.property", query)
+        if through is not None and params is not None:
+            # A merge into the link a traversal reaches from its source (ADR-124 Amendment 18).
+            vertex = self.vertex_id(through.group(1))
+            reached = [
+                link for link in self.links
+                if link["id"] == through.group(3)
+                and (link["_src"] == vertex or (through.group(2) == "bothE" and link["_tgt"] == vertex))
+            ]  # fmt: skip
+            assert reached, f"no link {through.group(3)!r} at {vertex!r}"
+            for record in reached:
+                record.update({k.removeprefix("prop_"): v for k, v in params.items()})
+            return []
         merge = re.match(r"g\.E\('#2:(\d+)'\)", query)
         if merge is not None:
             assert params is not None

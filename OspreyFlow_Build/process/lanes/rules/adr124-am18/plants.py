@@ -49,9 +49,18 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      "                    f'g.V(src).as(\"__src\").V(tgt).addE(\"{type_name}\").from(\"__src\"){property_steps}'\n",
      "                    f'g.V().has(\"id\", src).as(\"__src\").V().has(\"id\", tgt).addE(\"{type_name}\").from(\"__src\"){property_steps}'\n",
      [f"{MERGE}::test_the_aggregate_is_what_one_at_a_time_upserts_leave_in_the_store", SCALE]),
-    ("A5 a merged link found by its label and a scan", ADAPTER,
-     '                command = f"g.E({groovy_string_literal(rid)}){property_steps}"\n',
-     '                command = f"g.E().hasLabel({groovy_string_literal(type_name)}).has(\\"id\\",{groovy_string_literal(edge_id)}){property_steps}"\n',
+    ("A5 a merged link written by its record in the id index (a stray copy)", ADAPTER,
+     '                    f"g.V({groovy_string_literal(ends[write.source][0])})"\n'
+     '                    f".{step}({groovy_string_literal(type_name)})"\n'
+     "                    f'.has(\"id\",{groovy_string_literal(edge_id)}){property_steps}'\n",
+     '                    f"g.E({groovy_string_literal((await self._client.sql('
+     "f'SELECT @rid AS rid, id FROM `{type_name}` WHERE id IN :ids', "
+     'params={\"ids\": [edge_id]}, session_id=tx))[0][\"rid\"])}){property_steps}"\n',
+     [f"{AUDIENCE}::test_a_merge_is_written_to_the_link_a_traversal_reaches_not_a_stray_record"]),
+    ("A5b a merged link found by its label and a scan", ADAPTER,
+     '                    f"g.V({groovy_string_literal(ends[write.source][0])})"\n'
+     '                    f".{step}({groovy_string_literal(type_name)})"\n',
+     '                    f"g.E().hasLabel({groovy_string_literal(type_name)})"\n',
      [f"{AUDIENCE}::test_a_write_merges_into_the_link_of_its_own_audience_among_several"]),
     ("A6 the bulk write finds each row's ends by a scan", BULK,
      "            ' def t = g.V(r.sr).as(\"a\").V(r.tr).addE(\"' + label + '\")'\n",
@@ -65,6 +74,29 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      "            'g.V(rids).project(\"id\",\"d\").by(values(\"id\"))'\n",
      "            'g.V().has(\"id\", within(rids)).project(\"id\",\"d\").by(values(\"id\"))'\n",
      [f"{SHAPES}::test_no_lookup_scans_the_store_by_id"]),
+    # The live scale test alone, each against one scanning shape: red by its own measure, not by
+    # an offline test's refusal (rule 15's second paragraph).
+    ("A9 the scale test: a node looked up by a scan", ADAPTER,
+     '                rid_lit = groovy_string_literal(known[node_id][0])\n'
+     '                found = await self._client.gremlin(f"g.V({rid_lit}).elementMap()", session_id=tx)\n',
+     "                found = await self._client.gremlin(\n"
+     "                    f'g.V().has(\"id\",{groovy_string_literal(node_id)}).elementMap()', session_id=tx\n"
+     "                )\n",
+     [SCALE]),
+    ("A10 the scale test: a new link added from its ends by a scan", ADAPTER,
+     "                    f'g.V(src).as(\"__src\").V(tgt).addE(\"{type_name}\").from(\"__src\"){property_steps}'\n",
+     "                    f'g.V().has(\"id\", src).as(\"__src\").V().has(\"id\", tgt).addE(\"{type_name}\").from(\"__src\"){property_steps}'\n",
+     [SCALE]),
+    ("A11 the scale test: the bulk write's ends by a scan", BULK,
+     "            ' def t = g.V(r.sr).as(\"a\").V(r.tr).addE(\"' + label + '\")'\n",
+     "            ' def t = g.V().has(\"id\", r.s).as(\"a\").V().has(\"id\", r.t).addE(\"' + label + '\")'\n",
+     [SCALE]),
+    ("A12 a bulk row with no end dropped unsaid", BULK,
+     "        if missing:\n", "        if False:\n",
+     [f"{SHAPES}::test_a_rows_end_not_in_the_graph_is_refused_in_words_never_dropped"]),
+    ("A13 an id written earlier in the call not found again", ADAPTER,
+     "            if node_id in written:\n", "            if False:\n",
+     [f"{SCALE}::test_one_call_writing_one_node_twice_ends_as_one_node"]),
 ]
 
 
@@ -74,7 +106,11 @@ def main() -> int:
     plants = PLANTS
     if offline:
         every = [G]
-        plants = [(n, r, b, p, [t for t in ts if t not in LIVE]) for n, r, b, p, ts in PLANTS]
+        plants = [
+            (n, r, b, p, kept)
+            for n, r, b, p, ts in PLANTS
+            if (kept := [t for t in ts if not t.startswith(LIVE)])
+        ]
         print("offline: the live scale test left out of every plant")
     ignore = [f"--ignore={G}/{f}" for f in ("test_sources_withheld_live.py", "test_datasets_index.py",
                                             "test_client_row_limit.py")]  # fmt: skip

@@ -74,7 +74,15 @@ async def _world(n: int, texts: dict[str, tuple[str, str]] | None = None) -> tup
 
 
 async def _peak(n: int) -> int:
-    client, graph, texts = await _world(n)
+    """Every other node with a text (the text stream pages too), and half the documents missing,
+    some of them refused (so the missing ids and the refused index's lookups page too)."""
+    texts_of = {f"p-{i:07d}": ("He met Ada.", "unit-1") for i in range(0, n, 2)}
+    client, graph, texts = await _world(n, texts_of)
+    (index,) = client.resolve(ALIAS)
+    for i in range(0, n, 2):
+        del client.docs[index][f"p-{i:07d}"]
+    await client.index(index=f"{ALIAS}-refused", id="p-0000000", body={"doc_id": "p-0000000",
+                                                                     "reason": "400 x"})  # fmt: skip
     tracemalloc.start()
     try:
         tracemalloc.reset_peak()
@@ -83,7 +91,8 @@ async def _peak(n: int) -> int:
         peak = tracemalloc.get_traced_memory()[1] - before
     finally:
         tracemalloc.stop()
-    assert report.none and report.graph_nodes == n and report.index_documents == n
+    assert report.graph_nodes == n and report.missing_count == n // 2 - 1
+    assert report.refused_count == 1 and report.index_documents == n // 2 + n // 2
     return peak
 
 
@@ -123,6 +132,57 @@ async def test_the_counts_are_exact_and_the_lists_say_they_are_cut(
     report = await drift(graph, texts, client, ALIAS, SCHEMA, page=7)  # type: ignore[arg-type]
     assert report.missing_count == 30 and len(report.missing) == 5
     assert report.missing == [f"p-{i:07d}" for i in range(5)]
+
+
+async def test_an_index_stream_out_of_order_is_raised() -> None:
+    from services.search_index.rebuild import DriftOrderError
+
+    client, graph, texts = await _world(6)
+    client.unordered = True
+    with pytest.raises(DriftOrderError, match="node documents"):
+        await drift(graph, texts, client, ALIAS, SCHEMA, page=3)  # type: ignore[arg-type]
+
+
+async def test_an_extra_before_the_first_id_and_a_node_listed_but_not_live() -> None:
+    """A document sorting before the graph's first id is extra; a node the graph lists live but
+    reads back as not live (changed since it was listed) has its documents counted extra."""
+    texts = {"p-0000001": ("A letter.", "unit-1")}
+    client, graph, source_texts = await _world(3, texts)
+    (index,) = client.resolve(ALIAS)
+    client.docs[index]["a-first"] = {"kind": "node", "id": "a-first"}
+    real = graph.nodes_for_index
+
+    async def changed(node_ids: Sequence[str]) -> dict[str, Any]:
+        found = await real(node_ids)
+        return {**found, "p-0000001": None}
+
+    graph.nodes_for_index = changed  # type: ignore[method-assign]
+    report = await drift(graph, source_texts, client, ALIAS, SCHEMA, page=2)  # type: ignore[arg-type]
+    assert sorted(report.extra) == ["a-first", "p-0000001", "text:p-0000001"]
+    assert report.missing == [] and report.stale == []
+
+
+def test_the_command_says_an_order_fault_and_exits_3_never_1(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Exit 1 is drift, which a rebuild mends; an order fault is not, so it never exits 1."""
+    import contextlib
+
+    from scripts import search_index_drift
+    from services.search_index.rebuild import DriftOrderError
+
+    @contextlib.asynccontextmanager
+    async def resources() -> Any:
+        yield type("R", (), {"source": None, "texts": None, "client": None, "alias": "a",
+                             "schema": None})()  # fmt: skip
+
+    async def disordered(*_: Any, **__: Any) -> Any:
+        raise DriftOrderError("the graph's live ids are not in ascending order at 'x'")
+
+    monkeypatch.setattr(search_index_drift, "feed_resources", resources)
+    monkeypatch.setattr(search_index_drift, "drift", disordered)
+    assert search_index_drift.main([]) == search_index_drift.ORDER_FAULT == 3
+    assert "a rebuild cannot mend this" in capsys.readouterr().err
 
 
 async def test_a_stream_out_of_order_is_raised(monkeypatch: pytest.MonkeyPatch) -> None:
