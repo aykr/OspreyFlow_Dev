@@ -789,16 +789,16 @@ def _with_what_the_administrator_set(
     in words, never a default."""
     taken: dict[str, Any] = {}
     for field, source, held, what in (
-        ("clearance", mapping.clearance, stored.clearance, "clearance"),
-        ("org_unit", mapping.org_unit, stored.org_unit, "organisational unit"),
-        ("codes", mapping.handling_codes, stored.receivable_handling_codes, "handling codes"),
+        ("clearance", mapping.clearance, stored.clearance, "clearance has"),
+        ("org_unit", mapping.org_unit, stored.org_unit, "organisational unit has"),
+        ("codes", mapping.handling_codes, stored.receivable_handling_codes, "handling codes have"),
     ):
         if not source.administrator:
             continue
         if held is None or (field != "codes" and not held):
             raise PrincipalResolutionError(
-                f"your {what} has not been set in this deployment: ask an administrator to set it "
-                "in Admin › People"
+                f"your {what} not been set in this deployment: ask an administrator to set "
+                f"{'them' if field == 'codes' else 'it'} in Admin › People"
             )
         taken[field] = list(held) if field == "codes" else held
     return dataclasses.replace(verified, **taken) if taken else verified

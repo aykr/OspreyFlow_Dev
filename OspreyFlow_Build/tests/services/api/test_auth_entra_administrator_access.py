@@ -73,11 +73,12 @@ def test_an_administrator_cannot_override_a_value_the_mapping_reads_from_the_tok
 
 @pytest.mark.parametrize(
     ("unset", "words"),
-    [("clearance", "clearance"), ("org_unit", "organisational unit"), ("receivable_handling_codes", "handling codes")],
-)
+    [("clearance", "clearance has"), ("org_unit", "organisational unit has"),
+     ("receivable_handling_codes", "handling codes have")],  # each its own verb (admin's catch, 14 Nov)
+)  # fmt: skip
 def test_a_value_never_set_is_refused_in_words(keypair, jwks_url, unset: str, words: str) -> None:
     held = {"clearance": "OFFICIAL", "org_unit": "unit-2", "receivable_handling_codes": ("P",)} | {unset: None}
-    with pytest.raises(PrincipalResolutionError, match=f"your {words} has not been set in this deployment"):
+    with pytest.raises(PrincipalResolutionError, match=f"your {words} not been set in this deployment"):
         _as(jwks_url, keypair, StoredPerson(roles=("analyst",), disabled=False, **held))  # type: ignore[arg-type]
 
 
