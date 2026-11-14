@@ -340,6 +340,17 @@ class GraphArcadeDBAdapter:
         # per-type unique index could refuse). An id written earlier in this call is resolved
         # again, in its own type, since its record is new.
         known = await self._vertex_records([write.id for write in nodes], tx=tx)
+        # Every write checked before the first is sent, so a refused call writes nothing: an id is
+        # written as the type the store holds it in, and as one type throughout the call. The
+        # refusal names neither type: the holder may be a node its writer cannot read (rule 3).
+        typed = {node_id: stored for node_id, (_rid, stored) in known.items()}
+        for write in nodes:
+            wanted = physical_type_name(write.type)
+            if typed.setdefault(write.id, wanted) != wanted:
+                raise OntologyError(
+                    f"the id {write.id!r} is held by a node of another type: a node's type is not "
+                    "changed by a write, and one id is never two nodes"
+                )
         written: set[str] = set()
         for write in nodes:
             entity_type = schema.entity_type(write.type)
@@ -348,13 +359,6 @@ class GraphArcadeDBAdapter:
             validate_properties(entity_type, write.properties)
 
             node_id = write.id
-            held = known.get(node_id)
-            if held is not None and held[1] != physical_type_name(write.type):
-                raise OntologyError(
-                    f"the id {node_id!r} is held by a {logical_type_name(held[1])} and written "
-                    f"as a {write.type}: a node's type is not changed by a write, and one id is "
-                    "never two nodes"
-                )
             if node_id in written:
                 existing = await self._find_existing_node(
                     node_id, session_id=tx, type_name=physical_type_name(write.type)

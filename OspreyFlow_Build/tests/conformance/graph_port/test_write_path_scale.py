@@ -140,20 +140,40 @@ async def _timed_load(graph: GraphArcadeDBAdapter) -> float:
     return time.perf_counter() - started
 
 
+PER_ROW = 50
+
+
+async def _per_row(graph: GraphArcadeDBAdapter) -> float:
+    """The ingest engine's shape (`services/ingest/engine.py`: one `upsert_nodes` call a row): each
+    call asks every vertex type once (ADR-124 Amendment 18), so this is the per-row cost a load
+    pays. Seconds a call."""
+    nodes = [_person(n) for n in range(PER_ROW)]
+    started = time.perf_counter()
+    for node in nodes:
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes([node], tx)
+        await graph.commit_transaction(tx)
+    return (time.perf_counter() - started) / PER_ROW
+
+
 async def test_a_loads_time_grows_with_the_load_not_the_graph(graph: GraphArcadeDBAdapter) -> None:
     await _pad(graph, 0, 2_000)
     await _load(graph)  # warm: scripts compiled, types read
     small, small_trips = await _load(graph)
+    small_row = await _per_row(graph)
     await _pad(graph, 2_000, 100_000)
     large, large_trips = await _load(graph)
+    large_row = await _per_row(graph)
     lease = _lease()
     print(
         f"ADR-124 Am 18: the load at 2,000 padding {small:.2f} s and {small_trips} round trips, "
-        f"at 102,000 {large:.2f} s and {large_trips}; lease: {lease or 'none, so not timed'}"
+        f"at 102,000 {large:.2f} s and {large_trips}; one node a call, {small_row * 1000:.1f} ms "
+        f"and {large_row * 1000:.1f} ms; lease: {lease or 'none, so not timed'}"
     )
     assert large_trips == small_trips, (small_trips, large_trips)
     if lease is not None:
         assert large < 1.5 * small, (small, large)
+        assert large_row < 1.5 * small_row, (small_row, large_row)
 
 
 async def test_one_call_writing_one_node_twice_ends_as_one_node(graph: GraphArcadeDBAdapter) -> None:

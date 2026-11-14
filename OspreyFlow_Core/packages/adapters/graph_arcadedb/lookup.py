@@ -11,6 +11,8 @@ import re
 from collections.abc import Sequence
 from typing import Any
 
+from ontology.errors import OntologyError
+
 from .builders import render_record_id_and_id_lookup_sql
 
 RECORD_ID = re.compile(r"^#\d+:\d+$")
@@ -33,9 +35,10 @@ async def unique_id_types(client: Any, kind: str) -> list[str]:
     ]
 
 
-class IdInTwoTypes(RuntimeError):
+class IdInTwoTypes(OntologyError):
     """One id held by vertices of two stored types: the write cannot tell which it means, so it
-    stops rather than write onto whichever answered last."""
+    stops rather than write onto whichever answered last. An `OntologyError`, as the refusal of a
+    write onto another type's id is, so a load reports both the same way: the write refused."""
 
 
 async def vertex_records(
@@ -76,8 +79,8 @@ async def vertex_records(
                 node_id = str(row["id"])
                 if node_id in found and found[node_id][1] != type_name:
                     raise IdInTwoTypes(
-                        f"the id {node_id!r} is held by a {found[node_id][1]} and a {type_name}: "
-                        "the write stops rather than choose one"
+                        f"the id {node_id!r} is held by nodes of two types: the write stops rather "
+                        "than choose one"
                     )
                 found[node_id] = (rid, type_name)
     return found

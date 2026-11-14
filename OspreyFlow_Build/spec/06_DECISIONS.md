@@ -39131,11 +39131,17 @@ reads is its own record") for the write path.*
    type joins (every type for one that joins anything, `*`), and an end not found there is asked again of every
    type, so an end of a type the link does not allow is still refused for its type, never reported missing: a link
    call costs one read of the store's types and one query per type its links can reach, per 1,000 ids, not one per
-   type in the store. A node write asks every vertex type, once a call: an id another type already holds is refused
-   in words (a node's type is not changed by a write), never inserted beside it as a second vertex under one id,
-   which no per-type unique index can refuse (asked of its own type alone, the write would have made one, where the
-   scan it replaces sent an `UPDATE` that matched nothing). One id found in two types stops the write
-   (`IdInTwoTypes`). As on the read path (Amendment 2), a vertex type without a unique `id` index is never asked,
+   type in the store. A node write asks every vertex type, once a call: an id another type already holds, or one the
+   call itself writes under two types, is refused in words (a node's type is not changed by a write), never inserted
+   beside it as a second vertex under one id, which no per-type unique index can refuse (asked of its own type
+   alone, the write would have made one, where the scan it replaces sent an `UPDATE` that matched nothing). Every
+   write of the call is checked before the first is sent, so a refused call writes nothing, and the refusal names
+   neither type, since the holder may be a node its writer cannot read (rule 3). One id found in two types stops the
+   write (`IdInTwoTypes`). Both are `OntologyError`s, so a load reports either as a refused write. This costs a node
+   write one read of the store's types and one query per vertex type, per call: the ingest engine writes one node a
+   call, so the scale test times that shape too (below). It refuses what `main` lost unsaid: a deployment whose
+   generator moved an id to another type, reseeded, now stops on that id. `supersede_node`, which inserts the id
+   its caller gives, is not a load's write and is unchanged. As on the read path (Amendment 2), a vertex type without a unique `id` index is never asked,
    since asking it would scan it. The bulk loader asks every type once a chunk, which its chunk amortises.
 3. **What it does not change.** The per-call corpus total (`g.V().outE(<type>)…sum()`, read once per call and type,
    ADR-056 Amendment 22) is a whole-corpus traversal by design, not a lookup by id; the reads outside the write path
@@ -39156,8 +39162,8 @@ reads is its own record") for the write path.*
      gate of the lane's saw, since `make test` leaves `tests/ingest` to the live job; plant I1 puts that back);
    - offline, `test_write_path_round_trips.py` counts a call's lookups: a link write asks the types its link joins,
      unmoved by thirty more types in the store, and a node write every type once a call; an end of the wrong type
-     is refused for its type; a node write onto an id another type holds is refused and writes nothing; an id in
-     two types stops the write; plants R1 to R4;
+     is refused for its type; a node write onto an id another type holds, or one call writing an id as two
+     types, is refused, the call writing nothing; an id in two types stops the write; plants R1, R1b and R2 to R4;
    - offline, `CountingStore` keeps a stray second record of a link that its `id` index answers with, and
      `test_a_merge_is_written_to_the_link_a_traversal_reaches_not_a_stray_record` holds the merge to the reached one;
      `test_a_rows_end_not_in_the_graph_is_refused_in_words_never_dropped` holds the bulk refusal;
@@ -39166,7 +39172,8 @@ reads is its own record") for the write path.*
      (the bulk loader's included), always (deterministic, so CI's conformance job holds it), and, in a run that names its lease
      (`$OSPREY_RUN_TAG/lease`, written by `stack_lease.sh remote`), takes less than one and a half times as long;
      elsewhere its times are printed and not judged, since a time taken beside unknown work measures nothing (rule
-     14). Measured first on stack c under the rules lane's lease of 2026-11-14T01:36:26Z: 6.63 s and 6.41 s at 2,000 and 22,000 vertices, flat; but at 22,000 one scanning lookup
+     14). The same test times fifty nodes written one a call, the ingest engine's shape, at both sizes, under the
+     same bound. Measured first on stack c under the rules lane's lease of 2026-11-14T01:36:26Z: 6.63 s and 6.41 s at 2,000 and 22,000 vertices, flat; but at 22,000 one scanning lookup
      put back stayed under the bound (plants A9 to A11 green), so the graph is made fifty times larger and the bound
      tighter, and its load writes its nodes a second time (as a re-ingest does) so the existing node's lookup is
      measured too. At 102,000, three runs of the new path (stack c, the rules lane's lease of 2026-11-14T02:35:59Z): 8.30/8.06 s,

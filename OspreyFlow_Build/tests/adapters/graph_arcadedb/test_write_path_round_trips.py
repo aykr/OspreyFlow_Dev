@@ -119,14 +119,37 @@ def test_a_node_write_asks_every_type_once_a_call(extra: int) -> None:
     )
 
 
-def test_a_node_write_onto_an_id_another_type_holds_is_refused() -> None:
-    """Never a second vertex under one id: the write names both types and writes nothing."""
-    store = ManyTypedNodes(1, other=frozenset({"n-1"}))
+def _writes(store: ManyTypedNodes) -> list[str]:
+    return [c for c in store.sql_sent if c.startswith(("INSERT", "UPDATE"))]
+
+
+def test_a_node_write_onto_an_id_another_type_holds_is_refused_and_the_call_writes_nothing() -> None:
+    """Never a second vertex under one id. The refusal is found before the call's first write is
+    sent, so the node before it in the call is not written either; and it names neither type, since
+    the holder may be a node the writer cannot read (rule 3)."""
+    store = ManyTypedNodes(1, other=frozenset({"n-2"}))
     graph = _adapter(store)
-    taken = _write("n-1", classification="OFFICIAL", load_id="l", datasets=["Z2001ZZ"], source="f")
-    with pytest.raises(OntologyError, match="held by a Other0 and written as a Person"):
-        asyncio.run(graph.upsert_nodes([taken], "tx"))
-    assert not any(c.startswith(("INSERT", "UPDATE")) for c in store.sql_sent)
+    writes = [
+        _write(f"n-{n}", classification="OFFICIAL", load_id="l", datasets=["Z2001ZZ"], source="f")
+        for n in (1, 2)
+    ]
+    with pytest.raises(OntologyError, match="held by a node of another type") as refused:
+        asyncio.run(graph.upsert_nodes(writes, "tx"))
+    assert "Other0" not in str(refused.value) and "Person" not in str(refused.value)
+    assert _writes(store) == []
+
+
+def test_one_call_writing_one_id_as_two_types_is_refused_and_writes_nothing() -> None:
+    """An id new to the store, written twice in one call under two types, is refused before either
+    write: the second would otherwise be looked for in its own type alone, found nowhere, and
+    inserted beside the first."""
+    store = ManyTypedNodes(0)
+    graph = _adapter(store)
+    first = _write("n-1", classification="OFFICIAL", load_id="l", datasets=["Z2001ZZ"], source="f")
+    second = first.model_copy(update={"type": "Organisation", "properties": {"name": "Acme"}})
+    with pytest.raises(OntologyError, match="held by a node of another type"):
+        asyncio.run(graph.upsert_nodes([first, second], "tx"))
+    assert _writes(store) == []
 
 
 @pytest.mark.parametrize("extra", [0, 30])
