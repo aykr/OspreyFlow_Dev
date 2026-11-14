@@ -38798,8 +38798,9 @@ Amendment 6 point 8, which refused every guest (B2B) account outright.
    - `principal_from_claims`, the one construction path (decision 9), refuses a guest's claims itself unless its
      caller says the guest was admitted (`guest_admitted`), so no other caller can let one in unasked.
 3. **Admitted, a guest is any person, never more** (rule 3). The same mapping, so the clearance, unit and handling codes
-   their own token gives, or, where the mapping sets one here, People's (below) (a guest's token often carries none of the tenant's extension attributes or groups, and is
-   then refused as any person missing them is), and the roles Admin › People gives. The person is recorded as a guest
+   their own token gives, or People's where the mapping sets one here (the line added below), and the roles Admin ›
+   People gives. A guest's token often carries none of the tenant's extension attributes or groups, and the guest is
+   then refused as any person missing them is. The person is recorded as a guest
    (`entra_people.guest`), and People marks them.
    - *With the administrator fallback* (Amendment 15, a line added 14 November 2026):
      - A value the mapping sources from the administrator is a guest's as it is anyone's: the one set in People with
@@ -38839,8 +38840,8 @@ Amendment 6 point 8, which refused every guest (B2B) account outright.
 - `PeopleEntra.test.tsx`: the box shows the setting and switches it, a refusal is shown in its words with the box left
   as it was, a guest is marked, no box on Keycloak; `keyboard/admin.spec.ts`: the box switched by keyboard
   (`admit-guest-accounts-by-keyboard`, rule 13).
-- With the administrator fallback (the line added to point 3), each test red first and every plant red at its own
-  assertion (`process/lanes/admin/guest_words/`):
+- With the administrator fallback (the line added to point 3, and point 3's lead edited to point to it, 14 November
+  2026), each test red by its plants at its own assertion, the vitest red first too (`process/lanes/admin/guest_words/`):
   - `test_entra_guests.py::test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token`,
     through `resolve_principal` for each of clearance, unit and handling codes set here: People's value, never the
     token's; the member's principal field for field; never set, refused in the member's words;

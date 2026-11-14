@@ -1,7 +1,8 @@
 """ADR-148 Amendment 17 (the ADR-148 audit's finding 5; the owner's ruling "4b: guests behind a setting"): a guest
 (B2B) account on Entra ID signs in only while the deployment admits guests, a setting off by default that an
 administrator of people switches in Admin › People. Admitted, a guest is any person: the same mapping, the same
-clearance, unit and codes from their token, or set in People where the deployment sets them (Amendment 15), never more. Not admitted, the refusal says so in true words, and nothing
+clearance, unit and codes from their token, or set in People where the deployment sets them
+(Amendment 15), never more. Not admitted, the refusal says so in true words, and nothing
 is recorded of them. Switched off again, a guest already recorded is refused everywhere a person is read without a
 token: an open socket's standing and a run acting as them.
 
@@ -230,6 +231,8 @@ def test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_f
     guest = _resolve(_resolver(jwks_url, people, mapping), sign_token(_key(keypair), entra_claims(**claims, acct=1)))
     held = people_holds[attr]
     assert getattr(guest, attr) == (list(held) if isinstance(held, tuple) else held)
+    # The rest from the token: one of them, against what the token says.
+    assert (guest.org_unit if field == "clearance" else guest.clearance) == ("unit-1" if field == "clearance" else "OFFICIAL")
     member = _resolve(_resolver(jwks_url, people, mapping), sign_token(_key(keypair), entra_claims(**claims)))
     assert guest.model_dump() == member.model_dump()
 

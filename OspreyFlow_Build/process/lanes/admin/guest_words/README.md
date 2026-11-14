@@ -25,4 +25,4 @@ in `sections/People.tsx`).
 The words now choose the verb by the noun. People's own words (`entraPeopleWords`) share the list, in `EVERY_FIELD`'s
 order. Every sentence is asserted whole. The backend test runs through `resolve_principal` for each value.
 
-**Seen, not changed** (principal_auth is the platform lane's): its refusal says "your handling codes has not been set".
+**Seen, not changed** (principal_auth is the platform lane's): its refusal says "your handling codes has not been set". Sent to the platform lane on 14 November, for the orchestrator to carry.
