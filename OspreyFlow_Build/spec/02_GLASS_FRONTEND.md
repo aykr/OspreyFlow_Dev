@@ -2241,7 +2241,9 @@ the next session — a genuine decision belongs in the spec, not in chat alone. 
 ADR-046's addendum carries the full ruling.
 
 Retraction becomes two steps. An analyst **marks** a node for suppression from the canvas — the
-radial menu's own `Mark for suppression` item — and that is immediate and reversible. Nothing is
+radial menu's own `Mark for suppression (hides nothing yet)` item, worded so it says what it does
+while step two is still to come (the owner, 14 November 2026: "it records a mark and a reason, and hides nothing
+yet"; Explore's list of marks says the same) — and that is immediate and reversible. Nothing is
 suppressed by the mark: the node keeps its place in every read, its revision does not move, and
 un-marking leaves nothing behind. The suppression itself takes effect only when its **evidence**
 arrives through the Ingest Studio (step two), so that no record is ever suppressed on the strength

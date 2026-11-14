@@ -3067,9 +3067,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // and the item toggles, because R7's own word is "reversible".
       items.push({
         id: "mark-for-suppression",
+        // Its words say what it does today (the owner, 14 November 2026): it records a mark and a reason, and
+        // hides nothing yet; R7's second step, which hides, comes after v0.5.2.
         label: suppressionMarks[nodeId]
           ? "Remove suppression mark"
-          : "Mark for suppression",
+          : "Mark for suppression (hides nothing yet)",
         count: undefined,
         group: "Actions",
         onSelect: () => void toggleSuppressionMark(nodeId),

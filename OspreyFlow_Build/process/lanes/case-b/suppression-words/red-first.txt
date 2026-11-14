@@ -1,0 +1,21 @@
+"Mark for suppression" says what it does today (the owner, 14 November 2026: "it records a mark and a reason, and
+hides nothing yet"; R7's second step, which hides, comes after the v0.5.2 cut). A wording change only: the node
+menu's item has a label and no description, and marking asks no confirmation, so the label and Explore's list of
+marks are where it is said. No behaviour changed.
+
+Red first, the tests changed and run against main's words (lane/case-b-batch-panel-place at 5c25448, the code
+unchanged):
+- src/explore/ExplorePanel.test.tsx › puts a node a colleague confirmed or marked on the canvas with one action:
+  FAILED — Unable to find an accessible element with the role "button" and name "Add: bob@enron.com · Endpoint ·
+  marked for suppression by analyst-3 · 8 Oct 2026, 11:00 UTC · “a duplicate” · hides nothing yet"
+  (Tests 1 failed | 19 passed (20)).
+- keyboard/keyboard.spec.ts › the radial list reaches Mark for suppression, and the mark toggles (slot 3):
+  FAILED — getByRole('menuitem', { name: 'Mark for suppression (hides nothing yet)', exact: true }): element(s)
+  not found (1 failed). `exact` added: Playwright's name match is a substring by default, so the old label's
+  test would have passed the new label, and the new one the old.
+
+Green after the wording (GlassCanvas.tsx's item, ExplorePanel.tsx's row): ExplorePanel.test.tsx 20 passed (20);
+keyboard.spec.ts and explore.spec.ts 104 passed (slot 3).
+
+The user guide's §5.2 names the item; its line is docs-user-guide.patch here, for the orchestrator to apply (the
+guide is the docs lane's, its version row and PDF set at merge).
