@@ -20,7 +20,7 @@ from pathlib import Path
 OUT = Path(__file__).resolve().parent
 SOURCE = OUT / 'source'
 CHANGELOG = OUT.parents[2] / 'OspreyFlow_Core' / 'CHANGELOG.md'
-#: The release every claim on the pages was last checked against (docs lane, 13 November 2026).
+#: The release every claim on the pages was last checked against (docs lane, 14 November 2026: sites-v051-facts.md).
 CHECKED_AGAINST = 'v0.5.1'
 sys.path.insert(0, str(OUT))
 import overview as OV, govanim as GV  # noqa: E402
@@ -364,10 +364,10 @@ def org_features():
         'An analyst can propose a new link type; a data engineer decides whether it joins the domain model.',
         'A withdrawn item is kept in the record, never erased.']) + '</div></div>', 'tint', 'boards')
     b += sec('Models and questions', split(ul([
-        "<strong>Ask &amp; Chat.</strong> Ask about the documents and the graph around your selection. Each cited fact is a button that selects it on the canvas.",
-        '<strong>Extraction.</strong> Names, numbers and places found in documents arrive as inferred, to accept or reject. On the shared-platform profile, a second, open-source extraction engine for structured facts in documents.',
+        "<strong>Questions.</strong> Ask about the documents and the graph around your selection. Each cited fact is a button that selects it on the canvas.",
+        '<strong>Extraction.</strong> Names, numbers and places found in documents arrive as inferred, to accept or reject. On the shared-platform profile, a second, open-source extraction engine for structured facts in documents is installed and runs; no screen uses it yet.',
         '<strong>Local by default.</strong> Extraction, vision, transcription and embeddings run on the deployment itself.',
-        "<strong>Hosted engines, by permission.</strong> Each dataset has an egress setting, and material leaves only when that and its handling code both allow it. On the shared-platform profile, your organisation's own AI gateway, or Amazon Bedrock in London.",
+        "<strong>Hosted engines, by permission.</strong> Each dataset has an egress setting, and material leaves only when that and its handling code both allow it. On the shared-platform profile, your organisation's own AI gateway, or Amazon Bedrock in London, checked so far against a stand-in gateway, not yet against AWS or an organisation's own.",
         '<strong>Every answer names the engine and model that produced it.</strong>',
         '<strong>Keys are write-only,</strong> held by the model gateway alone, with limits and usage per engine.']), fig('questions'), flip=True), ident='models')
     b += sec('Admin and access', cards([
@@ -384,7 +384,7 @@ def org_features():
         ('The Vault', 'ArcadeDB for the graph, DuckDB or ClickHouse for analytics, OpenSearch or PostgreSQL for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage or Azure Blob, LiteLLM as the model gateway.')]) +
         '<p>The four ports are the graph, analytics, compute and models. An adapter is supported once it passes the same conformance suite as every other adapter behind that port.</p>', ident='architecture')
     b += sec('On main, coming with the next release', ul([
-        'On the shared-platform profile, scheduled runs: a pipeline\'s schedule and watched folder, rules, watches and list refreshes running as their owner.',
+        'On the shared-platform profile, scheduled runs: a pipeline\'s schedule and watched folder, rules, watches and list refreshes running as their owner, while the owner has signed in within the last 24 hours.',
         'Reporting on the shared-platform profile, through Apache Superset.',
         'The shared-platform profile\'s data-safety fixes, to its backups and restore.']) +
         f'<p>These are merged in development and not in release {RELEASE}. They arrive with the next release.</p>', 'tint', 'coming')
