@@ -88,11 +88,22 @@ count records).
     keywords. Questions elsewhere go to 2,000.
   - One page of 50 is read, and the answer says when there were more.
   - There is no timeline window for Whole case.
+- **Rules-b, Whole case (built offline):**
+  - A Document the search finds off the canvas is cited by the passage it matched, never read whole, because the
+    reader opens only Documents in the working set.
+  - [S-n] selects records already on the canvas but doesn't bring an off-canvas one onto it.
+  - Either can be widened by a patch to case's files if you want.
 - **Rules-b, Ask & Chat:**
   - Ask stays enabled while the "Will read" summary loads, since the answer says what it read.
   - A refusal's dataset names are scrubbed for a caller who may not see them.
 
 ## Done overnight
+
+- **v0.5.1's rehearsal found a missing CHANGELOG step**, and that held the publish. On v0.5.0, `ospreyflow`
+  itself cannot start ("No module named httpx"), so `ospreyflow update` couldn't be reached. Platform-b proved a
+  one-line repair (`uv tool install --force --editable --with httpx ./cli`). The CHANGELOG now gives it, on
+  release/v0.5.1 at 7d76022 (9197ea6 plus that fix), and is being rehearsed by its own words. Your demo's
+  `osprey-small` needs the same repair before its next update.
 
 - Landed and pushed: deps-opensearch, step 2 (the manifest), step 3a with data safety and docs' D2/D3/D8,
   platform-b hygiene, the ci.yml line for test_feed_live (your word, 5b894ff).
