@@ -796,7 +796,7 @@ def _with_what_the_administrator_set(
         if not source.administrator:
             continue
         if held is None or (field != "codes" and not held):
-            raise PrincipalResolutionError(
+            raise AccessNotSet(
                 f"your {what} not been set in this deployment: ask an administrator to set "
                 f"{'them' if field == 'codes' else 'it'} in Admin › People"
             )
@@ -848,7 +848,7 @@ def principal_from_claims(
         if verified.guest and not guest_admitted:
             # ADR-148 Amendment 17: a guest's claims build a principal only once the caller has
             # asked the deployment's setting (`resolve_principal`); any other caller is refused.
-            raise PrincipalResolutionError(GUESTS_NOT_ADMITTED_WORDS)
+            raise GuestNotAdmitted(GUESTS_NOT_ADMITTED_WORDS)
         if mapping.is_entra:
             if stored is None:
                 raise PrincipalLookupUnavailable(
@@ -1006,6 +1006,22 @@ class PrincipalResolutionError(Exception):
     is unreachable", and the API surface (`app.py`) maps this exception
     type to the former."""
 
+    #: A stable tag for a refusal whose words the person can act on, sent beside them in the 401
+    #: (`error`), so the Glass shows those words and no others; None for the rest.
+    error: str | None = None
+
+
+class AccessNotSet(PrincipalResolutionError):
+    """ADR-148 Amendment 15: a value the administrator sets for this person has not been set."""
+
+    error = "access_not_set"
+
+
+class GuestNotAdmitted(PrincipalResolutionError):
+    """ADR-148 Amendment 17: a guest (B2B) account while the deployment does not admit guests."""
+
+    error = "guest_not_admitted"
+
 
 class PrincipalExchangeError(Exception):
     """Base for a failed `resolve_for_owner_detailed` call — see the two subclasses below for
@@ -1127,6 +1143,8 @@ class TokenVersionMismatch(PrincipalResolutionError):
     can never match. Refused in words that name the API registration's
     `requestedAccessTokenVersion` and the setting, rather than a bare issuer or audience
     mismatch."""
+
+    error = "token_version"
 
     def __init__(self, got: str, want: str, issuer: str) -> None:
         manifest = "2" if want == "2.0" else "1 (or null)"
@@ -1569,7 +1587,7 @@ class PrincipalResolver:
             guest=verified.guest,
         )
         if verified.guest and not await self._guests_admitted():
-            raise PrincipalResolutionError(GUESTS_NOT_ADMITTED_WORDS)
+            raise GuestNotAdmitted(GUESTS_NOT_ADMITTED_WORDS)
         try:
             stored = await asyncio.wait_for(
                 self._role_source.person(self._claim_mapping.tenant_id, verified.id, seen),

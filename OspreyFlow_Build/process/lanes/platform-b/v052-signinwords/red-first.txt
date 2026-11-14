@@ -1,0 +1,22 @@
+signinwords (ADR-148 Amendment 18 point 6), red first and planted, 14 November 2026, platform-b, on the Mac
+(ports pinned: ARCADEDB 59991, POSTGRES 59992, VALKEY 59993, CLICKHOUSE 59994; no stack, no lease).
+
+Red first (the Glass, before App.tsx was wired):
+  App.test.tsx "a refusal the person can act on is shown in its own words":
+    x access_not_set / token_version / guest_not_admitted: the sign-in page shows the Conduit's words  (3 failed)
+    ok the same words with no tag are never shown  (already true: the general words)
+
+Plants, each restored after (a fresh PYTHONPYCACHEPREFIX for each Conduit run):
+  Glass: the tag dropped from ACTIONABLE_REFUSALS (apps/workspace/src/auth/refusalWords.ts)
+    access_not_set      -> x refusalWords "access_not_set shows its words", x App "access_not_set: ..."  (2 failed, 61 passed)
+    token_version       -> x refusalWords "token_version shows its words",  x App "token_version: ..."   (2 failed, 61 passed)
+    guest_not_admitted  -> x refusalWords "guest_not_admitted shows its words", x App "guest_not_admitted: ..." (2 failed, 61 passed)
+  Conduit: the class's `error = "<tag>"` line deleted (packages/principal_auth/__init__.py)
+    access_not_set      -> FAILED test_a_value_the_administrator_has_not_set_is_tagged_access_not_set (1 failed, 4 passed)
+    token_version       -> FAILED test_a_token_of_the_other_version_is_tagged_token_version (1 failed, 4 passed)
+    guest_not_admitted  -> FAILED test_a_guest_while_guests_are_not_admitted_is_tagged_guest_not_admitted (1 failed, 4 passed)
+  The two tiers disagreeing on a tag's spelling (rule 12: each tier's own tests would pass):
+    Glass spells "token_versions"      -> FAILED test_the_glass_shows_exactly_the_tags_the_conduit_sends (1 failed, 5 passed)
+    Conduit spells "guest_refused"     -> FAILED ..._tagged_guest_not_admitted, FAILED test_the_glass_shows_exactly_... (2 failed, 4 passed)
+
+Clean: test_sign_in_refusal_tags.py 6 passed; vitest App.test.tsx + auth/ 225 passed; tsc clean.

@@ -1312,10 +1312,13 @@ with PKCE, returning to the deployment's own address with a trailing `/`.
 **A token of the other version is refused in words** (ADR-148 Amendment 18). If the API registration
 issues the other version than `token_version` (with 2.0, its manifest's `requestedAccessTokenVersion`
 must be 2; left at null or 1, Entra issues v1.0), every sign-in is refused, and the Conduit says which
-version the registration issues and what to set, on the sign-in page and once in its log. Its words are
+version the registration issues and what to set, in its refusal (the 401) and once in its log. Its words are
 read only from a token the tenant signed, and never let it in. INSTALL step 6's token-version check,
 run after the first administrator's first sign-in, shows the same words, or says no sign-in has been
-refused for it so far.
+refused for it so far. The Glass's sign-in page shows the same words, as it shows the words for a value
+not set yet (Amendment 15) and for a guest while guests are not admitted (Amendment 17): the 401 tags each
+of the three (`error`), and any other refusal keeps the page's general words ("Your sign-in could not be
+used to reach the workspace …").
 
 `groups_claim` names the token claim that lists the person's Entra group ids; every `{groups: …}`
 table is read from it. Leave it at `groups` unless the app registration emits the groups under

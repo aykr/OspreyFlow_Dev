@@ -14,10 +14,12 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.09** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.11** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.11 | 2026-11-14 | §6a.7: the Glass's sign-in page shows the Conduit's words for a token-version refusal, a value not set yet and a guest not admitted, each tagged in its 401; every other refusal keeps the general words (ADR-148 Amendment 18 point 6). Version set at merge. PDF made by the orchestrator at merge. |
+| 2.10 | 2026-11-14 | §6a.7: a token-version refusal's words are in the Conduit's 401 and its log, and INSTALL step 6's check shows them; the Glass's sign-in page shows its general words, not these (the 2.07 text said the page showed them, which it does not). |
 | 2.09 | 2026-11-14 | §6a.7: an admitted guest under the administrator fallback takes the values set with *Access*, never their token's, and the Guests form says which come from where (ADR-148 Amendment 17, line added). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.08 | 2026-11-14 | §9.1: a coming Admin section is plain words with a *Coming* tag, never a link, and a person's actions in *People and roles* sit on a line beneath them (ADR-145 Amendment 16). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.07 | 2026-11-14 | §6a.7: a token of the other version than `token_version` is refused in words naming `requestedAccessTokenVersion` and the setting, and INSTALL step 6's check shows them after the first sign-in (ADR-148 Amendment 18). |
@@ -1509,10 +1511,13 @@ with PKCE, returning to the deployment's own address with a trailing `/`.
 **A token of the other version is refused in words** (ADR-148 Amendment 18). If the API registration
 issues the other version than `token_version` (with 2.0, its manifest's `requestedAccessTokenVersion`
 must be 2; left at null or 1, Entra issues v1.0), every sign-in is refused, and the Conduit says which
-version the registration issues and what to set, on the sign-in page and once in its log. Its words are
+version the registration issues and what to set, in its refusal (the 401) and once in its log. Its words are
 read only from a token the tenant signed, and never let it in. INSTALL step 6's token-version check,
 run after the first administrator's first sign-in, shows the same words, or says no sign-in has been
-refused for it so far.
+refused for it so far. The Glass's sign-in page shows the same words, as it shows the words for a value
+not set yet (Amendment 15) and for a guest while guests are not admitted (Amendment 17): the 401 tags each
+of the three (`error`), and any other refusal keeps the page's general words ("Your sign-in could not be
+used to reach the workspace …").
 
 `groups_claim` names the token claim that lists the person's Entra group ids; every `{groups: …}`
 table is read from it. Leave it at `groups` unless the app registration emits the groups under

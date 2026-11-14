@@ -38938,7 +38938,9 @@ audience check, in no words a person could act on, and INSTALL's section 8 left 
 1. **The Conduit says the mismatch in words** (`principal_auth.TokenVersionMismatch`, a `PrincipalResolutionError`, 401):
    "the API's app registration issues v1.0 access tokens (issuer …), and this deployment expects v2.0
    (cloud_platform.claims.token_version: "2.0"): set requestedAccessTokenVersion to 2 in the API registration's
-   manifest, or set token_version to "1.0" in osprey.yaml and render again", and the reverse.
+   manifest, or set token_version to "1.0" in osprey.yaml and render again", and the reverse. The words are in
+   the 401's `detail` and the Conduit's log, and the Glass's sign-in page shows them (point 6). *(Edited by point 6:
+   this said the page did not show them, carried as a defect a user can see.)*
 2. **Only a token the tenant signed reaches the words, and none is let in by them.** When an Entra token is
    refused, its signature is checked again with the tenant's key, issuer and audience aside, and the words are given
    only for this tenant's own issuer in the other version's form (`https://sts.windows.net/<tid>/` for v1.0,
@@ -38952,6 +38954,14 @@ audience check, in no words a person could act on, and INSTALL's section 8 left 
 5. **R1's Entra stand-in can issue v1.0 access tokens** (`api.access_token_version: "1.0"`, as Entra does for a
    registration at null or 1: issuer sts.windows.net, `ver` 1.0, the application id URI as audience, `appid`).
    This is platform's file, sent as a diff (`process/lanes/platform-b/v052-tokver/standin_v1.diff`).
+6. **The Glass's sign-in page shows the Conduit's words for the three refusals a person can act on** (added 14
+   November, the orchestrator's assignment, v0.5.2): this one, a value the administrator has not set yet (Amendment
+   15) and a guest while guests are not admitted (Amendment 17). Each `PrincipalResolutionError` of those kinds
+   carries a stable tag (`TokenVersionMismatch.error = "token_version"`, `AccessNotSet`'s `"access_not_set"`,
+   `GuestNotAdmitted`'s `"guest_not_admitted"`), and the Conduit's 401 for it is `{"detail": …, "error": <tag>}`.
+   The Glass (`apps/workspace/src/auth/refusalWords.ts`) shows `detail` for a 401 carrying one of those tags and no
+   other; every other refusal keeps the general words, and the disabled account its own (Amendment 8), its 401
+   unchanged. Before this the page showed the general words for all three.
 
 **Tests** (rule 12; `process/lanes/platform-b/v052-tokver/conduit-red-first.txt` has every plant red):
 - `tests/services/api/test_auth_entra_token_version.py`: both directions refused in words; each version's own
@@ -38962,6 +38972,12 @@ audience check, in no words a person could act on, and INSTALL's section 8 left 
   refusal; this test found it.
 - `process/lanes/platform-b/v052-tokver/test_standin_v1.py`: the stand-in, patched, issuing v1.0, with a real
   Glass sign-in's token refused in the words and the same sign-in at v2.0 resolving.
+- Point 6: `tests/services/api/test_sign_in_refusal_tags.py` (each refusal, the real resolver's through the real
+  app's `/v1/me`, carries its tag; another key's token and a disabled account carry none; the Glass's list of tags
+  equals the Conduit's), `apps/workspace/src/auth/refusalWords.test.ts` (each tag's words; none for an untagged 401,
+  an unknown tag, another status, no words or no readable body; the body left for the disabled check) and
+  `App.test.tsx` (each tag's words on the sign-in page, not the general ones; the same words untagged are not
+  shown). Red first and planted per tag on each side: `process/lanes/platform-b/v052-signinwords/red-first.txt`.
 
 **Consequences.**
 - Not measured: whether Entra serves a v1.0 token's signing key in the v2.0 key set the Conduit reads. In practice
