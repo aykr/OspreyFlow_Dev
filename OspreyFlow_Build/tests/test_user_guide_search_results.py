@@ -290,7 +290,19 @@ def test_section_5_5_says_the_fallback_pages_only_while_records_remain_and_where
         "more=more,",
     ):
         assert code in fallback, code
-    assert fallback.count("more =") == 1, "more set once, so nothing later offers a page past the records"
+    function = next(n for n in ast.walk(ast.parse(SERVICE)) if isinstance(n, ast.AsyncFunctionDef) and n.name == "_from_graph")
+    sets_more = [
+        n for n in ast.walk(function)
+        if (isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "more" for t in n.targets))
+        or (isinstance(n, (ast.AugAssign, ast.AnnAssign, ast.NamedExpr)) and getattr(n.target, "id", None) == "more")
+    ]
+    assert len(sets_more) == 1, "more set once, so nothing later offers a page past the records"
+    # The cut is known only before the list is cut to the depth: reached first, then the cut.
+    assert fallback.index("reached = len(found) > FALLBACK_DEPTH") < fallback.index("found = found[:FALLBACK_DEPTH]")
+    # Today's search hands the graph the limit it is given, uncut, so the one past the depth can come back.
+    today = _function((API / "search.py").read_text(encoding="utf-8"), "search")
+    assert "nodes = await graph.search_nodes(request.query, principal, limit=request.limit)" in today
+    assert "nodes = _merged(nodes, more)[: request.limit]" in today and "min(" not in today
     # `reached` is of the 100 before the dataset and group filters: the line stands on a narrowed list's last page too.
     assert fallback.index("reached = len(found) > FALLBACK_DEPTH") < fallback.index("if wanted: found = [")
     assert "{shown && (shown.page > 1 || shown.more) && (" in PAGE and "more={shown.more}" in PAGE
