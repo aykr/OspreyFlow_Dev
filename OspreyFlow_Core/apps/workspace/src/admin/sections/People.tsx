@@ -545,51 +545,51 @@ function PersonRow({
             >
               Save
             </Button>
-          <div className="admin-row-actions__more">
-            <button
-              type="button"
-              className="admin-row-actions__link"
-              aria-label={`Super user preset for ${person.username}`}
-              onClick={() => setChosen(new Set([...[...chosen].filter((r) => !ROLE_IDS.has(r)), ...SUPER_USER]))}
-            >
-              Super user
-            </button>
-            {(!entra || administratorSets.length > 0) && (
-              <button type="button" className="admin-row-actions__link" aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
-                Access
-              </button>
-            )}
-            {person.enabled ? (
-              <button type="button" className="admin-row-actions__link" aria-label={`Disable ${person.username}`} aria-expanded={confirming} onClick={() => setConfirming(!confirming)}>
-                Disable…
-              </button>
-            ) : (
-              <button type="button" className="admin-row-actions__link" aria-label={`Enable ${person.username}`} onClick={() => act(enablePerson(api, person.id))}>
-                Enable
-              </button>
-            )}
-            {!entra && (
+            <div className="admin-row-actions__more">
               <button
                 type="button"
                 className="admin-row-actions__link"
-                aria-label={`Reset sign-in for ${person.username}`}
-                onClick={() =>
-                  void resetSignIn(api, person.id)
-                    .then((delivery) => {
-                      onSaved(delivery.person);
-                      onDelivered(delivery);
-                    })
-                    .catch((e: Error) => setSaid(e.message))
-                }
+                aria-label={`Super user preset for ${person.username}`}
+                onClick={() => setChosen(new Set([...[...chosen].filter((r) => !ROLE_IDS.has(r)), ...SUPER_USER]))}
               >
-                Reset sign-in
+                Super user
               </button>
-            )}
-            {!entra && !person.system_account && (
-              <button type="button" className="admin-row-actions__link" aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
-                Remove
-              </button>
-            )}
+              {(!entra || administratorSets.length > 0) && (
+                <button type="button" className="admin-row-actions__link" aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
+                  Access
+                </button>
+              )}
+              {person.enabled ? (
+                <button type="button" className="admin-row-actions__link" aria-label={`Disable ${person.username}`} aria-expanded={confirming} onClick={() => setConfirming(!confirming)}>
+                  Disable…
+                </button>
+              ) : (
+                <button type="button" className="admin-row-actions__link" aria-label={`Enable ${person.username}`} onClick={() => act(enablePerson(api, person.id))}>
+                  Enable
+                </button>
+              )}
+              {!entra && (
+                <button
+                  type="button"
+                  className="admin-row-actions__link"
+                  aria-label={`Reset sign-in for ${person.username}`}
+                  onClick={() =>
+                    void resetSignIn(api, person.id)
+                      .then((delivery) => {
+                        onSaved(delivery.person);
+                        onDelivered(delivery);
+                      })
+                      .catch((e: Error) => setSaid(e.message))
+                  }
+                >
+                  Reset sign-in
+                </button>
+              )}
+              {!entra && !person.system_account && (
+                <button type="button" className="admin-row-actions__link" aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
+                  Remove
+                </button>
+              )}
             </div>
             {said && <span role="status" className="label">{` ${said}`}</span>}
           </div>
@@ -597,7 +597,7 @@ function PersonRow({
       </tr>
       {editing && (
         <tr>
-          <td colSpan={ROLES.length + 3}>
+          <td colSpan={ROLES.length + 2}>
             <AccessEditor
               api={api}
               person={person}
@@ -610,7 +610,7 @@ function PersonRow({
       )}
       {confirming && person.enabled && (
         <tr>
-          <td colSpan={ROLES.length + 3}>
+          <td colSpan={ROLES.length + 2}>
             <DisablePanel
               api={api}
               person={person}
@@ -628,7 +628,7 @@ function PersonRow({
       )}
       {removing && (
         <tr>
-          <td colSpan={ROLES.length + 3}>
+          <td colSpan={ROLES.length + 2}>
             <RemoveConfirmation api={api} person={person} onRemoved={onRemoved} onCancel={() => setRemoving(false)} />
           </td>
         </tr>
@@ -738,7 +738,7 @@ function Arrivals({
   if (!arrivals.length) return null;
   return (
     <section aria-label="Refused organisation sign-ins" style={{ display: "grid", gap: "var(--sp-8)" }}>
-      <h4 className="value" style={{ margin: 0 }}>Refused organisation sign-ins</h4>
+      <h2 className="value" style={{ margin: 0 }}>Refused organisation sign-ins</h2>
       <p className="label" style={{ margin: 0 }}>
         These people signed in through the organisation and were refused, because an OspreyFlow account already holds
         their email address. Join one to the account that is theirs, or remove that account so they arrive afresh.
@@ -797,7 +797,7 @@ function GuestsForm({ api }: { api: AdminApi }) {
   }, [api]);
   return (
     <form aria-label="Guests" style={{ display: "grid", gap: "var(--sp-8)", maxWidth: "32rem" }} onSubmit={(e) => e.preventDefault()}>
-      <h4 className="value" style={{ margin: 0 }}>Guests</h4>
+      <h2 className="value" style={{ margin: 0 }}>Guests</h2>
       <p className="label" style={{ margin: 0 }}>
         A guest account is homed outside your organisation's Entra ID (another organisation's, or another identity
         provider) and invited into yours. Admitted, a guest signs in
@@ -846,7 +846,7 @@ function AddByObjectIdForm({ api, onAdded }: { api: AdminApi; onAdded: (p: Perso
           .catch((e: Error) => setProblem(e.message));
       }}
     >
-      <h4 className="value" style={{ margin: 0 }}>Add a person by object id</h4>
+      <h2 className="value" style={{ margin: 0 }}>Add a person by object id</h2>
       <p className="label" style={{ margin: 0 }}>
         Their Entra object id, from the Entra admin centre. They are added with no roles; give them roles below,
         and they hold them from their first sign-in.
@@ -911,7 +911,7 @@ function InviteForm({
       }}
       style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 520, border: "1px solid var(--border-subtle)", padding: "var(--sp-12)" }}
     >
-      <h4 className="value" style={{ margin: 0 }}>Invite a person</h4>
+      <h2 className="value" style={{ margin: 0 }}>Invite a person</h2>
       <p className="label" style={{ margin: 0 }}>
         They are signed in by an emailed link when this deployment has a mail server and you give an address; otherwise you
         are shown a one-time code to give them in person. Nobody can be given more than you hold.
@@ -1139,7 +1139,7 @@ export function People({ api }: { api: AdminApi }) {
               <th key={r.id} style={{ textAlign: "center" }}>{r.label}</th>
             ))}
             <th>
-              Other grants<span className="visually-hidden"> (custom roles and other grants)</span>
+              Other grants<span className="visually-hidden">: custom roles, single rights and older roles</span>
             </th>
           </tr>
         </thead>

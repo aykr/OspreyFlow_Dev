@@ -80,14 +80,6 @@ export function sectionsFor(rights: ReadonlySet<string>): AdminGroup[] {
   );
 }
 
-function Coming({ section }: { section: AdminSection }) {
-  return (
-    <p className="label" style={{ margin: 0 }}>
-      {`Coming: ${section.coming}`}
-    </p>
-  );
-}
-
 function SideNavigation({
   groups,
   current,
@@ -106,7 +98,7 @@ function SideNavigation({
         const alone = group.sections.length === 1 && group.sections[0]!.label === group.label;
         return (
           <div key={group.label} className="admin-nav__group">
-            {!alone && <h3 className={govuk ? "govuk-heading-s admin-nav__heading" : "label admin-nav__heading"}>{group.label}</h3>}
+            {!alone && <h2 className={govuk ? "govuk-heading-s admin-nav__heading" : "label admin-nav__heading"}>{group.label}</h2>}
             <ul className="admin-nav__list">
               {group.sections.map((section) => (
                 <li key={section.id} className={section.id === current ? "admin-nav__item admin-nav__item--current" : "admin-nav__item"}>
@@ -196,7 +188,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
             <h1 id="admin-section-title" ref={heading} tabIndex={-1} className={govuk ? "govuk-heading-l admin-place__heading" : "value admin-place__heading"}>
               {section.label}
             </h1>
-            {section.coming ? <Coming section={section} /> : SCREENS[section.id]?.(api)}
+            {SCREENS[section.id]?.(api)}
           </div>
         </div>
       )}

@@ -38,8 +38,8 @@ function listed(): string[] {
   const nav = screen.getByRole("navigation", { name: "Admin sections" });
   // A section not built yet is named with a Coming tag, not a button (the GOV.UK pass, 14 Nov): read as
   // "<label> (coming)", so the order below holds both.
-  return [...nav.querySelectorAll("h3, button, .admin-nav__coming-item")].map((el) =>
-    el.tagName === "H3" ? `# ${el.textContent}`
+  return [...nav.querySelectorAll("h2, button, .admin-nav__coming-item")].map((el) =>
+    el.tagName === "H2" ? `# ${el.textContent}`
       : el.classList.contains("admin-nav__coming-item") ? `${el.firstChild?.textContent?.trim()} (coming)` : el.textContent!,
   ); // prettier-ignore
 }
@@ -144,7 +144,7 @@ describe("under the GOV.UK brand (ADR-145 decision 13)", () => {
     place(["administer_system"]);
     const nav = screen.getByRole("navigation", { name: "Admin sections" });
     expect(nav.classList.contains("admin-nav--govuk")).toBe(true);
-    expect([...nav.querySelectorAll("h3")].every((h) => h.classList.contains("govuk-heading-s"))).toBe(true);
+    expect([...nav.querySelectorAll("h2")].every((h) => h.classList.contains("govuk-heading-s"))).toBe(true);
     const links = within(nav).getAllByRole("button");
     expect(links.every((b) => b.classList.contains("govuk-link"))).toBe(true);
     expect(links.filter((b) => b.getAttribute("aria-current") === "page").map((b) => b.textContent)).toEqual(["Datasets"]);

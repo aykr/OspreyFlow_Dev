@@ -60,11 +60,24 @@ async function measure(page: Page) {
       caseNameFonts: [...place.querySelectorAll('[aria-label="Cases with no Author"] [data-case-name]')].map(
         (el) => getComputedStyle(el).fontFamily,
       ),
-      comingLinks: [...place.querySelectorAll(".admin-nav a")].filter((a) => /coming/i.test(a.textContent ?? "")).length,
+      // Anything in the side list a person can focus or follow that names a coming section: main's were buttons.
+      comingLinks: [...place.querySelectorAll(".admin-nav a, .admin-nav button, .admin-nav [tabindex]")].filter((a) =>
+        /coming/i.test(a.textContent ?? "")).length,
       comingTags: place.querySelectorAll(".admin-nav__coming").length,
       rolesLinkInTitleRow: !!place.querySelector(".admin-place__title-row a, .admin-place__title-row button"),
-      primaryPerRow: (row.nextElementSibling ?? row).querySelectorAll(".admin-row-actions__primary").length
-        + row.querySelectorAll(".admin-row-actions__primary").length,
+      // A person's actions as drawn: which are drawn as a button (a border), which as a link (underlined, no border).
+      actions: [row, row.nextElementSibling].flatMap((r) => (r ? [...r.querySelectorAll("button, a")] : [])).map((el) => {
+        const cs = getComputedStyle(el);
+        return {
+          text: (el.textContent ?? "").trim(),
+          button: cs.borderTopStyle !== "none" && parseFloat(cs.borderTopWidth) > 0,
+          link: cs.textDecorationLine.includes("underline") && parseFloat(cs.borderTopWidth) === 0,
+        };
+      }),
+      rowLink: px(place.querySelector(".admin-row-actions__link")),
+      comingWhat: px(place.querySelector(".admin-nav__coming-what")),
+      // One heading level per job: the section's h1, h2 beneath it (the side list's groups, People's parts).
+      headingLevels: [...new Set([...place.querySelectorAll("h1, h2, h3, h4, h5, h6")].map((h) => Number(h.tagName[1])))].sort(),
     };
   });
 }
@@ -73,7 +86,9 @@ for (const [look, brand] of LOOKS) {
   test(`Admin's People in the ${look} look: one h1, names in the body face, coming items not links`, async ({ page }) => {
     await open(page, look, brand);
     const m = await measure(page);
+    if (process.env.ADMIN_LOOK_PRINT) console.log(JSON.stringify({ look, ...m, actions: undefined }));
     expect(m.h1s.map((h) => h.text)).toEqual(["People and roles"]);
+    expect(m.headingLevels).toEqual([1, 2]);
     expect(m.caption).toBe("Admin");
     expect(m.nameFont).not.toMatch(/mono/i);
     expect(m.caseNameFonts).toHaveLength(1); // the harness's Op Wren
@@ -81,7 +96,10 @@ for (const [look, brand] of LOOKS) {
     expect(m.comingLinks).toBe(0);
     expect(m.comingTags).toBeGreaterThan(0);
     expect(m.rolesLinkInTitleRow).toBe(true);
-    expect(m.primaryPerRow).toBe(1);
+    // Save is the row's one button; every other action is drawn as a link.
+    expect(m.actions.filter((a) => a.button).map((a) => a.text)).toEqual(["Save"]);
+    expect(m.actions.filter((a) => !a.button && !a.link)).toEqual([]);
+    expect(m.actions.length).toBeGreaterThan(3);
     expect(m.headerLines.every((n) => n === 1)).toBe(true);
     expect(m.headerHeight).toBeLessThanOrEqual(MAIN[look].headerHeight - 30);
   });
@@ -91,7 +109,7 @@ test("Admin's People in the GOV.UK look: the Design System's scale, and a person
   await open(page, "govuk", "&brand=govuk");
   const m = await measure(page);
   expect(m.h1s[0]?.size).toBe(36); // govuk-heading-l
-  expect([m.nav, m.cell, m.header]).toEqual([16, 16, 16]); // the "s" size
+  expect([m.nav, m.cell, m.header, m.rowLink, m.comingWhat]).toEqual([16, 16, 16, 16, 16]); // the "s" size
   expect(m.row).toBeLessThanOrEqual(MAIN.govuk.row * 0.6);
 });
 
@@ -100,6 +118,7 @@ for (const look of ["dark", "light"] as const) {
     await open(page, look, "");
     const m = await measure(page);
     expect([m.nav, m.cell, m.header]).toEqual([MAIN[look].nav, MAIN[look].cell, MAIN[look].header]);
+    expect(m.rowLink).toBe(MAIN[look].cell); // the row's links at the table's size, not GOV.UK's
     expect(m.row).toBeLessThanOrEqual(MAIN[look].row + ACTION_LINE);
   });
 }
