@@ -16,6 +16,6 @@
 10	v0.5.1's CHANGELOG and release notes	orchestrator	Mon 16 Nov	8	done
 11	The owner's word to publish: given in advance, publish when green (the owner, 13 Nov)	owner	Sat 14 Nov	9, 10, 10b	done
 12	v0.5.1 published: the tag, the product repository, the release workflow	orchestrator	Tue 17 Nov	11	done
-13	osprey-small (the GOV.UK demo) updated to v0.5.1 by `ospreyflow update`: a backup first, the data, key prompt and GOV.UK look kept, then the checks (gate, four sign-ins, health)	orchestrator	Tue 17 Nov	12	todo
+13	osprey-small (the GOV.UK demo) updated to v0.5.1 by `ospreyflow update`: a backup first, the data, key prompt and GOV.UK look kept, then the checks (gate, four sign-ins, health) — SKIPPED by the owner's word, 14 Nov: osprey-small goes to the v0.5.2 candidate instead, then to the v0.5.2 release on the owner's word	orchestrator	Tue 17 Nov	12	done
 10b	The guides corrected for the cloud profile as v0.5.1 is (docs; the owner's exception, 13 Nov), merged	docs	Fri 13 Nov	-	done
 p1	After the v0.5.2 cut: run `graphify update .` from the repository root (not urgent; the owner, 14 Nov)	any idle lane	Thu 19 Nov, after the cut	-	todo

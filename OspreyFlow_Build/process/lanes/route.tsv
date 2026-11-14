@@ -21,5 +21,6 @@ U	An upgrade or fresh install builds the search index (ADR-150 d4: no index made
 3i	edges_among in chunks (ADR-124 Am 20): a batch or view past ~10k nodes answers	rules-b	2026-11-14	2026-11-16	y	-	rules-b:v052-am20
 F	Main's CI green (four fixes)	orchestrator	2026-11-14	2026-11-15	y	-	orchestrator:v052-ci
 C	The candidate: main after the sweep, with CI green on it	orchestrator	2026-11-15	2026-11-15	y	5,3i,F	-
+D	osprey-small (the GOV.UK demo) from the candidate, for client sign-ins (the owner, 14 Nov): backup, the gate, four sign-ins, health, a browser pass; restored if any check fails	orchestrator	2026-11-15	2026-11-15	n	C,4	-
 6	The install test on the candidate, from the manifest: v0.5.1 upgraded, and a fresh v0.5.2 install, each with spec 08's poc scenarios	platform-b	2026-11-16	2026-11-16	y	4,C	platform-b:v052-r1
 7	Cut v0.5.2; print the page tables; the demos when the owner says	orchestrator	2026-11-17	2026-11-17	y	6	-
