@@ -1,13 +1,13 @@
-rules-queries checks at 7bc4a1d, on the Mac in the worktree, OSPREY_PORTS_SLOT=9 and closed ports 59991-59994, no stack, no server (the orchestrator's ruling, 14 Nov)
+rules-queries checks at 0830954 (rebased onto main 7ba248e), on the Mac in the worktree, OSPREY_PORTS_SLOT=9 and closed ports 59991-59994, no stack, no server (the orchestrator's ruling, 14 Nov)
 == own tests
 ..............................................................           [100%]
-62 passed in 19.31s
+62 passed in 19.80s
 -- own tests exit=0
 == citation-check
-doc-citations-check: 2918 file(s) scanned, every cited path exists.
+doc-citations-check: 2920 file(s) scanned, every cited path exists.
 -- citation-check exit=0
 == test-file-coverage-check
-test-file-coverage-check: 1118 test file(s), 0 allowlisted, no new drift.
+test-file-coverage-check: 1122 test file(s), 0 allowlisted, no new drift.
 -- test-file-coverage-check exit=0
 == ruff check .
 All checks passed!
@@ -22,4 +22,4 @@ Success: no issues found in 493 source files
 Success: no issues found in 6 source files
 -- mypy (the lane's scripts) exit=0
 checks rc=0
-exit=0 at 7bc4a1d
+exit=0 at 0830954
