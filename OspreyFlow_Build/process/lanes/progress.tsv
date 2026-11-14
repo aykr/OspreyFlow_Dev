@@ -1,6 +1,9 @@
 # The lanes' steps and where each stands (ADR-142). Kept by the orchestrator, updated at every merge and
 # review; lanes_heartbeat.sh shows it. Columns, tab-separated: lane, step, size (S/M/L), status
-# (done | review | building | todo), title.
+# (done | review | building | todo), title, and optionally branch: the lane branch whose merge finishes the step,
+# written once no further part of the step will merge from it (never a bare lane/<lane>, which is not read). Once
+# that branch is merged, the step shows done, whatever the status says (lanes_heartbeat.sh read_git); until then,
+# the merger's LANDED.md `<step> done` line does the same.
 studio	L1.1	S	done	Phase 4's remainder: make ci green
 studio	L1.2	L	done	Phase 6: the canvas as editor, the Map editor, guided mode
 studio	L1.2a	M	done	Events-only withdrawal; the cross-case link merge shown not real (Parts A and A2)
@@ -108,7 +111,7 @@ platform-b	v052-r1	L	todo	v0.5.2: R1 on kind with a dashboards check (with platf
 platform	v052-manifest	M	done	v0.5.2 step 2: the poc manifest and its render test
 platform	v052-opensearch	M	done	v0.5.2 step 3a: OpenSearch on poc
 rules	v052-index	L	done	v0.5.2 step 3c: the index feed, rebuild, drift check
-rules	v052-load	M	done	v0.5.2 B: client-size synthetic data, loaded once
+rules	v052-load	M	done	v0.5.2 B: client-size synthetic data, loaded once	lane/rules-v052-load
 studio	v052-search	L	done	v0.5.2 step 3d: the search service
 case	v052-fixes	S	done	v0.5.2 step 3e: the Glass's screen fixes
 case	v052-results	M	done	v0.5.2 step 3e′: the search results layout
@@ -121,11 +124,11 @@ rules-b	v052-ask	L	done	v0.5.2 Part D: Ask & Chat (panel, server, Whole case)
 case-b	v052-selection	M	done	v0.5.2 Parts C and E: one set of actions for the selection; the typeface
 orchestrator	v051-cut	S	done	v0.5.1 cut: CI at the candidate, the upgrade rehearsal, the CHANGELOG, publish when green (the owner's word)
 platform	v052-searchkind	M	done	v0.5.2: the OpenSearch domain on R1's kind (stand-in wired, its limits, the run's domain check)
-platform-b	v052-4c	M	done	The administrator fallback on Entra, poc alone (ADR-148 Am 15; audit 4c)
-rules-b	v052-batch	M	done	v0.5.2: promote an expansion to a batch job at the cap (ADR-151, the owner's ruling)
-case-b	v052-batch-ui	S	done	v0.5.2: the batch job's choice, progress and result in the Glass (ADR-151)
-platform	v052-upgrade-index	S	done	v0.5.2: an upgrade or fresh install builds the search index (route step U)
-case	v052-cluster-on-entry	M	done	v0.5.2: a merged pair arrives as one cluster (route step 3h)
+platform-b	v052-4c	M	done	The administrator fallback on Entra, poc alone (ADR-148 Am 15; audit 4c)	lane/platform-b-4c
+rules-b	v052-batch	M	done	v0.5.2: promote an expansion to a batch job at the cap (ADR-151, the owner's ruling)	lane/rules-b-v052batch
+case-b	v052-batch-ui	S	done	v0.5.2: the batch job's choice, progress and result in the Glass (ADR-151)	lane/case-b-batch-expand
+platform	v052-upgrade-index	S	done	v0.5.2: an upgrade or fresh install builds the search index (route step U)	lane/platform-v052-rebuild
+case	v052-cluster-on-entry	M	done	v0.5.2: a merged pair arrives as one cluster (route step 3h)	lane/case-merged-clusters
 rules-b	v052-am20	M	building	v0.5.2: edges_among in chunks of record ids (ADR-124 Am 20; the owner's ruling, 14 Nov, after the 50k run): no id list in a script, so a set past ~10k ids answers
 orchestrator	v052-ci	S	building	v0.5.2: main's CI green: Core names no Build folder (6835a1b), the batch routes in the rights table (rules-b), the top bar one line on Linux (case), report sync's one token a pass (platform-b)
 case	v052-topbar	S	building	v0.5.2 fix (T): The top bar stays one line: less-used views fold into More views (the owner's design rule; fallback by Sun midday: all but Graph and Map at narrow widths)
