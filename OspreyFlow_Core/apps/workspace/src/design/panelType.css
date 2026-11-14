@@ -1,0 +1,38 @@
+/* The Glass page's panels and menus on the page's own type scale (the owner's exception, 14 November 2026).
+   The workspace keeps its 13px base in every look, GOV.UK's included (DESIGN.md §9 exception 1; tokens.css remaps
+   GOV.UK's scale for the welcome, home and Admin pages alone). A panel that switches to GOV.UK Frontend's classes
+   under that brand brought the Design System's own sizes in (a saved view's name at 19px bold, its tag at 19px, its
+   links at 16px, beside 13px text). Here those classes take the page's tokens wherever a panel or menu sits on the
+   Glass page: its drawers, its canvas menus and More's menu, the case line and the strip over the canvas. The
+   GOV.UK-scale pages and GOV.UK's own header, footer and phase banner keep their sizes, since none is inside these.
+   `keyboard/glass-panels-look.spec.ts` measures each panel against the page's scale, in the dark, light and GOV.UK
+   looks. Tokens only. */
+
+/* A panel's own headings: where nothing else sizes them, the body size, never the browser's 1.17em for an h3
+   (15.21px beside 13px text). `:where` keeps this below any class that sizes a heading on purpose. */
+:where(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner) :where(h2, h3, h4, h5, h6) {
+  font-size: var(--fs-13);
+  line-height: var(--lh-13);
+}
+
+/* GOV.UK Frontend's type classes, on the page's scale: body text at the body size, small text and hints at the
+   small size, tags at the small meta size, headings at the body size (bold, as GOV.UK draws them). */
+[data-brand="govuk"] :is(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner, .context-banner)
+  :is(.govuk-heading-xl, .govuk-heading-l, .govuk-heading-m, .govuk-heading-s,
+      .govuk-body, .govuk-body-m, .govuk-body-l, .govuk-link, .govuk-back-link, .govuk-button,
+      .govuk-summary-list, .govuk-summary-list__key, .govuk-summary-list__value, .govuk-summary-list__actions,
+      .govuk-label, .govuk-fieldset__legend, .govuk-input, .govuk-select, .govuk-textarea, .govuk-list,
+      .govuk-table, .govuk-table__cell, .govuk-table__header, .govuk-error-message, .govuk-error-summary__title,
+      .govuk-error-summary__body, .govuk-radios__label, .govuk-checkboxes__label) {
+  font-size: var(--fs-13);
+  line-height: var(--lh-13);
+}
+[data-brand="govuk"] :is(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner, .context-banner)
+  :is(.govuk-body-s, .govuk-hint, .govuk-caption-m, .govuk-caption-l, .govuk-caption-xl) {
+  font-size: var(--fs-12);
+  line-height: var(--lh-12);
+}
+[data-brand="govuk"] :is(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner, .context-banner) .govuk-tag {
+  font-size: var(--fs-11);
+  line-height: var(--lh-11);
+}

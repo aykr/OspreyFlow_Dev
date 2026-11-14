@@ -2,6 +2,9 @@
    Every colour is a `var(--token)` from `spec/design/tokens.css` — no
    colour is introduced that isn't already a token (CLAUDE.md). */
 
+/* The Glass page's panels and menus on the page's own type scale, GOV.UK's look included. */
+@import "./panelType.css";
+
 .btn {
   font: inherit;
   font-size: var(--fs-13);
