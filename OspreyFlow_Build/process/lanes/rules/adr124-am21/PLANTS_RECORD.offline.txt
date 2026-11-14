@@ -1,13 +1,13 @@
-# plants.py at 99c67e4 (red first against main f585330), 2026-11-14T17:07:29Z, offline on the Mac (closed ports 59991-59994, slot 9, no stack, fresh pycache)
-built: GREEN - 8 passed in 1.11s
-red first, main f585330's adapter and builders: RED - test_no_search_starts_from_every_vertex | test_a_field_is_asked_of_every_type_that_holds_it_and_the_value_is_bound | test_a_request_reader_looks_up_no_gazetteer_only_identifier | test_a_type_the_store_does_not_hold_is_not_asked | test_a_value_nobody_holds_still_sends_its_query | test_candidates_past_a_chunk_are_all_sent_and_the_answer_cut_at_the_limit | 6 failed, 2 passed in 0.75s
-A1 a search starts from every vertex again: RED - test_no_search_starts_from_every_vertex | 1 failed in 0.31s
-A2 the access step dropped from the traversal: RED - test_the_match_and_the_access_step_are_in_the_traversal_from_the_candidates | 1 failed in 0.31s
-A3 a field asked only where it is searchable on that type (an Account not found by its name): RED - test_a_field_is_asked_of_every_type_that_holds_it_and_the_value_is_bound | 1 failed in 0.32s
+# plants.py at 968f5ea (red first against main f585330, the branch's base), 2026-11-14T20:42:56Z, offline on the Mac (closed ports 59991-59994, slot 9, no stack, fresh pycache)
+built: GREEN - 8 passed in 1.25s
+red first, main f585330's adapter and builders: RED - test_no_search_starts_from_every_vertex | test_a_field_is_asked_of_each_type_that_keeps_it_flattened_and_the_value_is_bound | test_a_request_reader_looks_up_no_gazetteer_only_identifier | test_a_type_the_store_does_not_hold_is_not_asked | test_a_value_nobody_holds_still_sends_its_query | test_candidates_past_a_chunk_are_all_sent_and_the_answer_cut_at_the_limit | 6 failed, 2 passed in 0.92s
+A1 a search starts from every vertex again: RED - test_no_search_starts_from_every_vertex | 1 failed in 0.32s
+A2 the access step dropped from the traversal: RED - test_the_match_and_the_access_step_are_in_the_traversal_from_the_candidates | 1 failed in 0.30s
+A3 a field asked of every type that declares it, flattened or not (an Account's name scanned): RED - test_a_field_is_asked_of_each_type_that_keeps_it_flattened_and_the_value_is_bound | 1 failed in 0.31s
 A4 a request reader's lookups keep the gazetteer-only identifiers: RED - test_a_request_reader_looks_up_no_gazetteer_only_identifier | 1 failed in 0.31s
-A5 a type the store does not hold asked: RED - test_a_type_the_store_does_not_hold_is_not_asked | 1 failed in 0.28s
-A6 a value nobody holds sends no query: RED - test_a_value_nobody_holds_still_sends_its_query | 1 failed in 0.39s
-A7 only the first chunk's candidates traversed: RED - test_candidates_past_a_chunk_are_all_sent_and_the_answer_cut_at_the_limit | 1 failed in 0.34s
-A8 the chunks' answers not cut at the limit: RED - test_candidates_past_a_chunk_are_all_sent_and_the_answer_cut_at_the_limit | 1 failed in 0.35s
-restored: GREEN - 8 passed in 0.81s
+A5 a type the store does not hold asked: RED - test_a_type_the_store_does_not_hold_is_not_asked | 1 failed in 0.29s
+A6 a value nobody holds sends no query: RED - test_a_value_nobody_holds_still_sends_its_query | 1 failed in 0.37s
+A7 only the first chunk's candidates traversed: RED - test_candidates_past_a_chunk_are_all_sent_and_the_answer_cut_at_the_limit | 1 failed in 0.32s
+A8 the chunks' answers not cut at the limit: RED - test_candidates_past_a_chunk_are_all_sent_and_the_answer_cut_at_the_limit | 1 failed in 0.32s
+restored: GREEN - 8 passed in 0.80s
 exit=0
