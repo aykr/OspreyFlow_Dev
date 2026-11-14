@@ -38477,3 +38477,33 @@ Status: written 14 November 2026 by the rules-b lane (step v052D, part D(iii)) w
    - Test: `QuestionsPanel.test.tsx`, *shows each [S-n] as a button that selects its records*; the keyboard case
      above, red with the button selecting nothing (`keyboard-plant.txt`).
 
+### ADR-149, Amendment 1 (14 November 2026) — Ask's *Whole case* calls the search, and the leak test covers what it reads
+
+Status: written 14 November 2026 by the rules-b lane (step v052D, part D(iii)), after ADR-149 landed. It records
+how ADR-098 Amendment 9's *Whole case* uses this ADR's search. No decision here is narrowed.
+
+1. **Whole case calls `search_page` in-process, not over HTTP, with what `POST …/search` gives it.** The call site
+   is `app.case_search_with`. It builds the asker's own access filter (`index_access_filter`, decision 1), leaves
+   out the nodes the index has not caught up with (decision 2), and passes the case's threshold and the asker's
+   datasets. Ranking and fallback are the search's own (decisions 4 and 10). Nothing is read until the search is
+   called, so a question that does not read the whole case costs nothing more.
+   - Test: `tests/services/api/test_questions_whole_case.py`, *the question's own words are the query* (its fake
+     search re-validates the request and finds only through the graph's access step); `test_questions.py`'s route
+     case, with no index, graph or request.
+2. **The fallback and the counts reach the read summary.** A search that fell back (decision 10) says so in the
+   summary's `limited_reason`. Counts that may be short (decision 7) are `counts_exact: false`, and a page not read
+   is `more`. The panel shows each one.
+   - Test: *the search's fallback and limits reach the read summary*; `QuestionsPanel.test.tsx`'s *Whole case*
+     cases.
+3. **Decision 3's leak test covers Ask.** `tests/services/search_index/test_ask_whole_case_leak_live.py` reuses
+   `test_search_leak_live.py`'s worlds and readers, and asks each of its queries as a question through
+   `case_search_with` into `QuestionsService._gather_case`. What would be sent to the model must be identical
+   from the index holding every record and from the index holding only what the reader may see now. That covers
+   the sources' text, the Documents read and their passages, the read summary, and the records each `[S-n]`
+   stands for.
+   - Shown red at the real call site: `::test_the_ask_leak_check_finds_the_access_filter_dropped`, with the filter
+     `case_search_with` builds replaced by match-all.
+   - Live on a leased stack (`process/lanes/rules-b/v052Diii/live.txt`).
+
+Open: none.
+
