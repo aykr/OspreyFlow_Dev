@@ -48,7 +48,10 @@ def pod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
             return httpx.Response(404)
         hint = q.get("login_hint", "admin@r1.test")
         if hint not in (*ROLES, "nobody@r1.test", "admin@r1.test"):
-            return httpx.Response(200, text=f"AADSTS50034: The user account {hint} does not exist in the {TENANT} directory")
+            # As the stand-in refuses it (r1_kind_servers.py `_page`): 400, Entra's own page, never the redirect.
+            return httpx.Response(400, headers={"content-type": "text/html; charset=utf-8"},
+                                  text=f"<html><body><h1>Sign in</h1><p>AADSTS50034: The user account {hint} does not "
+                                       f"exist in the {TENANT} directory.</p></body></html>")
         if q.get("redirect_uri") != f"https://bi.{GLASS}/oauth-authorized/entra":
             return httpx.Response(200, text="AADSTS50011: The redirect URI does not match")
         code = f"code-{len(codes)}"
