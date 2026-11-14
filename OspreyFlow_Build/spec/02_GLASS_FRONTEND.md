@@ -1213,6 +1213,30 @@ their views. A member is never shown another's private view: the Conduit never s
 
 Opening another case from the drawer reloads the page, as every case switch does (§1): the working set, timeline and delta stream are each built once per case. The expansions and filters of a case are kept on the server, so they are still there; where nodes sit on screen and what was selected are not. Opening a view of the case on screen does not reload. Having several canvases live in one page, so that switching is instant and keeps the layout, is a later step.
 
+**An expansion run as a batch job (ADR-151; spec/00 §4's third choice).** When the cap refuses an
+expansion, the refusal on the canvas offers *Run as a batch job* beside expanding by one relationship
+and saving a smaller view. Choosing it sends exactly the refused expansion to the Conduit
+(`POST …/batch-expansions`), and a panel at the canvas's foot, `workingset/BatchExpansion.tsx`, follows
+the job. The panel is not modal, so the analyst can go on working while the job runs. It asks where the
+job is every two seconds and shows the server's sentence for each stage as given ("Expanding from 12
+nodes", "Saving the view"). It adds no words of its own to a stage, a refusal or a failure. Nothing
+joins the working set: when the job is done, its result, a private view of the case, opens as the
+read-only lens (§3.1h). The panel then says so, or says why the view could not be opened. A view past
+the canvas's limit is kept and named, and nothing is cut to fit.
+
+The refusals are said in words:
+- a case level below Editor, or an account without the right to expand (each named, and no job
+  started);
+- a case not opened;
+- a job already running in the case, which the panel follows instead of starting another;
+- a job refused for its size or for another reason, with figures and how to narrow;
+- a failed job, which offers *Try the batch job again*;
+- a job no longer found.
+
+A state the Glass does not know is said as a failure, never read as progress. The jsdom cases are in
+`workingset/BatchExpansion.test.tsx`, and their red-first record is
+`process/lanes/case-b/batch/plants.sh`. The keyboard case is `run-an-expansion-as-a-batch-job-by-keyboard`.
+
 ### 3.2 Social network analysis
 
 Metrics panel, computed on the working set in a Web Worker, recomputed on filter change:
