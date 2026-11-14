@@ -226,7 +226,7 @@ class StrengthReaches(BaseModel):
     @model_validator(mode="after")
     def _fits_scale(self) -> StrengthReaches:
         if self.scale == "drawn" and self.reaches > 1:
-            raise ValueError("a drawn strength is at most 1; name the client's scale for more")
+            raise ValueError("a drawn strength is at most 1; name the raw-sum scale for more")
         return self
 
 

@@ -310,7 +310,7 @@ class RoutedModel:
             else "material whose handling is not given"
         )
         raise ModelEgressRefused(
-            f"The {role} model is the client's own provider, and {what} may not be sent to it; "
+            f"The {role} model is a hosted provider, and {what} may not be sent to it; "
             f"this deployment has no local {role} model to use instead."
         )
 

@@ -1133,7 +1133,7 @@ test("a pipeline is handed to an orchestrator by keyboard, its quota and DAG rea
   const pipeline = region.getByRole("combobox", { name: "Pipeline to orchestrate" });
   await pipeline.focus();
   const first = await pipeline.inputValue();
-  await region.getByLabel("The orchestrator's client").focus();
+  await region.getByLabel("The orchestrator's sign-in ID").focus();
   await page.keyboard.type("syn-airflow");
   await region.getByRole("button", { name: "Mark owned externally" }).focus();
   await page.keyboard.press("Enter");

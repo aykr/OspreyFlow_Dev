@@ -80,7 +80,7 @@ LICENCES: dict[str, str] = {
 LICENCE_NOT_CONFIRMED: dict[str, str] = {
     "un_consolidated": (
         "no open licence was found for the UN consolidated list, and the UN's general terms allow "
-        "personal, non-commercial use only; its terms are to be confirmed with the UN"
+        "personal, non-commercial use only"
     ),
     "opensanctions": (
         "OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs "
@@ -169,8 +169,8 @@ def admit(
     unconfirmed = LICENCE_NOT_CONFIRMED.get(status.source)
     if unconfirmed is not None:
         raise ListRefused(
-            f"this list's licence is not confirmed: {unconfirmed}. Until it is, only OspreyFlow's "
-            "synthetic list may be read through this connector; nothing was loaded"
+            f"a real copy of this list is not read: {unconfirmed}. Only OspreyFlow's synthetic "
+            "list may be read through this connector; nothing was loaded"
         )
     return False
 

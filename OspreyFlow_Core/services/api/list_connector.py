@@ -89,7 +89,7 @@ log = logging.getLogger(__name__)
 CONNECTOR_SYNTHETIC = (
     Path(__file__).resolve().parents[2] / "connectors" / "screening" / ("synthetic.sha256")
 )
-BLANK_LICENCE = "the client's own list: its terms are the client's"
+BLANK_LICENCE = "your organisation's own list, under its own terms"
 
 
 class ListConnectorRefused(Exception):
@@ -610,8 +610,8 @@ def admit_list(
     unconfirmed = LICENCE_NOT_CONFIRMED.get(template)
     if unconfirmed is not None:
         raise ListConnectorRefused(
-            f"this list's licence is not confirmed: {unconfirmed}. Until it is, only OspreyFlow's "
-            "synthetic list may be read through this template; nothing was kept"
+            f"a real copy of this list is not read: {unconfirmed}. Only OspreyFlow's synthetic "
+            "list may be read through this template; nothing was kept"
         )
     return False
 

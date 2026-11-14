@@ -53,7 +53,7 @@ export const CLOSED_LISTS: Partial<Record<Source, string>> = {
  * a list row says the reason the Conduit sends with it. */
 export const LICENCE_NOT_CONFIRMED: Partial<Record<Source, string>> = {
   un_consolidated:
-    "no open licence was found for the UN consolidated list, and the UN's general terms allow personal, non-commercial use only; its terms are to be confirmed with the UN",
+    "no open licence was found for the UN consolidated list, and the UN's general terms allow personal, non-commercial use only",
   opensanctions:
     "OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs OpenSanctions' own data licence",
 };
@@ -143,7 +143,7 @@ export function ListsPanel(props: ListsPanelProps) {
                       <>
                         <br />
                         <span className="label" style={{ fontWeight: 600 }}>
-                          {`Licence not confirmed: ${list.licence_note ?? "its terms are to be confirmed"}. Synthetic lists only.`}
+                          {`Synthetic lists only: ${list.licence_note ?? "a real copy of this list is not read"}.`}
                         </span>
                       </>
                     )}

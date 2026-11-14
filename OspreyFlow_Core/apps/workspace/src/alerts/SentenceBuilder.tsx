@@ -597,7 +597,7 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
                 onChange={(e) => change({ strengthScale: e.target.value as SentenceDraft["strengthScale"] })}
               >
                 <option value="drawn">the drawn scale, 0 to 1</option>
-                <option value="client">the client's scale (a raw sum, under client parity)</option>
+                <option value="client">the raw-sum scale (a raw sum, under rarity plus adds)</option>
               </Select>
             </label>
           )}

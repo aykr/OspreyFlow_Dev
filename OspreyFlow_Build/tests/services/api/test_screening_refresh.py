@@ -410,7 +410,7 @@ async def test_a_real_list_whose_licence_is_not_confirmed_is_refused_even_with_a
     update = await _refresh(store, root, _rescreener(_Graph(LEDGER), _Queue(), [_rule()]),
                             exceptions_path=exceptions)  # fmt: skip
     assert update.outcome == "refused", update.words
-    assert "licence is not confirmed" in update.words and "commercial" in update.words
+    assert "a real copy of this list is not read" in update.words and "commercial" in update.words
     assert "only OspreyFlow's synthetic" in update.words
     status = await store.subscription("Synthetic list")
     assert status is not None and status.entries == 0

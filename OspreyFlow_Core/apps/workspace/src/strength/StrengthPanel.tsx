@@ -460,7 +460,7 @@ export function StrengthPanel(props: StrengthPanelProps) {
               <option value="">As the installation chooses</option>
               <option value="standard">{COMPOSITION_LABEL.standard}: the stored weight with the influencers</option>
               <option value="client_parity">
-                {COMPOSITION_LABEL.client_parity}: rarity plus the adds, as the client works it out
+                {COMPOSITION_LABEL.client_parity}: rarity plus the adds alone, with no count or recency
               </option>
             </Select>
           </label>

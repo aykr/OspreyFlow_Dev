@@ -118,20 +118,20 @@ test("a sentence rule's strength blank is written by keyboard (ADR-139 decision 
   registerCovered("STRENGTH_ACTIONS", "write-a-strength-rule-by-keyboard");
 });
 
-test("the case's Author switches the case to client parity by keyboard (ADR-139 Amendment 2)", async ({ page }) => {
+test("the case's Author switches the case to rarity plus adds by keyboard (ADR-139 Amendment 2)", async ({ page }) => {
   await page.goto("/keyboard/strength-harness.html?as=author");
   await expect(page.getByLabel("Composition in force")).toContainText("Composition: standard (shipped with OspreyFlow)");
   const how = page.getByRole("combobox", { name: "How strength is worked out in this case" });
   await tabUntilFocused(page, how);
-  await page.keyboard.type("Client");
+  await page.keyboard.type("Rarity");
   await expect(how).toHaveValue("client_parity");
   await tabUntilFocused(page, page.getByRole("button", { name: "Save this case's influencers" }));
   await page.keyboard.press("Enter");
   await expect(page.getByRole("status")).toHaveText("This case's influencers are saved.");
   const put = (await sent(page)).find((c) => c.method === "PUT");
   expect(put?.body).toEqual({ added: [], switched_off: [], composition: "client_parity", words: "" });
-  await expect(page.getByLabel("Composition in force")).toContainText("Composition: client parity (this case's own)");
-  registerCovered("STRENGTH_ACTIONS", "switch-a-case-to-client-parity-by-keyboard");
+  await expect(page.getByLabel("Composition in force")).toContainText("Composition: rarity plus adds (this case's own)");
+  registerCovered("STRENGTH_ACTIONS", "switch-a-case-to-rarity-plus-adds-by-keyboard");
 });
 
 test("an installation version's composition and rarity measure are chosen by keyboard (ADR-139 Amendment 2)", async ({
@@ -143,7 +143,7 @@ test("an installation version's composition and rarity measure are chosen by key
   const proposal = page.locator(".strength-panel__proposal");
   const composition = proposal.getByRole("combobox", { name: "Composition" });
   await tabUntilFocused(page, composition);
-  await page.keyboard.type("Client");
+  await page.keyboard.type("Rarity");
   await expect(composition).toHaveValue("client_parity");
   const measure = proposal.getByRole("combobox", { name: "Rarity measure" });
   await tabUntilFocused(page, measure);
@@ -157,7 +157,7 @@ test("an installation version's composition and rarity measure are chosen by key
   registerCovered("STRENGTH_ACTIONS", "choose-an-installation-composition-and-rarity-measure-by-keyboard");
 });
 
-test("a rule's strength figure is put on the client's scale by keyboard (ADR-139 Amendment 2)", async ({ page }) => {
+test("a rule's strength figure is put on the raw-sum scale by keyboard (ADR-139 Amendment 2)", async ({ page }) => {
   await page.goto("/keyboard/monitoring-harness.html?tab=rules");
   const strength = page.getByRole("combobox", { name: "Strength", exact: true });
   await tabUntilFocused(page, strength, 200);
@@ -165,15 +165,15 @@ test("a rule's strength figure is put on the client's scale by keyboard (ADR-139
   await expect(strength).toHaveValue("connection_strength");
   const scale = page.getByRole("combobox", { name: "On (scale, for strength)" });
   await tabUntilFocused(page, scale);
-  await page.keyboard.type("the cl");
+  await page.keyboard.type("the r");
   await expect(scale).toHaveValue("client");
   const reaches = page.getByRole("spinbutton", { name: "Reaches" });
   await tabUntilFocused(page, reaches);
   for (let i = 0; i < 6; i++) await page.keyboard.press("Backspace");
   await page.keyboard.type("1.2");
   await expect(reaches).toHaveValue("1.2");
-  await expect(page.getByText("A connection strength is at most 1; choose the client's scale for a raw sum.")).toHaveCount(0);
-  registerCovered("STRENGTH_ACTIONS", "write-a-strength-rule-on-the-clients-scale-by-keyboard");
+  await expect(page.getByText("A connection strength is at most 1; choose the raw-sum scale for a raw sum.")).toHaveCount(0);
+  registerCovered("STRENGTH_ACTIONS", "write-a-strength-rule-on-the-raw-sum-scale-by-keyboard");
 });
 
 test("every connection-strength keyboard action has a proving case", () => {

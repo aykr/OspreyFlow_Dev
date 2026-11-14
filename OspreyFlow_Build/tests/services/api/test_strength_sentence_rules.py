@@ -177,10 +177,10 @@ DIRECT = ActiveInfluencer(layer="file", influencer=StrengthInfluencer(
 
 def test_a_strength_figure_names_its_scale() -> None:
     """Amendment 2: a figure on the client's scale may pass 1 (a raw sum); a drawn one may not."""
-    with pytest.raises(ValidationError, match="client's scale"):
+    with pytest.raises(ValidationError, match="raw-sum scale"):
         StrengthReaches(reaches=1.1)
     sentence = RuleSentence(subject="Person", strength=StrengthReaches(reaches=1.1, scale="client"))
-    assert "reaches 1.1 on the client's scale" in sentence_words(sentence, ONTOLOGY)
+    assert "reaches 1.1 on the raw-sum scale" in sentence_words(sentence, ONTOLOGY)
 
 
 @pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str)
@@ -204,7 +204,7 @@ async def test_a_condition_on_the_clients_scale_is_judged_on_the_authors_raw_sum
         assert seen.would_raise == 0
         cleared = await preview_sentence(sentence, CLEARED, _ctx(graph, **parity))
         assert cleared.would_raise == 3
-        assert "on the client's scale" in cleared.examples[0].words
+        assert "on the raw-sum scale" in cleared.examples[0].words
         low = sentence.model_copy(update={"strength": StrengthReaches(
             link_type="COMMUNICATED_WITH", reaches=0.7, scale="client")})  # fmt: skip
         assert (await preview_sentence(low, OFFICIAL, _ctx(graph, **parity))).would_raise == 3

@@ -364,8 +364,9 @@ class ModelProviderConfig(BaseModel):
     kind: EngineKind = Field(
         default="provider",
         description="ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by "
-        "name), or at profile: cloud-platform only, gateway (the client's own OpenAI-compatible "
-        "AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider.",
+        "name), or at profile: cloud-platform only, gateway (your organisation's own "
+        "OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). "
+        "Default: provider.",
     )
     auth: EngineAuth | None = Field(
         default=None,
@@ -1101,7 +1102,7 @@ class EntraSignInConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    tenant_id: str = Field(pattern=_ENTRA_ID, description="The client's Entra tenant id")
+    tenant_id: str = Field(pattern=_ENTRA_ID, description="Your organisation's Entra tenant id")
     client_id: str = Field(
         pattern=_ENTRA_ID, description="The Glass's own app registration (application id)"
     )
