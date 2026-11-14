@@ -1,27 +1,5 @@
-# make -k ci via offline at ccd2466 (main debfc28), the three patches applied unstaged: every target green, exit 0.
-Running on ospreyflow-test (stack offline, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261114T112630Z-daf68f94/log: sh -c cd OspreyFlow_Build && make -k ci
-All checks passed!
-#15 [builder  7/11] COPY packages/schemas ./packages/schemas
-  34 passed (43.8s)
-licence-check: 94 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
-============================== 8 passed in 8.24s ===============================
-Success! 9 passed, 0 failed.
-Success! 11 passed, 0 failed.
-Success! 12 passed, 0 failed.
-Success! 11 passed, 0 failed.
-1 chart(s) linted, 0 chart(s) failed
-0.18s call     tests/harness/test_cluster_render.py::test_a_model_server_has_no_route_out_and_its_download_has
-============================= 54 passed in 18.64s ==============================
-============ 393 passed, 8 skipped, 1 warning in 365.85s (0:06:05) =============
-cd ../OspreyFlow_Core && PYTHONPATH=/root/osprey-runs/rules-b/OspreyFlow_Build .venv/bin/python -m tools.schemas_check
-schemas-check: 622 generated types match committed output.
-cd ../OspreyFlow_Core && PYTHONPATH=/root/osprey-runs/rules-b/OspreyFlow_Build .venv/bin/python -m tools.route_coverage_check
-route-coverage-check: 427 route(s), 0 allowlisted, no new drift.
-test-file-coverage-check: 1103 test file(s), 0 allowlisted, no new drift.
-================ 17 passed, 2 skipped, 780 deselected in 1.55s =================
-======================== 205 passed in 82.36s (0:01:22) ========================
-============================= 10 passed in 18.66s ==============================
-============================== 12 passed in 1.41s ==============================
-============================== 28 passed in 1.69s ==============================
-Wall time: 1142 s, exit 0 (no stack, no lease; set-up before it 17 s)
-exit=0 at ccd2466
+# make -k ci via offline at 6eb5440 (main c514da6), the three patches applied unstaged: every target green, exit 0. Replaces the run at ccd2466, taken before the rebase.
+Running on ospreyflow-test (stack offline, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261114T120336Z-e71b2185/log: sh -c cd OspreyFlow_Build && make -k ci
+test-file-coverage-check: 1106 test file(s), 0 allowlisted, no new drift.
+Wall time: 866 s, exit 0 (no stack, no lease; set-up before it 27 s)
+exit=0 at 6eb5440
