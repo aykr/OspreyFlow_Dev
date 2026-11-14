@@ -27,7 +27,8 @@ export interface BatchExpansionRequest {
 
 export type Started =
   | { ok: true; jobId: string }
-  | { ok: false; kind: "forbidden" | "not_found" }
+  | { ok: false; kind: "forbidden" }
+  | { ok: false; kind: "not_found" }
   | { ok: false; kind: "limit_exceeded"; wouldBe: LimitExceeded }
   | { ok: false; kind: "failed"; message: string };
 
