@@ -69,7 +69,8 @@ The CHANGELOG was fixed on `release/v0.5.1` at 7d76022.
 | 10d | the keys | 80 of v0.5.0's secrets byte for byte the same; the only change is `OSPREY_RELEASE_VERSION` |
 | 10e | the gateway | its master key equals the Conduit's key; the gateway answered 200 |
 | 11 | "After the update": `uv tool install --force --editable ./cli` | exit 0; `uv tool list --show-with` shows **no httpx extra**; `--help` and `status` exit 0 |
-| 12 | teardown | **REFUSED (exit 2)**: five anonymous volumes; see below. The image tags were put back (12b, exit 0) |
+| 12 | teardown | REFUSED (exit 2) on five anonymous volumes; image tags put back (12b, exit 0) |
+| 13–15 | the five removed on the orchestrator's ruling, then teardown again | each checked and removed (13, 14); **teardown exit 0** (15); the run's folder removed |
 
 Two notes on the 660:
 - **It is the update's own files step that renders it** (`scripts/refresh.py`,
@@ -105,4 +106,20 @@ this run's v0.5.0 deploy (01:10:21–01:15:54):
 - `5a407b0dc985…`, `d7055dec8e97…` and `e18e0de7ed5f…` are empty.
 
 They look like osprey-upg's ArcadeDB image volumes, kept across the recreate and missed by `down -v`.
-They are not removed until the orchestrator says so, and the run's folder is kept until then.
+
+**Removed on the orchestrator's ruling (14 November).** Before removal, each volume was checked against
+the ruling's conditions, and the `docker volume inspect` output is recorded in
+`run2-logs/13-volumes-inspect.txt`. Each one:
+- matched exactly one ID;
+- had no container (`docker ps -a --filter volume=<id>` empty);
+- had no compose project label, so nothing of osprey-small's;
+- was created inside the run's window.
+
+All five passed and were removed by full ID (`14-volumes-removed.txt`, exit 0). The teardown, run
+again, ends with **exit 0** (`15-teardown-final.txt`): containers 0, volumes 0, the run's image tags
+put back. One other lane's tag changed meanwhile (`osprey-test-workspace:proxy`); it is listed and was
+not touched. The run's folder `/root/osprey-runs/platform-b-upg` was then removed. The `.meta` folder
+beside it keeps the driver and the logs for the signed-update run.
+
+The v0.5.0 install race is recorded in `process/lanes/CARRIES.md` (the orchestrator's ruling 4). The
+orchestrator took both CHANGELOG wording notes at 477a500 on `release/v0.5.1`.
