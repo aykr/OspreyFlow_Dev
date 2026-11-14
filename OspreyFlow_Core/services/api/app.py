@@ -6228,13 +6228,21 @@ def _case_search(
     async def tau_of(investigation_id: str) -> float | None:
         return await _search_tau(working_set, investigation_id)
 
-    return case_search_with(
-        request.app.state.graph,
-        index,
-        pending_of=lambda: get_search_pending(request, index),
-        names_of=names_of,
-        tau_of=tau_of,
-    )
+    async def search(
+        investigation_id: str, principal: Principal, body: SearchPageRequest
+    ) -> SearchPageResponse:
+        # The graph is read here, when the search is called, not when the route builds it: a
+        # question that does not read the whole case touches nothing of the search's.
+        built = case_search_with(
+            request.app.state.graph,
+            index,
+            pending_of=lambda: get_search_pending(request, index),
+            names_of=names_of,
+            tau_of=tau_of,
+        )
+        return await built(investigation_id, principal, body)
+
+    return search
 
 
 @app.post(
