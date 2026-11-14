@@ -22,6 +22,8 @@ import { bringFactIntoView } from "../src/questions/graphFacts";
 import { QuestionsPanel } from "../src/questions/QuestionsPanel";
 import { Timeline } from "../src/timeline/Timeline";
 import { createWorkingSet } from "../src/workingset/store";
+import { BatchExpansion } from "../src/workingset/BatchExpansion";
+import type { BatchExpansionRequest } from "../src/workingset/batchExpansionApi";
 import type { OntologySchema, Node, Edge } from "../../../packages/schemas/generated";
 
 declare global {
@@ -46,6 +48,8 @@ declare global {
       savedSmallerView?: { would_be: number; cap: number; subject: string | undefined } | null;
       /** At `?batch=1`, what *Run as a batch job* handed up (ADR-151's slot, case-b's handler). */
       batchRequested?: { nodeId: string; edgeType: string | null; depth: number; would_be: number } | null;
+      /** At `?batch=panel`, the view the batch job's panel opened as its result (ADR-151, case-b's). */
+      batchViewOpened?: string | null;
     };
     __CANVAS__?: {
       viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
@@ -405,6 +409,35 @@ const judged = new Map<string, number>(
     }),
 );
 
+// `?batch=panel` (ADR-151, case-b's): *Run as a batch job* opens the real batch job's panel, as the App does
+// (`App.tsx`'s onRunExpansionAsBatch), against the address the test routes (`keyboard/canvas-expand-cap.spec.ts`).
+// The App's own hold on it, to its case and person and away from an open view, is proved in jsdom
+// (`workingset/useBatchExpansion.test.ts`, `App.batchExpand.test.tsx`).
+const wantsBatch = new URLSearchParams(window.location.search).get("batch");
+let showBatchPanel: (request: BatchExpansionRequest) => void = () => undefined;
+function HarnessBatchPanel() {
+  const [asked, setAsked] = useState<{ request: BatchExpansionRequest; n: number } | null>(null);
+  useEffect(() => {
+    showBatchPanel = (request) => setAsked((current) => ({ request, n: (current?.n ?? 0) + 1 }));
+  }, []);
+  if (!asked) return null;
+  return (
+    <BatchExpansion
+      key={asked.n}
+      request={asked.request}
+      apiBaseUrl="http://keyboard-test.invalid"
+      bearerToken="unused"
+      investigationId="keyboard-fixture"
+      pollMs={100}
+      onOpenView={async (viewId) => {
+        window.__KEYBOARD__!.batchViewOpened = viewId;
+        return null;
+      }}
+      onClose={() => setAsked(null)}
+    />
+  );
+}
+
 // ADR-093: the Inspector's selected list, wired to the canvas as App wires it.
 function HarnessSelectionList() {
   const [ids, setIds] = useState<string[]>([]);
@@ -454,9 +487,11 @@ createRoot(container).render(
         window.__KEYBOARD__!.savedSmallerView = { would_be: refused.would_be, cap: refused.cap, subject };
       }}
       onRunExpansionAsBatch={
-        new URLSearchParams(window.location.search).get("batch") === "1"
-          ? ({ nodeId, edgeType, depth, refused }) => {
+        wantsBatch === "1" || wantsBatch === "panel"
+          ? (request) => {
+              const { nodeId, edgeType, depth, refused } = request;
               window.__KEYBOARD__!.batchRequested = { nodeId, edgeType, depth, would_be: refused.would_be };
+              if (wantsBatch === "panel") showBatchPanel(request);
             }
           : undefined
       }
@@ -515,6 +550,7 @@ createRoot(container).render(
       </div>
     )}
     <HarnessSelectionList />
+    {wantsBatch === "panel" && <HarnessBatchPanel />}
     {wantsQuestions && (
       <QuestionsPanel
         apiBaseUrl="http://keyboard-test.invalid"

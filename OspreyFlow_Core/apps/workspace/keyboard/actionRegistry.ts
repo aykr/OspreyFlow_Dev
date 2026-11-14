@@ -1340,9 +1340,17 @@ export const ACCOUNT_UNREAD_ACTIONS = defineActionRegistry("ACCOUNT_UNREAD_ACTIO
 ] as const);
 
 // An expansion the working set's cap refused (rule 2; spec/00 §4's choices on the canvas): expand by one
-// relationship instead, and save a smaller view of the case. ADR-151's *Run as a batch job* is case-b's,
-// added to this list with its own case.
+// relationship instead, save a smaller view of the case, and run it whole as a batch job (ADR-151, case-b's).
 export const CANVAS_CAP_ACTIONS = defineActionRegistry("CANVAS_CAP_ACTIONS", [
   "narrow-an-over-cap-expansion-by-link-type-by-keyboard",
   "save-a-smaller-view-from-an-over-cap-expansion-by-keyboard",
+  "run-an-over-cap-expansion-as-a-batch-job-by-keyboard",
+] as const);
+
+// ADR-151 (v0.5.2): the batch job's own panel, followed while it runs (`keyboard/batch-expansion.spec.ts`).
+// Opened from the cap's refusal, which `CANVAS_CAP_ACTIONS` proves end to end.
+export const BATCH_EXPANSION_ACTIONS = defineActionRegistry("BATCH_EXPANSION_ACTIONS", [
+  "open-a-batch-jobs-view-by-keyboard",
+  "try-a-failed-batch-job-again-by-keyboard",
+  "close-the-batch-job-panel-by-keyboard",
 ] as const);

@@ -804,6 +804,19 @@
 .view-over-cap__window { display: flex; gap: var(--sp-12); flex-wrap: wrap; }
 .view-over-cap__window label { display: grid; gap: var(--sp-4); font-size: var(--fs-12); color: var(--text-secondary); }
 .view-over-cap__message { margin: var(--sp-12) 0 0; color: var(--text-primary); font-weight: 600; }
+/* An expansion run as a batch job (ADR-151): not modal, so it sits at the canvas's foot while the
+   reader goes on working; shaped as the over-cap dialog is. */
+.batch-expansion {
+  position: fixed; z-index: 20; right: var(--sp-16); bottom: var(--sp-16);
+  width: var(--w-right-panel-max); max-width: calc(100% - var(--sp-32)); box-sizing: border-box;
+  padding: var(--sp-16); background: var(--surface-raised); border-radius: var(--r-3); box-shadow: var(--overlay-shadow);
+  font-size: var(--fs-13); line-height: var(--lh-13); color: var(--text-primary);
+}
+.batch-expansion__title { margin: 0 0 var(--sp-8); font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 700; }
+.batch-expansion__figure, .batch-expansion__trouble { margin: 0 0 var(--sp-8); color: var(--text-secondary); }
+.batch-expansion__status { margin: 0 0 var(--sp-8); font-weight: 600; }
+.batch-expansion__message { margin: 0 0 var(--sp-12); font-weight: 600; }
+.batch-expansion__actions { display: flex; gap: var(--sp-8); flex-wrap: wrap; }
 .view-over-cap__reopen { position: fixed; z-index: 20; left: 50%; top: calc(var(--h-canvas-toolbar) + var(--sp-8)); transform: translateX(-50%); }
 /* The token could not be renewed (ADR-050 Amendment 1): asked over the page, in place, above everything
    else, so the page behind it is kept as it is; shaped as the over-cap dialog is. */

@@ -172,6 +172,8 @@ import {
 import { createWorkingSet } from "./workingset/store";
 import { applyRestoredSnapshot, ViewOverCapGate } from "./workingset/ViewOverCapGate";
 import { ViewOverCapDialog } from "./workingset/ViewOverCapDialog";
+import { BatchExpansion } from "./workingset/BatchExpansion";
+import { useBatchExpansion } from "./workingset/useBatchExpansion";
 
 // **An empty base URL means same-origin, and that is what a rendered
 // deployment builds with** (05_DEPLOYMENT.md §2.6 item 1, owner's decision
@@ -805,6 +807,11 @@ export function App() {
   // An expansion the working set's cap refused, its *Save a smaller view* chosen (spec/00 §4): the over-cap
   // dialog's save form, in the expansion's own words.
   const [expansionOverCap, setExpansionOverCap] = useState<{ refused: LimitExceeded; subject: string | undefined } | null>(null);
+  // ADR-151: the cap's third choice, the refused expansion run as a batch job and followed in its
+  // panel. `asked` gives each choice its own panel: choosing again while one runs opens a new one,
+  // which the Conduit's 409 makes follow the job already running.
+  // The panel follows a job in the case, and for the person, it was asked in and for (`useBatchExpansion`).
+  const batchExpansion = useBatchExpansion(investigationId, session?.sub ?? null);
   const [viewProblem, setViewProblem] = useState<string | null>(null);
   // ADR-144 decision 4: the view *Ask the model about these* saved, whose conversation is open.
   const [questionsView, setQuestionsView] = useState<{ id: string; name: string } | null>(null);
@@ -2211,6 +2218,11 @@ export function App() {
                   );
                 }}
                 onSaveSmallerView={(refused, subject) => setExpansionOverCap({ refused, subject })}
+                onRunExpansionAsBatch={
+                  bearerToken && investigationId && lens === null
+                    ? batchExpansion.ask
+                    : undefined
+                }
                 onViewMessages={(nodeId) => {
                   setDossierNodeId(nodeId);
                   setView("dossier");
@@ -2669,6 +2681,25 @@ export function App() {
           dimmedCount={dimmedNodeIds.size}
           withheld={withheld}
           groupedCount={groupedCount}
+        />
+      )}
+      {bearerToken && batchExpansion.asked && (
+        <BatchExpansion
+          key={batchExpansion.asked.n}
+          request={batchExpansion.asked.request}
+          apiBaseUrl={API_BASE_URL}
+          bearerToken={bearerToken}
+          investigationId={batchExpansion.asked.caseId}
+          // *Try the batch job again* only where a batch job may be chosen: not while a view is open.
+          mayStartAgain={lens === null}
+          // Opened as any view is (`openLens`: the latest view asked for wins); a problem is the panel's to say.
+          onOpenView={async (viewId) => {
+            setViewsRead((n) => n + 1);
+            const problem = await openLens(viewId);
+            if (problem !== null) setViewProblem(null);
+            return problem;
+          }}
+          onClose={batchExpansion.close}
         />
       )}
       {bearerToken && investigationId && expansionOverCap && (

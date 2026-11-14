@@ -2,8 +2,8 @@
 // never a cut). The Conduit answers 409 with the typed `limit_exceeded` (`workingset/models.ts`'s
 // LimitExceeded, the body `services/api/app.py` sends). The canvas says it in the over-cap dialog's words, adds
 // nothing, and offers, by keyboard: expand by one relationship instead (the cap's *filter*), and save a smaller
-// view of the case (*save_as_view*, handed to the App's over-cap dialog, `App.expandCap.test.tsx`). Run as a batch
-// job (*promote_to_batch*, ADR-151) is case-b's: its slot is proven here, its job there. A 409 that is not the cap's
+// view of the case (*save_as_view*, handed to the App's over-cap dialog, `App.expandCap.test.tsx`), and run it as a
+// batch job (*promote_to_batch*, ADR-151, case-b's): its slot, and the job from the refusal to its view opened. A 409 that is not the cap's
 // stays the expansion's failure. A search's chosen suggestion is drawn three hops out (`search/drawSearchResult.ts`),
 // which is how a single choice can reach the cap.
 import { expect, type Page, test } from "@playwright/test";
@@ -17,6 +17,7 @@ type Recorded = {
   __KEYBOARD__?: {
     savedSmallerView?: { would_be: number } | null;
     batchRequested?: { nodeId: string; edgeType: string | null; depth: number; would_be: number } | null;
+    batchViewOpened?: string | null;
   };
 };
 
@@ -179,6 +180,62 @@ test("the large expansion's prompt is modal too: Tab and Shift+Tab stay inside i
   await expandTheFocusedNode(page);
   await holdsFocus(page, page.getByRole("alertdialog", { name: "Large expansion" }));
 });
+
+// ADR-151, case-b's: *Run as a batch job* by keyboard, end to end. The refused expansion sent to the Conduit as the
+// canvas sent it to `/expand`, the batch job's panel taking focus and following the job in the server's words, its
+// result opened by *Open the view*, after which the panel closes. The Conduit here answers as rules-b's route
+// does (`services/api/app.py`'s batch expansions, `packages/schemas/batch_expansion.py`); its refusals are the
+// panel's own cases (`batch-expansion.spec.ts`, `BatchExpansion.test.tsx`), as the App's half is
+// `App.batchExpand.test.tsx`. Run again under StrictMode (`?strict=1`), as every dev build mounts the App: one POST.
+for (const strict of [false, true]) {
+  test(`an expansion past the cap is run as a batch job by keyboard, and its result opened as the view${strict ? " (StrictMode)" : ""}`, async ({ page }) => {
+    const expanded = await answerExpansions(page);
+    const VIEW = { id: "v-batch", case_id: "keyboard-fixture", name: "Expanded, whole", created_by: "analyst-1", created_at: "2026-11-14T10:00:00Z", shared: false, chosen: 1 };
+    const started: { request: unknown }[] = [];
+    let readings = 0;
+    await page.route("**/v1/investigations/keyboard-fixture/batch-expansions", (route) => {
+      started.push(route.request().postDataJSON() as { request: unknown });
+      return route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ id: "j1", state: "queued", words: "Waiting for the batch expansion to start.", view: null, nodes: null, links: null, refusal: null }) });
+    });
+    await page.route("**/v1/investigations/keyboard-fixture/batch-expansions/j1", (route) => {
+      readings += 1;
+      const job = readings < 3
+        ? { id: "j1", state: "running", words: "Expanding from 1 node.", view: null, nodes: null, links: null, refusal: null }
+        : { id: "j1", state: "done", words: "Saved 6,210 nodes and 9,004 links as your private view “Expanded, whole”.", view: VIEW, nodes: 6210, links: 9004, refusal: null };
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(job) });
+    });
+    await page.route("**/v1/investigations/keyboard-fixture/views/v-batch", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ view: VIEW, nodes: [], edges: [], layout: {}, missing: 0 }) }),
+    );
+    await expandTheFocusedNode(page, `?batch=panel${strict ? "&strict=1" : ""}`);
+    await reachAndPress(page, "Run as a batch job");
+    await expect(refusal(page)).toHaveCount(0);
+    const panel = page.getByRole("region", { name: "Batch job: the whole expansion" });
+    await expect(panel.getByRole("heading", { name: "Batch job: the whole expansion" })).toBeFocused();
+    await expect(panel).toContainText("The canvas refused 6,210 nodes against its limit of 5,000.");
+    await expect.poll(() => started.length).toBe(1);
+    // The expansion the cap refused, as the canvas itself sent it.
+    expect(expanded).toHaveLength(1);
+    expect(started[0]!.request).toEqual(expanded[0]!.request);
+    const status = panel.getByRole("status");
+    await expect(status).toHaveText("Saved 6,210 nodes and 9,004 links as your private view “Expanded, whole”.");
+    expect(await page.evaluate(() => (window as unknown as Recorded).__KEYBOARD__?.batchViewOpened ?? null)).toBeNull();
+    const tabTo = async (name: string) => {
+      const button = panel.getByRole("button", { name, exact: true });
+      for (let i = 0; i < 10 && !(await button.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
+      await expect(button, `${name} was not reached by Tab from the panel's heading`).toBeFocused();
+      await page.keyboard.press("Enter");
+    };
+    // Focus has stayed on the panel's heading while the job ran: nothing took it.
+    await expect(panel.getByRole("heading", { name: "Batch job: the whole expansion" })).toBeFocused();
+    await tabTo("Open the view");
+    await expect.poll(() => page.evaluate(() => (window as unknown as Recorded).__KEYBOARD__?.batchViewOpened)).toBe("v-batch");
+    // Its work done, the panel closes (the App's lens then takes focus, `ViewLensBanner`).
+    await expect(panel).toHaveCount(0);
+    expect(started).toHaveLength(1);
+    if (!strict) registerCovered(REGISTRY, "run-an-over-cap-expansion-as-a-batch-job-by-keyboard");
+  });
+}
 
 // Last in the file: the check reads the cases above it, run in order on one worker.
 test("every registered over-cap expansion action has its own proving test case above", () => {

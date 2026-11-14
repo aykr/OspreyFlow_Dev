@@ -1,0 +1,22 @@
+AS IT MUST BE (red): the panel not taking focus when it opens
+    Error: expect(locator).toBeFocused() failed
+AS IT MUST BE (red): Close out of the Tab order
+    Error: expect(locator).toBeFocused() failed
+AS IT MUST BE (red): Try the batch job again out of the Tab order
+    Error: expect(locator).toBeFocused() failed
+AS IT MUST BE (red): Open the view out of the Tab order
+    Error: expect(locator).toBeFocused() failed
+AS IT MUST BE (red): the stage's words faint against the panel (dark)
+    Error: [
+    "id": "color-contrast",
+AS IT MUST BE (red): the refusal's words faint against the panel (GOV.UK)
+    Error: [
+    "id": "color-contrast",
+AS IT MUST BE (red): the stage's words in the panel's own colour, 1:1, which axe leaves undecided (dark)
+    Error: colour contrast axe left undecided
+    +   ".batch-expansion__status: 1.00:1 < 4.5:1 (axe: equalRatio) (\"Saving the view.\")",
+AS IT MUST BE (red): the view's name faint against the panel (light)
+    Error: [
+    "id": "color-contrast",
+unplanted: 35 passed (32.2s)
+every plant red for its reason, unplanted green

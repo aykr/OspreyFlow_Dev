@@ -1213,6 +1213,53 @@ their views. A member is never shown another's private view: the Conduit never s
 
 Opening another case from the drawer reloads the page, as every case switch does (§1): the working set, timeline and delta stream are each built once per case. The expansions and filters of a case are kept on the server, so they are still there; where nodes sit on screen and what was selected are not. Opening a view of the case on screen does not reload. Having several canvases live in one page, so that switching is instant and keeps the layout, is a later step.
 
+**An expansion run as a batch job (ADR-151; spec/00 §4's third choice).** When the cap refuses an
+expansion, the refusal on the canvas offers *Run as a batch job* beside expanding by one relationship
+and saving a smaller view. Choosing it sends exactly the refused expansion to the Conduit
+(`POST …/batch-expansions`), and a panel at the canvas's foot, `workingset/BatchExpansion.tsx`, follows
+the job. The panel starts one job, whatever it is given later, until *Try again*, and sends one POST
+under React's StrictMode, which runs its start twice on one mount. It is not modal, so
+the analyst can go on working while the job runs. It asks where the job is every two seconds, with
+the newest token the page holds. It shows the server's sentence for each stage, refusal and failure as
+given ("Expanding from 12 nodes", "Saving the view"), and its own words only where the server sent
+none. Nothing joins the working set: when the job is done, the panel says so in the server's words and
+offers *Open the view* (ADR-151), which opens its result, a private view of the case, as the read-only
+lens (§3.1h), as the App opens any view: a view asked for after it wins. It never opens unasked: the job
+may finish minutes later, with the analyst in another view or place. Once the view is open the panel
+closes and the lens's banner takes focus; otherwise the panel says why it could not be opened, in the
+App's own sentence. When *Open the view* or *Try the batch job again* is pressed, the button goes and
+focus moves to the panel's heading, never to the page's top; a job ending moves no focus. A view past the canvas's limit is kept and named, and nothing is cut to fit.
+
+The refusals are said in words:
+- a case level below Editor, in the Conduit's own sentence;
+- an account without the right to expand (each, and no job started);
+- a case not opened;
+- a batch expansion of the reader's already running in the case, which the panel follows instead of
+  starting another, without this request's figures, since it may be another expansion;
+- a job refused for its size or for another reason, with figures and how to narrow;
+- a failed job, which offers *Try the batch job again*, except while a view is open;
+- a job not the reader's or no longer shared;
+- a done job whose view has since been deleted;
+- a reading refused (the sign-in ended) or failing for a minute, after which the panel stops asking
+  and says the job carries on.
+
+While the job runs, the panel says that closing it does not stop the job, and that asking for a batch
+expansion in the case again follows it while it runs (the Conduit's 409 names the running job). A
+state the Glass does not know is said as a failure, never read as progress.
+
+The jsdom cases are in `workingset/BatchExpansion.test.tsx`, and their red-first record is
+`process/lanes/case-b/batch/plants.sh`. The panel's three actions (*Open the view*, *Try the batch job
+again*, *Close*) are proved by keyboard in
+`keyboard/batch-expansion.spec.ts` (registry `BATCH_EXPANSION_ACTIONS`), and so is each of its states
+under axe in the three looks. Starting the job from the cap refusal is proved by keyboard where that
+refusal's own cases are (`keyboard/canvas-expand-cap.spec.ts`, registry `CANVAS_CAP_ACTIONS`), from
+*Run as a batch job* through the panel to its result opened as the view, its POST the canvas's own
+refused `/expand` body, and again under StrictMode. The App holds each choice with the case and the person
+it was made in and for, and drops it when either changes, so a panel never follows one case's job in
+another nor shows one person's figure to the next (`workingset/useBatchExpansion.ts` and its test). A
+second choice gets its own panel, and no batch job is offered while a view is open
+(`App.batchExpand.test.tsx`; red-first record `process/lanes/case-b/batch/plants-app.sh`).
+
 ### 3.2 Social network analysis
 
 Metrics panel, computed on the working set in a Web Worker, recomputed on filter change:
