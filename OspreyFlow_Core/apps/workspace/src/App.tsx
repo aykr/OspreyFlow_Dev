@@ -244,6 +244,21 @@ const GEO_BIN_PRECISION = 8;
 // Precedence logic (URL param → sessionStorage → create new) lives in
 // `investigation/investigationId.ts`, not here — see that module's own docstring.
 
+/** Asks again, waiting longer each time (1 s, then twice as long, at most 30 s), until `ask` answers or
+ * `stopped()`; `undefined` once stopped. A read the session cannot do without (the ontology) is never
+ * given up on after one failure. */
+async function untilAnswered<T>(ask: () => Promise<T>, stopped: () => boolean): Promise<T | undefined> {
+  for (let wait = 1000; ; wait = Math.min(wait * 2, 30_000)) {
+    if (stopped()) return undefined;
+    try {
+      return await ask();
+    } catch {
+      // Asked again after the wait.
+    }
+    await new Promise((resolve) => setTimeout(resolve, wait));
+  }
+}
+
 export function App() {
   const workingSetRef = useRef(createWorkingSet());
   // Read from the store itself, not copied into this component's own state by a subscription that a
@@ -1188,25 +1203,29 @@ export function App() {
     // supplies it), and every effect below that reaches `/v1` is gated on it for exactly that
     // reason — this one first, since it is the earliest bootstrap call in the component.
     if (!bearerToken) return;
-    void fetchOntologyRegistry(API_BASE_URL, bearerToken).then((registry) => {
-      setOntology(registry);
+    // The case's ontology is asked again until it answers: read once, a failed read (a dropped
+    // connection, a Conduit restarting or busy) left the Query builder panel and the canvas's link
+    // types absent for the whole session (found live, 14 November 2026; `App.ontologyRetry.test.tsx`).
+    let stopped = false;
+    void untilAnswered(() => fetchOntologyRegistry(API_BASE_URL, bearerToken), () => stopped).then((registry) => {
+      if (registry && !stopped) setOntology(registry);
     });
-    void fetch(`${API_BASE_URL}/v1/ontology`, {
-      headers: { Authorization: `Bearer ${bearerToken}` },
-    })
-      .then((r) => {
-        if (r.status === 401) {
-          handleUnauthenticatedResponse();
-          return null;
-        }
-        hasResolvedAPrincipalOnceRef.current = true;
-        return r.json();
-      })
-      .then((schema: OntologySchema | null) => {
-        if (!schema) return;
-        setEdgeTypes(schema.edge_types);
-        setOntologySchema(schema);
+    void untilAnswered(async () => {
+      const r = await fetch(`${API_BASE_URL}/v1/ontology`, {
+        headers: { Authorization: `Bearer ${bearerToken}` },
       });
+      if (r.status === 401) {
+        handleUnauthenticatedResponse();
+        return null;
+      }
+      if (!r.ok) throw new Error(`GET /v1/ontology failed: ${r.status}`);
+      hasResolvedAPrincipalOnceRef.current = true;
+      return (await r.json()) as OntologySchema;
+    }, () => stopped).then((schema) => {
+      if (!schema || stopped) return;
+      setEdgeTypes(schema.edge_types);
+      setOntologySchema(schema);
+    });
     void fetchMapConfig(API_BASE_URL, bearerToken).then(setMapConfig);
     fetchHandlingScheme(API_BASE_URL, bearerToken)
       .then((scheme) => {
@@ -1214,6 +1233,9 @@ export function App() {
         setHandlingScheme(scheme);
       })
       .catch(() => setClassificationOrder([]));
+    return () => {
+      stopped = true;
+    };
   }, [bearerToken, handleUnauthenticatedResponse]);
 
   useEffect(() => {
