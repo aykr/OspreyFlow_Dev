@@ -61,6 +61,15 @@ count records).
    - **(b)** Record it as a known limit of the standard shape, in the guide and the ADR.
    Platform can build either once you rule.
 
+7. **The right-click menu with two items selected (case-b, Part C, ADR-078 Am 1 d4).** Part C lists "Link to"
+   and "Find paths to…" among one item's own actions, but each needs a second item. Should the menu offer them only
+   when exactly two are selected, headed "2 selected", leaving out the clicked item's other actions (Explain
+   cluster, View messages) there? **Recommended, and built:** yes.
+   - One selected: the item's own actions.
+   - Two selected: the pair's actions (Link to, Split from, Find paths to).
+   - Three or more: the selection's actions alone.
+   - The heading always says what the menu applies to.
+
 ## Decided by the lanes, for you to overrule if you wish
 
 - **Case, Build a report for the Administrator (ADR-145 Am 15 decision 5):** a builder without the Reports
