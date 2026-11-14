@@ -1,0 +1,12 @@
+Running on ospreyflow-test (stack offline, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261114T124927Z-7c7a301a/log: bash -c PYTHONPYCACHEPREFIX=$(mktemp -d) OspreyFlow_Core/.venv/bin/python OspreyFlow_Build/process/lanes/rules/queries/plants.py; echo "plants exit=$?"
+built: GREEN - 16 passed in 3.80s
+Q1 a row from a record m10-measure cannot read let through: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_a_row_from_a_secret_document_is_refused | 1 failed in 2.52s
+Q2 an exact row's expect_first not compared with its record: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_an_exact_row_expecting_a_record_it_does_not_name_is_refused | 1 failed in 2.57s
+Q3 a number two visible records hold let through: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_an_exact_row_whose_number_two_visible_records_hold_is_refused | 1 failed in 2.56s
+Q4 a fulltext row's date filter not checked: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_a_fulltext_row_without_its_date_filter_is_refused | 1 failed in 2.54s
+Q5 a class with too few rows let through: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_a_class_with_too_few_rows_is_refused_in_words | 1 failed in 2.55s
+Q6 rows drawn from every record of the case, not the visible ones: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_every_row_is_drawn_from_a_record_the_measured_principal_reads | 1 failed in 2.58s
+Q7 the names changes not rotated (a hash picks each, the rows a change misses dropped): RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_names_rows_change_the_name_each_of_three_ways | 1 failed in 2.50s
+restored: GREEN - 16 passed in 2.83s
+plants exit=0
+Wall time: 35 s, exit 0 (no stack, no lease; set-up before it 12 s)
