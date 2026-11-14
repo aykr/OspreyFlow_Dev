@@ -1126,12 +1126,30 @@ class GraphArcadeDBAdapter:
         principal: Principal,
         edge_types: list[str] | None = None,
     ) -> list[Edge]:
-        if len(set(node_ids)) < 2:
+        """ADR-124 Amendment 20: each chunk of the ids is resolved to record ids through each vertex
+        type's unique `id` index (as `get_nodes` is), the links leaving those records are read with
+        the access step on both ends and the link, and a link is kept where its far end's id was
+        asked for. Each link is reached from its own source alone, and each source record is in one
+        chunk, so a link across two chunks is found once, with no merging by id: two links of
+        different types may hold one id, and both are listed, as before. Every chunk's query is
+        sent, so the round trips depend on how many ids were asked, never on which of them the
+        reader may see (rule 3)."""
+        if isinstance(node_ids, str):
+            raise TypeError("node_ids must be a sequence of ids, not a single string")
+        wanted = set(node_ids)
+        if len(wanted) < 2:
             return []
-        records = await self._client.gremlin(
-            render_edges_among_gremlin(sorted(set(node_ids)), self._access, principal, edge_types)
-        )
-        return [edge_from_element_map(r, principal) for r in records]
+        types = await self._types_with_unique_id("vertex")
+        found: list[Edge] = []
+        for chunk in _id_chunks(sorted(wanted)):
+            rids = await self._record_ids(types, chunk)
+            query = render_edges_among_gremlin(rids, self._access, principal, edge_types)
+            found += [
+                edge_from_element_map(row["e"], principal)
+                for row in await self._client.gremlin(query)
+                if row["t"] in wanted
+            ]
+        return found
 
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]:
         query = PathBuilder(req).render_gremlin(self._access, principal)

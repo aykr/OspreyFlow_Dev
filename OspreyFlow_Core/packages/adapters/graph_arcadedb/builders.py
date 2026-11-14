@@ -286,25 +286,37 @@ def _local_date_time(moment: datetime) -> str:
 
 
 def render_edges_among_gremlin(
-    node_ids: Sequence[str],
+    record_ids: Sequence[str],
     access: AccessFilter,
     principal: Principal,
     edge_types: list[str] | None = None,
 ) -> str:
-    """Every edge with both ends in `node_ids` (ADR-098 decision 1), each once: from each node in
-    the set, its outgoing edges, kept when their head is in the set too. The access step is on the
-    tail, the edge and the head, so a hidden edge, or an edge to a hidden node, leaves no trace."""
+    """One chunk of `GraphPort.edges_among` (ADR-098 decision 1; ADR-124 Amendment 20): from the
+    vertices at `record_ids` (one chunk of the asked-for ids, resolved by
+    `render_record_id_lookup_sql`), their outgoing links, each row the link and its far end's id.
+    The adapter keeps a row only where that id was asked for. The access step is on the tail, the
+    link and the head, so a hidden link, or a link to a hidden node, gives no row.
+
+    Never `has("id", within(...))`: that read every vertex in the store for each id list, and with
+    every id in the text twice, ArcadeDB could not compile the script past some 10,000 to 25,000 ids
+    ("Class too large", measured 14 November 2026). The text now holds one chunk's record ids only.
+    For no record ids the query is still rendered, as `render_get_nodes_gremlin`'s is, so an absent
+    id costs the round trip a hidden one does."""
     has_access = access.gremlin_has_step(principal)
-    ids = groovy_string_list_literal(list(node_ids))
     label_filter = ""
     if edge_types:
         physical = [label for t in edge_types for label in physical_edge_labels(t)]
         label_filter = f".hasLabel({groovy_args_literal(physical)})"
+    source = (
+        "g.V().limit(0)"
+        if not record_ids
+        else f"g.V({groovy_string_list_literal(list(record_ids))})"
+    )
     return (
-        f'g.V().has("id",within({ids})).{has_access}'
-        f".outE(){label_filter}.{has_access}"
-        f'.where(inV().has("id",within({ids})).{has_access})'
-        ".dedup().elementMap()"
+        f"{source}.{has_access}"
+        f".outE(){label_filter}.{has_access}.dedup().as('e')"
+        f".inV().{has_access}.as('t')"
+        ".select('e','t').by(elementMap()).by(values('id'))"
     )
 
 
