@@ -39485,12 +39485,16 @@ measured.*
      chunk where nothing resolved, so an absent id costs what a hidden one does.
    - **Unchanged:** an empty or one-node set sends nothing and has none; `edge_types` narrows every chunk's query. A
      bare `str` for the ids is refused, as `get_nodes` refuses it. As on every read by id (Amendment 2), a vertex
-     type without a unique `id` index is not asked, so a link whose source is of such a type is not found from it.
-     Every type the ontology applies has the index.
+     type without a unique `id` index is not asked, so a link whose source is of such a type is not found from it,
+     where the query as built, which scanned every vertex, found it. Every type the ontology applies has the index.
 
    Measured in the same run (`measure50k.py`'s comparison B, the same shape): 3.3 s at 5,000 ids, 4.1 s at 10,000,
    4.9 s at 25,000, 6.2 s at 50,000. At 5,000 and 10,000 the link-id sets were exactly those of the query as built,
    compared both ways. The cost is one SQL query per vertex type and one Gremlin call per 1,000 ids.
+   Each chunk reads every visible out-link of each start and the far end is narrowed in the adapter, so a start of
+   very high degree streams all its links: measured only to hubs of some 5,000 links (the 50k shape), and a later
+   scale run should hold a hub of many more (`process/lanes/CARRIES.md`, after the v0.5.2 cut; the rules lane's
+   review of 14 November).
 3. **Every caller keeps its contract** (the port's: every link with both ends in the set, each once, access-filtered
    in the adapter; order unspecified):
    - the batch expansion (`batch_expansion._expand_and_save`, ADR-151): the links among its result;
