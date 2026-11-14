@@ -24,6 +24,9 @@ PLANTS = [
      [SPEC], "Roles in", r"expect\(skips\)"),
     ("the sections' h2s at the browser's size", [(CSS, ".admin-place__section h2 { font-size: var(--fs-13);", ".admin-place__section h2 { font-size: 1.5em;")],
      [SPEC], "dark look|light look", r"h\.size >= h1"),
+    # In GOV.UK the browser's h2 (28.5px) stays under the 36px h1, so only the token check can see it.
+    ("the sections' h2s at the browser's size, in GOV.UK", [(CSS, ".admin-place__section h2 { font-size: var(--fs-13);", ".admin-place__section h2 { font-size: 1.5em;")],
+     [SPEC], "govuk look", r"expect\(offScale"),
     ("the row links without govuk-link under GOV.UK", [("src/admin/sections/People.tsx", '"admin-row-actions__link govuk-link"', '"admin-row-actions__link"')],
      [SPEC], "link focus", r"toContain\(\"govuk-link\"\)"),
     ("a local focus rule over GOV.UK's, the class kept", [(CSS, ".admin-row-actions__link[aria-expanded=\"true\"] { font-weight: 700; }", ".admin-row-actions__link[aria-expanded=\"true\"] { font-weight: 700; }\n.admin-place .admin-row-actions__link:focus { background: none; }")],

@@ -39003,7 +39003,7 @@ not to regress. The orchestrator approved three choices:
      the browser's sizes, with no `h1` to step from.
    - **Admin › Models and Admin › Maps head their parts with `h2`s beneath the section's `h1`** (What the
      installer declared, Engines, Each job's default engine, Usage, History; Providers, The local basemap,
-     Prefetch areas, History), each `className="value"`, so `.admin-place__section h2.value` draws them below
+     Prefetch areas, History), each `className="value"`, so `.admin-place__section h2` (which this step generalised from `h2.value`) draws them below
      the `h1` in every look (`--fs-13`; in GOV.UK 19px, below the 36px `h1`), as People's parts are. Held by the
      sections' own tests (`Models.test.tsx` and `Maps.test.tsx`: every heading an `h2` with `value`) and by
      `admin-look.spec.ts`'s Models and Maps cases in the dark, light and GOV.UK looks (one `h1`, levels [1, 2],

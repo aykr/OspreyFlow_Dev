@@ -14,7 +14,8 @@ const SIZES = { dark: { h2: 13, h3: 12 }, light: { h2: 13, h3: 12 }, govuk: { h2
 const SECTIONS = [
   ["Roles", "serve=people&open=Roles", "New role", "New role"],
   ["Dashboard identities", "serve=packs&open=Dashboard%20identities", "Register a dashboard", ""],
-  ["Datasets", "serve=datasets&open=Datasets&show=details", "Authors", ""],
+  // Linked cases is read by a fetch of its own, after the details: waited on, so every part is drawn.
+  ["Datasets", "serve=datasets&open=Datasets&show=details", "Linked cases", ""],
   ["System", "serve=datasets&open=System", "Dataset owners", ""],
   // Budget alerts is drawn only once the figures are read, so every part of them is drawn before measuring.
   ["Operations", "serve=operations&open=Operations", "Budget alerts", ""],
