@@ -6,7 +6,8 @@ measure: 3.6 s for 1,000 ids at 200,000 vertices), so a load of n items into a g
 and loading a client-size dataset grew with its square. It now resolves ids through each vertex
 type's unique `id` index by SQL and starts every traversal from record ids.
 
-The same load (200 nodes, then 200 links between them, then 200 more loaded in bulk) runs against
+The same load (200 nodes, then 200 links between them, the 200 nodes written again as a re-ingest
+writes them, then 200 more links loaded in bulk) runs against
 the graph padded with 2,000 other vertices and then with 102,000: fifty times the graph, and the
 load must take less than one and a half times as long. Measured on the lane stack (14 November,
 stack c): 6.63 s and 6.41 s at 2,000 and 22,000, flat. At 22,000 one scan per item adds only some
@@ -79,6 +80,11 @@ async def _load(graph: GraphArcadeDBAdapter) -> float:
     tx = await graph.begin_transaction()
     ids = [str(i) for i in await graph.upsert_nodes(nodes, tx)]
     await graph.upsert_edges([_link(ids[n], ids[(n + 1) % LOAD]) for n in range(LOAD)], tx)
+    await graph.commit_transaction(tx)
+    # The same nodes written again, as a re-ingested load writes them: each now exists, so its
+    # lookup of the existing node is measured too (plant A9).
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes(nodes, tx)
     await graph.commit_transaction(tx)
     await graph.bulk_load_edges([_link(ids[n], ids[(n + 7) % LOAD]) for n in range(LOAD)])
     return time.perf_counter() - started
