@@ -21,6 +21,7 @@ PLANTS = [
     ("out_of_date_read_as_unreachable", WS, "    if isinstance(error, PrincipalAccessOutOfDate):\n        return \"out_of_date\"\n", "", "out-of-date or out_of_date"),
     ("out_of_date_words_their_own", WS, "        f\"Its owner {ACCESS_OUT_OF_DATE_WORDS}. It is active again at the first load after they \"", "        \"Its owner is out of date. It is active again at the first load after they \"", "every_reason_has_its_words"),
     ("words_name_the_owner_id", WS, "    return STOPPED_WHY.get(reason) if reason else None", "    return (STOPPED_WHY.get(reason) or '') + ' (owner-1)' if reason in STOPPED_WHY else None", "every_reason_has_its_words"),
+    ("resolved_watch_left_stopped", EV, "        # owner no longer reaches its dataset is skipped below, not stopped (monitor_schedule's).\n        await monitor_store.set_status(monitor.id, \"active\")\n", "        # owner no longer reaches its dataset is skipped below, not stopped (monitor_schedule's).\n", "active_again_though"),
     ("not_held_said_as_refused", WS, "    if isinstance(error, OwnerNotHeld):\n        return \"not_held\"\n", "", "not-held"),
     ("unresolved_left_out_of_the_guide", WS, "    \"unresolved\": \"Its owner could not be acted as at the last load.\",", "    \"unresolved\": \"Its owner could not be acted as at the last load, for now.\",", "user_guide"),
     ("named_revoked_read_as_refused", WS, "    if isinstance(error, PrincipalRevoked):\n        return \"revoked\"\n", "", "revoked_principal_sets"),

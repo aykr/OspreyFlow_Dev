@@ -5,4 +5,4 @@ E
 E         At index 0 diff: ('m-1', 'stopped', None) != ('m-1', 'stopped', 'pattern_gone')
 E         Use -v to get more diff
 FAILED ../OspreyFlow_Build/tests/services/api/test_stopped_why.py::test_a_watch_whose_pattern_is_no_longer_its_owner_s_stops_with_that_reason
-1 failed, 28 deselected in 2.90s
+1 failed, 29 deselected in 2.98s

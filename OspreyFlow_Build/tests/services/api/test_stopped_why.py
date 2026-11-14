@@ -310,3 +310,21 @@ async def test_an_owner_the_identity_provider_refuses_sets_status_detail_refused
 
     resolver = PrincipalResolver(_config_with_exchange(jwks_url, token_exchange_url))
     assert await _stopped_with(resolver, "owner-unknown") == [("h-9", "stopped", "refused")]
+
+
+async def test_a_watch_whose_owner_resolves_is_active_again_though_it_no_longer_reaches_its_dataset() -> None:
+    """An earlier reason is never shown once untrue: the owner can be acted as, so the watch is set
+    active at once (as a hotlist is), and then skipped, not stopped, for the dataset it no longer reaches."""
+    watch = _monitor().model_copy(update={"dataset_id": "ds-1"})
+    store = _Watches([watch])
+
+    async def owner(_o: str) -> Principal:
+        return OWNER
+
+    async def reaches(_p: Principal, _d: str) -> bool:
+        return False
+
+    await evaluate_monitors_for_entry(_Entry(), graph=_Nothing(), monitor_store=store, pattern_store=_Nothing(),  # type: ignore[arg-type]
+                                      alert_store=_Nothing(), audit=_Nothing(), valkey=_Nothing(),  # type: ignore[arg-type]
+                                      principal_for_owner=owner, reaches_dataset=reaches)  # fmt: skip
+    assert store.told == [("m-1", "active", None)]
