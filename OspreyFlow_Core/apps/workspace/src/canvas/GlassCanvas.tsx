@@ -633,6 +633,38 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const [suppressionMarks, setSuppressionMarks] = useState<
       Record<string, string>
     >({});
+    // v0.5.2 route row S7: the marks are read back from the case (`GET …/suppression-marks`, the nodes this reader
+    // may see on the canvas) when the canvas loads and again as nodes arrive, so a reload keeps them: a marked node
+    // offers *Remove suppression mark*, never the mark again over its reason. A read that fails changes nothing.
+    useEffect(() => {
+      if (!investigationId) return;
+      let live = true;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const read = async () => {
+        try {
+          const response = await fetch(
+            `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/suppression-marks`,
+            { headers: { Authorization: `Bearer ${bearerToken}` } },
+          );
+          if (!response.ok) return;
+          const marks = (await response.json()) as { node_id: string; reason: string }[];
+          if (live && Array.isArray(marks)) setSuppressionMarks(Object.fromEntries(marks.map((m) => [m.node_id, m.reason])));
+        } catch {
+          // Unread: the marks already known stay as they are.
+        }
+      };
+      void read();
+      const again = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => void read(), 250);
+      };
+      graph.on("nodeAdded", again);
+      return () => {
+        live = false;
+        clearTimeout(timer);
+        graph.removeListener("nodeAdded", again);
+      };
+    }, [apiBaseUrl, bearerToken, investigationId, graph]);
     // A link selected by click or by keyboard. A ref as well, because the Sigma edge reducer
     // reads it when drawing.
     const [selectedEdge, setSelectedEdge] = useState<string | null>(() =>
@@ -661,6 +693,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       y: number;
       title: string;
       confirmLabel: string;
+      why?: string;
       run: (reason: string) => void;
     } | null>(null);
     // Nodes the analyst folded into one from a same-as link: a view only, like Communities, kept in
@@ -2551,11 +2584,29 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // `/expand`'s own `ExpandBody` is — `ManualAssertionRequest` (`services/api/resolution.py`) is
     // the whole body, checked directly rather than assumed from `expandNode`'s own different shape.
     async function toggleSuppressionMark(nodeId: string): Promise<void> {
-      // A write, like `manualAssertion` — so a failure is surfaced rather than swallowed. An
-      // analyst who believes they have flagged a record for suppression, and has not, is exactly
-      // the dangerous silence that function's own comment describes.
-      const marked = Boolean(suppressionMarks[nodeId]);
-      const reason = marked ? "" : "Marked from the canvas";
+      // ADR-046 step 1, owner ruling R7: "a reversible mark with a reason". Marking asks why first (v0.5.2 route
+      // row S8: it recorded a fixed "Marked from the canvas" and asked for nothing), in the same box the link
+      // menu's writes ask in; removing asks nothing.
+      const anchor = radialMenu ?? { x: 0, y: 0 };
+      if (suppressionMarks[nodeId]) {
+        await writeSuppressionMark(nodeId, null, anchor);
+        return;
+      }
+      setReasonPrompt({
+        x: anchor.x,
+        y: anchor.y,
+        title: "Mark this record for suppression (hides nothing yet)",
+        confirmLabel: "Mark for suppression",
+        why: "Why should it be suppressed? (required, kept with the mark)",
+        run: (reason) => void writeSuppressionMark(nodeId, reason, anchor),
+      });
+    }
+
+    /** The mark written (`reason`) or removed (`null`). A write, like `manualAssertion`, so a failure is surfaced
+     * rather than swallowed: an analyst who believes they have flagged a record for suppression, and has not, is
+     * exactly the dangerous silence that function's own comment describes. */
+    async function writeSuppressionMark(nodeId: string, reason: string | null, anchor: { x: number; y: number }): Promise<void> {
+      const marked = reason === null;
       try {
         const response = await fetch(
           `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/nodes/${nodeId}/suppression-mark`,
@@ -2582,7 +2633,6 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           );
         }
       } catch (err) {
-        const anchor = radialMenu ?? { x: 0, y: 0 };
         setActionError({
           x: anchor.x,
           y: anchor.y,
@@ -2592,7 +2642,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       }
       setSuppressionMarks((current) => {
         const next = { ...current };
-        if (marked) delete next[nodeId];
+        if (reason === null) delete next[nodeId];
         else next[nodeId] = reason;
         return next;
       });
@@ -3701,6 +3751,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             y={reasonPrompt.y}
             title={reasonPrompt.title}
             confirmLabel={reasonPrompt.confirmLabel}
+            why={reasonPrompt.why}
             onSubmit={(reason) => {
               const run = reasonPrompt.run;
               setReasonPrompt(null);
