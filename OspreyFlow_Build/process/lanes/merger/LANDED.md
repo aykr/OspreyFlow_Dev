@@ -95,3 +95,4 @@ b925385 cb54a90 case-b lease-tests, with its stack_lease.sh diff
 8a5bde1 0b480e8 platform-b v052-r1 (step 6's run sheet and checks)
 428e993 7568835 platform-b v052-rls (the guest token's RLS read)
 fd96c11 d8971cd platform-b v052-sheet
+4116841 252df74 admin audit1 (ruling 1, option A), three guide PDFs reprinted
