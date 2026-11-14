@@ -39155,7 +39155,9 @@ reads is its own record") for the write path.*
      its times printed and recorded with the lease they were taken under. Measured first on stack c under the rules
      lane's lease, 14 November: 6.63 s and 6.41 s at 2,000 and 22,000 vertices, flat; but at 22,000 one scanning lookup
      put back stayed under the bound (plants A9 to A11 green), so the graph is made fifty times larger and the bound
-     tighter, until each plant is red by the test's own measure; and
+     tighter, and its load writes its nodes a second time (as a re-ingest does) so the existing node's lookup is
+     measured too. At 102,000, three runs of the new path (stack c, the rules lane's lease of 2026-11-14T02:36:09Z): 8.30/8.06 s,
+     8.43/8.94 s and 8.54/8.84 s, ratios 0.97, 1.06 and 1.04, and plants A9 to A11 each red by the test alone; and
      `test_one_call_writing_one_node_twice_ends_as_one_node`, one call that writes a node twice in one transaction;
    - plants A1 to A13 (`process/lanes/rules/adr124-am18/plants.py`), each lookup put back to its scanning shape, A5
      to the record in the index, each red (`PLANTS_RECORD.txt`); A9 to A11 list the scale test alone, so it is shown

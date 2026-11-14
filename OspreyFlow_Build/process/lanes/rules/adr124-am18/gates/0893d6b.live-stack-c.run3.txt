@@ -1,0 +1,63 @@
+Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261114T025814Z-f45299ad/log: bash -c T=../OspreyFlow_Build/tests/conformance/graph_port/test_write_path_scale.py; for i in 1 2 3; do echo "=== scale run $i"; .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -s $T; done; echo "=== plants adr124-am18"; .venv/bin/python ../OspreyFlow_Build/process/lanes/rules/adr124-am18/plants.py; c=$?; echo "plants adr124-am18 exit=$c"; exit $c
+=== scale run 1
+ADR-124 Am 18: the load at 2,000 padding 8.30 s, at 102,000 8.06 s
+..
+---------------------- 2 unmarked test(s) reached a store ----------------------
+tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph: ArcadeDB on port 2493
+tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node: ArcadeDB on port 2493
+============================= slowest 30 durations =============================
+26.98s call     tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph
+0.56s setup    tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph
+0.38s setup    tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node
+0.19s call     tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node
+0.09s teardown tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node
+0.05s teardown tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph
+2 passed in 28.36s
+=== scale run 2
+ADR-124 Am 18: the load at 2,000 padding 8.43 s, at 102,000 8.94 s
+..
+---------------------- 2 unmarked test(s) reached a store ----------------------
+tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph: ArcadeDB on port 2493
+tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node: ArcadeDB on port 2493
+============================= slowest 30 durations =============================
+28.21s call     tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph
+0.66s setup    tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph
+0.53s setup    tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node
+0.25s call     tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node
+0.09s teardown tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node
+0.07s teardown tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph
+2 passed in 29.93s
+=== scale run 3
+ADR-124 Am 18: the load at 2,000 padding 8.54 s, at 102,000 8.84 s
+..
+---------------------- 2 unmarked test(s) reached a store ----------------------
+tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph: ArcadeDB on port 2493
+tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node: ArcadeDB on port 2493
+============================= slowest 30 durations =============================
+28.13s call     tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph
+0.58s setup    tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph
+0.46s setup    tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node
+0.21s call     tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node
+0.10s teardown tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node
+0.06s teardown tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph
+2 passed in 29.65s
+=== plants adr124-am18
+built: GREEN - 321 passed in 80.84s (0:01:20)
+A1 a node looked up by a scan of the store [OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py]: RED - FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_write_onto_a_reverted_node.py::test_a_write_onto_a_live_node_still_merges | FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph | 2 failed, 1 passed in 35.64s
+A2 a link's existing edge looked for from a scan [OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py]: RED - FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_writes_in_two_datasets_are_two_links | FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph | 2 failed, 1 passed in 32.31s
+A3 a link's end degree from a scan [OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py]: RED - FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_corpus_stats_ignore_stray_records.py::test_the_corpus_total_does_not_count_records_only_a_scan_finds | 1 failed in 1.00s
+A4 a new link added from its ends by a scan [OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py]: RED - FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py::test_the_aggregate_is_what_one_at_a_time_upserts_leave_in_the_store | FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph | 2 failed, 1 passed in 33.91s
+A5 a merged link written by its record in the id index (a stray copy) [OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py]: RED - FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_merge_is_written_to_the_link_a_traversal_reaches_not_a_stray_record | 1 failed in 0.93s
+A5b a merged link found by its label and a scan [OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py]: RED - FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py::test_a_write_merges_into_the_link_of_its_own_audience_among_several | 1 failed in 1.07s
+A6 the bulk write finds each row's ends by a scan [OspreyFlow_Core/packages/adapters/graph_arcadedb/bulk.py]: RED - FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_gremlin_bulk_transport_shapes.py::test_no_lookup_scans_the_store_by_id | FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph | 2 failed, 1 passed in 49.40s
+A7 the bulk stored links from a scan [OspreyFlow_Core/packages/adapters/graph_arcadedb/bulk.py]: RED - FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_gremlin_bulk_transport_shapes.py::test_no_lookup_scans_the_store_by_id | 1 failed in 1.12s
+A8 the bulk degrees from a scan [OspreyFlow_Core/packages/adapters/graph_arcadedb/bulk.py]: RED - FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_gremlin_bulk_transport_shapes.py::test_no_lookup_scans_the_store_by_id | 1 failed in 1.08s
+A9 the scale test: a node looked up by a scan [OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py]: RED - FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph | 1 failed, 1 passed in 35.91s
+A10 the scale test: a new link added from its ends by a scan [OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py]: RED - FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph | 1 failed, 1 passed in 55.38s
+A11 the scale test: the bulk write's ends by a scan [OspreyFlow_Core/packages/adapters/graph_arcadedb/bulk.py]: RED - FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_write_path_scale.py::test_a_loads_time_grows_with_the_load_not_the_graph | 1 failed, 1 passed in 74.32s (0:01:14)
+A12 a bulk row with no end dropped unsaid [OspreyFlow_Core/packages/adapters/graph_arcadedb/bulk.py]: RED - FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_gremlin_bulk_transport_shapes.py::test_a_rows_end_not_in_the_graph_is_refused_in_words_never_dropped | 1 failed in 1.44s
+A13 an id written earlier in the call not found again [OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py]: RED - FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_write_path_scale.py::test_one_call_writing_one_node_twice_ends_as_one_node | 1 failed in 1.76s
+restored: GREEN - 321 passed in 101.34s (0:01:41)
+plants adr124-am18 exit=0
+Wall time: 635 s, exit 0 (stack c, the lease rules took at 2026-11-14T02:35:59Z; set-up before it 16 s)
+exit=0
