@@ -1524,12 +1524,12 @@ platform's, under its own snapshots and versioning. **The deployment backs up wh
 (ADR-148 Amendments 7 and 13): ArcadeDB, ClickHouse and the claims part. **The claims part holds, in
 every shape, the shared volume's folders the deployment cannot make again**: the published
 pipelines (`data/recipes`), the model settings (`model-settings`) and the map settings with the map
-key file (`map-settings`, ADR-147); and, in the poc shape, the Ingest root's claim. Each is
+key file (`map-settings`, ADR-147); and the Ingest root (uploads and the drop folder) beside them:
+in the poc shape its own claim, and in the standard shape the shared volume's folder of it (`ingest`,
+a part of its own). Uploads can be large, so the claims run's size and time grow with them. Each is
 read-only to the backup, and the pods that mount them are writers a restore refuses to run beside.
 **Not in a set**: the rest of the shared volume, `ospreyflow-shared`: the tiles (`tiles`), made
-again, and, in the standard shape, the Ingest root (`ingest`: uploads and the drop folder), which
-there is a folder of the shared volume, not a claim of its own. A restore leaves those as they are,
-so in the standard shape an upload can disagree with the stores it brings back. The
+again. A restore leaves those as they are. The
 recovery runbook that ships with the product, `deploy/RUNBOOK.md`, has the whole procedure under *The
 `cloud-platform` profile*, with every command; this section says what it does.
 
