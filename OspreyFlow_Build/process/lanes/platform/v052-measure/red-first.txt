@@ -58,3 +58,23 @@ plant 3: the gate run without a named stack, against a default
 3/3 red
 Green after: test_measure_search, tests/perf, test_adr_reservations, test_test_file_coverage_check, test_write_store_marks;
 doc-citations-check: every cited path exists.
+
+# M6, the feed's lag (2026-11-14T07:56:41Z): measure_search.measure_lag and the live file's M6 case, on rules' advice (a node
+# drawn on a board, POST .../boards/{board}/items, polled on the case's search until the index answers it). Built, then shown
+# red one plant per check at its real call site (plants_lag.py), each restored after its run:
+plant 1: a fallback answer holding the node counted as the index's
+  tests/test_measure_search.py -k 'fallback_answering_the_node': RED (1 failed, 18 deselected in 1.12s)
+plant 2: M6's failure figure not applied
+  tests/test_measure_search.py -k 'lag_over_the_failure_figure': RED (1 failed, 18 deselected in 2.76s)
+plant 3: a refused draw not counted
+  tests/test_measure_search.py -k 'refused_draw': RED (1 failed, 18 deselected in 1.08s)
+plant 4: the board made inside the loop, once per draw
+  tests/test_measure_search.py -k 'in_time_meets_m6': RED (1 failed, 18 deselected in 1.34s)
+plant 5: the live file's M6 verdict dropped
+  tests/test_measure_search.py -k 'fails_m6_when': RED (1 failed, 18 deselected in 2.32s)
+plant 6: the table's M6 failure figure changed alone
+  tests/test_measure_search.py -k 'both_ways': RED (1 failed, 18 deselected in 0.61s)
+6/6 red
+The earlier plants rerun after the change: plants_budgets 6/6 red, plants_live 3/3 red.
+Green after: test_measure_search and tests/perf 19 passed, 5 skipped (no stack named); with test_adr_reservations,
+test_test_file_coverage_check and test_write_store_marks 60 passed, 5 skipped; doc-citations-check: every cited path exists.

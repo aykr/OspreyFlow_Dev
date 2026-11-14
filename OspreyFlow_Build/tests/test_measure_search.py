@@ -26,28 +26,46 @@ class _Conduit(BaseHTTPRequestHandler):
     source = "index"
     exact_first = True
     seen: list[tuple[str, dict[str, Any], str]] = []
+    # M6: how long a drawn node takes to reach the index, whether the draw is refused, and the
+    # drawn nodes (their family name, their id, when they were drawn).
+    lag = 0.0
+    refuse_draw = False
+    drawn: dict[str, tuple[str, float]] = {}
 
     def do_POST(self) -> None:  # noqa: N802 - http.server's name
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.seen.append((self.path, body, self.headers.get("Authorization", "")))
         time.sleep(self.delay)
+        status = 200
         if self.path.endswith("/suggest"):
             answer: dict[str, Any] = {"nodes": [{"id": "n1"}], "more": False}
+        elif self.path.endswith("/boards"):
+            status, answer = 201, {"id": "board-1", "name": body["name"]}
+        elif self.path.endswith("/items"):
+            if self.refuse_draw:
+                status, answer = 403, {"detail": "no draw right"}
+            else:
+                node = f"drawn-{len(self.drawn)}"
+                self.drawn[body["properties"]["family_name"]] = (node, time.monotonic())
+                status, answer = 201, {"element_id": node, "item_id": f"i-{node}"}
         else:
             hits = [
                 {"node_ids": ["exact-1"], "match": {"band": "identifier"}},
                 {"node_ids": ["close-1"], "match": {"band": "name_typo"}},
             ]
+            found = self.drawn.get(body.get("query", ""))
+            if found and time.monotonic() - found[1] >= self.lag:
+                hits = [{"node_ids": [found[0]], "match": {"band": "name_exact"}}]
             answer = {
                 "source": self.source,
                 "limited": self.source != "index",
-                "total": 2,
+                "total": len(hits),
                 "groups": [],
                 "results": hits if self.exact_first else hits[::-1],
                 "nodes": [],
             }
         data = json.dumps(answer).encode()
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -60,6 +78,7 @@ class _Conduit(BaseHTTPRequestHandler):
 @pytest.fixture
 def conduit() -> Iterator[str]:
     _Conduit.delay, _Conduit.source, _Conduit.exact_first, _Conduit.seen = 0.0, "index", True, []
+    _Conduit.lag, _Conduit.refuse_draw, _Conduit.drawn = 0.0, False, {}
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Conduit)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -285,6 +304,7 @@ def _run_live(tmp_path: Path, base: str | None) -> subprocess.CompletedProcess[s
             "OSPREY_MEASURE_TOKEN": "t0ken",
             "OSPREY_MEASURE_QUERIES": str(queries),
             "OSPREY_MEASURE_N": "3",
+            "OSPREY_MEASURE_LAG_N": "2",
             "OSPREY_MEASURE_WARMUP": "1",
         }
     env["PYTHONPYCACHEPREFIX"] = str(tmp_path / "pyc")
@@ -303,7 +323,7 @@ def test_the_live_gate_passes_a_conduit_within_every_failure_figure(
 ) -> None:
     done = _run_live(tmp_path, conduit)
     assert done.returncode == 0, done.stdout[-2000:]
-    assert "4 passed" in done.stdout
+    assert "5 passed" in done.stdout
 
 
 def test_the_live_gate_fails_a_suggestion_over_its_failure_figure(
@@ -319,7 +339,7 @@ def test_the_live_gate_fails_a_suggestion_over_its_failure_figure(
 
 def test_the_live_gate_is_skipped_with_its_reason_where_no_stack_is_named(tmp_path: Path) -> None:
     done = _run_live(tmp_path, None)
-    assert done.returncode == 0 and "4 skipped" in done.stdout
+    assert done.returncode == 0 and "5 skipped" in done.stdout
     assert "no B-sized stack named" in done.stdout
 
 
@@ -328,14 +348,15 @@ def test_the_live_gate_fails_a_class_its_queries_file_leaves_out(
 ) -> None:
     """A named stack whose queries hold no full-text query fails M4, never passes it unmeasured."""
     done = _run_live(tmp_path, conduit)
-    assert "4 passed" in done.stdout  # the control: every class present
+    assert "5 passed" in done.stdout  # the control: every class present
     (tmp_path / "queries.jsonl").write_text("\n".join(json.dumps(q) for q in QUERIES))
     import sys
 
     env = {k: v for k, v in os.environ.items() if not k.startswith("OSPREY_MEASURE_")} | {
         "OSPREY_MEASURE_BASE": conduit, "OSPREY_MEASURE_CASE": "case-1",
         "OSPREY_MEASURE_TOKEN": "t",
-        "OSPREY_MEASURE_QUERIES": str(tmp_path / "queries.jsonl"), "OSPREY_MEASURE_N": "2",
+        "OSPREY_MEASURE_QUERIES": str(tmp_path / "queries.jsonl"),
+        "OSPREY_MEASURE_N": "2", "OSPREY_MEASURE_LAG_N": "2",
         "OSPREY_MEASURE_WARMUP": "0", "PYTHONPYCACHEPREFIX": str(tmp_path / "pyc"),
     }  # fmt: skip
     again = subprocess.run(
@@ -343,3 +364,66 @@ def test_the_live_gate_fails_a_class_its_queries_file_leaves_out(
         cwd=_LIVE.parents[2], env=env, capture_output=True, text=True, timeout=120,
     )  # fmt: skip
     assert again.returncode != 0 and "M4-fulltext" in again.stdout and "unmeasured" in again.stdout
+
+
+# ---- M6, the feed's lag (measure_lag)
+
+_LAG = {"measure": "M6", "budget_ms": 150.0, "fail_ms": 250.0}
+
+
+def test_a_drawn_node_answered_from_the_index_in_time_meets_m6(conduit: str) -> None:
+    _Conduit.lag = 0.05
+    result = measure_lag_run(conduit, budget=_LAG)
+    assert result["verdict"] == "met", result["why"]
+    assert result["n"] == 3 and result["p50_ms"] >= 50
+    paths = [p for p, _b, _a in _Conduit.seen]
+    assert paths.count("/v1/investigations/case-1/boards") == 1, (
+        "the board made once, outside the clock"
+    )
+    assert paths.count("/v1/investigations/case-1/boards/board-1/items") == 4  # one warm-up
+    item = next(b for p, b, _a in _Conduit.seen if p.endswith("/items"))
+    assert item["type"] == "Person" and item["label"] == f"M6 {item['properties']['family_name']}"
+    searched = {b["query"] for p, b, _a in _Conduit.seen if p.endswith("/search")}
+    assert searched == set(_Conduit.drawn)
+    assert all(a == "Bearer t0ken" for _p, _b, a in _Conduit.seen), "one principal throughout"
+
+
+def test_a_lag_over_the_failure_figure_is_not_met(conduit: str) -> None:
+    _Conduit.lag = 0.4
+    result = measure_lag_run(conduit, budget=_LAG)
+    assert result["verdict"] == "not met" and "over the failure figure" in result["why"]
+
+
+def test_the_fallback_answering_the_node_is_never_the_index_s(conduit: str) -> None:
+    _Conduit.source = "fallback"
+    result = measure_lag_run(conduit, budget=_LAG, give_up_seconds=0.3)
+    assert result["verdict"] == "not met" and "not searchable from the index" in result["why"]
+
+
+def test_a_refused_draw_is_not_met(conduit: str) -> None:
+    _Conduit.refuse_draw = True
+    result = measure_lag_run(conduit, budget=_LAG)
+    assert result["verdict"] == "not met" and "refused" in result["why"]
+
+
+def test_lag_is_not_sent_as_a_query(conduit: str) -> None:
+    with pytest.raises(SystemExit, match="measure_lag"):
+        measure_search.measure(
+            base=conduit, case="case-1", token="t", queries=[{"class": "lag", "query": "x"}],
+            n=1, warmup=0,
+        )  # fmt: skip
+
+
+def measure_lag_run(base: str, **overrides: Any) -> dict[str, Any]:
+    return measure_search.measure_lag(
+        base=base, case="case-1", token="t0ken", n=3, warmup=1, poll_seconds=0.01, **overrides
+    )
+
+
+def test_the_live_gate_fails_m6_when_no_drawn_node_reaches_the_index(
+    conduit: str, tmp_path: Path
+) -> None:
+    _Conduit.refuse_draw = True
+    done = _run_live(tmp_path, conduit)
+    assert done.returncode != 0 and "FAILED" in done.stdout and "M6 lag" in done.stdout
+    assert "4 passed" in done.stdout, "the query classes are not M6's"
