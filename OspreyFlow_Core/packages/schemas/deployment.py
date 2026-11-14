@@ -1152,6 +1152,13 @@ class EntraSignInConfig(BaseModel):
     first_administrators: list[str] = Field(
         description="The people given the Admin role at install, by Entra object id (at least one)"
     )
+    first_administrator_access: dict[str, Any] | None = Field(
+        default=None,
+        description="With {administrator: true} for clearance, org_unit or handling_codes (the poc "
+        "shape's fallback, ADR-148 Amendment 15): what the first administrators hold of each such "
+        "value at install, {clearance: ..., org_unit: ..., handling_codes: [...]}, so they can "
+        "sign in and set everyone else's; required then",
+    )
     claims_mapping_policy: bool = Field(
         default=False,
         description="Default: false. Whether a claims-mapping policy signs the API's tokens with "

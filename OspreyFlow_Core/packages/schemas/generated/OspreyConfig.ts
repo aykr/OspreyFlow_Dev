@@ -242,6 +242,12 @@ export type GroupsClaim = string;
  */
 export type FirstAdministrators = string[];
 /**
+ * With {administrator: true} for clearance, org_unit or handling_codes (the poc shape's fallback, ADR-148 Amendment 15): what the first administrators hold of each such value at install, {clearance: ..., org_unit: ..., handling_codes: [...]}, so they can sign in and set everyone else's; required then
+ */
+export type FirstAdministratorAccess = {
+  [k: string]: unknown;
+} | null;
+/**
  * Default: false. Whether a claims-mapping policy signs the API's tokens with its own key (the keys are then read with ?appid=<api_client_id>)
  */
 export type ClaimsMappingPolicy = boolean;
@@ -843,6 +849,7 @@ export interface EntraSignInConfig {
   handling_codes: HandlingCodes;
   groups_claim?: GroupsClaim;
   first_administrators: FirstAdministrators;
+  first_administrator_access?: FirstAdministratorAccess;
   claims_mapping_policy?: ClaimsMappingPolicy;
 }
 /**
