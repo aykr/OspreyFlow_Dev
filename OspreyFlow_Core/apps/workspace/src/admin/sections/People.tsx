@@ -3,7 +3,7 @@
 // the places they open, their case levels (R3), access and state; the cases with no Author and
 // *Name an Author* (R1); *Disable…* with a transfer for everything they own (A4); inviting a person,
 // and refused organisation sign-ins. Behind `manage_people` (`admin/sections.json`).
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 import type {
   AdminPeopleRows,
@@ -576,7 +576,8 @@ function PersonRow({
         ))}
         <td className="label">
           {ctx.custom.map((c) => (
-            <label key={c.id} style={{ display: "block" }}>
+            <Fragment key={c.id}>
+            <label style={{ display: "block" }}>
               <input
                 type="checkbox"
                 aria-label={`${c.name} for ${person.username}`}
@@ -593,12 +594,14 @@ function PersonRow({
                 }}
               />{" "}
               {c.team ? `${c.name} (team)` : c.name}
-              {withheld(`role:${c.id}`).length > 0 && (
-                <span id={reasonId(`role:${c.id}`)} className="visually-hidden">
-                  {withheldWords(c.name, withheld(`role:${c.id}`))}
-                </span>
-              )}
             </label>
+            {withheld(`role:${c.id}`).length > 0 && (
+              // Outside the label: a reason is the box's description, never part of its name (WCAG 2.5.3).
+              <span id={reasonId(`role:${c.id}`)} className="visually-hidden">
+                {withheldWords(c.name, withheld(`role:${c.id}`))}
+              </span>
+            )}
+            </Fragment>
           ))}
           {others.length ? others.map(grantWords).join(", ") : ctx.custom.length ? null : "—"}
         </td>
@@ -1087,7 +1090,8 @@ function InviteForm({
         Roles
         <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "var(--sp-8)" }}>
           {ROLES.map((role) => (
-            <label key={role.id} style={{ display: "inline-flex", gap: "var(--sp-4)", alignItems: "center" }}>
+            <Fragment key={role.id}>
+            <label style={{ display: "inline-flex", gap: "var(--sp-4)", alignItems: "center" }}>
               <input
                 type="checkbox"
                 aria-label={`Invite as ${role.label}`}
@@ -1104,12 +1108,14 @@ function InviteForm({
                 }}
               />
               {role.label}
-              {inviteWithheld(role.id).length > 0 && (
-                <span id={`withheld-invite-${role.id}`} className="visually-hidden">
-                  {withheldWords(role.label, inviteWithheld(role.id))}
-                </span>
-              )}
             </label>
+            {inviteWithheld(role.id).length > 0 && (
+              // Outside the label: a reason is the box's description, never part of its name (WCAG 2.5.3).
+              <span id={`withheld-invite-${role.id}`} className="visually-hidden">
+                {withheldWords(role.label, inviteWithheld(role.id))}
+              </span>
+            )}
+            </Fragment>
           ))}
         </span>
       </div>
