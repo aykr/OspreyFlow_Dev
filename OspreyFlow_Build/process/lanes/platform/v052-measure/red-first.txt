@@ -209,3 +209,8 @@ plant 6: a session that never had the index measured anyway
 6/6 red
 Every earlier plant set rerun: 6/6, 3/3, 6/6, 11/11. Green offline: 41 passed, 9 skipped (the two live M9 runs skip here:
 the Mac's docker guard refuses the stand-in too; server_m9.sh runs them on the test server).
+
+# M9's live runs on the test server (server_m9.sh through stack_lease.sh offline, run 20261114T100049Z-07a58c0d, no stack):
+- green: both live-run cases passed (2 passed): the stand-in docker stopped and started the stub's index, the case met,
+  and the silent fallback's case failed as it should;
+- red: with the live case's verdict check planted out, the silent fallback's case failed (1 failed); then put back.
