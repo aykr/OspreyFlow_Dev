@@ -114,6 +114,14 @@ Main's own CI will meet the same finding at its next image scan.
    Accept as proposed, or change any figure. Suggestions are measured on what B loads (your ruling of 13 Nov), not
    at tens of millions.
 
+9. **For your information, a later choice for audit 1 (scheduled runs on Entra).** Admin is building option A as you
+   ruled it: runs use the owner's stored identity, and their clearance is refused once it is over 24 hours old.
+   That means a schedule stops when its owner hasn't signed in for a day, for example over a weekend, and it says so
+   in true words. Admin proposes lifting that limit by reading the owner from Microsoft Graph at each run, which
+   needs a Graph application permission (User.Read.All, plus GroupMember.Read.All if groups map access) on the
+   client's API registration. That is something the client creates, which A ruled out, so it is not being built.
+   Say if you want it after v0.5.2.
+
 ## Decided by the lanes, for you to overrule if you wish
 
 - **Case, Build a report for the Administrator (ADR-145 Am 15 decision 5):** a builder without the Reports
