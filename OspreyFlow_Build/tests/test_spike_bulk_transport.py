@@ -88,11 +88,20 @@ class _Client:
     async def sql(
         self, query: str, *, params: dict[str, Any] | None = None, session_id: Any = None
     ) -> list[Any]:
-        """The one statement the id check sends, against the type's unique index: refused if it is
-        anything else, as the store would refuse what it cannot parse."""
+        """The statements the bulk path sends: the store's types and each vertex type's record-id
+        lookup (ADR-124 Amendment 18), and the id check, against the type's unique index; refused if
+        it is anything else, as the store would refuse what it cannot parse."""
         self.queries.append(query)
         if self.refuse and self.refuse in query:
             raise RuntimeError("cannot parse")
+        # The write path's lookup of ids (ADR-124 Amendment 18): the store's types, then each
+        # vertex type's unique `id` index; every id asked for is a vertex.
+        if query == "SELECT name, type, indexes FROM schema:types":
+            return [{"name": "mx_Endpoint", "type": "vertex",
+                     "indexes": [{"unique": True, "properties": ["id"]}]}]  # fmt: skip
+        if query.startswith("SELECT @rid AS rid, id FROM `") and query.endswith("` WHERE id IN :ids"):
+            assert params is not None
+            return [{"rid": f"#1:{n}", "id": i} for n, i in enumerate(params["ids"])]
         if not (query.startswith("SELECT id FROM `") and query.endswith("` WHERE id IN :ids")):
             raise AssertionError(f"unexpected statement: {query}")
         assert params is not None and isinstance(params["ids"], list)
