@@ -31,8 +31,10 @@ for f in index.html intro-video.html public-sector.html monitoring.html .nojekyl
   [ -f "$DEPLOY/$f" ] || { echo "STOP: $DEPLOY/$f is missing." >&2; exit 1; }
 done
 
-# The site may name the company; it must not carry a personal identifier or a path on this machine.
-if grep -lI -i -E 'ayan[[:space:]._-]?(d[._-])?kar|ayankarsolirius' "$DEPLOY"/*.html || grep -lI -E '/Users/|/home/' "$DEPLOY"/*.html; then
+# The site may name the company; it must not carry a personal identifier or a path on this machine. The one
+# exception is ospreyflow.org's Team page, which names the six people in TEAM_NAMES, in their own cards and
+# nowhere else (the owner's decision, 12 November 2026; identifier_check.py, tests/test_site_identifiers.py).
+if ! python3 "$HERE/identifier_check.py" "$DEPLOY"; then
   echo "STOP: the files above carry a personal identifier or a local path." >&2
   exit 1
 fi
