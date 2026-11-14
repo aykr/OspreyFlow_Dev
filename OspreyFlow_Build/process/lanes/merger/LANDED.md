@@ -116,3 +116,4 @@ cb1178f d27da5f case live-fresh-case
 a95a94d f1bd574 platform v052-expiry (decision 5: sets at 34 days)
 4695349 015ed4c docs v052-expiry (2.03), PDF reprinted
 f9a1802 0a2ee97 platform v052-m10ctl
+7132b83 e2b6305 admin stopped-why (ADR-044 Am 1); guides 2.04 and 1.56, PDFs reprinted
