@@ -9,7 +9,7 @@ WS=OspreyFlow_Core/apps/workspace
 UI=$WS/src/workingset/BatchExpansion.tsx
 CSS=$WS/src/design/primitives.css
 SPEC=keyboard/batch-expansion.spec.ts
-: "${OSPREY_PORTS_SLOT:?set this lane's Playwright slot}"
+: "${OSPREY_PORTS_SLOT:?set the Playwright slot of this lane}"
 git diff --quiet -- "$UI" "$CSS" || { echo "commit first: the plants restore from HEAD"; exit 2; }
 fails=0
 run() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts "$SPEC" --workers=1 --reporter=line ${1:+--grep "$1"} 2>&1); }
