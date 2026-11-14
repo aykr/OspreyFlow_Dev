@@ -104,3 +104,4 @@ d8888d8 2730b69 docs 6a-search (2.00), PDF reprinted
 c42c1e4 9f22c21 platform-b v051-upg (the rehearsal, the real update and its rollback)
 77ee8fb e964d4c platform-b v052-dayplan
 175776c a86a9c1 docs v052-admin-fixes (2.01), PDF reprinted
+bb06bf5 3b144d5 docs v052-nav (user guide 1.54), PDF reprinted
