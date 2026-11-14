@@ -1,0 +1,59 @@
+# 4c after its merges with main (Amendments 16 and 17), live, 14 November 2026, on test stack b under platform-b's lease
+# ('4c after merge live', taken at 2026-11-14T10:33:56Z by the owner with '!' in this worktree's window; up, remote, down and
+# release by this session under the owner's allow rules). Branch lane/platform-b-4c at e5f3ef9. Each pytest via stack_lease.sh
+# remote, a fresh PYTHONPYCACHEPREFIX.
+
+== the whole live file (the merged SQL: Access's setter read through PEOPLE_SQL ... FOR SHARE OF p, standing's join with
+== the administrator's columns, the person upsert writing guest and the administrator's columns)
+PASSED test_entra_people_live.py::test_a_first_sign_in_is_recorded_with_no_roles_and_listed
+PASSED test_entra_people_live.py::test_the_tokens_access_is_brought_up_to_date_but_never_its_roles
+PASSED test_entra_people_live.py::test_another_tenants_row_for_the_same_oid_grants_nothing
+PASSED test_entra_people_live.py::test_the_resolver_reads_the_stored_roles_with_a_real_token
+PASSED test_entra_people_live.py::test_a_store_that_cannot_answer_is_unavailable_never_no_roles
+PASSED test_entra_people_live.py::test_first_administrators_are_seeded_once_and_a_removal_stands
+PASSED test_entra_people_live.py::test_adding_by_object_id_once_and_the_refusals_the_fakes_model
+PASSED test_entra_people_live.py::test_the_store_refuses_a_read_for_another_tenant
+PASSED test_entra_people_live.py::test_the_sockets_read_is_this_tenants_and_records_nobody
+PASSED test_entra_people_live.py::test_when_nobody_can_manage_people_the_named_first_administrators_get_admin_again
+PASSED test_entra_people_live.py::test_each_admin_role_a_start_gives_is_audited
+PASSED test_entra_people_live.py::test_a_grant_is_never_kept_without_its_audit_row
+PASSED test_entra_people_live.py::test_a_start_waits_for_the_people_lock
+PASSED test_entra_people_live.py::test_a_custom_role_that_manages_people_counts_at_the_start
+PASSED test_entra_people_live.py::test_access_read_at_is_refreshed_at_most_hourly[2h]
+PASSED test_entra_people_live.py::test_access_read_at_is_refreshed_at_most_hourly[30min]
+PASSED test_entra_people_live.py::test_one_person_is_read_by_this_tenant_alone
+PASSED test_entra_people_live.py::test_a_sign_in_records_when_access_was_read_and_an_added_person_has_not_signed_in
+PASSED test_entra_people_live.py::test_a_conduit_starting_waits_for_the_bootstrap_lock
+PASSED test_entra_people_live.py::test_a_dashboard_identity_is_registered_read_listed_and_removed
+PASSED test_entra_people_live.py::test_the_resolver_reads_a_registered_dashboard_with_a_real_token
+PASSED test_entra_people_live.py::test_a_run_acts_as_its_owner_as_the_store_holds_them
+PASSED test_entra_people_live.py::test_the_store_refuses_an_owner_read_for_another_tenant
+PASSED test_entra_people_live.py::test_guests_are_off_until_set_and_each_change_answers_what_it_was
+PASSED test_entra_people_live.py::test_a_guest_is_recorded_as_one_and_stands_disabled_once_guests_are_no_longer_admitted
+PASSED test_entra_people_live.py::test_the_resolver_refuses_a_guest_until_the_real_store_admits_guests
+PASSED test_entra_people_live.py::test_a_guest_who_can_no_longer_sign_in_is_no_people_manager_and_the_way_back_in_still_opens
+PASSED test_entra_people_live.py::test_am15_the_first_administrator_resolves_on_a_fresh_store_and_can_set_others
+PASSED test_entra_people_live.py::test_am15_seeding_never_overwrites_a_later_change
+PASSED test_entra_people_live.py::test_am15_set_values_are_kept_apart_and_a_sign_in_never_overwrites_them
+PASSED test_entra_people_live.py::test_am15_the_store_s_limits_read_the_setter_s_own_row[clearance]
+PASSED test_entra_people_live.py::test_am15_the_store_s_limits_read_the_setter_s_own_row[codes]
+PASSED test_entra_people_live.py::test_am15_another_tenant_s_row_is_never_read_or_written
+PASSED test_entra_people_live.py::test_am15_a_person_with_none_set_is_recorded_for_people_and_refused_until_set
+PASSED test_entra_people_live.py::test_am15_the_start_itself_seeds_the_first_administrator_who_then_signs_in
+PASSED test_entra_people_live.py::test_am15_a_recorded_person_is_not_seeded_while_someone_manages_people
+PASSED test_entra_people_live.py::test_am15_a_value_is_never_kept_without_its_audit_row[grant_first_administrator_access]
+PASSED test_entra_people_live.py::test_am15_a_value_is_never_kept_without_its_audit_row[set_person_access]
+PASSED test_entra_people_live.py::test_am15_a_run_acts_as_its_owner_with_the_values_set_here
+PASSED test_entra_people_live.py::test_am15_a_guest_refused_while_guests_are_not_admitted_sets_nothing
+40 passed in 12.44s
+
+== planted: Access's setter read back to a plain SELECT * ... FOR SHARE, without the guest join; -k 'guest or am15'
+E       Failed: DID NOT RAISE AccessBeyondTheSetter
+FAILED test_entra_people_live.py::test_am15_a_guest_refused_while_guests_are_not_admitted_sets_nothing
+1 failed, 16 passed, 23 deselected in 5.86s
+
+== restored (the tree checked clean), -k 'guest or am15'
+17 passed, 23 deselected in 5.79s
+Wall time: 8 s, exit 0 (stack b, the lease platform-b took at 2026-11-14T10:33:56Z; set-up before it 7 s)
+
+== then: stack b down, the lease released (stack b free)

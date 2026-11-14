@@ -72,7 +72,11 @@ set-up, so a rebase would have met the same overlap in commit after commit. Each
 
 The guide is 2.06, above main's 2.05, and the copies are mirrored.
 
-**Not yet run live:** the merged SQL. That is the setter's read (`PEOPLE_SQL … FOR SHARE OF p`), `standing`'s join
-with the administrator's columns, and the person upsert with both the guest and the administrator's columns. The live
-file passed, 35 of 35, before the merge; after it, the file needs a lease again.
-
+**Run live after the merge** (`merge-live.txt`, on stack b under platform-b's lease "4c after merge live", 14 November):
+- The whole live file passed, 40 of 40. It covers the merged SQL: Access's setter read through
+  `PEOPLE_SQL … FOR SHARE OF p`, `standing`'s join with the administrator's columns, and the person upsert writing
+  the guest and the administrator's columns.
+- The setter's read put back to a plain `SELECT * … FOR SHARE` went red on the real table: the refused guest set
+  Access ("DID NOT RAISE AccessBeyondTheSetter").
+- Restored: 17 passed.
+- main merged again (8a0f8c5) for its own mypy fix.
