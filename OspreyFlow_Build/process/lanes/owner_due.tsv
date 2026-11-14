@@ -13,4 +13,4 @@ owner	2026-11-14	OpenSearch on poc: IRSA with SigV4 and no FGAC? No backups of t
 orchestrator	2026-11-15	Search navigation options (2-3) for the owner to choose from	done
 orchestrator	2026-11-14	Navigation C, D, E: estimates, effect on 26 Nov, the six questions, the amendments	done
 owner	2026-11-14	v0.5.1's release: Superset's dnspython CVE-2026-128089 (MORNING, top)	done
-owner	2026-11-16	Promote to a batch job at the working-set cap: build for v0.5.2 or defer (MORNING item 10)	open
+owner	2026-11-16	Promote to a batch job at the working-set cap: build for v0.5.2 or defer (MORNING item 10)	done
