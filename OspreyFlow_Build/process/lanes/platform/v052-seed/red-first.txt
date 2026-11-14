@@ -159,3 +159,11 @@ tests/test_r1_kind_standins.py::test_r1_s_poc_declares_secret_so_step_6_can_seed
 Green after: the three, with tests/harness/test_cloud_platform*.py, tests/cp_policy_check (less its two docker
 files, which make test runs on the server), the R1 kind, seed and admin-guide tests:
 529 passed, 43 skipped (the live cases) in 28.70s
+
+# Server gates at c3f0e61 (on main 0e46c66), with live_wiring.diff applied uncommitted in the run's tree, through
+# stack_lease.sh offline platform (no stack, no lease):
+- make -k test, run 20261114T072348Z-a7e494ba: exit 0. pytest 13884 passed, 38 skipped; vitest 380 files passed.
+- make -k ci, run 20261114T070444Z-7823bbb1: exit 2, its one failure main's own: trivy-image-superset, CVE-2026-128089
+  (dnspython 2.7.0, MORNING item 1's), in an image this branch does not touch; make lint and every other part green.
+- Round 1 at a0dd0e1 (on ed7baef) superseded: make lint's three findings in the seed path's lines (fixed, 1456046), and
+  the seed's live files run by make test without the wiring, whose first diff no longer applied (re-made, c3f0e61).
