@@ -71,9 +71,9 @@ describe("the Lists tab", () => {
     const table = await screen.findByRole("table", { name: "Screening lists and their versions" });
     const [, synthetic, ofac] = within(table).getAllByRole("row");
     expect(synthetic!.textContent).toContain(
-      "Licence not confirmed: OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs OpenSanctions' own data licence. Synthetic lists only.",
+      "Synthetic lists only: OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs OpenSanctions' own data licence.",
     );
-    expect(ofac!.textContent).not.toContain("Licence not confirmed");
+    expect(ofac!.textContent).not.toContain("Synthetic lists only");
   });
 
   it("says the OFSI connector reads a closed list, on its row", async () => {

@@ -92,7 +92,7 @@ def test_a_real_list_whose_licence_is_not_confirmed_is_refused_even_with_the_exc
     """The owner's answer of 1 November 2026: UN and OpenSanctions are synthetic-only until their
     licences are confirmed, through this loader as through a subscription's refresh."""
     config = _exceptions(tmp_path, ["local_development"])
-    with pytest.raises(ListRefused, match="licence is not confirmed"):
+    with pytest.raises(ListRefused, match="a real copy of this list is not read"):
         parse_list(REAL, use="local_development", config_path=config)
     config = _exceptions(tmp_path, ["local_development"], dataset="un_consolidated")
     with pytest.raises(ListRefused, match="non-commercial use only"):

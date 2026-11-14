@@ -130,7 +130,7 @@ test("the case's Author switches the case to client parity by keyboard (ADR-139 
   await expect(page.getByRole("status")).toHaveText("This case's influencers are saved.");
   const put = (await sent(page)).find((c) => c.method === "PUT");
   expect(put?.body).toEqual({ added: [], switched_off: [], composition: "client_parity", words: "" });
-  await expect(page.getByLabel("Composition in force")).toContainText("Composition: client parity (this case's own)");
+  await expect(page.getByLabel("Composition in force")).toContainText("Composition: rarity plus adds (this case's own)");
   registerCovered("STRENGTH_ACTIONS", "switch-a-case-to-client-parity-by-keyboard");
 });
 
@@ -172,7 +172,7 @@ test("a rule's strength figure is put on the client's scale by keyboard (ADR-139
   for (let i = 0; i < 6; i++) await page.keyboard.press("Backspace");
   await page.keyboard.type("1.2");
   await expect(reaches).toHaveValue("1.2");
-  await expect(page.getByText("A connection strength is at most 1; choose the client's scale for a raw sum.")).toHaveCount(0);
+  await expect(page.getByText("A connection strength is at most 1; choose the raw-sum scale for a raw sum.")).toHaveCount(0);
   registerCovered("STRENGTH_ACTIONS", "write-a-strength-rule-on-the-clients-scale-by-keyboard");
 });
 

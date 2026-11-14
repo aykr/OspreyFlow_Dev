@@ -207,7 +207,7 @@ def test_the_weights_file_ships_direct_links_and_the_incident_source_influencer(
     assert defaults.rarity_exclude_types == ("Alert",)
     for influencer in defaults.influencers:
         assert influencer.change == "add"
-        assert influencer.note == "to be confirmed with the client"
+        assert influencer.note is None  # no setting shown as still to be agreed (the owner, 14 Nov)
 
 
 def test_the_shipped_sizes_are_the_calibration_not_a_hand_tuned_number() -> None:

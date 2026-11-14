@@ -51,8 +51,10 @@ def _words(text: str) -> str:
     )
 
 
-def found(path: Path, source: str | None = None) -> list[tuple[int, str]]:
-    """`(line, text)` for each string a person can be shown that says "recipe"."""
+def found(
+    path: Path, source: str | None = None, word: re.Pattern[str] = WORD
+) -> list[tuple[int, str]]:
+    """`(line, text)` for each string a person can be shown that holds `word` ("recipe")."""
     text = source if source is not None else path.read_text(encoding="utf-8")
     tree = ast.parse(text)
     silent: set[int] = set()
@@ -75,7 +77,7 @@ def found(path: Path, source: str | None = None) -> list[tuple[int, str]]:
             call = parents.get(id(call))
         if isinstance(call, ast.keyword):
             call = parents.get(id(call))
-        if id(node) in silent or not WORD.search(_words(words)) or not whole.strip().count(" "):
+        if id(node) in silent or not word.search(_words(words)) or not whole.strip().count(" "):
             continue
         if SQL.match(whole) or QUERY.search(whole):
             continue

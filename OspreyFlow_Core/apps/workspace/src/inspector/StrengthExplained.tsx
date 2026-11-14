@@ -91,8 +91,8 @@ export function PairShared({ apiBaseUrl, bearerToken, investigationId, a, b }: P
             {MEASURE_LABEL[measure]}.
           </p>
           {pair.parity_raw !== null && pair.parity_raw !== undefined && (
-            <p className="strength-explained__muted" aria-label="Client parity through what they share">
-              Client parity through what they share: raw sum {EXACT.format(pair.parity_raw)} on the client's scale
+            <p className="strength-explained__muted" aria-label="Rarity plus adds through what they share">
+              Rarity plus adds through what they share: raw sum {EXACT.format(pair.parity_raw)} on the raw-sum scale
               {(pair.parity_applied ?? []).length > 0
                 ? ` (rarity and ${(pair.parity_applied ?? []).map((x) => x.label).join(", ")})`
                 : " (rarity alone)"}
@@ -134,8 +134,8 @@ export function StrengthExplained({ apiBaseUrl, bearerToken, investigationId, ed
         Composition: {COMPOSITION_LABEL[composition]}
       </p>
       {composition === "client_parity" && link.raw_sum !== null && link.raw_sum !== undefined && (
-        <p className="strength-explained__raw" aria-label="Raw sum on the client's scale">
-          <span>Raw sum, the client's scale</span>
+        <p className="strength-explained__raw" aria-label="Raw sum on the raw-sum scale">
+          <span>Raw sum, before it is drawn on 0 to 1</span>
           <span className="value">{EXACT.format(link.raw_sum)}</span>
         </p>
       )}

@@ -203,7 +203,7 @@ def refuse_inside_host(host: str) -> str:
     if bare.endswith(PLATFORM_SUFFIXES):
         raise ValueError(
             "the host is the platform this deployment runs on (Docker's or the cluster's own "
-            "names), never a client's server"
+            "names), never a server this deployment reads from"
         )
     ip = literal_ip(bare)
     if ip is not None:

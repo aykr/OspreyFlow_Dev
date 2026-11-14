@@ -21,16 +21,16 @@ export type RarityMeasure = "share" | "idf";
 
 export const COMPOSITION_LABEL: Record<Composition, string> = {
   standard: "Standard",
-  client_parity: "Client parity",
+  client_parity: "Rarity plus adds",
 };
 
 export const MEASURE_LABEL: Record<RarityMeasure, string> = {
-  share: "share of pair links (the client's)",
+  share: "share of pair links",
   idf: "inverse frequency (IDF)",
 };
 
 const NUMBER = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
-/** The client's own scale, to four places, so their thresholds can be compared. */
+/** The raw sum, to four places, so a threshold set on it can be compared. */
 const EXACT = new Intl.NumberFormat("en-GB", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
@@ -103,7 +103,7 @@ export function compositionWords(legend: Pick<StrengthLegend, "composition" | "c
         : "shipped with OspreyFlow";
   const measure = MEASURE_LABEL[(legend.rarity_measure ?? "share") as RarityMeasure];
   if (composition === "client_parity") {
-    return `Composition: client parity (${from}): strength is rarity plus the adds, with no count or recency, drawn on 0 to 1; rarity by ${measure}.`;
+    return `Composition: rarity plus adds (${from}): strength is rarity plus the adds, with no count or recency, drawn on 0 to 1; rarity by ${measure}.`;
   }
   return `Composition: standard (${from}): strength is the stored weight with the influencers; rarity by ${measure}.`;
 }
@@ -145,7 +145,7 @@ export function strengthExplanation(link: LinkStrength, linkName: LinkName = AS_
   const parity = link.composition === "client_parity";
   if (parity) {
     lines.length = 0;
-    lines.push("Client parity: worked out as the client does, from rarity and the adds alone; its count and age are not used.");
+    lines.push("Rarity plus adds: worked out from rarity and the adds alone; its count and age are not used.");
     lines.push(
       `Its rarity term ${EXACT.format(link.rarity_term ?? 0)}${link.dataset ? `, in ${link.dataset}` : ""}: one less its share of the links of its type you can see there.`,
     );
@@ -162,7 +162,7 @@ export function strengthExplanation(link: LinkStrength, linkName: LinkName = AS_
     lines.push(`${applied.label} (${layerWords({ layer: applied.layer, version: null })})${because}: ${what}.`);
   }
   if (parity) {
-    lines.push(`Raw sum ${EXACT.format(link.raw_sum ?? 0)} on the client's scale; drawn at ${NUMBER.format(link.strength)} on 0 to 1.`);
+    lines.push(`Raw sum ${EXACT.format(link.raw_sum ?? 0)} on the raw-sum scale; drawn at ${NUMBER.format(link.strength)} on 0 to 1.`);
   } else {
     lines.push(`Connection strength ${NUMBER.format(link.strength)}.`);
   }

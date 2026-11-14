@@ -436,8 +436,8 @@ export function unfinished(draft: SentenceDraft): string | null {
     const figure = Number(draft.reaches);
     if (!Number.isFinite(figure) || figure <= 0) return "Give the figure the strength or rarity must reach, above 0.";
     if (draft.strength === "connection_strength" && draft.strengthScale === "drawn" && figure > 1)
-      return "A connection strength is at most 1; choose the client's scale for a raw sum.";
-    if (draft.strength === "connection_strength" && figure > 10) return "A raw sum on the client's scale is at most 10.";
+      return "A connection strength is at most 1; choose the raw-sum scale for a raw sum.";
+    if (draft.strength === "connection_strength" && figure > 10) return "A raw sum on the raw-sum scale is at most 10.";
     if (draft.runs === "pre_commit") return "Strength is read from the stored graph, so the rule runs after commit or on a schedule.";
   }
   return null;
@@ -475,7 +475,7 @@ export function sentenceSummary(sentence: RuleSentence): string {
   const st = (sentence as unknown as { strength?: Loose | null }).strength;
   if (st?.kind === "connection_strength")
     parts.push(
-      `the connection strength with ${st.other_type ? a(String(st.other_type)) : "anything"}${st.link_type ? ` by ${String(st.link_type)}` : ""} reaches ${String(st.reaches)}${st.scale === "client" ? " on the client's scale" : ""}`,
+      `the connection strength with ${st.other_type ? a(String(st.other_type)) : "anything"}${st.link_type ? ` by ${String(st.link_type)}` : ""} reaches ${String(st.reaches)}${st.scale === "client" ? " on the raw-sum scale" : ""}`,
     );
   if (st?.kind === "shared_attribute_rarity")
     parts.push(`the shared-attribute rarity with another ${sentence.subject} reaches ${String(st.reaches)}`);

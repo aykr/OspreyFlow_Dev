@@ -112,7 +112,6 @@ influencers:
     link_types: [COMMUNICATED_WITH, TRANSACTED, VISITED, SHARED_CELL_WITH]
     change: add
     size: 0.1348
-    note: to be confirmed with the client
   - id: incident-source
     label: Evidenced by an assault, disorder or find
     # An Incident is at one end of a ROLE_IN link, and evidences the person-to-person links of the
@@ -124,7 +123,6 @@ influencers:
     link_types: [ROLE_IN, IN_CONFLICT_WITH, ASSOCIATE_OF, SHARED_CELL_WITH]
     change: add
     size: 0.1348
-    note: to be confirmed with the client
 # Shared-attribute rarity (ADR-139 decision 4): any node linked to both entities of a pair is an
 # attribute they share, except a node of these types (an alert is a rule's finding, not a fact
 # about either of them). `measure` (ADR-139 Amendment 2): `share`, the client's own

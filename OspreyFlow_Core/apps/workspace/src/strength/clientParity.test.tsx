@@ -38,11 +38,11 @@ const LEGEND: StrengthLegend = {
 describe("client parity in words", () => {
   it("explains a parity link from its rarity term and adds, and gives the raw sum and the drawn strength", () => {
     const lines = strengthExplanation(PARITY_LINK);
-    expect(lines[0]).toContain("Client parity");
+    expect(lines[0]).toContain("Rarity plus adds");
     expect(lines.join(" ")).not.toContain("Seen 3 times");
     expect(lines).toContain("Its rarity term 0.7500, in calls: one less its share of the links of its type you can see there.");
     expect(lines).toContain("From calls (installation-wide), because it is in calls: adds 0.1.");
-    expect(lines[lines.length - 1]).toBe("Raw sum 1.0500 on the client's scale; drawn at 0.62 on 0 to 1.");
+    expect(lines[lines.length - 1]).toBe("Raw sum 1.0500 on the raw-sum scale; drawn at 0.62 on 0 to 1.");
   });
 
   it("says a dataset trigger and a shared value", () => {
@@ -58,7 +58,7 @@ describe("client parity in words", () => {
 
   it("names the composition in force, where it came from, and the rarity measure", () => {
     expect(compositionWords(LEGEND)).toBe(
-      "Composition: client parity (this case's own): strength is rarity plus the adds, with no count or recency, drawn on 0 to 1; rarity by share of pair links (the client's).",
+      "Composition: rarity plus adds (this case's own): strength is rarity plus the adds, with no count or recency, drawn on 0 to 1; rarity by share of pair links.",
     );
     expect(compositionWords({ composition: "standard", composition_layer: "file", rarity_measure: "idf" })).toBe(
       "Composition: standard (shipped with OspreyFlow): strength is the stored weight with the influencers; rarity by inverse frequency (IDF).",
@@ -71,7 +71,7 @@ describe("the legend's composition indicator", () => {
     render(<CanvasLegend types={[{ type: "Person", count: 2, visual: undefined } as never]} strength={LEGEND} />);
     const indicator = screen.getByLabelText("Composition");
     expect(indicator.textContent).toContain("Case override");
-    expect(indicator.textContent).toContain("Composition: client parity");
+    expect(indicator.textContent).toContain("Composition: rarity plus adds");
   });
 });
 
@@ -88,8 +88,8 @@ describe("the Inspector under client parity", () => {
       ),
     );
     render(<StrengthExplained apiBaseUrl="http://x.invalid" bearerToken="t" investigationId="inv-1" edge={edge} />);
-    expect((await screen.findByLabelText("Composition")).textContent).toBe("Composition: Client parity");
-    expect(screen.getByLabelText("Raw sum on the client's scale").textContent).toContain("1.0500");
+    expect((await screen.findByLabelText("Composition")).textContent).toBe("Composition: Rarity plus adds");
+    expect(screen.getByLabelText("Raw sum on the raw-sum scale").textContent).toContain("1.0500");
   });
 
   it("says a pair's rarity measure and its parity sum through what they share", async () => {
@@ -112,7 +112,7 @@ describe("the Inspector under client parity", () => {
     );
     render(<PairShared apiBaseUrl="http://x.invalid" bearerToken="t" investigationId="inv-1" a="a" b="b" />);
     expect((await screen.findByText(/measured by share of pair links/)).textContent).toContain("worked out in phones");
-    expect(screen.getByLabelText("Client parity through what they share").textContent).toContain("raw sum 0.8833");
+    expect(screen.getByLabelText("Rarity plus adds through what they share").textContent).toContain("raw sum 0.8833");
   });
 });
 
@@ -173,7 +173,7 @@ describe("the Monitoring tab's composition controls", () => {
 describe("a rule's strength figure on either scale", () => {
   it("sends the client's scale only when chosen, and reads it back", () => {
     const draft = { ...emptyDraft("Person"), strength: "connection_strength" as const, reaches: "1.2" };
-    expect(unfinished(draft)).toBe("A connection strength is at most 1; choose the client's scale for a raw sum.");
+    expect(unfinished(draft)).toBe("A connection strength is at most 1; choose the raw-sum scale for a raw sum.");
     const client = { ...draft, strengthScale: "client" as const };
     expect(unfinished(client)).toBeNull();
     const sentence = toSentence(client);

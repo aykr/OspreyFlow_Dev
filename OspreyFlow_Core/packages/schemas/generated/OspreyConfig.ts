@@ -77,7 +77,7 @@ export type PrivacyContract = boolean;
  */
 export type ContractReference = string | null;
 /**
- * ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider.
+ * ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (your organisation's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider.
  */
 export type Kind = "provider" | "gateway" | "bedrock";
 /**
@@ -206,7 +206,7 @@ export type AllowFrom = string[];
  */
 export type TlsSecret = string | null;
 /**
- * The client's Entra tenant id
+ * Your organisation's Entra tenant id
  */
 export type TenantId = string;
 /**

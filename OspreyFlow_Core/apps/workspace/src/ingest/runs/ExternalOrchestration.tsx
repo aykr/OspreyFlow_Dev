@@ -185,7 +185,7 @@ export function ExternalOrchestration(props: ExternalOrchestrationProps) {
       {canSchedule && !owned && (
         <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "end", flexWrap: "wrap" }}>
           <label style={{ display: "grid", gap: "var(--sp-4)" }}>
-            <span>The orchestrator's client</span>
+            <span>The orchestrator's sign-in ID</span>
             <Input value={client} onChange={(e) => setClient(e.target.value)} />
           </label>
           <Button onClick={mark} disabled={!client.trim() || !!(pipeline.schedule_cron || pipeline.schedule_watch)}>

@@ -135,7 +135,7 @@ async def test_a_real_list_of_an_unconfirmed_licence_is_refused_even_when_admitt
         "    added_by: owner\n    added_date: '2026-11-08'\n    device: test-device\n"
         "    justification: a test of the gate\n    decision_record: ADR-140\n"
     )
-    with pytest.raises(ListConnectorRefused, match="licence is not confirmed"):
+    with pytest.raises(ListConnectorRefused, match="a real copy of this list is not read"):
         admit_list({"main": b"<x/>"}, template="un_consolidated", dataset="un_list",
                    use="local_development", known=set(), exceptions_path=exceptions)  # fmt: skip
 

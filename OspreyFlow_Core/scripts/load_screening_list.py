@@ -102,8 +102,8 @@ def parse_list(
         unconfirmed = LICENCE_NOT_CONFIRMED.get(dataset.lower())
         if unconfirmed is not None:
             raise ListRefused(
-                f"{dataset!r}: this list's licence is not confirmed: {unconfirmed}. Until it is, "
-                "only a synthetic list may be loaded; nothing was loaded"
+                f"{dataset!r}: a real copy of this list is not read: {unconfirmed}. Only a "
+                "synthetic list may be loaded; nothing was loaded"
             )
     list_name = str(raw.get("list_name") or "").strip()
     if not list_name:

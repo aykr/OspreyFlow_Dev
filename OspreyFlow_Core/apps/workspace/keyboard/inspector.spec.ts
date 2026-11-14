@@ -74,8 +74,8 @@ test("under client parity a link's raw sum on the client's scale is read by keyb
   await page.goto("/keyboard/inspector-harness.html");
   await header(page, "Connection strength").focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByLabel("Composition", { exact: true })).toHaveText("Composition: Client parity");
-  await expect(page.getByLabel("Raw sum on the client's scale")).toContainText("1.0848");
+  await expect(page.getByLabel("Composition", { exact: true })).toHaveText("Composition: Rarity plus adds");
+  await expect(page.getByLabel("Raw sum on the raw-sum scale")).toContainText("1.0848");
   const lines = page.getByRole("list", { name: "What this link's strength rests on" });
   await expect(lines).toContainText("Its rarity term 0.7500, in prison-intelligence");
   await expect(lines).not.toContainText("Seen 2 times");

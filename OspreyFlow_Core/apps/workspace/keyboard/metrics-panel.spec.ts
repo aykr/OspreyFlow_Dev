@@ -239,7 +239,7 @@ test("the legend's composition indicator says the case is under client parity, b
   const indicator = page.getByLabel("Composition", { exact: true });
   await expect(indicator).toBeVisible();
   await expect(indicator).toContainText("Case override");
-  await expect(indicator).toContainText("Composition: client parity (this case's own)");
+  await expect(indicator).toContainText("Composition: rarity plus adds (this case's own)");
   // The case's own floor has no place in the client's sum, and the legend says so.
   await expect(indicator).toContainText("Only the adds count in it");
   await page.keyboard.press("Enter");

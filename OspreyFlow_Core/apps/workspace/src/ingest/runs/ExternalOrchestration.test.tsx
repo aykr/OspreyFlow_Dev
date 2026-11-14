@@ -72,7 +72,7 @@ describe("ExternalOrchestration", () => {
   it("marks a pipeline owned externally by the client named, and says who each run acts as", async () => {
     const calls = serve();
     open();
-    fireEvent.change(await screen.findByLabelText("The orchestrator's client"), { target: { value: "syn-airflow" } });
+    fireEvent.change(await screen.findByLabelText("The orchestrator's sign-in ID"), { target: { value: "syn-airflow" } });
     fireEvent.click(screen.getByRole("button", { name: "Mark owned externally" }));
     expect((await screen.findByRole("status")).textContent).toContain("only syn-airflow may trigger it, and each run acts as you");
     const put = calls.find((c) => c.init?.method === "PUT");
@@ -83,7 +83,7 @@ describe("ExternalOrchestration", () => {
   it("is not offered over a schedule of the pipeline's own, nor without Schedule pipelines", async () => {
     serve();
     open([SCHEDULED]);
-    fireEvent.change(await screen.findByLabelText("The orchestrator's client"), { target: { value: "x" } });
+    fireEvent.change(await screen.findByLabelText("The orchestrator's sign-in ID"), { target: { value: "x" } });
     expect((screen.getByRole("button", { name: "Mark owned externally" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(ORCHESTRATION_WORDS.hasSchedule)).toBeTruthy();
     cleanup();

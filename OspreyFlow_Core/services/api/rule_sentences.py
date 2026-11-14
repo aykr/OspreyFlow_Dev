@@ -488,7 +488,7 @@ def sentence_words(sentence: RuleSentence, ontology: OntologySchema | None = Non
         if strength.kind == "connection_strength":
             other = _a(strength.other_type) if strength.other_type else "anything it is linked to"
             by = f" by “{label(strength.link_type)}”" if strength.link_type else ""
-            scale = " on the client's scale" if strength.scale == "client" else ""
+            scale = " on the raw-sum scale" if strength.scale == "client" else ""
             words.append(
                 f"and the connection strength between it and {other}{by} reaches "
                 f"{_number(strength.reaches)}{scale}"
@@ -749,7 +749,7 @@ async def _meets_strength(
             if best is None or (best.raw_sum or 0.0) < strength.reaches:
                 return None
             return (
-                f"connection strength {best.raw_sum:.2f} on the client's scale with "
+                f"connection strength {best.raw_sum:.2f} on the raw-sum scale with "
                 f"{node_name(others[ends[best.edge_id]])}"
             )
         best = max(found, key=lambda s: (s.strength, s.edge_id), default=None)
