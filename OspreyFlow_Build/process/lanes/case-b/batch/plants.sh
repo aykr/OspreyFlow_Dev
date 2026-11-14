@@ -29,9 +29,27 @@ plant() { # name, file, perl substitution, the case that must go red
   fi
 }
 
+plant "a new request or a renewed token starting another job" "$UI" \
+  's/  \}, \[attempt\]\);/  }, [attempt, request, bearerToken]);/' \
+  "starts one job, whatever the panel is given later: a new request object, a renewed token"
+plant "the token read once, never renewed" "$UI" \
+  's/asked.current = \{ \.\.\.asked.current, apiBaseUrl, bearerToken, investigationId, pollMs \};/asked.current = { ...asked.current, apiBaseUrl, investigationId, pollMs };/' \
+  "starts one job, whatever the panel is given later: a new request object, a renewed token"
+plant "the Conduit's 403 sentence replaced by the Glass's own" "$UI" \
+  's/            started.words \?\?\n//' \
+  "says a reader below Editor cannot start one in the Conduit's own sentence, and asks nothing more"
+plant "a followed job said with this request's figures" "$UI" \
+  's/\{!following && \(/{true \&\& (/' \
+  "follows the job already running when the reader has one on this case"
+plant "a 401 on a reading taken for a passing trouble" "$API" \
+  's/if \(response.status === 401\) \{/if (false) {/' \
+  "stops asking, and says so, when its sign-in has ended"
+plant "readings that fail asked for ever" "$UI" \
+  's/>= TROUBLES_BEFORE_STOPPING\)/>= Infinity)/' \
+  "stops asking after a minute of readings that fail, and says the job carries on"
 plant "a 403 at the start read as any failure" "$API" \
   's/if \(response.status === 403\) \{/if (false) {/' \
-  "says a reader below Editor cannot start one, and asks nothing more"
+  "says a reader below Editor cannot start one in the Conduit's own sentence, and asks nothing more"
 plant "right_required read as a case level too low" "$API" \
   's/detail\?.error === "right_required" \? "right_required" : "forbidden"/"forbidden"/' \
   "says an account without the right to expand cannot start one"
@@ -62,8 +80,8 @@ plant "a job not this reader's read as progress not read" "$API" \
 plant "the result not opened when the job is done" "$UI" \
   's/onViewOpenedRef.current\(result.opened\);//' \
   "opens the job's result as the view, and says the server's words and that it is open"
-plant "a done job with no view opened anyway" "$UI" \
-  's/if \(!job.view\) \{/if (!job.view \&\& false) {/' \
+plant "a done job's deleted-view words replaced by the Glass's own" "$UI" \
+  's/words: job.words \|\| "The batch expansion finished, but the view it saved has since been deleted." \}\);/words: "The batch job finished." });/' \
   "says a done job whose view has since been deleted in the server's words, and opens nothing"
 plant "the carry-on note left up once the job ends" "$UI" \
   's/\{\(shown.phase === "starting" \|\| shown.phase === "watching"\) \&\& \(/{true \&\& (/' \
