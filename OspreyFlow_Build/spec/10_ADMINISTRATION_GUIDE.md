@@ -1394,25 +1394,59 @@ assigned in *Admin › People*, which keeps them in the deployment's own Postgre
   Viewer (never Owner or Editor, refused). Removing it in *Admin › Dashboards* takes away every case
   grant it held; registering the same application id again starts with none.
 
-**Nothing acts as its owner on Entra yet, so loads are started by hand.** The Conduit acts as a
-person who is not present only through Keycloak's token exchange, which Entra ID does not have, so
-on this profile everything that runs as its owner is refused:
+**A run acts as its owner as Admin › People holds them** (ADR-148 Amendment 16). Entra ID has no
+way for the Conduit to sign in as a person who is not present, so whatever runs as its owner uses
+what this deployment holds of them: their roles, and whether they are disabled, read from
+*Admin › People* at each run; their clearance, unit and handling codes as their last sign-in gave
+them. That is:
 
-- **a pipeline's schedule and its watched folder** (developer guide, §6.3), and **Run now** in
-  *Admin › Operations*, which runs as the schedule's owner (section 9.11). Each slot is refused and
-  recorded in the scheduler's words, "the identity provider could not be reached to act as the
-  schedule's owner": here that means no owner can be acted as, while Entra itself may be answering.
-  Such a refusal says nothing about the owner, so it never counts toward the three that pause a
-  schedule, and the schedule is refused again at every slot until it is set to run by hand;
-- **`ospreyflow run`**, an orchestrator's trigger (section 8), which runs as the pipeline's owner: it
-  is refused, in words, and recorded;
+- **a pipeline's schedule and its watched folder** (developer guide, §6.3), **Run now** in
+  *Admin › Operations*, which runs as the schedule's owner (section 9.11), and **`ospreyflow run`**,
+  an orchestrator's trigger (section 8), which runs as the pipeline's owner;
 - **a rule that runs on a schedule** (user guide, §7.11), and **the daily check for KYC documents
   that lapse**, which runs each KYC rule as the person who deployed it;
-- **a screening list's refresh schedule** (section 9.5): **Refresh now** still works;
-- **a watch's own runs**: the watch is tried again each minute and does nothing, with a warning in
-  the Conduit's log;
-- **at a load, anyone else's rules, hotlists and watches**: only those of the person who started the
-  load are judged.
+- **a screening list's refresh schedule**, a subscribed list's or a deployment-wide one's
+  (section 9.5);
+- **a watch's own runs**, and **at a load, anyone else's rules, hotlists and watches** (user guide,
+  §7.5).
+
+**The 24 hours.** The access held for a person is recorded when they sign in, and again at most
+hourly while they use OspreyFlow. A run is refused when that record is more than 24 hours old, or
+there is none (a person added by object id who has never signed in). Such a refusal decides nothing
+about the owner, so it never counts toward the three refusals that pause a schedule. What it says,
+and what happens next, depends on what was asked:
+
+- **a slot of a schedule** (a pipeline's, a rule's or a list's), or a watch's run: "the schedule's
+  owner, <id>, has not signed in to OspreyFlow within the last 24 hours, so their clearance and unit
+  are out of date: it runs at its next slot after they sign in" (a rule's says "the rule's author").
+  A watch keeps its slot and is tried again each minute;
+- **Run now** and **`ospreyflow run`**: the same, ending "run it again once they have signed in",
+  since nothing asked for by hand runs again by itself;
+- **the daily KYC check**: the rule's audit says the deployer is out of date and that "the documents
+  that lapsed are not judged by this day's check; the rule judges its customers afresh at its next
+  load". The check does not come back for that day;
+- **at a load**: the owner's hotlists and watches are marked stopped, as for any owner who cannot be
+  acted as, and are made active again at the first load after they sign in; a stopped watch's own
+  runs wait for that load. Their rules are not judged at that load. The watch list shows *Stopped*
+  and does not yet say why.
+
+**Other refusals.** An owner disabled in *Admin › People* is refused, and three such refusals in a
+row pause a schedule, as on Keycloak; so is an owner *Admin › People* does not hold ("is not a
+person Admin › People holds"). If *Admin › People*'s store cannot be read, the run is refused as
+that and never counted. None of these says "the identity provider could not be reached": Entra is
+not asked.
+
+**So a schedule runs only while its owner keeps signing in.** The 24 hours run from the owner's last
+recorded access, not from the day. An owner last active on Friday at 17:00, with a daily slot at
+06:00: Saturday's run goes ahead (13 hours later), Sunday's and Monday's are refused (Monday's comes
+before they sign in that morning), and Tuesday's goes ahead. Give a schedule that must run unattended
+for longer an owner who signs in each working day. There is no unattended owner on this profile:
+reading a person's access from Entra itself at each run needs an application permission the
+organisation would grant, which this release does not ask for.
+
+**A leaver's runs go on for up to 24 hours.** Disabling or removing a person in Entra stops their
+sign-in, but runs as them keep the access last recorded for up to 24 hours after it. Disable a leaver
+in *Admin › People* as well: that stops every run as them at once.
 
 A load started by hand in the Ingest Studio (**Run now**, developer guide §3.9) runs as the person
 who starts it, and is not affected.
@@ -1666,8 +1700,8 @@ first install:
 
 ### 6a.10 Coming
 
-- **On Entra ID**: anything that runs as its owner, a scheduled run among them (until then each is
-  refused, section 6a.7), display names (a person is
+- **On Entra ID**: an owner's access read from Entra itself at each run, so a schedule runs on days
+  its owner does not sign in (section 6a.7), display names (a person is
   shown by object id until then), and one real token from the organisation's tenant to settle the
   shapes section 6a.7 lists as untried.
 - **The backups' alert** on a failed or missing run, the production shape's restore, the restore
@@ -1785,7 +1819,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
 | `ospreyflow release export <dataset> --name <name> --release-version <version> --out <folder>` | Writes the dataset's release as a YAML bundle into a new, empty folder: `release.yaml` (`apiVersion: ospreyflow.io/v1`, `kind: DatasetRelease`, checked by `packages/schemas/release.schema.json`), the domain model, each published pipeline and each reference list's definition, and a small list's rows as a CSV named by its checksum. Never a credential, loaded data, case membership, an owner or a licensed screening list's rows. Does what Studio › Releases' *Export* does, as you: set `OSPREY_TOKEN` to your own sign-in token (and `OSPREY_API_URL` for another deployment's address). A pipeline marked above what you may view is left out, and the command says how many |
 | `ospreyflow release import <folder> --dataset <id> [--dry-run]` | Reads a bundle whole (every file's SHA-256, nothing it does not list) and lands the model, the pipelines and the lists as drafts in the dataset, each pipeline through the Studio's own save gates; with `--dry-run`, says what it would write and writes nothing. A refusal writes nothing. Nothing goes live: make the model live in the Studio |
-| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Refused where people sign in with Entra ID (`cloud-platform`): nothing acts as its owner there (section 6a.7) |
+| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Where people sign in with Entra ID (`cloud-platform`), the owner as *Admin › People* holds them, refused if they have not signed in within 24 hours (section 6a.7) |
 | `ospreyflow map list` | Lists the map providers, each with its tier, whether its key is set (never the key) and its state; the local basemap, the place-name fonts and the prefetch areas |
 | `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
 | `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |
@@ -2155,8 +2189,8 @@ A rule can also run **when a screening list refreshes** (user guide, section 7).
 - **A scheduled refresh runs as the person who saved the schedule**, resolved afresh each time —
   never as the system. If they can no longer sign in or no longer hold `load_screening_lists`, that
   refresh is refused, recorded under **Latest refreshes** in words, and nothing is read; save the
-  schedule again as someone who holds the right. Where people sign in with Entra ID, nobody can be
-  acted as, so every scheduled refresh is refused there: refresh by hand (section 6a.7).
+  schedule again as someone who holds the right. Where people sign in with Entra ID, a refresh is
+  refused while its owner has not signed in within the last 24 hours (section 6a.7).
 - Each scheduled time runs once, whichever Conduit replica takes it; after downtime only the latest
   runs. A refresh that ran on its schedule says so under **Latest refreshes**.
 - Put each new download in the list's location before the scheduled hour: the schedule reads the file
@@ -2298,7 +2332,8 @@ dry run first.
 
 **Operations** (`operate_schedules`) has the schedules (pipeline, case, schedule, owner, next and last
 run; **Pause**, **Resume**, **Run now**, **Save schedule**; **Run now** runs as the schedule's owner,
-so where people sign in with Entra ID it is refused, as every scheduled run is: section 6a.7) and **Promotions waiting for review**:
+so where people sign in with Entra ID it is refused, in those words, while the owner has not signed
+in within the last 24 hours: section 6a.7) and **Promotions waiting for review**:
 the load, the dataset it goes into, who sent it, when, and how long it has waited. **Alert the
 reviewers and administrators after N days** (1 to 90) sets when a waiting promotion is overdue; an
 overdue one alerts the dataset's Authors who hold `review_promotions`, and administrators of its unit.
