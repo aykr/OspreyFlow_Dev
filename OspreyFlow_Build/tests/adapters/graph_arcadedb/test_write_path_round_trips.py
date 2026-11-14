@@ -186,3 +186,15 @@ def test_one_id_held_by_two_types_stops_the_write() -> None:
 
     with pytest.raises(IdInTwoTypes):
         asyncio.run(vertex_records(Twice(), ["x"]))
+
+
+def test_a_call_whose_later_node_is_of_no_type_writes_nothing() -> None:
+    """Every write of a call is checked (its type, its properties, its id's type) before the first
+    is sent, so a refusal of a later node leaves the earlier ones unwritten too."""
+    store = ManyTypedNodes(0)
+    graph = _adapter(store)
+    good = _write("n-1", classification="OFFICIAL", load_id="l", datasets=["Z2001ZZ"], source="f")
+    bad = good.model_copy(update={"id": "n-2", "type": "NoSuchType"})
+    with pytest.raises(OntologyError, match="not a type in the active ontology"):
+        asyncio.run(graph.upsert_nodes([good, bad], "tx"))
+    assert _writes(store) == []

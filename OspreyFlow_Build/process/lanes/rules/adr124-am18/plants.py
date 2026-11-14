@@ -111,9 +111,12 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      [f"{TRIPS}::test_a_node_write_onto_an_id_another_type_holds_is_refused_and_the_call_writes_nothing",
       f"{TRIPS}::test_one_call_writing_one_id_as_two_types_is_refused_and_writes_nothing"]),
     ("R1b only the call's first write checked before the writes are sent", ADAPTER,
-     "        for write in nodes:\n            wanted = physical_type_name(write.type)\n",
-     "        for write in nodes[:1]:\n            wanted = physical_type_name(write.type)\n",
-     [f"{TRIPS}::test_a_node_write_onto_an_id_another_type_holds_is_refused_and_the_call_writes_nothing"]),
+     "        for write in nodes:\n            entity_type = schema.entity_type(write.type)\n"
+     "            if entity_type is None:\n",
+     "        for write in nodes[:1]:\n            entity_type = schema.entity_type(write.type)\n"
+     "            if entity_type is None:\n",
+     [f"{TRIPS}::test_a_node_write_onto_an_id_another_type_holds_is_refused_and_the_call_writes_nothing",
+      f"{TRIPS}::test_a_call_whose_later_node_is_of_no_type_writes_nothing"]),
     ("R2 a link's ends asked of every type", ADAPTER,
      "            ids, tx=tx, types=None if types is None else sorted(types)\n",
      "            ids, tx=tx, types=None\n",

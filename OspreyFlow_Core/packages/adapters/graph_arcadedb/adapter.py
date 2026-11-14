@@ -345,6 +345,10 @@ class GraphArcadeDBAdapter:
         # refusal names neither type: the holder may be a node its writer cannot read (rule 3).
         typed = {node_id: stored for node_id, (_rid, stored) in known.items()}
         for write in nodes:
+            entity_type = schema.entity_type(write.type)
+            if entity_type is None:
+                raise OntologyError(f"{write.type!r} is not a type in the active ontology")
+            validate_properties(entity_type, write.properties)
             wanted = physical_type_name(write.type)
             if typed.setdefault(write.id, wanted) != wanted:
                 raise OntologyError(
@@ -356,10 +360,7 @@ class GraphArcadeDBAdapter:
         written: set[str] = set()
         for write in nodes:
             entity_type = schema.entity_type(write.type)
-            if entity_type is None:
-                raise OntologyError(f"{write.type!r} is not a type in the active ontology")
-            validate_properties(entity_type, write.properties)
-
+            assert entity_type is not None  # checked above, before any write
             node_id = write.id
             if node_id in written:
                 existing = await self._find_existing_node(

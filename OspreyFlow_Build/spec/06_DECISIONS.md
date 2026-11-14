@@ -39135,11 +39135,13 @@ reads is its own record") for the write path.*
    call itself writes under two types, is refused in words (a node's type is not changed by a write), never inserted
    beside it as a second vertex under one id, which no per-type unique index can refuse (asked of its own type
    alone, the write would have made one, where the scan it replaces sent an `UPDATE` that matched nothing). Every
-   write of the call is checked before the first is sent, so a refused call writes nothing, and the refusal names
+   write of the call is checked (its type, its properties and its id's type) before the first is sent, so a
+   refused call writes nothing, and the refusal names
    neither type, since the holder may be a node its writer cannot read (rule 3). One id found in two types stops the
    write (`IdInTwoTypes`). Both are `OntologyError`s, so a load reports either as a refused write. This costs a node
    write one read of the store's types and one query per vertex type, per call: the ingest engine writes one node a
-   call, so the scale test times that shape too (below). It refuses what `main` lost unsaid: a deployment whose
+   call, so the scale test times that shape too (below), a figure recorded with the store's number of vertex types
+   beside it, since its two sizes differ in vertices, not in types. It refuses what `main` lost unsaid: a deployment whose
    generator moved an id to another type, reseeded, now stops on that id. `supersede_node`, which inserts the id
    its caller gives, is not a load's write and is unchanged. As on the read path (Amendment 2), a vertex type without a unique `id` index is never asked,
    since asking it would scan it. The bulk loader asks every type once a chunk, which its chunk amortises.
