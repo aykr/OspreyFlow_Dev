@@ -22,14 +22,15 @@ plant() { # name, file, perl substitution, the case that must go red
   git checkout -q HEAD -- "$file"
   if grep -qF "FAIL  $TEST > BatchExpansion > $case" <<<"$out"; then
     echo "AS IT MUST BE (red): $name"
-    grep -m1 -E "AssertionError|Error:|expected" <<<"$out" | sed 's/^/    /'
+    # The words of the named case's own failure, not the first in the file.
+    awk -v h="FAIL  $TEST > BatchExpansion > $case" 'index($0,h){f=1;next} f&&/AssertionError|Error:/{print "    " $0; exit}' <<<"$out"
   else
     echo "NOT RED FOR ITS REASON: $name (wanted: $case)"; grep -E "✓|×|FAIL|Tests " <<<"$out" | head -20; fails=1
   fi
 }
 
 plant "a 403 at the start read as any failure" "$API" \
-  's/    if \(response.status === 403\) return \{ ok: false, kind: "forbidden" \};\n//' \
+  's/if \(response.status === 403\) \{/if (false) {/' \
   "says a reader below Editor cannot start one, and asks nothing more"
 plant "right_required read as a case level too low" "$API" \
   's/detail\?.error === "right_required" \? "right_required" : "forbidden"/"forbidden"/' \
