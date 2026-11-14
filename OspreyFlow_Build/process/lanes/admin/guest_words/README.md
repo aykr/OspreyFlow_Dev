@@ -10,13 +10,19 @@ in `sections/People.tsx`).
 
 | File | What it is |
 | --- | --- |
-| `form-words-red.log` | `PeopleEntraAdministrator.test.tsx`'s *Guests words* before the change. All 8 subsets of `administrator_sets` red, served sorted as the Conduit sorts them. The empty set is red only for the rewording "codes" → "handling codes" |
-| `backend-plants.log` | `test_entra_guests.py::test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token`, against two plants. In the first, a guest skips the values set here: it is red, but at `principal_auth`'s own assert, which refuses that state first. In the second, a guest's token clearance is used where the deployment sets it: red at the test's own assertion |
+| `form-words-red.log` | The *Guests words* test as first written, before the change: all 8 subsets red |
+| `ui_plants.py`, `ui-plants.log` | The words' plants, after the lane review. Each is planted alone in `People.tsx`, and the tree is restored from git. Red only when the tests that fail are exactly the ones the plant must fail: the verb chosen by count alone, the old token clause kept, the values listed in served order. 3 of 3 red |
+| `plants.py`, `backend-plants.log` | The backend plants, in `principal_auth`, each red only when every failure stops at the assertion it names: a guest's token values kept where the deployment sets them; a guest refused in words of its own when a value set here is unset. 2 of 2 red, each across the 3 values. An earlier plant, a guest skipping the values set here, was caught first by `principal_auth`'s own assert (line 874), not by the test, so it does not count |
+| `lint.log`, `vitest-full.log`, `pytest.log` | The gates, each naming the head it ran at |
 
-Checks after the change, offline:
-- vitest 3462 passed;
-- tsc clean, eslint clean;
-- the guide, guest and administrator-access pytest files: 233 passed;
-- `adr_reservations_check` clean.
+**The lane review** (14 November) found the following, all fixed:
+- the verb chosen by count, so handling codes alone read "is";
+- a test of part-sentences that a wrong verb or a longer list passed;
+- the backend test held through `principal_from_claims` alone, for clearance alone, its refusal half never shown red;
+- logs with no head;
+- the module docstring and point 3's lead still saying "from their token" without exception.
 
-Administration guide §6a.7 gains a sentence (version 2.09, set at merge), and spec/10 is mirrored.
+The words now choose the verb by the noun. People's own words (`entraPeopleWords`) share the list, in `EVERY_FIELD`'s
+order. Every sentence is asserted whole. The backend test runs through `resolve_principal` for each value.
+
+**Seen, not changed** (principal_auth is the platform lane's): its refusal says "your handling codes has not been set".
