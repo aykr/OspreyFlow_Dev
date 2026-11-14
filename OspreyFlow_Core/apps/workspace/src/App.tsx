@@ -2711,10 +2711,12 @@ export function App() {
         />
       )}
       {/* ADR-151, spec 02 §3.1h: the batch job's panel is at the canvas's foot, on the Graph alone. Elsewhere in the case
-          (Reports, the Studio, the Map) it is hidden, not taken away, so it goes on following its job, and is there
-          again, as it was, on the way back to the canvas; the job itself runs on the server either way. */}
+          (Reports, the Studio, the Map, the search results, a document read full screen) it is hidden, not taken
+          away, so it goes on following its job, and is there again on the way back to the canvas. Where the App
+          draws another tree (Home, Admin, All cases) the panel goes, and the job it started is kept here, so the
+          panel drawn again follows it rather than starting another; the job runs on the server either way. */}
       {bearerToken && batchExpansion.asked && (
-        <div hidden={view !== "graph"}>
+        <div hidden={view !== "graph" || searching !== null || readerDocumentId !== null}>
           <BatchExpansion
             key={batchExpansion.asked.n}
             request={batchExpansion.asked.request}
@@ -2723,6 +2725,8 @@ export function App() {
             investigationId={batchExpansion.asked.caseId}
             // *Try the batch job again* only where a batch job may be chosen: not while a view is open.
             mayStartAgain={lens === null}
+            startedJob={batchExpansion.asked.job ?? null}
+            onJobStarted={(job) => batchExpansion.started(batchExpansion.asked!.n, job)}
             // Opened as any view is (`openLens`: the latest view asked for wins); a problem is the panel's to say.
             onOpenView={async (viewId) => {
               setViewsRead((n) => n + 1);

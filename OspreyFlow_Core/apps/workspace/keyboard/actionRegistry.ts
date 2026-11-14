@@ -1354,3 +1354,9 @@ export const BATCH_EXPANSION_ACTIONS = defineActionRegistry("BATCH_EXPANSION_ACT
   "try-a-failed-batch-job-again-by-keyboard",
   "close-the-batch-job-panel-by-keyboard",
 ] as const);
+
+// ADR-115 E6, ADR-145 Amendment 12 (CARRIES 224): the rail's Help opens its panel from every view of the real
+// Glass, not the Graph alone (`keyboard/help-every-view.spec.ts`).
+export const HELP_ACTIONS = defineActionRegistry("HELP_ACTIONS", [
+  "open-help-from-every-view-by-keyboard",
+] as const);
