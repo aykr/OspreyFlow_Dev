@@ -1,0 +1,13 @@
+plants with the M3 variants drawn from B's groups, on the Mac, closed ports 59991-59994, no stack
+built: GREEN - 17 passed in 1.39s
+Q1 a row from a record m10-measure cannot read let through: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_a_row_from_a_secret_document_is_refused | 1 failed in 0.88s
+Q2 an exact row's expect_first not compared with its record: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_an_exact_row_expecting_a_record_it_does_not_name_is_refused | 1 failed in 0.89s
+Q3 a number two visible records hold let through: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_an_exact_row_whose_number_two_visible_records_hold_is_refused | 1 failed in 0.89s
+Q4 a fulltext row's date filter not checked: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_a_fulltext_row_without_its_date_filter_is_refused | 1 failed in 0.87s
+Q5 a class with too few rows let through: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_a_class_with_too_few_rows_is_refused_in_words | 1 failed in 0.89s
+Q6 rows drawn from every record of the case, not the visible ones: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_every_row_is_drawn_from_a_record_the_measured_principal_reads | 1 failed in 0.91s
+Q7 the names changes not rotated (a hash picks each, the rows a change misses dropped): RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_names_rows_change_the_name_each_of_three_ways | 1 failed in 0.91s
+Q8 a variant changing only case or word order (the register form) let through: RED - FAILED ../OspreyFlow_Build/tests/test_client_size_queries.py::test_a_names_row_changing_only_case_or_word_order_is_refused | 1 failed in 0.92s
+Q9 the variants drawn as the register form, not from B's spelling groups (red at the set's build: each folds to the name, so names cannot fill its count): RED - 1 error in 0.89s
+restored: GREEN - 17 passed in 1.02s
+plants exit=0
