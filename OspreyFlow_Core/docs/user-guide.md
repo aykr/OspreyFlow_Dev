@@ -1148,8 +1148,11 @@ queue on **Alerts**. There is no Watches tab and no separate inbox.
 - on Entra ID, its owner is not in *People and roles*: "Its owner is not a person Admin › People
   holds."
 - the identity provider refused: "The identity provider refused to act as its owner."
-- its owner's sign-in could not be checked: "Its owner's sign-in could not be checked at the last
-  load. It is tried again at the next."
+- its owner's sign-in could not be checked at three loads in a row: "Its owner's sign-in could not be
+  checked at three loads in a row. It is tried again at the next." One or two such loads leave it
+  *Active*, matching nothing, and say so beside the word: "Its owner's sign-in could not be checked at
+  the last load. It stops if that happens at three loads in a row." or "Its owner's sign-in could not
+  be checked at the last two loads. It stops if the next is the third in a row." (ADR-044 Amendment 2)
 - its owner could not be acted as, for no reason given: "Its owner could not be acted as at the last
   load."
 - a watched pattern whose saved pattern is no longer its owner's: "Its saved pattern is no longer
