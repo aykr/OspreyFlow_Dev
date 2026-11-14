@@ -117,10 +117,11 @@ docs	v052-sweep	S	todo	v0.5.2 step 5: the wording sweep
 admin	v052-heartbeat	M	done	The heartbeat's route view (the owner, 13 Nov) (merged ee440c1)
 case-b	v052-r1-driver	M	done	v0.5.2 step 6's driver: the manifest verifier and spec 08 runner, built ahead
 docs	v052-sweep-draft	S	todo	v0.5.2 step 5 drafted ahead: the non-search wording
-rules-b	v052-ask	L	todo	v0.5.2 Part D: Ask & Chat (panel, server, Whole case)
+rules-b	v052-ask	L	done	v0.5.2 Part D: Ask & Chat (panel, server, Whole case)
 case-b	v052-selection	M	done	v0.5.2 Parts C and E: one set of actions for the selection; the typeface
 orchestrator	v051-cut	S	done	v0.5.1 cut: CI at the candidate, the upgrade rehearsal, the CHANGELOG, publish when green (the owner's word)
 platform	v052-searchkind	M	done	v0.5.2: the OpenSearch domain on R1's kind (stand-in wired, its limits, the run's domain check)
 platform-b	v052-4c	M	building	The administrator fallback on Entra, poc alone (ADR-148 Am 15; audit 4c)
 rules-b	v052-batch	M	building	v0.5.2: promote an expansion to a batch job at the cap (ADR-151, the owner's ruling)
 case-b	v052-batch-ui	S	building	v0.5.2: the batch job's choice, progress and result in the Glass (ADR-151)
+platform	v052-upgrade-index	S	building	v0.5.2: an upgrade or fresh install builds the search index (route step U)
