@@ -15,13 +15,16 @@ What a mistake would do, and the case that catches it:
 - a sentence deployed around its checks through the typology route — `test_the_typology_route_refuses_a_sentence`;
 - a preview naming or counting a filtered node — `test_a_preview_run_by_an_analyst_reveals_no_filtered_node`;
 - a preview counted in part — `test_a_preview_over_the_limit_is_refused_with_limit_exceeded`;
-- a preview that writes — `test_a_preview_writes_no_alert_rule_or_pattern`.
+- a preview that writes — `test_a_preview_writes_no_alert_rule_or_pattern`;
+- a total too large to count answered as a bare 500, or with the total in it —
+  `test_a_preview_whose_total_is_too_large_to_count_is_refused_in_words`.
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import duckdb
@@ -59,7 +62,8 @@ from schemas.domain import (
     TypologyRule,
     TypologyRuleInput,
 )
-from tests.services.api.test_rule_sentences import ONTOLOGY, SCHEME, _Graph, _node
+from ports.analytics import AMOUNT_TOTAL_RULE
+from tests.services.api.test_rule_sentences import ONTOLOGY, SCHEME, _event, _Graph, _node
 
 CASE = Investigation(id="case-s", name="C", created_at=datetime(2026, 1, 1, tzinfo=UTC), created_by="a",
                      owning_unit="unit-1")  # fmt: skip
@@ -137,7 +141,7 @@ def world() -> Iterator[dict[str, Any]]:
     create_geometries_table(con)
     graph = _Graph([_node("v1", "Person", family_name="Okafor"),
                     _node("h1", "Person", "SECRET", family_name="Okafor", given_names="Hidden")])  # fmt: skip
-    things: dict[str, Any] = {"graph": graph, "patterns": _Patterns(), "rules": _Rules(), "audit": _Audit()}
+    things: dict[str, Any] = {"con": con, "graph": graph, "patterns": _Patterns(), "rules": _Rules(), "audit": _Audit()}
     app.dependency_overrides.update({
         get_investigations: _Cases, get_ontology: lambda: ONTOLOGY, get_graph: lambda: graph,
         get_analytics: lambda: AnalyticsDuckDBAdapter(con, SCHEME), get_hotlists_store: _Hotlists,
@@ -250,3 +254,21 @@ def test_a_preview_writes_no_alert_rule_or_pattern(world: dict[str, Any]) -> Non
     response = _as(AUTHOR).post(f"{BASE}/preview", json={"sentence": {**LISTED, "severity": "high"}})
     assert response.status_code == 200 and response.json()["would_raise"] == 1
     assert world["audit"].actions == ["rule_previewed"]  # the read, recorded; nothing raised
+
+
+def test_a_preview_whose_total_is_too_large_to_count_is_refused_in_words(world: dict[str, Any]) -> None:
+    """ADR-133 Amendment 10 over the wire: two payments of 6 × 10^27 make a total the adapter
+    refuses (`AmountTotalOutOfRange`). The preview answers 422 in the port's words, never a bare
+    500 and never the total or an amount."""
+    world["graph"].nodes.update({"a1": _node("a1", "Endpoint", value_normalised="acct-1"),
+                                 "a2": _node("a2", "Endpoint", value_normalised="acct-2")})  # fmt: skip
+    recent = datetime.now(UTC) - timedelta(days=3)
+    paid = [_event("a1", "a2", recent - timedelta(hours=h), edge_type="TRANSACTED", amount=6e27).model_copy(
+        update={"investigation_scope": CASE.id}) for h in (1, 2)]  # fmt: skip
+    asyncio.run(AnalyticsDuckDBAdapter(world["con"], SCHEME).load_events(paid))
+    amount = {"kind": "amount", "link_type": "TRANSACTED", "amount_property": "amount", "over": 10000,
+              "within_days": 7}  # fmt: skip
+    response = _as(VIEWER).post(f"{BASE}/preview", json={"sentence": {"subject": "Endpoint", "frequency": amount}})
+    assert response.status_code == 422, (response.status_code, response.text[:200])
+    assert response.json() == {"error": "amount_total_out_of_range", "detail": AMOUNT_TOTAL_RULE}
+    assert "6000000" not in response.text and "e+27" not in response.text and "e27" not in response.text

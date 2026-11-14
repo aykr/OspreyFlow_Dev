@@ -21,6 +21,7 @@ import duckdb
 from ontology.handling import HandlingScheme
 from ports.analytics import (
     AmountTotalOutOfRange,
+    AnalyticsFieldRefused,
     TrendLimitExceeded,
     refuse_an_amount_total_out_of_range,
 )
@@ -82,8 +83,10 @@ _TOP_LEVEL_FIELDS = frozenset({"edge_type", "source_id", "target_id", "cell_site
 
 
 def _safe_field_name(field: str) -> str:
+    """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+    words (`AnalyticsFieldRefused`), which never carry the name sent."""
     if not field.replace("_", "").isalnum() or not field:
-        raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+        raise AnalyticsFieldRefused
     return field
 
 

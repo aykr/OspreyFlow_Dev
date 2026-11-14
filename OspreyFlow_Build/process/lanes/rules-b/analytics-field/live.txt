@@ -1,0 +1,61 @@
+# live at f3ebe5a on stack f (rules-b's lease): the analytics_port suite on ClickHouse
+Running on ospreyflow-test (stack f, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261114T050824Z-48db9dd9/log: sh -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py -k clickhouse
+........................................................................ [ 49%]
+........................................................................ [ 99%]
+.                                                                        [100%]
+--------------------- 141 unmarked test(s) reached a store ---------------------
+tests/conformance/analytics_port/test_suite.py::test_a_case_alert_is_counted_in_its_own_case_only[analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[account_activity amount_property-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[cross_filter dimension field-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[cross_filter value_filters-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[event_frequency amount_property-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[geocode_events property-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[histogram field-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[list_events value_filters-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[trend group_by-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_field_name_that_is_not_one_is_refused_in_the_ports_words[trend measure_field-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_movement_at_the_windows_start_is_in_the_window_not_before_it[analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_retract_does_not_cross_investigations_it_was_not_asked_about[analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_team_routed_alert_is_counted_for_the_teams_members_alone[analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-6e+27-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-9e+28-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-6e+27-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-9e+28-analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_a_trend_past_its_bounds_is_refused_not_cut[analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_activity_counts_an_account_at_either_end_and_each_event_once[analytics_clickhouse]: ClickHouse on port 18128
+tests/conformance/analytics_port/test_suite.py::test_activity_counts_only_this_case_and_the_link_types_named[analytics_clickhouse]: ClickHouse on port 18128
+… and 121 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+2.14s call     tests/conformance/analytics_port/test_suite.py::test_restore_withdrawn_events_puts_back_exactly_what_that_load_withdrew[analytics_clickhouse]
+2.09s call     tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_takes_exactly_those_events_out_of_every_read[analytics_clickhouse]
+2.06s call     tests/conformance/analytics_port/test_suite.py::test_retracting_the_load_that_wrote_withdrawn_events_leaves_nothing_to_restore[analytics_clickhouse]
+1.98s call     tests/conformance/analytics_port/test_suite.py::test_after_a_retract_no_read_for_any_principal_returns_or_counts_a_retracted_event[analytics_clickhouse]
+1.97s call     tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_leaves_every_other_event_on_the_same_link[analytics_clickhouse]
+1.06s call     tests/conformance/analytics_port/test_suite.py::test_the_comparison_sees_a_missing_survivor_in_every_read[analytics_clickhouse]
+0.94s call     tests/conformance/analytics_port/test_suite.py::test_alert_trend_splits_by_rule_typology_severity_or_outcome[analytics_clickhouse]
+0.88s call     tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_takes_more_ids_than_one_statement_holds[analytics_clickhouse]
+0.78s call     tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-9e+28-analytics_clickhouse]
+0.67s call     tests/conformance/analytics_port/test_suite.py::test_event_filter_edge_ids_restricts_to_events_on_those_links[analytics_clickhouse]
+0.65s call     tests/conformance/analytics_port/test_suite.py::test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not[analytics_clickhouse]
+0.65s call     tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-9e+28-analytics_clickhouse]
+0.64s call     tests/conformance/analytics_port/test_suite.py::test_event_filter_event_ids_restricts_to_those_events[analytics_clickhouse]
+0.61s call     tests/conformance/analytics_port/test_suite.py::test_geocode_twice_changes_nothing_the_second_time[analytics_clickhouse]
+0.59s call     tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-6e+27-analytics_clickhouse]
+0.59s call     tests/conformance/analytics_port/test_suite.py::test_a_team_routed_alert_is_counted_for_the_teams_members_alone[analytics_clickhouse]
+0.58s call     tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-6e+27-analytics_clickhouse]
+0.57s call     tests/conformance/analytics_port/test_suite.py::test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader[analytics_clickhouse]
+0.50s call     tests/conformance/analytics_port/test_suite.py::test_alert_trend_counts_alerts_raised_per_week_and_month[analytics_clickhouse]
+0.50s call     tests/conformance/analytics_port/test_suite.py::test_an_alert_resting_on_a_handling_the_reader_may_not_view_moves_nothing[analytics_clickhouse]
+0.48s call     tests/conformance/analytics_port/test_suite.py::test_load_geometries_and_get_geometry_round_trips_a_polygon[analytics_clickhouse]
+0.48s call     tests/conformance/analytics_port/test_suite.py::test_alert_trend_filters_by_equalities[analytics_clickhouse]
+0.48s call     tests/conformance/analytics_port/test_suite.py::test_geocode_a_point_on_a_shared_edge_lands_in_exactly_one_cell[analytics_clickhouse]
+0.48s call     tests/conformance/analytics_port/test_suite.py::test_geocode_neither_touches_nor_reveals_what_the_principal_cannot_see[analytics_clickhouse]
+0.46s call     tests/conformance/analytics_port/test_suite.py::test_geocode_records_the_covering_cell_on_each_event_with_a_point[analytics_clickhouse]
+0.45s call     tests/conformance/analytics_port/test_suite.py::test_geocode_clears_its_own_stale_value_and_leaves_other_sites_alone[analytics_clickhouse]
+0.42s call     tests/conformance/analytics_port/test_suite.py::test_unauthorised_event_moves_no_trend_point_total_or_classification[analytics_clickhouse]
+0.41s call     tests/conformance/analytics_port/test_suite.py::test_trend_over_the_links_named_counts_only_events_on_them_and_a_hidden_one_moves_nothing[analytics_clickhouse]
+0.40s call     tests/conformance/analytics_port/test_suite.py::test_unauthorised_first_seen_matches_a_corpus_without_the_hidden_event[analytics_clickhouse]
+0.38s call     tests/conformance/analytics_port/test_suite.py::test_an_alert_on_a_restricted_handling_is_counted_only_within_its_units[analytics_clickhouse]
+145 passed, 145 deselected in 51.33s
+Wall time: 52 s, exit 0 (stack f, the lease rules-b took at 2026-11-14T05:08:05Z; set-up before it 14 s)
+exit=0

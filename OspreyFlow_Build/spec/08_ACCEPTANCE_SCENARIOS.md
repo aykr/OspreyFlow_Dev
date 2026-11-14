@@ -451,6 +451,18 @@ beside the access filter, never applied after retrieval (`03_CONDUIT_MIDDLEWARE.
 control lives in the query, never after it), and a field may be a top-level event column or a key
 inside the JSON `properties` blob.
 
+**A field name that is not one is refused in words.** A caller names a field in a value filter, a
+dimension's or a histogram's `field`, a trend's split or sum, a geocode's `property` and a rule's
+amount. Every adapter refuses a name that is not letters, digits and underscores before any SQL
+is built, with the port's own `AnalyticsFieldRefused`. Every route answers it 422
+`field_name_refused`, in words that name the rule and never echo what was sent. Until 14 November
+2026 this was a bare `ValueError`, so a caller got a 500 with no words, which A7's over-the-wire
+case accepted because it asked only for 400 or more. The cases are
+`test_a_field_name_that_is_not_one_is_refused_in_the_ports_words` (the conformance suite, each such
+field on every adapter) and `test_a_hostile_field_name_is_refused_with_the_rule_not_the_name`
+(`tests/services/api/test_analytics_field_refused.py`, each analytics route on the real DuckDB
+adapter).
+
 **The data was never the problem.** The HMP fixture has written `item_type` on every event since
 early in the build; only the predicate was missing, which is why this row needed a feature rather than a
 fixture. Four conformance cases hold every adapter to it, including that a field name carrying

@@ -133,7 +133,12 @@ from ontology.influencers import StrengthDefaults, as_the_reader_sees, load_stre
 from ontology.packs import pack_catalogue
 from ontology.pattern_where import PatternConditionRefused, check_pattern_conditions
 from ontology.yardstick import Yardstick, load_phia_yardstick
-from ports.analytics import AnalyticsPort, TrendLimitExceeded
+from ports.analytics import (
+    AmountTotalOutOfRange,
+    AnalyticsFieldRefused,
+    AnalyticsPort,
+    TrendLimitExceeded,
+)
 from ports.compute import ComputePort
 from ports.graph import GraphPort
 from ports.media import MediaStore
@@ -18606,6 +18611,24 @@ async def delete_trend(
 @app.exception_handler(TrendDefinitionRefused)
 async def _trend_refused(request: Request, exc: TrendDefinitionRefused) -> JSONResponse:
     return JSONResponse(status_code=422, content={"error": "trend_refused", "detail": str(exc)})
+
+
+@app.exception_handler(AnalyticsFieldRefused)
+async def _analytics_field_refused(request: Request, exc: AnalyticsFieldRefused) -> JSONResponse:
+    """spec 08's A7: a field name that is not one is refused in the port's words, which name the
+    rule and never what was sent; on every route that reads the analytics store, not a bare 500."""
+    return JSONResponse(
+        status_code=422, content={"error": "field_name_refused", "detail": str(exc)}
+    )
+
+
+@app.exception_handler(AmountTotalOutOfRange)
+async def _amount_total_out_of_range(request: Request, exc: AmountTotalOutOfRange) -> JSONResponse:
+    """ADR-133 Amendment 10: a total of declared amounts too large to count exactly is refused in
+    the port's words, which name the limit and never the total or an amount; not a bare 500."""
+    return JSONResponse(
+        status_code=422, content={"error": "amount_total_out_of_range", "detail": str(exc)}
+    )
 
 
 @app.exception_handler(TrendLimitExceeded)

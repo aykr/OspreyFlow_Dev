@@ -22,7 +22,12 @@ import duckdb
 import pytest
 from ulid import ULID
 
-from ports.analytics import AnalyticsPort, TrendLimitExceeded
+from ports.analytics import (
+    FIELD_NAME_RULE,
+    AnalyticsFieldRefused,
+    AnalyticsPort,
+    TrendLimitExceeded,
+)
 from schemas.analytics import (
     BaselineRequest,
     CrossFilterDimension,
@@ -363,7 +368,7 @@ async def test_event_filter_value_filters_cannot_smuggle_sql_through_a_field_nam
             bucketing=HistogramBucketing.FIXED_INTERVAL,
             interval_seconds=3600,
         )
-        with pytest.raises(ValueError):
+        with pytest.raises(AnalyticsFieldRefused):
             await adapter.histogram(req, CLEARED)
 
         # The table is still there, which is the assertion that would matter if the guard failed.
@@ -2737,18 +2742,24 @@ async def test_a_total_past_the_decimals_range_is_refused_never_wrapped(
     decimal wraps silently to a negative) and never cut. Either sign. Two of 6 × 10^27 make a total
     the decimal holds but the limit (10^28) refuses: there the adapter's own check alone refuses it,
     with no overflow of the store's to do it instead (rule 15)."""
-    from ports.analytics import AmountTotalOutOfRange
+    from ports.analytics import AMOUNT_TOTAL_RULE, AmountTotalOutOfRange
 
     big = sign * each
+    refusals = []
     async with factory.context([_paid(0, big), _paid(1, big)]) as adapter:
-        with pytest.raises(AmountTotalOutOfRange):
+        with pytest.raises(AmountTotalOutOfRange) as refused:
             await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
+        refusals.append(refused.value)
     async with factory.context([_moved(_at(0), big), _moved(_at(1), big)]) as adapter:
-        with pytest.raises(AmountTotalOutOfRange):
+        with pytest.raises(AmountTotalOutOfRange) as refused:
             await adapter.account_activity(_activity(28, amount="amount"), OFFICIAL)
+        refusals.append(refused.value)
     async with factory.context([_moved(_at(-1), big), _moved(_at(-2), big)]) as adapter:
-        with pytest.raises(AmountTotalOutOfRange):  # the days before the window too
+        with pytest.raises(AmountTotalOutOfRange) as refused:  # the days before the window too
             await adapter.account_activity(_activity(28, amount="amount"), OFFICIAL)
+        refusals.append(refused.value)
+    # The port's words on every adapter (the routes answer them), never the total or an amount.
+    assert [str(r) for r in refusals] == [AMOUNT_TOTAL_RULE] * 3
 
 
 async def test_activity_says_the_first_movement_in_the_window_and_the_last_before_it(
@@ -2849,3 +2860,59 @@ async def test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_r
         await adapter.load_alert_facts([row(3, "open", core + a + b, [])])
         again = await adapter.alert_trend(_alerts(group_by="outcome"), OFFICIAL)
     assert again.total == 0.0
+
+
+# --- A field name that is not one is refused, in the same words, by every adapter ----------------
+
+#: Shaped as a caller sends it: a key of `value_filters`, a dimension's `field`, a trend's split.
+_HOSTILE_FIELD = "item_type'); DROP TABLE events; --"
+
+#: Every way a request names a field the adapter interpolates (each value filter, a categorical
+#: dimension or histogram, a baseline's field, a trend's split and sum, the property a geocode
+#: writes, the amount a frequency or an activity totals). One that is missing here is a call site
+#: an adapter could let reach SQL, or answer with a bare ValueError the routes cannot word.
+_FIELD_CALLS = {
+    "cross_filter value_filters": lambda a, p: a.cross_filter(CrossFilterRequest(
+        filter=_filter(value_filters={_HOSTILE_FIELD: ["x"]}),
+        dimensions=[CrossFilterDimension(name="t", bucketing=HistogramBucketing.FIXED_INTERVAL,
+                                         interval_seconds=3600)]), p),
+    "cross_filter dimension field": lambda a, p: a.cross_filter(CrossFilterRequest(
+        filter=_filter(),
+        dimensions=[CrossFilterDimension(name="c", bucketing=HistogramBucketing.CATEGORICAL,
+                                         field=_HOSTILE_FIELD)]), p),
+    "histogram field": lambda a, p: a.histogram(HistogramRequest(
+        filter=_filter(), bucketing=HistogramBucketing.CATEGORICAL, field=_HOSTILE_FIELD), p),
+    "list_events value_filters": lambda a, p: a.list_events(EventListRequest(
+        filter=_filter(value_filters={_HOSTILE_FIELD: ["x"]})), p),
+    "trend group_by": lambda a, p: a.trend(TrendRequest(
+        filter=_filter(), group_by=_HOSTILE_FIELD), p),
+    "trend measure_field": lambda a, p: a.trend(TrendRequest(
+        filter=_filter(), measure=TrendMeasure.SUM, measure_field=_HOSTILE_FIELD), p),
+    "geocode_events property": lambda a, p: a.geocode_events(GeocodeRequest(
+        filter=_filter(), cells={"geo-1": "cell-1"}, property=_HOSTILE_FIELD), p),
+    "event_frequency amount_property": lambda a, p: a.event_frequency(
+        _frequency(7, amount=_HOSTILE_FIELD), p),
+    "account_activity amount_property": lambda a, p: a.account_activity(
+        _activity(amount=_HOSTILE_FIELD), p),
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("call", sorted(_FIELD_CALLS))
+async def test_a_field_name_that_is_not_one_is_refused_in_the_ports_words(
+    factory: AnalyticsAdapterFactory, call: str
+) -> None:
+    """spec 08's A7: a caller's field name is refused in words, never answered as a bare error and
+    never echoed. Every adapter raises the port's own `AnalyticsFieldRefused`, whose words name the
+    rule (`FIELD_NAME_RULE`) and not what was sent, so the routes answer each the same way."""
+    now = datetime(2026, 4, 2, tzinfo=UTC)
+    events = [_event(occurred_at=now, source_id="acct-a", properties={"item_type": "x"})]
+    async with factory.context(events) as adapter:
+        with pytest.raises(AnalyticsFieldRefused) as refused:
+            await _FIELD_CALLS[call](adapter, CLEARED)
+        assert str(refused.value) == FIELD_NAME_RULE
+        assert "DROP" not in str(refused.value) and _HOSTILE_FIELD not in repr(refused.value)
+        # Nothing was written or dropped on the way to the refusal.
+        ok = HistogramRequest(
+            filter=_filter(), bucketing=HistogramBucketing.FIXED_INTERVAL, interval_seconds=3600
+        )
+        assert (await adapter.histogram(ok, CLEARED)).total == 1

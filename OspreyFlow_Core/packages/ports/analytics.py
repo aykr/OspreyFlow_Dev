@@ -52,20 +52,45 @@ class TrendLimitExceeded(Exception):
         self.cap_kind, self.cap, self.would_be = cap_kind, cap, would_be
 
 
+#: What a field name may be, said whenever one is refused: the rule, never what was sent (spec 08's
+#: A7). Every adapter refuses in these words, so the routes answer each the same way.
+FIELD_NAME_RULE = (
+    "A field to filter, group, sum or write by is named with letters, digits and underscores "
+    "only; one in this request was not, so nothing was read or written."
+)
+
+
+class AnalyticsFieldRefused(ValueError):
+    """A field name a request carries (a `value_filters` key, a dimension's or a histogram's
+    `field`, a trend's `group_by` or `measure_field`, a geocode's `property`, an `amount_property`)
+    that is not a plain identifier: refused before any SQL is built, since a field name is
+    interpolated where values are parameterised. The words are `FIELD_NAME_RULE` and do not carry
+    the name sent, which may be hostile. A `ValueError`, as the adapters' guard always raised."""
+
+    def __init__(self) -> None:
+        super().__init__(FIELD_NAME_RULE)
+
+
 #: Past this, a total of declared amounts is refused (ADR-133 Amendment 10): a decimal of 38 digits,
 #: 9 after the point, holds less than 10^29, and a total is checked short of it.
 AMOUNT_TOTAL_LIMIT = 10**28
 
 
+#: What is said when a total of declared amounts is refused: the limit, never the total or an
+#: amount. Every adapter refuses in these words, so the routes answer each the same way.
+AMOUNT_TOTAL_RULE = (
+    "A total of the declared amount reaches 10^28, past what is counted exactly, so nothing was "
+    "answered. Check the amounts loaded for this case."
+)
+
+
 class AmountTotalOutOfRange(Exception):
     """A frequency's or an activity's total of a declared amount at or past `AMOUNT_TOTAL_LIMIT`
-    (ADR-133 Amendment 10, rule 2): refused whole on every adapter, never wrapped or cut."""
+    (ADR-133 Amendment 10, rule 2): refused whole on every adapter, never wrapped or cut. The words
+    are `AMOUNT_TOTAL_RULE`."""
 
     def __init__(self) -> None:
-        super().__init__(
-            "a total of the declared amount reaches 10^28, past what is counted exactly; nothing "
-            "is answered"
-        )
+        super().__init__(AMOUNT_TOTAL_RULE)
 
 
 def refuse_an_amount_total_out_of_range(*totals: float | None) -> None:

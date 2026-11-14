@@ -35,7 +35,11 @@ from adapters.analytics_duckdb.alert_facts import (
     series_expression,
 )
 from ontology.handling import HandlingScheme
-from ports.analytics import TrendLimitExceeded, refuse_an_amount_total_out_of_range
+from ports.analytics import (
+    AnalyticsFieldRefused,
+    TrendLimitExceeded,
+    refuse_an_amount_total_out_of_range,
+)
 from schemas.analytics import (
     ActivityRequest,
     ActivityResult,
@@ -91,8 +95,10 @@ _SYNC = " SETTINGS mutations_sync = 2"
 
 
 def _safe_field_name(field: str) -> str:
+    """A caller's field name, checked before it is interpolated into SQL; refused in the port's
+    words (`AnalyticsFieldRefused`), which never carry the name sent."""
     if not field.replace("_", "").isalnum() or not field:
-        raise ValueError(f"not a safe field name for a SQL literal: {field!r}")
+        raise AnalyticsFieldRefused
     return field
 
 
