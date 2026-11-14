@@ -101,7 +101,7 @@ admin	refresh	M	done	A refresh keeps the person signed in and where they were (A
 admin	pg	S	done	A deployment's Postgres allows its services' connections at rest (ADR-114 Am 43) (merged 6aa02ff)
 demo	fixes-13nov	S	done	osprey-small, 13 Nov: banner, footer, Home x2, key prompt, one prompt, rail + Help, compact header (orchestrator's deploys from HANDOFF after the lane closed)
 platform	part3	L	building	Part 3: ospreyflow.app beside the GOV.UK demo on one server (ADR-114 Am 44; after v0.5.1's candidate)
-platform-b	v052-superset	M	todo	v0.5.2: Superset on Entra ID, embedded dashboards, the render (ADR-148 Am 9, 11)
+platform-b	v052-superset	M	done	v0.5.2: Superset on Entra ID, embedded dashboards, the render (ADR-148 Am 9, 11)
 admin	v052-identities	M	done	v0.5.2: dashboard identities and report sync on Entra ID (ADR-148 Am 10)
 platform	v052-standin	M	done	v0.5.2: R1's Entra stand-in signs (token, authorize)
 platform-b	v052-r1	L	todo	v0.5.2: R1 on kind with a dashboards check (with platform)
