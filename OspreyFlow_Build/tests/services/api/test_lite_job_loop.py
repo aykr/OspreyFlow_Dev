@@ -49,9 +49,13 @@ def test_register_all_registers_exactly_the_registry() -> None:
     from services.api.worker import JobWorker
     from services.api.worker_main import register_all, registered_job_types
 
+    from services.api.batch_expansion import BatchExpandBindings
+
     worker = JobWorker(None, None, None)  # type: ignore[arg-type]
+    # ADR-151's batch expansion's stores, which nothing here asks anything of.
+    batch = BatchExpandBindings(views=None, investigations=object, datasets=None, jobs=None, audit=None)  # type: ignore[arg-type]
     register_all(worker, ontology=None, scheme=None, valkey=None, analyst_layers=None, alerts=None,  # type: ignore[arg-type]
-                 judgement_store=None)  # fmt: skip
+                 judgement_store=None, batch=batch)  # fmt: skip
     assert set(worker._handlers) == set(registered_job_types())
 
 

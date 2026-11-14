@@ -39073,9 +39073,10 @@ and registers its handlers (`app.py`, "this app process itself does not spin up 
 and `cloud-platform` run the worker image (`harness/cluster.py`, `harness/cloud_platform/profile.yaml`). The
 service inventory's note ("Lite runs the same loop inside the Conduit") is not true of the code. A job
 submitted on `local-lite` today is never run. That is pre-existing and true of every job type
-(`supersede_node`, `resolve_entity_type`, `pattern_match`, `compute_metric`). The orchestrator has given it to
-the admin lane as a fix of its own: the Conduit's lifespan runs the job loop for every stream where no worker
-runs, with the inventory note corrected there (the orchestrator's ruling of 14 November 2026).
+(`supersede_node`, `resolve_entity_type`, `pattern_match`, `compute_metric`). The orchestrator gave it to the
+admin lane as a fix of its own, landed on 14 November 2026: where the render says `OSPREY_JOB_WORKER=conduit`
+(every profile that renders no worker), the Conduit's lifespan runs `worker_main.run_forever` over every
+registered job type, and the inventory note is corrected.
 
 ### Decision
 
@@ -39152,7 +39153,7 @@ runs, with the inventory note corrected there (the orchestrator's ruling of 14 N
      their own level, and `missing` counts the rest without naming them.
 6. **Where it runs: where the job worker runs.** `batch_expand` is registered in `worker_main.register_all`,
    so the worker image runs it in `cluster` and `cloud-platform`, and the Conduit's own loop runs it on
-   `local-lite` once the admin lane's fix lands. Nothing here special-cases it. Every consumer reads the stream
+   `local-lite` (the admin lane's fix). Nothing here special-cases it. Every consumer reads the stream
    through the one consumer group (`workers`), so each job goes to exactly one consumer, even with a Conduit
    and a worker both reading it.
 7. **Audit.**

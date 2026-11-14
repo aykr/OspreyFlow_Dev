@@ -51,23 +51,23 @@ index 0000000..6f3baaa
 +    assert "Narrow it by link type, depth or dates" in batch_expansion._NARROW  # noqa: SLF001
 +    assert "narrow it by link type, depth or dates" in flat
 diff --git a/OspreyFlow_Core/docs/user-guide.md b/OspreyFlow_Core/docs/user-guide.md
-index 7bf7cc7..99cb730 100644
+index 8cb491a..f0a92e4 100644
 --- a/OspreyFlow_Core/docs/user-guide.md
 +++ b/OspreyFlow_Core/docs/user-guide.md
 @@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
  <!-- document-control:begin -->
  ## Document control
  
--**Version 1.57** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
-+**Version 1.58** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+-**Version 1.59** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
++**Version 1.60** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
  
  | Version | Date | What changed |
  | --- | --- | --- |
-+| 1.58 | 2026-11-14 | §5.2: an expansion past the working set's limit may be **run as a batch job** (ADR-151): run on the server as you, saved as a private view of the case, or refused with its figures past a view's own limit of 50,000 nodes and 250,000 links; its result opens as your private view when it is done, and the job carries on with the panel closed. Held by `tests/test_user_guide_batch_expansion.py`. PDF made by the orchestrator at merge. |
++| 1.60 | 2026-11-14 | §5.2: an expansion past the working set's limit may be **run as a batch job** (ADR-151): run on the server as you, saved as a private view of the case, or refused with its figures past a view's own limit of 50,000 nodes and 250,000 links; its result opens as your private view when it is done, and the job carries on with the panel closed. Held by `tests/test_user_guide_batch_expansion.py`. PDF made by the orchestrator at merge. |
+ | 1.59 | 2026-11-14 | §5.5: the fallback's depth line as studio's fix words it, "Only the first 100 matches are listed, and the filters apply to those alone.", shown only where the search found more than 100: the fallback asks one past its depth, so exactly 100 matches is a whole list. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
+ | 1.58 | 2026-11-14 | §5.5: the fallback's paging as studio's fix built it: *Next page* offered only while a further page holds records, and where the search reached the fallback's 100, the last page's line adds, even with a dataset or a group chosen, "Only the first 100 matches are listed: narrow the search to see others." in the Conduit's words. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
  | 1.57 | 2026-11-14 | §5.5: the search results page as v0.5.2's step 3e′ built it (ADR-145 Amendment 15 Part A, spec 02 §2.0c): Enter on the typed words opens it over the view, a suggestion moved to still chosen; the heading and the Conduit's count, a group's own once chosen; the groups, the datasets and dates, *Clear filters*; 20 a page; each result's *Show on graph* (the records it stands for, one that could not be read said) and, for a document, *Open* (the results set aside while it is read over the view); *Back to ‹view›*; the empty line; the Ask line; a search over 200 characters refused with its limit named, never cut, and the Conduit's other refusals in its words; the fallback's one line, its first 100 exact matches, counts always marked incomplete, datasets without counts and no dates. §12: Enter in the top bar's search box. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
- | 1.56 | 2026-11-14 | §7.5: a *Stopped* hotlist or watch says why beside the word, each reason in the Conduit's words (ADR-044 Amendment 1). PDF made by the orchestrator at merge. |
- | 1.55 | 2026-11-14 | §6, Ask & Chat: **Whole case** as v0.5.2's Part D(iii) built it (ADR-098 Amendment 9, ADR-129 Amendment 5, rules-b's wording): the case searched with the question's own words, as you, by names and words, not meaning; a question past 200 characters refused with what to do; a document on the canvas read whole, one elsewhere by its passage; each other record a source, `[S-n]`, selecting its records. Held by `tests/test_user_guide_ask_chat.py`. PDF made by the orchestrator at merge. |
-@@ -326,7 +327,14 @@ held by this…, Set picture… and Mark for suppression; with two selected, onl
+@@ -328,7 +329,14 @@ held by this…, Set picture… and Mark for suppression; with two selected, onl
  to…, Split from… and Find paths to…. In a view, the menu offers only what changes nothing in the
  case. An expansion that would add more than
  **500** nodes asks first, offering one relationship at a time, all of them, or nothing. An expansion
