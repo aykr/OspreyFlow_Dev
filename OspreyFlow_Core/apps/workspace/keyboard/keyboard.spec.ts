@@ -1435,7 +1435,7 @@ test("in an opened view the canvas offers nothing that changes the case, and say
   await page.keyboard.press("Delete");
   await expect(
     page.getByText(
-      "This is a view: nothing in it changes the case. Go back to the case to change it.",
+      "This is a saved view: nothing in it changes the case. Go back to the whole case to change it.",
     ),
   ).toBeVisible();
   expect(writes).toEqual([]);
