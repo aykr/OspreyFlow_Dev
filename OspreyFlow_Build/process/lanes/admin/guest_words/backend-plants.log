@@ -1,38 +1,38 @@
-# backend plants at 3ca9e03
+# backend plants at 1b00778
 == a guest's token value kept where the deployment sets it (every value) (must fail at /assert getattr\(guest, attr\)/): RED at its assertion, 3 failed
-tests/services/api/test_entra_guests.py:232: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
+tests/services/api/test_entra_guests.py:233: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
 E   AssertionError: assert 'OFFICIAL-SENSITIVE' == 'OFFICIAL'
 E     
 E     - OFFICIAL
 E     + OFFICIAL-SENSITIVE
-tests/services/api/test_entra_guests.py:232: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
+tests/services/api/test_entra_guests.py:233: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
 E   AssertionError: assert 'unit-9' == 'unit-2'
 E     
 E     - unit-2
 E     ?      ^
 E     + unit-9
 E     ?      ^
-tests/services/api/test_entra_guests.py:232: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
+tests/services/api/test_entra_guests.py:233: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
 E   AssertionError: assert ['R'] == ['P']
 E     
 E     At index 0 diff: 'R' != 'P'
 E     Use -v to get more diff
-3 failed, 16 deselected in 3.16s
+3 failed, 16 deselected in 2.99s
 == a guest refused in words of its own when a value set here is not set (must fail at /str\(as_guest\.value\) == str\(as_member\.value\)/): RED at its assertion, 3 failed
-tests/services/api/test_entra_guests.py:242: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
+tests/services/api/test_entra_guests.py:245: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
 E   assert "a guest's va...administrator" == 'your clearan...dmin › People'
 E     
 E     - your clearance has not been set in this deployment: ask an administrator to set it in Admin › People
 E     + a guest's values are not set here: ask an administrator
-tests/services/api/test_entra_guests.py:242: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
+tests/services/api/test_entra_guests.py:245: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
 E   assert "a guest's va...administrator" == 'your organis...dmin › People'
 E     
 E     - your organisational unit has not been set in this deployment: ask an administrator to set it in Admin › People
 E     + a guest's values are not set here: ask an administrator
-tests/services/api/test_entra_guests.py:242: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
+tests/services/api/test_entra_guests.py:245: in test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token
 E   assert "a guest's va...administrator" == 'your handlin...dmin › People'
 E     
 E     - your handling codes has not been set in this deployment: ask an administrator to set it in Admin › People
 E     + a guest's values are not set here: ask an administrator
-3 failed, 16 deselected in 2.13s
+3 failed, 16 deselected in 2.27s
 plants: 2, missed: 0
