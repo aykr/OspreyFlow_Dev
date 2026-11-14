@@ -604,7 +604,8 @@ def grants_for(source_key: str, grants: Sequence[str]) -> list[str]:
             mine.append(text)
             continue
         if key not in known:
-            raise SystemExit(f"--grant {text!r}: {key!r} is not a source ({', '.join(sorted(known))})")
+            sources = ", ".join(sorted(known))
+            raise SystemExit(f"--grant {text!r}: {key!r} is not a source ({sources})")
         if key == source_key:
             mine.append(rest)
     return mine

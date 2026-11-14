@@ -65,7 +65,9 @@ def test_each_leak_case_hides_its_record_from_the_part_cleared_and_its_control_r
 
 def test_a_restricted_records_control_is_its_own_units(folder: Path, made: dict[str, Any]) -> None:
     case_records, _people = _world(folder)
-    restricted = [c for c in made["leaks"] if case_records[c["hidden"]].handling.handling_code == "R"]
+    restricted = [
+        c for c in made["leaks"] if case_records[c["hidden"]].handling.handling_code == "R"
+    ]
     assert restricted, "the set has SECRET/R reports of unit-intel-covert"
     assert {c["control"] for c in restricted} == {"m10-cleared-unit-intel-covert"}
 
