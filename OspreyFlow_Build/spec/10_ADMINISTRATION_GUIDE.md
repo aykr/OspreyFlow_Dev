@@ -2937,7 +2937,7 @@ digest. Each release's notes are its section of `CHANGELOG.md`.
 | Your install | How it is updated |
 | --- | --- |
 | Lite, installed from a release tag | `ospreyflow update` (below) |
-| Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so. `start --build` does not rebuild the search index, so where the deployment searches with OpenSearch, rebuild it after the first `start --build` onto v0.5.2: in the deployment's own folder (`~/.ospreyflow/deployments/<name>/`), `docker compose --env-file deployment.env -f compose.yaml exec -T api python -m scripts.rebuild_search_index`, as `apply` runs it; until then search is limited to exact identifiers |
+| Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so. Where the deployment searches with OpenSearch, `start --build` rebuilds the search index from the graph as its last step, as `install` and `update` do. If the rebuild fails it says so: the stack is up, search is limited to exact identifiers, and running `start --build` again rebuilds it |
 | Small | **Not yet by `update`**: its first step, the backup, refuses a deployment on a managed database (section 13). The cloud's own backups protect the data |
 | Small on your own server, installed from a release tag | `ospreyflow update`, as Lite: its backup is written to `<server.backups>/<deployment>/` first |
 | Enterprise | Move the checkout to the release's tag and run the install again: the chart is upgraded in place, every password and account kept |

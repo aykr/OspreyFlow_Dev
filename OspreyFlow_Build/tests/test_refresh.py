@@ -253,8 +253,9 @@ def test_the_chosen_models_are_brought_up_to_date_and_no_secret_changes(repo: Pa
     assert "pull_and_verify qwen2.5:14b-instruct" in services["ollama-models"]["command"][0]
     assert services["ollama"]["command"] == ["serve"]  # the server itself never pulls
     # The new model fetched and waited on first (defect 9); then the proxy, which reads its routing
-    # table at start: restarted after `up`, and waited on.
-    assert _subcommands(run.calls) == ["build", "up", "exec", "up", "restart", "up"]
+    # table at start: restarted after `up`, and waited on. Last, the search index rebuilt, as the
+    # rendered deployment searches with OpenSearch (`test_refresh_search_rebuild.py`).
+    assert _subcommands(run.calls) == ["build", "up", "exec", "up", "restart", "up", "exec"]
     assert run.calls[4][-1] == "litellm"
 
 
@@ -293,7 +294,7 @@ def test_bringing_the_models_up_to_date_twice_changes_nothing_the_second_time(re
     run = Recorder()
     refresh.refresh(repo, run=run, register=Registrar())
     assert {p.name: p.read_bytes() for p in out.iterdir() if p.is_file()} == before
-    assert _subcommands(run.calls) == ["build", "up"]
+    assert _subcommands(run.calls) == ["build", "up", "exec"]  # the search index rebuilt
 
 
 def test_the_glass_settings_are_brought_up_to_date(repo: Path) -> None:
@@ -322,7 +323,7 @@ def test_the_glass_settings_are_brought_up_to_date(repo: Path) -> None:
     written = (out / "glass.json").read_text(encoding="utf-8")
     assert written == render_glass_settings(OspreyConfig.model_validate(raw))
     assert json.loads(written)["marking"] == "OFFICIAL"
-    assert _subcommands(run.calls) == ["build", "up"]
+    assert _subcommands(run.calls) == ["build", "up", "exec"]  # the search index rebuilt
 
 
 def test_the_proxys_routing_table_is_brought_up_to_date_and_the_proxy_restarted(repo: Path) -> None:

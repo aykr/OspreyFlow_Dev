@@ -88,6 +88,7 @@ def test_start_build_pulls_the_bases(
         },
     )
     monkeypatch.setattr(refresh, "_deployment_dir", lambda _root: tmp_path)
+    (tmp_path / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
     refresh.refresh(
         tmp_path, run=lambda argv: calls.append(list(argv)), register=lambda _a: 0
     )
