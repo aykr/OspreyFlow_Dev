@@ -18,7 +18,7 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.36 | 2026-11-14 | Step 5's wording sweep, early part. §1: the third narrow port, `IndexFeedSource`, apart from GraphPort so that no route reaches its unfiltered read (ADR-150). §7.5: the nine writers that read in full, from the code. §7.8: a drawn dataset merged into another, as built (its four steps, who may merge, what follows), no longer *Coming*. §8: list alerts pointed at the user guide. §9: Ask & Chat for Ask the case. Held by `tests/test_guides_ports_and_search.py`, `test_guides_drawn_merge.py` and `test_guide_navigation_words.py`. PDF made by the orchestrator at merge. |
+| 1.36 | 2026-11-14 | Step 5's wording sweep, early part. §1: the third narrow port, `IndexFeedSource`, apart from GraphPort so that no route reaches its unfiltered read (ADR-150). §7.5: the ten writers that read in full, from the code. §7.8 adds who may merge: through the drawing's home case, into a dataset of its unit. §7.8: a drawn dataset merged into another, as built (its four steps, who may merge, what follows), no longer *Coming*. §8: list alerts pointed at the user guide. §9: Ask & Chat for Ask the case. Held by `tests/test_guides_ports_and_search.py`, `test_guides_drawn_merge.py` and `test_guide_navigation_words.py`. PDF made by the orchestrator at merge. |
 | 1.35 | 2026-11-14 | §6.3: where people sign in with Entra ID, a schedule or watched folder runs as the person who set it while they have signed in within the last 24 hours (administration guide §6a.7; ADR-148 Amendment 16). PDF made by the orchestrator at merge. |
 | 1.34 | 2026-11-13 | §6.3: where people sign in with Entra ID (a shared platform), neither a schedule nor a watched folder runs: loads are started by hand (administration guide §6a.7; docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
 | 1.33 | 2026-11-10 | Describes v0.5.0. §3: Releases as built (studio's L1.7), no longer *coming*. |
@@ -541,8 +541,7 @@ element that names no dataset, read by a scoped principal, is withheld. `withhol
 and returns a copy; it changes nothing stored.
 
 **The rule for a writer that reads and writes back.** A writer that reads an element and writes its
-provenance back (a link change, a picture, an extraction's replacement, a resolution, a pipeline run's
-mention, confirming an alert's cited links) would rebuild the element from a withheld, empty list. That would
+provenance back (a link change, a picture, an extraction's replacement, a resolution, a pipeline run's mention, confirming an alert's cited links, and the others listed below) would rebuild the element from a withheld, empty list. That would
 silently drop the stored sources, or be refused by the write guard below. So **a read whose result is
 written back runs inside `ontology.handling.sources_in_full()`**:
 
@@ -558,8 +557,8 @@ The read is still made with the request's principal, so the access filter is app
 before; only the sources are left in. The scope is a context variable, so it holds for the calling task
 alone, and the adapter and its test double honour it. The writers that do this today are `services/api/alert_queue.py`, `services/api/case_gazetteers.py`,
 `services/api/drawn_merge.py`, `services/api/entity_pictures.py`, `services/api/grading.py`,
-`services/api/link_changes.py`, `services/api/pipeline_run.py`, `services/extract/writer.py` and
-`services/resolve/trigger.py`. The
+`services/api/link_changes.py`, `services/api/pipeline_run.py`, `services/extract/writer.py`,
+`services/resolve/trigger.py` and, outside the Conduit, `scripts/build_local_basemap.py` (a gazetteer's load). The
 working set's own writes are covered the same way.
 Never wrap a read whose result goes to the Glass.
 
@@ -793,7 +792,9 @@ layer on its own. Admin → Datasets' screen offers both as a dry run, and after
 an administrator may delete the layer there too (section 9.1); the merge is done only here.
 
 **Merging a drawn dataset into another.** In **4 Runs**, *Merge into a dataset…* is offered for a drawn dataset
-to someone who may merge it: an Author of the target dataset holding `merge_datasets`. It takes four steps.
+to someone who may merge it: an Author of the target dataset holding `merge_datasets`, who reads the drawing
+through its home case (its Author shares the case with them). It is merged only into a dataset of the
+drawing's unit. It takes four steps.
 **1. Map the models**: each drawn type onto a type of the target's live model, or left out, saying why, and a
 retyped type's properties each placed in one of its new type's, or not carried. **2. Match**: the *Looks like a
 loaded item* pairs, read within the target alone, each chosen one written as a proposed match (inferred and scored)
@@ -814,7 +815,7 @@ Studio, **2 Sources → screening lists** imports a list once for the deployment
 its publisher's format, each import that changes its rows a new version, refreshed by hand or on a
 schedule (`load_screening_lists`); each dataset then **subscribes** to the lists its rules read
 (`add_ingest_files`). A list of real people is refused unless this device's real-data exceptions name
-it. How a list raises alerts, through a rule on a screening list, is in the user guide, sections 7.4 to 7.6. A list can also be loaded,
+it. How a list raises alerts, through a rule on a screening list and when the list changes, is in the user guide, sections 7.4 to 7.6 and 7.10. A list can also be loaded,
 whole, from a YAML file on the server:
 
 ```

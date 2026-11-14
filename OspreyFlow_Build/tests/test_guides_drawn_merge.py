@@ -39,34 +39,51 @@ def test_section_7_8_names_the_four_steps_as_the_screen_heads_them() -> None:
     assert "> Merge into a dataset… </" in SCREEN and "In **4 Runs**, *Merge into a dataset…*" in text
 
 
+def merge_routes() -> dict[str, str]:
+    """Each route on a drawing's merge (`/v1/datasets/{dataset_id}/merge…`): its decorator's arguments and its
+    signature, as `app.py` declares them."""
+    found = {}
+    for m in re.finditer(r'@app\.(?:get|post|put|delete)\(\s*"(/v1/datasets/\{dataset_id\}/merge[^"]*)"(.*?)\)\s*\nasync def \w+\((.*?)\)', ROUTES, re.DOTALL):
+        found[m.group(1)] = m.group(2) + " | " + m.group(3)
+    return found
+
+
 def test_section_7_8_says_who_may_merge_as_the_routes_and_service_do() -> None:
-    assert "`merge_datasets` on every route" in ROUTES
-    assert "an Author of the **target** dataset" in SERVICE and "who holds `merge_datasets`" in SERVICE
-    assert "an Author of the target dataset holding `merge_datasets`" in merge_paragraph()
+    """The right on every route; the dataset read as the Studio's (a case of the reader's that reads it); the target
+    of the drawing's own unit, offered and checked again at the merge."""
+    assert "_MERGES = [Depends(require_right(Right.MERGE_DATASETS))]" in ROUTES
+    routes = merge_routes()
+    assert len(routes) >= 4, routes
+    assert [p for p, args in routes.items() if "dependencies=_MERGES" not in args or "StudioDatasetDep" not in args] == []
+    assert "or dataset.owning_unit != drawn.owning_unit" in SERVICE and "or target.owning_unit != drawing.owning_unit" in SERVICE
+    text = merge_paragraph()
+    assert "an Author of the target dataset holding `merge_datasets`, who reads the drawing through its home case" in text
+    assert "It is merged only into a dataset of the drawing's unit." in text
 
 
 def test_the_guides_say_a_match_is_proposed_never_merged_in_storage() -> None:
-    assert "a scored, `inferred` `SAME_AS` (rule 5)" in SERVICE and "nothing is collapsed in storage (rule 6)" in SERVICE
+    """Each match the merge writes is a `SAME_AS` whose provenance `_inferred` makes `INFERRED` (rule 5): a link, so
+    nothing is merged in storage (rule 6)."""
+    inferred = re.search(r"def _inferred\(.*?\) -> Provenance: .*? return Provenance\( state=ProvenanceState\.(\w+),", SERVICE)
+    assert inferred and inferred.group(1) == "INFERRED"
+    assert SERVICE.count("self._inferred(") >= 1 and SERVICE.count("type=SAME_AS,") >= 1
     assert "each chosen one written as a proposed match (inferred and scored) that a person confirms later" in merge_paragraph()
     assert "proposed as scored links for a person to confirm (never merged in storage)" in guide("architecture")
 
 
 def test_section_7_8_says_what_follows_the_merge_as_the_service_does() -> None:
-    for code in ("the drawing's home case reads the target, and its drawn dataset read-only",
-                 "each of its boards becomes a view", "read through each reader's own handling"):  # fmt: skip
-        assert code in SERVICE, code
+    assert "await self.datasets.merge_drawn(" in SERVICE, "the home case reads the target, the drawn dataset read-only"
+    assert "await self.views.merge_boards(record.case_id, record.load_id, drawn)" in SERVICE, "its boards become views"
+    assert "async def view_annotations(" in SERVICE
     text = merge_paragraph()
     assert "Afterwards the drawing's home case reads the target, and the drawn dataset read-only" in text
     assert "each of its boards becomes a view" in text
 
 
-# ---------------------------------------------------------------- developer guide §7.5's writers that read in full
-
-
 def writers_reading_in_full() -> list[str]:
-    """Every module in `services/` that enters `sources_in_full()` (packages/ontology/handling.py)."""
+    """Every module in `services/` and `scripts/` that enters `sources_in_full()` (packages/ontology/handling.py)."""
     return sorted(
-        str(p.relative_to(CORE)) for p in (CORE / "services").rglob("*.py")
+        str(p.relative_to(CORE)) for root in ("services", "scripts") for p in (CORE / root).rglob("*.py")
         if "test" not in p.name and "with sources_in_full()" in p.read_text(encoding="utf-8")
     )  # fmt: skip
 
@@ -74,7 +91,7 @@ def writers_reading_in_full() -> list[str]:
 def named_writers(text: str) -> list[str]:
     m = re.search(r"The writers that do this today are (.*?)\. The working set", text)
     assert m, "developer guide §7.5's writers"
-    return sorted(re.findall(r"`(services/[^`]+\.py)`", m.group(1)))
+    return sorted(re.findall(r"`((?:services|scripts)/[^`]+\.py)`", m.group(1)))
 
 
 def test_section_7_5_names_every_writer_that_reads_in_full() -> None:
@@ -87,4 +104,5 @@ def test_the_writers_check_flags_one_left_out() -> None:
            "`services/extract/writer.py`, `services/resolve/trigger.py`, `services/api/pipeline_run.py` and "
            "`services/api/alert_queue.py`. The working set")  # fmt: skip
     missing = sorted(set(writers_reading_in_full()) - set(named_writers(old)))
-    assert missing == ["services/api/case_gazetteers.py", "services/api/drawn_merge.py", "services/api/grading.py"]
+    assert missing == ["scripts/build_local_basemap.py", "services/api/case_gazetteers.py", "services/api/drawn_merge.py",
+                       "services/api/grading.py"]  # fmt: skip

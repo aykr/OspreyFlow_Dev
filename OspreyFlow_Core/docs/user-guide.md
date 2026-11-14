@@ -19,7 +19,7 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.61 | 2026-11-14 | Step 5's wording sweep, early part. §2: a refresh keeps you signed in and where you were, for the tab alone, forgotten at sign-out (ADR-050 Amendment 3). §3: under GOV.UK, the slim header and phase banner and the one-row context banner on every screen but Home and sign-in (ADR-132 Amendment 8). §5.5: the box's filters as it labels them (Ignore case, Match, Entity types, Only nodes on screen, Reset filters), its more line and its limited line. §6: Ask & Chat for Ask the case. Held by `tests/test_guides_v051_gaps.py`, `test_user_guide_search_results.py` and `test_guide_navigation_words.py`. PDF made by the orchestrator at merge. |
+| 1.61 | 2026-11-14 | Step 5's wording sweep, early part. §2: a refresh keeps you signed in and where you were, for the tab alone, forgotten at sign-out (ADR-050 Amendment 3). §3: under GOV.UK, the slim header and phase banner and the one-row context banner on every screen but Home and sign-in (ADR-132 Amendment 8). §5.5: the box's filters as it labels them (Ignore case, Match, Entity types, Only nodes on screen, Reset filters), its more line, its limited line (a *Starts with* search alone), one character with *Only nodes on screen*, and a *Starts with* search of at most 50 characters where there is an index. §6: Ask & Chat for Ask the case. Held by `tests/test_guides_v051_gaps.py`, `test_user_guide_search_results.py` and `test_guide_navigation_words.py`. PDF made by the orchestrator at merge. |
 | 1.60 | 2026-11-14 | §5.2: an expansion past the working set's limit may be **run as a batch job** (ADR-151): run on the server as you, saved as a private view of the case, or refused with its figures past a view's own limit of 50,000 nodes and 250,000 links; its result opens as your private view when it is done, and the job carries on with the panel closed. Held by `tests/test_user_guide_batch_expansion.py`. PDF made by the orchestrator at merge. |
 | 1.59 | 2026-11-14 | §5.5: the fallback's depth line as studio's fix words it, "Only the first 100 matches are listed, and the filters apply to those alone.", shown only where the search found more than 100: the fallback asks one past its depth, so exactly 100 matches is a whole list. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
 | 1.58 | 2026-11-14 | §5.5: the fallback's paging as studio's fix built it: *Next page* offered only while a further page holds records, and where the search reached the fallback's 100, the last page's line adds, even with a dataset or a group chosen, "Only the first 100 matches are listed: narrow the search to see others." in the Conduit's words. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
@@ -146,10 +146,9 @@ the selection, the map and anything you have typed, stays as it is. If the sign-
 reached, it says so and offers **Try again**.
 
 **Refreshing the page** keeps you signed in and where you were. It asks the sign-in service's own session
-first, without showing you anything, and shows the sign-in page only when that session has ended. Home
-stays Home, a case stays that case on the view it had, and Admin, the Ingest Studio and Rules and
-Monitoring stay themselves; a place your roles do not open is shown as Home. This is kept for the tab
-alone, and **Sign out** forgets it, so the next person to sign in there starts at Home.
+first, without showing you anything, and shows the sign-in page only when that session has ended. Home stays Home, a case stays that case (on the view it had, where that is the graph, the map, the Matrix
+or Figures; on any other view, the Glass's first), and Admin, the Ingest Studio and Rules and Monitoring stay
+themselves; a place your roles do not open is shown as Home. This is kept for the tab alone, and **Sign out** forgets it, so the next person to sign in there does not start where you were.
 
 **Signing out**: the account button at the top right (your name and clearance) has **Sign out**.
 
@@ -454,14 +453,14 @@ it.
 <!-- needs a new capture: shows the rail and banner before ADR-145 Amendment 15 -->
 ![Search: suggestions after two characters](images/user/16-search.png)
 
-Press `/` anywhere (outside a text box) to search. Suggestions start at two characters, across names,
-identifiers and titles; choosing one puts it in the case and draws it with what is near it (three links
+Press `/` anywhere (outside a text box) to search. Suggestions start at two characters (one, with **Only nodes on screen**), across names, identifiers and titles; choosing one puts it in the case and draws it with what is near it (three links
 out), counting first and asking if it is a lot. Cancelling a large draw leaves the chosen node in the case
 on its own. **Filters** narrow them: **Ignore case**; **Match**, *Starts with*, *Contains* or *Exact*;
 **Entity types** (none ticked searches every type); and **Only nodes on screen**. **Reset filters** puts
 them back. When more match than are shown, the box says "Showing the first …; more match. Keep typing to
-narrow." Where the search index cannot answer, the box says so: "Suggestions are limited just now: only the
-exact start of a name or identifier matches." A phone number or account reference is read the same way
+narrow." Where the search index cannot answer a *Starts with* search, the box says so: "Suggestions are limited just
+now: only the exact start of a name or identifier matches." A *Starts with* search is at most 50 characters
+where there is an index, and a longer one is refused: the box says "Suggestions are unavailable." A phone number or account reference is read the same way
 however you type it, so `07700 900640` finds the number held as `+447700900640`.
 
 **The results page.** Press Enter on the words you typed, with no suggestion moved to, and the results

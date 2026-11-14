@@ -42,13 +42,17 @@ def section(text: str, heading: str) -> str:
 
 
 def _literals(path: Path, call: str) -> list[str]:
-    """Every string literal passed as the first argument of `call(...)` in a module, joined as Python joins them."""
+    """Every string passed as the first argument of `call(...)` in a module, joined as Python joins them; an f-string
+    with each value it fills in written "…", as the guides quote one."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     found = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == call:
-            if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                found.append(node.args[0].value)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == call and node.args:
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                found.append(first.value)
+            elif isinstance(first, ast.JoinedStr):
+                found.append("".join(p.value if isinstance(p, ast.Constant) else "…" for p in first.values))
     return found
 
 
@@ -145,9 +149,15 @@ def entra_refusals() -> list[str]:
     return words
 
 
+def refusals_left_out(people: str) -> list[str]:
+    """Each refusal `entra_people.py` raises that §9 does not quote."""
+    folded = re.sub(r"\s+", " ", people)
+    return [w for w in dict.fromkeys(entra_refusals()) if w not in folded]
+
+
 def test_section_9_quotes_each_entra_people_refusal() -> None:
-    people = section(ADMIN, "## 9. People")
-    assert [w for w in entra_refusals() if w not in re.sub(r"\s+", " ", people)] == []
+    assert refusals_left_out(section(ADMIN, "## 9. People")) == []
+    assert "Here … come from Entra ID, and are changed there." in entra_refusals(), "an f-string's refusal is read"
 
 
 def guide_entra_refusals(people: str) -> list[str]:
@@ -178,9 +188,10 @@ def test_the_people_check_flags_a_refusal_the_code_no_longer_raises() -> None:
 
 
 def test_the_people_check_flags_a_refusal_left_out() -> None:
-    first = entra_refusals()[0]
-    people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People")).replace(first, "")
-    assert first not in people
+    """§9 without the f-string's refusal, the one this check could not read before the sweep."""
+    people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People"))
+    planted = people.replace('("Here … come from Entra ID, and are changed there.")', "")
+    assert refusals_left_out(planted) == ["Here … come from Entra ID, and are changed there."]
 
 
 # ---------------------------------------------------------------- the code's numbers

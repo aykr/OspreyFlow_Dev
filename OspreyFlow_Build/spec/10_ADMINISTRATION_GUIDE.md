@@ -1855,9 +1855,9 @@ Added in this guide, beyond ADR-148's own list:
 13. **OpenSearch without fine-grained access control.** Does your security standard accept an OpenSearch
     domain whose access policy admits one IAM role, the namespace's, with no fine-grained access control
     and no OpenSearch users? In its place, OspreyFlow applies each reader's access in its own query to the
-    index: the Conduit adds to every search, before it is sent, a filter that keeps only what the reader's
-    clearance, handling codes and the case's datasets allow, so a result the reader may not see is never
-    returned or counted. If your platform fronts OpenSearch with a proxy that signs for us, say so:
+    index: the Conduit adds to every search, before it is sent, a filter that keeps only what the reader's clearance, handling codes and the case's datasets allow, and
+a document's text only for the unit that holds it, so a result the reader may not see is never returned or
+counted. If your platform fronts OpenSearch with a proxy that signs for us, say so:
     OspreyFlow then sends its requests to it unsigned (`opensearch_signing: none`, section 6a.1). And which
     two private subnets, in two availability zones, may the domain use?
 
@@ -1998,8 +1998,8 @@ its own sign-in page. What a person may do is their **roles**; what they may see
 **Where people sign in with Entra ID** (`cloud-platform`, section 6a.7), Entra holds their accounts,
 and *People and roles* gives them roles, adds them by object id before they first sign in, and
 disables them. What Entra holds is refused here, in words, each followed by "On this deployment
-Entra ID holds people's accounts…": inviting ("People are not invited here."), access ("A person's
-clearance, unit and handling codes are changed in Entra ID."), a sign-in's reset ("A sign-in is
+Entra ID holds people's accounts…": inviting ("People are not invited here."), access ("A person's clearance, unit and handling codes are changed in Entra ID."), a value Entra sends, where
+the administrator fallback is set for another ("Here … come from Entra ID, and are changed there."), a sign-in's reset ("A sign-in is
 reset in Entra ID."), removing ("A person is not removed here: they would return, with no roles, at
 their next sign-in. Disable them instead, or remove them in Entra ID.") and joining ("There is no
 organisation account to join."). **A dashboard identity** is its own Entra app registration, which
@@ -2322,7 +2322,8 @@ engineer attaches rules to pipelines (Checks on load) but does not write them.
 **So a dataset that asks for a second person needs at least two Authors of the case who hold
 `deploy_rules` and open Rules and Monitoring (Analysts)**; with one, a rule there can be tested but never made live.
 
-**Approving influencers.** In the Glass's **Connection strength** view (the top bar's view switch, under **More views**), a version waiting for a second
+**Approving influencers.** In the Glass's **Connection strength** view (the top bar's view switch, under **More views**, or in
+the switch itself for someone offered no other view, as the built-in Administrator is), a version waiting for a second
 person shows what it would put in force, who proposed it and why. Another holder of the right chooses
 **Approve version N**, or **Send it back** with words; its proposer sees the approval withheld and may
 withdraw it. Until a version is approved, the influencers shipped in the weights file are in force.

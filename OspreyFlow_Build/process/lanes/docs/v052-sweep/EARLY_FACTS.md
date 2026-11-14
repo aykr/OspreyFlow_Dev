@@ -37,6 +37,8 @@ Paths are relative to `OspreyFlow_Core/`.
   the indexer alone reads each node as stored, unfiltered, "so that no route, which is given a `GraphPort`, can reach
   the unfiltered read". Access is applied in the query to the index, `services/api/search_access.py`'s
   `index_access_filter`: classification against clearance, handling code, and the case's datasets.
+  - The administration guide's tier section named two narrower ports too; it now names three. `spec/00_ARCHITECTURE.md`
+    still says "Two narrower ports" (line 601): carried for the spec's owner (rule 11).
   - The ports are `GraphPort`, `AnalyticsPort`, `ComputePort` and `ModelPort`, with `MediaStore`, `RecognisePort` and
     `IndexFeedSource` beside them. `BulkGraphLoader` is GraphPort's own bulk path, in `ports/graph.py`.
 - **"PostgreSQL full-text" is not built.**
@@ -45,7 +47,8 @@ Paths are relative to `OspreyFlow_Core/`.
   - Without an index, search is the graph store's exact search (`services/api/search.py`'s `search`, through
     `graph.search_nodes`). The page then says "Search is limited to exact identifiers: this deployment has no search
     index." (`search_service.py`'s `LIMITED_REASONS["no_index"]`).
-  - The architecture guide now says so.
+  - The architecture guide, the administration guide's tier table, Features' Vault card and the overview's Vault
+    chip now say so; the lane review found the last three still saying "or PostgreSQL" for search.
   - **For the platform lane:** `harness/render.py:1826-1827` writes into the rendered `INSTALL.md` that "full-text falls
     back to PostgreSQL", and so does `spec/05_DEPLOYMENT.md` §3's reduced variant. Neither is built.
 - **The suggestions box** (`apps/workspace/src/search/`):
@@ -56,14 +59,23 @@ Paths are relative to `OspreyFlow_Core/`.
     - the more line is "Showing the first ${results.length}; more match. Keep typing to narrow.";
     - `LIMITED_SUGGESTIONS` is shown only when the Conduit answers `limited` (`services/api/search.py`'s
       `SuggestResponse.limited`).
-  - The survey's "50-character limit" is not in the code. `SuggestRequest.query` has a minimum length alone, so the
-    guide gives none.
+  - The 50-character limit **is** in the code, where there is an index: `services/search_index/mapping.py`'s
+    `PREFIX_MAX_CHARS = 50`, refused by `search_index_query.py` ("a suggestion is at most 50 characters", a 422), and
+    the box shows a refusal as "Suggestions are unavailable." (`GlobalSearch.tsx`'s `!response.ok`). This file's
+    first draft said otherwise, from `SuggestRequest.query`'s minimum length alone; the lane review found it.
+  - *Only nodes on screen* starts at one character, and asks the Conduit nothing (`GlobalSearch.tsx`'s
+    `onScreenOnly`).
+  - The limited line is for a *Starts with* search alone: `search_service.py`'s `suggest` sets `limited` only for
+    `request.mode == "starts_with"`; *Contains* and *Exact* always read the graph.
 - **`opensearch_signing`** is `harness/cloud_platform/settings.py`'s `PlatformSettings.opensearch_signing`,
   `Literal["sigv4", "none"]`, `sigv4` by default.
   - `harness/cloud_platform/runbooks.py`'s `_opensearch_needs` words it in the rendered `INSTALL.md`: "no
     fine-grained access control, so there is no user or master password to keep"; with `none`, the platform's proxy
     signs.
   - `services/search_index/client.py` reads `OPENSEARCH_SIGNING`.
+- **What replaces FGAC has four parts**, not three: `index_access_filter` builds `classification`, `handling_code`,
+  `datasets` and `text_unit` (a Document's text only for the unit that holds it). It is given to the results page's
+  search, the box's suggestions and *Whole case*'s search (`search_route`, `suggest_route`, `case_search_with`).
 - **§6a.11's question 13**, an IAM-only OpenSearch access policy without fine-grained access control: a ruling,
   brought to the orchestrator with a recommendation and approved on 14 November with one addition, to name where each
   reader's access is applied instead (`search_access.py`'s `index_access_filter`, given to every search by the route,
@@ -84,10 +96,11 @@ Paths are relative to `OspreyFlow_Core/`.
   - The developer guide §7.8 and the architecture guide §5 said "**Coming:**". They now describe it as built.
 - **The writers that read in full** are every module in `services/` that enters `sources_in_full()`
   (`packages/ontology/handling.py:321`). There are nine: `alert_queue`, `case_gazetteers`, `drawn_merge`,
-  `entity_pictures`, `grading`, `link_changes`, `pipeline_run`, `extract/writer` and `resolve/trigger`. The guide
-  named six.
+  `entity_pictures`, `grading`, `link_changes`, `pipeline_run`, `extract/writer` and `resolve/trigger`, and outside
+  the Conduit `scripts/build_local_basemap.py` (a gazetteer's load). The guide named six.
 - **"How lists raise alerts is rewritten with the alerts journey (coming)":** no such rewrite is planned in the code.
-  A list raises alerts through a rule on a screening list (user guide §7.4 to §7.6), so the line now points there.
+  A list raises alerts through a rule on a screening list, and when it changes (user guide §7.4 to §7.6 and §7.10),
+  so the line now points there.
 
 ## 8. What v0.5.1 shipped that the guides had not said
 
@@ -95,7 +108,8 @@ Paths are relative to `OspreyFlow_Core/`.
   - `App.tsx`'s `signInAtLoad` asks `renewSilently` first, and shows the screen only when the identity provider says
     no.
   - `auth/refreshPlace.ts` keeps the place (home, case, admin, studio, rules) in `sessionStorage`. A place the rights
-    do not offer is kept as Home.
+    do not offer is kept as Home (`placeOnScreen`). Of the Glass's views only `RESTORED_GLASS_VIEWS`, the graph, the
+    map, the Matrix and Figures, are put back; on any other a refresh opens the Glass's first view (the lane review).
   - `auth/userManager.ts`'s `signOut` calls `forgetPlace`.
 - **GOV.UK's slim top** (ADR-132 Amendment 8):
   - `brand/BrandFrame.tsx` draws the header and phase banner `brand-chrome--compact` unless a screen claims the full
@@ -109,7 +123,32 @@ Paths are relative to `OspreyFlow_Core/`.
 
 ## 9. §9's refusals both ways
 
-- `services/api/entra_people.py`'s `_refused(...)` literals are the refusals.
+- `services/api/entra_people.py`'s `_refused(...)` arguments are the refusals, an f-string's among them, read with
+  each value it fills in as "…": "Here … come from Entra ID, and are changed there." (`check_administrator_access`,
+  a value Entra sends, given under the administrator fallback). The first check read plain strings alone and could not
+  see it; it was in no guide, and §9 now quotes it.
 - §9's one sentence ("What Entra holds is refused here, in words, …") now lists only those, and the words each opens
   with ("On this deployment Entra ID holds people's accounts…") are the code's. A refusal the code drops turns the
   test red, as the dashboard identity's did after the code stopped raising it.
+
+## After the lane review
+
+The review's findings, all taken:
+- the false search and port claims left in the administration guide and the sites;
+- the suggestion limits;
+- what a refresh keeps;
+- question 13's fourth part;
+- tests holding a docstring or a comment instead of the code: the merge's right, its `INFERRED` matches and
+  `merge_boards`; the filter's parts; `placeOnScreen`;
+- §9's f-string refusal;
+- §9.6's Administrator;
+- who may merge, the drawing's home case and its unit;
+- the cloud-platform images;
+- the tenth writer;
+- §7.10;
+- the figure's caption and the generated pages read by the navigation test.
+
+Left as they are:
+- *Whole case* in the administration guide's two "Ask & Chat" lines: the engine answers every Read from choice, not
+  only *Whole case*.
+- The tests' copied `fold` and `guide` helpers.

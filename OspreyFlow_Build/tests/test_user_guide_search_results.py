@@ -315,6 +315,7 @@ def test_section_5_5_says_the_fallback_pages_only_while_records_remain_and_where
 # ---------------------------------------------------------------- the suggestions box (step 5's sweep, part 4)
 
 FILTERS = _read(SRC / "search" / "SearchFilters.tsx")
+GLOBAL_RAW = (SRC / "search" / "GlobalSearch.tsx").read_text(encoding="utf-8")
 
 
 def suggestions_text(guide: str = GUIDE) -> str:
@@ -344,10 +345,28 @@ def test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line() -> None:
     assert '{limited && <span className="global-search__limited">{LIMITED_SUGGESTIONS}</span>}' in BOX
     assert "body.limited === true" in BOX
     assert "limited: bool = False" in (API / "search.py").read_text(encoding="utf-8")
-    assert f'Where the search index cannot answer, the box says so: "{limited.group(1)}"' in suggestions_text()
+    assert f'Where the search index cannot answer a *Starts with* search, the box says so: "{limited.group(1)}"' in suggestions_text()
 
 
 def test_section_5_5_gives_the_box_s_two_characters() -> None:
     m = re.search(r"export const SUGGEST_MIN_CHARS = (\d+);", BOX)
     words = {1: "one", 2: "two", 3: "three"}
     assert m and f"Suggestions start at {words[int(m.group(1))]} characters" in suggestions_text()
+
+
+def test_section_5_5_gives_the_box_s_limits_as_the_code_holds_them() -> None:
+    """One character on screen, nothing asked of the Conduit; with an index, a *Starts with* prefix of at most
+    `PREFIX_MAX_CHARS`, a longer one refused with a 422 the box shows as unavailable; the limited line for a
+    *Starts with* the graph answered, never for *Contains* or *Exact*."""
+    assert "// Nothing is asked of the Conduit: the nodes are already here, so one character is enough" in GLOBAL_RAW
+    assert "Suggestions start at two characters (one, with **Only nodes on screen**)" in suggestions_text()
+    mapping = (CORE / "services" / "search_index" / "mapping.py").read_text(encoding="utf-8")
+    limit = re.search(r"^PREFIX_MAX_CHARS = (\d+)$", mapping, re.MULTILINE)
+    query = fold((API / "search_index_query.py").read_text(encoding="utf-8"))
+    assert limit and 'if len(prefix) > PREFIX_MAX_CHARS: ' in query and 'raise ValueError(f"a suggestion is at most {PREFIX_MAX_CHARS} characters")' in query
+    assert 'if (!response.ok) { settle("unavailable", [], false); return; }' in BOX
+    assert '? "Suggestions are unavailable."' in BOX
+    assert (f"A *Starts with* search is at most {limit.group(1)} characters where there is an index, and a longer one "
+            'is refused: the box says "Suggestions are unavailable."') in suggestions_text()  # fmt: skip
+    assert 'update={"source": "graph", "limited": request.mode == "starts_with"}' in SERVICE
+    assert "Where the search index cannot answer a *Starts with* search, the box says so" in suggestions_text()

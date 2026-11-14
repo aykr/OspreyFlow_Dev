@@ -60,8 +60,7 @@ organisation's sign-in, and the cloud's managed services.
 | --- | --- |
 | **The Glass** | The browser workspace: one web application holding the four places (section 4) |
 | **The Conduit** | The API (FastAPI), stateless and horizontally scaled. Every request is checked against the person making it, and access control is applied inside each query to the stores, never after |
-| **The Vault** | The stores: the graph store (ArcadeDB), the analytics database (DuckDB inside the Conduit, or ClickHouse shared by several Conduits), search (OpenSearch; where a deployment has none, `postgres-fulltext`, the graph store's exact search alone, and
-the screen says search is limited to exact identifiers), PostgreSQL, the object store, and the models |
+| **The Vault** | The stores: the graph store (ArcadeDB), the analytics database (DuckDB inside the Conduit, or ClickHouse shared by several Conduits), search (OpenSearch; where a deployment has none, `postgres-fulltext`, the graph store's own reads, and the results page says search is limited to exact identifiers), PostgreSQL, the object store, and the models |
 
 Everything that passes between the Conduit and the Vault crosses one of four typed **ports**. A port
 is a narrow interface (a Python `Protocol`) that everything above it may call and nothing else may.
@@ -80,7 +79,7 @@ Three narrower ports sit beside them: the **media store**, for content files (an
 Azure Blob); the **recognition port**, for the fast named-entity pass (Stanza by default); and the **search
 index feed's source** (`IndexFeedSource`), through which the indexer alone reads each node as stored, unfiltered,
 to build its search document (ADR-150). It is kept apart from GraphPort so that no route can reach that read:
-every route is given a GraphPort and nothing else, and who may see a search result is decided in the query to
+every route is given a GraphPort and no other graph read, and who may see a search result is decided in the query to
 the index, with the same clearance, handling codes and case datasets (ADR-149).
 
 **Gremlin never leaves the Vault.** The Conduit builds the graph store's queries; the Glass never
@@ -110,7 +109,8 @@ server, in your cloud or your own network; Enterprise runs on Kubernetes (EKS or
 and the same acceptance suite serve all three. The administration guide's section 1 compares them.
 A namespace on an organisation's own shared Kubernetes platform is a profile of its own, `cloud-platform`
 (the administration guide's section 6a): the platform's managed services, non-root containers, sign-in
-through the organisation's Entra ID, and a single-copy shape for a proof of concept.
+through the organisation's Entra ID, and a single-copy shape for a proof of concept. There the Conduit's image is built without Java (so no basemap
+is built on the platform), and the second extraction engine, Laurium, has an image of its own.
 
 ## 4. The four places
 

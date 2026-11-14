@@ -19,7 +19,7 @@ is made from the deployment's own schema, and is checked against it on every cha
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 2.10 | 2026-11-14 | Step 5's wording sweep, early part. Navigation as ADR-145 Amendments 12 and 15 built it: §9.6's *Connection strength* and §12's *Reports* in the top bar's view switch (More views for the first), not on the rail; *Ask & Chat* for Ask the case and Questions (§5a.4, §6a.1, §10); *Admin → Operations* for Schedules and runs, its screenshot marked for a new capture; *Admin › People and roles* and *Admin › Dashboard identities* as Admin labels them (the code's quoted words left as the code has them). §6a.1: `opensearch_signing`, `sigv4` or `none`, as the platform settings file holds it. §6a.11's question 13 (the orchestrator's ruling): whether the client's standard accepts an OpenSearch domain admitting one IAM role with no fine-grained access control, and what OspreyFlow does in its place, each reader's access in its own query to the index. The opening and §14 name the `cloud-platform` profile, §14 with a row for a shared-platform namespace (the poc shape by §6a.1; the standard shape's runbooks coming). Held by `tests/test_guide_navigation_words.py`, `test_guides_ports_and_search.py`, `test_guides_v051_gaps.py` and `test_guides_cloud_platform.py` (§9's Entra refusals now held both ways). PDF made by the orchestrator at merge. |
+| 2.10 | 2026-11-14 | Step 5's wording sweep, early part. Navigation as ADR-145 Amendments 12 and 15 built it: §9.6's *Connection strength* and §12's *Reports* in the top bar's view switch (More views for the first), not on the rail; *Ask & Chat* for Ask the case and Questions (§5a.4, §6a.1, §10); *Admin → Operations* for Schedules and runs, its screenshot marked for a new capture; *Admin › People and roles* and *Admin › Dashboard identities* as Admin labels them (the code's quoted words left as the code has them). §1's tiers: search as built (OpenSearch or the graph store's own reads, no PostgreSQL full-text) and three narrower ports, `IndexFeedSource` among them. §9: the refusal of a value Entra sends, under the administrator fallback, quoted. §6a.1: `opensearch_signing`, `sigv4` or `none`, as the platform settings file holds it. §6a.11's question 13 (the orchestrator's ruling): whether the client's standard accepts an OpenSearch domain admitting one IAM role with no fine-grained access control, and what OspreyFlow does in its place, each reader's access in its own query to the index. The opening and §14 name the `cloud-platform` profile, §14 with a row for a shared-platform namespace (the poc shape by §6a.1; the standard shape's runbooks coming). Held by `tests/test_guide_navigation_words.py`, `test_guides_ports_and_search.py`, `test_guides_v051_gaps.py` and `test_guides_cloud_platform.py` (§9's Entra refusals now held both ways). PDF made by the orchestrator at merge. |
 | 2.09 | 2026-11-14 | §6a.7: an admitted guest under the administrator fallback takes the values set with *Access*, never their token's, and the Guests form says which come from where (ADR-148 Amendment 17, line added). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.08 | 2026-11-14 | §9.1: a coming Admin section is plain words with a *Coming* tag, never a link, and a person's actions in *People and roles* sit on a line beneath them (ADR-145 Amendment 16). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.07 | 2026-11-14 | §6a.7: a token of the other version than `token_version` is refused in words naming `requestedAccessTokenVersion` and the setting, and INSTALL step 6's check shows them after the first sign-in (ADR-148 Amendment 18). |
@@ -152,7 +152,7 @@ Three tiers; everything that passes between them crosses one of four typed ports
 | --- | --- |
 | **The Glass** | The browser workspace, one web application with four places: the Glass itself (the graph, map, timeline and figures), the Ingest Studio, Rules and Monitoring, and Admin |
 | **The Conduit** | The API (FastAPI). Every request is checked against the person making it: access control is applied inside each query to the stores, never after |
-| **The Vault** | The stores: the graph store (ArcadeDB), the analytics database (DuckDB inside the Conduit, or ClickHouse shared by several Conduits), search (OpenSearch, or PostgreSQL full-text), PostgreSQL, the object store, and the models |
+| **The Vault** | The stores: the graph store (ArcadeDB), the analytics database (DuckDB inside the Conduit, or ClickHouse shared by several Conduits), search (OpenSearch; where a deployment has none, `postgres-fulltext`, the graph store's own reads, and the results page says search is limited to exact identifiers), PostgreSQL, the object store, and the models |
 
 | Port | What passes through it |
 | --- | --- |
@@ -161,8 +161,10 @@ Three tiers; everything that passes between them crosses one of four typed ports
 | ComputePort | Graph algorithms: centrality, communities, ownership chains |
 | ModelPort | Extraction, vision, transcription and embedding, through the LiteLLM gateway |
 
-Two narrower ports sit beside them: the media store, for content files (an S3-protocol store —
-SeaweedFS or AWS S3 — or Azure Blob), and the recognition port.
+Three narrower ports sit beside them: the media store, for content files (an S3-protocol store —
+SeaweedFS or AWS S3 — or Azure Blob); the recognition port; and the search index feed's source
+(`IndexFeedSource`), through which the indexer alone reads each node as stored, to build its search
+document (ADR-150).
 
 The level 1 diagram names the technology in each component. Versions are those the release pins;
 Small and Enterprise use the cloud's managed services where the diagram's last row says.
@@ -2054,9 +2056,9 @@ Added in this guide, beyond ADR-148's own list:
 13. **OpenSearch without fine-grained access control.** Does your security standard accept an OpenSearch
     domain whose access policy admits one IAM role, the namespace's, with no fine-grained access control
     and no OpenSearch users? In its place, OspreyFlow applies each reader's access in its own query to the
-    index: the Conduit adds to every search, before it is sent, a filter that keeps only what the reader's
-    clearance, handling codes and the case's datasets allow, so a result the reader may not see is never
-    returned or counted. If your platform fronts OpenSearch with a proxy that signs for us, say so:
+    index: the Conduit adds to every search, before it is sent, a filter that keeps only what the reader's clearance, handling codes and the case's datasets allow, and
+a document's text only for the unit that holds it, so a result the reader may not see is never returned or
+counted. If your platform fronts OpenSearch with a proxy that signs for us, say so:
     OspreyFlow then sends its requests to it unsigned (`opensearch_signing: none`, section 6a.1). And which
     two private subnets, in two availability zones, may the domain use?
 
@@ -2197,8 +2199,8 @@ its own sign-in page. What a person may do is their **roles**; what they may see
 **Where people sign in with Entra ID** (`cloud-platform`, section 6a.7), Entra holds their accounts,
 and *People and roles* gives them roles, adds them by object id before they first sign in, and
 disables them. What Entra holds is refused here, in words, each followed by "On this deployment
-Entra ID holds people's accounts…": inviting ("People are not invited here."), access ("A person's
-clearance, unit and handling codes are changed in Entra ID."), a sign-in's reset ("A sign-in is
+Entra ID holds people's accounts…": inviting ("People are not invited here."), access ("A person's clearance, unit and handling codes are changed in Entra ID."), a value Entra sends, where
+the administrator fallback is set for another ("Here … come from Entra ID, and are changed there."), a sign-in's reset ("A sign-in is
 reset in Entra ID."), removing ("A person is not removed here: they would return, with no roles, at
 their next sign-in. Disable them instead, or remove them in Entra ID.") and joining ("There is no
 organisation account to join."). **A dashboard identity** is its own Entra app registration, which
@@ -2525,7 +2527,8 @@ engineer attaches rules to pipelines (Checks on load) but does not write them.
 **So a dataset that asks for a second person needs at least two Authors of the case who hold
 `deploy_rules` and open Rules and Monitoring (Analysts)**; with one, a rule there can be tested but never made live.
 
-**Approving influencers.** In the Glass's **Connection strength** view (the top bar's view switch, under **More views**), a version waiting for a second
+**Approving influencers.** In the Glass's **Connection strength** view (the top bar's view switch, under **More views**, or in
+the switch itself for someone offered no other view, as the built-in Administrator is), a version waiting for a second
 person shows what it would put in force, who proposed it and why. Another holder of the right chooses
 **Approve version N**, or **Send it back** with words; its proposer sees the approval withheld and may
 withdraw it. Until a version is approved, the influencers shipped in the weights file are in force.

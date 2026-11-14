@@ -381,7 +381,7 @@ def org_features():
     b += sec('Architecture', '<p class="intro">Three tiers, separated by four typed ports, so an engine can be swapped without touching what sits above it.</p>' + cards([
         ('The Glass', 'React and TypeScript. Sigma.js and Graphology for the network, MapLibre GL with PMTiles for maps, Apache ECharts for charts, GOV.UK Frontend for the GOV.UK theme.'),
         ('The Conduit', 'Python and FastAPI. The API, access control, entity resolution, extraction and model routing. Stateless.'),
-        ('The Vault', 'ArcadeDB for the graph, DuckDB or ClickHouse for analytics, OpenSearch or PostgreSQL for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage or Azure Blob, LiteLLM as the model gateway.')]) +
+        ('The Vault', 'ArcadeDB for the graph, DuckDB or ClickHouse for analytics, OpenSearch for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage or Azure Blob, LiteLLM as the model gateway.')]) +
         '<p>The four ports are the graph, analytics, compute and models. An adapter is supported once it passes the same conformance suite as every other adapter behind that port.</p>', ident='architecture')
     b += sec('On main, coming with the next release', ul([
         'On the shared-platform profile, scheduled runs: a pipeline\'s schedule and watched folder, rules, watches and list refreshes running as their owner, while the owner has signed in within the last 24 hours.',

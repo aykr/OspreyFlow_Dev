@@ -67,7 +67,7 @@ def test_each_narrow_port_is_a_protocol_the_guides_know() -> None:
 
 
 def test_both_guides_name_every_narrow_port() -> None:
-    for name in ("developer", "architecture"):
+    for name in ("developer", "architecture", "administration"):
         assert unnamed_narrow_ports(guide(name), protocols()) == [], name
 
 
@@ -99,16 +99,24 @@ def full_text_queries() -> list[str]:
     return found
 
 
-def test_the_architecture_guide_gives_search_as_built() -> None:
-    text = guide("architecture")
-    assert full_text_queries() == [], "a PostgreSQL full-text query exists now: the guide must say what it does"
-    assert "PostgreSQL full-text" not in text
+SEARCH_AS_BUILT = (
+    "search (OpenSearch; where a deployment has none, `postgres-fulltext`, the graph store's own reads, and the results "
+    "page says search is limited to exact identifiers)"
+)
+SITES = Path(__file__).resolve().parents[1] / "marketing_site" / "sites"
+
+
+def test_the_guides_and_the_sites_give_search_as_built() -> None:
+    assert full_text_queries() == [], "a PostgreSQL full-text query exists now: the guides must say what it does"
     deployment = (CORE / "packages" / "schemas" / "deployment.py").read_text(encoding="utf-8")
     assert 'POSTGRES_FULLTEXT = "postgres-fulltext"' in deployment
     service = (CORE / "services" / "api" / "search_service.py").read_text(encoding="utf-8")
     assert '"no_index": "Search is limited to exact identifiers: this deployment has no search index."' in service
-    assert ("search (OpenSearch; where a deployment has none, `postgres-fulltext`, the graph store's exact search alone, "
-            "and the screen says search is limited to exact identifiers)") in text  # fmt: skip
+    for name in ("architecture", "administration"):
+        text = guide(name)
+        assert "PostgreSQL full-text" not in text and SEARCH_AS_BUILT in text, name
+    sites = {f: (SITES / f).read_text(encoding="utf-8") for f in ("build.py", "overview.py")}
+    assert [f for f, text in sites.items() if re.search(r"OpenSearch or PostgreSQL", text)] == []
 
 
 def test_the_opensearch_signing_setting_is_given_as_the_settings_file_holds_it() -> None:
@@ -133,12 +141,14 @@ def test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says
     assert "admits that role alone, with no fine-grained access control" in runbook.replace('" "', "")
     assert "two private subnets, in two availability zones" in runbook
     access = fold((CORE / "services" / "api" / "search_access.py").read_text(encoding="utf-8"))
-    for part in ("1. **classification:** no higher than the principal's clearance", "2. **handling code:**",
-                 "3. **datasets:** one of the case's"):  # fmt: skip
-        assert part in access, part
+    # The filter's own parts, as the code builds them (not its docstring): one clause each.
+    parts = re.findall(r'_part\( ?"(\w+)"', access)
+    assert parts == ["classification", "handling_code", "datasets", "text_unit"], parts
+    assert '{"term": {"text_owning_unit": unit}}' in access
     app = (CORE / "services" / "api" / "app.py").read_text(encoding="utf-8")
-    for name in ("search_route", "suggest_route"):  # the results page's and the box's own routes
-        route = next(n for n in ast.walk(ast.parse(app)) if isinstance(n, ast.AsyncFunctionDef) and n.name == name)
+    # Every search the Conduit sends the index: the results page's, the box's and Whole case's (Ask & Chat).
+    for name in ("search_route", "suggest_route", "case_search_with"):
+        route = next(n for n in ast.walk(ast.parse(app)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name)
         assert "access_filter=index_access_filter(index.scheme, principal)" in (ast.get_source_segment(app, route) or ""), name
     text = guide("administration")
     q13 = text[text.index("13. **OpenSearch without fine-grained access control.**") :]
@@ -146,5 +156,5 @@ def test_section_6a11_asks_about_opensearch_without_fine_grained_access_and_says
     assert "admits one IAM role, the namespace's, with no fine-grained access control and no OpenSearch users?" in q13
     assert ("OspreyFlow applies each reader's access in its own query to the index: the Conduit adds to every "
             "search, before it is sent, a filter that keeps only what the reader's clearance, handling codes and "
-            "the case's datasets allow") in q13  # fmt: skip
+            "the case's datasets allow, and a document's text only for the unit that holds it") in q13  # fmt: skip
     assert "(`opensearch_signing: none`, section 6a.1)" in q13 and "two private subnets, in two availability zones" in q13

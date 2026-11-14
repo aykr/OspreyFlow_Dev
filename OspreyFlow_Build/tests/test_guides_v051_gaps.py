@@ -34,13 +34,20 @@ def test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were() ->
     assert "silent: () => renewSilently({ silentRequestTimeoutInSeconds: SILENT_AT_LOAD_TIMEOUT_SECONDS })," in app
     assert 'const PLACES: readonly Place[] = ["home", "case", "admin", "studio", "rules"];' in place
     assert "storage.setItem(REFRESH_PLACE_KEY, place);" in place and "placeAtLoad(" in app and "sessionStorage" in app
-    assert "a place the rights do not offer is kept as Home" in place
+    # A place the rights do not open is kept as Home (`placeOnScreen`); of the Glass's views, only these are put back.
+    assert "if (chosen && (chosen === \"admin\" || !caseOpen) && !offered.includes(chosen)) return \"home\";" in place
+    views = re.search(r'const RESTORED_GLASS_VIEWS: readonly string\[\] = \[([^\]]*)\];', place)
+    assert views and re.findall(r'"(\w+)"', views.group(1)) == ["graph", "map", "matrix", "reports"]
     assert "export function signOut(): Promise<void> { // ADR-050 Amendment 3: the next person in this tab does not start where this one was. forgetPlace(sessionStorage);" in users
     text = guide("user")
     assert "**Refreshing the page** keeps you signed in and where you were. It asks the sign-in service's own session first" in text
-    assert ("Home stays Home, a case stays that case on the view it had, and Admin, the Ingest Studio and Rules and "
-            "Monitoring stay themselves; a place your roles do not open is shown as Home.") in text  # fmt: skip
-    assert "This is kept for the tab alone, and **Sign out** forgets it" in text
+    layout = (SRC / "shell" / "railLayout.ts").read_text(encoding="utf-8")
+    block = layout[layout.index("export const VIEW_LABELS") :]
+    labels = dict(re.findall(r'^\s*(map|matrix|reports): "([^"]+)",$', block[: block.index("};")], re.MULTILINE))
+    assert (f"Home stays Home, a case stays that case (on the view it had, where that is the graph, the {labels['map'].lower()}, "
+            f"the {labels['matrix']} or {labels['reports']}; on any other view, the Glass's first)") in text  # fmt: skip
+    assert "a place your roles do not open is shown as Home." in text
+    assert "This is kept for the tab alone, and **Sign out** forgets it, so the next person to sign in there does not start where you were." in text
 
 
 def test_user_guide_3_says_the_govuk_top_is_slim_and_the_banner_one_row() -> None:
@@ -60,6 +67,10 @@ def test_the_shared_platform_profile_is_named_where_the_modes_are() -> None:
     profiles = (CORE / "cli" / "ospreyflow" / "deployments.py").read_text(encoding="utf-8")
     assert 'PROFILE_NAMES = ("local-lite", "small", "cluster", "cloud-platform")' in profiles
     assert "is a profile of its own, `cloud-platform` (the administration guide's section 6a)" in guide("architecture")
+    profile = (CORE / "harness" / "cloud_platform" / "profile.yaml").read_text(encoding="utf-8")
+    assert "build_args: {CONDUIT_JAVA: omitted}" in profile and "laurium: {dockerfile: services/laurium/Dockerfile" in profile
+    assert ("There the Conduit's image is built without Java (so no basemap is built on the platform), and the second "
+            "extraction engine, Laurium, has an image of its own.") in guide("architecture")  # fmt: skip
     admin = guide("administration")
     assert "and a namespace on an organisation's own shared Kubernetes platform (`cloud-platform`, section 6a)" in admin
 
@@ -67,6 +78,9 @@ def test_the_shared_platform_profile_is_named_where_the_modes_are() -> None:
 def test_section_14_says_how_a_shared_platform_namespace_moves_to_a_new_release() -> None:
     admin = guide("administration")
     assert "**Moving to a new release (poc shape).** There is no separate upgrade runbook." in admin
+    runbook = (CORE / "harness" / "cloud_platform" / "runbooks.py").read_text(encoding="utf-8")
+    install = runbook[runbook.index("def render_install(") : runbook.index("def _seed_section(")]
+    assert 'helm upgrade --install "$RELEASE" "$CHART"' in install, "INSTALL.md moves the release with helm upgrade --install"
     assert "- **The standard shape's runbooks**, as the poc shape has." in admin, "§6a.10 still lists them as coming"
     row = "| A namespace on a shared platform (`cloud-platform`), the poc shape | As section 6a.1's *Moving to a new release* says"
     section = admin[admin.index("## 14. Updates") : admin.index("**Checking for a newer release.**")]

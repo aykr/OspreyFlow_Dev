@@ -24,7 +24,8 @@ SITES_BUILD = Path(__file__).resolve().parents[1] / "marketing_site" / "sites" /
 #: Every place held here, by name.
 GUIDES = {name: DOCS / f"{name}-guide.md" for name in ("administration", "developer", "architecture")}
 #: The names the questions panel had before Amendment 12 renamed it (ADR-145 Amendment 12: "Questions renamed").
-OLD_QUESTIONS_NAMES = ("Ask the case", "Questions panel", "Questions and Ask", "<strong>Questions.</strong>")
+OLD_QUESTIONS_NAMES = ("Ask the case", "Questions panel", "Questions and Ask", "<strong>Questions.</strong>",
+                       "Questions: an answer")  # the last, the questions figure's caption and alternative text
 
 
 def _list(name: str) -> list[str]:
@@ -66,6 +67,9 @@ def places(guides: dict[str, str]) -> dict[str, str]:
 def read_all() -> dict[str, str]:
     found = {name: path.read_text(encoding="utf-8") for name, path in GUIDES.items()}
     found["sites"] = SITES_BUILD.read_text(encoding="utf-8")
+    # The pages as generated too, so a page edited by hand or left unbuilt is read as it would be published.
+    pages = sorted(p for site in ("org", "net") for p in (SITES_BUILD.parent / site).glob("*.html"))
+    found["pages"] = "\n\n".join(p.read_text(encoding="utf-8") for p in pages)
     return found
 
 
@@ -133,8 +137,11 @@ def test_the_views_the_guides_name_are_where_the_layout_puts_them() -> None:
     text = prose(read_all()["administration"])
     assert ("dashboards" in VIEW_SWITCH) and f"the **{VIEW_LABELS['dashboards']}** view (the top bar's view switch)" in text
     assert ("strength" in MORE_VIEWS) and (
-        f"**{VIEW_LABELS['strength']}** view (the top bar's view switch, under **More views**)" in text
+        f"**{VIEW_LABELS['strength']}** view (the top bar's view switch, under **More views**, or in the switch itself "
+        "for someone offered no other view, as the built-in Administrator is)" in text
     )
+    # splitViews: someone offered none of the switch's views has More views' in the switch itself.
+    assert "return main.length > 0 ? { main, more } : { main: more, more: [] };" in LAYOUT
 
 
 # ---------------------------------------------------------------- each check flags what it is for (rule 15)
