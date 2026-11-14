@@ -60,7 +60,7 @@ def run(specs, grep):
 def main() -> int:
     missed = 0
     # The orchestrator's registry change (registry-govuk.diff) is applied in the run copy, as for the gates.
-    if subprocess.run(["git", "diff", "--quiet", "--", ".", ":!OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts"], cwd=ROOT).returncode:
+    if subprocess.run(["git", "diff", "--quiet", "--", "OspreyFlow_Core", ":!OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts"], cwd=ROOT).returncode:
         sys.exit("the tree has changes: commit them first, since each plant is restored from git")
     for name, edits, specs, grep, why in PLANTS:
         touched = set()

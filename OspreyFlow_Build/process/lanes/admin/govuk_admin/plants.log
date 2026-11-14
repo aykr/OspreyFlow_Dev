@@ -1,0 +1,155 @@
+== name in mono, as main drew it (must go red on nameFont): RED
+  1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
+    Expected pattern: not /mono/i
+    Received string:      "\"IBM Plex Mono\", ui-monospace, monospace"
+  2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
+    Expected pattern: not /mono/i
+    Received string:      "\"IBM Plex Mono\", ui-monospace, monospace"
+  3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
+    Expected pattern: not /mono/i
+    Received string:      "\"IBM Plex Mono\", ui-monospace, monospace"
+  3 failed
+== Super user drawn as a button, as main drew it (must go red on actions: a second button): RED
+  1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
+    - Expected  - 0
+    + Received  + 1
+    +   "Super user",
+  2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
+    - Expected  - 0
+    + Received  + 1
+    +   "Super user",
+  3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
+    - Expected  - 0
+    + Received  + 1
+    +   "Super user",
+  3 failed
+== Save drawn as a link (must go red on actions: Save not a button): RED
+  1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
+    - Expected  - 3
+    + Received  + 1
+    - Array [
+    -   "Save",
+    - ]
+    + Array []
+  2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
+    - Expected  - 3
+    + Received  + 1
+    - Array [
+    -   "Save",
+    - ]
+    + Array []
+  3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
+    - Expected  - 3
+    + Received  + 1
+    - Array [
+    -   "Save",
+    - ]
+    + Array []
+  3 failed
+== headers allowed to wrap at desktop width (must go red on headerLines / headerHeight): RED
+  1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
+    Expected: true
+    Received: false
+  2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
+    Expected: true
+    Received: false
+  3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
+    Expected: true
+    Received: false
+  3 failed
+== headers on one line but as tall as main's (must go red on headerHeight): RED
+  1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
+    Expected: <= 37
+    Received:    66.5
+  2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
+    Expected: <= 37
+    Received:    66.5
+  2 failed
+  1 passed (2.2s)
+== People's parts back to h4, as main had them (must go red on headingLevels): RED
+  1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
+    - Expected  - 0
+    + Received  + 1
+    +   4,
+  2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
+    - Expected  - 0
+    + Received  + 1
+    +   4,
+  3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
+    - Expected  - 0
+    + Received  + 1
+    +   4,
+  3 failed
+== the h2s at the browser's size, above the h1 (must go red on h2sNotSmaller): RED
+  1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "Invite a person 19.5px",
+    + ]
+  2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "Invite a person 19.5px",
+    + ]
+  2 failed
+  1 passed (2.2s)
+== a coming item a button again, as main drew it (must go red on comingLinks, and Tab reaching it): RED
+  1) keyboard/admin-look.spec.ts:89:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
+    Expected: 0
+    Received: 2
+  2) keyboard/admin-look.spec.ts:89:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
+    Expected: 0
+    Received: 2
+  3) keyboard/admin-look.spec.ts:89:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
+    Expected: 0
+    Received: 2
+  4) keyboard/admin.spec.ts:713:1 › a coming section says what it will hold in the side list, and Tab passes over it 
+    Expected: focused
+    Received: inactive
+      - Expect "toBeFocused" getByRole('navigation', { name: 'Admin sections' }).getByRole('button', { name: 'Audit', exact: true }) with timeout 5000ms
+      - waiting for getByRole('navigation', { name: 'Admin sections' }).getByRole('button', { name: 'Audit', exact: true })
+           - unexpected value "inactive"
+  4 failed
+== GOV.UK's 16px rule removed (must go red on the s size): RED
+  1) keyboard/admin-look.spec.ts:112:1 › Admin's People in the GOV.UK look: the Design System's scale, and a person at most 60% of their old height 
+    - Expected  - 3
+    + Received  + 3
+    -   16,
+    -   16,
+    -   16,
+    +   19,
+    +   19,
+    +   19,
+  1 failed
+== GOV.UK's 16px rule in every look (must go red on main's sizes, the row links' size): RED
+  1) keyboard/admin-look.spec.ts:121:3 › Admin's People in the dark look keeps main's sizes ────────
+    - Expected  - 2
+    + Received  + 2
+    -   13,
+    -   13,
+    +   12,
+    +   12,
+  2) keyboard/admin-look.spec.ts:121:3 › Admin's People in the light look keeps main's sizes ───────
+    - Expected  - 2
+    + Received  + 2
+    -   13,
+    -   13,
+    +   12,
+    +   12,
+  2 failed
+== a person's actions stacked one per line, as main's actions cell (must go red on the row bounds): RED
+  1) keyboard/admin-look.spec.ts:112:1 › Admin's People in the GOV.UK look: the Design System's scale, and a person at most 60% of their old height 
+    Expected: <= 160.2
+    Received:    277
+  2) keyboard/admin-look.spec.ts:121:3 › Admin's People in the dark look keeps main's sizes ────────
+    Expected: <= 142
+    Received:    265
+  3) keyboard/admin-look.spec.ts:121:3 › Admin's People in the light look keeps main's sizes ───────
+    Expected: <= 142
+    Received:    265
+  3 failed
+plants: 11, missed: 0
