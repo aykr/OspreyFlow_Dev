@@ -19,7 +19,7 @@ is made from the deployment's own schema, and is checked against it on every cha
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 2.10 | 2026-11-14 | Step 5's wording sweep. The freeze's last features: the search index rebuilt from the graph wherever OpenSearch is searched, on install (§4's step 4), on update (§14) and by `INSTALL.md`'s Job (§6a.1; ADR-150 Amendment 2); §6a.11 question 11 counting the reporting registrations; the install test planned for the route's step 6. §6a.2: the poc shape's tables as its manifest prints them. Then the early part. Navigation as ADR-145 Amendments 12 and 15 built it: §9.6's *Connection strength* and §12's *Reports* in the top bar's view switch (More views for the first), not on the rail; *Ask & Chat* for Ask the case and Questions (§5a.4, §6a.1, §10); *Admin → Operations* for Schedules and runs, its screenshot marked for a new capture; *Admin › People and roles* and *Admin › Dashboard identities* as Admin labels them (the code's quoted words left as the code has them). §1's tiers: search as built (OpenSearch or the graph store's own reads, no PostgreSQL full-text) and three narrower ports, `IndexFeedSource` among them. §9: the refusal of a value Entra sends, under the administrator fallback, quoted. §9's "No administrator can give a missing clearance or unit" qualified by the poc shape's administrator fallback. §6a.1: `opensearch_signing`, `sigv4` or `none`, as the platform settings file holds it. §6a.11's question 13 (the orchestrator's ruling): whether the client's standard accepts an OpenSearch domain admitting one IAM role with no fine-grained access control, and what OspreyFlow does in its place, each reader's access in its own query to the index. The opening and §14 name the `cloud-platform` profile, §14 with a row for a shared-platform namespace (the poc shape by §6a.1; the standard shape's runbooks coming). Held by `tests/test_guide_navigation_words.py`, `test_guides_ports_and_search.py`, `test_guides_v051_gaps.py` and `test_guides_cloud_platform.py` (§9's Entra refusals now held both ways). PDF made by the orchestrator at merge. |
+| 2.10 | 2026-11-14 | Step 5's wording sweep. The freeze's last features: the search index rebuilt from the graph wherever OpenSearch is searched, on install (§4's step 4), on update (§14) and by `INSTALL.md`'s Job (§6a.1; ADR-150 Amendment 2); §6a.11 question 11 counting the reporting registrations; §14, `start --build` and the index rebuilt by hand. §6a.2: the poc shape's tables as its manifest prints them. Then the early part. Navigation as ADR-145 Amendments 12 and 15 built it: §9.6's *Connection strength* and §12's *Reports* in the top bar's view switch (More views for the first), not on the rail; *Ask & Chat* for Ask the case and Questions (§5a.4, §6a.1, §10); *Admin → Operations* for Schedules and runs, its screenshot marked for a new capture; *Admin › People and roles* and *Admin › Dashboard identities* as Admin labels them (the code's quoted words left as the code has them). §1's tiers: search as built (OpenSearch or the graph store's own reads, no PostgreSQL full-text) and three narrower ports, `IndexFeedSource` among them. §9: the refusal of a value Entra sends, under the administrator fallback, quoted. §9's "No administrator can give a missing clearance or unit" qualified by the poc shape's administrator fallback. §6a.1: `opensearch_signing`, `sigv4` or `none`, as the platform settings file holds it. §6a.11's question 13 (the orchestrator's ruling): whether the client's standard accepts an OpenSearch domain admitting one IAM role with no fine-grained access control, and what OspreyFlow does in its place, each reader's access in its own query to the index. The opening and §14 name the `cloud-platform` profile, §14 with a row for a shared-platform namespace (the poc shape by §6a.1; the standard shape's runbooks coming). Held by `tests/test_guide_navigation_words.py`, `test_guides_ports_and_search.py`, `test_guides_v051_gaps.py` and `test_guides_cloud_platform.py` (§9's Entra refusals now held both ways). PDF made by the orchestrator at merge. |
 | 2.09 | 2026-11-14 | §6a.7: an admitted guest under the administrator fallback takes the values set with *Access*, never their token's, and the Guests form says which come from where (ADR-148 Amendment 17, line added). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.08 | 2026-11-14 | §9.1: a coming Admin section is plain words with a *Coming* tag, never a link, and a person's actions in *People and roles* sit on a line beneath them (ADR-145 Amendment 16). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.07 | 2026-11-14 | §6a.7: a token of the other version than `token_version` is refused in words naming `requestedAccessTokenVersion` and the setting, and INSTALL step 6's check shows them after the first sign-in (ADR-148 Amendment 18). |
@@ -530,10 +530,11 @@ basemap, which demo packs — then (`--starter <theme>-<domain>` fills these in 
 3. starts the deployment and waits until every service is healthy and the extraction model has
    downloaded (it says which, and its size: `qwen2.5:7b-instruct`, about 4.7 GB, or the 14b on a GPU,
    about 9 GB), so Ask works as soon as the install says it is done;
-4. where the deployment searches with OpenSearch (`components.search: opensearch`, the default),
+4. makes the demo accounts (unless `--no-demo-accounts`);
+5. where the deployment searches with OpenSearch (`components.search: opensearch`, the default),
    rebuilds the search index from the graph, so search answers from the index at once; a rebuild that
    fails fails the install, saying so;
-5. makes the demo accounts (unless `--no-demo-accounts`) and loads the chosen demo packs.
+6. loads the chosen demo packs.
 
 It ends by saying the address and that the sign-in details are in `deployment.env`.
 
@@ -1112,8 +1113,7 @@ with the render to install.
 answers: the checks of the tools and rights, the Terraform's pull request, the unpinned render and
 the push, the pinned render, `helm upgrade --install`, then, where the deployment searches with
 OpenSearch, the search index rebuilt from the graph by a Job once the Conduit and the workers are rolled out
-(on a fresh install and on every upgrade; the step fails, naming the Job, if it has not started in five
-minutes or finished in 30), the sign-in check (and the way back in when
+(on a fresh install and on every upgrade; the step fails, naming the Job and deleting it, if the Job fails, or has not started in five minutes or finished in 30), the sign-in check (and the way back in when
 nobody can manage people, section 6a.7), and the Glass's health. `DECOMMISSION.md` removes it: a
 last backup, `helm uninstall`, the claims and our Secret, the buckets and repositories emptied, and
 the backups bucket and its key by a choice with no default: its step 7 refuses until it is given
@@ -1162,7 +1162,7 @@ the deployment onto the new release's images and values. In order:
    that the Conduit reads Entra's settings, and section 7's `/healthz` through the Glass. Then start the Conduit and the workers again at the copy counts noted in
    step 1, if the install has not.
 
-**What will check it.** v0.5.2's install test, planned for 16 November 2026 on a kind cluster (route step 6), is to
+**What will check it.** v0.5.2's install test, planned before its release, on a kind cluster, is to
 install v0.5.1, then the candidate by these steps over it, and check that the data made before the
 upgrade is still there. It has not run yet. **Going back to the previous release** (installing its copy again the same way and
 restoring step 1's backup) **has not been rehearsed**: until it has, treat step 1's backup as the way
@@ -1274,9 +1274,9 @@ memory limits must be larger, or pods are left unscheduled; in the standard shap
 
 **The poc shape, from its manifest.** The poc shape's containers, Jobs, images, managed services, app registrations
 and egress, as `python -m harness.cloud_platform.manifest tables` prints them from
-`harness/cloud_platform/poc_manifest.yaml`, the one list the render is checked against (`manifest check`). These
-tables are that output, put in by `python -m tests.test_guide_poc_manifest --write` and checked against it on
-every change; an entry marked *pending* is one the release adds that is not yet rendered.
+`harness/cloud_platform/poc_manifest.yaml`, the one list the render is checked against (`manifest check`). They list the poc shape with reporting on (Superset and the report sync), so their totals are above the table
+before them, which leaves reporting out. These tables are that output, checked against it on every change; an
+entry marked *pending* is one the release adds that is not yet rendered.
 
 <!-- manifest:begin -->
 
@@ -3145,7 +3145,7 @@ digest. Each release's notes are its section of `CHANGELOG.md`.
 | Your install | How it is updated |
 | --- | --- |
 | Lite, installed from a release tag | `ospreyflow update` (below) |
-| Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so |
+| Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so. `start --build` does not rebuild the search index, so where the deployment searches with OpenSearch, rebuild it after the first `start --build` onto v0.5.2: in the deployment's own folder (`~/.ospreyflow/deployments/<name>/`), `docker compose --env-file deployment.env -f compose.yaml exec -T api python -m scripts.rebuild_search_index`, as `apply` runs it; until then search is limited to exact identifiers |
 | Small | **Not yet by `update`**: its first step, the backup, refuses a deployment on a managed database (section 13). The cloud's own backups protect the data |
 | Small on your own server, installed from a release tag | `ospreyflow update`, as Lite: its backup is written to `<server.backups>/<deployment>/` first |
 | Enterprise | Move the checkout to the release's tag and run the install again: the chart is upgraded in place, every password and account kept |

@@ -338,13 +338,16 @@ def test_section_5_5_names_the_box_s_filters_as_the_box_labels_them() -> None:
 def test_section_5_5_quotes_the_box_s_more_line_and_its_limited_line() -> None:
     more = re.search(r"\? `(Showing the first \$\{results\.length\}; more match\. Keep typing to narrow\.)`", BOX)
     assert more and f'the box says "{_template(more.group(1))}"' in suggestions_text()
-    limited = re.search(r'export const LIMITED_SUGGESTIONS = "([^"]+)";', BOX)
-    assert limited, "GlobalSearch.tsx's LIMITED_SUGGESTIONS"
-    # Shown only when the Conduit says the suggestions are limited: answered by the graph for want of the index.
-    assert '{limited && <span className="global-search__limited">{LIMITED_SUGGESTIONS}</span>}' in BOX
-    assert "body.limited === true" in BOX
+    lines = dict(re.findall(r'(no_index|unreachable|catching_up|unknown):\s*"([^"]+)",', BOX))
+    assert set(lines) == {"no_index", "unreachable", "catching_up", "unknown"}, "GlobalSearch.tsx's LIMITED_SUGGESTIONS"
+    # Shown only when the Conduit says the suggestions are limited, in the words for why.
+    assert '{limited && <span className="global-search__limited">{LIMITED_SUGGESTIONS[limited]}</span>}' in BOX
+    assert 'const why = body.limited === true ? (body.limited_why ?? "unknown") : null;' in BOX
     assert re.search(r"^    limited: bool = False$", (API / "search.py").read_text(encoding="utf-8"), re.MULTILINE)
-    assert f'Where the search index cannot answer a *Starts with* search, the box says so: "{limited.group(1)}"' in suggestions_text()
+    text = suggestions_text()
+    assert f'Where the search index cannot answer a *Starts with* search, the box says why: "{lines["no_index"]}"' in text
+    assert all(lines[w].startswith("Suggestions are limited just now") for w in ("unreachable", "catching_up"))
+    assert "or, while the index cannot be reached or catches up with recent changes, that suggestions are limited just now." in text
 
 
 def test_section_5_5_gives_the_box_s_two_characters() -> None:
@@ -355,7 +358,7 @@ def test_section_5_5_gives_the_box_s_two_characters() -> None:
 
 def test_section_5_5_gives_the_box_s_limits_as_the_code_holds_them() -> None:
     """One character on screen, nothing asked of the Conduit; with an index, a *Starts with* prefix of at most
-    `PREFIX_MAX_CHARS`, a longer one refused with a 422 the box shows as unavailable; the limited line for a
+    `PREFIX_MAX_CHARS`, a longer one refused in the Conduit's own words, which the box shows; the limited line for a
     *Starts with* the graph answered, never for *Contains* or *Exact*."""
     # On screen, the nodes are matched in the Glass before the two-character check is reached, and nothing is asked.
     on_screen = BOX.index("if (using.onScreenOnly) {")
@@ -365,10 +368,28 @@ def test_section_5_5_gives_the_box_s_limits_as_the_code_holds_them() -> None:
     mapping = (CORE / "services" / "search_index" / "mapping.py").read_text(encoding="utf-8")
     limit = re.search(r"^PREFIX_MAX_CHARS = (\d+)$", mapping, re.MULTILINE)
     query = fold((API / "search_index_query.py").read_text(encoding="utf-8"))
-    assert limit and 'if len(prefix) > PREFIX_MAX_CHARS: ' in query and 'raise ValueError(f"a suggestion is at most {PREFIX_MAX_CHARS} characters")' in query
-    assert 'if (!response.ok) { settle("unavailable", [], false); return; }' in BOX
-    assert '? "Suggestions are unavailable."' in BOX
-    assert (f"A *Starts with* search is at most {limit.group(1)} characters where there is an index, and a longer one "
-            'is refused: the box says "Suggestions are unavailable."') in suggestions_text()  # fmt: skip
-    assert 'update={"source": "graph", "limited": request.mode == "starts_with"}' in SERVICE
-    assert "Where the search index cannot answer a *Starts with* search, the box says so" in suggestions_text()
+    refusal = 'raise ValueError(f"a suggestion is at most {PREFIX_MAX_CHARS} characters")'
+    assert limit and "if len(prefix) > PREFIX_MAX_CHARS: " in query and refusal in query
+    # The route sends the words as the 422's detail, and the box shows a 422's words.
+    assert "except ValueError as exc: raise HTTPException(status_code=422, detail=str(exc)) from exc" in fold(
+        (API / "app.py").read_text(encoding="utf-8")
+    )
+    assert "const detail = response.status === 422 ? await refusalWords(response) : null;" in BOX
+    assert 'settle(detail ? "refused" : "unavailable", [], false);' in BOX
+    assert 'outcome === "refused" && refusal ? refusal' in BOX
+    assert (f"A *Starts with* search is at most {limit.group(1)} characters where there is an index; a longer one is "
+            f'refused in the Conduit\'s words, "a suggestion is at most {limit.group(1)} characters".') in suggestions_text()  # fmt: skip
+    assert 'limited = request.mode == "starts_with"' in SERVICE
+    assert "Where the search index cannot answer a *Starts with* search, the box says why" in suggestions_text()
+
+
+def test_section_5_5_says_the_groups_count_their_own_records_as_the_page_does() -> None:
+    """K (the owner, 14 November 2026): each group counts its own records, so All need not be their sum, said where
+    there is more than one group."""
+    assert "{counts && counts.groups.length > 1 && ( <p" in PAGE
+    assert ("Each group counts its own records, and a record can be in more than one, so All need not be the groups "
+            "added up.") in PAGE  # fmt: skip
+    text = results_text()
+    assert ("Each group counts its own records, and a record can be in more than one (a document is both a Document and "
+            "*Mentioned in documents*), so **All** need not be the groups added up; the page says so where there is "
+            "more than one group.") in text  # fmt: skip

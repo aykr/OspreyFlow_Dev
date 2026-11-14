@@ -329,10 +329,11 @@ basemap, which demo packs — then (`--starter <theme>-<domain>` fills these in 
 3. starts the deployment and waits until every service is healthy and the extraction model has
    downloaded (it says which, and its size: `qwen2.5:7b-instruct`, about 4.7 GB, or the 14b on a GPU,
    about 9 GB), so Ask works as soon as the install says it is done;
-4. where the deployment searches with OpenSearch (`components.search: opensearch`, the default),
+4. makes the demo accounts (unless `--no-demo-accounts`);
+5. where the deployment searches with OpenSearch (`components.search: opensearch`, the default),
    rebuilds the search index from the graph, so search answers from the index at once; a rebuild that
    fails fails the install, saying so;
-5. makes the demo accounts (unless `--no-demo-accounts`) and loads the chosen demo packs.
+6. loads the chosen demo packs.
 
 It ends by saying the address and that the sign-in details are in `deployment.env`.
 
@@ -911,8 +912,7 @@ with the render to install.
 answers: the checks of the tools and rights, the Terraform's pull request, the unpinned render and
 the push, the pinned render, `helm upgrade --install`, then, where the deployment searches with
 OpenSearch, the search index rebuilt from the graph by a Job once the Conduit and the workers are rolled out
-(on a fresh install and on every upgrade; the step fails, naming the Job, if it has not started in five
-minutes or finished in 30), the sign-in check (and the way back in when
+(on a fresh install and on every upgrade; the step fails, naming the Job and deleting it, if the Job fails, or has not started in five minutes or finished in 30), the sign-in check (and the way back in when
 nobody can manage people, section 6a.7), and the Glass's health. `DECOMMISSION.md` removes it: a
 last backup, `helm uninstall`, the claims and our Secret, the buckets and repositories emptied, and
 the backups bucket and its key by a choice with no default: its step 7 refuses until it is given
@@ -961,7 +961,7 @@ the deployment onto the new release's images and values. In order:
    that the Conduit reads Entra's settings, and section 7's `/healthz` through the Glass. Then start the Conduit and the workers again at the copy counts noted in
    step 1, if the install has not.
 
-**What will check it.** v0.5.2's install test, planned for 16 November 2026 on a kind cluster (route step 6), is to
+**What will check it.** v0.5.2's install test, planned before its release, on a kind cluster, is to
 install v0.5.1, then the candidate by these steps over it, and check that the data made before the
 upgrade is still there. It has not run yet. **Going back to the previous release** (installing its copy again the same way and
 restoring step 1's backup) **has not been rehearsed**: until it has, treat step 1's backup as the way
@@ -1073,9 +1073,9 @@ memory limits must be larger, or pods are left unscheduled; in the standard shap
 
 **The poc shape, from its manifest.** The poc shape's containers, Jobs, images, managed services, app registrations
 and egress, as `python -m harness.cloud_platform.manifest tables` prints them from
-`harness/cloud_platform/poc_manifest.yaml`, the one list the render is checked against (`manifest check`). These
-tables are that output, put in by `python -m tests.test_guide_poc_manifest --write` and checked against it on
-every change; an entry marked *pending* is one the release adds that is not yet rendered.
+`harness/cloud_platform/poc_manifest.yaml`, the one list the render is checked against (`manifest check`). They list the poc shape with reporting on (Superset and the report sync), so their totals are above the table
+before them, which leaves reporting out. These tables are that output, checked against it on every change; an
+entry marked *pending* is one the release adds that is not yet rendered.
 
 <!-- manifest:begin -->
 
@@ -2934,7 +2934,7 @@ digest. Each release's notes are its section of `CHANGELOG.md`.
 | Your install | How it is updated |
 | --- | --- |
 | Lite, installed from a release tag | `ospreyflow update` (below) |
-| Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so |
+| Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so. `start --build` does not rebuild the search index, so where the deployment searches with OpenSearch, rebuild it after the first `start --build` onto v0.5.2: in the deployment's own folder (`~/.ospreyflow/deployments/<name>/`), `docker compose --env-file deployment.env -f compose.yaml exec -T api python -m scripts.rebuild_search_index`, as `apply` runs it; until then search is limited to exact identifiers |
 | Small | **Not yet by `update`**: its first step, the backup, refuses a deployment on a managed database (section 13). The cloud's own backups protect the data |
 | Small on your own server, installed from a release tag | `ospreyflow update`, as Lite: its backup is written to `<server.backups>/<deployment>/` first |
 | Enterprise | Move the checkout to the release's tag and run the install again: the chart is upgraded in place, every password and account kept |

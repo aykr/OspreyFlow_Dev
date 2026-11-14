@@ -194,8 +194,33 @@ for admin.
     `python -m tests.test_guide_poc_manifest --write` and held to it byte for byte.
   - The per-shape table stays, held by the sizing tests: the manifest covers the poc shape alone.
 - **D7:** waits for step 6 (the install test).
-- **D1 to D4, D6 and D8:** done, as the checklist gives them.
+- **D1 to D4:** done. **D6:** 4b and 4c done; 4d is not ruled. **D8:** done in part (AG 2.00); the rest is part 4's.
 - **R7:** step 1 is built. `GlassCanvas.tsx`'s *Mark for suppression* and *Remove suppression mark*; marks in their
   own table, never a graph write (`services/api/suppression.py`); listed in Explore with who, when and why.
   - Step 2, the suppression taking effect through ingest, is not built: nothing in `services/ingest` suppresses.
   - User guide §5.2 says so. The ruling's three questions went to the orchestrator for the owner.
+
+### After the third review (14 November, evening)
+
+Fixed:
+- R7's paragraph said "with your reason" and that *Remove suppression mark* takes the mark off. The canvas sends
+  "Marked from the canvas" and asks for no reason, and its marks are its own session's (`suppressionMarks` starts
+  empty and is never read back), so after a reload the menu offers the mark again. The guide now says what is
+  built; spec 02 §9.5 and ADR-046 say the marker is not built, and CARRIES carries both for the case lane.
+- Case-b's line for the menu's new label ("Mark for suppression (hides nothing yet)", on main since its merge) is
+  folded into the same paragraph, held to the label as the code gives it.
+- 3h's "follows the next time you expand it": only a snapshot (a reload) brings every cluster; an expansion brings
+  those its new records touch.
+- `start --build` does not rebuild the index (`scripts/refresh.py`): §14's row says how to, and CARRIES has it for
+  platform.
+- 3f′'s limits: the Editor level, the expand right, the progress words and the ten minutes.
+- The install's order (the demo accounts before the rebuild).
+- The Job's failure.
+- The manifest tables' reporting.
+- The install test's date, with "route step 6", out of the guide.
+- After main's suggest-fixes (ADR-059 Amendment 2), §5.5's limited line gives its reason, and a 422 is shown in the
+  Conduit's words ("a suggestion is at most 50 characters"); K, the results page's per-group line, is in §5.5.
+- The tests read code, not comments: the Job's `seq 60` × `sleep 5`, the add path's `_reader_clusters`, the store's
+  table and its one graph read, update's `try` that rolls back, and `INSTALL.md`'s use of `entra_registrations`.
+
+Left: the administration guide has no section on what the job worker runs, where batch expansions would be named.
