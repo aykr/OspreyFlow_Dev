@@ -38835,10 +38835,15 @@ is not M6's steady state. **No route removes a board or its items, so step 4 lea
 nodes (OFFICIAL Persons, each labelled `M6 <unique>`) in B's case**; they are synthetic, and B's case is a measurement
 load. M10 is the live file's pass-or-fail case, `measure_search.measure_leaks`. Each of its cases is a query, as the
 part-cleared principal, that matches a record they may not see. The record's ids and distinguishing words must appear
-nowhere in the answer (results, merged entities, passages, suggestions, labels, filters), the totals and group counts
-must be those of what they may see where the case gives them, and the answer must be the index's. **The control:** the
-same request as the case's control must name the hidden record, or the case reaches nothing hidden and fails as
-proving nothing; a case whose control is missing or not given fails the same way, never skips. **There is one control
+nowhere in the answer (results, merged entities, passages, suggestions, labels, filters; not its echo of the query
+sent, which is what the caller asked, `_answer_strings`), the totals and group counts must be those of what they may
+see where the case gives them, and the answer must be the index's. **The control:** the same request as the case's
+control must name the hidden record on page 1, or the case reaches nothing hidden and proves nothing: it is reported
+apart as indeterminate, never a pass and never a leak, and a file whose controls reach their record in fewer than 90%
+of its cases is unmeasured (`REACHED_AT_LEAST`; the orchestrator's ruling of 14 November 2026, on rules' first M10
+results, where every failure was the echo, a word visible records also hold, or an unreached control). A case whose
+control is missing, not given or answers an error fails, never skips; any leak fails M10, whatever share is reached.
+**There is one control
 per unit owning an R source**, `m10-cleared-<unit>` (SECRET, code R, that unit, granted every case), and each case names
 its own (`control`, the control subject's name; a SECRET record without R may name any): a principal holds one unit, and a restricted code is read only in its own unit, so no one
 principal could be the control for every unit's records (found building step 4's runner; the orchestrator's ruling, 14

@@ -143,7 +143,10 @@ def test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal() -
         cases=[json.loads(line) for line in lines if line.strip()],
     )
     _record("M10", found)
-    assert found["verdict"] == "met", "M10: " + "; ".join(found["failures"][:20])
+    assert found["verdict"] == "met", (
+        f"M10 {found['verdict']}, {found['reached']} of {found['cases']} controls reached: "
+        + "; ".join((found["failures"] or found["indeterminate"])[:20])
+    )
 
 
 def test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so() -> None:

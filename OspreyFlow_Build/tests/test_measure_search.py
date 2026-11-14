@@ -71,7 +71,8 @@ class _Conduit(BaseHTTPRequestHandler):
             answer = self._fallback_answer()
         elif self.leak_world and self.path.endswith(("/search", "/suggest")):
             answer = self._leak_answer(
-                self.headers.get("Authorization", "") == "Bearer cleared-unit-fiu"
+                self.headers.get("Authorization", "") == "Bearer cleared-unit-fiu",
+                str(body.get("query", "")),
             )
         elif self.path.endswith("/suggest"):
             answer: dict[str, Any] = {"nodes": [{"id": "n1"}], "more": False}
@@ -135,7 +136,7 @@ class _Conduit(BaseHTTPRequestHandler):
             "nodes": [],
         }  # fmt: skip
 
-    def _leak_answer(self, cleared: bool) -> dict[str, Any]:
+    def _leak_answer(self, cleared: bool, query: str) -> dict[str, Any]:
         hidden = cleared and self.leak != "unreached"
         if self.partner_only:
             hidden = hidden and "/investigations/case-partner/" in self.path
@@ -154,6 +155,11 @@ class _Conduit(BaseHTTPRequestHandler):
             results[0] = {**results[0], "passage": [{"text": "paid by Ravenscar Holdings"}]}
         total = len(results) + (1 if not cleared and self.leak == "count" else 0)
         return {
+            # The search page echoes the query as the real one does (`SearchPageResponse.query`):
+            # a case that asks a hidden record's own words gets them back in the echo, which is
+            # what the caller sent, not a leak (rules' M10 analysis, 14 November 2026). `echo`
+            # stands in for a Conduit that put something else under that key.
+            "query": "Ravenscar Holdings" if self.leak == "echo" else query,
             "source": self.source,
             "limited": False,
             "total": total,
@@ -587,11 +593,79 @@ def test_a_hidden_record_seen_or_counted_fails_m10(conduit: str, leak: str, said
     assert any(said in f for f in result["failures"]), result["failures"]
 
 
-def test_a_case_the_cleared_principal_cannot_reach_proves_nothing_and_fails(conduit: str) -> None:
+def test_a_case_the_cleared_principal_cannot_reach_is_indeterminate_never_a_pass(
+    conduit: str,
+) -> None:
+    """The orchestrator's ruling of 14 November 2026 on rules' M10 analysis: a control that
+    answers without naming its record on page 1 is reported apart, as indeterminate, never a pass
+    and never a leak; under 90% reached, the file is unmeasured."""
     _Conduit.leak = "unreached"
     result = _leaks(conduit)
-    assert result["verdict"] == "not met"
-    assert all("proves nothing" in f for f in result["failures"]) and len(result["failures"]) == 2
+    assert result["verdict"] == "unmeasured", result
+    assert result["failures"] == [], "an unreached case is not a leak"
+    assert len(result["indeterminate"]) == 2 and result["reached"] == 0
+    assert all("proves nothing" in f for f in result["indeterminate"])
+
+
+def _cases(n: int, unreached: int) -> list[dict[str, Any]]:
+    """`n` copies of the first case, the last `unreached` of them asked of a control in another
+    unit, which answers without the hidden record (it cannot read it)."""
+    return [
+        {
+            **LEAKS[0],
+            "name": f"case {i}",
+            **({"control": "unit-border"} if i >= n - unreached else {}),
+        }
+        for i in range(n)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("unreached", "verdict"), [(0, "met"), (1, "met"), (2, "unmeasured"), (10, "unmeasured")]
+)
+def test_m10_is_measured_only_when_90_percent_of_the_controls_reach_their_record(
+    conduit: str, unreached: int, verdict: str
+) -> None:
+    _Conduit.leak_world = True
+    result = measure_search.measure_leaks(
+        base=conduit, case="case-1", token="part", controls=CONTROLS, cases=_cases(10, unreached)
+    )
+    assert result["verdict"] == verdict, result
+    assert len(result["indeterminate"]) == unreached and result["reached"] == 10 - unreached
+    assert result["failures"] == []
+
+
+def test_a_leak_fails_m10_whatever_share_of_the_controls_is_reached(conduit: str) -> None:
+    _Conduit.leak_world, _Conduit.leak = True, "text"
+    result = measure_search.measure_leaks(
+        base=conduit, case="case-1", token="part", controls=CONTROLS, cases=_cases(10, 5)
+    )
+    assert result["verdict"] == "not met" and len(result["failures"]) == 5, result
+
+
+def test_a_case_that_asks_the_hidden_words_is_not_failed_by_the_query_s_own_echo(
+    conduit: str,
+) -> None:
+    """Rules' M10 analysis, 14 November 2026: every leak case asked its hidden document's own
+    title, which was its `never_text`, and the search page's echo of the query was read as the
+    words leaking, so all 500 failed. The echo is what the caller sent."""
+    _Conduit.leak_world = True
+    case = {**LEAKS[0], "query": "Ravenscar Kestral", "never_text": ["Ravenscar"]}
+    result = measure_search.measure_leaks(
+        base=conduit, case="case-1", token="part", controls=CONTROLS, cases=[case]
+    )
+    assert result["verdict"] == "met", result
+    _Conduit.leak = "text"  # and the same words elsewhere in the answer still fail it
+    result = measure_search.measure_leaks(
+        base=conduit, case="case-1", token="part", controls=CONTROLS, cases=[case]
+    )
+    assert any("'Ravenscar' are in the answer" in f for f in result["failures"]), result
+
+
+def test_words_under_the_query_key_that_are_not_the_query_sent_still_fail(conduit: str) -> None:
+    _Conduit.leak_world, _Conduit.leak = True, "echo"
+    result = _leaks(conduit)
+    assert any("'Ravenscar' are in the answer" in f for f in result["failures"]), result
 
 
 def test_a_fallback_answer_is_not_the_index_s_for_m10(conduit: str) -> None:
@@ -634,19 +708,30 @@ def test_the_live_gate_fails_m10_on_a_leak(conduit: str, tmp_path: Path) -> None
     _Conduit.leak = "id"
     done = _run_live_m10(conduit, tmp_path)
     assert (
-        done.returncode != 0 and "M10:" in done.stdout and "hid-1 is in the answer" in done.stdout
+        done.returncode != 0
+        and "M10 not met" in done.stdout
+        and "hid-1 is in the answer" in done.stdout
     )
+
+
+def test_the_live_gate_fails_an_unmeasured_m10_saying_how_many_reached(
+    conduit: str, tmp_path: Path
+) -> None:
+    """Rule 15 at the real call site: indeterminate cases are never a pass."""
+    _Conduit.leak = "unreached"
+    done = _run_live_m10(conduit, tmp_path)
+    assert done.returncode != 0, done.stdout[-1500:]
+    assert "M10 unmeasured, 0 of 2 controls reached" in done.stdout, done.stdout[-1500:]
 
 
 @pytest.mark.parametrize(
     ("control", "said"),
     [
-        ("unit-border", "does not name ['hid-1']"),  # another unit's control cannot see it
         ("unit-covert", "no control token for 'unit-covert'"),
         (None, "no control token for None"),
     ],
 )
-def test_a_case_whose_control_cannot_name_its_record_fails_never_skips(
+def test_a_case_whose_control_is_not_given_fails_never_skips(
     conduit: str, control: str | None, said: str
 ) -> None:
     _Conduit.leak_world = True
@@ -683,7 +768,8 @@ def test_a_never_join_case_s_control_asks_in_the_partner_s_case(conduit: str) ->
 
 def test_a_never_join_case_without_its_partner_case_proves_nothing(conduit: str) -> None:
     result = _never_join(conduit)
-    assert result["verdict"] == "not met" and "proves nothing" in result["failures"][0]
+    assert result["verdict"] == "unmeasured" and result["failures"] == [], result
+    assert "proves nothing" in result["indeterminate"][0]
 
 
 def test_a_never_join_partner_merged_into_the_answer_fails(conduit: str) -> None:
@@ -844,4 +930,3 @@ def test_the_live_gate_stops_the_whole_run_on_a_refused_token(conduit: str, tmp_
     assert " passed" not in said.splitlines()[-1], said[-600:]
     assert not results.exists() or not list(results.iterdir()), "no result written past it"
     assert len(_Conduit.seen) == 3, f"no case sent anything past the refusal: {len(_Conduit.seen)}"
-

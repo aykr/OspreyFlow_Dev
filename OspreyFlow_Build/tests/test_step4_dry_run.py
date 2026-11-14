@@ -81,3 +81,13 @@ def test_every_row_s_figures_are_the_amendment_s() -> None:
     assert sorted(figures) == sorted(m for m, _w, _e in table.MEASURES)
     assert figures["M1"] == ("≤ 300 ms", "p95 > 300 ms, or any over 2 s")
     assert figures["M10"][1] == "any"
+
+
+def test_an_unmeasured_m10_is_shown_unmeasured_with_its_reached_count_never_met() -> None:
+    """The orchestrator's ruling of 14 November 2026: under 90% of the controls reached, M10 is
+    unmeasured, and the record says how many reached, never met and never a leak."""
+    m10 = {"measure": "M10", "cases": 500, "reached": 428, "verdict": "unmeasured",
+           "failures": [], "indeterminate": ["case 1: … proves nothing"] * 72}  # fmt: skip
+    [row] = [r for r in table.render({"M10": m10}, {}).splitlines() if r.startswith("| M10 ")]
+    assert "**unmeasured**" in row and "**met**" not in row, row
+    assert "500 (428 reached)" in row and "only 428 of 500 controls reached" in row, row

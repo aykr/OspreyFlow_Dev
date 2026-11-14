@@ -284,6 +284,21 @@ def _strings(value: Any) -> Iterator[str]:
             yield from _strings(inner)
 
 
+def _answer_strings(answer: dict[str, Any], sent: str) -> list[str]:
+    """Every string in an answer but its echo of the query sent (`SearchPageResponse.query`): a case
+    that asks a hidden record's own words gets them back there, which is what the caller sent, not
+    a leak (rules' M10 analysis, 14 November 2026: all 500 leak cases failed on their own echo).
+    Only an echo equal to what was sent is left out; anything else under that key is read."""
+    if answer.get("query") == sent:
+        answer = {k: v for k, v in answer.items() if k != "query"}
+    return list(_strings(answer))
+
+
+#: The share of a file's cases whose control must reach its record on page 1 for M10 to count as
+#: measured (the orchestrator's ruling of 14 November 2026, on rules' M10 analysis).
+REACHED_AT_LEAST = 0.9
+
+
 def _leak_request(case: str, leak: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     if leak.get("route", "search") == "suggest":
         return f"/v1/investigations/{case}/suggest", {"query": leak["query"], "limit": 10}
@@ -307,11 +322,15 @@ def measure_leaks(
     with code R in the hidden record's owning unit: a restricted code is read only in its own
     unit, so one principal cannot be the control for every unit; for a never-join case, asked in
     its `partner_case`) must name every `never_ids`, or the case reaches nothing hidden and
-    proves nothing, and fails as that; so does a case whose control is missing or not given,
-    never skipped. Pass or fail, not a time: any leak fails M10."""
+    proves nothing: it is reported apart, `indeterminate`, never a pass and never a leak, and the
+    file is `unmeasured` unless the controls of at least `REACHED_AT_LEAST` of its cases reach their
+    record (the orchestrator's ruling of 14 November 2026). A case whose control is missing, not
+    given or answers an error fails, never skipped. The answer's echo of the query sent is not read
+    (`_answer_strings`). Pass or fail, not a time: any leak fails M10, whatever share is reached."""
     if not cases:
         raise SystemExit("M10: no leak cases: the test would pass having asked nothing")
     failures: list[str] = []
+    indeterminate: list[str] = []
     for i, leak in enumerate(cases):
         name = leak.get("name") or f"case {i + 1} ({leak.get('route', 'search')} {leak['query']!r})"
         path, body = _leak_request(case, leak)
@@ -331,10 +350,15 @@ def measure_leaks(
         _ms, control, error = _send(base, control_path, body, controls[unit])
         seen = set(_strings(control)) if control is not None else set()
         unreached = [n for n in leak["never_ids"] if not any(n in t for t in seen)]
-        if control is None or unreached:
+        if control is None:
             failures.append(
-                f"{name}: the cleared principal's answer does not name "
-                f"{unreached if control is not None else error}, so "
+                f"{name}: the cleared principal's answer does not name {error}, so "
+                "the case reaches nothing hidden and proves nothing"
+            )
+            continue
+        if unreached:
+            indeterminate.append(
+                f"{name}: the cleared principal's answer does not name {unreached} on page 1, so "
                 "the case reaches nothing hidden and proves nothing"
             )
             continue
@@ -345,7 +369,7 @@ def measure_leaks(
         if path.endswith("/search") and answer.get("source", "index") != "index":
             failures.append(f"{name}: answered from the {answer.get('source')}, not the index")
             continue
-        texts = list(_strings(answer))
+        texts = _answer_strings(answer, leak["query"])
         for node in leak["never_ids"]:
             if any(node in t for t in texts):
                 failures.append(f"{name}: the hidden record {node} is in the answer")
@@ -363,11 +387,20 @@ def measure_leaks(
                 failures.append(
                     f"{name}: groups {groups}, but they may see {leak['expect_groups']}"
                 )
+    reached = len(cases) - len(indeterminate)
+    if failures:
+        verdict = "not met"
+    elif reached < REACHED_AT_LEAST * len(cases):
+        verdict = "unmeasured"
+    else:
+        verdict = "met"
     return {
         "measure": "M10",
         "cases": len(cases),
-        "verdict": "not met" if failures else "met",
+        "reached": reached,
+        "verdict": verdict,
         "failures": failures,
+        "indeterminate": indeterminate,
     }
 
 
