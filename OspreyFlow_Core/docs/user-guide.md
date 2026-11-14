@@ -790,20 +790,24 @@ copy: there are no branches, and nothing in a saved view changes the case.
 
 - **Saving.** Select what matters and choose **Save as a view** in the selection bar; name it under
   **View name** and **Save view**. A new saved view is yours alone.
-- **Finding them.** **Saved views (n)**, on the case line, opens the **Saved views** panel. Its list starts
-  with **The whole case**, marked *Open now* when no saved view is open; choosing it does what **Back to
-  the whole case** does. Then each saved view you may see: its name and its *Private* or *Shared* tag, and
-  for one saved without a name, its first item's name and when it was saved, so that two are told apart.
-  The one open now is marked *Open now* and offers no **Open**; the others offer **Open**, and to the
-  person who saved them **Share with the case** and **Delete** ("Delete this view? Nothing on the case is
-  deleted with it."). Before you have any it says "No views yet. Select nodes on the canvas and choose
-  *Save as a view*."
+- **Finding them.** **Saved views (n)**, on the case line, opens the **Saved views** panel; it is the one
+  way to them. Its list starts with **The whole case**, marked *Open now* when no saved view is open, and
+  offering **Open the whole case** while one is, which does what **Back to the whole case** does. Then
+  each saved view you may see, with its *Private* or *Shared* tag. One saved under the name the Glass
+  gives it ("Selection of 3 nodes") is told apart by a second line: its first item, as you may see it,
+  and when it was saved ("‹first item› · saved 14 Nov 2026, 12:01"), or when it was saved alone ("Saved
+  14 Nov 2026, 12:01"). The one open now is marked *Open now* and offers no **Open**; the others offer
+  **Open**, and to the person who saved them **Share with the case** and **Delete** ("Delete this view?
+  Nothing on the case is deleted with it."). Before you have any it says "No views yet. Select nodes on
+  the canvas and choose *Save as a view*."
 - **Opening one** reads the case through it, read-only. The strip above the graph starts with **Back to the
-  whole case** (the GOV.UK back link in that look) and says "Saved view: ‹name›", whether it is shared or
-  private, and "Nothing in a saved view changes the case."; the case line shows "› Saved view: ‹name›".
-  Focus moves to the strip, and **Back to the whole case** returns it to **Saved views**. With no saved
-  view open the strip says "You are looking at the whole case." A saved view opened from an alert also
-  says "Opened from an alert" and offers **← Back to the alert**.
+  whole case** (the GOV.UK back link in that look), then "Saved view: ‹name›", its *Private* or *Shared*
+  tag, how many of its items could not be shown when any could not, and "Nothing in a saved view changes
+  the case."; the case line shows "› Saved view: ‹name›". Focus moves to the strip, **Back to the whole
+  case** is the next Tab, and it returns focus to **Saved views (n)**. An action that would change the
+  case says instead "This is a saved view: nothing in it changes the case. Go back to the whole case to
+  change it." With no saved view open the strip says "You are looking at the whole case." A saved view
+  opened from an alert also says "Opened from an alert" and offers **← Back to the alert**.
 
 ### 5.14 Drawing boards
 
