@@ -29,7 +29,8 @@ E	A watch stays active until three unreachable evaluations in a row (ADR-044; th
 G	The Glass shows the Conduit's words for an access value not set, a token-version mismatch and a refused guest	platform-b	2026-11-14	2026-11-15	y	-	platform-b:v052-signin-words
 M	Mark for suppression says what it does today: a mark and a reason, hiding nothing yet (the owner, 14 Nov)	case-b	2026-11-14	2026-11-15	y	-	case-b:v052-suppress-words
 R	The render's and spec 05's 'falls back to PostgreSQL' say what search really does when OpenSearch does not answer	platform	2026-11-14	2026-11-15	y	-	platform:v052-fallback-words
-C	The candidate: main after the sweep, with CI green on it	orchestrator	2026-11-15	2026-11-15	y	5,3i,F,T,Q,P,S,W,E,G,M,R	-
+K	The search results page says counts are per group, so All need not equal their sum (the owner, 14 Nov)	case-b	2026-11-14	2026-11-15	y	-	case-b:v052-group-counts
+C	The candidate: main after the sweep, with CI green on it	orchestrator	2026-11-15	2026-11-15	y	5,3i,F,T,Q,P,S,W,E,G,M,R,K	-
 D	osprey-small (the GOV.UK demo) from the candidate, for client sign-ins (the owner, 14 Nov): backup, the gate, four sign-ins, health, a browser pass; restored if any check fails	orchestrator	2026-11-15	2026-11-15	n	C,4	-
 6	The install test on the candidate, from the manifest: v0.5.1 upgraded, and a fresh v0.5.2 install, each with spec 08's poc scenarios	platform-b	2026-11-16	2026-11-16	y	4,C	platform-b:v052-r1
 7	Cut v0.5.2; print the page tables; the demos when the owner says	orchestrator	2026-11-17	2026-11-17	y	6	-

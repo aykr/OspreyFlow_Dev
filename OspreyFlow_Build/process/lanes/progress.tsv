@@ -137,3 +137,4 @@ admin	v052-escalation	S	building	v0.5.2 fix (E): A watch stays active until thre
 platform-b	v052-signin-words	S	building	v0.5.2 fix (G): The Glass shows the Conduit's words for an access value not set, a token-version mismatch and a refused guest
 case-b	v052-suppress-words	S	building	v0.5.2 fix (M): Mark for suppression says what it does today: a mark and a reason, hiding nothing yet (the owner, 14 Nov)
 platform	v052-fallback-words	S	building	v0.5.2 fix (R): The render's and spec 05's 'falls back to PostgreSQL' say what search really does when OpenSearch does not answer
+case-b	v052-group-counts	S	building	v0.5.2 fix (K): the search results page says counts are per group, so All need not equal their sum
