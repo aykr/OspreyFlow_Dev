@@ -1,0 +1,9 @@
+# plant: store_failure_as_out_of_date (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; -k store_unread
+E           ConnectionError: down
+E           principal_auth.PrincipalAccessOutOfDate: owner '50000000-0000-4000-8000-000000000009': access last read never
+E           asyncio.exceptions.CancelledError
+E               TimeoutError
+E           principal_auth.PrincipalAccessOutOfDate: owner '50000000-0000-4000-8000-000000000009': access last read never
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_the_store_unread_is_its_own_unavailable_never_out_of_date[fails]
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_the_store_unread_is_its_own_unavailable_never_out_of_date[slow]
+2 failed, 1 passed, 16 deselected in 3.10s

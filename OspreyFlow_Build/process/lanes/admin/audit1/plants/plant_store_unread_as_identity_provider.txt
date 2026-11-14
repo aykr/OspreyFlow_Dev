@@ -1,0 +1,6 @@
+# plant: store_unread_as_identity_provider (services/api/scheduler.py); fresh PYTHONPYCACHEPREFIX; -k people_store_unread
+E       assert ('People' in "the identity provider could not be reached to act as the schedule's owner")
+E        +  where "the identity provider could not be reached to act as the schedule's owner" = str(_Refused("the identity provider could not be reached to act as the schedule's owner"))
+E        +    where _Refused("the identity provider could not be reached to act as the schedule's owner") = <ExceptionInfo _Refused("the identity provider could not be reached to act as the schedule's owner") tblen=2>.value
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_the_people_store_unread_is_said_as_the_store_never_as_the_identity_provider
+1 failed, 18 deselected in 2.79s

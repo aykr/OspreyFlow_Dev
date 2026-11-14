@@ -1,0 +1,7 @@
+# plant: disabled_admitted (packages/principal_auth/__init__.py); fresh PYTHONPYCACHEPREFIX; -k disabled
+E               principal_auth.PrincipalLookupUnavailable: a stored owner is built only once judged current
+E           principal_auth.OwnerRecordUnavailable: the stored owner '50000000-0000-4000-8000-000000000009' is not a principal's
+E           principal_auth.PrincipalAccessOutOfDate: owner '50000000-0000-4000-8000-000000000009': access last read never
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_roles_and_disabled_are_read_live_at_every_run
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_a_disabled_owner_is_revoked_whatever_their_access
+2 failed, 17 deselected in 2.78s

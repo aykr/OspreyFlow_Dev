@@ -1,0 +1,6 @@
+# plant: kyc_deployer_words_generic (services/api/kyc_sweep.py); fresh PYTHONPYCACHEPREFIX; -k kyc_check
+E       AssertionError: assert False
+E        +  where False = <built-in method endswith of str object at 0x12a8ab990>('its deployer, 50000000-0000-4000-8000-000000000009, has not signed in to OspreyFlow within the last 24 hours, so their clearance and unit are out of date: it runs again once they sign in')
+E        +    where <built-in method endswith of str object at 0x12a8ab990> = 'rule rule-1 in case case-1: its deployer could not be resolved, so it could not run as them'.endswith
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_the_daily_kyc_check_s_deployer_out_of_date_is_said_in_the_24_hour_words
+1 failed, 18 deselected in 2.75s

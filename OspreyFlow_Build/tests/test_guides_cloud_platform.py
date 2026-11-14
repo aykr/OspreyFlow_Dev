@@ -51,9 +51,9 @@ def _literals(path: Path, call: str) -> list[str]:
     return found
 
 
-# ---------------------------------------------------------------- nothing acts as its owner on Entra ID
+# ---------------------------------------------------------------- a run as its owner on Entra ID (ADR-148 Am 16)
 
-#: Each guide section describing something that runs as its owner, and so stops on Entra ID.
+#: Each guide section describing something that runs as its owner, and so points to §6a.7's rule on Entra ID.
 OWNER_RUNS = [
     ("administration", "### 9.5"),   # a screening list's refresh schedule
     ("administration", "### 9.11"),  # Operations' Run now, as the schedule's owner
@@ -71,8 +71,35 @@ def owner_runs_without_the_entra_note(guides: dict[str, str]) -> list[str]:
     return found
 
 
-def test_every_owner_run_says_it_stops_on_entra() -> None:
+def test_every_owner_run_points_to_the_entra_rule() -> None:
     assert owner_runs_without_the_entra_note(GUIDES) == []
+
+
+#: What the guides said while nothing acted as its owner on Entra ID (docs' v0.5.2 sweep, part one), and
+#: no longer may: since ADR-148 Amendment 16 a run acts as its owner's stored identity (D1, inverted).
+STOPS_ON_ENTRA = [
+    "nothing acts as its owner", "nothing can act as", "nobody can be acted as", "loads are started by hand",
+    "cannot act as you while you are away", "a watch's own runs do not happen", "as every scheduled run is",
+    "owner resolution is unavailable",
+]  # fmt: skip
+
+
+def owner_runs_said_to_stop(guides: dict[str, str]) -> list[str]:
+    """The guides' own text, their history rows left out: a row records what a version said."""
+    def body(text: str) -> str:
+        kept = [line for line in text.splitlines() if not re.match(r"\| \d+\.\d+ \| \d{4}-\d{2}-\d{2} \|", line)]
+        return re.sub(r"\s+", " ", "\n".join(kept)).lower()
+
+    return [f"{g}: {words}" for g, text in guides.items() for words in STOPS_ON_ENTRA if words in body(text)]
+
+
+def test_no_guide_says_an_owner_run_stops_on_entra() -> None:
+    assert owner_runs_said_to_stop(GUIDES) == []
+
+
+def test_the_stop_check_flags_the_old_words_put_back() -> None:
+    planted = dict(GUIDES, user=GUIDES["user"] + "\nOn Entra ID nothing can act as you, so loads are started by\nhand.\n")
+    assert owner_runs_said_to_stop(planted) == ["user: nothing can act as", "user: loads are started by hand"]
 
 
 def test_the_owner_run_check_flags_a_section_without_its_note() -> None:
@@ -80,19 +107,22 @@ def test_the_owner_run_check_flags_a_section_without_its_note() -> None:
     assert owner_runs_without_the_entra_note(planted) == ["developer ### 6.3"]
 
 
-#: The scheduler's own refusal, for a pipeline's run, when its owner cannot be resolved.
-SCHEDULER_WORDS = next(w for w in _literals(CORE / "services/api/scheduler.py", "_Refused")
-                       if "could not be reached to act as the schedule" in w)  # fmt: skip
+def test_section_6a7_quotes_the_24_hour_refusal_as_the_code_words_it() -> None:
+    """The words every run as its owner says when its owner's access is out of date (`ACCESS_OUT_OF_DATE_WORDS`),
+    after the scheduler's "the schedule's owner, <id>,"."""
+    from principal_auth import ACCESS_OUT_OF_DATE_WORDS
+
+    text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.7"))
+    assert f"the schedule's owner, <id>, {ACCESS_OUT_OF_DATE_WORDS}" in text
 
 
-def test_section_6a7_quotes_the_scheduled_runs_refusal_as_the_scheduler_words_it() -> None:
-    assert SCHEDULER_WORDS in re.sub(r"\s+", " ", section(ADMIN, "### 6a.7"))
+def test_section_6a7_gives_the_hours_the_code_trusts_a_sign_in_for() -> None:
+    from principal_auth import ACCESS_FRESH
 
-
-def test_entra_owner_resolution_is_refused_in_the_code_the_guide_describes() -> None:
-    """The fact §6a.7 rests on: the resolver refuses every owner on an Entra mapping."""
-    source = (CORE / "packages/principal_auth/__init__.py").read_text(encoding="utf-8")
-    assert "owner resolution is unavailable with Entra ID sign-in" in source
+    hours = int(ACCESS_FRESH.total_seconds() // 3600)
+    text = re.sub(r"\s+", " ", section(ADMIN, "### 6a.7"))
+    assert f"has not signed in within the last {hours} hours" in text
+    assert "So a schedule runs only on the days its owner signs in." in text
 
 
 def test_no_guide_says_an_entra_scheduled_run_is_marked_stopped() -> None:

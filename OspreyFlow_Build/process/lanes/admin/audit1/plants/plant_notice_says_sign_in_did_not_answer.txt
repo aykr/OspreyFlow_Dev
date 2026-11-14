@@ -1,0 +1,4 @@
+# plant: notice_says_sign_in_did_not_answer (services/api/schedule_notices.py); fresh PYTHONPYCACHEPREFIX; -k notice
+E       AssertionError: assert ('24 hours' in 'The scheduled run of Daily export due 06:00 could not run: the sign-in service did not answer.')
+FAILED ../OspreyFlow_Build/tests/services/api/test_owner_on_entra.py::test_the_owner_s_notice_names_the_24_hours_and_is_served_as_written
+1 failed, 18 deselected in 2.72s
