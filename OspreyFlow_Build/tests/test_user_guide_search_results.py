@@ -283,7 +283,7 @@ def test_section_5_5_says_the_fallback_pages_only_while_records_remain_and_where
     fallback = _function(SERVICE, "_from_graph")
     for code in (
         "reached = len(found) >= FALLBACK_DEPTH",
-        "more = len(found) > start + size",
+        "more = len(found) > start + size reason = LIMITED_REASONS[why]",  # the whole statement: nothing or-ed on
         "if reached and not more: reason += DEPTH_REACHED.format(depth=FALLBACK_DEPTH)",
         "more=more,",
     ):
