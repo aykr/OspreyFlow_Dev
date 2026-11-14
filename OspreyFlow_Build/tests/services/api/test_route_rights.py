@@ -144,6 +144,7 @@ ROUTE_RIGHTS = {
     "confirm_node_route": "confirm_inferred",
     "mark_node_for_suppression": "edit_graph",
     "unmark_node_for_suppression": "edit_graph",
+    "list_suppression_marks": "investigate",
     "retract_node_route": "confirm_inferred",
     "get_investigation_history": "investigate",
     "restore_history_step": "investigate",
