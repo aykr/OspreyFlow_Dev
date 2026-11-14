@@ -949,11 +949,14 @@ address yet, so it is unused. Caddy is not rendered: the platform's NGINX ingres
 with ModSecurity on and the IP allow-list from `allow_from`. Local models and Whisper are not
 rendered, since the platform has no GPU. The model gateway (LiteLLM) is rendered always, with or
 without an engine (section 6a.3 says which identity it runs as; section 6a.9 is the model
-route). **Reporting is not rendered**:
-Superset and the report sync signed in through Keycloak, and a render setting `reporting.sync` or
-`reporting.superset` is refused ("report sync and Superset are not on this profile yet: they signed
-in through Keycloak, and people sign in with Entra ID here; their own step after P10 (reporting on
-Entra ID) brings them. Set reporting.sync and reporting.superset to false"). The Conduit's image is
+route). **Reporting is rendered when it is switched on** (`reporting.superset`, `reporting.sync`;
+ADR-148 Amendments 9 to 11): Superset, at the `bi.` name, signs people in with Entra ID as its own
+app registration (`cloud_platform.claims.superset_client_id`; a render without it is refused in
+words), and the report sync's dashboard identities get their tokens from Entra ID (section 6a.7).
+Superset's settings are its own database, `superset`, which it makes on the managed PostgreSQL at its
+first start, beside `ospreyflow` and the gateway's `litellm`; the reports are the schema
+`osprey_reports` inside `ospreyflow`, as on Small, which Power BI may read through a read-only login
+of its own (an option the install's runbook describes). The Conduit's image is
 built without Java on this profile, so *Admin › Maps*' **Build** says that the basemap cannot be
 built here; there is no way yet to bring a basemap built elsewhere onto the platform (*coming*), so
 the map uses its providers alone.
@@ -1004,6 +1007,8 @@ on the platform.
 | ClickHouse | 1 | 2 | 1 | 8 GiB | 8 GiB |
 | ClickHouse Keeper (standard shape) | 1 | 3 | 0.1 | 512 MiB | 512 MiB |
 | The model gateway (LiteLLM) | 1 | 1 | 0.25 | 512 MiB | 1 GiB |
+| Superset, when reporting is on | 1 | 2 | 0.25 | 1 GiB | 2 GiB |
+| The report sync, when reporting is on | 1 | 2 | 0.1 | 256 MiB | 512 MiB |
 | Laurium, when it is the extraction engine | 1 | 1 | 0.25 | 1 GiB | 2 GiB |
 | The backups' and the restore's Jobs | — | — | 0.5 | 2 GiB | 4 GiB |
 | The restore's ArcadeDB step | — | — | 1 | 12 GiB | 12 GiB |
@@ -1042,7 +1047,7 @@ leaves it unchanged and `tofu validate` accepts it.
 | `gateway.tf` | Only while a Bedrock engine is declared in `osprey.yaml`: the model gateway's own service account and IAM role, allowed to invoke Bedrock's models in eu-west-2 (`bedrock:InvokeModel`, `bedrock:InvokeModelWithResponseStream`) and nothing else, no S3 included, and trusted by the gateway's service account alone |
 | `backups.tf` | The backups' bucket and its own KMS key, their two roles and service accounts, ClickHouse's backup user's password and the Secrets `ospreyflow-clickhouse-backup` and `ospreyflow-backup-output` (section 6a.8) |
 | `ecr.tf` | A repository for each image, scanned on push |
-| `secrets.tf` | Our own Secret, `ospreyflow-secrets`: each password made here (`random_password`), and each key a person holds (a model engine's, a connection's, the mail server's password) as a sensitive variable |
+| `secrets.tf` | Our own Secret, `ospreyflow-secrets`: each password made here (`random_password`), and each key a person holds (a model engine's, a connection's, the mail server's password; with reporting on, Superset's client secret, `superset_oidc_client_secret`, and the report sync's dashboard identities, `report_sync_dashboards`) as a sensitive variable |
 
 **The platform's Terraform state holds every secret here**: the passwords it makes, and each key a
 person holds, which is a sensitive variable with no default written into the Secret's data. How the
@@ -1131,6 +1136,8 @@ single ports, never a range:
 | ClickHouse | Its own copies and, in the standard shape, ClickHouse Keeper; S3 and STS, for its backups |
 | The backups' runs and the restore | S3 and STS; ArcadeDB and ClickHouse, or the cluster's API, as each needs (section 6a.8) |
 | The Glass | The Conduit |
+| Superset, when reporting is on | The Conduit (who signed in); the managed stores' networks (its database and the mart, its rate limits); Entra ID's sign-in host |
+| The report sync, when reporting is on | The Conduit; the managed stores' networks (the mart); S3 and STS; Entra ID's sign-in host (its token) |
 | Named-entity extraction | Nothing beyond DNS |
 
 **An engine's way out is made at render.** With no engine declared, no engine's host is allowed. An
@@ -1197,9 +1204,9 @@ platform's team give them.
 
 **Ingress, each workload's own.** Each workload admits only the pods that call it, on its own ports
 (`ospreyflow-ingress-<workload>`), and one that nobody calls admits nothing; the Glass also admits the
-platform's controller, on its own port. The Ingress serves the Glass alone, at
-`network.public_origin`'s name: there is no `id.` (sign-in is Entra's) and no `bi.` (reporting is not
-rendered). Its read and send timeouts are an hour, for the Glass's live updates, and its body-size
+platform's controller, on its own port. The Ingress serves the Glass at `network.public_origin`'s
+name and, with Superset on, Superset at its `bi.` name (whose pod also admits the controller); there is
+no `id.` (sign-in is Entra's). Its read and send timeouts are an hour, for the Glass's live updates, and its body-size
 limit is the Conduit's upload cap, 512 MiB; ModSecurity may refuse an upload long before that (the
 first question in section 6a.11).
 
@@ -1374,6 +1381,19 @@ assigned in *Admin › People*, which keeps them in the deployment's own Postgre
   pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
   registration.
 
+- **Superset** (ADR-148 Amendment 9) signs a person in as its own app registration and asks Entra ID
+  for a token for this API's scope, issued to Superset, which the Conduit admits for `GET /v1/me` and
+  `GET /v1/me/rights` alone (any other route answers 403 `route_not_admitted`). Superset's role is
+  the person's rights here, read again at each sign-in: `administer_system` is its Admin,
+  `manage_dashboards` its builder (Alpha), whom *Build a report* in the Glass sends there,
+  `read_reports` its read-only Gamma, and a person with none of them is not let in.
+- **A dashboard identity** (ADR-148 Amendment 10), registered in *Admin › Dashboards* by its app
+  registration's application id and a name (the dashboard's), signs the report sync in with an
+  app-only token carrying the app role `Dashboard.Read`; it reads the case list and the report feed
+  alone, within its registration's clearance, unit and codes, and the cases whose Author gives it
+  Viewer (never Owner or Editor, refused). Removing it in *Admin › Dashboards* takes away every case
+  grant it held; registering the same application id again starts with none.
+
 **Nothing acts as its owner on Entra yet, so loads are started by hand.** The Conduit acts as a
 person who is not present only through Keycloak's token exchange, which Entra ID does not have, so
 on this profile everything that runs as its owner is refused:
@@ -1395,8 +1415,7 @@ on this profile everything that runs as its owner is refused:
   load are judged.
 
 A load started by hand in the Ingest Studio (**Run now**, developer guide §3.9) runs as the person
-who starts it, and is not affected. Reporting is not available either: Superset and the report sync
-are refused at render on this profile until Superset signs in through Entra ID.
+who starts it, and is not affected.
 
 **Not yet tried against a real tenant.** The token shapes above are as Microsoft documents them, and
 one real token from the organisation's development tenant is to settle each:
@@ -1648,7 +1667,7 @@ first install:
 ### 6a.10 Coming
 
 - **On Entra ID**: anything that runs as its owner, a scheduled run among them (until then each is
-  refused, section 6a.7), reporting (Superset and the report sync signing in through Entra ID), display names (a person is
+  refused, section 6a.7), display names (a person is
   shown by object id until then), and one real token from the organisation's tenant to settle the
   shapes section 6a.7 lists as untried.
 - **The backups' alert** on a failed or missing run, the production shape's restore, the restore
