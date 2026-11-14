@@ -21,7 +21,12 @@ needs that, `OSPREY_MEASURE_CONTROLS` (a JSON
 object, each control subject's token by its name, one per R-owning unit; in the environment, never
 a file) and `OSPREY_MEASURE_LEAKS` (a JSON-lines file of leak cases derived from B's truth, each
 naming its `control`, `measure_search.measure_leaks`), and is skipped with that reason where either
-is unset. M9 (the fallback) is not in this file yet: a case to be written for step 6's live run."""
+is unset.
+
+M9, the fallback, stops OpenSearch mid-session: it runs only where `OSPREY_MEASURE_STOP_OPENSEARCH`
+names the container to stop (on the day, stack d's, under rules' lease with its agreement), and is
+skipped with that reason otherwise, so no other run stops a store. The container is started again
+whatever happens, and the index must answer again before the case ends."""
 
 from __future__ import annotations
 
@@ -109,3 +114,36 @@ def test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal() -
         cases=[json.loads(line) for line in lines if line.strip()],
     )
     assert found["verdict"] == "met", "M10: " + "; ".join(found["failures"][:20])
+
+
+def test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so() -> None:
+    import subprocess
+
+    stack = _stack()
+    container = os.environ.get("OSPREY_MEASURE_STOP_OPENSEARCH", "").strip()
+    if not container:
+        pytest.skip(
+            "OSPREY_MEASURE_STOP_OPENSEARCH unset: M9 stops OpenSearch, and runs only where the "
+            "container to stop is named (stack d's, under rules' lease, with its agreement)"
+        )
+    lines = Path(stack["OSPREY_MEASURE_QUERIES"]).read_text(encoding="utf-8").splitlines()
+    every = [json.loads(line) for line in lines if line.strip()]
+    names = [q for q in every if q["class"] == "names"][:5]
+    prefixes = [q for q in every if q["class"] == "suggest"][:5]
+    assert names and prefixes, "M9 needs name and suggestion queries in the queries file"
+    queries = [{"route": "search", **q} for q in names] + [
+        {"route": "suggest", **q} for q in prefixes
+    ]
+
+    def docker(verb: str) -> None:
+        subprocess.run(["docker", verb, container], check=True, capture_output=True)
+
+    found = measure_search.measure_fallback(
+        base=stack["OSPREY_MEASURE_BASE"],
+        case=stack["OSPREY_MEASURE_CASE"],
+        token=stack["OSPREY_MEASURE_TOKEN"],
+        queries=queries,
+        stop=lambda: docker("stop"),
+        start=lambda: docker("start"),
+    )
+    assert found["verdict"] == "met", "M9: " + "; ".join(found["failures"])

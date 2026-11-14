@@ -38620,7 +38620,7 @@ index's speed: each makes its class fail.
 | M6 | Index feed lag: a change made through the Conduit to searchable | `lag` | ≤ 5 s | p95 > 30 s | ADR-150's poll (1 s idle); 30 s is the indexer's lease. A node drawn on a board, polled until the index answers it |
 | M7 | Rebuild from the graph, B's whole load | no (the restore's rebuild) | measured, then the restore's bound set from it with a margin | the rebuild exceeds the bound the restore runbook gives it | Platform's finding F1: today's bound is a guess |
 | M8 | Drift check, B's whole load | no (its Job) | inside its Job's 4 GiB, its peak flat as the load grows, ≤ 1 h | out of memory, a peak growing with the documents, or over 1 h | The streaming check's bound by the page (ADR-124 Amendment 18's lane, 90442ba); finding F2 |
-| M9 | The fallback: OpenSearch stopped mid-session | no (the live search file) | the bar falls back and says so within the 5 s timeout | no message, or a wait over 5 s | ADR-149's fallback that says so |
+| M9 | The fallback: OpenSearch stopped mid-session | no (pass or fail: `measure_search.measure_fallback`, the live file's M9 case) | the bar falls back and says so within the 5 s timeout | no message, or a wait over 5 s | ADR-149's fallback that says so |
 | M10 | The leak test at scale (the part-cleared principal) | no (pass or fail: `measure_search.measure_leaks`, the live file's M10 case) | nothing they may not see, count or infer, in results, counts, suggestions or snippets | any | Rule 3 (pass or fail, not a time) |
 | M11 | Sizes: each container's peak working set during M1–M8 | no (the cluster's metrics) | peak ≤ 80% of its limit | at or over its limit, or killed | ADR-148 Amendment 12 decision 4: step 4 measures the manifest's sizes |
 
@@ -38656,8 +38656,13 @@ asking the same query in the partner's own case (`partner_case`), which every cl
 orchestrator's ruling (a), 14 November). It counts toward M10's pass; a null control still fails.
 The principals: `m10-part` (OFFICIAL-SENSITIVE without R, unit-records, granted the nominals and intel cases), the
 controls, and `m10-measure` (M1 to M6's, OFFICIAL-SENSITIVE, an editor on one case for M6's draws); rules grants
-them on B's cases under its lease, and step 4's runner mints their tokens into the run's environment. M9 is a live case
-still to be written for step 6. M1, M3 and
+them on B's cases under its lease, and step 4's runner mints their tokens into the run's environment. **M9** is the live file's pass-or-fail case,
+`measure_search.measure_fallback`: before the stop the first query must be the index's (a session that never had the
+index proves nothing); OpenSearch is stopped (`docker stop` of the container `OSPREY_MEASURE_STOP_OPENSEARCH` names,
+on the day stack d's, under rules' lease with its agreement, and skipped where none is named); each search must
+answer within its 5 s timeout from the fallback, `limited`, with words in `limited_reason`, and each suggestion within
+its 2 s from the graph, `limited`; OpenSearch is started again whatever happens, and the index must answer again
+within 120 s. M1, M3 and
 M4 are also to become a CI regression gate on a fixed corpus of a million names (CI cannot hold B's load), shown red
 before it is wired (rule 15). M2 is to become a `perf/` case beside glass-perf. M7 and M8 set the restore runbook's
 and the drift check's bounds and memory, held by the render tests. M11 changes the manifest and the profile together.

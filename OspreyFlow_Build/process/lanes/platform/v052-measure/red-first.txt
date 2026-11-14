@@ -191,3 +191,26 @@ plant 7: each user's id left to Keycloak
 plant 8: the realm's users left as the deployment's
   tests/test_step4_stack.py -k 'subjects_alone': RED (1 failed, 12 deselected in 0.63s)
 8/8 red
+
+# M9, the fallback (2026-11-14T10:00:23Z): measure_search.measure_fallback and the live file's M9 case. Offline, one plant per
+# check at its real line (plants_fallback.py), each restored:
+plant 1: a fallback that says nothing taken as one that says so
+  tests/test_measure_search.py -k 'late_silent_or_absent and silent': RED (1 failed, 3 passed, 39 deselected in 3.81s)
+plant 2: the timeout not applied
+  tests/test_measure_search.py -k 'late_silent_or_absent and slow': RED (1 failed, 42 deselected in 1.72s)
+plant 3: an index's answer taken for the fallback
+  tests/test_measure_search.py -k 'late_silent_or_absent and stuck': RED (1 failed, 42 deselected in 1.15s)
+plant 4: the index's return not waited for
+  tests/test_measure_search.py -k 'late_silent_or_absent and never_back': RED (1 failed, 3 passed, 39 deselected in 3.78s)
+plant 5: OpenSearch started again only when all went well
+  tests/test_measure_search.py -k 'started_again_when': RED (1 failed, 42 deselected in 1.32s)
+plant 6: a session that never had the index measured anyway
+  tests/test_measure_search.py -k 'never_had': RED (1 failed, 42 deselected in 1.18s)
+6/6 red
+Every earlier plant set rerun: 6/6, 3/3, 6/6, 11/11. Green offline: 41 passed, 9 skipped (the two live M9 runs skip here:
+the Mac's docker guard refuses the stand-in too; server_m9.sh runs them on the test server).
+
+# M9's live runs on the test server (server_m9.sh through stack_lease.sh offline, run 20261114T100049Z-07a58c0d, no stack):
+- green: both live-run cases passed (2 passed): the stand-in docker stopped and started the stub's index, the case met,
+  and the silent fallback's case failed as it should;
+- red: with the live case's verdict check planted out, the silent fallback's case failed (1 failed); then put back.
