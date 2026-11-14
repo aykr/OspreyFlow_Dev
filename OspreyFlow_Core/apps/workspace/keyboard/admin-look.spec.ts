@@ -25,6 +25,9 @@ async function open(page: Page, look: string, brand: string): Promise<void> {
   await page.goto(`/keyboard/admin-harness.html?rights=${ALL_RIGHTS}&serve=people${brand}`);
   if (look === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
   await page.getByRole("table").first().waitFor();
+  // Measured before GDS Transport has loaded, a person's lines wrap in the fallback face (173px seen under a
+  // parallel run, against 152px once loaded): wait for the faces, so the bound is the look's, not the race's.
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 
 async function measure(page: Page) {
