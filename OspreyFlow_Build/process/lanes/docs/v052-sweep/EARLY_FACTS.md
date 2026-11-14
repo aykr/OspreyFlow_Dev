@@ -152,3 +152,8 @@ Left as they are:
 - *Whole case* in the administration guide's two "Ask & Chat" lines: the engine answers every Read from choice, not
   only *Whole case*.
 - The tests' copied `fold` and `guide` helpers.
+
+**Its re-check** found the record's plant results printed as `{summary}` (a string the script failed to format), §9
+contradicting itself on the administrator fallback, and three weaker checks (the match's own link, the sites' search
+phrases, and the fallback). All are fixed, the record is taken again, and the f-string refusal's field names are carried
+for admin.

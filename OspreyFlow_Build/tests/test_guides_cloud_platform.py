@@ -306,3 +306,16 @@ def test_section_6a7_quotes_the_guest_refusal_and_the_audit_action_as_the_code_h
     assert 'action="set_guest_sign_in"' in app and "`set_guest_sign_in`" in text
     assert "Admit guest accounts" in text
     assert "Admitting guests would need a setting that does not exist" not in text
+
+
+def test_section_9_says_a_missing_value_is_given_only_by_the_administrator_fallback() -> None:
+    """§9's sentence qualified after the lane review: the administrator fallback (ADR-148 Amendment 15) gives what a
+    token does not carry, and only where the mapping names `{administrator: true}`."""
+    source = (CORE / "packages/principal_auth/__init__.py").read_text(encoding="utf-8")
+    assert re.search(r"^    administrator: bool = False$", source, re.MULTILINE), "a claim's source may be the administrator"
+    render = (CORE / "harness/cloud_platform/__init__.py").read_text(encoding="utf-8")
+    assert 'if by_administrator and _cp(config).shape != "poc":' in render, "and only on the poc shape"
+    people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People"))
+    assert ("Unless the mapping names `{administrator: true}` for a value (the poc shape's fallback, section 6a.7), "
+            "no administrator can give a missing clearance or unit instead") in people  # fmt: skip
+    assert "deployment's own application, the Glass's or the API's. No administrator can give" not in people

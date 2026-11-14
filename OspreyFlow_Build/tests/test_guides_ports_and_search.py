@@ -115,8 +115,9 @@ def test_the_guides_and_the_sites_give_search_as_built() -> None:
     for name in ("architecture", "administration"):
         text = guide(name)
         assert "PostgreSQL full-text" not in text and SEARCH_AS_BUILT in text, name
-    sites = {f: (SITES / f).read_text(encoding="utf-8") for f in ("build.py", "overview.py")}
-    assert [f for f, text in sites.items() if re.search(r"OpenSearch or PostgreSQL", text)] == []
+    sources = [SITES / "build.py", SITES / "overview.py", *sorted((SITES / "org").glob("*.html")), *sorted((SITES / "net").glob("*.html"))]
+    said = re.compile(r"OpenSearch or PostgreSQL|PostgreSQL (?:full-text|for search)|full-text search in PostgreSQL", re.IGNORECASE)
+    assert [p.name for p in sources if said.search(p.read_text(encoding="utf-8"))] == []
 
 
 def test_the_opensearch_signing_setting_is_given_as_the_settings_file_holds_it() -> None:

@@ -66,7 +66,8 @@ def test_the_guides_say_a_match_is_proposed_never_merged_in_storage() -> None:
     nothing is merged in storage (rule 6)."""
     inferred = re.search(r"def _inferred\(.*?\) -> Provenance: .*? return Provenance\( state=ProvenanceState\.(\w+),", SERVICE)
     assert inferred and inferred.group(1) == "INFERRED"
-    assert SERVICE.count("self._inferred(") >= 1 and SERVICE.count("type=SAME_AS,") >= 1
+    # The match's own link, the chosen pair's (not only the retyped copy's): a SAME_AS made by `_inferred`.
+    assert 'provenance=self._inferred(record, f"{r.drawn}:{r.loaded}", r.score, now),' in SERVICE
     assert "each chosen one written as a proposed match (inferred and scored) that a person confirms later" in merge_paragraph()
     assert "proposed as scored links for a person to confirm (never merged in storage)" in guide("architecture")
 

@@ -1853,13 +1853,14 @@ Added in this guide, beyond ADR-148's own list:
     ArcadeDB's and ClickHouse's data, the shared volume and, in the poc shape, the Ingest root are
     encrypted at rest only if it does; the render does not check.
 13. **OpenSearch without fine-grained access control.** Does your security standard accept an OpenSearch
-    domain whose access policy admits one IAM role, the namespace's, with no fine-grained access control
-    and no OpenSearch users? In its place, OspreyFlow applies each reader's access in its own query to the
-    index: the Conduit adds to every search, before it is sent, a filter that keeps only what the reader's clearance, handling codes and the case's datasets allow, and
-a document's text only for the unit that holds it, so a result the reader may not see is never returned or
-counted. If your platform fronts OpenSearch with a proxy that signs for us, say so:
-    OspreyFlow then sends its requests to it unsigned (`opensearch_signing: none`, section 6a.1). And which
-    two private subnets, in two availability zones, may the domain use?
+    domain whose access policy admits one IAM role, the namespace's, with no fine-grained access control and
+    no OpenSearch users? In its place, OspreyFlow applies each reader's access in its own query to the
+    index: the Conduit adds to every search, before it is sent, a filter that keeps only what the reader's
+    clearance, handling codes and the case's datasets allow, and a document's text only for the unit that
+    holds it, so a result the reader may not see is never returned or counted. If your platform fronts
+    OpenSearch with a proxy that signs for us, say so: OspreyFlow then sends its requests to it unsigned
+    (`opensearch_signing: none`, section 6a.1). And which two private subnets, in two availability zones,
+    may the domain use?
 
 ## 7. The answers file, `install.yaml`
 
@@ -2006,8 +2007,9 @@ organisation account to join."). **A dashboard identity** is its own Entra app r
 holds its secret: *Dashboard identities* registers it by its application id, and shows no secret.
 Without an application id it is refused ("on Entra ID a dashboard identity is its own app
 registration: give its application id (the registration holds its secret)"), and so is the
-deployment's own application, the Glass's or the API's. No administrator can give a missing clearance or unit instead: a person
-whose token carries neither is refused at sign-in (section 6a.7). A person is shown by object id,
+deployment's own application, the Glass's or the API's. Unless the mapping names `{administrator: true}` for a value (the poc shape's fallback, section 6a.7),
+no administrator can give a missing clearance or unit instead: a person whose token carries neither is
+refused at sign-in (section 6a.7). A person is shown by object id,
 not by name. A guest account, homed in another organisation's Entra ID, signs in only while
 **Admit guest accounts** is on, below the list (section 6a.7), and is marked as a guest in it;
 while it is off, a guest is listed as not enabled.
