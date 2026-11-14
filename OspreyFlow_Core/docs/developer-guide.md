@@ -925,7 +925,7 @@ With `none`, the render is byte for byte what it was with no setting.
 **The extraction model.** `OspreyConfig.extraction_model` decides it. If `models.extraction` is in
 `osprey.yaml`, that model, always (the key being there counts, not its value: `model_fields_set`).
 Otherwise `qwen2.5:14b-instruct` with `resources.gpu: nvidia`, and `qwen2.5:7b-instruct` without.
-The extraction model also answers Ask the case and Ask to search on the local engine. The render's
+The extraction model also answers Ask & Chat and Ask to search on the local engine. The render's
 model pull, the gateway's routing table, the Conduit's `OSPREY_EXTRACTION_MODEL`, and the update
 `start --build` makes to them (`scripts/refresh.py`) all read this one property, so they cannot
 disagree.

@@ -907,7 +907,7 @@ example "Answered by Gemini (gemini/gemini-2.5-flash)" or "Answered by This depl
 (qwen2.5:7b-instruct)". It is what the deployment says it used, not what you chose. An answer kept
 before engines were named has no such line. **Ask to search** shows the same choice and line, and the
 choice applies there too: your question is about the case, so it goes under the case's handling and
-from the case's datasets, through the same two checks as Ask the case. It reaches the engine you chose
+from the case's datasets, through the same two checks as Ask & Chat. It reaches the engine you chose
 only when the case's material, as you see it, may leave the deployment and every dataset of the case
 allows that engine; otherwise the deployment's own model answers, and its line says so.
 
