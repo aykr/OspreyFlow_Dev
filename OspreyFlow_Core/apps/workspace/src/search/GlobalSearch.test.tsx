@@ -8,7 +8,13 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Node } from "../../../../packages/schemas/generated";
-import { GlobalSearch, SEARCH_HINT_MS, SUGGEST_MIN_CHARS, SUGGEST_PAUSE_MS } from "./GlobalSearch";
+import {
+  GlobalSearch,
+  LIMITED_SUGGESTIONS,
+  SEARCH_HINT_MS,
+  SUGGEST_MIN_CHARS,
+  SUGGEST_PAUSE_MS,
+} from "./GlobalSearch";
 
 function account(id: string, value: string): Node {
   return { id, type: "Endpoint", properties: { value_normalised: value } } as unknown as Node;
@@ -174,6 +180,41 @@ describe("GlobalSearch as the analyst types", () => {
     await pause();
     expect(screen.getByRole("status").textContent).toMatch(/unavailable/i);
     expect(screen.queryByText("Endpoint: C1305486145")).toBeNull();
+  });
+
+  // ADR-059 Amendment 1, the owner's requirement c: when the search index cannot answer, the box's
+  // suggestions come from today's prefix read, and the box says so, in one line under them.
+  it("says suggestions are limited when the Conduit answered without the search index", async () => {
+    stubFetch(() => ({ body: { nodes: [account("n1", "C1305486145")], more: false, source: "graph", limited: true } }));
+    mount();
+    type("C13");
+    await pause();
+    expect(screen.getByRole("status").textContent).toBe(LIMITED_SUGGESTIONS);
+  });
+
+  it("does not say so when the index answered, or for an older reply with no such field", async () => {
+    stubFetch((query) => ({
+      body: query === "C13" ? { nodes: [account("n1", "C1")], more: false, source: "index", limited: false } : { nodes: [account("n1", "C1")], more: false },
+    }));
+    mount();
+    const box = type("C13");
+    await pause();
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.change(box, { target: { value: "C130" } });
+    await pause();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("keeps the limited line in view, and beside the 'more match' hint when both apply", async () => {
+    stubFetch(() => ({ body: { nodes: [account("n1", "C1")], more: true, source: "graph", limited: true } }));
+    mount();
+    type("C13");
+    await pause();
+    await pause(SEARCH_HINT_MS + 1000);
+    const status = screen.getByRole("status");
+    expect(status.textContent).toContain(LIMITED_SUGGESTIONS);
+    expect(status.textContent).toMatch(/more match/);
+    expect(status.getAttribute("data-faded")).toBeNull();
   });
 
   it("says when nothing starts with what was typed", async () => {

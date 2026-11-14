@@ -1,0 +1,9 @@
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core
+
+
+ Test Files  3 passed (3)
+      Tests  71 passed (71)
+   Start at  00:10:22
+   Duration  7.58s (tests 82%, environment 12%, transform 3%, import 2%)
+

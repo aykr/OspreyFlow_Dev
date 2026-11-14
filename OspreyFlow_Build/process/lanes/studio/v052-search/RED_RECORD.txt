@@ -1,0 +1,92 @@
+== plant: the access filter moved to post_filter: NOT APPLIED on the first run (the formatter had rewrapped the line); its 23 passed proves nothing, and it is rerun at the end
+== plant: dis_max sums bands (tie_breaker 1)
+FAILED tests/services/api/test_search_index_query.py::test_every_dis_max_takes_the_best_band_alone
+1 failed, 22 passed in 0.43s
+== plant: a fuzzy typo band instead of trigrams
+FAILED tests/services/api/test_search_index_query.py::test_no_clause_expands_against_the_word_list
+FAILED tests/services/api/test_search_index_query.py::test_the_expansion_check_finds_a_planted_fuzzy_clause
+2 failed, 21 passed in 0.42s
+== plant: the query cut silently instead of refused
+FAILED tests/services/api/test_search_index_query.py::test_a_query_over_the_limit_is_refused_not_cut
+1 failed, 22 passed in 0.41s
+== plant: the access filter optional
+FAILED tests/services/api/test_search_index_query.py::test_a_body_cannot_be_built_without_an_access_filter
+1 failed, 22 passed in 0.42s
+== plant: the canonical form not asked
+FAILED tests/services/api/test_search_index_query.py::test_the_identifier_band_asks_the_canonical_form_too
+1 failed, 22 passed in 0.41s
+== restored
+23 passed in 0.41s
+== plant (rerun): the access filter moved to post_filter (limits hits, not counts)
+ OspreyFlow_Core/services/api/search_index_query.py | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+FAILED tests/services/api/test_search_index_query.py::test_the_access_filter_limits_hits_and_counts_alike
+FAILED tests/services/api/test_search_index_query.py::test_narrowing_filters_join_the_access_filter_never_replace_it
+2 failed, 21 passed in 0.44s
+== restored
+23 passed in 0.41s
+
+== second round (the response shape: groups, datasets and dates, paging), at the builder after a01ca1c
+== plant: by-type counts over text documents too (a Document counted twice)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_index_query.py::test_the_by_type_counts_ask_every_type_the_ontology_has
+1 failed, 26 passed in 1.38s
+== plant: the group in the query, so other groups' counts shrink
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+FAILED tests/services/api/test_search_index_query.py::test_a_group_narrows_the_list_and_leaves_every_groups_count_whole
+1 failed, 26 passed in 1.46s
+== plant: the depth limit removed, so a deep page is cut by OpenSearch's window instead
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_index_query.py::test_a_page_past_the_depth_limit_is_refused_not_cut
+1 failed, 26 passed in 1.30s
+== restored
+27 passed in 1.19s
+
+== third round: the suggestion prefix limit against rules' PREFIX_MAX_CHARS (50), test written first
+== before the check existed (the test alone):
+FAILED tests/services/api/test_search_index_query.py::test_a_suggestion_longer_than_the_stored_prefixes_is_refused_not_cut
+1 failed, 27 passed
+== with the check: 28 passed
+
+== fourth round: the search service, at 20968b4; its tests were green on first run, so each is shown red here
+== plant: the index asked whenever there is one, with or without an access filter
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_with_no_access_filter_the_index_is_never_asked
+1 failed, 10 passed in 3.42s
+== plant: every index failure falls back, hiding a broken query as 'limited'
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_any_other_index_failure_is_not_hidden
+1 failed, 10 passed in 3.33s
+== plant: a hit listed whether or not the graph returns it
+ 1 file changed, 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_a_hit_the_graph_does_not_return_is_dropped_and_counts_are_not_exact
+1 failed, 10 passed in 4.45s
+== plant: every dataset an index count names offered, inside the case or not
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_an_index_reply_becomes_the_response_shape
+FAILED tests/services/api/test_search_service.py::test_a_dataset_outside_the_case_is_never_offered
+2 failed, 9 passed in 2.16s
+== plant: a filter on any dataset passed to the index
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_a_filter_on_a_dataset_outside_the_case_is_refused
+1 failed, 10 passed in 2.04s
+== plant: the fallback not flagged as limited
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+FAILED tests/services/api/test_search_service.py::test_with_no_access_filter_the_index_is_never_asked
+FAILED tests/services/api/test_search_service.py::test_with_no_index_the_fallback_answers_and_says_results_are_limited
+FAILED tests/services/api/test_search_service.py::test_an_unreachable_index_falls_back
+3 failed, 8 passed in 2.05s
+== restored
+11 passed in 2.79s
+
+== fifth round: merged entities, at baa13f1 (the tests were red before the code: 16 failed, no tau argument)
+== plant: every hit, hidden ones too, asked for links
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_a_member_the_reader_may_not_see_adds_nothing
+1 failed, 15 passed in 1.86s
+== plant: splits ignored
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+FAILED tests/services/api/test_search_service.py::test_a_merge_below_the_cases_threshold_or_split_is_not_made
+1 failed, 15 passed in 1.85s
+== restored
+16 passed in 2.77s

@@ -1,0 +1,54 @@
+Running on ospreyflow-test (stack f, osprey-runs/studio/), logged at osprey-runs/studio.meta/runs/20261113T224149Z-bb2ba9dd/log: bash -c cd OspreyFlow_Build && ../OspreyFlow_Core/.venv/bin/python -m pytest -p no:cacheprovider -q -rfE tests/services/search_index/
+.........................................................F...            [100%]
+=================================== FAILURES ===================================
+___________ test_a_mention_is_found_in_text_with_its_passage_marked ____________
+
+    async def test_a_mention_is_found_in_text_with_its_passage_marked() -> None:
+        found = await _search("Kestrel invoice")
+        bands = _bands(found)
+        assert bands[0] == ("d-memo", "mention_words")
+        memo = found.results[0]
+        assert memo.is_document
+>       assert [p.text for p in memo.passage if p.match] == ["Kestrel", "invoice"]
+E       AssertionError: assert ['invoice'] == ['Kestrel', 'invoice']
+E         
+E         At index 0 diff: 'invoice' != 'Kestrel'
+E         Right contains one more item: 'invoice'
+E         Use -v to get more diff
+
+tests/services/search_index/test_search_leak_live.py:520: AssertionError
+============================= slowest 30 durations =============================
+1.72s call     tests/services/search_index/test_index_feed_reach.py::test_no_route_or_other_module_reaches_the_indexers_reads
+0.86s call     tests/services/search_index/test_search_leak_live.py::test_names_exact_every_word_sounds_alike_and_spelt_alike
+0.76s call     tests/services/search_index/test_search_leak_live.py::test_default_relevance_would_leak_through_word_rarity
+0.74s call     tests/services/search_index/test_feed_live.py::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them
+0.62s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[classification]
+0.59s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[text_unit]
+0.59s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+0.58s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[public-other-unit]
+0.56s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[not-for-R]
+0.56s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[datasets]
+0.56s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[handling_code]
+0.50s teardown tests/services/search_index/test_client_sigv4.py::test_an_unsigned_client_is_refused
+0.50s teardown tests/services/search_index/test_client_sigv4.py::test_a_sigv4_client_is_answered
+0.50s teardown tests/services/search_index/test_client_sigv4.py::test_a_client_signing_with_a_key_the_domain_does_not_know_is_refused
+0.45s setup    tests/services/search_index/test_feed_live.py::test_a_long_typed_prefix_still_finds_the_name
+0.44s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[empty-case]
+0.43s setup    tests/services/search_index/test_feed_live.py::test_a_promotion_and_its_revert_change_the_documents_datasets
+0.42s setup    tests/services/search_index/test_feed_live.py::test_a_load_reaches_the_index
+0.41s setup    tests/services/search_index/test_feed_live.py::test_a_new_version_replaces_the_old_revisions_document
+0.40s setup    tests/services/search_index/test_feed_live.py::test_a_merge_re_reads_both_ends_and_adds_no_cluster
+0.40s teardown tests/services/search_index/test_feed_live.py::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them
+0.40s setup    tests/services/search_index/test_feed_live.py::test_a_deletion_takes_the_document_and_its_text_out
+0.39s call     tests/services/search_index/test_search_leak_live.py::test_fuzzy_expansion_would_leak_a_visible_record_out
+0.38s setup    tests/services/search_index/test_feed_live.py::test_a_change_during_a_rebuild_reaches_the_index_being_built_too
+0.38s call     tests/services/search_index/test_search_leak_live.py::test_the_world_is_not_vacuous
+0.36s call     tests/services/search_index/test_feed_live.py::test_a_promotion_and_its_revert_change_the_documents_datasets
+0.36s setup    tests/services/search_index/test_feed_live.py::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them
+0.35s call     tests/services/search_index/test_search_leak_live.py::test_the_date_filter_and_the_offered_span
+0.31s call     tests/services/search_index/test_feed_live.py::test_a_merge_re_reads_both_ends_and_adds_no_cluster
+0.27s call     tests/services/search_index/test_feed_live.py::test_a_change_during_a_rebuild_reaches_the_index_being_built_too
+=========================== short test summary info ============================
+FAILED tests/services/search_index/test_search_leak_live.py::test_a_mention_is_found_in_text_with_its_passage_marked
+1 failed, 60 passed in 20.48s
+Wall time: 22 s, exit 1 (stack f, the lease studio took at 2026-11-13T22:35:56Z; set-up before it 12 s)

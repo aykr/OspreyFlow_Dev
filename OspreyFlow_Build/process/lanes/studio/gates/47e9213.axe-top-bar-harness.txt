@@ -1,0 +1,13 @@
+
+Running 8 tests using 1 worker
+
+  ✓  1 a11y/every-harness.spec.ts:388:7 › top-bar-harness.html (dark) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✓  2 a11y/every-harness.spec.ts:388:7 › top-bar-harness.html (light) has no automated WCAG 2.2 A or AA violations (886ms)
+  ✓  3 a11y/every-harness.spec.ts:388:7 › top-bar-harness.html (govuk) has no automated WCAG 2.2 A or AA violations (973ms)
+  ✓  4 a11y/every-harness.spec.ts:424:5 › top-bar-harness.html: every labelled field's name contains its visible label (2.5.3) (603ms)
+  ✓  5 a11y/every-harness.spec.ts:388:7 › top-bar-harness.html help=1 (dark) has no automated WCAG 2.2 A or AA violations (904ms)
+  ✓  6 a11y/every-harness.spec.ts:388:7 › top-bar-harness.html help=1 (light) has no automated WCAG 2.2 A or AA violations (897ms)
+  ✓  7 a11y/every-harness.spec.ts:388:7 › top-bar-harness.html help=1 (govuk) has no automated WCAG 2.2 A or AA violations (991ms)
+  ✓  8 a11y/every-harness.spec.ts:424:5 › top-bar-harness.html help=1: every labelled field's name contains its visible label (2.5.3) (600ms)
+
+  8 passed (8.5s)

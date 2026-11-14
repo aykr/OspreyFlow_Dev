@@ -82,6 +82,11 @@ class SuggestResponse(BaseModel):
 
     nodes: list[Node]
     more: bool
+    #: ADR-059 Amendment 1: who answered ("graph" until the index answers), and whether the box
+    #: should say its suggestions are limited (a "starts with" one the graph answered for want of
+    #: the index: the owner's requirement c, on screen).
+    source: Literal["index", "graph"] = "graph"
+    limited: bool = False
 
 
 async def suggest(

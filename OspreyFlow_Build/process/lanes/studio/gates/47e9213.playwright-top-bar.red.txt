@@ -1,0 +1,91 @@
+== plant: GlobalSearch ignores the reply's limited (body.limited === true -> false)
+
+Running 4 tests using 1 worker
+
+  ✘  1 keyboard/top-bar.spec.ts:180:3 › the box says its suggestions are limited when the index did not answer (dark) (5.3s)
+  ✘  2 keyboard/top-bar.spec.ts:180:3 › the box says its suggestions are limited when the index did not answer (light) (5.2s)
+  ✘  3 keyboard/top-bar.spec.ts:180:3 › the box says its suggestions are limited when the index did not answer (govuk) (5.2s)
+  ✓  4 keyboard/top-bar.spec.ts:201:1 › with the index answering, the box shows no limited line (518ms)
+
+
+  1) keyboard/top-bar.spec.ts:180:3 › the box says its suggestions are limited when the index did not answer (dark) 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('.global-search__limited')
+    Expected: "Suggestions are limited just now: only the exact start of a name or identifier matches."
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" locator('.global-search__limited') with timeout 5000ms
+      - waiting for locator('.global-search__limited')
+
+
+      185 |     await page.getByRole("combobox").fill("per");
+      186 |     const line = page.locator(".global-search__limited");
+    > 187 |     await expect(line).toHaveText("Suggestions are limited just now: only the exact start of a name or identifier matches.");
+          |                        ^
+      188 |     await expect(page.getByRole("status")).toContainText("more match");
+      189 |     const results = await new AxeBuilder({ page })
+      190 |       .include(".global-search")
+        at /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/apps/workspace/keyboard/top-bar.spec.ts:187:24
+
+    Error Context: test-results/top-bar-the-box-says-its-s-5acaa--index-did-not-answer-dark-/error-context.md
+
+  2) keyboard/top-bar.spec.ts:180:3 › the box says its suggestions are limited when the index did not answer (light) 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('.global-search__limited')
+    Expected: "Suggestions are limited just now: only the exact start of a name or identifier matches."
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" locator('.global-search__limited') with timeout 5000ms
+      - waiting for locator('.global-search__limited')
+
+
+      185 |     await page.getByRole("combobox").fill("per");
+      186 |     const line = page.locator(".global-search__limited");
+    > 187 |     await expect(line).toHaveText("Suggestions are limited just now: only the exact start of a name or identifier matches.");
+          |                        ^
+      188 |     await expect(page.getByRole("status")).toContainText("more match");
+      189 |     const results = await new AxeBuilder({ page })
+      190 |       .include(".global-search")
+        at /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/apps/workspace/keyboard/top-bar.spec.ts:187:24
+
+    Error Context: test-results/top-bar-the-box-says-its-s-740b9-index-did-not-answer-light-/error-context.md
+
+  3) keyboard/top-bar.spec.ts:180:3 › the box says its suggestions are limited when the index did not answer (govuk) 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('.global-search__limited')
+    Expected: "Suggestions are limited just now: only the exact start of a name or identifier matches."
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" locator('.global-search__limited') with timeout 5000ms
+      - waiting for locator('.global-search__limited')
+
+
+      185 |     await page.getByRole("combobox").fill("per");
+      186 |     const line = page.locator(".global-search__limited");
+    > 187 |     await expect(line).toHaveText("Suggestions are limited just now: only the exact start of a name or identifier matches.");
+          |                        ^
+      188 |     await expect(page.getByRole("status")).toContainText("more match");
+      189 |     const results = await new AxeBuilder({ page })
+      190 |       .include(".global-search")
+        at /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/apps/workspace/keyboard/top-bar.spec.ts:187:24
+
+    Error Context: test-results/top-bar-the-box-says-its-s-b1a28-index-did-not-answer-govuk-/error-context.md
+
+  3 failed
+    keyboard/top-bar.spec.ts:180:3 › the box says its suggestions are limited when the index did not answer (dark) 
+    keyboard/top-bar.spec.ts:180:3 › the box says its suggestions are limited when the index did not answer (light) 
+    keyboard/top-bar.spec.ts:180:3 › the box says its suggestions are limited when the index did not answer (govuk) 
+  1 passed (18.6s)
+== restored

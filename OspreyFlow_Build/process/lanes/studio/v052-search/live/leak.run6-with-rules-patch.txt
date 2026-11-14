@@ -1,0 +1,35 @@
+Running on ospreyflow-test (stack f, osprey-runs/studio/), logged at osprey-runs/studio.meta/runs/20261113T224348Z-2cffcf52/log: bash -c cd OspreyFlow_Build && ../OspreyFlow_Core/.venv/bin/python -m pytest -p no:cacheprovider -q -rfE tests/services/search_index/
+.............................................................            [100%]
+============================= slowest 30 durations =============================
+3.12s call     tests/services/search_index/test_index_feed_reach.py::test_no_route_or_other_module_reaches_the_indexers_reads
+1.53s call     tests/services/search_index/test_search_leak_live.py::test_names_exact_every_word_sounds_alike_and_spelt_alike
+1.39s call     tests/services/search_index/test_search_leak_live.py::test_default_relevance_would_leak_through_word_rarity
+1.29s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[datasets]
+1.25s setup    tests/services/search_index/test_feed_live.py::test_a_promotion_and_its_revert_change_the_documents_datasets
+1.15s call     tests/services/search_index/test_feed_live.py::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them
+1.11s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[text_unit]
+1.10s setup    tests/services/search_index/test_feed_live.py::test_a_new_version_replaces_the_old_revisions_document
+1.09s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[handling_code]
+1.09s setup    tests/services/search_index/test_feed_live.py::test_a_merge_re_reads_both_ends_and_adds_no_cluster
+1.03s setup    tests/services/search_index/test_feed_live.py::test_a_load_reaches_the_index
+0.84s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+0.80s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[classification]
+0.75s setup    tests/services/search_index/test_feed_live.py::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them
+0.75s call     tests/services/search_index/test_search_leak_live.py::test_fuzzy_expansion_would_leak_a_visible_record_out
+0.73s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[not-for-R]
+0.67s call     tests/services/search_index/test_search_leak_live.py::test_the_date_filter_and_the_offered_span
+0.61s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[public-other-unit]
+0.61s setup    tests/services/search_index/test_feed_live.py::test_a_long_typed_prefix_still_finds_the_name
+0.58s setup    tests/services/search_index/test_feed_live.py::test_a_deletion_takes_the_document_and_its_text_out
+0.56s setup    tests/services/search_index/test_feed_live.py::test_a_change_during_a_rebuild_reaches_the_index_being_built_too
+0.55s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[empty-case]
+0.50s teardown tests/services/search_index/test_client_sigv4.py::test_an_unsigned_client_is_refused
+0.50s teardown tests/services/search_index/test_client_sigv4.py::test_a_sigv4_client_is_answered
+0.50s teardown tests/services/search_index/test_client_sigv4.py::test_a_client_signing_with_a_key_the_domain_does_not_know_is_refused
+0.49s call     tests/services/search_index/test_feed_live.py::test_a_merge_re_reads_both_ends_and_adds_no_cluster
+0.44s call     tests/services/search_index/test_feed_live.py::test_a_deletion_takes_the_document_and_its_text_out
+0.43s call     tests/services/search_index/test_search_leak_live.py::test_the_world_is_not_vacuous
+0.43s call     tests/services/search_index/test_feed_live.py::test_a_promotion_and_its_revert_change_the_documents_datasets
+0.41s call     tests/services/search_index/test_feed_live.py::test_a_change_during_a_rebuild_reaches_the_index_being_built_too
+61 passed in 32.45s
+Wall time: 35 s, exit 0 (stack f, the lease studio took at 2026-11-13T22:35:56Z; set-up before it 18 s)
