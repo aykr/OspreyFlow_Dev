@@ -301,10 +301,16 @@ def entra_config() -> dict[str, Any]:
         "claims": {claims["clearance"]["claim"]: "OFFICIAL-SENSITIVE",
                    "groups": [*claims["org_unit"]["groups"], *claims["handling_codes"]["groups"]]},
     }
+    # ADR-148 Amendment 18: the API registration's access-token version, set for one run (step 6's
+    # live check of the Conduit's words on a v1.0 token); unset, Entra's v2.0 as the poc asks for.
+    version = os.environ.get("R1_ENTRA_TOKEN_VERSION", "2.0").strip() or "2.0"
+    if version not in ("1.0", "2.0"):
+        raise SystemExit(f"R1_ENTRA_TOKEN_VERSION={version!r}: Entra issues access tokens as 1.0 or 2.0")
     return {
         "tenant_id": claims["tenant_id"],
         "jwks": [entra_keys()["jwk"]],
-        "api": {"app_id": api, "identifier": f"api://{api}", "scopes": [claims.get("scope", "access_as_user")]},
+        "api": {"app_id": api, "identifier": f"api://{api}", "scopes": [claims.get("scope", "access_as_user")],
+                "access_token_version": version},
         "clients": {
             claims["client_id"]: {"redirect_uris": [f"https://{GLASS}/"], "delegated": [claims.get("scope", "access_as_user")]},
             superset["client_id"]: {"secret": made["superset"], "delegated": superset["delegated"],
@@ -413,6 +419,21 @@ def platform() -> None:
     kubectl("-n", MANAGED, "rollout", "status", "deployment/entra-standin", "--timeout=300s")
     log.write_text(f"platform stand-ins up with {image}\n")
     print(f"the platform's stand-ins are up (record {log})")
+
+
+def entra() -> None:
+    """The Entra stand-in alone, with `entra_config()` as it stands now (step 6's row 11b': the API's
+    access-token version, `R1_ENTRA_TOKEN_VERSION`, for one run): never the deployment's namespace,
+    CoreDNS or the other stand-ins, as `platform` would (its CoreDNS rewrite leaves out the search
+    domain's name a deployment in progress needs). Its pod rolls when its config changes (the
+    template's `r1/config` hash), and makes a new signing key: the Conduit is restarted after."""
+    log = record("entra")
+    apply(_server("entra-standin", state()["standin_image"], "entra", entra_config(), 443, "standin-tls"))
+    kubectl("-n", MANAGED, "rollout", "status", "deployment/entra-standin", "--timeout=300s")
+    version = entra_config()["api"]["access_token_version"]
+    log.write_text(f"entra stand-in re-applied: the API's access tokens v{version}\n")
+    print(f"the Entra stand-in is re-applied, the API's access tokens v{version} (record {log});"
+          ' restart the Conduit: kubectl -n ospreyflow-poc rollout restart deploy/api')
 
 
 def irsa_webhook(roles: dict[str, str]) -> None:
@@ -1215,6 +1236,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("platform")
+    sub.add_parser("entra", help="the Entra stand-in alone, as entra_config() is now")
     r = sub.add_parser("runbook")
     r.add_argument("name", choices=["INSTALL", "DECOMMISSION"])
     r.add_argument("--from", dest="start", type=int, default=1)
@@ -1230,7 +1252,9 @@ def main() -> None:
     sub.add_parser("restored")
     a = p.parse_args()
     os.chdir(CORE)
-    if a.command == "platform":
+    if a.command == "entra":
+        entra()
+    elif a.command == "platform":
         platform()
     elif a.command == "runbook":
         runbook(a.name, a.start)
