@@ -2055,3 +2055,12 @@ Also asked by the lanes:
 
 1. **Live-file listings: a standing word.** An edit that only adds a new live test file to the live-test skip lists in `.github/workflows/ci.yml` and the Makefile's `test` target is applied without asking and recorded here. Any other `.github/` or Makefile change still goes to the owner. First use: `test_batch_expansion_live.py`, in rules-b's batch merge (354c707).
 2. **The batch job at 50,000 nodes: measured before the freeze.** At 4,001 nodes, written through the ordinary write path (417 s), `edges_among` did not answer within 420 s, so no 50k figure exists. The batch job is merged. After rules' am18 lands, a 50,000-node run with bulk-loaded data is queued, and the figure goes to the owner before the freeze on Tue 17. If it times out, rules-b looks at `edges_among`, and the owner gets the result and a proposal.
+
+## 14 November 2026, evening: the owner's rulings on the route, the demo, R7 and ADR-044
+
+1. **The route pulled forward** (the owner's paste): step 4 now, step 5 (freeze and sweep) now, the candidate after the sweep, am20 and CI green; step 6 Mon 16 from 08:00Z; the cut when step 6 passes (committed: Tue 17). Tue 17 to Thu 19 are step 6's spare days, with no new work. From the freeze to the cut, only v0.5.2 fixes merge. Admin's heartbeat fix (done from git, ready to start) proceeds now; its points 3 to 5 come after the cut.
+2. **edges_among (ADR-124 Am 20): fix in v0.5.2** (rules-b builds, rules reviews), after rules-b's 50k run found the compile wall past ~10–25k ids.
+3. **The demo for client sign-ins** (the owner's paste): osprey-small from the candidate on Sun 15 evening (route D), clear of step 6; finish step 13 (v0.5.1 on the demo) skipped; ospreyflow.app (Part 3) after the cut; sign-ins only once the user-visible defect list is empty or accepted. Studio proposes accounts, isolation and the Gemini limit.
+4. **R7 confirmed**: step 2 (suppression taking effect) is not in v0.5.2 and gets its own ADR after the cut; the menu keeps the mark, and the guide says it hides nothing yet.
+5. **ADR-044's three-in-a-row escalation: fix in v0.5.2** (admin), no longer carried.
+6. **Standing word: live-file listings** in ci.yml and the Makefile may be applied without asking (see the afternoon entry).
