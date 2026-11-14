@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "87028fb523a8341f55596807fa965dc401b62cfd8882e3ee1a2268caffb83a82",
+    "body": "3d3ab6d8866abee9888565844483ef5178b56bbf88ff7d75d391ddaf89b42e83",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -12,9 +12,9 @@
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
     },
-    "pdf": "5c350d61b3eb36a8d29f10cf4c971422921f35638455e89cf6db5e4e45504a7b",
-    "source": "45213c36ee86e01c0c5fc94569af91403869adba541ed60e3b0eefd38631fcfa",
-    "version": "2.15"
+    "pdf": "7018036696ada38fd92602a666e97f45bd37e90849f5d64ab7bf6afcebd60ec9",
+    "source": "765839b0edd4080710151186d2e088af73f9e6c563afefbc8e78a51b4cc9be74",
+    "version": "2.16"
   },
   "architecture-guide.md": {
     "body": "64863ff4e301ec2ae5b72e94a2fc5d81179b59dd6d378b5307efc8175b273629",
@@ -50,7 +50,7 @@
     "version": "1.36"
   },
   "user-guide.md": {
-    "body": "6b26f1144fe05cdb4c3f88ccb906850e6aae473d8fa370dba57f9d551437a167",
+    "body": "b85d21f3a7a955b297c3b350b3422004ae299f05db9837a22d21fbbbee188135",
     "images": {
       "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
       "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
@@ -79,8 +79,8 @@
       "images/user/25-scheduled-rule.png": "85fd57e01b357aaa6923a965531bc1a29970cf4cd1b0f503f519988bfe8381e1",
       "images/user/26-second-person.png": "c27f6a95d9a76921c21821823ec56de4334b4670ce2455fe30f964aac38802e8"
     },
-    "pdf": "8dff4e759046b7d452055657ecc8d9fbf44e94328fe9565548241ea637e06287",
-    "source": "43d7b3902c93256ae54ad20efc83f0ba5205f1118227deada1a5cf463a4f1a44",
-    "version": "1.63"
+    "pdf": "974be16a57f66e3263fa797a888f59cd00ac5d54bcb219f1295c6a7d5b4303b5",
+    "source": "2c44fd5c4eab0a53bdbc7df930a223d4421efc1cb47a77098fa7d69cfeb25f2d",
+    "version": "1.64"
   }
 }
