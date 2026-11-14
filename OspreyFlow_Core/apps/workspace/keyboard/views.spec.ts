@@ -1,4 +1,4 @@
-// Case views by keyboard alone (ADR-144; rule 13): a view opened from *Views in this case*, shared
+// Case views by keyboard alone (ADR-144; rule 13): a view opened from the saved views list, shared
 // with the case, deleted after asking once, opened from another case's row in the cases list, saved
 // from its form, and left for the case from the banner over an opened view. Saving from the canvas
 // (the selection bar and a node's menu) is in `keyboard.spec.ts`, asking the model in a view in
@@ -10,7 +10,8 @@ import { VIEW_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistr
 
 async function open(page: Page, query = ""): Promise<void> {
   await page.goto(`/keyboard/views-harness.html${query}`);
-  await expect(page.getByRole("list", { name: "Views in this case" })).toBeVisible();
+  // ADR-145 Amendment 17: the list is *Saved views* (it was *Views in this case*).
+  await expect(page.getByRole("list", { name: "Saved views" })).toBeVisible();
 }
 
 const state = (page: Page) => page.evaluate(() => window.__VIEWS__!);
@@ -131,8 +132,10 @@ test("a merged drawing's notes are opened and closed from its view's banner by k
 
 test("another member of the case is shown nothing of a private view, and no share or delete", async ({ page }) => {
   await open(page, "?as=bob");
-  const panel = page.getByRole("list", { name: "Views in this case" });
-  await expect(panel.getByRole("listitem")).toHaveCount(1);
+  const panel = page.getByRole("list", { name: "Saved views" });
+  // The one view Bob may see, after the whole case's row (ADR-145 Amendment 17).
+  await expect(panel.getByRole("listitem")).toHaveCount(2);
+  await expect(panel.locator('[data-view-id]:not([data-view-id="whole-case"])')).toHaveCount(1);
   await expect(page.getByText("Alice's own")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Share / })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Delete / })).toHaveCount(0);
@@ -180,8 +183,13 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
           };
         });
       });
-      expect(rows.map((r) => r.id)).toEqual(["v-private", "v-shared"]);
-      for (const row of rows) expect(row, row.id!).toEqual({ id: row.id, nameBesideTag: true, tagCovered: false, actionLines: 1, outside: 0 });
+      // ADR-145 Amendment 17: the list starts with the whole case, its *Open now* tag beside its name and, while it
+      // is the one open, no action; each view's row as before.
+      expect(rows.map((r) => r.id)).toEqual(["whole-case", "v-private", "v-shared"]);
+      for (const row of rows) {
+        const actionLines = row.id === "whole-case" ? 0 : 1;
+        expect(row, row.id!).toEqual({ id: row.id, nameBesideTag: true, tagCovered: false, actionLines, outside: 0 });
+      }
       if (state !== "&asking=delete") {
         await drawer.getByRole("button", { name: /^Open Alice's own/ }).focus();
         await page.keyboard.press("Enter");
