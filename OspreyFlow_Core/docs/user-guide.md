@@ -19,7 +19,7 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.65 | 2026-11-14 | "View" means a saved view alone (ADR-145 Amendment 17, ADR-144 Amendment 6). §3: the case line's **Saved views (n)**, and "› Saved view: ‹name›" while one is open. §4 and §5: **More** in place of More views, and **Clear the graph**. §5.13, *Saved views*: the strip's **Back to the whole case** and its words, the list's **The whole case** row and *Open now*, a saved view without a name told apart by its first item and when it was saved, and the graph toolbar's Views menu gone. Held by `tests/test_user_guide_navigation.py` and `tests/test_guide_navigation_words.py`. Version set at merge. PDF made by the orchestrator at merge. |
+| 1.65 | 2026-11-14 | "View" means a saved view alone (ADR-145 Amendment 17, ADR-144 Amendment 6). §3: the case line's **Saved views (n)**, and "› Saved view: ‹name›" while one is open. §4 and §5: **More** in place of More views, and **Clear the graph**. §5.13, *Saved views*: the strip's **Back to the whole case** and its words, the list's **The whole case** row and *Open now*, a saved view without a name told apart by its first item and when it was saved, and the graph toolbar's Views menu gone, and an action that would change the case answered with the saved view's notice. §5.12, the client's words gone (studio's V3): the composition is **Rarity plus adds**, its scale the raw-sum scale, the measure the **share of pair links**, and the influencers' "to be confirmed" note struck. Held by `tests/test_user_guide_navigation.py`, `tests/test_guide_navigation_words.py`, `tests/test_user_guide_saved_views.py` and `tests/test_guides_no_client_words.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.64 | 2026-11-14 | §5.2: a batch result, and a view, up to the view's limit saved and opened with its links, and *Show links among all* on a large canvas, since the links among a set are found a thousand records at a time (ADR-124 Amendment 20). Held by `tests/test_user_guide_am20.py`. PDF made by the orchestrator at merge. |
 | 1.63 | 2026-11-14 | A watch whose owner is not held in *People and roles* quotes the stopped reason's new words ("Its owner is not held in Admin › People and roles.", ADR-148 Amendment 19). Version set at merge. PDF made by the orchestrator at merge. |
 | 1.62 | 2026-11-14 | §7.5: a watch stays active through two unreachable evaluations in a row, with a note saying so, and stops at the third (ADR-044 Amendment 2). |
@@ -707,7 +707,7 @@ OspreyFlow ships two. **Direct link**: calls, money transfers, visits and cell s
 stronger than links that are only inferred or shared. **Evidenced by an assault, disorder or find**:
 a role in such an incident, and a conflict, association or cell share between people in one, are drawn
 stronger. Their sizes are calibrated so that a boost moves an ordinary link about as far as doubling
-its count would, and are marked "to be confirmed with the client". Boosts add up.
+its count would. Boosts add up.
 
 **An influencer applies only if you may see the record that evidences the link,** or, for a dataset,
 only if your case reads that dataset. An assault report above your clearance never thickens a line
@@ -717,8 +717,7 @@ weight never changes: influencers are applied as the link is read, so a change t
 
 **3. Shared-attribute rarity.** Two people who share something few others share are more interesting
 than two who share what everyone does. A thing two people of one kind share (a cell, a phone number, a
-visitor, a report, a group) is a **shared value**. By default rarity is worked out as the client works
-it out: a value held by *k* people links *k × (k − 1) / 2* pairs, and its rarity is one less its share
+visitor, a report, a group) is a **shared value**. By default rarity is worked out as the **share of pair links**: a value held by *k* people links *k × (k − 1) / 2* pairs, and its rarity is one less its share
 of all the pairs linked through values of its kind. A phone two people share, among phones that link
 few pairs, scores near 1; the prison everyone is held in scores near 0. Two people take the rarity of
 the rarest value they share. Your installation may choose the earlier measure instead, **inverse
@@ -726,7 +725,7 @@ frequency**, which adds, for each thing two people share, the logarithm of how m
 over how many share it; the legend says which is in force. It is worked out per dataset unless you
 choose across the case's datasets, and **only over what you may see**: if two analysts have different
 access, they can see different rarity for the same pair, and both are right for what each may see.
-Rarity is its own measure, never folded into the strength, except under client parity (below).
+Rarity is its own measure, never folded into the strength, except under rarity plus adds (below).
 
 **Two compositions.** How the three ideas make a strength is the installation's choice, shown in the
 legend:
@@ -734,14 +733,13 @@ legend:
 | Composition | Strength is | Drawn on |
 | --- | --- | --- |
 | **Standard** (shipped) | the link's stored weight, from its own count and recency, with the influencers applied | 0 to 1 |
-| **Client parity** | rarity plus the influencers' added boosts, with no count and no recency: the client's own sum | 0 to 1, through a curve that keeps the sums' order; the Inspector also shows the **raw sum on the client's scale** |
+| **Rarity plus adds** | rarity plus the influencers' added boosts, with no count and no recency: a raw sum | 0 to 1, through a curve that keeps the sums' order; the Inspector also shows the **raw sum on the raw-sum scale** |
 
-Under client parity, a stored link's rarity is that of the link itself among the links of its type you
+Under rarity plus adds, a stored link's rarity is that of the link itself among the links of its type you
 can see in its dataset (one less one over how many there are), and a pair linked through a shared
 value takes that value's rarity. Only added boosts count in the sum: a multiplier, floor or exclusion
-is left out, and the legend says so. Because rarity is worked out over what you may see, so is a
-client-parity strength. An installation chooses its composition in the same way as its influencers (a
-proposal and a second person's approval); a case's Author may switch one case to client parity, to
+is left out, and the legend says so. Because rarity is worked out over what you may see, so is a strength under rarity plus adds. An installation chooses its composition in the same way as its influencers (a
+proposal and a second person's approval); a case's Author may switch one case to rarity plus adds, to
 compare the two on the same case, and back.
 
 **Where you see it:**
@@ -764,8 +762,7 @@ compare the two on the same case, and back.
 - **The Inspector** explains a selected link under **Connection strength**: its count against what is
   heavy for its type, when it was last seen, the rule and weights version it was worked out under,
   each influencer that changed it and the kind of record (or the dataset) that evidenced it, and what
-  its two ends share, rarest first, with the measure named. Under client parity it shows instead the
-  link's rarity term, each boost added, and the **raw sum on the client's scale**, beside the strength
+  its two ends share, rarest first, with the measure named. Under rarity plus adds it shows instead the link's rarity term, each boost added, and the **raw sum on the raw-sum scale**, beside the strength
   it is drawn at. With two people selected, **What these two share** does the same for them.
 
 **Who changes influencers.** An installation-wide set is proposed in the Glass's **Connection
@@ -778,8 +775,7 @@ that case, and the legend marks it. Both are recorded in the audit.
 
 **Rules on strength.** A rule written as a sentence (§7.6) may say "and the connection strength
 between it and … reaches X", or "… the shared-attribute rarity between it and another … reaches X". A
-strength figure is on the drawn scale (0 to 1) or **on the client's scale** (the raw sum, which only
-client parity has: under the standard composition such a rule raises nothing). It is previewed like
+strength figure is on the drawn scale (0 to 1) or **on the raw-sum scale** (the raw sum, which only rarity plus adds has: under the standard composition such a rule raises nothing). It is previewed like
 any other, and judged as its author, on what its author may see: it never raises an alert on evidence
 its author could not read.
 
@@ -1252,8 +1248,7 @@ understood.
 - **How often.** Optionally, a number of times, a total amount or a first time, within some days
   (§7.7).
 - **How strongly connected.** Optionally: *the connection strength* between the subject and something
-  it is linked to (by a link type, or any; to a type, or anything) *reaches* a figure up to 1, or *on
-  the client's scale* a raw sum up to 10 (met only under client parity); or *the
+  it is linked to (by a link type, or any; to a type, or anything) *reaches* a figure up to 1, or *on the raw-sum scale* a raw sum up to 10 (met only under rarity plus adds); or *the
   shared-attribute rarity* between it and another of its type *reaches* a figure, per dataset or across
   the case's datasets (§5.12). Both are read from the stored graph, so the rule runs after commit or on
   a schedule, and both are worked out as you, the rule's author, may see them.
