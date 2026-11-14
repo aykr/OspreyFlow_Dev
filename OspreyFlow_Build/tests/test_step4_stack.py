@@ -222,3 +222,28 @@ def test_the_conduit_s_settings_are_passed_by_name_and_its_directories_writable(
     assert argv[argv.index("OSPREY_DATA_ROOT") - 1] == "-e"
     assert not any("=/var/lib/osprey/data" in a for a in argv)
     assert any(a.startswith(f"{step4.DATA_ROOT}:rw,uid=10001") for a in argv)
+
+
+def test_the_conduit_reads_the_poc_s_own_files_where_the_chart_mounts_them() -> None:
+    """The fourth proof on stack f: the Conduit read osprey.yaml at start and found none. Each
+    workload's files are the render's, mounted read-only at the chart's own paths."""
+    values = step4.poc_values()
+    files = step4.workload_files(values, "api")
+    assert [(k, at) for k, at, _t in files] == [("osprey.yaml", "/app/osprey.yaml")]
+    assert files[0][2] == values["files"]["osprey.yaml"]
+    argv = step4.service_argv(
+        "r", "n", "img", "api", {}, ["x"], mounts=[("/tmp/f/osprey.yaml", "/app/osprey.yaml")]
+    )
+    assert "/tmp/f/osprey.yaml:/app/osprey.yaml:ro" in argv
+    for writable in step4.WRITABLE:
+        assert any(a.startswith(f"{writable}:rw,uid=10001") for a in argv)
+
+
+def test_each_workload_s_own_plain_settings_are_the_render_s_and_none_from_a_secret() -> None:
+    values = step4.poc_values()
+    api = step4.workload_settings(values, "api")
+    assert api["OSPREY_MAP_SETTINGS_DIR"].startswith("/run/osprey")
+    assert "POSTGRES_PASSWORD" not in api and "POSTGRES_HOST" not in api, (
+        "the stack's, from the lease"
+    )
+    assert all(v for v in api.values()), "no empty setting given"

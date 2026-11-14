@@ -42,7 +42,9 @@ PLANTS = [
      '        "ARCADEDB_HOST": loopback, "CLICKHOUSE_HOST": loopback, "OPENSEARCH_HOST": loopback,',
      '        "ARCADEDB_HOST": loopback,', "poc_s_own_settings"),
     ("the poc's directories left unwritable", RUNNER,
-     '        "--tmpfs", f"{DATA_ROOT}:rw,uid=10001,gid=10001,mode=0700",\n', "", "directories_writable"),
+     '"--tmpfs", f"{w}:rw,uid=10001,gid=10001,mode=0700"', '"--tmpfs", f"{w}:ro"', "directories_writable"),
+    ("the poc's files not mounted", RUNNER,
+     '        *(a for host, at in mounts for a in ("-v", f"{host}:{at}:ro")),\n', "", "own_files_where"),
     ("the realm's users left as the deployment's", RUNNER,
      '    realm["users"] = realm_users()\n    return realm', "    return realm", "subjects_alone"),
 ]

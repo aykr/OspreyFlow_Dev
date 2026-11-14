@@ -85,12 +85,33 @@ DROPPED = frozenset({
     "OPENSEARCH_REGION", "OSPREY_SEARCH_INDEX_ALIAS", "CLICKHOUSE_CLUSTER", "ARCADEDB_HA",
     "OIDC_ISSUER", "OIDC_JWKS_URL", "OIDC_AUDIENCE",  # the realm's, set by the run
 })  # fmt: skip
-#: Where the poc's own directories are, made writable for the run (a tmpfs, the image's user's).
+#: Where the poc's own directories are, made writable for the run (a tmpfs, the image's user's):
+#: its data, ingest and state folders, and its map and model settings.
 DATA_ROOT = "/var/lib/osprey"
+WRITABLE = (DATA_ROOT, "/run/osprey")
 
 
 def poc_environment() -> dict[str, str]:
     """The poc's own Conduit environment, as the render gives it (never typed here)."""
+    return {k: str(v) for k, v in poc_values()["environment"].items()}
+
+
+def workload_settings(values: dict[str, Any], workload: str) -> dict[str, str]:
+    """A workload's own plain settings in the render (`env` entries with a value; those from a
+    Secret are the stack's, from the lease), empty ones left out."""
+    found = next(w for w in values["workloads"] if w["name"] == workload)
+    return {e["name"]: str(e["value"]) for e in found.get("env", []) if e.get("value")}
+
+
+def workload_files(values: dict[str, Any], workload: str) -> list[tuple[str, str, str]]:
+    """(key, where the chart mounts it, its text) for each of a workload's files: osprey.yaml
+    among them, the poc's own configuration, which the Conduit reads at start (the fourth proof)."""
+    found = next(w for w in values["workloads"] if w["name"] == workload)
+    return [(f["key"], f["mountPath"], values["files"][f["key"]]) for f in found.get("files") or []]
+
+
+def poc_values() -> dict[str, Any]:
+    """The poc's own render, values.yaml as the chart is given it."""
     import yaml
     from harness.render import render
     from tools.cp_policy_check import FIXTURES, _resolver
@@ -102,7 +123,8 @@ def poc_environment() -> dict[str, str]:
     values = yaml.safe_load(
         render(OspreyConfig.model_validate(raw), resolver=_resolver).artefacts["values.yaml"]
     )
-    return {k: str(v) for k, v in values["environment"].items()}
+    found: dict[str, Any] = values
+    return found
 
 
 def conduit_environment(poc: dict[str, str], lease: dict[str, str]) -> dict[str, str]:
@@ -178,6 +200,7 @@ def keycloak_argv(run: str, name: str, port: int) -> list[str]:
 def service_argv(
     run: str, name: str, image: str, workload: str, environment: dict[str, str],
     command: Sequence[str], settings: Sequence[str] = (),
+    mounts: Sequence[tuple[str, str]] = (),
 ) -> list[str]:  # fmt: skip
     """`settings`: the Conduit's own (`conduit_environment`'s names), passed by name as the
     lease's are, their values in Docker's environment alone."""
@@ -188,7 +211,8 @@ def service_argv(
     return [
         "run", "-d", "--name", name, *run_labels(run), "--network", "host",
         f"--cpus={cpus}", f"--memory={memory}", f"--memory-swap={memory}",
-        "--tmpfs", f"{DATA_ROOT}:rw,uid=10001,gid=10001,mode=0700",
+        *(a for w in WRITABLE for a in ("--tmpfs", f"{w}:rw,uid=10001,gid=10001,mode=0700")),
+        *(a for host, at in mounts for a in ("-v", f"{host}:{at}:ro")),
         *passed, *(arg for n in named for arg in ("-e", n)),
         "--entrypoint", command[0], image, *command[1:],
     ]  # fmt: skip
@@ -329,6 +353,7 @@ class Stack:
     def __init__(self, run: str) -> None:
         self.run = run
         self.images: list[str] = []
+        self.folders: list[Path] = []
 
     def docker(self, *argv: str, env: dict[str, str] | None = None) -> str:
         done = subprocess.run(
@@ -355,6 +380,10 @@ class Stack:
             subprocess.run(["docker", "rm", "-f", *found], capture_output=True, check=False)
         for image in self.images:
             subprocess.run(["docker", "rmi", "-f", image], capture_output=True, check=False)
+        import shutil
+
+        for folder in self.folders:
+            shutil.rmtree(folder, ignore_errors=True)
 
 
 def realm_document() -> dict[str, Any]:
@@ -428,8 +457,23 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
         stack.images.append(tag)
         images[workload] = tag
     cp = _free_port()
-    conduit = conduit_environment(poc_environment(), dict(os.environ))
-    env |= conduit
+    import tempfile
+
+    values = poc_values()
+    conduit = conduit_environment(
+        {k: str(v) for k, v in values["environment"].items()}, dict(os.environ)
+    )
+    own = {w: workload_settings(values, w) for w in ("api", "worker")}
+    folder = Path(tempfile.mkdtemp(prefix="step4-files-"))
+    stack.folders.append(folder)
+    mounts = {}
+    for workload in ("api", "worker"):
+        mounts[workload] = []
+        for key, at, text in workload_files(values, workload):
+            (folder / key).write_text(text, encoding="utf-8")
+            (folder / key).chmod(0o644)
+            mounts[workload].append((str(folder / key), at))
+    env |= conduit | own["api"] | own["worker"]
     env |= {
         "OIDC_ISSUER": issuer,
         "OIDC_JWKS_URL": f"{issuer}/protocol/openid-connect/certs",
@@ -439,11 +483,11 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
     name = slug(stack.run)
     api = service_argv(
         stack.run, f"osprey-step4-api-{name}", images["api"], "api", env, conduit_command(cp),
-        settings=list(conduit),
+        settings=[*conduit, *own["api"]], mounts=mounts["api"],
     )  # fmt: skip
     worker = service_argv(
         stack.run, f"osprey-step4-worker-{name}", images["worker"], "worker", env,
-        WORKER_COMMAND, settings=list(conduit),
+        WORKER_COMMAND, settings=[*conduit, *own["worker"]], mounts=mounts["worker"],
     )  # fmt: skip
     stack.docker(*api, env=env)
     stack.docker(*worker, env=env)
