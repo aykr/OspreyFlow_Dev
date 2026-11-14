@@ -52,7 +52,7 @@ describe("the capture kit's wait for a run it started", () => {
   it("is the run-now request alone: the screen shows an older Succeeded while the new run is going", async () => {
     const { sent } = serve();
     render(<PublishScreen apiBaseUrl="http://glass/api" bearerToken="t" recipeId="r1" investigationId="c1" onBack={() => {}} mode="operate" />);
-    const runs = await screen.findByRole("list", { name: "Runs of this recipe" });
+    const runs = await screen.findByRole("list", { name: "Runs of this pipeline" });
     fireEvent.click(await screen.findByRole("button", { name: "Run now" }));
     // The defect: the words the old wait looked for are on screen, from the older run, before the
     // new run has answered at all.

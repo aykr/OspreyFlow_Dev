@@ -204,9 +204,9 @@ export function summariseHome(input: HomeInputs): HomeSummary {
   const recipeSets = figures.filter((f) => f.recipes !== undefined);
   if (recipeSets.length > 0) {
     const flagged = recipeSets.reduce((n, f) => n + (readable(f.recipes) ? f.recipes.filter((r) => r.status === "flagged").length : 0), 0);
-    if (flagged > 0) studio.push({ tone: "warn", text: `${plural(flagged, "recipe", "recipes")} flagged after an ontology change` });
+    if (flagged > 0) studio.push({ tone: "warn", text: `${plural(flagged, "pipeline", "pipelines")} flagged after an ontology change` });
     const unread = recipeSets.filter((f) => !readable(f.recipes)).length;
-    if (unread > 0) studio.push({ tone: "error", text: `The recipes of ${plural(unread, "case", "cases")} could not be read` });
+    if (unread > 0) studio.push({ tone: "error", text: `The pipelines of ${plural(unread, "case", "cases")} could not be read` });
   }
 
   const admin: Fact[] = [];

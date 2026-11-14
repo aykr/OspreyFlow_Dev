@@ -141,21 +141,21 @@ def check_recipe_pins(recipe: Recipe, ontology: OntologySchema) -> None:
     packs = recipe_packs(recipe.pipeline, recipe.row_template, ontology)
     if packs and recipe.pack_versions is None:
         raise StaleRecipeError(
-            f"recipe {recipe.id!r} names or writes the pack(s) {', '.join(packs)} but is not "
-            "pinned to any pack version — open and republish the recipe before running it again"
+            f"pipeline {recipe.id!r} names or writes the pack(s) {', '.join(packs)} but is not "
+            "pinned to any pack version — open and republish the pipeline before running it again"
         )
     pins = recipe.pack_versions or {}
     for pack in packs:
         if pack not in ontology.packs:
             raise StaleRecipeError(
-                f"recipe {recipe.id!r} needs the pack {pack!r}, which the active ontology does "
-                "not carry — open and republish the recipe before running it again"
+                f"pipeline {recipe.id!r} needs the pack {pack!r}, which the active ontology does "
+                "not carry — open and republish the pipeline before running it again"
             )
         if pins.get(pack) != ontology.packs[pack]:
             raise StaleRecipeError(
-                f"recipe {recipe.id!r} pins pack {pack!r} at version {pins.get(pack)}, but the "
+                f"pipeline {recipe.id!r} pins pack {pack!r} at version {pins.get(pack)}, but the "
                 f"active ontology carries version {ontology.packs[pack]} — open and republish "
-                "the recipe before running it again"
+                "the pipeline before running it again"
             )
 
 
@@ -486,7 +486,7 @@ def _handling(defaults: Mapping[str, Any]) -> Handling:
     raw = dict(defaults)
     originator = raw.get("originator")
     if originator is None:
-        raise RowRejected("recipe defaults.handling has no `originator`")
+        raise RowRejected("pipeline defaults.handling has no `originator`")
     raw.setdefault("owning_unit", originator)
     raw.setdefault("handling_code", "P")
     return Handling.model_validate(raw)
@@ -502,7 +502,7 @@ def _require_scheme_to_judge_bound_handling(recipe: Recipe, scheme: HandlingSche
     if scheme is None and recipe_binds_handling(recipe):
         raise RecipeRuleError(
             [
-                "This recipe binds a marking to a column, which is judged against the handling "
+                "This pipeline binds a marking to a column, which is judged against the handling "
                 "scheme, and this run has no handling scheme (ADR-127 decision 3)."
             ]
         )
@@ -573,7 +573,7 @@ def row_handling_override(
         if part in ("originator", "owning_unit"):
             if cell not in recipe.defaults.units:
                 raise RowRejected(
-                    f"column {column!r} gives a {label} the recipe does not declare "
+                    f"column {column!r} gives a {label} the pipeline does not declare "
                     f"(declared: {', '.join(recipe.defaults.units) or 'none'})"
                 )
         elif cell not in _defined_values(scheme, part):
@@ -798,14 +798,14 @@ def _refuse_staging_without_its_refs(
         # which has written its sources' raw rows itself, may leave it to that (review round 2).
         raise RecipeRuleError(
             [
-                f"Recipe {recipe.id!r} is run without staging its raw rows, which only a staged "
+                f"Pipeline {recipe.id!r} is run without staging its raw rows, which only a staged "
                 "run (one that has staged its sources' rows itself) may do."
             ]
         )
     if recipe.staging and row_refs is None:
         raise RecipeRuleError(
             [
-                f"Recipe {recipe.id!r} declares staging steps, so it runs through its staging "
+                f"Pipeline {recipe.id!r} declares staging steps, so it runs through its staging "
                 "(each source table, then each step, then Map); it cannot be run over one "
                 "source's rows."
             ]
@@ -1190,7 +1190,7 @@ class RowKeyDefinitionChanged(Exception):
 
     def __init__(self, loads: int) -> None:
         super().__init__(
-            "this recipe's `deduplicate` has changed since rows were loaded into this case: "
+            "this pipeline's `deduplicate` has changed since rows were loaded into this case: "
             f"revert the {loads} load(s) that kept keys under the earlier definition, then run it "
             "again"
         )
@@ -1204,7 +1204,7 @@ class RowKeyRunInProgress(Exception):
 
     def __init__(self, recipe_id: str) -> None:
         super().__init__(
-            "another run of this recipe into this case is in progress; run it again when it "
+            "another run of this pipeline into this case is in progress; run it again when it "
             "has finished"
         )
         self.recipe_id = recipe_id
@@ -2522,8 +2522,8 @@ async def run_recipe(
     leave it out; a load with a row above it is refused whole before anything is staged."""
     if recipe.ontology_version != ontology.version:
         raise StaleRecipeError(
-            f"recipe {recipe.id!r} targets ontology version {recipe.ontology_version}, but the "
-            f"active ontology is version {ontology.version} — open and re-publish the recipe "
+            f"pipeline {recipe.id!r} targets ontology version {recipe.ontology_version}, but the "
+            f"active ontology is version {ontology.version} — open and re-publish the pipeline "
             "before running it again"
         )
     # ADR-120 D10, Amendment 1: the packs it names or writes, at the versions it was published at.
@@ -2548,7 +2548,7 @@ async def run_recipe(
     if holds_content(recipe.row_template) and media is None:
         raise RecipeRuleError(
             [
-                "This recipe marks content an entity holds, which is kept in the deployment's "
+                "This pipeline marks content an entity holds, which is kept in the deployment's "
                 "media store, and this run has no media store (ADR-094)."
             ]
         )

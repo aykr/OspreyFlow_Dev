@@ -399,7 +399,8 @@ class ScheduleExecutor:
         if recipe.status is StudioRecipeStatus.FLAGGED:
             await self._not_run(
                 recipe, latest, "blocked",
-                "the ontology changed since this recipe was published; publish it again to run it",
+                "the ontology changed since this pipeline was published; publish it again to "
+                "run it",
             )  # fmt: skip
             return
         try:
@@ -415,7 +416,7 @@ class ScheduleExecutor:
         token = uuid4().hex
         if not await reply(self.valkey.set(lock, token, nx=True, ex=_LOCK_SECONDS)):
             await self._not_run(
-                recipe, latest, "skipped", "the previous run of this recipe was still going"
+                recipe, latest, "skipped", "the previous run of this pipeline was still going"
             )
             return
         try:
@@ -475,8 +476,8 @@ class ScheduleExecutor:
                 if recipe.dataset_id not in (owner.datasets or []):
                     # Rule 4: the folder is the dataset's, read only through a case that has it.
                     raise _Refused(
-                        f"the recipe's dataset, {recipe.dataset_id}, is no longer in the case the "
-                        "watch was set in",
+                        f"the pipeline's dataset, {recipe.dataset_id}, is no longer in the case "
+                        "the watch was set in",
                         kind="refused_reach",
                     )
             except _Refused as refused:
@@ -535,7 +536,7 @@ class ScheduleExecutor:
         lock = f"schedule:lock:{recipe.recipe_id}"
         token = uuid4().hex
         if not await reply(self.valkey.set(lock, token, nx=True, ex=_LOCK_SECONDS)):
-            raise ScheduleRunRefused("the previous run of this recipe is still going")
+            raise ScheduleRunRefused("the previous run of this pipeline is still going")
         try:
             return await self.run(owner, recipe, case, None)
         finally:

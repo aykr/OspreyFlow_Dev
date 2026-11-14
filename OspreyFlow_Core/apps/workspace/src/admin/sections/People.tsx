@@ -238,7 +238,7 @@ export function removalWords(person: PersonAccount): string {
   const who = person.name && person.name !== person.username ? `${person.name} (${person.username})` : person.username;
   return (
     `Remove ${who}? Their account is deleted: they can no longer sign in, and their sign-in name and email address ` +
-    "become free to use again. Cases, alerts and recipes they made stay as they are and show their id in place of " +
+    "become free to use again. Cases, alerts and pipelines they made stay as they are and show their id in place of " +
     "their name. This cannot be undone. To keep the account but stop them signing in, disable it instead."
   );
 }

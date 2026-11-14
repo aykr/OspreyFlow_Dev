@@ -50,7 +50,7 @@ describe("Home's figures", () => {
   it("counts rows still held and recipes flagged", () => {
     expect(home.studio.map((f) => [f.tone, f.text])).toEqual([
       ["warn", "2 rows held for review"],
-      ["warn", "1 recipe flagged after an ontology change"],
+      ["warn", "1 pipeline flagged after an ontology change"],
     ]);
   });
 

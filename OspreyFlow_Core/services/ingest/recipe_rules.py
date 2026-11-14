@@ -349,8 +349,9 @@ def recipe_rule_violations(
                 )
             if bound_part in ("originator", "owning_unit") and not units:
                 problems.append(
-                    f"{owner} binds handling {bound_part} to a column, but the recipe declares no "
-                    "units: a cell may name only a unit the recipe lists (units), so declare them."
+                    f"{owner} binds handling {bound_part} to a column, but the pipeline declares "
+                    "no units: a cell may name only a unit the pipeline lists (units), so declare "
+                    "them."
                 )
     # ADR-104: a structured transform fills a property through one named part, so a binding that
     # names none (or one the result does not have) is refused here, when the recipe is saved.
@@ -483,11 +484,11 @@ def recipe_rule_violations(
         elif edge.type == NOT_SAME_AS:
             problems.append(
                 f"{edge.type!r} records an analyst's judgement that two nodes differ; no source "
-                "records it, so a recipe cannot write it."
+                "records it, so a pipeline cannot write it."
             )
         elif type_def.basis != "direct":
             problems.append(
-                f"{edge.type!r} is a Probabilistic relationship type. A recipe writes what the "
+                f"{edge.type!r} is a Probabilistic relationship type. A pipeline writes what the "
                 "source records, which is Direct (ADR-081); choose a Direct type."
             )
         if edge.content is not None and edge.content.kind in FILE_KINDS:

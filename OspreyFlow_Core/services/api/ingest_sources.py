@@ -72,7 +72,7 @@ class IngestSourceFile(BaseModel):
     through — the analyst never types a path, which is the point of the listing."""
 
     name: str = Field(description="The file's own name, with no directory part")
-    source_location: str = Field(description="The container path to give the recipe draft")
+    source_location: str = Field(description="The container path to give the pipeline draft")
     size_bytes: int
     modified_at: float = Field(description="Unix timestamp, for ordering by recency in the Glass")
     uploaded: bool = Field(

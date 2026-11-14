@@ -437,7 +437,7 @@ export function PublishScreen({
           <p style={{ color: "var(--text-secondary)", fontSize: "0.85em", margin: 0 }}>
             {draft?.dataset_id
               ? `Each new file whose name matches, in the ${draft.dataset_id} folder, runs once, a minute after it stops changing. Leave it blank to watch nothing.`
-              : "This recipe belongs to no dataset, so it has no folder to watch."}
+              : "This pipeline belongs to no dataset, so it has no folder to watch."}
           </p>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.85em" }}>
             A pipeline may be deployed unscheduled and run only on demand.
@@ -451,7 +451,7 @@ export function PublishScreen({
           {runs.length === 0 ? (
             <p style={{ margin: 0, color: "var(--text-secondary)" }}>It has not run yet.</p>
           ) : (
-            <ul aria-label="Runs of this recipe" style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
+            <ul aria-label="Runs of this pipeline" style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
               {runs.slice(0, 20).map((run) => (
                 <li key={run.run_id}>
                   {`${new Date(run.slot ?? run.started_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} — ${

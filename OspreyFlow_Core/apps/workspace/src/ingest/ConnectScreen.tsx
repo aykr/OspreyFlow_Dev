@@ -464,7 +464,7 @@ export function ConnectScreen({
               }}
             >
               You don't hold the Source Author role, so you can't create or edit a source
-              recipe. Ask a source approver to grant it.
+              pipeline. Ask a source approver to grant it.
             </div>
           )}
           {saveError && (

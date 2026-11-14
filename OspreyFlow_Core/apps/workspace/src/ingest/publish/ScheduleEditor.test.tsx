@@ -100,7 +100,7 @@ describe("the structured schedule", () => {
   it("lists the recipe's runs, a refused one with why", async () => {
     serve();
     place();
-    const runs = await screen.findByRole("list", { name: "Runs of this recipe" });
+    const runs = await screen.findByRole("list", { name: "Runs of this pipeline" });
     expect(within(runs).getByText(/Refused: the schedule's owner, approver-1, can no longer sign in/)).toBeTruthy();
   });
 
@@ -138,7 +138,7 @@ describe("the structured schedule", () => {
       rows_read: 13, nodes_created: 0, nodes_referenced: 4, rows_rejected: 0, failure: null, load_id: "01LOAD" };  // prettier-ignore
     serve(WATCHABLE, [watched]);
     place();
-    const runs = await screen.findByRole("list", { name: "Runs of this recipe" });
+    const runs = await screen.findByRole("list", { name: "Runs of this pipeline" });
     expect(within(runs).getByText(/Succeeded: 13 rows read, 0 created.*— load 01LOAD$/)).toBeTruthy();
   });
 
@@ -147,7 +147,7 @@ describe("the structured schedule", () => {
       rows_read: 4, nodes_created: 2, nodes_referenced: 0, rows_rejected: 0, failure: null };  // prettier-ignore
     serve(WATCHABLE, [watched]);
     place();
-    const runs = await screen.findByRole("list", { name: "Runs of this recipe" });
+    const runs = await screen.findByRole("list", { name: "Runs of this pipeline" });
     expect(within(runs).getByText(/watch, 2026-06-02\.csv: Succeeded: 4 rows read/)).toBeTruthy();
   });
 });

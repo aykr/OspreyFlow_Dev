@@ -42,7 +42,7 @@ def validate_watch(pattern: str, recipe: StudioRecipeDraft) -> None:
     """Refuses, in words, a watch the executor could not keep (Amendment 4, point 1)."""
     if recipe.dataset_id is None:
         raise ScheduleRefused(
-            "this recipe belongs to no dataset, so it has no folder to watch; make it again in a "
+            "this pipeline belongs to no dataset, so it has no folder to watch; make it again in a "
             "case's dataset to watch one"
         )
     if not pattern.strip():
@@ -54,7 +54,7 @@ def validate_watch(pattern: str, recipe: StudioRecipeDraft) -> None:
     if "/" in pattern or "\\" in pattern or ":" in pattern:
         raise ScheduleRefused(
             "a filename pattern names files, with no folder: the folder watched is always the "
-            "recipe's own dataset's"
+            "pipeline's own dataset's"
         )
     if pattern.startswith("."):
         raise ScheduleRefused(
