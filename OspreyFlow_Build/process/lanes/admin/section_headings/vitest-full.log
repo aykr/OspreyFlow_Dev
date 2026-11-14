@@ -1,3 +1,4 @@
-# vitest, whole workspace, at d45d3f3
+# vitest, whole workspace, at f0305b4
+     ✓ a panel closed by Help stays closed at the next sign-in, as one closed by its × 318ms
  Test Files  388 passed (388)
-      Tests  3464 passed (3464)
+      Tests  3466 passed (3466)
