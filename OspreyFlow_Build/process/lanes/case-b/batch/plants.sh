@@ -51,7 +51,7 @@ plant "a 403 at the start read as any failure" "$API" \
   's/if \(response.status === 403\) \{/if (false) {/' \
   "says a reader below Editor cannot start one in the Conduit's own sentence, and asks nothing more"
 plant "right_required read as a case level too low" "$API" \
-  's/detail\?.error === "right_required" \? "right_required" : "forbidden"/"forbidden"/' \
+  's/if \(detail\?\.error === "right_required"\) return/if (false) return/' \
   "says an account without the right to expand cannot start one"
 plant "a 404 at the start read as any failure" "$API" \
   's/    if \(response.status === 404\) return \{ ok: false, kind: "not_found" \};\n  *return \{ ok: false, kind: "failed", message: `The batch job could not be started/    return { ok: false, kind: "failed", message: `The batch job could not be started/' \
@@ -75,7 +75,7 @@ plant "a state not known read as waiting" "$API" \
   's/!STATES.has\(body.state\)/false/' \
   "never reads a state it does not know as progress"
 plant "a job not this reader's read as progress not read" "$API" \
-  's/if \(response.status === 404\) return \{ ok: false, kind: "not_found" \};\n    if \(!response.ok\) return \{ ok: false, kind: "unreachable"/if (!response.ok) return { ok: false, kind: "unreachable"/' \
+  's/if \(response.status === 404\) return \{ ok: false, kind: "not_found" \};\n    if \(response.status === 401\)/if (response.status === 401)/' \
   "says a job that is not this reader's, or is gone, can no longer be found"
 plant "the result not opened when the job is done" "$UI" \
   's/onViewOpenedRef.current\(result.opened\);//' \
@@ -90,7 +90,7 @@ plant "a result view past the canvas's limit said as any failure" "$UI" \
   's/\} else if \(result.kind === "limit_exceeded"\) \{/} else if (false) {/' \
   "says a result view past the canvas's limit is kept and was not cut to fit"
 plant "a failed job offered no second try" "$UI" \
-  's/again: true, words: job.words \|\| "The batch job failed on the server."/again: false, words: job.words || "The batch job failed on the server."/' \
+  's/again: true, words: job.words \|\| "The batch expansion could not finish/again: false, words: job.words || "The batch expansion could not finish/' \
   "says a failed job in the server's words, and offers to try it again"
 plant "progress not read taken as the end" "$UI" \
   's/          trouble,\n        \}\)\);\n      \}/          trouble,\n        }));\n        return;\n      }/' \
