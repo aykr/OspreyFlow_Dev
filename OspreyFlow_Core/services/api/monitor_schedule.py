@@ -106,7 +106,11 @@ class MonitorScheduleExecutor:
                 log.warning("watch %s: its owner, %s, %s: %s", monitor.id, monitor.owner_id,
                             out_of_date_words(error), out_of_date_next(error))  # fmt: skip
             elif isinstance(error, OwnerRecordUnavailable):
-                log.warning("watch %s: the people store behind %s could not be read", monitor.id, PEOPLE_SECTION)
+                log.warning(
+                    "watch %s: the people store behind %s could not be read",
+                    monitor.id,
+                    PEOPLE_SECTION,
+                )
             else:
                 log.warning("watch %s: the identity provider could not be reached", monitor.id)
             await reply(self.valkey.delete(claim))

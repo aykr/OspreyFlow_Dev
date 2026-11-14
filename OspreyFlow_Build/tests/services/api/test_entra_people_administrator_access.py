@@ -78,7 +78,7 @@ class _Store:
     async def set_administrator_access(self, oid: str, by: Principal, access: PersonAccessInput, classification: Any, audit: Any = None):  # type: ignore[no-untyped-def]
         target = self.rows.get((self.tenant_id, oid))
         if target is None:
-            raise NoSuchPerson(f"{oid} is not in People here")
+            raise NoSuchPerson(f"{oid} is not in People and roles here")
         check_administrator_access(self.by_administrator, self.rows.get((self.tenant_id, by.id)), access, classification)
         after = dict(target)
         for column, value in (("admin_clearance", access.clearance), ("admin_org_unit", access.org_unit),

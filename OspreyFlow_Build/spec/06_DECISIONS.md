@@ -39030,6 +39030,46 @@ audience check, in no words a person could act on, and INSTALL's section 8 left 
 - Not measured: whether Entra serves a v1.0 token's signing key in the v2.0 key set the Conduit reads. In practice
   the keys are the same; a key it does not hold leaves the plain refusal, never the words.
 - The live check is step 6's on R1 with the stand-in's v1.0 mode, once platform applies the diff.
+### ADR-148, Amendment 19 (14 November 2026) — The People section named as the side list names it, and Entra's refusal in words
+
+*v0.5.2 (route W, from docs' sweep, the orchestrator's order of 14 November). By admin.*
+
+**Context.** Since ADR-145 Amendment 16, the Admin section where people's roles, access and guests are set is
+*People and roles*, the label the side list takes from `apps/workspace/src/admin/sections.json`. The Conduit's
+refusals, the schema's descriptions, the runbook and the guides still named it *Admin › People*, a place no list
+shows. That included the sentences Amendments 15, 16 and 17 prescribe. Separately, Amendment 15's refusal of a value
+Entra sends was built from the schema's own keys: a person read "Here clearance and org_unit come from Entra ID, and
+are changed there." It was followed by a sentence saying all three values come from Entra, which on the poc shape
+is false for the values set here.
+
+**Decisions.**
+1. **One name, held to the side list.** `principal_auth.PEOPLE_SECTION` is "Admin › People and roles". Every
+   user-facing sentence of the Conduit and `principal_auth` that names the section is built from it. That covers
+   refusals, error bodies, log lines and the stopped reasons, and a test reads `sections.json`'s label to check it.
+   The schema's descriptions (and so the generated TypeScript), the runbook, the Glass and the guides say the
+   same. A guide's version rows keep what each version said.
+2. **Amendment 16's sentences, edited by this point.** An owner not held is said as "is not held in Admin › People
+   and roles" (it was "is not a person Admin › People holds"). A people store that cannot be read is said as "the
+   people store behind Admin › People and roles could not be read to act as …" (it was "*Admin › People*'s store
+   could not be read …"). A watch's stopped reason reads "Its owner is not held in Admin › People and roles."
+   Amendment 15's and 17's sentences ("… set it in …", "… can admit them in …") name the section the same way. Each
+   is otherwise unchanged.
+3. **Amendment 15's refusal of a value Entra sends says the values in words**, as the Guests form does (*clearance*,
+   *unit*, *handling codes*, in that order), with its verb agreeing. Then it says which values are set here,
+   never that all three come from Entra. For example, with the unit from Entra and the clearance and codes set
+   here: "Here a person's unit comes from Entra ID, and is changed there. Their clearance and handling codes are
+   set here, with Access."
+
+**Tests** (rule 12; `process/lanes/admin/v052_words/` has each red):
+- `tests/test_people_section_words.py`:
+  - the constant against `sections.json`'s label;
+  - a scan of every user-facing string, parsed, in `services/api`, `principal_auth`, `harness`, `cli` and the
+    schema (descriptions included), the generated TypeScript, the Glass's source and the guides, joined across
+    lines, with its own red for each shape;
+  - the Entra refusal's exact sentence for each set of values;
+- the refusal tests that quote these sentences (`test_owner_on_entra.py`, `test_entra_people_administrator_access.py`,
+  `test_stopped_why.py`) hold the new words.
+
 ### ADR-044, Amendment 1 (14 November 2026) — A stopped hotlist or watch says why
 
 Status: the orchestrator's assignment (14 November 2026), from the CARRIES row ADR-148 Amendment 16 left ("a stopped

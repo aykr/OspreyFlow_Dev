@@ -1096,7 +1096,8 @@ class EntraSignInConfig(BaseModel):
     """ADR-148 decision 9 and Amendment 8: how this deployment's people sign in with Entra ID, and
     where `principal_auth` finds each of clearance, unit and handling codes in their token (a claim,
     or a table from Entra group to value; `principal_auth.ClaimMapping` checks the shape at render).
-    Roles are not here: they are kept in Admin › People and roles, the first administrators named below."""
+    Roles are not here: they are kept in Admin › People and roles, the first administrators named
+    below."""
 
     model_config = ConfigDict(extra="forbid")
 

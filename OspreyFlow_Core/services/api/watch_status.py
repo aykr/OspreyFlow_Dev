@@ -5,8 +5,8 @@ the badge it is shown beside already says."""
 from __future__ import annotations
 
 from principal_auth import (
-    PEOPLE_SECTION,
     ACCESS_OUT_OF_DATE_WORDS,
+    PEOPLE_SECTION,
     OwnerNotHeld,
     OwnerRecordUnavailable,
     PrincipalAccessOutOfDate,

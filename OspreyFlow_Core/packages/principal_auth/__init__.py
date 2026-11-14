@@ -542,8 +542,9 @@ class StoredOwner:
     guest: bool = False
 
 
-#: The Admin section where people's roles, access and guests are set, as the Glass's side list names it
-#: (`apps/workspace/src/admin/sections.json`; `tests/test_people_section_words.py` reads it there).
+#: The Admin section where people's roles, access and guests are set, as the Glass's side list
+#: names it (`apps/workspace/src/admin/sections.json`; `tests/test_people_section_words.py` reads it
+#: there; ADR-148 Amendment 19).
 PEOPLE_SECTION = "Admin › People and roles"
 
 #: ADR-148 Amendment 17: why a guest (B2B) account is refused while the deployment does not admit

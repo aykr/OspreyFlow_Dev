@@ -2,9 +2,9 @@
 ADR-145 decision 6 and A4; L3.8, the case-b lane's ownership route).
 
 Words and counts only (rule 7): each item is its kind, the Conduit's own id for it (what a
-transfer names) and a label that places it by its case's name, which Admin › People and roles already shows
-the administrator. Never a view's, a board's or a proposed type's analyst-written name, an
-identity-provider id, or a source-system identifier. An item the administrator may not see
+transfer names) and a label that places it by its case's name, which Admin › People and roles
+already shows the administrator. Never a view's, a board's or a proposed type's analyst-written
+name, an identity-provider id, or a source-system identifier. An item the administrator may not see
 (another unit's, or on a dataset marked above their clearance) is never read: `withheld` says that
 some exist, never how many or where, as ADR-145 Amendment 5 decision 8 says another unit's items,
 so *Transfer and disable* is refused until someone who can see them transfers them.

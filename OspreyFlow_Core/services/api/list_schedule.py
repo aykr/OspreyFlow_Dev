@@ -85,7 +85,10 @@ def owner_refusal_words(error: BaseException, owner_id: str) -> str:
     if isinstance(error, OwnerNotHeld):
         return f"the schedule's owner, {owner_id}, is not held in {PEOPLE_SECTION}"
     if isinstance(error, OwnerRecordUnavailable):
-        return f"the people store behind {PEOPLE_SECTION} could not be read to act as the schedule's owner"
+        return (
+            f"the people store behind {PEOPLE_SECTION} could not be read to act as the "
+            "schedule's owner"
+        )
     return f"OspreyFlow could not act as the schedule's owner, {owner_id}"
 
 

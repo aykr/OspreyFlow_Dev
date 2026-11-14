@@ -1,0 +1,67 @@
+# tests/test_people_section_words.py at the branch's head, run against main fe69379's code: every line pytest printed
+FF.FFFFFFFF                                                              [100%]
+=================================== FAILURES ===================================
+E   AssertionError: assert None == 'Admin › People and roles'
+     +  where None = getattr(principal_auth, 'PEOPLE_SECTION', None)
+/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.bFVrDqSkaC/OspreyFlow_Build/tests/test_people_section_words.py:50: AssertionError: assert None == 'Admin › People and roles'
+E   AssertionError: assert ['services/ap....py:339', ...] == []
+      
+      Left contains 36 more items, first extra item: 'services/api/app.py:17446'
+      Use -v to get more diff
+/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.bFVrDqSkaC/OspreyFlow_Build/tests/test_people_section_words.py:110: AssertionError: assert ['services/ap....py:339', ...] == []
+E   AssertionError: assert 'Here clearan...disable them.' == 'Here a perso... with Access.'
+      
+      - Here a person's clearance comes from Entra ID, and is changed there. Their unit and handling codes are set here, with Access.
+      + Here clearance come from Entra ID, and are changed there. On this deployment Entra ID holds people's accounts: they sign in with their organisation account, and their clearance, unit and handling codes come from Entra. Here you give them roles, add them by object id, and disable them.
+/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.bFVrDqSkaC/OspreyFlow_Build/tests/test_people_section_words.py:176: AssertionError: assert 'Here clearan...disable them.' == 'Here a perso... with Access.'
+E   AssertionError: assert 'Here org_uni...disable them.' == 'Here a perso... with Access.'
+      
+      - Here a person's unit comes from Entra ID, and is changed there. Their clearance and handling codes are set here, with Access.
+      + Here org_unit come from Entra ID, and are changed there. On this deployment Entra ID holds people's accounts: they sign in with their organisation account, and their clearance, unit and handling codes come from Entra. Here you give them roles, add them by object id, and disable them.
+/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.bFVrDqSkaC/OspreyFlow_Build/tests/test_people_section_words.py:176: AssertionError: assert 'Here org_uni...disable them.' == 'Here a perso... with Access.'
+E   AssertionError: assert 'Here handlin...disable them.' == 'Here a perso... with Access.'
+      
+      - Here a person's handling codes come from Entra ID, and are changed there. Their clearance and unit are set here, with Access.
+      + Here handling_codes come from Entra ID, and are changed there. On this deployment Entra ID holds people's accounts: they sign in with their organisation account, and their clearance, unit and handling codes come from Entra. Here you give them roles, add them by object id, and disable them.
+/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.bFVrDqSkaC/OspreyFlow_Build/tests/test_people_section_words.py:176: AssertionError: assert 'Here handlin...disable them.' == 'Here a perso... with Access.'
+E   AssertionError: assert 'Here org_uni...disable them.' == 'Here a perso... with Access.'
+      
+      - Here a person's unit and handling codes come from Entra ID, and are changed there. Their clearance is set here, with Access.
+      + Here org_unit and handling_codes come from Entra ID, and are changed there. On this deployment Entra ID holds people's accounts: they sign in with their organisation account, and their clearance, unit and handling codes come from Entra. Here you give them roles, add them by object id, and disable them.
+/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.bFVrDqSkaC/OspreyFlow_Build/tests/test_people_section_words.py:176: AssertionError: assert 'Here org_uni...disable them.' == 'Here a perso... with Access.'
+E   AssertionError: assert 'Here clearan...disable them.' == 'Here a perso... with Access.'
+      
+      - Here a person's clearance and unit come from Entra ID, and are changed there. Their handling codes are set here, with Access.
+      + Here clearance and org_unit come from Entra ID, and are changed there. On this deployment Entra ID holds people's accounts: they sign in with their organisation account, and their clearance, unit and handling codes come from Entra. Here you give them roles, add them by object id, and disable them.
+/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.bFVrDqSkaC/OspreyFlow_Build/tests/test_people_section_words.py:176: AssertionError: assert 'Here clearan...disable them.' == 'Here a perso... with Access.'
+E   AssertionError: assert 'Here clearan...disable them.' == 'Here a perso... with Access.'
+      
+      - Here a person's clearance and handling codes come from Entra ID, and are changed there. Their unit is set here, with Access.
+      + Here clearance and handling_codes come from Entra ID, and are changed there. On this deployment Entra ID holds people's accounts: they sign in with their organisation account, and their clearance, unit and handling codes come from Entra. Here you give them roles, add them by object id, and disable them.
+/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.bFVrDqSkaC/OspreyFlow_Build/tests/test_people_section_words.py:176: AssertionError: assert 'Here clearan...disable them.' == 'Here a perso... with Access.'
+E   assert "the rule's a... People holds" == "the rule's a...ple and roles"
+      
+      - the rule's author, x, is not held in Admin › People and roles
+      ?                              ^ ^^^^                 ^^^^^  ^
+      + the rule's author, x, is not a person Admin › People holds
+      ?                              ^^^ ^^^                 ^  ^
+/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.bFVrDqSkaC/OspreyFlow_Build/tests/test_people_section_words.py:196: assert "the rule's a... People holds" == "the rule's a...ple and roles"
+E   assert "Admin › Peop...rule's author" == "the people s...rule's author"
+      
+      - the people store behind Admin › People and roles could not be read to act as the rule's author
+      ? ------------------------              ^^^^^ -- -
+      + Admin › People's store could not be read to act as the rule's author
+      ?               ^^^^^^
+/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.bFVrDqSkaC/OspreyFlow_Build/tests/test_people_section_words.py:196: assert "Admin › Peop...rule's author" == "the people s...rule's author"
+=========================== short test summary info ============================
+FAILED tests/test_people_section_words.py::test_the_people_section_s_name_is_the_one_the_side_list_draws
+FAILED tests/test_people_section_words.py::test_no_user_facing_string_names_the_people_section_by_its_old_name
+FAILED tests/test_people_section_words.py::test_a_value_entra_sends_is_refused_in_words[by_administrator0-access0-Here a person's clearance comes from Entra ID, and is changed there. Their unit and handling codes are set here, with Access.]
+FAILED tests/test_people_section_words.py::test_a_value_entra_sends_is_refused_in_words[by_administrator1-access1-Here a person's unit comes from Entra ID, and is changed there. Their clearance and handling codes are set here, with Access.]
+FAILED tests/test_people_section_words.py::test_a_value_entra_sends_is_refused_in_words[by_administrator2-access2-Here a person's handling codes come from Entra ID, and are changed there. Their clearance and unit are set here, with Access.]
+FAILED tests/test_people_section_words.py::test_a_value_entra_sends_is_refused_in_words[by_administrator3-access3-Here a person's unit and handling codes come from Entra ID, and are changed there. Their clearance is set here, with Access.]
+FAILED tests/test_people_section_words.py::test_a_value_entra_sends_is_refused_in_words[by_administrator4-access4-Here a person's clearance and unit come from Entra ID, and are changed there. Their handling codes are set here, with Access.]
+FAILED tests/test_people_section_words.py::test_a_value_entra_sends_is_refused_in_words[by_administrator5-access5-Here a person's clearance and handling codes come from Entra ID, and are changed there. Their unit is set here, with Access.]
+FAILED tests/test_people_section_words.py::test_a_rule_s_author_refused_names_the_section[error0-the rule's author, x, is not held in Admin \u203a People and roles]
+FAILED tests/test_people_section_words.py::test_a_rule_s_author_refused_names_the_section[error1-the people store behind Admin \u203a People and roles could not be read to act as the rule's author]
+10 failed, 1 passed in 5.02s

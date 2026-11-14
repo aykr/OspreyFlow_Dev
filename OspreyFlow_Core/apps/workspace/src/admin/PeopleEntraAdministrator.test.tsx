@@ -86,8 +86,8 @@ describe("Admin › People on Entra ID with the administrator fallback", () => {
   it.each([
     [403, { detail: { error: "setter_cannot_set" } },
      "You cannot set anyone's access until your own is set here, and while your account is enabled."],
-    [404, { error: "no_such_person", detail: `${OID} is not in People here` },
-     "That person is no longer in People here: refresh the list."],
+    [404, { error: "no_such_person", detail: `${OID} is not in People and roles here` },
+     "That person is no longer in People and roles here: refresh the list."],
   ])("shows the store's refusal %i in its words", async (status, body, words) => {
     serve(["clearance", "org_unit", "handling_codes"], (path, init) =>
       path === `people/${OID}/access` && init?.method === "PUT" ? json(status, body) : null,
