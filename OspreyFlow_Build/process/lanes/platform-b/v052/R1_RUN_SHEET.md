@@ -1,7 +1,7 @@
 # Step 6 (`v052-r1`) · the install test on the candidate · run sheet
 
 Prepared offline on 14 November 2026 by platform-b, on `lane/platform-b-v052-r1` (main 78564d2 merged in). The day is
-**Mon 16 Nov from 08:00Z** (the owner's word, 14 November; Tue 17 to Thu 19 are its spare days; **the cut is when step 6 passes**, Mon 16 evening or Tue 17, and Thu 19 ends the spare days; it was the 18th, and before that the 25th). **The candidate** is main after the wording sweep, am20 and the CI fixes, with CI green on it; the orchestrator sends its commit by Sunday evening. If it is not ready by then, the day starts at the first 08:00Z after it is. ROUTE_052's brief: install v0.5.1, upgrade to the
+**Mon 16 Nov from 08:00Z** (the owner's word, 14 November; Tue 17 to Thu 19 are its spare days; **the cut is when step 6 passes**, Mon 16 evening or Tue 17, and Thu 19 ends the spare days; it was the 18th, and before that the 25th). **The candidate is ad2725f** (main, Sun 15 Nov; `OspreyFlow_Core/VERSION` v0.5.2; every route row before C done). **Confirm the CI before starting:** its own CI run, 43643678182 (ending about 23:20Z on the 15th), must be green, and the orchestrator confirms it before the morning. If that run is red, a fixed candidate follows and the orchestrator sends its hash: copy B is made at that commit, and this line is updated before row 1. If no candidate is confirmed by then, the day starts at the first 08:00Z after one is. ROUTE_052's brief: install v0.5.1, upgrade to the
 candidate, **verify every manifest entry**, run spec 08's scenarios that apply to the shape, then decommission, with
 the operator choosing keep or destroy for the backups. "The full suite runs once, at step 6."
 
@@ -66,15 +66,15 @@ Nothing touches osprey-small.
 
 **The cluster and its state are platform-b's for the day.** `osprey-r1` and R1's state folder
 (`~/osprey-runs/platform.r1`: `state.json`, the kept render `KEPT`, `records/`) are one per server; another lane's R1
-run overwrites `KEPT`, which the verifier's `--candidate auto` reads. The orchestrator gives platform-b both for the
-25th, and no other lane runs R1 that day.
+run overwrites `KEPT`, which the verifier's `--candidate auto` reads. The orchestrator gives platform-b both for
+Mon 16 (and the spare days), and no other lane runs R1 then.
 
 **Two copies run it, each named in the table.**
 - **Copy A** is a worktree at v0.5.1's tagged commit: **477a500** today. If the owner takes MORNING's option (a), the
   tag moves to a later commit in both repositories, and copy A is made at the commit the tag names on the day.
   ROUTE_052 names 9197ea6 as v0.5.1's cut; the tag sits on 477a500, which is 9197ea6 plus the CHANGELOG's fixes from
   the upgrade rehearsal (7d76022, 477a500).
-- **Copy B** is the candidate's worktree.
+- **Copy B** is the candidate's worktree: **ad2725f**, once its CI run 43643678182 is confirmed green (above).
 
 Each copy is sent by `stack_lease.sh remote platform-b …` (from the repository root). Within a copy, commands run
 from `OspreyFlow_Core` with `G=../OspreyFlow_Build/process/lanes/platform/gates`,
