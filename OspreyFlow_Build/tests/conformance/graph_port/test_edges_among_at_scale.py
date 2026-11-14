@@ -159,15 +159,19 @@ async def test_links_across_a_chunk_boundary_are_each_found_once(
 ) -> None:
     """Twice the chunk and a little more, so there are three chunks. Asked in the adapter's own
     order (sorted ids), so the boundaries are known: links from the first chunk into the third, from
-    the third back into the first, from the second into both, inside each chunk, and a self-loop."""
+    the third into the first, from the second into both, inside each chunk, and a self-loop."""
     nodes = [_person() for _ in range(2 * _ID_CHUNK + 50)]
     await _write_nodes(graph, nodes)
     ids = sorted(n.id for n in nodes)
     first, second, third = ids[:_ID_CHUNK], ids[_ID_CHUNK : 2 * _ID_CHUNK], ids[2 * _ID_CHUNK :]
-    pairs = [(first[-1], third[0]), (third[0], first[-1]), (first[0], third[-1]),
-             (third[-1], first[0]), (second[0], first[1]), (second[-1], third[1]),
-             (first[2], first[3]), (second[2], second[3]), (third[2], third[3]),
+    # Every pair distinct as an unordered pair: ASSOCIATE_OF is undirected (`directed: false`), so a
+    # second link written on a pair, either way round, merges into the first, which would
+    # make the fixture's expected ids wrong, not `edges_among`.
+    pairs = [(first[-1], third[0]), (third[1], first[-2]), (first[0], third[-1]),
+             (third[-2], first[4]), (second[0], first[1]), (second[-1], third[2]),
+             (first[2], first[3]), (second[2], second[3]), (third[3], third[4]),
              (second[4], second[4])]  # fmt: skip
+    assert len({frozenset(p) for p in pairs}) == len(pairs)
     links = [_link(s, t) for s, t in pairs]
     await graph.bulk_load_edges(links)
     among = [e.id for e in await graph.edges_among(ids, READER)]
