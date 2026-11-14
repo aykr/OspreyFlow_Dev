@@ -134,3 +134,20 @@ def test_the_check_s_plan_and_its_people() -> None:
     assert check.ROLES["builder@r1.test"] == ["reports_viewer", "right:manage_dashboards"]
     assert json.dumps(check.SUPERSET_ROLE) == json.dumps(
         {"admin@r1.test": ["Admin"], "builder@r1.test": ["Alpha"], "reader@r1.test": ["Gamma"]})
+
+
+def test_the_report_sync_is_given_what_install_s_step_6a_tells_the_client_to_give() -> None:
+    """The check writes REPORT_SYNC_DASHBOARDS as the apply would from the runbook's example, so it tests the
+    value a client is told to give, not one of its own (a key added here, or one the runbook gains, fails)."""
+    import json as _json
+    import re
+
+    from harness.cloud_platform import runbooks
+
+    source = Path(runbooks.__file__).read_text(encoding="utf-8")
+    example = re.search(r'report_sync_dashboards`, a JSON list, as\\n"\s*"`(\{.*?\})`', source, re.S)
+    assert example, "INSTALL.md's step 6a example"
+    told = set(re.findall(r'\\"([a-z_]+)\\": ', example.group(1)))
+    check = _load(CHECK, "dashboards_check_under_test")
+    given = _json.loads(check.report_sync_dashboards("app-id", "not-a-secret"))
+    assert told == {"client_id", "secret"} and [set(d) for d in given] == [told]

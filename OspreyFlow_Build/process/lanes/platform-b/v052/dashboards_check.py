@@ -71,6 +71,13 @@ PLAN = [
 ]
 
 
+
+def report_sync_dashboards(client_id: str, secret: str) -> str:
+    """The value INSTALL.md's step 6a has the client give the Terraform's `report_sync_dashboards`, one
+    dashboard identity: `{"client_id", "secret"}` and nothing else (held to the runbook's own example by
+    `tests/test_v052_dashboards_check.py`)."""
+    return json.dumps([{"client_id": client_id, "secret": secret}])
+
 def _r1() -> Any:
     sys.path.insert(0, str(GATES))
     import r1_kind  # platform's driver, imported, never changed here
@@ -138,7 +145,10 @@ def run() -> None:
         r = c.put(f"/v1/investigations/{case}/access/grants/{who}", headers=admin, json={"level": "viewer"})
         ok(f"the case's Author gives {who} Viewer", r.status_code == 204, f"{r.status_code} {r.text[:200]}")
     secret = r1.entra_clients()["report-sync"]
-    given = json.dumps([{"client_id": app_id, "secret": secret, "weeks": 4}])
+    # INSTALL.md's step 6a, exactly as the client is told: the Terraform's `report_sync_dashboards` given
+    # `{"client_id", "secret"}` alone, applied into our Secret, and the report sync restarted. The run's
+    # Terraform stand-in holds `[]` (r1_kind.py), so the apply's write is made here, in the shape it writes.
+    given = report_sync_dashboards(app_id, secret)
     r1.kubectl("patch", "secret", "ospreyflow-secrets", "--type", "merge",
                "-p", json.dumps({"stringData": {"REPORT_SYNC_DASHBOARDS": given}}))  # fmt: skip
     r1.kubectl("rollout", "restart", "deploy/report-sync")
