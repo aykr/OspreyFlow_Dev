@@ -111,3 +111,4 @@ aca0591 2916cf6 platform v052-measure (ADR-149 Am 2, the budgets and live gate)
 f44d97b 2c1ffa1 platform v052-m6 (index lag)
 cc6d222 bebfc2f admin guests (audit 4b, Am 17), with registry-4b.diff; guide 2.02, PDF reprinted
 9ec898d 4140e9b case v052-results (step 3e′), with its shared diff
+2301841 0849a28 platform v052-m10 (the leak check at scale)
