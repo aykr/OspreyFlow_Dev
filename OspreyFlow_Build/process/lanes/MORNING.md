@@ -146,7 +146,8 @@ The items below are kept as they were written.
     - **(b)** defer it past v0.5.2, amending spec 00 and 03 to say two choices until it is built, and telling the
       client.
 
-    Recommended: (b). It has been missing since before this route, B's load shows the cap is rarely met on the
+    **You ruled (a), build it for v0.5.2 (14 Nov).** ADR-151 is reserved; rules-b leads the Conduit and worker,
+    case-b the Glass, with a target of main by Sat 21. (I had recommended (b).) It has been missing since before this route, B's load shows the cap is rarely met on the
     measured case, and (a) would land in freeze week.
 
 ## Decided by the lanes, for you to overrule if you wish
