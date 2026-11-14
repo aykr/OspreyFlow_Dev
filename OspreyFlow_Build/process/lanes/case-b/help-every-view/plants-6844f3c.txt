@@ -1,0 +1,6 @@
+AS IT MUST BE (red, for its reason): Help's panel in the Graph alone (CARRIES 224 as found)
+    Help did not open its panel in Map
+AS IT MUST BE (red, for its reason): Help never closing an open panel
+    Help did not close its panel in Graph
+unplanted: 2 passed
+every plant red for its reason, unplanted green
