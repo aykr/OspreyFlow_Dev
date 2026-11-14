@@ -92,9 +92,15 @@ Each rule has a case that plants a violation and shows the check fails. The firs
       session the owner runs.
 - [x] The publish script's identifier rule allows the Team page's six names, in their own cards and nowhere else
       (item 4, applied 14 November 2026: `../identifier_check.py`, `../TEAM_NAMES`, `tests/test_site_identifiers.py`).
+- [ ] Whoever publishes reads every page, each time, for a person's name. The identifier check knows the owner's
+      identifiers and TEAM_NAMES' six (each full name and each surname, in any case, spacing or markup), and refuses
+      them anywhere but in their own cards on the Team page. **It cannot find anyone else: a person who is not among
+      the six, named in running prose on any page, is not detected.**
 - [ ] The images are fresh captures from the rebuilt demonstration (item 6).
 - [ ] What each page marks as in the release, and as only on `main`, is still true for the release then current.
-      These pages were checked against v0.5.0 and `main` on 12 November 2026.
+      These pages were checked against v0.5.1 and `main` on 14 November 2026 (`process/lanes/docs/sites-v051-facts.md`),
+      and are to be checked against v0.5.2 at the cut, before the owner says "publish"; `build.py` refuses to build until
+      `CHECKED_AGAINST` names the release then current.
 
 ## The current site once these are live (item 7, proposed)
 
