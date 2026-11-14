@@ -2050,3 +2050,8 @@ Also asked by the lanes:
 
 - `origin` is public and stands, as you ruled. Pushing waits for a green `make ci`.
 - Case's throwaway ArcadeDB was bound to `0.0.0.0:2491`, not loopback. It is stopped now.
+
+## 14 November 2026, afternoon: the owner's two answers on the batch job
+
+1. **Live-file listings: a standing word.** An edit that only adds a new live test file to the live-test skip lists in `.github/workflows/ci.yml` and the Makefile's `test` target is applied without asking and recorded here. Any other `.github/` or Makefile change still goes to the owner. First use: `test_batch_expansion_live.py`, in rules-b's batch merge (354c707).
+2. **The batch job at 50,000 nodes: measured before the freeze.** At 4,001 nodes, written through the ordinary write path (417 s), `edges_among` did not answer within 420 s, so no 50k figure exists. The batch job is merged. After rules' am18 lands, a 50,000-node run with bulk-loaded data is queued, and the figure goes to the owner before the freeze on Tue 17. If it times out, rules-b looks at `edges_among`, and the owner gets the result and a proposal.
