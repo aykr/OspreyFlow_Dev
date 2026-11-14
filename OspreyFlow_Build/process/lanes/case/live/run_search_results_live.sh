@@ -116,7 +116,26 @@ if [ "${LIVE_DIAG:-}" = 1 ]; then
   exit 0
 fi
 cd apps/workspace || exit 1
-OSPREY_TEST_LIVE_GLASS=1 OSPREY_LIVE_API_BASE_URL="http://127.0.0.1:$CP" OSPREY_LIVE_BEARER_TOKEN="$TOKEN" \
+# Vite started here, as live/playwright.config.ts would, and warmed by one page load until the Glass draws its search
+# box: a cold start's dependency build on a loaded host outlasted the first tests' timeouts (the run at 49093b4, three
+# tests timing out on the box while the last passed). The spec then reuses this server (OSPREY_REUSE_SERVER=1).
+echo "# load: $(cut -d' ' -f1-3 /proc/loadavg)"
+VITE_API_BASE_URL="http://127.0.0.1:$CP" VITE_DEV_BEARER_TOKEN="$TOKEN" npx vite --port 5173 --strictPort >"$W/vite.log" 2>&1 &
+pids+=($!)
+for _ in $(seq 60); do curl -s -o /dev/null http://localhost:5173/ && break; sleep 1; done
+started=$(date +%s)
+CASE="$CASE" node -e '
+const { chromium } = require("@playwright/test");
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  await page.goto(`http://localhost:5173/?investigation=${process.env.CASE}`);
+  await page.locator(".top-bar [role=\"combobox\"]").waitFor({ timeout: 600000 });
+  await browser.close();
+})().catch((e) => { console.error(String(e)); process.exit(1); });
+' || { tail -20 "$W/vite.log" | mask; fail "the Glass did not draw its search box in 10 minutes"; }
+echo "# warm-up: the Glass drew its search box after $(( $(date +%s) - started )) s"
+OSPREY_REUSE_SERVER=1 OSPREY_TEST_LIVE_GLASS=1 OSPREY_LIVE_API_BASE_URL="http://127.0.0.1:$CP" OSPREY_LIVE_BEARER_TOKEN="$TOKEN" \
   OSPREY_LIVE_INVESTIGATION_ID="$CASE" \
   npx playwright test --config live/playwright.config.ts live/search-results.spec.ts --reporter=line 2>&1 | mask
 code=${PIPESTATUS[0]}
