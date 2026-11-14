@@ -413,6 +413,25 @@ Ownership and Connection strength are under *More views*, History is a panel of 
 the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
 wide.
 
+**When the bar runs out of room it folds, and stays one line high** (the owner's ruling of 14 November 2026, ADR-115 Amendment 7, after
+main's CI drew the bar 73 px high, two lines, at 1440 wide on Linux: a client's Windows or smaller screen would see
+the same). What is used least leaves the bar first, in `shell/railLayout.ts`'s `BAR_FOLD_ORDER`: *Build a report*
+into *More views* (last in its menu, still a link in a new tab); then *Reports*, *Drawing board*, *Map* and a
+dossier's *Messages*, each into *More views*, ahead of its own four, in the switch's order; then the place switcher
+into one menu named by the place open (not under GOV.UK, where the places stand in the GOV.UK header); *Graph*, the
+landing view, last. A switch view the order does not name (the built-in Administrator's) folds just before *Graph*.
+*More views* names the folded view that is open, as it names its own. `TopBar` measures rather than using a
+breakpoint, since what fits depends on the person's places, the case and the font as much as the window: it folds
+one more while any item sits on a second line, starts again from none folded when the bar's width changes or a web
+font arrives, each step before the screen is painted. Only with everything that folds folded do whole items wrap to a second
+line (ADR-065 decision 6; ADR-115 Amendments 2 and 3), given room above and below; the account and its clearance never
+leave the screen. Proved by `keyboard/top-bar.spec.ts` (one line, 44 high, at 1024 wide in the dark, light and GOV.UK
+looks, for a reader of the four views and for one with every place and *Build a report*; one line with a wider font
+forced; nothing folded at 1440 for the four views, and unfolded again on widening; at 924 folded, nothing leaving the
+window; at 700 everything folded and two lines) and `keyboard/shell.spec.ts` (each
+folded view chosen and the folded *Build a report* followed by keyboard, and a place chosen from the folded places;
+rule 13).
+
 Every menu opens on Enter or Space, closes on Escape (focus returns to its button), on a click
 outside it, and when keyboard focus moves outside it, so it never traps a keyboard user.
 

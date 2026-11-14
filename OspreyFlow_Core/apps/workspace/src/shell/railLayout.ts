@@ -72,6 +72,16 @@ export function splitViews<T extends { id: string }>(offered: readonly T[]): { m
   return main.length > 0 ? { main, more } : { main: more, more: [] };
 }
 
+/** What leaves the top bar first when it runs out of room on one line (the owner's ruling of 14 November 2026, spec 02
+ * §3): the bar stays one line high, and the least-used go first. *Build a report* (a link out of the Glass) folds into
+ * More views first; then the views, Reports, the Drawing board, the Map and a node's Messages, each into More views; then
+ * the place switcher into one menu naming the place open; Graph, the Glass's landing view, last of all. A view in the
+ * switch this list does not name (the built-in Administrator's Connection strength) folds just before Graph. Every one
+ * folded is still one click away under More views (or the places menu), and by keyboard. `TopBar` reads this; it
+ * measures, folds one more while any item sits on a second line, and starts again from none folded when the bar's
+ * width changes. */
+export const BAR_FOLD_ORDER = ["build-a-report", "dashboards", "boards", "map", "dossier", "places", "graph"] as const;
+
 /** The views this person is offered, in the switch's order then More views': each by the rights that offered it
  * before Amendment 15 (`viewsFor`, `railEntries`), the drawing board by `investigate` as its routes ask (offered with
  * the graph). `App.tsx` and the keyboard harnesses read this one list, so a harness cannot offer what the App would

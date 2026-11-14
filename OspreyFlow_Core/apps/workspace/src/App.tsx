@@ -60,7 +60,7 @@ import { MORE_VIEWS, offeredViews, RAIL_LABELS, railMark, splitRail, splitViews,
 
 const ALL_SWITCH_VIEWS = [...VIEW_SWITCH, ...MORE_VIEWS];
 import { Drawer } from "./design/primitives/Drawer";
-import { BuildAReportLink, TopBar } from "./shell/TopBar";
+import { TopBar } from "./shell/TopBar";
 import { ContextBanner, crossLinkFor, useCaseContext } from "./shell/ContextBanner";
 import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { useLastGlassView } from "./shell/placeMemory";
@@ -1821,8 +1821,9 @@ export function App() {
         onStart={() => setStartChoice("start")}
         // ADR-145 decision 1: the places this person's rights open (inside the GOV.UK header under
         // that brand). Admin is a place of its own, outside the case.
-        places={
+        places={(folded) => (
           <PlaceSwitcher
+            folded={folded}
             places={startPlaces(rights)}
             current={app}
             counts={{ rules: alertCount }}
@@ -1837,7 +1838,7 @@ export function App() {
               if (place !== "rules" && address.kind !== "none") navigate("/");
             }}
           />
-        }
+        )}
         search={
           app === "glass" ? (
             <GlobalSearch
@@ -1882,9 +1883,7 @@ export function App() {
         // The owner's ruling of 13 November 2026 (Q2; ADR-145 Amendment 15): *Build a report* beside Reports, opening
         // Superset (the deployment's `bi.` address) in a new tab, for a holder of manage_dashboards where Superset is
         // deployed. Superset refuses anyone else; the link is offered to no one else.
-        besideViews={
-          app === "glass" && reportsUrl && rights?.has("manage_dashboards") ? <BuildAReportLink href={reportsUrl} /> : undefined
-        }
+        buildAReport={app === "glass" && reportsUrl && rights?.has("manage_dashboards") ? reportsUrl : undefined}
         actions={
           view === "graph" ? (
             // `02_GLASS_FRONTEND.md` §10: the export drawer, for the whole case.

@@ -1,0 +1,61 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T150410Z-d951012f/log: sh -c export PATH=$HOME/.local/node/bin:$PATH && PLANT_HEAD=0ae5e00 python3 OspreyFlow_Build/process/lanes/case/gates/topbar_fold_reds.py
+# top-bar fold reds at 0ae5e00 (the local checkout's, passed in); each plant restored from the file's own text
+## 1. no fold: the bar keeps every item and wraps
+plant in OspreyFlow_Core/apps/workspace/src/shell/TopBar.tsx; keyboard/top-bar.spec.ts -g ospreyflow\ dark,\ every\ place\ and\ Build\ a\ report:\ at\ 1024\ wide\ the\ bar\ folds\ and\ stays\ one\ line,\ 44\ high --workers=1; exit 1
+  ✘  1 keyboard/top-bar.spec.ts:209:5 › ospreyflow dark, every place and Build a report: at 1024 wide the bar folds and stays one line, 44 high (5.1s)
+    Error: items on a second line (their left edges)
+    - Expected  - 1
+    + Received  + 7
+  1 failed
+## 2. no fold, with a wider font
+plant in OspreyFlow_Core/apps/workspace/src/shell/TopBar.tsx; keyboard/top-bar.spec.ts -g govuk\ light,\ the\ four\ views:\ at\ 1024\ wide\ with\ a\ wider\ font\ the\ bar\ folds\ further\ and\ stays\ one\ line --workers=1; exit 1
+  ✘  1 keyboard/top-bar.spec.ts:216:5 › govuk light, the four views: at 1024 wide with a wider font the bar folds further and stays one line (5.8s)
+    Error: items on a second line (their left edges)
+    - Expected  - 1
+    + Received  + 3
+  1 failed
+## 3. a folded view left out of More views
+plant in OspreyFlow_Core/apps/workspace/src/shell/TopBar.tsx; keyboard/shell.spec.ts -g ospreyflow:\ at\ 1024\ wide\ every\ folded\ view\ is\ chosen\ under\ More\ views\ by\ keyboard --workers=1; exit 1
+  ✘  1 keyboard/shell.spec.ts:765:3 › ospreyflow: at 1024 wide every folded view is chosen under More views by keyboard, and Build a report followed (1.0m)
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+  1 failed
+## 4. a folded Build a report dropped, not put under More views
+plant in OspreyFlow_Core/apps/workspace/src/shell/TopBar.tsx; keyboard/shell.spec.ts -g govuk:\ at\ 1024\ wide\ every\ folded\ view\ is\ chosen\ under\ More\ views\ by\ keyboard --workers=1; exit 1
+  ✘  1 keyboard/shell.spec.ts:765:3 › govuk: at 1024 wide every folded view is chosen under More views by keyboard, and Build a report followed (5.6s)
+    Error: expect(locator).toHaveAttribute(expected) failed
+    Expected: "https://bi.example.invalid"
+    Error: element(s) not found
+  1 failed
+## 5. the places never folded into one menu
+plant in OspreyFlow_Core/apps/workspace/src/shell/PlaceSwitcher.tsx; keyboard/shell.spec.ts -g at\ 1024\ wide\ the\ folded\ places\ are\ one\ menu --workers=1; exit 1
+  ✘  1 keyboard/shell.spec.ts:799:1 › at 1024 wide the folded places are one menu naming the Glass, and another place is chosen from it by keyboard (5.6s)
+    Error: expect(locator).toHaveAttribute(expected) failed
+    Expected: "page"
+    Error: element(s) not found
+  1 failed
+## 6. a wider bar never unfolding (a narrower one still folds)
+plant in OspreyFlow_Core/apps/workspace/src/shell/TopBar.tsx; keyboard/top-bar.spec.ts -g at\ 1440\ wide\ the\ four\ views'\ bar\ folds\ nothing --workers=1; exit 1
+  ✘  1 keyboard/top-bar.spec.ts:228:1 › at 1440 wide the four views' bar folds nothing, and widening a folded bar unfolds it (5.6s)
+    Error: expect(locator).not.toHaveAttribute(expected) failed
+    Expected pattern: not /./
+    Received string: "dashboards boards map places graph"
+        14 × locator resolved to <header data-app="glass" class="app-header top-bar" data-folded="dashboards boards map places graph">…</header>
+  1 failed
+## 7. the two-line padding by breakpoint again (main's), on a folded one-line bar
+plant in OspreyFlow_Core/apps/workspace/src/design/primitives.css; keyboard/top-bar.spec.ts -g ospreyflow\ light,\ the\ four\ views:\ at\ 1024\ wide\ the\ bar\ folds\ and\ stays\ one\ line,\ 44\ high --workers=1; exit 1
+  ✘  1 keyboard/top-bar.spec.ts:209:5 › ospreyflow light, the four views: at 1024 wide the bar folds and stays one line, 44 high (593ms)
+    Error: expect(received).toBe(expected) // Object.is equality
+    Expected: 44
+    Received: 45
+  1 failed
+## 8. Graph first in the fold order
+plant in OspreyFlow_Core/apps/workspace/src/shell/railLayout.ts; run src/shell/topBarFold.test.tsx -t folds Build a report, then Reports; exit 1
+ [31m❯[39m src/shell/topBarFold.test.tsx [2m([22m[2m8 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m7 skipped[39m[2m)[22m[32m 9[2mms[22m[39m
+[31m     [31m×[31m folds Build a report, then Reports, the Drawing board, the Map and Messages, then the places, Graph last[39m[32m 8[2mms[22m[39m
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m7 skipped[39m[90m (8)[39m
+[31m[1mAssertionError[22m: expected [ 'graph', 'build-a-report', …(5) ] to deeply equal [ Array(7) ][39m
+[32m- Expected[39m
+[31m+ Received[39m
+# 8 of 8 red
+Wall time: 108 s, exit 0 (no stack, no lease; set-up before it 8 s)

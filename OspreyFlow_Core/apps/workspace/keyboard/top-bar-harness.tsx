@@ -10,7 +10,9 @@ import { applyHarnessBrand } from "./brandHarness";
 import "../src/design/primitives.css";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { LeftRail } from "../src/shell/LeftRail";
-import { BuildAReportLink, TopBar } from "../src/shell/TopBar";
+import { TopBar } from "../src/shell/TopBar";
+import { ContextBanner } from "../src/shell/ContextBanner";
+import { PlaceSwitcher } from "../src/shell/PlaceSwitcher";
 import { AccountMenu } from "../src/auth/AccountMenu";
 import { Button } from "../src/design/primitives/Button";
 import { CaseSwitcher } from "../src/investigation/CaseSwitcher";
@@ -20,7 +22,7 @@ import { OntologyRegistry } from "../src/ontology/schema";
 import { createWorkingSet } from "../src/workingset/store";
 import { guideUrl } from "../src/home/guides";
 import { offeredViews, ON_THE_RAIL, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS } from "../src/shell/railLayout";
-import type { RailEntry } from "../src/rights/visibility";
+import { startPlaces, type RailEntry } from "../src/rights/visibility";
 
 // The rail and the view switch as `App.tsx` lays them out (the owner's navigation decision, ADR-145 Amendment 15).
 const RAIL_ENTRIES: readonly RailEntry[] = ON_THE_RAIL;
@@ -161,21 +163,13 @@ function RailWithHelp() {
 createRoot(container).render(
   <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
     <ClassificationStrip marking="OFFICIAL" />
+    {/* The bar as `App.tsx` draws it since ADR-145 Amendment 15: the places this person's rights open in it, and the
+        case switcher in the case line under it (`ContextBanner`), never in the bar. */}
     <TopBar
       app="glass"
-      caseSwitcher={
-        <CaseSwitcher
-          apiBaseUrl="http://top-bar.invalid"
-          bearerToken="unused"
-          currentId={wantsLong ? "c3" : "c1"}
-          onOpen={(id) => {
-            window.__TOPBAR__!.opened = id;
-          }}
-          onBrowse={() => {
-            window.__TOPBAR__!.browsed = true;
-          }}
-        />
-      }
+      places={(folded) => (
+        <PlaceSwitcher folded={folded} places={startPlaces(new Set(harnessRights.split(",")))} current="glass" onChoose={(place) => window.__TOPBAR__!.views.push(`place:${place}`)} />
+      )}
       search={
         <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" investigationId="inv-1" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} onApplyDelta={(delta) => workingSet.store.getState().applyDelta(delta)} />
       }
@@ -184,7 +178,7 @@ createRoot(container).render(
       moreViews={SWITCHED.more}
       // `?reports=1`: a builder on a deployment with Superset, *Build a report* beside Reports as `App.tsx` draws it
       // (ADR-145 Amendment 15); the address is a stand-in, never followed.
-      besideViews={new URLSearchParams(window.location.search).get("reports") === "1" ? <BuildAReportLink href="https://bi.example.invalid" /> : undefined}
+      buildAReport={new URLSearchParams(window.location.search).get("reports") === "1" ? "https://bi.example.invalid" : undefined}
       actions={<Button>Export ⚙</Button>}
       account={
         <>
@@ -203,6 +197,22 @@ createRoot(container).render(
             }}
           />
         </>
+      }
+    />
+    <ContextBanner
+      place="glass"
+      caseSwitcher={
+        <CaseSwitcher
+          apiBaseUrl="http://top-bar.invalid"
+          bearerToken="unused"
+          currentId={wantsLong ? "c3" : "c1"}
+          onOpen={(id) => {
+            window.__TOPBAR__!.opened = id;
+          }}
+          onBrowse={() => {
+            window.__TOPBAR__!.browsed = true;
+          }}
+        />
       }
     />
     <div style={{ flex: 1, display: "flex", minHeight: 0 }}>

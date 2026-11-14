@@ -689,7 +689,7 @@ for (const shown of GOVUK_PAGES) {
 // ADR-145 Amendment 14 decision 2 (the owner, 13 November 2026: "the Cases panel covers the top navigation"):
 // a drawer opens under the top bar and the context row, so the places, the top bar's controls, the GOV.UK header's
 // navigation and the row's case switcher and cross-link stay in view and can be clicked while it is open. In each
-// look the scans use, at 1440 and again after the window narrows to 900, where the bar and the row wrap and the
+// look the scans use, at 1440 and again after the window narrows to 700, where the bar and the row wrap and the
 // drawer is measured again.
 for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
   test(`${brand} ${theme}: an open drawer starts under the top bar and the context row, the navigation above it uncovered`, async ({ page }) => {
@@ -722,8 +722,9 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     };
     await expect.poll(measure).toMatchObject({ underTheChrome: true, covered: [] });
     const wide = await measure();
-    await page.setViewportSize({ width: 900, height: 900 });
-    // At 900 the row wraps, so the chrome is deeper; the drawer is measured again and follows it.
+    // At 700 the bar wraps even with everything folded (ADR-115 Amendment 7; at 900 it fits on one line with macOS's
+    // fonts), so the chrome is deeper; the drawer is measured again and follows it.
+    await page.setViewportSize({ width: 700, height: 900 });
     await expect.poll(async () => (await measure()).chrome).toBeGreaterThan(wide.chrome);
     await expect.poll(measure).toMatchObject({ underTheChrome: true, covered: [] });
     // Its own way out is reached by keyboard: the drawer takes focus as it opens, and Tab reaches Close.
@@ -738,6 +739,9 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
 // and GOV.UK looks. (Who is offered it is `App.chrome.test.tsx`'s, on the real App.)
 for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
   test(`${brand} ${theme}: Build a report follows Reports by keyboard, a link to Superset in a new tab`, async ({ page }) => {
+    // Wide enough that nothing folds: with the link, the dark and light bar needs some 1,490 px on Linux (the folded
+    // link is the fold cases' own, below).
+    await page.setViewportSize({ width: 1680, height: 900 });
     await page.goto(`/keyboard/top-bar-harness.html?reports=1&brand=${brand}`);
     await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
     await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Reports" }).focus();
@@ -753,6 +757,61 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
     registerCovered(REGISTRY, "build-a-report-by-keyboard");
   });
 }
+
+// The owner's ruling of 14 November 2026 (spec 02 §3, `BAR_FOLD_ORDER`): at 1024 wide, with every place and Build a
+// report, the bar has folded; each view folded is chosen under More views by keyboard, Build a report followed from
+// it, and another place chosen from the folded places (rule 13).
+const EVERY_RIGHT = "investigate,read_reports,trace_ownership,edit_pipelines,read_alert_queue,author_rules,manage_dashboards";
+for (const look of ["ospreyflow", "govuk"] as const) {
+  test(`${look}: at 1024 wide every folded view is chosen under More views by keyboard, and Build a report followed`, async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 700 });
+    await page.goto(`/keyboard/top-bar-harness.html?rights=${EVERY_RIGHT}&reports=1${look === "govuk" ? "&brand=govuk" : ""}`);
+    const bar = page.locator("header.top-bar");
+    await expect(bar).toHaveAttribute("data-folded", /build-a-report/);
+    const folded = ((await bar.getAttribute("data-folded")) ?? "").split(" ");
+    const views = ["graph", "map", "boards", "dashboards"].filter((id) => folded.includes(id));
+    expect(views.length).toBeGreaterThan(0);
+    const names: Record<string, string> = { graph: "Graph", map: "Map", boards: "Drawing board", dashboards: "Reports" };
+    const group = page.getByRole("group", { name: "View" });
+    for (const id of views) {
+      await expect(group.getByRole("button", { name: names[id], exact: true })).toHaveCount(0);
+      // The button names the view open when that is folded (Graph, in this harness, when Graph has folded).
+      await page.getByRole("button", { name: views.includes("graph") ? /^Graph/ : /^More views/ }).focus();
+      await page.keyboard.press("Enter");
+      const more = page.getByRole("group", { name: "More views" });
+      await more.getByRole("button", { name: names[id], exact: true }).focus();
+      await page.keyboard.press("Enter");
+      await expect(more).toHaveCount(0);
+    }
+    expect(await page.evaluate(() => window.__TOPBAR__?.views)).toEqual(views);
+    await page.getByRole("button", { name: views.includes("graph") ? /^Graph/ : /^More views/ }).focus();
+    await page.keyboard.press("Enter");
+    const link = page.getByRole("group", { name: "More views" }).getByRole("link", { name: "Build a report (opens in new tab)" });
+    await expect(link).toHaveAttribute("href", "https://bi.example.invalid");
+    await expect(link).toHaveAttribute("target", "_blank");
+    await link.focus();
+    const opened = page.context().waitForEvent("page");
+    await page.keyboard.press("Enter");
+    await (await opened).close();
+    registerCovered(REGISTRY, "folded-view-chosen-by-keyboard");
+  });
+}
+
+test("at 1024 wide the folded places are one menu naming the Glass, and another place is chosen from it by keyboard", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 700 });
+  await page.goto(`/keyboard/top-bar-harness.html?rights=${EVERY_RIGHT}&reports=1`);
+  await expect(page.locator("header.top-bar")).toHaveAttribute("data-folded", /places/);
+  const places = page.getByRole("navigation", { name: "Places" });
+  await places.getByRole("button", { name: /^The Glass/ }).focus();
+  await page.keyboard.press("Enter");
+  const menu = page.getByRole("group", { name: "Places" });
+  await expect(menu.getByRole("button", { name: "The Glass" })).toHaveAttribute("aria-current", "page");
+  await menu.getByRole("button", { name: /^Ingest Studio/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect(menu).toHaveCount(0);
+  expect(await page.evaluate(() => window.__TOPBAR__?.views)).toEqual(["place:ingest"]);
+  registerCovered(REGISTRY, "folded-place-chosen-by-keyboard");
+});
 
 // Last in the file: the check reads the cases above it, run in order on one worker (CI's two-core runner).
 test("every registered shell action has its own proving test case above", () => {

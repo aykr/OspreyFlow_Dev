@@ -8,6 +8,7 @@ import { useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { currentBrand } from "../brand/brand";
+import { DropdownPanel } from "../design/primitives/DropdownPanel";
 import { GOVUK_HEADER_PLACES_ID } from "../brand/govuk/GovukHeader";
 import { PLACE_NAME, type PlaceId } from "./places";
 import "./places.css";
@@ -20,9 +21,12 @@ export interface PlaceSwitcherProps {
   onChoose: (place: PlaceId) => void;
   /** How many are open in a place (Rules and Monitoring's alerts); none drawn for nothing. */
   counts?: Partial<Record<PlaceId, number>>;
+  /** The top bar has run out of room on one line (`TopBar`, `BAR_FOLD_ORDER`): the places in one menu named by the
+   * place open. Not under GOV.UK, where they stand in the GOV.UK header, outside the bar. */
+  folded?: boolean;
 }
 
-export function PlaceSwitcher({ places, current, onChoose, counts = {} }: PlaceSwitcherProps) {
+export function PlaceSwitcher({ places, current, onChoose, counts = {}, folded = false }: PlaceSwitcherProps) {
   const govuk = currentBrand() === "govuk";
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   // The GOV.UK header is drawn above the page by the brand frame; its slot exists once it has been.
@@ -30,6 +34,42 @@ export function PlaceSwitcher({ places, current, onChoose, counts = {} }: PlaceS
     setSlot(govuk ? document.getElementById(GOVUK_HEADER_PLACES_ID) : null);
   }, [govuk]);
   if (places.length === 0) return null;
+  const count = (place: PlaceId) =>
+    // The count's name is its visible text and "open", so the visible label stays in the accessible name (WCAG
+    // 2.5.3): "Rules and Monitoring 3 open".
+    counts[place] ? (
+      <>
+        {" "}
+        <span className="value place-switcher__count">{counts[place]! > 99 ? "99+" : counts[place]!.toLocaleString("en-GB")}</span>
+        {" "}
+        <span className="visually-hidden">open</span>
+      </>
+    ) : null;
+  if (folded && !govuk && places.length > 1) {
+    return (
+      <nav aria-label="Places" className="place-switcher place-switcher--folded">
+        <DropdownPanel label={current ? PLACE_NAME[current] : "Places"} panelLabel="Places">
+          {(close) =>
+            places.map((place) => (
+              <button
+                key={place}
+                type="button"
+                className="menu-panel__item"
+                aria-current={place === current ? "page" : undefined}
+                onClick={() => {
+                  close();
+                  onChoose(place);
+                }}
+              >
+                {PLACE_NAME[place]}
+                {count(place)}
+              </button>
+            ))
+          }
+        </DropdownPanel>
+      </nav>
+    );
+  }
   const nav = (
     <nav aria-label="Places" className={govuk ? "govuk-places" : "place-switcher"}>
       <ul className={govuk ? "govuk-places__list" : "place-switcher__list"}>
@@ -42,16 +82,7 @@ export function PlaceSwitcher({ places, current, onChoose, counts = {} }: PlaceS
               onClick={() => onChoose(place)}
             >
               {PLACE_NAME[place]}
-              {/* The count's name is its visible text and "open", so the visible label stays in the
-                  accessible name (WCAG 2.5.3): "Rules and Monitoring 3 open". */}
-              {counts[place] ? (
-                <>
-                  {" "}
-                  <span className="value place-switcher__count">{counts[place]! > 99 ? "99+" : counts[place]!.toLocaleString("en-GB")}</span>
-                  {" "}
-                  <span className="visually-hidden">open</span>
-                </>
-              ) : null}
+              {count(place)}
             </button>
           </li>
         ))}
