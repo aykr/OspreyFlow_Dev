@@ -1,0 +1,32 @@
+# positive_control.py on stack d, run 20261114T210353Z-80a82366 (21:04Z), run tree 496e714 (main 8347d28 + platform a28f93e + lane/rules-m10-query d50eaf3), under the rules lane's lease of 2026-11-14T03:27:42Z, kept raw
+Running on ospreyflow-test (stack d, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261114T210353Z-80a82366/log: bash -c cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/v052-measure/step4_stack.py --case 01M7C2SXAPP3RF8QRSR2SKEMJK -- bash -c "OSPREY_MEASURE_LEAKS=\$HOME/osprey-load/m10/leaks.jsonl .venv/bin/python ../OspreyFlow_Build/process/lanes/rules/m10-query/positive_control.py"
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+== cs-intel-doc-10063 | control: m10-cleared-unit-intel | never_text: ['2025-01-21T03:17:22Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-01-21T03:17:22Z']
+   .nodes[0].properties.sent_at: '2025-01-21T03:17:22Z'
+   result: ['cs-intel-doc-10063'] 2025-01-21 name_exact
+   result: ['cs-intel-doc-7963'] 2026-11-01 name_typo
+== cs-intel-doc-10127 | control: m10-cleared-unit-intel | never_text: ['2026-08-27T23:08:54Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2026-08-27T23:08:54Z']
+   .nodes[0].properties.sent_at: '2026-08-27T23:08:54Z'
+   result: ['cs-intel-doc-10127'] 2026-08-27 name_exact
+   result: ['cs-intel-doc-38392'] 2026-11-01 name_typo
+== cs-intel-doc-10255 | control: m10-cleared-unit-intel | never_text: ['2025-07-06T11:23:30Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-07-06T11:23:30Z']
+   .nodes[0].properties.sent_at: '2025-07-06T11:23:30Z'
+   result: ['cs-intel-doc-10255'] 2025-07-06 name_exact
+   result: ['cs-intel-doc-8042'] 2026-11-01 name_typo
+== cs-intel-doc-10265 | control: m10-cleared-unit-intel | never_text: ['2025-07-13T01:29:19Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-07-13T01:29:19Z']
+   .nodes[0].properties.sent_at: '2025-07-13T01:29:19Z'
+   result: ['cs-intel-doc-10265'] 2025-07-13 name_exact
+   result: ['cs-intel-doc-6861'] 2026-11-01 name_typo
+== cs-intel-doc-10312 | control: m10-cleared-unit-intel | never_text: ['2025-01-31T19:18:41Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-01-31T19:18:41Z']
+   .nodes[0].properties.sent_at: '2025-01-31T19:18:41Z'
+   result: ['cs-intel-doc-10312'] 2025-01-31 name_exact
+   result: ['cs-intel-doc-9560'] 2026-11-01 name_typo
+positive control: the words check fired on 5 of 5
+Wall time: 46 s, exit 0 (stack d, the lease rules took at 2026-11-14T03:27:42Z; set-up before it 11 s)
