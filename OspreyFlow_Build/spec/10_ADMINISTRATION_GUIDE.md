@@ -1071,6 +1071,97 @@ and the extra copy a rolling update starts need room above them, so a ResourceQu
 memory limits must be larger, or pods are left unscheduled; in the standard shape one on
 `limits.cpu` refuses them whatever its size.
 
+**The poc shape, from its manifest.** The poc shape's containers, Jobs, images, managed services, app registrations
+and egress, as `python -m harness.cloud_platform.manifest tables` prints them from
+`harness/cloud_platform/poc_manifest.yaml`, the one list the render is checked against (`manifest check`). These
+tables are that output, put in by `python -m tests.test_guide_poc_manifest --write` and checked against it on
+every change; an entry marked *pending* is one the release adds that is not yet rendered.
+
+<!-- manifest:begin -->
+
+#### Containers
+
+| Workload | Kind | Count | Image | CPU request / limit | Memory request / limit | Ready when |
+|---|---|---|---|---|---|---|
+| workspace | Deployment | 1 | `ospreyflow/workspace` | 100m / 500m | 128Mi / 256Mi | http://127.0.0.1:8080/ |
+| api | Deployment | 1 | `ospreyflow/api` | 500m / 2 | 2Gi / 4Gi | http://127.0.0.1:8000/healthz |
+| worker | Deployment | 1 | `ospreyflow/worker` | 500m / 2 | 2Gi / 4Gi | none |
+| ner | Deployment | 1 | `ospreyflow/ner` | 250m / 1 | 1Gi / 2Gi | http://127.0.0.1:8000/healthz |
+| laurium | Deployment | 1 | `ospreyflow/laurium` | 250m / 500m | 1Gi / 2Gi | http://127.0.0.1:8000/healthz |
+| litellm | Deployment | 1 | `berriai/litellm` | 250m / 500m | 512Mi / 1Gi | http://localhost:4000/health/liveliness |
+| arcadedb | StatefulSet | 1 | `arcadedata/arcadedb` | 1 / 2 | 12Gi / 12Gi | http://127.0.0.1:2480/api/v1/ready |
+| clickhouse | StatefulSet | 1 | `clickhouse/clickhouse-server` | 1 / 2 | 8Gi / 8Gi | http://localhost:8123/ping |
+| superset | Deployment | 1 | `ospreyflow/superset` | 250m / 500m | 1Gi / 2Gi | http://127.0.0.1:8088/health |
+| report-sync | Deployment | 1 | `ospreyflow/report-sync` | 100m / 500m | 256Mi / 512Mi | python -m services.report_sync --health |
+| **Total** | | **10** | | **4.2 / 11.5 CPU** | **27.88 / 35.75 GiB** | |
+| litellm/litellm-db (init) | | | `postgres` | 100m / 500m | 256Mi / 512Mi | runs first |
+
+#### Jobs and CronJobs
+
+| Name | Kind | When | Image | CPU request / limit | Memory request / limit |
+|---|---|---|---|---|---|
+| `ospreyflow-backup` | CronJob | 15 2 * * * | `ospreyflow/api` | 500m / 2 | 2Gi / 4Gi |
+| `ospreyflow-backup-claims` | CronJob | 15 2 * * * | `ospreyflow/api` | 500m / 2 | 2Gi / 4Gi |
+| `ospreyflow-restore-<set>` | Job | a restore, by the recovery runbook | `ospreyflow/api` | 500m / 2 | 2Gi / 4Gi |
+| `ospreyflow-restore-<set>`, step restore-graph | | | `arcadedata/arcadedb` | 1 / 2 | 12Gi / 12Gi |
+| `ospreyflow-restore-claims-<set>` | Job | a restore, by the recovery runbook | `ospreyflow/api` | 500m / 2 | 2Gi / 4Gi |
+| `ospreyflow-search-rebuild` | CronJob | suspended, started by the runbooks (a restore ends with it) | `ospreyflow/api` | 500m / 2 | 2Gi / 4Gi |
+| `ospreyflow-search-drift` | CronJob | suspended, started by the runbooks | `ospreyflow/api` | 500m / 2 | 2Gi / 4Gi |
+| `ospreyflow-seed` | CronJob | suspended, started by the install runbook's optional seed block | `ospreyflow/api` | 500m / 2 | 2Gi / 4Gi |
+
+#### Images and ECR repositories
+
+| ECR repository | Ours or upstream | From |
+|---|---|---|
+| `ospreyflow/workspace` | ours | built from `apps/workspace/Dockerfile` |
+| `ospreyflow/api` | ours | built from `services/api/Dockerfile` |
+| `ospreyflow/worker` | ours | built from `services/worker/Dockerfile` |
+| `ospreyflow/ner` | ours | built from `services/ner/Dockerfile` |
+| `ospreyflow/laurium` | ours | built from `services/laurium/Dockerfile` |
+| `ospreyflow/superset` | ours | built from `deploy/superset/Dockerfile` |
+| `ospreyflow/report-sync` | ours | built from `services/report_sync/Dockerfile` |
+| `arcadedata/arcadedb` | upstream | copied from `arcadedata/arcadedb:26.10.1` |
+| `clickhouse/clickhouse-server` | upstream | copied from `clickhouse/clickhouse-server:25.8.33.6` |
+| `berriai/litellm` | upstream | copied from `ghcr.io/berriai/litellm` |
+| `postgres` | upstream | copied from `postgres:16.4` |
+
+#### Managed services
+
+| Service | Setting | Value |
+|---|---|---|
+| RDS PostgreSQL | engine | postgres 16 |
+| RDS PostgreSQL | class | db.t4g.large |
+| RDS PostgreSQL | max connections | 1000 |
+| RDS PostgreSQL | point in time days | 35 |
+| RDS PostgreSQL | databases | ospreyflow, litellm, superset |
+| ElastiCache | engine | redis 7.1 |
+| ElastiCache | node type | cache.t4g.micro |
+| ElastiCache | nodes | 1 |
+| S3 | buckets | media, staging, site-images, tile-cache, backups |
+| OpenSearch Service | engine | OpenSearch_2.17 |
+| OpenSearch Service | instance type | t3.medium.search |
+| OpenSearch Service | data nodes | 2 |
+| OpenSearch Service | signing | sigv4 |
+
+#### Entra ID registrations
+
+| Registration | Kind | Details |
+|---|---|---|
+| glass | single-page application | redirect: https://<the deployment's name>/; grants: the API's access_as_user (delegated) |
+| api | web API | exposes: access_as_user; app roles: Dashboard.Read |
+| superset | web application, with a client secret | redirect: https://bi.<the deployment's name>/oauth-authorized/<provider>; grants: the API's access_as_user (delegated) |
+| report-sync | application (client credentials), with a client secret | grants: the API's Dashboard.Read (application) |
+
+#### Egress
+
+| Host | Port |
+|---|---|
+| `login.microsoftonline.com` | 443 |
+| `s3.eu-west-2.amazonaws.com` | 443 |
+| `sts.eu-west-2.amazonaws.com` | 443 |
+
+<!-- manifest:end -->
+
 ### 6a.3 The namespace's Terraform, and the secrets each component reads
 
 The Terraform is plain AWS and Kubernetes resources, not the platform's own modules, and each file
