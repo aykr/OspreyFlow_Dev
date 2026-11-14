@@ -1,0 +1,68 @@
+diff --git a/OspreyFlow_Build/tests/test_user_guide_ask_chat.py b/OspreyFlow_Build/tests/test_user_guide_ask_chat.py
+index f3bbe1e..d809c57 100644
+--- a/OspreyFlow_Build/tests/test_user_guide_ask_chat.py
++++ b/OspreyFlow_Build/tests/test_user_guide_ask_chat.py
+@@ -34,10 +34,22 @@ def test_section_6_names_each_read_from_choice_as_the_panel_labels_it() -> None:
+     assert re.findall(r"\*\*(Selected items|Everything on the graph|Whole case|[A-Z][a-z ]+)\*\* \(", text) == labels
+ 
+ 
+-def test_section_6_says_whole_case_is_not_available_while_the_panel_says_so() -> None:
+-    disabled = re.search(r'"Whole case is not available yet:[^"]*"', PANEL)
++def test_section_6_says_what_whole_case_reads_as_the_panel_and_the_conduit_do() -> None:
++    """ADR-098 Amendment 9: the panel's one line, the Conduit's 200-character refusal, and what is
++    read of each result (ADR-129 Amendment 5's `[S-n]`), each read from the code that says it."""
+     text = ask_paragraph()
+-    assert ("**Whole case** (not available yet, and it says why)" in text) is bool(disabled)
++    line = re.search(r'export const WHOLE_CASE_LINE = "([^"]+)";', PANEL)
++    assert line and "finds things by their names and words, not by what they mean" in line.group(1)
++    assert "it finds things by their names and words, not by what they mean" in text
++    from services.api.questions import MAX_QUERY_CHARS, QuestionTooLongToSearchError
++
++    refused = QuestionTooLongToSearchError(MAX_QUERY_CHARS + 1).words
++    assert f"at most {MAX_QUERY_CHARS} characters" in refused and "Shorten the question" in refused
++    assert f"a question of more than {MAX_QUERY_CHARS} characters is refused, with what to do" in text
++    assert "Whole case is not available" not in text and "not available yet" not in text
++    assert 'aria-label="Sources found in the case"' in PANEL
++    assert "cited as `[S-n]`, which selects its records on the canvas" in text
++    assert "a document on the canvas is read whole and one elsewhere in the case by the passage" in text
+ 
+ 
+ def test_section_6_quotes_about_and_will_read_in_the_panel_s_shape() -> None:
+diff --git a/OspreyFlow_Core/docs/user-guide.md b/OspreyFlow_Core/docs/user-guide.md
+index 7139a6b..549a81a 100644
+--- a/OspreyFlow_Core/docs/user-guide.md
++++ b/OspreyFlow_Core/docs/user-guide.md
+@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
+ <!-- document-control:begin -->
+ ## Document control
+ 
+-**Version 1.53** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
++**Version 1.54** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+ 
+ | Version | Date | What changed |
+ | --- | --- | --- |
++| 1.54 | 2026-11-14 | §6, Ask & Chat: **Whole case** as v0.5.2's Part D(iii) built it (ADR-098 Amendment 9, ADR-129 Amendment 5, rules-b's wording): the case searched with the question's own words, as you, by names and words, not meaning; a question past 200 characters refused with what to do; a document on the canvas read whole, one elsewhere by its passage; each other record a source, `[S-n]`, selecting its records. Held by `tests/test_user_guide_ask_chat.py`. PDF made by the orchestrator at merge. |
+ | 1.53 | 2026-11-14 | §7.5 and §7.11: where people sign in with Entra ID, your watches, hotlists and rules run as you, and a scheduled rule's run acts as you, while you have signed in within the last 24 hours (administration guide §6a.7; ADR-148 Amendment 16). PDF made by the orchestrator at merge. |
+ | 1.52 | 2026-11-14 | §6, Ask & Chat, as v0.5.2's Part D built it (ADR-098 Amendment 7, rules-b's wording): **Read from** (*Selected items*, *Everything on the graph*, *Whole case* not available yet), the *About* and *Will read* lines and the engine before anything is sent, an answer from links and events when there is no document; *Ask the model about these…* on any selection saves a private view and asks there; asking needs Editor, no longer a document. Held by `tests/test_user_guide_ask_chat.py`. PDF made by the orchestrator at merge. |
+ | 1.51 | 2026-11-13 | §7.5 and §7.11: where people sign in with Entra ID (a shared platform), a load judges only its starter's rules, hotlists and watches, a watch's own runs do not happen, and a scheduled rule is refused (administration guide §6a.7; docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
+@@ -790,11 +791,15 @@ the case's analyst layer.
+ **Ask & Chat** (on the rail; it was named *Questions*) asks the deployment's model about what you choose
+ under **Read from**: **Selected items** (what you have selected, everything one link from it, and the
+ documents among them; the choice when something is selected), **Everything on the graph** (every item,
+-link and document you can see), or **Whole case** (not available yet, and it says why). Above the
+-question it says what that is about ("About: Tarbuck, Kyle and 1 other"), what will be read ("Will read:
+-1 document, 3 items and 2 links") and which engine will answer, before anything is sent. It answers
+-from the documents and **graph facts** only, citing each — **Draws on** opens a document. With no
+-document to read it answers from the links and events, and says so under the answer. What it
++link and document you can see), or **Whole case** (the case searched with your question's own words, as
++you, so it finds things by their names and words, not by what they mean; a question of more than 200
++characters is refused, with what to do instead). Above the question it says what that is about ("About:
++Tarbuck, Kyle and 1 other"), what will be read ("Will read: 1 document, 3 items and 2 links") and which
++engine will answer, before anything is sent. It answers from the documents and **graph facts** only,
++citing each — **Draws on** opens a document. Under *Whole case*, a document on the canvas is read whole
++and one elsewhere in the case by the passage the search found; each other record found is a source,
++cited as `[S-n]`, which selects its records on the canvas. With no document to read it answers from the
++links and events, and says so under the answer. What it
+ proposes, you **Accept** or **Reject**; an accepted proposal enters the graph as *inferred*.
+ **Ask the model about these…** on any selection saves it as a private view and asks there. Asking
+ needs Editor.
