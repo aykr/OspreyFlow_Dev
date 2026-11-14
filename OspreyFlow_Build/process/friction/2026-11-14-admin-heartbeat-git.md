@@ -1,14 +1,1 @@
-# Friction: the heartbeat reads done from git (admin, 14 November 2026)
-
-- **The order assumed a branch the tables don't hold.** It said to read each step's branch "from groups.tsv or
-  progress.tsv as they record it". Neither records one, and step names don't match branch names (3h is
-  v052-cluster-on-entry on lane/case-merged-clusters). Guessing a branch from names would have shown steps 4, 5
-  and 6 done, because a part of each had already merged from the step's own branch. The variant was settled with
-  the orchestrator before any code. **Next time:** check a stated data source exists before building on it.
-- **The first "came in by a merge" test was too weak.** "An ancestor of main, not on its first-parent line" also
-  matches a branch cut afresh at a lane's last merged head. Git can't tell two branches on one commit apart; only
-  the merge's subject can. The lane review found it (finding 1).
-- **The first version fixed one view of four.** `--lanes`, `--overview` and `summary` still read the typed
-  column, so the views disagreed by two steps on the real tables. All views now read one table (`read_git`).
-- **The tests landed with the code**, so the red-before-code record was taken afterwards: the new tests run
-  against main's script (`red_before_code.log`).
+| 2026-11-14 | a done typed by hand where git knows it | The route showed steps building after they were on main, and later steps kept typed dates after the steps before them finished. Every row's status was hand-typed. The order named a branch column the tables lack. A branch guessed from a step's name would have shown steps 4, 5 and 6 done, since a part of each had merged from its own branch. The first fix read git in the route view alone; a branch cut afresh at a lane's merged head, or a bare lane/<lane>, read as merged; and main's merges passed through the environment, which the kernel caps | Every view reads one table with git's done (read_git). A row's sixth column names the branch whose merge finishes the step, and it reads done only when that head is a first-parent merge's second parent whose subject names the branch as a whole word or as `merge: <lane> <name>`; a bare lane/<lane> never counts; perl runs git itself; any fault reads the typed table; LANDED's `<step> done` line; a step whose after steps are all done shows ready, with the days it could gain | test_lanes_heartbeat_route.py (done from git, ready, each view, each subject form, a subject past the environment's size), 17 plants red; process/lanes/admin/heartbeat_git/. Hash: recorded at merge. |

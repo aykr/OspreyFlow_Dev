@@ -1,9 +1,9 @@
 # The lanes' steps and where each stands (ADR-142). Kept by the orchestrator, updated at every merge and
 # review; lanes_heartbeat.sh shows it. Columns, tab-separated: lane, step, size (S/M/L), status
-# (done | review | building | todo), title, and optionally branch: the lane branch whose merge finishes the step
-# (for a step merged in parts, the last part's branch, written when that part is assigned, never the branch an
-# earlier part merged from). Once that branch is merged, the step shows done, whatever the status says
-# (lanes_heartbeat.sh read_git).
+# (done | review | building | todo), title, and optionally branch: the lane branch whose merge finishes the step,
+# written once no further part of the step will merge from it (never a bare lane/<lane>, which is not read). Once
+# that branch is merged, the step shows done, whatever the status says (lanes_heartbeat.sh read_git); until then,
+# the merger's LANDED.md `<step> done` line does the same.
 studio	L1.1	S	done	Phase 4's remainder: make ci green
 studio	L1.2	L	done	Phase 6: the canvas as editor, the Map editor, guided mode
 studio	L1.2a	M	done	Events-only withdrawal; the cross-case link merge shown not real (Parts A and A2)

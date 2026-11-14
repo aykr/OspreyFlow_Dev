@@ -429,7 +429,7 @@ overview() {
   [ "${1:-}" = --full ] && full=1
   lanes="$(mktemp "$DIR/.overview.XXXXXX")"; merges="$(mktemp "$DIR/.merges.XXXXXX")"; needs="$(mktemp "$DIR/.ovneeds.XXXXXX")"
   # shellcheck disable=SC2064   # these files, now
-  trap "rm -f '$lanes' '$merges' '$needs' '$GIT_PROGRESS'" EXIT
+  trap "rm -f '$lanes' '$merges' '$needs' '$GIT_PROGRESS' '$GIT_PROGRESS.tmp'" EXIT
   # What needs the owner, by `show`'s own reading, into this view's own file; watch keeps a copy (OVERVIEW_NEEDS)
   # for its notifications, so another view run meanwhile cannot change what it notifies.
   NEEDS_COPY="$needs" show >/dev/null
@@ -446,7 +446,7 @@ overview() {
     P_LANES="$lanes" P_MERGES="$merges" P_NEEDS="$needs" P_DIR="$DIR" P_FULL="$full" perl -CSD -e "$STAGES_PL$OVERVIEW_PL"
   rm -f "$lanes" "$merges" "$needs"
   # shellcheck disable=SC2064   # this file, now
-  trap "rm -f '$GIT_PROGRESS'" EXIT
+  trap "rm -f '$GIT_PROGRESS' '$GIT_PROGRESS.tmp'" EXIT
 }
 
 # shellcheck disable=SC2016   # perl, not the shell, expands these
@@ -676,46 +676,56 @@ print $full ? "\nThe short view: lanes_heartbeat.sh · lane by lane: lanes_heart
 # were on main, and later steps kept their typed dates, from hand-typed rows). Every view reads progress.tsv through
 # this: a row's status reads done, whatever it says, when
 #   - its sixth column names a branch whose head is the second parent of a merge on main's first-parent line, and
-#     that merge's subject names the branch (`merge: <lane> <name>` or `merge(lane/<lane>): <name>, …`, hyphens
-#     aside, as lane/<lane>-<name>; or the branch written whole). The subject is what tells a merged branch from one cut
-#     afresh at a lane's last merged head, which git alone cannot (the lane review of heartbeat-git, finding 1);
-#   - or merger/LANDED.md has `<main parent> <lane head> <lane> <step> done`, tab-separated where the step has a
-#     space, the step progress.tsv's own id.
+#     that merge's subject names the branch: the merger's `merge: <lane> <name>`, as lane/<lane>-<name> (hyphens
+#     aside), or the branch written whole as a word of its own (`merge(lane/case-x): …`, git's `Merge branch
+#     'lane/case-x'`). The subject is what tells a merged branch from one cut afresh at a lane's last merged
+#     head, which git alone cannot (the lane review of heartbeat-git, finding 1). A bare lane/<lane>, which the
+#     lane's every step merges from, never counts (its second review, finding 1);
+#   - or merger/LANDED.md has `<commit> <commit> <lane> <step> done …`, tab-separated where the step has a space,
+#     the step progress.tsv's own id.
 # A branch is never guessed from a row's names: a step's parts merge ahead from its branch (step 4's plan, step 5's
-# drafts, step 6's run sheet, 14 November), so the branch a row names is the one whose merge finishes the step.
+# drafts, step 6's run sheet, 14 November), so a row names a branch only once no further part of the step will
+# merge from it; until then the merger's LANDED `done` is the way. perl runs git itself, so main's merges never
+# pass through the environment (whose size the kernel caps), and any fault reads the typed table.
 TYPED_PROGRESS="$PROGRESS"
 GIT_PROGRESS="$DIR/.progress-git.$$"
 read_git() {
-  local ref="${OSPREY_MAIN_REF:-main}" repo="${OSPREY_REPO:-$SCRIPTS_DIR}" refs merges
   [ -f "$TYPED_PROGRESS" ] || return 0
-  refs="$(git -C "$repo" for-each-ref --format='%(refname:short)%09%(objectname)' refs/heads 2>/dev/null || true)"
-  merges="$(git -C "$repo" log --first-parent --merges --format='%P%x09%s' "$ref" 2>/dev/null || true)"
-  P_TYPED="$TYPED_PROGRESS" P_REFS="$refs" P_MERGES="$merges" P_LANDED="$LANDED" perl -CSD -e "$GIT_PL" \
-    > "$GIT_PROGRESS.tmp" && mv "$GIT_PROGRESS.tmp" "$GIT_PROGRESS" && PROGRESS="$GIT_PROGRESS"
+  if P_TYPED="$TYPED_PROGRESS" P_LANDED="$LANDED" P_REPO="${OSPREY_REPO:-$SCRIPTS_DIR}" P_REF="${OSPREY_MAIN_REF:-main}" \
+      perl -CSD -e "$GIT_PL" > "$GIT_PROGRESS.tmp" 2>/dev/null; then
+    mv "$GIT_PROGRESS.tmp" "$GIT_PROGRESS"; PROGRESS="$GIT_PROGRESS"
+  else
+    rm -f "$GIT_PROGRESS.tmp"; PROGRESS="$TYPED_PROGRESS"
+  fi
 }
 # shellcheck disable=SC2016   # perl, not the shell, expands these
 GIT_PL='
 use strict; use warnings;
-my %tip = map { my ($r, $h) = split /\t/; ($r => $h) } grep { /\t/ } split /\n/, $ENV{P_REFS};
-my %by;   # a merged head: the subjects of the first-parent merges that brought it in
-for (split /\n/, $ENV{P_MERGES}) { my ($parents, $subject) = split /\t/, $_, 2; my (undef, @in) = split / /, $parents;
+sub git_lines { my @r; open(my $g, "-|:encoding(UTF-8)", "git", "-C", $ENV{P_REPO}, @_) or return @r;
+  while (<$g>) { chomp; push @r, $_ } close $g; return @r }
+my %tip = map { my ($r, $h) = split /\t/, $_, 2; ($r => $h) } grep { /\t/ }
+  git_lines("for-each-ref", "--format=%(refname:short)%09%(objectname)", "refs/heads");
+my %by;   # a merged head: the subjects of the first-parent merges that brought it in as a second parent
+for (git_lines("log", "--first-parent", "--merges", "--format=%P%x09%s", $ENV{P_REF}, "--")) {
+  my ($parents, $subject) = split /\t/, $_, 2; my (undef, @in) = split / /, $parents;
   push @{ $by{$_} }, $subject // "" for @in }
 sub flat { my ($s) = @_; $s =~ s/-//g; return lc $s }
-sub names_branch { my ($subject, $branch) = @_;
-  return 1 if index($subject, $branch) >= 0;
+sub names_branch { my ($subject, $branch, $lane) = @_;
+  return 0 if $branch eq "lane/$lane";
+  return 1 if $subject =~ /(?:^|[\s(\x27"])\Q$branch\E(?=$|[\s)\x27",:])/;
   my ($suffix) = $branch =~ m{^lane/(.+)$} or return 0;
-  return ($subject =~ /^merge: (\S+) (\S+)/ || $subject =~ m{^merge\(lane/([^)\s]+)\): ([^,\s]+)})
-    && flat("$1-$2") eq flat($suffix) }
+  return $subject =~ /^merge: (\S+) (\S+)/ && flat("$1-$2") eq flat($suffix) }
 my %landed;
 if (open(my $h, "<:encoding(UTF-8)", $ENV{P_LANDED})) { while (<$h>) { s/\r?\n\z//;
   my @f = /\t/ ? split(/\t/) : split(/ +/);
-  $landed{"$f[2]\t$f[3]"} = 1 if @f >= 5 && $f[0] =~ /^[0-9a-f]{7,40}$/ && $f[1] =~ /^[0-9a-f+]{7,}$/ && $f[4] eq "done" } }
-open(my $h, "<:encoding(UTF-8)", $ENV{P_TYPED}) or exit 0;
+  $landed{"$f[2]\t$f[3]"} = 1
+    if @f >= 5 && $f[0] =~ /^[0-9a-f]{7,40}$/ && $f[1] =~ /^[0-9a-f+]{7,}$/ && $f[4] =~ /^done\b/ } }
+open(my $h, "<:encoding(UTF-8)", $ENV{P_TYPED}) or exit 1;
 while (my $line = <$h>) { $line =~ s/\r?\n\z//;
   if ($line !~ /^#/ && $line =~ /\t/) { my @f = split /\t/, $line, -1;
     my $branch = @f >= 6 ? $f[5] =~ s/^\s+|\s+$//gr : "";
     my $tip = $branch ne "" && $branch ne "-" ? $tip{$branch} : undef;
-    my $merged = defined $tip && grep { names_branch($_, $branch) } @{ $by{$tip} // [] };
+    my $merged = defined $tip && grep { names_branch($_, $branch, $f[0]) } @{ $by{$tip} // [] };
     if (@f >= 4 && ($merged || $landed{"$f[0]\t$f[1]"})) { $f[3] = "done"; $line = join "\t", @f } }
   print "$line\n" }
 '
@@ -725,7 +735,7 @@ route_view() {
   local lanes needs lane st note
   lanes="$(mktemp "$DIR/.route.XXXXXX")"; needs="$(mktemp "$DIR/.routeneeds.XXXXXX")"
   # shellcheck disable=SC2064   # these files, now
-  trap "rm -f '$lanes' '$needs' '$GIT_PROGRESS'" EXIT
+  trap "rm -f '$lanes' '$needs' '$GIT_PROGRESS' '$GIT_PROGRESS.tmp'" EXIT
   NEEDS_COPY="$needs" show >/dev/null
   if [ -n "${OVERVIEW_NEEDS:-}" ]; then cp "$needs" "$OVERVIEW_NEEDS"; fi
   for lane in $LANES; do
@@ -736,7 +746,7 @@ route_view() {
     P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_DIR="$DIR" perl -CSD -e "$STAGES_PL$ROUTE_PL"
   rm -f "$lanes" "$needs"
   # shellcheck disable=SC2064   # this file, now
-  trap "rm -f '$GIT_PROGRESS'" EXIT
+  trap "rm -f '$GIT_PROGRESS' '$GIT_PROGRESS.tmp'" EXIT
 }
 
 # shellcheck disable=SC2016   # perl, not the shell, expands these
@@ -938,7 +948,7 @@ watch_loop() {
 }
 
 # shellcheck disable=SC2064   # this file, now
-trap "rm -f '$GIT_PROGRESS'" EXIT
+trap "rm -f '$GIT_PROGRESS' '$GIT_PROGRESS.tmp'" EXIT
 case "${1:-}" in "" | --overview | --full | --lanes | show | summary) read_git ;; esac
 case "${1:-}" in
   "") if [ -f "$ROUTE" ]; then route_view; else overview; fi ;;
