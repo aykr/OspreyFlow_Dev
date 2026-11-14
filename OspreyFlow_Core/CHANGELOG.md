@@ -16,14 +16,19 @@ Entra ID on that profile. The workspace gains a reworked left rail, a Views menu
 in the GOV.UK look, and a refresh that keeps you signed in and where you were.
 
 **Before you update.**
+- **On v0.5.0, the `ospreyflow` command fails to start** ("No module named 'httpx'"), and that includes
+  `ospreyflow update`. Repair it once, in the checkout's folder, before anything else:
+  `uv tool install --force --editable --with httpx ./cli`, then `ospreyflow --help` to check it starts.
+  If `uv` is not to hand, `cd cli && ../.venv/bin/python -m ospreyflow update --name <deployment>` runs the
+  same update from the checkout's own environment.
 - **Back up first,** as for every update: `ospreyflow update` takes its own backup and rolls back if
   anything fails.
 - **Small and Lite deployments: the deployment's PostgreSQL restarts once** with a higher
   `max_connections` (660 on Small), rendered by `ospreyflow apply` from what the deployment's own services
   hold (ADR-114 Amendment 43). Nothing else to do.
-- **The `ospreyflow` command is installed with `uv tool install ./cli`** (administration guide §6a). An
-  install made earlier keeps working; if `ospreyflow --help` fails with "No module named 'httpx'", update
-  the checkout. The command loads only the standard library and PyYAML again.
+- **After the update, put the command back as `install.sh` makes it:** `uv tool install --force --editable
+  ./cli` in the checkout's folder (administration guide §6a). From v0.5.1 the command loads only the
+  standard library and PyYAML again; the `--with httpx` from the repair above is then harmless.
 
 **The `cloud-platform` profile (ADR-148), as installed and checked on kind.**
 - The install and decommission runbooks, rendered for the deployment, were run block by block. The fixes
