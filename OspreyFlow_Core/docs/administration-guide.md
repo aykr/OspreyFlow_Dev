@@ -18,6 +18,7 @@ is made from the deployment's own schema, and is checked against it on every cha
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.08 | 2026-11-14 | §9.1: a coming Admin section is plain words with a *Coming* tag, never a link, and a person's actions in *People and roles* sit on a line beneath them (ADR-145 Amendment 16). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.07 | 2026-11-14 | §6a.7: a token of the other version than `token_version` is refused in words naming `requestedAccessTokenVersion` and the setting, and INSTALL step 6's check shows them after the first sign-in (ADR-148 Amendment 18). |
 | 2.06 | 2026-11-14 | §6a.7, the administrator fallback on the poc shape (ADR-148 Amendment 15): `{administrator: true}` as the source of a person's clearance, unit or handling codes, set in *Admin › People* with Access (none above the setter's own), a person with none set unable to sign in until set, the first administrators' values at install (`first_administrator_access`), refused on any other shape; Appendix A's three claim sources and `first_administrator_access`. PDF reprinted alone. |
 | 2.05 | 2026-11-14 | §6a.8: the Ingest root in the set in every shape (ADR-148 Amendment 13 point 4, amended 14 November): in the standard shape the shared volume's `ingest` folder is a part of its own, so it is no longer among what no set holds, and an upload no longer disagrees with a restore's stores. Held by `tests/test_guides_cloud_platform.py`, reading the render both ways. PDF made by the orchestrator at merge. |
@@ -2195,7 +2196,9 @@ while it is off, a guest is listed as not enabled.
 **Admin** is one of the four places (key `A`); Home and the place switcher offer it to whoever holds
 one of its sections' rights. A side list groups its sections, each shown only to someone holding its
 right, and each section's routes refuse anyone without it, so hiding a section is never the control.
-Under the GOV.UK theme the list is a GOV.UK side navigation.
+Under the GOV.UK theme the list is a GOV.UK side navigation. A section not built yet is not a link: its name
+stands with a **Coming** tag, and what it will hold is written beneath it. Each person in **People and roles**
+has **Save** and, beside it, links to the person's other actions on a line beneath their name.
 
 | Group | Section | Right | What it does |
 | --- | --- | --- | --- |

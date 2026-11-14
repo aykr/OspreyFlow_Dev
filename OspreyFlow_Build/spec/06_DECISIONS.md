@@ -38955,3 +38955,46 @@ decision 10's "says `more` when it reaches that"; decision 10's text stands as i
   and `::test_the_fallback_says_in_words_where_its_depth_stops_the_list`, both red before the change. They are
   planted again in `process/lanes/studio/v052-search/plants.py`: Next offered past the records, and the depth not
   said, each red.
+
+### ADR-145, Amendment 16 (14 November 2026) — Admin in the GOV.UK look: one heading, names in the body face, a person's actions beneath them, coming sections as plain words
+
+Status: the owner's ruling of 14 November 2026, through the orchestrator (a font-sizing and usability pass on Admin
+in the GOV.UK look, the other two looks not to regress); built by the admin lane on the orchestrator's reservation.
+The orchestrator approved: a row of link-styled actions, not a menu; one DOM in all three looks with the GOV.UK type
+scale alone; and the row-height trade in dark and light. **Changes Amendment 3**: point 3's "*Name* (coming)", and
+point 5's keyboard case for opening a coming section.
+
+1. **One heading level each.** The section's name is the screen's one `h1` (`govuk-heading-l`, 36px, in GOV.UK; the
+   ui face at the body size in dark and light). *Admin* above it is a caption, not a heading (`govuk-caption-l`).
+   *Roles, teams and Authors* sits on the caption's line as a link.
+2. **The type scale, in GOV.UK alone.** The side navigation, the tables, their buttons, inputs and the row's links
+   are the Design System's "s" size, 16px. Every value is `tokens.css`'s; the rule is scoped to
+   `[data-brand="govuk"]`, so dark and light keep the sizes main drew (13px navigation and cells, 12px headers).
+3. **Names in the body face.** A person's name is bold in the body face (`admin-person__name`). Mono stays for
+   identifiers: the username, and a case's name where it is one.
+4. **A person's actions beneath them.** *Save* is the row's one primary action. *Super user, Access, Disable… (or
+   Enable), Reset sign-in* and *Remove* follow it as links on the same line, in a row of their own beneath the
+   person (`admin-row-actions-row`), each with the same accessible name as before. What each one shows, and which
+   are offered on Entra ID (Amendment 15 of ADR-148 for *Access*), is unchanged. Moving them out of a column of
+   their own is what lets every column header keep to one line at desktop width (1020px and wider): in dark and
+   light the headers are 67px → 31px tall and a person 122px → 141px, in GOV.UK 113px → 33px and 267px → 153px.
+   *Other grants* is the column's visible name; "(custom roles and other grants)" is read by assistive technology.
+5. **A coming section is plain words.** It is no longer a button. Its name stands with a *Coming* tag
+   (`govuk-tag--grey` in GOV.UK), and the words of what it will hold sit beneath it in the side list, so decision 5's
+   "says what it will hold" is kept without a link to a screen that holds nothing. Tab passes over it.
+
+Tests, each red first on main's `AdminPlace.tsx`, `sections/People.tsx` and `admin.css`
+(`process/lanes/admin/govuk_admin/red-on-main-code.log`, and `look-spec-on-main.red.log`):
+- `keyboard/admin-look.spec.ts`, at 1280px in each look: one `h1`, the caption, the name outside mono, no coming
+  link and a tag for each, the roles link on the caption's line, one primary per person, every header on one line
+  and at least 30px shorter than main's. GOV.UK: 36px and 16px, a person at most 60% of main's height. Dark and
+  light: main's sizes, a person at most one line of actions (20px) taller. These two were planted red by the
+  GOV.UK size rule unscoped (`plant-govuk-size-in-every-look.log`).
+- `keyboard/admin.spec.ts` *a coming section says what it will hold in the side list, and Tab passes over it*
+  (registry `read-a-coming-admin-section-by-keyboard`, replacing `open-a-coming-admin-section-by-keyboard`).
+- `AdminSections.test.tsx`, `adminWords.test.tsx` and `PeopleEntra.test.tsx` (*a person's row in Admin › People*).
+- `a11y/every-harness.spec.ts` scans People with every Admin right in dark, light and GOV.UK, with
+  `checkUndecidedContrast`, in place of the open placeholder.
+- Before and after captures in the GOV.UK look: `process/lanes/admin/govuk_admin/{before,after}-people*.png`.
+
+The registry and `every-harness` changes are the orchestrator's (`process/lanes/admin/govuk_admin/registry-govuk.diff`).

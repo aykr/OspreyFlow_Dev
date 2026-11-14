@@ -26,7 +26,7 @@ async function open(page: Page, look: string, brand: string): Promise<void> {
   if (look === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
   await page.getByRole("table").first().waitFor();
   // Measured before GDS Transport has loaded, a person's lines wrap in the fallback face (173px seen under a
-  // parallel run, against 152px once loaded): wait for the faces, so the bound is the look's, not the race's.
+  // parallel run, against 153px once loaded): wait for the faces, so the bound is the look's, not the race's.
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 

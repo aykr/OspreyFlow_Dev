@@ -1,0 +1,8 @@
+# Plant: the GOV.UK pass's 16px rule unscoped from [data-brand="govuk"], so it reaches the dark and light looks
+  1) keyboard/admin-look.spec.ts:93:3 › Admin's People in the dark look keeps main's sizes ─────────
+    - Expected  - 2
+    + Received  + 2
+  2) keyboard/admin-look.spec.ts:93:3 › Admin's People in the light look keeps main's sizes ────────
+    - Expected  - 2
+    + Received  + 2
+  2 failed

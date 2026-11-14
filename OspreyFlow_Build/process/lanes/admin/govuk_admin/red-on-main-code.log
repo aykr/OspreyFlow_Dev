@@ -1,0 +1,21 @@
+# Main's AdminPlace.tsx, sections/People.tsx and admin.css under the branch's tests (b4f1e13 under 3d4b025)
+     × shows a holder of administer_system only the sections of that right 19ms
+     × names a section not built yet with a Coming tag, never a link or button, and asks the Conduit nothing for it 15ms
+     × has one primary action and the rest as named links beneath it, and the name outside mono 20ms
+     × in Approval rights, nothing names a person in a tip or shows an id 5ms
+     × in Uploads, nothing names a person in a tip or shows an id 4ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/admin/AdminSections.test.tsx > the Admin place's sections (ADR-145 decision 5) > shows a holder of administer_system only the sections of that right
+ FAIL  src/admin/AdminSections.test.tsx > the Admin place's sections (ADR-145 decision 5) > names a section not built yet with a Coming tag, never a link or button, and asks the Conduit nothing for it
+ FAIL  src/admin/PeopleEntra.test.tsx > a person's row in Admin › People > has one primary action and the rest as named links beneath it, and the name outside mono
+ FAIL  src/admin/adminWords.test.tsx > Admin's words: roles by name, never people or ids > in Approval rights, nothing names a person in a tip or shows an id
+ FAIL  src/admin/adminWords.test.tsx > Admin's words: roles by name, never people or ids > in Uploads, nothing names a person in a tip or shows an id
+ Test Files  3 failed (3)
+      Tests  5 failed | 43 passed (48)
+  1) keyboard/admin-look.spec.ts:69:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links 
+  2) keyboard/admin-look.spec.ts:69:3 › Admin's People in the light look: one h1, names in the body face, coming items not links 
+  3) keyboard/admin-look.spec.ts:69:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links 
+  4) keyboard/admin-look.spec.ts:84:1 › Admin's People in the GOV.UK look: the Design System's scale, and a person at most 60% of their old height 
+  5) keyboard/admin.spec.ts:713:1 › a coming section says what it will hold in the side list, and Tab passes over it 
+  5 failed
+  2 passed (7.1s)

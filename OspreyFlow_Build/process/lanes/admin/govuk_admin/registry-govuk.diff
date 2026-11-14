@@ -1,0 +1,14 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 44d9603..88414fe 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -997,7 +997,8 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
+   "name-a-connection-by-keyboard",
+   // ADR-145 decision 5: Admin's sections.
+   "move-between-admin-sections-by-keyboard",
+-  "open-a-coming-admin-section-by-keyboard",
++  // The GOV.UK pass (ADR-145 decision 5): a coming section is read in the side list, never opened.
++  "read-a-coming-admin-section-by-keyboard",
+   // ADR-145 decisions 6 and 7 and Amendment 5 (L2.5): People's row, Name an Author, Disable…, and
+   // Roles: a custom role made, copied and edited, a team, its lead and its cover.
+   "give-the-super-user-preset-by-keyboard",

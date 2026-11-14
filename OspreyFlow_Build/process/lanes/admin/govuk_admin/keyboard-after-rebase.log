@@ -1,0 +1,60 @@
+
+Running 52 tests using 2 workers
+
+[1/52] keyboard/admin-look.spec.ts:69:3 › Admin's People in the dark look: one h1, names in the body face, coming items not links
+[2/52] keyboard/admin.spec.ts:212:1 › a person's roles are saved by keyboard
+[3/52] keyboard/admin-look.spec.ts:69:3 › Admin's People in the light look: one h1, names in the body face, coming items not links
+[4/52] keyboard/admin.spec.ts:223:1 › a dashboard is registered and removed by keyboard
+[5/52] keyboard/admin-look.spec.ts:69:3 › Admin's People in the govuk look: one h1, names in the body face, coming items not links
+[6/52] keyboard/admin-look.spec.ts:84:1 › Admin's People in the GOV.UK look: the Design System's scale, and a person at most 60% of their old height
+[7/52] keyboard/admin.spec.ts:238:1 › a dataset's egress is set by keyboard
+[8/52] keyboard/admin-look.spec.ts:93:3 › Admin's People in the dark look keeps main's sizes
+[9/52] keyboard/admin.spec.ts:275:1 › a dataset's owners are changed by keyboard
+[10/52] keyboard/admin-look.spec.ts:93:3 › Admin's People in the light look keeps main's sizes
+[11/52] keyboard/admin.spec.ts:294:1 › a dataset's promotion policy is set by keyboard
+[12/52] keyboard/admin.spec.ts:313:1 › a removed case's layer is merged, as a dry run, by keyboard
+[13/52] keyboard/admin.spec.ts:327:1 › a removed case's layer is deleted, as a dry run, by keyboard
+[14/52] keyboard/admin.spec.ts:340:1 › a removed case's layer is deleted by keyboard after its dry run
+[15/52] keyboard/admin.spec.ts:356:1 › who may own a dataset is set in System by keyboard
+[16/52] keyboard/admin.spec.ts:372:1 › the system is asked again by keyboard
+[17/52] keyboard/admin.spec.ts:383:1 › a person is invited by keyboard and their one-time code is shown
+[18/52] keyboard/admin.spec.ts:399:1 › a person is added by Entra object id by keyboard
+[19/52] keyboard/admin.spec.ts:410:1 › guest accounts are admitted by keyboard
+[20/52] keyboard/admin.spec.ts:425:1 › a person's access is edited by keyboard
+[21/52] keyboard/admin.spec.ts:435:1 › a person is disabled and enabled again by keyboard
+[22/52] keyboard/admin.spec.ts:447:1 › a person's sign-in is reset by keyboard and the new code shown
+[23/52] keyboard/admin.spec.ts:457:1 › a person is removed by keyboard once the removal is confirmed
+[24/52] keyboard/admin.spec.ts:470:1 › a refused organisation arrival is joined to an account by keyboard
+[25/52] keyboard/admin.spec.ts:486:1 › a demo pack's command is copied by keyboard
+[26/52] keyboard/admin.spec.ts:498:1 › a schedule is paused and resumed by keyboard
+[27/52] keyboard/admin.spec.ts:510:1 › a schedule's runs are shown by keyboard
+[28/52] keyboard/admin.spec.ts:522:1 › a schedule is run now by keyboard, as its owner
+[29/52] keyboard/admin.spec.ts:531:1 › a schedule is changed by keyboard, keeping its owner
+[30/52] keyboard/admin.spec.ts:548:1 › a connection is named by keyboard
+[31/52] keyboard/admin.spec.ts:563:1 › a SQL and a JSON connection are named with their fields by keyboard
+[WebServer] 11:07:42 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+[32/52] keyboard/admin.spec.ts:601:1 › an S3 and an Athena connection are named with their fields by keyboard
+[WebServer] 11:07:43 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+[33/52] keyboard/admin.spec.ts:645:1 › the grading scheme is read and its change command copied by keyboard
+[34/52] keyboard/admin.spec.ts:660:1 › an API connection is named with its fields, and a connection tested, by keyboard
+[35/52] keyboard/admin.spec.ts:692:1 › Admin's sections are moved between by keyboard
+[36/52] keyboard/admin.spec.ts:713:1 › a coming section says what it will hold in the side list, and Tab passes over it
+[37/52] keyboard/admin.spec.ts:730:1 › a person is given the Super user preset by keyboard
+[38/52] keyboard/admin.spec.ts:742:1 › a person is given a custom role by keyboard
+[39/52] keyboard/admin.spec.ts:755:1 › an Author is named for a case with none by keyboard
+[40/52] keyboard/admin.spec.ts:768:1 › a person's case is transferred and they are disabled by keyboard
+[41/52] keyboard/admin.spec.ts:791:1 › a built-in role is copied into a new role by keyboard
+[42/52] keyboard/admin.spec.ts:807:1 › a custom role is made by keyboard
+[43/52] keyboard/admin.spec.ts:823:1 › a right's tip is read with its box, and Roles, teams and Authors is opened and left, by keyboard
+[44/52] keyboard/admin.spec.ts:840:1 › a custom role's versions are shown by keyboard
+[45/52] keyboard/admin.spec.ts:850:1 › a custom role is edited by keyboard into its next version
+[46/52] keyboard/admin.spec.ts:863:1 › a role's team is saved, its lead handed over and a cover named by keyboard
+[47/52] keyboard/admin.spec.ts:900:1 › the audit is read by kind and person by keyboard
+[48/52] keyboard/admin.spec.ts:920:1 › a case's rule audit is read in Audit by keyboard
+[49/52] keyboard/admin.spec.ts:936:1 › the audit is paged by keyboard
+[50/52] keyboard/admin.spec.ts:948:1 › when promotions are overdue is set in Operations by keyboard
+[51/52] keyboard/admin.spec.ts:966:1 › a role's, a team lead's and a dataset's Authors' tips are read with their controls by keyboard
+[52/52] keyboard/admin.spec.ts:989:1 › every registered Admin action has its own proving test case above
+  52 passed (14.2s)
