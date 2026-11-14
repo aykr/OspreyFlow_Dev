@@ -39127,15 +39127,16 @@ reads is its own record") for the write path.*
    `addE` from an empty start wrote nothing). Unfiltered by design, as the lookups it replaces were: an internal
    lookup during a trusted write; no record id leaves the adapter.
 
-   **Only the types a call can touch** (the lane review of 14 November). Asked of every vertex type, a call cost one
-   read of the store's types and one query per type, however few it wrote, and a per-row load (one call a row: the
-   CLI, the site grid, the seeders, the basemap builder) paid it on every row. A node is looked for in its own type,
-   where its write goes (`UPDATE` or `INSERT INTO` that type); a link's ends in the types its link type joins (every
-   type for one that joins anything, `*`), and an end not found there is asked again of every type, so an end of a
-   type the link does not allow is still refused for its type, never reported missing. A call costs one read of the
-   store's types and one query per type it names, per 1,000 ids. One id held by vertices of two types stops the write
-   (`IdInTwoTypes`) rather than write onto whichever answered last. The bulk loader asks every type once per chunk,
-   which its chunk amortises.
+   **Which types a call asks** (the lane review of 14 November). A link's ends are asked of the types its link
+   type joins (every type for one that joins anything, `*`), and an end not found there is asked again of every
+   type, so an end of a type the link does not allow is still refused for its type, never reported missing: a link
+   call costs one read of the store's types and one query per type its links can reach, per 1,000 ids, not one per
+   type in the store. A node write asks every vertex type, once a call: an id another type already holds is refused
+   in words (a node's type is not changed by a write), never inserted beside it as a second vertex under one id,
+   which no per-type unique index can refuse (asked of its own type alone, the write would have made one, where the
+   scan it replaces sent an `UPDATE` that matched nothing). One id found in two types stops the write
+   (`IdInTwoTypes`). As on the read path (Amendment 2), a vertex type without a unique `id` index is never asked,
+   since asking it would scan it. The bulk loader asks every type once a chunk, which its chunk amortises.
 3. **What it does not change.** The per-call corpus total (`g.V().outE(<type>)…sum()`, read once per call and type,
    ADR-056 Amendment 22) is a whole-corpus traversal by design, not a lookup by id; the reads outside the write path
    that still start by `has("id")` (supersede and clone, `shared_contacts`, and `restore_link_state`, a revert's put-back
@@ -39143,25 +39144,26 @@ reads is its own record") for the write path.*
 4. **Held by** (rule 12):
    - offline, every stand-in of the store refuses a traversal that starts from the whole store by `id`
      (`tests/adapters/graph_arcadedb/edge_store.refuse_scans`, used by `CountingStore`, the node store of
-     `test_write_onto_a_reverted_node.py`, the stray-records store, `tests/ingest`'s `TypedStore` and the bulk spike's
-     client; it catches the property quoted either way and any filter step before it, and `test_refuse_scans.py`
-     shows it on each shape and on the write path's own, which pass, red as it was before, S1), and `test_gremlin_bulk_transport_shapes.py`'s
+     `test_write_onto_a_reverted_node.py`, the stray-records store, `tests/ingest`'s `TypedStore`, the bulk shapes'
+     recording client and the bulk spike's client; it catches the property quoted either way and any filter step
+     before it, nested ones included, and `test_refuse_scans.py` shows it on each shape and on the write path's own,
+     which pass; plant S1), and `test_gremlin_bulk_transport_shapes.py`'s
      `test_no_lookup_scans_the_store_by_id` holds the bulk path's four lookups and its write: red first, 35 offline
      tests on the old write path by the refusal itself (`process/lanes/rules/adr124-am18/red-first.txt`, which shows
      40: the other five are live files, `test_client_row_limit.py` and `test_datasets_index.py`, that failed for want of
      a store); `tests/ingest/combined_run_support.py`'s `TypedStore`, behind the adapter cases of
-     `test_run_writes_each_link_once.py` (nine red at the first rebase, since `make test` leaves `tests/ingest` to
-     the live job), refuses it too;
-   - offline, `test_write_path_round_trips.py` counts a call's lookups: a node write asks its own type alone, a link
-     write the types its link joins, both unmoved by thirty more types in the store; an end of the wrong type is
-     refused for its type; an id in two types stops the write; plants R1 to R4 each red
-     (`process/lanes/rules/adr124-am18/review-red-first.txt`);
+     `test_run_writes_each_link_once.py`, refuses it too (it still read the old shape at the first rebase, which no
+     gate of the lane's saw, since `make test` leaves `tests/ingest` to the live job; plant I1 puts that back);
+   - offline, `test_write_path_round_trips.py` counts a call's lookups: a link write asks the types its link joins,
+     unmoved by thirty more types in the store, and a node write every type once a call; an end of the wrong type
+     is refused for its type; a node write onto an id another type holds is refused and writes nothing; an id in
+     two types stops the write; plants R1 to R4;
    - offline, `CountingStore` keeps a stray second record of a link that its `id` index answers with, and
      `test_a_merge_is_written_to_the_link_a_traversal_reaches_not_a_stray_record` holds the merge to the reached one;
      `test_a_rows_end_not_in_the_graph_is_refused_in_words_never_dropped` holds the bulk refusal;
    - live, `tests/conformance/graph_port/test_write_path_scale.py`: the same load (200 nodes, 200 links, 200 more in
-     bulk) in a graph padded with 2,000 vertices and then with 102,000 makes the same number of round trips to the store,
-     always (deterministic, so CI's conformance job holds it), and, in a run that names its lease
+     bulk) in a graph padded with 2,000 vertices and then with 102,000 makes the same number of round trips to the store
+     (the bulk loader's included), always (deterministic, so CI's conformance job holds it), and, in a run that names its lease
      (`$OSPREY_RUN_TAG/lease`, written by `stack_lease.sh remote`), takes less than one and a half times as long;
      elsewhere its times are printed and not judged, since a time taken beside unknown work measures nothing (rule
      14). Measured first on stack c under the rules lane's lease of 2026-11-14T01:36:26Z: 6.63 s and 6.41 s at 2,000 and 22,000 vertices, flat; but at 22,000 one scanning lookup
@@ -39171,7 +39173,8 @@ reads is its own record") for the write path.*
      8.43/8.94 s and 8.54/8.84 s, ratios 0.97, 1.06 and 1.04, and plants A9 to A11 each red by the test alone; and
      `test_one_call_writing_one_node_twice_ends_as_one_node`, one call that writes a node twice in one transaction;
    - plants A1 to A13 (`process/lanes/rules/adr124-am18/plants.py`), each lookup put back to its scanning shape, A5
-     to the record in the index, each red (`PLANTS_RECORD.txt`); A9 to A11 list the scale test alone, so it is shown
+     to the record in the index, each red (`PLANTS_RECORD.txt`); and the review's R1 to R4, D1 to D3, S1 and I1 in
+     the same file, each red offline at the head (`PLANTS_RECORD.offline.txt`); A9 to A11 list the scale test alone, so it is shown
      red by its own measure, not by an offline refusal.
 
 ### ADR-150, Amendment 1 (14 November 2026) — The drift check streams
@@ -39197,9 +39200,12 @@ about 4.5 GB at thirty million) and left a streaming check to CARRIES.*
    kind than node or text or without the key its kind is sorted by (which OpenSearch sorts after every one with it),
    is counted as unread, from the index's own count less the documents read, and the check is not clean while one is
    there (`test_a_document_no_stream_reads_is_counted_unread_never_passed_over`); the stand-in's refusal of a page
-   over `max_result_window` is shown firing; plants D1 to D3 each red
-   (`process/lanes/rules/adr124-am18/review-red-first.txt`).
-2. **What it does not change.** What the check compares (decision 5: missing, extra, stale, refused, and the outboxes'
-   pending) and its exit on drift, 1.
-3. **Measured** on step B's load (stack d, 14 November, `process/lanes/rules/v052-load/B_RECORD.md`): 570,460 nodes
-   against 642,460 documents in 711 s, at 169 MB peak, clean once the outboxes were drained.
+   over `max_result_window` is shown firing; plants D1 to D3 each red (`process/lanes/rules/adr124-am18/plants.py`,
+   `PLANTS_RECORD.offline.txt`). While the outboxes hold rows the unread count, like every other difference, may be
+   a change in flight, and it is never below none.
+2. **What it changes besides.** Decision 5's differences (missing, extra, stale, refused, and the outboxes' pending)
+   are compared as before, and drift still exits 1; unread is a difference of its own, which exits 1 too.
+3. **Measured** on step B's load, on stack d under the rules lane's lease of 2026-11-14T03:27:42Z, by this check as
+   first built (`feat(search): the drift check streams`, before the unread count): 570,460 nodes against 642,460 documents in 711 s, at 169 MB peak,
+   clean once the outboxes were drained. The record (`B_RECORD.md`, `drain.try2.txt`) is step B's, on
+   `lane/rules-v052-load`, merged after this.
