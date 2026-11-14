@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
 
+# A newer push to the same branch cancels the run it supersedes, so pushes do not queue full runs behind one
+# another (about ten queued on 13 November 2026 and held up v0.5.1's re-run). A pull request's runs are never
+# cancelled. The owner's word, 14 November 2026 (MORNING item 3).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
 defaults:
   run:
     working-directory: OspreyFlow_Core
