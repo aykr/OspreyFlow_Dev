@@ -166,6 +166,7 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "add_person_by_object_id",
         "grant_first_administrator",
         "set_person_roles",
+        "set_guest_sign_in",  # ADR-148 Amendment 17: guests admitted, or no longer
         "set_person_access",
         "disable_person",
         "disable_person_incomplete",
