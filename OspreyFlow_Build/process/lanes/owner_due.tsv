@@ -15,4 +15,4 @@ orchestrator	2026-11-14	Navigation C, D, E: estimates, effect on 26 Nov, the six
 owner	2026-11-14	v0.5.1's release: Superset's dnspython CVE-2026-128089 (MORNING, top)	done
 owner	2026-11-16	Promote to a batch job at the working-set cap: build for v0.5.2 or defer (MORNING item 10)	done
 orchestrator	2026-11-17	Will v0.5.2 be cut by Thursday 19? If not, the client installs v0.5.1 on the 20th (the owner's checkpoint)	open
-orchestrator	2026-11-14	Update osprey-small to main once admin's GOV.UK Admin pass merges (the owner's word, 14 Nov): backup, HANDOFF recipe, start --build, the demo checks	open
+orchestrator	2026-11-14	Update osprey-small to main once admin's GOV.UK Admin pass merges (the owner's word, 14 Nov): backup, HANDOFF recipe, start --build, the demo checks	done
