@@ -1,0 +1,16 @@
+# v052-results browser reds at ecb07dd; each plant restored with `git checkout -- <file>`
+## 15. an over-long query's refusal without its limit (the live check's finding)
+plant in src/search/SearchResults.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/search-results.spec.ts -g 'a pasted query longer than the search takes'; exit 1
+  ✘  1 keyboard/search-results.spec.ts:150:1 › a pasted query longer than the search takes is kept whole in the box, and the refusal names the limit (rule 2) (5.2s)
+    Error: expect(locator).toContainText(expected) failed
+    Expected substring: "The search could not be done: a search can be at most 200 characters, and this one has 207. Shorten it and press Enter again."
+    Received string:    "The search could not be done (422)."
+  1 failed
+## 16. the search box cutting a pasted query at the limit (maxLength)
+plant in src/design/primitives/Combobox.tsx; OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/search-results.spec.ts -g 'a pasted query longer than the search takes'; exit 1
+  ✘  1 keyboard/search-results.spec.ts:150:1 › a pasted query longer than the search takes is kept whole in the box, and the refusal names the limit (rule 2) (5.2s)
+    Error: expect(locator).toHaveValue(expected) failed
+    Expected: "Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel"
+    Received: "Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel Kestrel "
+  1 failed
+# 2 of 2 red
