@@ -60,7 +60,8 @@ from valkey.exceptions import LockError
 from knowledge_adapters import REGISTRY, NormalisationError
 from ontology.handling import HandlingScheme
 from ports.graph import GraphPort
-from schemas.domain import Alert, Hotlist, Monitor, Principal, Subgraph
+from principal_auth import PrincipalExchangeError
+from schemas.domain import Alert, Hotlist, Monitor, Principal, StoppedReason, Subgraph
 
 from .alerts import AlertStore, DisclosurePolicy, record_match
 from .audit import AuditWriter
@@ -69,6 +70,7 @@ from .hotlists import HotlistStore
 from .monitors import MonitorStore
 from .pattern_store import PatternNotFoundError, PatternStore
 from .watch_reach import DatasetReach
+from .watch_status import reason_of
 
 #: Bounds `services/resolve/trigger.py`'s own `LOCK_TTL_SECONDS`/`PAGE_SIZE` precedent —
 #: conservative and disclosed as a guess, not a measurement, for the identical reason that
@@ -168,6 +170,19 @@ async def _within_its_dataset(
     return owner.model_copy(update={"datasets": [dataset_id]})
 
 
+async def _owner_or_why(
+    principal_for_owner: Callable[[str], Awaitable[Principal | None]], owner_id: str
+) -> tuple[Principal | None, StoppedReason | None]:
+    """The owner as `principal_for_owner` resolves them, or why not (ADR-044 Amendment 1): a
+    refusal it raises (`resolve_for_owner_detailed`'s) is its reason; `None` from a resolver that
+    collapses them is `unresolved`. Any other fault is not a refusal, and is raised."""
+    try:
+        recipient = await principal_for_owner(owner_id)
+    except PrincipalExchangeError as error:
+        return None, reason_of(error)
+    return (recipient, None) if recipient is not None else (None, "unresolved")
+
+
 async def evaluate_hotlists_for_entry(
     entry: ChangeStreamEntry,
     *,
@@ -221,9 +236,9 @@ async def evaluate_hotlists_for_entry(
         return index
 
     for hotlist in await hotlist_store.list_all_active():
-        recipient = await principal_for_owner(hotlist.owner_id)
+        recipient, why = await _owner_or_why(principal_for_owner, hotlist.owner_id)
         if recipient is None:
-            await hotlist_store.set_status(hotlist.id, "stopped")
+            await hotlist_store.set_status(hotlist.id, "stopped", why)
             continue
         await hotlist_store.set_status(hotlist.id, "active")
 
@@ -300,9 +315,9 @@ async def evaluate_monitors_for_entry(
     all_alerts: list[Alert] = []
 
     for monitor in await monitor_store.list_all_active():
-        recipient = await principal_for_owner(monitor.owner_id)
+        recipient, why = await _owner_or_why(principal_for_owner, monitor.owner_id)
         if recipient is None:
-            await monitor_store.set_status(monitor.id, "stopped")
+            await monitor_store.set_status(monitor.id, "stopped", why)
             continue
         # ADR-099 Amendment 3: the pattern is read, and matched, within the monitor's dataset, and
         # only while its owner still reaches it (L2.10 review item 4): narrowing the owner to the
@@ -351,7 +366,7 @@ async def match_monitor(
         # today, so in practice this is "the owning principal this monitor's own row
         # names no longer owns the pattern it was created against," ADR-036's own
         # "the monitor stops" case, extended from principal validity to pattern validity.
-        await monitor_store.set_status(monitor.id, "stopped")
+        await monitor_store.set_status(monitor.id, "stopped", "pattern_gone")
         return []
     await monitor_store.set_status(monitor.id, "active")
     subgraph = await graph.match(saved.definition, recipient)

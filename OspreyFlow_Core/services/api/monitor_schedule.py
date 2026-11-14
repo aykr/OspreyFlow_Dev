@@ -33,7 +33,7 @@ from principal_auth import (
     PrincipalExchangeUnavailable,
     PrincipalRevoked,
 )
-from schemas.domain import Alert, Monitor, Principal, WatchStatus
+from schemas.domain import Alert, Monitor, Principal, StoppedReason, WatchStatus
 
 from .scheduler import DEFAULT_TIMEZONE, due_slots
 
@@ -54,7 +54,9 @@ class ScheduledMonitors(Protocol):
     async def list_all_active(self) -> list[Monitor]: ...
     async def last_slot(self, monitor_id: str) -> datetime | None: ...
     async def record_slot(self, monitor_id: str, slot: datetime) -> None: ...
-    async def set_status(self, monitor_id: str, status: WatchStatus) -> None: ...
+    async def set_status(
+        self, monitor_id: str, status: WatchStatus, detail: StoppedReason | None = None
+    ) -> None: ...
 
 
 @dataclass
@@ -94,7 +96,7 @@ class MonitorScheduleExecutor:
             owner = await self.resolve_owner(monitor.owner_id)
         except PrincipalRevoked:
             await self.monitors.record_slot(monitor.id, latest)
-            await self.monitors.set_status(monitor.id, "stopped")
+            await self.monitors.set_status(monitor.id, "stopped", "revoked")
             return
         except PrincipalExchangeUnavailable as error:
             # Says nothing about the owner: the claim is given back, so the next tick tries the

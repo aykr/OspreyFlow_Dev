@@ -12,11 +12,14 @@ import type { Status as WatchStatus } from "../../../../packages/schemas/generat
 
 export interface StatusBadgeProps {
   status: WatchStatus;
+  /** ADR-044 Amendment 1: why it is stopped, in the Conduit's words for its owner; shown beside the
+   * label while stopped, never while active. */
+  why?: string | null;
 }
 
-export function StatusBadge({ status }: StatusBadgeProps) {
+export function StatusBadge({ status, why }: StatusBadgeProps) {
   const stopped = status === "stopped";
-  return (
+  const badge = (
     <span
       className="value"
       style={{
@@ -27,6 +30,13 @@ export function StatusBadge({ status }: StatusBadgeProps) {
       }}
     >
       {stopped ? "Stopped" : "Active"}
+    </span>
+  );
+  if (!stopped || !why) return badge;
+  return (
+    <span style={{ display: "inline-flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+      {badge}
+      <span className="label">{why}</span>
     </span>
   );
 }

@@ -185,3 +185,25 @@ async def test_connecting_says_how_many_rows_it_could_not_canonicalise(
         assert "+44-legacy-refused-2" not in caplog.text, "the identifier is not written to the log"
     finally:
         await again.close()
+
+
+# --- ADR-044 Amendment 1: a stopped hotlist says why ----------------------------------------------
+
+
+async def test_a_stopped_hotlist_keeps_why_until_it_is_active_again(store) -> None:  # type: ignore[no-untyped-def]
+    from services.api.watch_status import STOPPED_WHY
+
+    hotlist = await store.create(OWNER, identifier="07700900188", review_date=date(2027, 1, 1))
+    assert (await store.get_authorized(hotlist.id, OWNER)).stopped_why is None
+    await store.set_status(hotlist.id, "stopped", "out_of_date")
+    stopped = await store.get_authorized(hotlist.id, OWNER)
+    assert (stopped.status, stopped.status_detail, stopped.stopped_why) == (
+        "stopped", "out_of_date", STOPPED_WHY["out_of_date"])  # fmt: skip
+    listed = [h for h in await store.list_authorized(OWNER) if h.id == hotlist.id]
+    assert listed and listed[0].stopped_why == STOPPED_WHY["out_of_date"]
+    await store.set_status(hotlist.id, "active")
+    active = await store.get_authorized(hotlist.id, OWNER)
+    assert (active.status, active.status_detail, active.stopped_why) == ("active", None, None)
+    # Set active with a reason given by mistake: an active row never carries one.
+    await store.set_status(hotlist.id, "active", "revoked")
+    assert (await store.get_authorized(hotlist.id, OWNER)).status_detail is None

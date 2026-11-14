@@ -138,3 +138,25 @@ async def test_a_watchs_schedule_is_set_by_its_owner_alone(
                 await conn.execute("DELETE FROM monitors WHERE id = $1", monitor.id)
         async with pattern_store._pool.acquire() as conn:
             await conn.execute("DELETE FROM saved_patterns WHERE pattern_id = $1", saved.pattern_id)
+
+
+# --- ADR-044 Amendment 1: a stopped watch says why -------------------------------------------------
+
+
+async def test_a_stopped_watch_keeps_why_and_a_reason_not_known_here_is_served_as_none(store) -> None:  # type: ignore[no-untyped-def]
+    import asyncpg
+    from services.api.watch_status import STOPPED_WHY
+
+    monitor = await store.create(OWNER, pattern_id="p-stopped-why")
+    await store.set_status(monitor.id, "stopped", "revoked")
+    stopped = await store.get_authorized(monitor.id, OWNER)
+    assert (stopped.status_detail, stopped.stopped_why) == ("revoked", STOPPED_WHY["revoked"])
+    conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    try:
+        await conn.execute("UPDATE monitors SET status_detail = 'a-later-release-s' WHERE id = $1", monitor.id)
+    finally:
+        await conn.close()
+    unknown = await store.get_authorized(monitor.id, OWNER)
+    assert (unknown.status, unknown.status_detail, unknown.stopped_why) == ("stopped", None, None)
+    await store.set_status(monitor.id, "active")
+    assert (await store.get_authorized(monitor.id, OWNER)).stopped_why is None

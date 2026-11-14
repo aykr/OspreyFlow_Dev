@@ -19,9 +19,10 @@ import asyncpg
 
 from conduit_common.identity import new_id
 from knowledge_adapters import REGISTRY, NormalisationError
-from schemas.domain import Hotlist, HotlistAudience, Principal, WatchStatus
+from schemas.domain import Hotlist, HotlistAudience, Principal, StoppedReason, WatchStatus
 
 from .dataset_scope import made_in, reach_clause
+from .watch_status import stopped_why
 
 #: `ADD COLUMN IF NOT EXISTS` — `alerts.py`'s own `_BOOTSTRAP_SQL` docstring has the full reasoning:
 #: this codebase has no migration tooling, and `CREATE TABLE IF NOT EXISTS` alone is a no-op
@@ -36,6 +37,8 @@ CREATE TABLE IF NOT EXISTS hotlists (
     created_at TIMESTAMPTZ NOT NULL
 );
 ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+-- ADR-044 Amendment 1: why it is stopped, NULL while active.
+ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS status_detail TEXT;
 CREATE INDEX IF NOT EXISTS hotlists_owner_id_idx ON hotlists (owner_id);
 CREATE INDEX IF NOT EXISTS hotlists_identifier_idx ON hotlists (identifier);
 ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS dataset_id TEXT;
@@ -53,7 +56,7 @@ _log = logging.getLogger(__name__)
 
 _COLUMNS = (
     "id, identifier, identifier_typed, identifier_canonical, owner_id, review_date, status, "
-    "created_at, dataset_id, audience"
+    "status_detail, created_at, dataset_id, audience"
 )
 
 #: A digit string of this length fits `imei` and `imsi` alike, with different canonical forms.
@@ -134,6 +137,13 @@ class HotlistNotFoundError(Exception):
     the same existence-leak discipline every other store in this codebase already establishes."""
 
 
+def _detail(row: asyncpg.Record) -> StoppedReason | None:
+    """ADR-044 Amendment 1: the stopped reason, only while stopped, and only one this release
+    knows."""
+    detail = row["status_detail"] if row["status"] == "stopped" else None
+    return detail if stopped_why(detail) is not None else None  # type: ignore[return-value]
+
+
 def _row_to_hotlist(row: asyncpg.Record) -> Hotlist:
     return Hotlist(
         id=row["id"],
@@ -143,6 +153,8 @@ def _row_to_hotlist(row: asyncpg.Record) -> Hotlist:
         owner_id=row["owner_id"],
         review_date=row["review_date"],
         status=row["status"],
+        status_detail=_detail(row),
+        stopped_why=stopped_why(_detail(row)),
         created_at=row["created_at"],
         dataset_id=row["dataset_id"],
         audience=row["audience"],
@@ -286,7 +298,9 @@ class HotlistStore:
             )
         return [_row_to_hotlist(row) for row in rows]
 
-    async def set_status(self, hotlist_id: str, status: WatchStatus) -> None:
+    async def set_status(
+        self, hotlist_id: str, status: WatchStatus, detail: StoppedReason | None = None
+    ) -> None:
         """Called only by the evaluator (`services/api/evaluation.py`), never a route — Stage 6c's
         own answer to ADR-036's "surfaced as stopped somewhere the analyst... can see it": written
         on every evaluation attempt that reaches this hotlist, not only on the first skip, so
@@ -298,7 +312,11 @@ class HotlistStore:
         through."""
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "UPDATE hotlists SET status = $2 WHERE id = $1", hotlist_id, status
+                "UPDATE hotlists SET status = $2, status_detail = CASE WHEN $2 = 'stopped' "
+                "THEN $3 END WHERE id = $1",
+                hotlist_id,
+                status,
+                detail,
             )
 
     async def list_all_active(self) -> list[Hotlist]:

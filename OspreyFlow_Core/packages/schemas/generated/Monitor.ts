@@ -4,6 +4,9 @@ export type Id = string;
 export type PatternId = string;
 export type OwnerId = string;
 export type Status = "active" | "stopped";
+export type StatusDetail =
+  ("revoked" | "out_of_date" | "refused" | "unreachable" | "unresolved" | "pattern_gone") | null;
+export type StoppedWhy = string | null;
 export type CreatedAt = string;
 export type DatasetId = string | null;
 export type Every = "daily" | "weekly" | "never";
@@ -34,6 +37,8 @@ export interface Monitor {
   pattern_id: PatternId;
   owner_id: OwnerId;
   status?: Status;
+  status_detail?: StatusDetail;
+  stopped_why?: StoppedWhy;
   created_at: CreatedAt;
   dataset_id?: DatasetId;
   every?: Every;
