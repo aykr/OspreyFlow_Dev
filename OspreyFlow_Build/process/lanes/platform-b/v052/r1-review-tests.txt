@@ -1,4 +1,4 @@
-# tests/test_v052_dashboards_check.py, 14 November 2026, the tree committed with this record (on 13c8e6a), a fresh PYTHONPYCACHEPREFIX
+# tests/test_v052_dashboards_check.py, 14 November 2026, the tree committed with this record (lane/platform-b-v052-rls on main bce6268), a fresh PYTHONPYCACHEPREFIX
 PASSED test_v052_dashboards_check.py::test_the_login_hint_is_added_and_one_already_there_replaced
 PASSED test_v052_dashboards_check.py::test_a_person_signs_in_and_superset_names_their_role[reader@r1.test-Gamma]
 PASSED test_v052_dashboards_check.py::test_a_person_signs_in_and_superset_names_their_role[builder@r1.test-Alpha]
@@ -12,7 +12,14 @@ PASSED test_v052_dashboards_check.py::test_building_is_made_for_alpha_refused_fo
 PASSED test_v052_dashboards_check.py::test_superset_refuses_a_build_without_its_csrf_token_so_build_is_shown_to_send_it
 PASSED test_v052_dashboards_check.py::test_a_rerun_finds_the_board_its_slug_names
 PASSED test_v052_dashboards_check.py::test_the_board_opens_with_the_conduit_s_guest_token_alone
+PASSED test_v052_dashboards_check.py::test_the_chart_is_made_once_on_the_board_and_found_again
+PASSED test_v052_dashboards_check.py::test_a_chart_is_refused_to_a_builder_superset_does_not_let_make_one
+PASSED test_v052_dashboards_check.py::test_the_guest_token_reads_the_identity_s_rows_only_and_a_session_reads_all
+PASSED test_v052_dashboards_check.py::test_a_secret_reaches_the_pod_script_through_stdin_alone
 PASSED test_v052_dashboards_check.py::test_the_check_passes_on_a_deployment_that_refuses_what_it_should
+PASSED test_v052_dashboards_check.py::test_each_leak_stops_the_check_at_its_own_assertion[Superset ignores the guest token's row-level security]
+PASSED test_v052_dashboards_check.py::test_each_leak_stops_the_check_at_its_own_assertion[the identity's rows are missing through the guest token]
+PASSED test_v052_dashboards_check.py::test_each_leak_stops_the_check_at_its_own_assertion[the planted row never reaches the mart]
 PASSED test_v052_dashboards_check.py::test_each_leak_stops_the_check_at_its_own_assertion[the report sync never pulls]
 PASSED test_v052_dashboards_check.py::test_each_leak_stops_the_check_at_its_own_assertion[the report sync's pull fails]
 PASSED test_v052_dashboards_check.py::test_each_leak_stops_the_check_at_its_own_assertion[the builder, with no level on the identity's case, is offered the board]
@@ -34,4 +41,5 @@ PASSED test_v052_dashboards_check.py::test_anything_v051_made_and_the_upgrade_lo
 PASSED test_v052_dashboards_check.py::test_anything_v051_made_and_the_upgrade_lost_fails_on_its_own_line[the alert-the hotlist's alert on the load]
 PASSED test_v052_dashboards_check.py::test_anything_v051_made_and_the_upgrade_lost_fails_on_its_own_line[the file-the Ingest claim's files]
 PASSED test_v052_dashboards_check.py::test_a_snap_of_a_case_holding_too_little_proves_nothing_and_stops
-35 passed in 1.59s
+PASSED test_v052_dashboards_check.py::test_the_guest_token_never_reaches_kubectl_s_command_line
+43 passed in 1.61s

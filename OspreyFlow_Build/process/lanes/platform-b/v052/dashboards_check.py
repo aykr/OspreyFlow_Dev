@@ -19,6 +19,10 @@ What it shows, each line PASS or FAIL, stopping at the first that fails (R1's wa
    dashboard (201); the Reports Viewer is refused (403).
 5. **Embedding** (Amendment 11 point 8), through the Glass's door: the Reports Viewer is offered
    `r1-board` and given a guest token, which opens the board in Superset (and nothing opens without it).
+   **The board's rows through the guest token** (rules 3 and 4: its row-level security is this read path's
+   access control): a chart on the mart's `figures`, and another identity's row (counted at SECRET) planted in
+   the mart; the guest token reads the identity's own rows and only them, while an administrator's own session
+   sees both, so the planted row is shown to be there. The row is removed before anything is asserted.
    **Each refusal the Conduit's `may_open` makes is asked** (rules 3 and 4): no reports right is refused the
    listing and the token (403); a Reports Viewer with no level on the identity's case, one of another unit,
    and one whose clearance is below the identity's are each offered nothing and refused the token (404, the
@@ -75,6 +79,8 @@ PLAN = [
     "Superset: the person with no role is refused by Superset at sign-in (its /api/v1/me/ 401)",
     "Superset: a role is re-read at the next sign-in (the builder made a Reports Viewer: Gamma)",
     "embedding: the Reports Viewer is offered r1-board and its guest token opens it, nothing without",
+    "the board's rows through the guest token: a chart on the mart's figures; the identity's rows only, another "
+    "identity's (counted at SECRET) absent; an administrator's own session sees both (the control)",
     "embedding: no reports right is refused the listing and the token (403)",
     "embedding: no level on the identity's case, another unit, a lower clearance: offered nothing, refused (404)",
 ]
@@ -99,11 +105,31 @@ def kube(r1: Any, *args: str, stdin: str | None = None) -> str:
     return r1.kubectl("-n", r1.NS, *args, stdin=stdin)
 
 
-def pod(r1: Any, *args: str) -> dict[str, Any]:
-    """`superset_pod.py` in the api pod, its one JSON line back."""
+def pod(r1: Any, *args: str, secret: str | None = None) -> dict[str, Any]:
+    """`superset_pod.py` in the api pod, its one JSON line back. A `secret` (a guest token) travels inside the
+    script's text on stdin, read where an argument says `@secret`: never on kubectl's command line."""
+    preamble = f"import os\nos.environ['R1_SECRET'] = {json.dumps(secret)}\n" if secret is not None else ""
     out = kube(r1, "exec", "-i", "deploy/api", "--", "/app/.venv/bin/python", "-I", "-", r1.GLASS, *args,
-               stdin=POD_SCRIPT.read_text())  # fmt: skip
+               stdin=preamble + POD_SCRIPT.read_text())  # fmt: skip
     return json.loads(out.strip().splitlines()[-1])
+
+
+#: A row of the mart's `figures` the identity must never see: another identity's, counted at SECRET (synthetic,
+#: rule 9). Planted through the managed PostgreSQL for the guest token's row-level security to leave out, and
+#: removed again before anything is asserted.
+OTHER = "r1-another-identity-counted-at-secret"
+PLANT_ROW = (
+    "INSERT INTO osprey_reports.figures (dashboard, case_id, case_name, period_weeks, section, label, typology, "
+    f"week_start, value, changed_at) VALUES ('{OTHER}', 'r1-planted', 'R1 planted, SECRET', 12, 'r1', 'planted', "
+    "'r1', '2026-11-23', 99, now()) ON CONFLICT DO NOTHING;"
+)
+REMOVE_ROW = f"DELETE FROM osprey_reports.figures WHERE dashboard = '{OTHER}';"
+
+
+def mart(r1: Any, sql: str) -> str:
+    """SQL on the managed PostgreSQL's `ospreyflow` (R1's RDS stand-in), as its superuser, the SQL on stdin."""
+    return r1.kubectl("-n", r1.MANAGED, "exec", "-i", "statefulset/postgres", "-c", "postgres", "--",
+                      "psql", "-U", "postgres", "-d", "ospreyflow", "-v", "ON_ERROR_STOP=1", stdin=sql)  # fmt: skip
 
 
 def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
@@ -112,7 +138,7 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
     import yaml
 
     r1 = r1 or _r1()
-    ask = ask or (lambda *args: pod(r1, *args))
+    ask = ask or (lambda *args, secret=None: pod(r1, *args, secret=secret))
     log = r1.record("dashboards")
     lines: list[str] = []
 
@@ -217,9 +243,27 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
     ok(f"the Reports Viewer is offered {BOARD}", status == 200 and has, f"listing {status}, offered {has}")
     status, guest_token = guest(reader)
     ok("and given a guest token for it", status == 200 and bool(guest_token), f"guest token {status}")
-    s = ask("embedded", str(board_id), guest_token or "")
+    s = ask("embedded", str(board_id), "@secret", secret=guest_token or "")
     ok("which opens the board in Superset, which nothing opens without it",
        s.get("with_token") == 200 and s.get("without") in (401, 403), s)
+    # 5b. The board's rows through the guest token: its row-level security is the access control on this read
+    # path (rules 3 and 4). A chart on the mart's figures; another identity's row planted; read with an
+    # administrator's own session (both seen: the control) and with the Reports Viewer's guest token.
+    s = ask("chart", "admin@r1.test", str(board_id))
+    ok("a chart on the mart's figures is on the board", s.get("status") in (200, 201) and s.get("chart"), s)
+    dataset, chart = str(s["dataset"]), str(s["chart"])
+    mart(r1, PLANT_ROW)
+    try:
+        control = ask("chartdata", "session", "admin@r1.test", str(board_id), dataset, chart)
+        through = ask("chartdata", "guest", str(board_id), dataset, chart, "@secret", secret=guest_token or "")
+    finally:
+        mart(r1, REMOVE_ROW)
+    ok("the administrator's own session sees the identity's rows and the planted one (the control)",
+       control.get("status") == 200 and {app_id, OTHER} <= set(control.get("dashboards") or []), control)
+    ok("the guest token reads the identity's own rows, and only them (its row-level security)",
+       through.get("status") == 200 and through.get("dashboards") == [app_id], through)
+    ok("another identity's row, counted at SECRET, is absent through the guest token",
+       OTHER not in (through.get("dashboards") or []), through)
     nobody = token("nobody@r1.test")
     listing, _ = offered(nobody)
     refused, _ = guest(nobody)

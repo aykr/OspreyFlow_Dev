@@ -45,7 +45,8 @@ def pod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
     module = _load(POD, "superset_pod_under_test")
     codes: dict[str, str] = {}
     sessions: dict[str, str] = {}
-    fake: dict[str, Any] = {"honours_forwarding": True, "boards": {}, "csrf_checked": True, "redirect_suffix": ""}
+    fake: dict[str, Any] = {"honours_forwarding": True, "boards": {}, "csrf_checked": True, "redirect_suffix": "",
+                            "mart": ["app-id", "app-id", "another-identity"], "rls": "app-id"}
 
     def entra(request: httpx.Request) -> httpx.Response:
         q = dict(urllib.parse.parse_qsl(request.url.query.decode()))
@@ -108,6 +109,39 @@ def pod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
             made = len(boards) + 7
             boards[body.get("slug") or f"#{made}"] = made
             return httpx.Response(201, json={"id": made, "result": body})
+        if path == "/api/v1/database/":
+            return httpx.Response(200, json={"result": [{"id": 1, "database_name": "OspreyFlow reports"}]}) if who else httpx.Response(401)
+        if path in ("/api/v1/dataset/", "/api/v1/chart/") and request.method == "GET":
+            if not who:
+                return httpx.Response(401)
+            kept = fake.setdefault("made", {}).get(path)
+            return httpx.Response(200, json={"result": [kept] if kept else []})
+        if path in ("/api/v1/dataset/", "/api/v1/chart/") and request.method == "POST":
+            if not who or request.headers.get("x-csrftoken") != f"csrf-{who}":
+                return httpx.Response(401 if not who else 400)
+            if role != "Admin":
+                return httpx.Response(403)
+            body = json.loads(request.content)
+            made = {"id": 3 if path == "/api/v1/dataset/" else 5, "schema": body.get("schema")}
+            fake.setdefault("made", {})[path] = made
+            if path == "/api/v1/chart/":
+                fake["chart_on"] = body.get("dashboards")
+            return httpx.Response(201, json={"id": made["id"]})
+        if path == "/api/v1/chart/data" and request.method == "POST":
+            # Superset's own order: a guest token opens only its dashboard's charts and applies its RLS clause
+            # (the Conduit's `dashboard = '<the identity>'`); a session reads as its role, with no clause.
+            body = json.loads(request.content)
+            guest = request.headers.get("x-guesttoken")
+            rows = fake["mart"]
+            if guest is not None:
+                if guest != GUEST:
+                    return httpx.Response(401)
+                if body["form_data"]["dashboardId"] not in (fake.get("chart_on") or []):
+                    return httpx.Response(403)
+                rows = [r for r in rows if r == fake["rls"]] if not fake.get("rls_ignored") else rows
+            elif not who:
+                return httpx.Response(401)
+            return httpx.Response(200, json={"result": [{"data": [{"dashboard": r, "count": 1} for r in rows]}]})
         if path.startswith("/api/v1/dashboard/") and request.method == "GET":
             key = path.rsplit("/", 1)[1]
             board = boards.get(key) or (int(key) if key.isdigit() and int(key) in boards.values() else None)
@@ -171,7 +205,7 @@ def test_a_redirect_that_only_begins_with_the_registered_one_is_caught(pod: Any)
 
 def test_the_check_s_plan_and_its_people() -> None:
     check = _load(CHECK, "dashboards_check_under_test")
-    assert len(check.PLAN) == 12
+    assert len(check.PLAN) == 13
     assert set(check.SUPERSET_ROLE) | {"nobody@r1.test"} == set(check.PEOPLE)
     assert check.ROLES["builder@r1.test"] == ["reports_viewer", "right:manage_dashboards"]
     assert json.dumps(check.SUPERSET_ROLE) == json.dumps(
@@ -228,6 +262,36 @@ def test_the_board_opens_with_the_conduit_s_guest_token_alone(pod: Any) -> None:
     assert pod.embedded(GLASS, str(made["id"]), "a-token-the-conduit-never-gave")["with_token"] == 401
 
 
+def test_the_chart_is_made_once_on_the_board_and_found_again(pod: Any) -> None:
+    pod.signin(GLASS, "admin@r1.test")
+    board = pod.build(GLASS, "admin@r1.test", "R1 board", "r1-board")["id"]
+    first = pod.chart(GLASS, "admin@r1.test", str(board))
+    again = pod.chart(GLASS, "admin@r1.test", str(board))
+    assert first == {"status": 201, "dataset": 3, "chart": 5} and again == {"status": 200, "dataset": 3, "chart": 5, "existing": True}
+
+
+def test_a_chart_is_refused_to_a_builder_superset_does_not_let_make_one(pod: Any) -> None:
+    pod.signin(GLASS, "reader@r1.test")
+    assert pod.chart(GLASS, "reader@r1.test", "7")["status"] == 403
+
+
+def test_the_guest_token_reads_the_identity_s_rows_only_and_a_session_reads_all(pod: Any) -> None:
+    """Superset's row-level security under the Conduit's guest token, both ways (rules 3 and 4)."""
+    pod.signin(GLASS, "admin@r1.test")
+    board = str(pod.build(GLASS, "admin@r1.test", "R1 board", "r1-board")["id"])
+    made = pod.chart(GLASS, "admin@r1.test", board)
+    ds, chart = str(made["dataset"]), str(made["chart"])
+    assert pod.chartdata(GLASS, "guest", GUEST, board, ds, chart) == {"status": 200, "dashboards": ["app-id"]}
+    assert pod.chartdata(GLASS, "session", "admin@r1.test", board, ds, chart) == {"status": 200, "dashboards": ["another-identity", "app-id"]}
+    assert pod.chartdata(GLASS, "guest", "a-token-the-conduit-never-gave", board, ds, chart) == {"status": 401}
+    assert pod.chartdata(GLASS, "guest", GUEST, "999", ds, chart) == {"status": 403}  # a board not the token's
+
+
+def test_a_secret_reaches_the_pod_script_through_stdin_alone(pod: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("R1_SECRET", GUEST)
+    assert pod._secret("@secret") == GUEST and pod._secret("7") == "7"
+
+
 # ---- the check itself, against a Conduit whose refusals are the real may_open's ---------------------------
 
 CLASSES = ["PUBLIC", "OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET"]
@@ -235,6 +299,9 @@ NS = "ospreyflow-poc"
 SECRET = "report-sync-secret-of-the-run"
 #: The fakes misbehaving, each the leak one access assertion exists for (rules 3 and 4, rule 15).
 LEAKS = {
+    "Superset ignores the guest token's row-level security": "and only them (its row-level security)",
+    "the identity's rows are missing through the guest token": "and only them (its row-level security)",
+    "the planted row never reaches the mart": "sees the identity's rows and the planted one (the control)",
     "the report sync never pulls": "pulls the case",
     "the report sync's pull fails": "pulls the case",
     "the builder, with no level on the identity's case, is offered the board": "no level on the identity's case",
@@ -254,6 +321,7 @@ class _R1:
     """R1's driver as the check uses it: the door to a Conduit, tokens, kubectl, the run's records."""
 
     NS = NS
+    MANAGED = "platform-managed"
     GLASS = GLASS
 
     def __init__(self, tmp: Path, conduit: Any) -> None:
@@ -286,6 +354,12 @@ class _R1:
         self.calls.append((args, stdin))
         if "patch" in args:
             self.conduit.patched = json.loads(stdin or "{}")
+        if "psql" in args and stdin:  # the managed PostgreSQL's mart, as the SQL it is given leaves it
+            other = "r1-another-identity-counted-at-secret"
+            if stdin.startswith("INSERT") and self.conduit.leak != "the planted row never reaches the mart":
+                self.conduit.mart.add(other)
+            elif stdin.startswith("DELETE"):
+                self.conduit.mart.discard(other)
         return ""
 
 
@@ -335,6 +409,8 @@ def _conduit(leak: str = "") -> Any:
             return httpx.Response(201, json={})
         if path == "/v1/admin/dashboards":
             pulled = bool(answer.patched) and leak != "the report sync never pulls"
+            if pulled:
+                answer.mart |= {i.client_id for i in identities}
             failure = "the Conduit refused the identity's token" if leak == "the report sync's pull fails" else None
             return httpx.Response(200, json=[{"client_id": i.client_id, "last_pulled": "2026-11-25T10:00:00Z" if pulled else None,
                                               "last_failure": failure} for i in identities])  # fmt: skip
@@ -355,12 +431,15 @@ def _conduit(leak: str = "") -> Any:
 
     answer.patched = None
     answer.roles = roles
+    answer.leak = leak
+    answer.mart = set()  # the dashboards with rows in osprey_reports.figures
     return answer
 
 
 def _superset(conduit: Any, leak: str = "") -> Any:
-    """superset_pod's answers as its own tests show them, the roles read from the Conduit's state."""
-    def ask(action: str, *args: str) -> dict[str, Any]:
+    """superset_pod's answers as its own tests show them, the roles read from the Conduit's state and the rows
+    from the mart's; the guest token's row-level security keeps the identity's rows alone."""
+    def ask(action: str, *args: str, secret: str | None = None) -> dict[str, Any]:
         if action == "signin":
             hint = args[0]
             if hint == "nobody@r1.test" and leak == "the person with no reports right is stopped by Entra, never reaching Superset":
@@ -375,7 +454,18 @@ def _superset(conduit: Any, leak: str = "") -> Any:
             gamma = args[0] == "reader@r1.test"
             return {"status": 201 if not gamma or leak == "Superset lets Gamma build" else 403, "id": 7}
         if action == "embedded":
-            return {"with_token": 200 if args[1] == GUEST else 401, "without": 200 if leak == "Superset opens the board without a guest token" else 401}
+            assert args[1] == "@secret", "the guest token travels as a secret, never an argument"
+            return {"with_token": 200 if secret == GUEST else 401, "without": 200 if leak == "Superset opens the board without a guest token" else 401}
+        if action == "chart":
+            return {"status": 201, "dataset": 3, "chart": 5}
+        if action == "chartdata" and args[0] == "session":
+            return {"status": 200, "dashboards": sorted(conduit.mart)}
+        if action == "chartdata":
+            assert args[4] == "@secret" and secret == GUEST
+            identity = {i for i in conduit.mart if not i.startswith("r1-")}
+            seen = conduit.mart if leak == "Superset ignores the guest token's row-level security" else (
+                set() if leak == "the identity's rows are missing through the guest token" else identity)
+            return {"status": 200, "dashboards": sorted(seen)}
         raise AssertionError(action)
 
     return ask
@@ -397,7 +487,10 @@ def test_the_check_passes_on_a_deployment_that_refuses_what_it_should(tmp_path: 
     # Nothing secret or bearer leaves the run: the report sync's secret, a guest token, a person's token.
     assert SECRET not in printed and GUEST not in printed and "fake.{" not in printed
     # Every kubectl call names R1's namespace, and the secret is never on kubectl's command line.
-    assert r1.calls and all(args[:2] == ("-n", NS) for args, _ in r1.calls)
+    assert r1.calls and all(args[:2] == ("-n", NS) or (args[:2] == ("-n", r1.MANAGED) and "psql" in args) for args, _ in r1.calls)
+    # The planted row went in, and was taken out again: the mart is left as the report sync made it.
+    sql = [stdin for args, stdin in r1.calls if "psql" in args]
+    assert [q.split()[0] for q in sql] == ["INSERT", "DELETE"] and r1.conduit.mart == {r1.report_sync}
     assert all(SECRET not in " ".join(args) for args, _ in r1.calls)
     patch = next(stdin for args, stdin in r1.calls if "patch" in args)
     assert json.loads(json.loads(patch)["stringData"]["REPORT_SYNC_DASHBOARDS"]) == [{"client_id": r1.report_sync, "secret": SECRET}]
@@ -517,3 +610,15 @@ def test_a_snap_of_a_case_holding_too_little_proves_nothing_and_stops(tmp_path: 
     survival = _load(SURVIVAL, "survival_under_test")
     with pytest.raises(SystemExit, match="left less than it should"):
         survival.snap(_R1State(tmp_path, "the alert"))
+
+
+def test_the_guest_token_never_reaches_kubectl_s_command_line(tmp_path: Path) -> None:
+    """The review of 0b480e8's own fix: `embedded` passed the guest token as an argument to `kubectl exec`.
+    It travels inside the script's stdin, where `@secret` reads it."""
+    check = _load(CHECK, "dashboards_check_pod_under_test")
+    r1 = _R1(tmp_path, _conduit())
+    r1.kubectl = lambda *args, stdin=None, check=True: (r1.calls.append((args, stdin)), '{"with_token": 200}')[1]  # type: ignore[method-assign]
+    assert check.pod(r1, "embedded", "7", "@secret", secret=GUEST) == {"with_token": 200}
+    (args, stdin), = r1.calls
+    assert GUEST not in " ".join(args) and args[:2] == ("-n", NS) and args[-2:] == ("7", "@secret")
+    assert stdin.startswith(f"import os\nos.environ['R1_SECRET'] = {json.dumps(GUEST)}\n")
