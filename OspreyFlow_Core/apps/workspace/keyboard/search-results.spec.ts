@@ -147,6 +147,20 @@ test("a suggestion moved to with the arrow keys is chosen by Enter, and no resul
   expect((await state(page)).sent).toHaveLength(0);
 });
 
+test("a pasted query longer than the search takes is kept whole in the box, and the refusal names the limit (rule 2)", async ({ page }) => {
+  await page.goto("/keyboard/search-results-harness.html");
+  const box = page.getByRole("combobox", { name: "Search entities, identifiers, documents" });
+  await box.focus();
+  const long = "Kestrel ".repeat(26).trim(); // 207 characters
+  await page.keyboard.insertText(long);
+  await expect(box).toHaveValue(long);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("alert")).toContainText(
+    "The search could not be done: a search can be at most 200 characters, and this one has 207. Shorten it and press Enter again.",
+  );
+  expect((await state(page)).sent.map((b) => (b as { query: string }).query)).toEqual([long]);
+});
+
 // Last in the file: the check reads the cases above it, run in order on one worker (CI's two-core runner).
 test("every registered search results action has its own proving test case above", () => {
   assertAllCovered(REGISTRY, SEARCH_RESULTS_ACTIONS);

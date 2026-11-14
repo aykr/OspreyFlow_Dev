@@ -56,14 +56,14 @@ const PAGE = (over: Partial<SearchPageResponse> = {}): SearchPageResponse =>
     ...over,
   }) as SearchPageResponse; // prettier-ignore
 
-function serve(...pages: (SearchPageResponse | { status: number; detail: string })[]) {
+function serve(...pages: (SearchPageResponse | { status: number; detail: unknown })[]) {
   const sent: Record<string, unknown>[] = [];
   const urls: string[] = [];
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     urls.push(url);
     sent.push(JSON.parse(String(init?.body)));
     const next = pages.length > 1 ? pages.shift()! : pages[0]!;
-    const refusal = next as { status?: number; detail?: string };
+    const refusal = next as { status?: number; detail?: unknown };
     return typeof refusal.status === "number"
       ? new Response(JSON.stringify({ detail: refusal.detail }), { status: refusal.status })
       : new Response(JSON.stringify(next));
@@ -226,6 +226,37 @@ test("a refusal is said in the Conduit's words", async () => {
   serve({ status: 422, detail: "Narrow the search: only the first 1,000 results can be paged." });
   draw();
   expect((await screen.findByRole("alert")).textContent).toContain("Narrow the search: only the first 1,000 results can be paged.");
+});
+
+// FastAPI's own refusal of a query over `MAX_QUERY_CHARS` (`schemas/search.py`), its body as the real route sends it
+// (measured against SearchPageRequest, 14 November 2026): a list, not words.
+const TOO_LONG = (length: number) => [
+  {
+    type: "string_too_long",
+    loc: ["body", "query"],
+    msg: "String should have at most 200 characters",
+    input: "a".repeat(length),
+    ctx: { max_length: 200 },
+  },
+];
+
+test("a query longer than the search takes is refused with the limit named, the words untouched (rule 2)", async () => {
+  // Counted as the route counts, by character: two emoji are two characters, not four UTF-16 units.
+  const query = `${"a".repeat(199)}\u{1F985}\u{1F985}`;
+  serve({ status: 422, detail: TOO_LONG(201) });
+  draw({ query });
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "The search could not be done: a search can be at most 200 characters, and this one has 201. Shorten it and press Enter again.",
+  );
+  expect(screen.getByRole("heading", { level: 2 }).textContent).toContain(query);
+});
+
+test("any other refusal given as a list says the search could not be done, never the list's own words", async () => {
+  serve({ status: 422, detail: [{ type: "date_from_datetime_parsing", loc: ["body", "filters", "date_from"], msg: "Input should be a valid date", input: "x" }] });
+  draw();
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("The search could not be done (422).");
+  expect(alert.textContent).not.toContain("Input should be");
 });
 
 test("with no Ask & Chat to hand the words to, there is no Ask line", async () => {

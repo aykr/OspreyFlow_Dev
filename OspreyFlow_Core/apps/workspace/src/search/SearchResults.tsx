@@ -41,6 +41,19 @@ interface Filters {
   dateTo: string;
 }
 
+/** FastAPI refuses a query over the search's limit (`schemas/search.py`'s MAX_QUERY_CHARS) with a list, not words; the
+ * page names the limit from it, and the words stay as typed: refused, never cut (rule 2). Any other list says only
+ * that the search could not be done: its entries are the framework's words, not the person's. */
+function tooLong(detail: unknown, query: string): string | null {
+  if (!Array.isArray(detail)) return null;
+  const entry = detail.find(
+    (d): d is { ctx: { max_length: number } } =>
+      typeof d === "object" && d !== null && d.type === "string_too_long" && Array.isArray(d.loc) && d.loc.at(-1) === "query" && typeof d.ctx?.max_length === "number",
+  );
+  if (!entry) return null;
+  return `The search could not be done: a search can be at most ${entry.ctx.max_length} characters, and this one has ${[...query].length}. Shorten it and press Enter again.`;
+}
+
 const NO_FILTERS: Filters = { datasets: [], dateFrom: "", dateTo: "" };
 
 function requestFilters(filters: Filters): Record<string, unknown> {
@@ -96,7 +109,7 @@ export function SearchResults({
       if (mine !== latest.current) return;
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { detail?: unknown } | null;
-        const detail = typeof body?.detail === "string" ? body.detail : null;
+        const detail = typeof body?.detail === "string" ? body.detail : tooLong(body?.detail, query);
         setAnswer({ kind: "refused", words: detail ?? `The search could not be done (${response.status}).` });
         return;
       }

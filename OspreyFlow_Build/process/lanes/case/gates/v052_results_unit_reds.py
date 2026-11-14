@@ -158,6 +158,15 @@ PLANTS = [
     ("Help's keys panel under the results (the first review's)",
      'src/App.tsx', '          beside={welcomeOpen ? welcomePanel : null}\n', '',
      'src/App.search.test.tsx', "Help's keys panel opens over the results"),
+    ("an over-long query's refusal without its limit (the live check's finding)",
+     'src/search/SearchResults.tsx', ': tooLong(body?.detail, query);', ': null;',
+     'src/search/SearchResults.test.tsx', 'a query longer than the search takes'),
+    ("a list refusal shown in the framework's own words",
+     'src/search/SearchResults.tsx', ': tooLong(body?.detail, query);', ': Array.isArray(body?.detail) ? String((body.detail[0] as { msg?: unknown })?.msg) : null;',
+     'src/search/SearchResults.test.tsx', 'any other refusal given as a list'),
+    ("the query's length counted in UTF-16 units, not characters as the route counts",
+     'src/search/SearchResults.tsx', '${[...query].length}', '${query.length}',
+     'src/search/SearchResults.test.tsx', 'a query longer than the search takes'),
 ]
 
 def main() -> int:

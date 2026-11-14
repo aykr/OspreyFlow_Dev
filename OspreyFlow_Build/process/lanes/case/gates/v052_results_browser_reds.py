@@ -61,6 +61,12 @@ PLANTS = [
     ('Enter always submitting, over a suggestion moved to',
      [('src/design/primitives/Combobox.tsx', 'if (onSubmit && e.key === "Enter" && !(open && highlighted >= 0 && filtered[highlighted])) {', 'if (onSubmit && e.key === "Enter") {')],
      'keyboard/search-results.spec.ts', 'a suggestion moved to with the arrow keys'),
+    ("an over-long query's refusal without its limit (the live check's finding)",
+     [('src/search/SearchResults.tsx', ': tooLong(body?.detail, query);', ': null;')],
+     'keyboard/search-results.spec.ts', 'a pasted query longer than the search takes'),
+    ('the search box cutting a pasted query at the limit (maxLength)',
+     [('src/design/primitives/Combobox.tsx', '        role="combobox"\n        aria-expanded={open}', '        role="combobox"\n        maxLength={200}\n        aria-expanded={open}')],
+     'keyboard/search-results.spec.ts', 'a pasted query longer than the search takes'),
 ]
 
 

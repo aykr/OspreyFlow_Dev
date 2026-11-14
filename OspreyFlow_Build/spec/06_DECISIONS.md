@@ -36956,7 +36956,13 @@ saying "records".
    filters*, taking focus to the heading of the new answer; the date filter GOV.UK's date input (day, month, year)
    under that brand, a date field otherwise; "No records match '…'." with *Clear filters* where a filter is on; on the
    fallback, the Conduit's `limited_reason` in one line, or "Results are limited: the search index is not in use."
-   where it gives none; a refusal in the Conduit's words.
+   where it gives none; a refusal in the Conduit's words. A query over the search's limit (`MAX_QUERY_CHARS`, 200,
+   counted by character as the Conduit counts) is refused, never cut (rule 2). The box sets no `maxLength`, so a long
+   query is taken whole, pasted or typed. FastAPI's 422 for it is a list, not words, and the page names the limit
+   from it: "The search could not be done: a search can be at most 200 characters, and this one has ‹n›. Shorten it
+   and press Enter again." Any other list refusal says only "The search could not be done (‹status›)." and never
+   the framework's own words. Found reading studio's route while preparing the live check; the orchestrator ruled on
+   14 November 2026 that it is fixed before the merge and that the box sets no `maxLength`.
 4. **The actions.** *Show on graph* (named "Show on graph: ‹name›", the visible words first, WCAG 2.5.3) seeds every
    record the result stands for through `/seed` and returns to the graph, focus on it. *Open*, for a document, reads it
    over the view; the results are kept, hidden, and shown again when the reader closes, focus on their heading (never
@@ -36968,12 +36974,13 @@ saying "records".
 6. **Decided by the lane under the never-stop rule** (the owner free to overrule): *Show on graph* leaves the results for
    the graph, as choosing a suggestion does; *Open* keeps them; the page size is 20.
 
-Tests, each red first: `search/SearchResults.test.tsx` (23), `App.search.test.tsx` (16, on the real App),
+Tests, each red first: `search/SearchResults.test.tsx` (25), `App.search.test.tsx` (16, on the real App),
 `design/primitives/Combobox.test.tsx` (4); `keyboard/search-results.spec.ts` on `search-results-harness.html` in dark,
 light and GOV.UK (registry `SEARCH_RESULTS_ACTIONS`, eleven actions, Previous page, Clear filters and the dates among
-them, and a read document hiding the results where the stylesheet applies), and `a11y/every-harness.spec.ts` scanning
+them, a read document hiding the results where the stylesheet applies, and a pasted over-long query kept whole and
+refused with the limit named), and `a11y/every-harness.spec.ts` scanning
 the page open, with nothing found, on the fallback and refused. The plants: `process/lanes/case/gates/v052-results-unit-reds.log`
-and `v052-results-browser-reds.2016275.log`, each plant red for its stated reason; those marked "the first review's"
+and `v052-results-browser-reds.2016275.log` (the over-long query's plants in `v052-results-browser-reds.too-long.log`), each plant red for its stated reason; those marked "the first review's"
 are the defects the lane review found (14 November 2026). The registry and every-harness states are the orchestrator's
 files, sent as `process/lanes/case/shared-files-v052-results.diff`.
 

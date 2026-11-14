@@ -59,6 +59,10 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (!url.endsWith("/search")) return realFetch(input, init);
   const body = JSON.parse(String(init?.body)) as { query: string; page: number };
   window.__SEARCH__!.sent.push(body);
+  // The real route's refusal of a query over MAX_QUERY_CHARS (200, counted by character), its body as FastAPI sends it.
+  if ([...body.query].length > 200)
+    return new Response(JSON.stringify({ detail: [{ type: "string_too_long", loc: ["body", "query"], msg: "String should have at most 200 characters",
+      input: body.query, ctx: { max_length: 200 } }] }), { status: 422 }); // prettier-ignore
   if (state === "refused") return new Response(JSON.stringify({ detail: "Narrow the search: only the first 1,000 results can be paged." }), { status: 422 });
   if (state === "none") return new Response(JSON.stringify({ ...PAGE, query: body.query, total: 0, groups: [], results: [], nodes: [], more: false }));
   if (state === "limited")
