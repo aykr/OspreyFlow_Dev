@@ -76,8 +76,45 @@ echo "# step: the search index rebuilt from the graph"
 "$PY" -m scripts.rebuild_search_index 2>&1 | mask | tail -4
 [ "${PIPESTATUS[0]}" -eq 0 ] || fail "rebuild"
 
-echo "# step: the Conduit up; the spec"
+echo "# step: the Conduit up, and the worker beside it to drain the index's outbox"
 conduit_up second
+# The seed's nodes sit in the graph's outbox until the indexer drains it, and every pending node is left out of every
+# search (ADR-149's pending exclusion, ruling A), so a rebuild alone finds nothing (found by the run at 8ec9c33). The
+# worker process drains it, as in a deployment; the spec starts once the route says its counts are exact (none
+# pending), which assumes nothing about what it finds.
+OSPREY_WORKER_NAME=case-live "$PY" -m services.api.worker_main >"$W/worker.log" 2>&1 &
+pids+=($!)
+drained=
+for _ in $(seq 90); do
+  exact=$(curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$CASE/search" -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' -d '{"query":"QQ118439C","page":1,"page_size":20}' |
+    "$PY" -c 'import json,sys; print(json.load(sys.stdin).get("counts_exact"))' 2>/dev/null)
+  [ "$exact" = True ] && { drained=1; break; }
+  sleep 2
+done
+[ -n "$drained" ] || { tail -20 "$W/worker.log" | mask; fail "the outbox not drained in 180 s"; }
+echo "# step: the outbox drained; the spec"
+if [ "${LIVE_DIAG:-}" = 1 ]; then
+  # Diagnosis only (LIVE_DIAG=1): the route asked directly, and what the index holds for one Person.
+  for q in QQ118439C Volkov corp-res-identical-1; do
+    printf '%s: ' "$q"
+    curl -s -X POST "http://127.0.0.1:$CP/v1/investigations/$CASE/search" -H "Authorization: Bearer $TOKEN" \
+      -H 'Content-Type: application/json' -d "{\"query\":\"$q\",\"page\":1,\"page_size\":20}" |
+      "$PY" -c 'import json,sys; b=json.load(sys.stdin); print({k: b.get(k) for k in ("total","counts_exact","source","limited","limited_reason","detail")}, [r["node_ids"] for r in b.get("results", [])][:3])'
+  done
+  curl -s "http://127.0.0.1:${OPENSEARCH_PORT}/ospreyflow-default/_search?q=type:Person&size=2" |
+    "$PY" -c 'import json,sys; b=json.load(sys.stdin); print(b["hits"]["total"]); [print(json.dumps(h["_source"])[:900]) for h in b["hits"]["hits"]]'
+  echo "== the case's datasets"
+  curl -s "http://127.0.0.1:$CP/v1/investigations/$CASE/datasets" -H "Authorization: Bearer $TOKEN" | head -c 900; echo
+  echo "== the index asked directly for the identifier"
+  curl -s "http://127.0.0.1:${OPENSEARCH_PORT}/ospreyflow-default/_search?q=identifiers:QQ118439C&size=1" |
+    "$PY" -c 'import json,sys; b=json.load(sys.stdin); print(b["hits"]["total"], [h["_id"] for h in b["hits"]["hits"]])'
+  curl -s "http://127.0.0.1:${OPENSEARCH_PORT}/ospreyflow-default/_mapping" | head -c 1500; echo
+  echo "== the case's own record"
+  curl -s "http://127.0.0.1:$CP/v1/investigations/$CASE" -H "Authorization: Bearer $TOKEN" | head -c 900; echo
+  grep -iE 'search|error|traceback' "$W/conduit.second.log" | mask | tail -15
+  exit 0
+fi
 cd apps/workspace || exit 1
 OSPREY_TEST_LIVE_GLASS=1 OSPREY_LIVE_API_BASE_URL="http://127.0.0.1:$CP" OSPREY_LIVE_BEARER_TOKEN="$TOKEN" \
   OSPREY_LIVE_INVESTIGATION_ID="$CASE" \
