@@ -116,7 +116,7 @@ studio	v052-search	L	done	v0.5.2 step 3d: the search service
 case	v052-fixes	S	done	v0.5.2 step 3e: the Glass's screen fixes
 case	v052-results	M	done	v0.5.2 step 3e′: the search results layout
 platform	v052-measure	S	building	v0.5.2 step 4: the measurement session
-docs	v052-sweep	S	building	v0.5.2 step 5: the wording sweep
+docs	v052-sweep	S	done	v0.5.2 step 5: the wording sweep	lane/docs-v052-am20
 admin	v052-heartbeat	M	done	The heartbeat's route view (the owner, 13 Nov) (merged ee440c1)
 case-b	v052-r1-driver	M	done	v0.5.2 step 6's driver: the manifest verifier and spec 08 runner, built ahead
 docs	v052-sweep-draft	S	todo	v0.5.2 step 5 drafted ahead: the non-search wording
@@ -129,25 +129,25 @@ rules-b	v052-batch	M	done	v0.5.2: promote an expansion to a batch job at the cap
 case-b	v052-batch-ui	S	done	v0.5.2: the batch job's choice, progress and result in the Glass (ADR-151)	lane/case-b-batch-expand
 platform	v052-upgrade-index	S	done	v0.5.2: an upgrade or fresh install builds the search index (route step U)	lane/platform-v052-rebuild
 case	v052-cluster-on-entry	M	done	v0.5.2: a merged pair arrives as one cluster (route step 3h)	lane/case-merged-clusters
-rules-b	v052-am20	M	building	v0.5.2: edges_among in chunks of record ids (ADR-124 Am 20; the owner's ruling, 14 Nov, after the 50k run): no id list in a script, so a set past ~10k ids answers
+rules-b	v052-am20	M	done	v0.5.2: edges_among in chunks of record ids (ADR-124 Am 20; the owner's ruling, 14 Nov, after the 50k run): no id list in a script, so a set past ~10k ids answers	lane/rules-b-am20
 orchestrator	v052-ci	S	building	v0.5.2: main's CI green: Core names no Build folder (6835a1b), the batch routes in the rights table (rules-b), the top bar one line on Linux (case), report sync's one token a pass (platform-b)
-case	v052-topbar	S	building	v0.5.2 fix (T): The top bar stays one line: less-used views fold into More views (the owner's design rule; fallback by Sun midday: all but Graph and Map at narrow widths)
-case	v052-tidy	S	building	v0.5.2 fix (Q): The ontology read retried, so the Query builder and link types appear after a failed first read; step 6's live list (5 of 5)
-case-b	v052-batch-panel	S	building	v0.5.2 fix (P): The batch job's panel only on the canvas, not over Studio, Reports, Boards; a local-lite batch job proven to done
-studio	v052-suggest	S	building	v0.5.2 fix (S): Type-ahead: case-sensitive suggestions fill their page; the limited line says its reason, never 'just now' when no index is configured
-admin	v052-words	S	building	v0.5.2 fix (W): Refusals say 'People and roles', not 'Admin › People'; no raw field names in the Entra refusal
-admin	v052-escalation	S	building	v0.5.2 fix (E): A watch stays active until three unreachable evaluations in a row (ADR-044; the owner's ruling, 14 Nov)
-platform-b	v052-signin-words	S	building	v0.5.2 fix (G): The Glass shows the Conduit's words for an access value not set, a token-version mismatch and a refused guest
-case-b	v052-suppress-words	S	building	v0.5.2 fix (M): Mark for suppression says what it does today: a mark and a reason, hiding nothing yet (the owner, 14 Nov)
-platform	v052-fallback-words	S	building	v0.5.2 fix (R): The render's and spec 05's 'falls back to PostgreSQL' say what search really does when OpenSearch does not answer
-case-b	v052-group-counts	S	building	v0.5.2 fix (K): the search results page says counts are per group, so All need not equal their sum
-platform-b	v052-attribution	S	building	v0.5.2 fix (A): The map's attribution chip readable: a token background, measured in every look
-platform-b	v052-version	S	building	v0.5.2 fix (V): The Glass shows the code's own version, not an older checkout's .git commit (the demo showed v0.5.0)
-studio	v052-pipeline-words	S	building	v0.5.2 fix (N): The Ingest Studio's messages say Pipeline, as its screens do, not recipe
-case-b	v052-help-everywhere	S	building	v0.5.2 fix (H): Help (?) opens its panel from every view, not only Graph
-studio	v052-model-words	S	building	v0.5.2 fix (D2): The model's refusals in words: the provider's 429 and 401, a time-out said instead of a 500, a deadline on the Glass's model fetches (studio's demo research)
-admin	v052-admin-grant	S	building	v0.5.2 fix (A2): Only an administrator can give the osprey-admin role; a people manager is refused in words (studio's demo research; rule 4)
-case	v052-suppress-reload	S	building	v0.5.2 fix (S7): Mark for suppression survives a reload: the marks are read back, and a marked node offers Remove
-case	v052-suppress-reason	S	building	v0.5.2 fix (S8): Mark for suppression asks the analyst for a reason (ADR-046 step 1), not a fixed one
-platform	v052-startbuild-index	S	building	v0.5.2 fix (S9): ospreyflow start --build rebuilds the search index, as install and update do
+case	v052-topbar	S	done	v0.5.2 fix (T): The top bar stays one line: less-used views fold into More views (the owner's design rule; fallback by Sun midday: all but Graph and Map at narrow widths)	lane/case-topbar-linux
+case	v052-tidy	S	done	v0.5.2 fix (Q): The ontology read retried, so the Query builder and link types appear after a failed first read; step 6's live list (5 of 5)	lane/case-tidy-fixes
+case-b	v052-batch-panel	S	done	v0.5.2 fix (P): The batch job's panel only on the canvas, not over Studio, Reports, Boards; a local-lite batch job proven to done	lane/case-b-v052-followup
+studio	v052-suggest	S	done	v0.5.2 fix (S): Type-ahead: case-sensitive suggestions fill their page; the limited line says its reason, never 'just now' when no index is configured	lane/studio-suggest-fixes
+admin	v052-words	S	done	v0.5.2 fix (W): Refusals say 'People and roles', not 'Admin › People'; no raw field names in the Entra refusal	lane/admin-v052-words
+admin	v052-escalation	S	done	v0.5.2 fix (E): A watch stays active until three unreachable evaluations in a row (ADR-044; the owner's ruling, 14 Nov)	lane/case-b-adr044-escalation
+platform-b	v052-signin-words	S	done	v0.5.2 fix (G): The Glass shows the Conduit's words for an access value not set, a token-version mismatch and a refused guest	lane/platform-b-v052-signinwords
+case-b	v052-suppress-words	S	done	v0.5.2 fix (M): Mark for suppression says what it does today: a mark and a reason, hiding nothing yet (the owner, 14 Nov)	lane/case-b-batch-panel-place
+platform	v052-fallback-words	S	done	v0.5.2 fix (R): The render's and spec 05's 'falls back to PostgreSQL' say what search really does when OpenSearch does not answer	lane/platform-v052-fallbackwords
+case-b	v052-group-counts	S	done	v0.5.2 fix (K): the search results page says counts are per group, so All need not equal their sum	lane/case-b-batch-panel-place
+platform-b	v052-attribution	S	done	v0.5.2 fix (A): The map's attribution chip readable: a token background, measured in every look	lane/platform-b-v052-attribchip
+platform-b	v052-version	S	done	v0.5.2 fix (V): The Glass shows the code's own version, not an older checkout's .git commit (the demo showed v0.5.0)	lane/platform-b-v052-codeversion
+studio	v052-pipeline-words	S	done	v0.5.2 fix (N): The Ingest Studio's messages say Pipeline, as its screens do, not recipe	lane/studio-pipeline-words
+case-b	v052-help-everywhere	S	done	v0.5.2 fix (H): Help (?) opens its panel from every view, not only Graph	lane/case-b-v052-followup
+studio	v052-model-words	S	done	v0.5.2 fix (D2): The model's refusals in words: the provider's 429 and 401, a time-out said instead of a 500, a deadline on the Glass's model fetches (studio's demo research)	lane/studio-model-words
+admin	v052-admin-grant	S	done	v0.5.2 fix (A2): Only an administrator can give the osprey-admin role; a people manager is refused in words (studio's demo research; rule 4)	lane/admin-v052-admin-role
+case	v052-suppress-reload	S	done	v0.5.2 fix (S7): Mark for suppression survives a reload: the marks are read back, and a marked node offers Remove	lane/case-marks-viewer
+case	v052-suppress-reason	S	done	v0.5.2 fix (S8): Mark for suppression asks the analyst for a reason (ADR-046 step 1), not a fixed one	lane/case-suppression-marks
+platform	v052-startbuild-index	S	done	v0.5.2 fix (S9): ospreyflow start --build rebuilds the search index, as install and update do	lane/platform-v052-startrebuild
 rules	v052-search-from-rids	S	building	v0.5.2 fix (M9): The fallback name search under its 5 s budget at client size: search_nodes from record ids found by index, not a scan of the store (ADR-124 Am 21)
