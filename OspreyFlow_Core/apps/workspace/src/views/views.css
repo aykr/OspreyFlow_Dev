@@ -34,8 +34,9 @@
 .case-views--govuk .case-views__actions { flex-wrap: wrap; column-gap: var(--sp-16); row-gap: var(--sp-4); }
 .case-views--govuk .case-views__confirm { gap: var(--sp-8); }
 .case-views--govuk .case-views__button { margin-bottom: 0; }
-/* A button drawn as a GOV.UK link (its colour and underline are `govuk-link`'s); GOV.UK's small type, 16 px,
-   named outright as the banner's is (`shell/places.css`), with a 24 px target (WCAG 2.2, 2.5.8). */
+/* A button drawn as a GOV.UK link (its colour and underline are `govuk-link`'s), with a 24 px target (WCAG 2.2, 2.5.8).
+   Its 16 px here is never what is drawn: the panel is always in a drawer, where `design/panelType.css` sets
+   `.govuk-link` to the page's body size (the owner's exception of 14 November 2026). */
 .case-views__link {
   background: none; border: 0; margin: 0; padding: 0; cursor: pointer;
   font: inherit; font-size: 16px; line-height: 24px; min-height: 24px; min-width: 24px;
