@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.09** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.10** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.10 | 2026-11-14 | Step 5's wording sweep, early part. Navigation as ADR-145 Amendments 12 and 15 built it: §9.6's *Connection strength* and §12's *Reports* in the top bar's view switch (More views for the first), not on the rail; *Ask & Chat* for Ask the case and Questions (§5a.4, §6a.1, §10); *Admin → Operations* for Schedules and runs, its screenshot marked for a new capture; *Admin › People and roles* and *Admin › Dashboard identities* as Admin labels them (the code's quoted words left as the code has them). §6a.1: `opensearch_signing`, `sigv4` or `none`, as the platform settings file holds it. The opening and §14 name the `cloud-platform` profile, §14 with a row for a shared-platform namespace (the poc shape by §6a.1; the standard shape's runbooks coming). Held by `tests/test_guide_navigation_words.py`, `test_guides_ports_and_search.py`, `test_guides_v051_gaps.py` and `test_guides_cloud_platform.py` (§9's Entra refusals now held both ways). PDF made by the orchestrator at merge. |
 | 2.09 | 2026-11-14 | §6a.7: an admitted guest under the administrator fallback takes the values set with *Access*, never their token's, and the Guests form says which come from where (ADR-148 Amendment 17, line added). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.08 | 2026-11-14 | §9.1: a coming Admin section is plain words with a *Coming* tag, never a link, and a person's actions in *People and roles* sit on a line beneath them (ADR-145 Amendment 16). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.07 | 2026-11-14 | §6a.7: a token of the other version than `token_version` is refused in words naming `requestedAccessTokenVersion` and the setting, and INSTALL step 6's check shows them after the first sign-in (ADR-148 Amendment 18). |

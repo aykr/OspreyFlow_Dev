@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.35** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.36** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.36 | 2026-11-14 | Step 5's wording sweep, early part. §1: the third narrow port, `IndexFeedSource`, apart from GraphPort so that no route reaches its unfiltered read (ADR-150). §7.5: the nine writers that read in full, from the code. §7.8: a drawn dataset merged into another, as built (its four steps, who may merge, what follows), no longer *Coming*. §8: list alerts pointed at the user guide. §9: Ask & Chat for Ask the case. Held by `tests/test_guides_ports_and_search.py`, `test_guides_drawn_merge.py` and `test_guide_navigation_words.py`. PDF made by the orchestrator at merge. |
 | 1.35 | 2026-11-14 | §6.3: where people sign in with Entra ID, a schedule or watched folder runs as the person who set it while they have signed in within the last 24 hours (administration guide §6a.7; ADR-148 Amendment 16). PDF made by the orchestrator at merge. |
 | 1.34 | 2026-11-13 | §6.3: where people sign in with Entra ID (a shared platform), neither a schedule nor a watched folder runs: loads are started by hand (administration guide §6a.7; docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
 | 1.33 | 2026-11-10 | Describes v0.5.0. §3: Releases as built (studio's L1.7), no longer *coming*. |

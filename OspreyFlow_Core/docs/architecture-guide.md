@@ -16,10 +16,11 @@ installs and runs OspreyFlow, the [user guide](user-guide.md), for analysts, and
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.3** · 2026-11-13 · For OspreyFlow v0.5.0 · Issued
+**Version 1.4** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.4 | 2026-11-14 | Step 5's wording sweep, early part. §2: search as built, OpenSearch or, with `postgres-fulltext`, the graph store's exact search alone (no PostgreSQL full-text exists); the third narrow port, `IndexFeedSource` (ADR-150, access in the index's query, ADR-149). §3: the `cloud-platform` profile beside the three modes. §5: a drawn dataset merged into another, as built, no longer *Coming*. Held by `tests/test_guides_ports_and_search.py`, `test_guides_drawn_merge.py` and `test_guides_v051_gaps.py`. PDF made by the orchestrator at merge. |
 | 1.3 | 2026-11-13 | §1: on a shared platform the identity provider is the organisation's Entra ID, in Keycloak's place (docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
 | 1.2 | 2026-11-10 | Describes v0.5.0. §4: releases between environments and the rule editor as built, no longer *coming*. |
 | 1.1 | 2026-11-10 | Promotion as built (case lane's L3.4). One door in: Small on your own server publishes 443 alone. |
