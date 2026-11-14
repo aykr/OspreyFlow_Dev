@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from principal_auth import (
     ACCESS_OUT_OF_DATE_WORDS,
+    PEOPLE_SECTION,
     OwnerNotHeld,
     OwnerRecordUnavailable,
     PrincipalAccessOutOfDate,
@@ -23,7 +24,7 @@ STOPPED_WHY: dict[str, str] = {
         "sign in."
     ),
     # On Entra ID: Admin › People does not hold them, and Entra was not asked (ADR-148 Am 16).
-    "not_held": "Its owner is not a person Admin › People holds.",
+    "not_held": f"Its owner is not held in {PEOPLE_SECTION}.",
     "refused": "The identity provider refused to act as its owner.",
     # ADR-044 Amendment 2: only the third load in a row stops it (`UNREACHABLE_STOPS_AT`).
     "unreachable": (

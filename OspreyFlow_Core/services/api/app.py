@@ -474,6 +474,7 @@ from schemas.rights import (
     Right,
     RightsResponse,
     rights_for,
+    rights_listed,
 )
 from schemas.rule_editor import RuleDatasetOffer, RuleTestResult
 from schemas.rule_standards import ImportedRule
@@ -17422,7 +17423,7 @@ def _may_give(
     if beyond := sorted(r.value for r in given if not giver_may_give(r, held)):
         raise RoleRefused(
             "beyond_your_rights",
-            f"you cannot give a right you do not hold: {', '.join(beyond)}",
+            f"you cannot give a right you do not hold: {rights_listed(beyond)}",
             rights=beyond,
         )
 
@@ -17459,9 +17460,9 @@ async def invite_person_route(
 
 @app.get("/v1/admin/sign-in", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
 async def sign_in_kind_route(identity_admin: IdentityAdminDep) -> SignInKind:
-    """ADR-148 Amendment 8: how people sign in here, so Admin › People offers invite (Keycloak) or
-    add by object id (Entra ID), and on Entra ID which values it sets itself (Amendment 15). Behind
-    `manage_people`, as People is."""
+    """ADR-148 Amendment 8: how people sign in here, so Admin › People and roles offers invite
+    (Keycloak) or add by object id (Entra ID), and on Entra ID which values it sets itself
+    (Amendment 15). Behind `manage_people`, as People is."""
     if isinstance(identity_admin, EntraPeopleAdmin):
         sets = sorted(identity_admin.by_administrator)
         return SignInKind(kind="entra", administrator_sets=sets)  # type: ignore[arg-type]

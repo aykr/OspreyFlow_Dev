@@ -6,8 +6,8 @@
 export type ObjectId = string;
 
 /**
- * A person added to Admin › People by their Entra object id, ahead of their first sign-in
- * (ADR-148 Amendment 8). Only on Entra ID sign-in; Graph gives the object id.
+ * A person added to Admin › People and roles by their Entra object id, ahead of their first
+ * sign-in (ADR-148 Amendment 8). Only on Entra ID sign-in; Graph gives the object id.
  */
 export interface AddPersonInput {
   object_id: ObjectId;

@@ -32,6 +32,7 @@ from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme, principal_may_view
 from principal_auth import (
     ACCESS_OUT_OF_DATE_WORDS,
+    PEOPLE_SECTION,
     RUN_AGAIN_WORDS,
     OwnerNotHeld,
     OwnerRecordUnavailable,
@@ -657,7 +658,8 @@ class ScheduleExecutor:
             ) from error
         except OwnerRecordUnavailable as error:
             raise _Refused(
-                "Admin › People's store could not be read to act as the schedule's owner",
+                f"the people store behind {PEOPLE_SECTION} could not be read to act as the "
+                "schedule's owner",
                 kind="failed",
                 about_the_owner=False,
             ) from error
@@ -670,7 +672,7 @@ class ScheduleExecutor:
         except OwnerNotHeld as error:
             # ADR-148 Amendment 16: a fact about the owner, counted; Entra itself was not asked.
             raise _Refused(
-                f"the schedule's owner, {owner_id}, is not a person Admin › People holds",
+                f"the schedule's owner, {owner_id}, is not held in {PEOPLE_SECTION}",
                 kind="refused_rights",
             ) from error
         except PrincipalExchangeRefused as error:

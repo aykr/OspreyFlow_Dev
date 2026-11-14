@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.62** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.63** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.63 | 2026-11-14 | A watch whose owner is not held in *People and roles* quotes the stopped reason's new words ("Its owner is not held in Admin › People and roles.", ADR-148 Amendment 19). Version set at merge. PDF made by the orchestrator at merge. |
 | 1.62 | 2026-11-14 | §7.5: a watch stays active through two unreachable evaluations in a row, with a note saying so, and stops at the third (ADR-044 Amendment 2). |
 | 1.61 | 2026-11-14 | Step 5's wording sweep. §5.2: records arrive shown as one where they match, worked out for you alone (ADR-124 Amendment 19); *Mark for suppression (hides nothing yet)* as built, a mark that hides nothing, kept for the session that made it, the suppression itself not built; the batch job's limits (the Editor level, the expand right, ten minutes). §5.5: the limited line's reason, a 50-character search refused in the Conduit's words, and each group counting its own records. Then the early part. §2: a refresh keeps you signed in and where you were, for the tab alone, forgotten at sign-out (ADR-050 Amendment 3). §3: under GOV.UK, the slim header and phase banner and the one-row context banner on every screen but Home and sign-in (ADR-132 Amendment 8). §5.5: the box's filters as it labels them (Ignore case, Match, Entity types, Only nodes on screen, Reset filters), its more line, its limited line (a *Starts with* search alone), one character with *Only nodes on screen*, and a *Starts with* search of at most 50 characters where there is an index. §6: Ask & Chat for Ask the case. Held by `tests/test_guides_v051_gaps.py`, `test_user_guide_search_results.py` and `test_guide_navigation_words.py`. PDF made by the orchestrator at merge. |
 | 1.60 | 2026-11-14 | §5.2: an expansion past the working set's limit may be **run as a batch job** (ADR-151): run on the server as you, saved as a private view of the case, or refused with its figures past a view's own limit of 50,000 nodes and 250,000 links; its result opens as your private view when it is done, and the job carries on with the panel closed. Held by `tests/test_user_guide_batch_expansion.py`. PDF made by the orchestrator at merge. |
@@ -1146,8 +1147,8 @@ queue on **Alerts**. There is no Watches tab and no separate inbox.
 - on a deployment signing in with Entra ID, its owner's access is out of date: "Its owner has not
   signed in to OspreyFlow within the last 24 hours, so their clearance and unit are out of date. It
   is active again at the first load after they sign in."
-- on Entra ID, its owner is not in *People and roles*: "Its owner is not a person Admin › People
-  holds."
+- on Entra ID, its owner is not in *People and roles*: "Its owner is not held in
+  Admin › People and roles."
 - the identity provider refused: "The identity provider refused to act as its owner."
 - its owner's sign-in could not be checked at three loads in a row: "Its owner's sign-in could not be
   checked at three loads in a row. It is tried again at the next." One or two such loads leave it

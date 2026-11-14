@@ -231,6 +231,24 @@ def _refused(what: str) -> PersonActionRefused:
     return PersonActionRefused("entra_holds_accounts", f"{what} {ENTRA_HOLDS_ACCOUNTS}")
 
 
+#: Each value in a person's words, as the Guests form says them (`People.tsx`'s `FIELD_WORDS`), in
+#: its order.
+VALUE_WORDS = {"clearance": "clearance", "org_unit": "unit", "handling_codes": "handling codes"}
+
+
+def _many(fields: Sequence[str]) -> bool:
+    return len(fields) > 1 or list(fields) == ["handling_codes"]
+
+
+def _values(fields: Sequence[str], then: str = "") -> str:
+    """The values in words, and their verb: "unit comes", "clearance and handling codes are set
+    here"."""
+    words = [VALUE_WORDS[f] for f in VALUE_WORDS if f in fields]
+    listed = words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
+    if then:
+        return f"{listed} {'are' if _many(fields) else 'is'} {then}"
+    return f"{listed} {'come' if _many(fields) else 'comes'}"
+
 #: ADR-148 Amendment 15: the values a claim mapping may source from the administrator, by the name
 #: `ClaimMapping` gives each, and the store's column holding what the administrator set.
 ADMINISTRATOR_FIELDS = {"clearance": "admin_clearance", "org_unit": "admin_org_unit",
@@ -336,7 +354,7 @@ def _owner(
     read_at = row["access_read_at"]
     clearance, org_unit = held("clearance", "clearance"), held("org_unit", "org_unit")
     codes = held("handling_codes", "receivable_handling_codes")
-    named = (("clearance", "clearance"), ("org_unit", "unit"), ("handling_codes", "handling codes"))
+    named = tuple(VALUE_WORDS.items())
     unset = tuple(
         words for field, words in named if field in sets and not _all_set(row, frozenset({field}))
     )
@@ -398,7 +416,15 @@ def check_administrator_access(
     given = {"clearance": access.clearance, "org_unit": access.org_unit,
              "handling_codes": access.receivable_handling_codes}  # fmt: skip
     if entra_s := [f for f, v in given.items() if v is not None and f not in by_administrator]:
-        raise _refused(f"Here {' and '.join(entra_s)} come from Entra ID, and are changed there.")
+        # In words, as the Guests form says them (People.tsx's fieldList), never a field's name,
+        # and which values are set here, never that all come from Entra (ADR-148 Amendment 19).
+        here = [f for f in given if f in by_administrator]
+        changed = "are" if _many(entra_s) else "is"
+        raise PersonActionRefused(
+            "entra_holds_accounts",
+            f"Here a person's {_values(entra_s)} from Entra ID, and {changed} changed there. "
+            f"Their {_values(here, 'set here')}, with Access.",
+        )
     if (
         setter is None
         or setter["disabled"]
@@ -821,7 +847,7 @@ class EntraPeopleStore:
                 self.tenant_id, oid,
             )  # fmt: skip
             if target is None:
-                raise NoSuchPerson(f"{oid} is not in People here")
+                raise NoSuchPerson(f"{oid} is not in People and roles here")
             check_administrator_access(sets, setter, access, classification)
             row = await conn.fetchrow(
                 "UPDATE entra_people SET "
@@ -921,7 +947,7 @@ class EntraPeopleAdmin:
             return await self.store.add(oid, by)
         except PersonExistsError:
             raise PersonActionRefused(
-                "person_exists", f"{oid} is already in People: give them roles there."
+                "person_exists", f"{oid} is already in People and roles: give them roles there."
             ) from None
 
     async def invite(self, invite: InviteInput) -> SignInDelivery:

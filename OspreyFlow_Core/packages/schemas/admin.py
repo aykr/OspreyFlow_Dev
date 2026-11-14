@@ -161,9 +161,9 @@ class RolesInput(BaseModel):
 
 
 class SignInKind(BaseModel):
-    """`GET /v1/admin/sign-in`: how this deployment's people sign in (ADR-148 Amendment 8), so Admin
-    › People offers what it can do: invite on Keycloak; add by object id on Entra ID, where Entra
-    holds the accounts."""
+    """`GET /v1/admin/sign-in`: how this deployment's people sign in (ADR-148 Amendment 8), so
+    Admin › People and roles offers what it can do: invite on Keycloak; add by object id on Entra
+    ID, where Entra holds the accounts."""
 
     kind: Literal["keycloak", "entra"]
     #: ADR-148 Amendment 15: on Entra ID, the values Admin › People sets here (the poc shape's
@@ -192,8 +192,8 @@ class GuestSignInInput(BaseModel):
 
 
 class AddPersonInput(BaseModel):
-    """A person added to Admin › People by their Entra object id, ahead of their first sign-in
-    (ADR-148 Amendment 8). Only on Entra ID sign-in; Graph gives the object id."""
+    """A person added to Admin › People and roles by their Entra object id, ahead of their first
+    sign-in (ADR-148 Amendment 8). Only on Entra ID sign-in; Graph gives the object id."""
 
     object_id: str = Field(
         pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",

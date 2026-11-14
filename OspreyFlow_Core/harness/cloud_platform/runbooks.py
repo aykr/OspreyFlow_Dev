@@ -338,7 +338,7 @@ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --t
 People sign in with the client's own Entra ID (ADR-148 Amendment 8): there is no sign-in service of
 ours to set up, only the {_COUNT[entra_registrations(config)]} app registrations *What it needs* asks for, in tenant
 `{claims.tenant_id}`. The first administrators ({", ".join(claims.first_administrators)}) were given the Admin role when the
-Conduit first started; they give everyone else their roles in Admin › People. Check the Conduit reads
+Conduit first started; they give everyone else their roles in Admin › People and roles. Check the Conduit reads
 Entra's settings:
 
 ```bash
@@ -398,12 +398,12 @@ stop and raise it with the client's Entra administrator before anyone else is to
    and every sign-in is refused, in words that say so: step 6's token-version check, run after this
    first sign-in, shows them.
 2. **The first administrator.** One of {", ".join(claims.first_administrators)} signs in at
-   `https://{glass}`. Admin › People lists them with Admin, and their clearance (for example
+   `https://{glass}`. Admin › People and roles lists them with Admin, and their clearance (for example
    OFFICIAL-SENSITIVE), unit and handling codes are the ones their groups give. If they are not, the
    claims set in the registration (`claims_mapping_policy`, optional claims) do not send what
    `cloud_platform.claims` names.
 3. **A person given no role.** A member of the tenant whom no administrator has given a role signs in,
-   is listed in Admin › People with no role, and sees no case and no Admin.
+   is listed in Admin › People and roles with no role, and sees no case and no Admin.
 4. **Who may sign in at all.** If the Glass's enterprise application has *Assignment required*, a person
    who is not assigned is refused by Entra itself (AADSTS50105) and never reaches the deployment. If it
    does not, every member of the tenant can sign in, with no role until given one: confirm which the

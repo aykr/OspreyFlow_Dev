@@ -157,7 +157,10 @@ def refusals_left_out(people: str) -> list[str]:
 
 def test_section_9_quotes_each_entra_people_refusal() -> None:
     assert refusals_left_out(section(ADMIN, "## 9. People")) == []
-    assert "Here … come from Entra ID, and are changed there." in entra_refusals(), "an f-string's refusal is read"
+    # The fallback's refusal of a value Entra sends is raised on its own, saying which values are set here, never
+    # followed by "On this deployment Entra ID holds…" (ADR-148 Amendment 19): §9 quotes its example whole.
+    assert ("Here a person's unit comes from Entra ID, and is changed there. Their clearance and handling codes are "
+            "set here, with Access.") in re.sub(r"\s+", " ", section(ADMIN, "## 9. People"))  # fmt: skip
 
 
 def guide_entra_refusals(people: str) -> list[str]:
@@ -188,10 +191,10 @@ def test_the_people_check_flags_a_refusal_the_code_no_longer_raises() -> None:
 
 
 def test_the_people_check_flags_a_refusal_left_out() -> None:
-    """§9 without the f-string's refusal, the one this check could not read before the sweep."""
+    """§9 without one of the refusals it lists."""
     people = re.sub(r"\s+", " ", section(ADMIN, "## 9. People"))
-    planted = people.replace('("Here … come from Entra ID, and are changed there.")', "")
-    assert refusals_left_out(planted) == ["Here … come from Entra ID, and are changed there."]
+    planted = people.replace('("A sign-in is reset in Entra ID.")', "")
+    assert refusals_left_out(planted) == ["A sign-in is reset in Entra ID."]
 
 
 # ---------------------------------------------------------------- the code's numbers

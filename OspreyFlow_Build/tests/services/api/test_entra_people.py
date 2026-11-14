@@ -254,7 +254,7 @@ def test_adding_a_person_already_recorded_is_refused(client: Any) -> None:
     # The words name the object id, never a sign-in name or email address (finding 13).
     assert response.json() == {
         "error": "person_exists",
-        "detail": f"{OID} is already in People: give them roles there.",
+        "detail": f"{OID} is already in People and roles: give them roles there.",
     }
     assert client.store.people[(TENANT, OID)].roles == ["osprey-admin"]
 
