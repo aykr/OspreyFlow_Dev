@@ -1,0 +1,34 @@
+# heartbeat plants at bfe3e66
+== git's merged steps not read: the typed row stands (must fail at /assert " done" in _row\(out, "3c"\)/): RED at its assertion, 1 failed
+E   AssertionError: assert (' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:436: AssertionError: assert (' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index')
+1 failed, 30 deselected in 1.76s
+== a branch cut from main with nothing of its own counted (no first-parent check) (must fail at /assert " not started" in _row\(out, "B"\)$/): RED at its assertion, 1 failed
+E   AssertionError: assert ' not started' in '  B   ★ rules        16–18 Nov [██████] done · Client-size synthetic data loaded once'
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:444: AssertionError: assert ' not started' in '  B   ★ rules        16–18 Nov [██████] done · Client-size synthetic data loaded once'
+1 failed, 30 deselected in 1.15s
+== a branch whose head main lacks counted (no ancestor check) (must fail at /" not started" in _row\(out, "3e"\)/): RED at its assertion, 1 failed
+1 failed, 30 deselected in 1.53s
+== a branch guessed from the lane and step's names where the row names none (must fail at /assert " running" in _row\(gitroute\(16\), "3c"\)/): RED at its assertion, 1 failed
+E   AssertionError: assert ' running' in '  3c  ★ rules        14–19 Nov [██████] done · The index feed: every change reaches the index'
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:454: AssertionError: assert ' running' in '  3c  ★ rules        14–19 Nov [██████] done · The index feed: every change reaches the index'
+1 failed, 30 deselected in 1.35s
+== a LANDED line counted without `done` (a part's merge, named by its step) (must fail at /assert " running" in _row\(out, "3c"\) and " not started" in _row\(out, "B"\)/): RED at its assertion, 1 failed
+E   AssertionError: assert (' running' in '  3c  ★ rules        14–19 Nov [██████] done · The index feed: every change reaches the index')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:462: AssertionError: assert (' running' in '  3c  ★ rules        14–19 Nov [██████] done · The index feed: every change reaches the index')
+1 failed, 30 deselected in 1.17s
+== no step shown ready (must fail at /assert " ready, 2 days ahead/): RED at its assertion, 1 failed
+E   AssertionError: assert (' ready, 2 days ahead of its start' in '  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c · Client-size synthetic data loaded once')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:472: AssertionError: assert (' ready, 2 days ahead of its start' in '  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c · Client-size synthetic data loaded once')
+1 failed, 30 deselected in 1.21s
+== ready without the days it could gain (must fail at /assert " ready, 2 days ahead/): RED at its assertion, 1 failed
+E   AssertionError: assert (' ready, 2 days ahead of its start' in '  B   ★ rules        16–18 Nov [░░░░░░] ready · Client-size synthetic data loaded once')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:472: AssertionError: assert (' ready, 2 days ahead of its start' in '  B   ★ rules        16–18 Nov [░░░░░░] ready · Client-size synthetic data loaded once')
+1 failed, 30 deselected in 1.19s
+== an `after` naming no route step taken as done (must fail at /assert "ready" not in _row\(gitroute\(14, progress\), "3d"\)/): RED at its assertion, 1 failed
+E   AssertionError: assert 'ready' not in '  3d  ★ stu...ext, ranking'
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:483: AssertionError: assert 'ready' not in '  3d  ★ stu...ext, ranking'
+1 failed, 30 deselected in 1.20s
+== a step under way shown ready (must fail at /assert " running" in _row\(gitroute\(14, progress\), "B"\)/): RED at its assertion, 1 failed
+1 failed, 30 deselected in 1.52s
+plants: 9, missed: 0
