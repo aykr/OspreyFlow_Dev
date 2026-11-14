@@ -877,10 +877,9 @@ shape, which a development namespace alone may take ("cloud_platform.shape: poc 
 namespace's (one copy of each store); a production namespace takes the standard shape"). The poc
 shape runs one copy of each store, ClickHouse with its own Keeper inside it rather than ClickHouse
 Keeper beside it, no disruption budgets, a CPU limit on every container (section 6a.2), and the
-Ingest root (uploads and the drop folder) on a claim of its own, `ospreyflow-ingest`. It makes no
-OpenSearch domain, and refuses a render that would use one ("the poc shape makes no OpenSearch
-domain (ADR-148 Amendment 5), so its Conduit would reach for one that is not there: set
-components.search: postgres-fulltext"): name `components.search: postgres-fulltext` with it.
+Ingest root (uploads and the drop folder) on a claim of its own, `ospreyflow-ingest`. Like the
+standard shape, it makes the platform's OpenSearch domain when `components.search` is `opensearch`
+(the default; ADR-148 Amendment 13), and `components.search: postgres-fulltext` makes none.
 
 Then, in `OspreyFlow_Core`:
 
@@ -967,9 +966,11 @@ own file is `client.yaml`.
 in the standard shape) run in the namespace as StatefulSets on the platform's `gp2-expand` class;
 in the standard shape each has a disruption budget allowing one copy down at a time, and two minutes
 for ArcadeDB to close its databases. Postgres is RDS PostgreSQL 16 and Valkey is ElastiCache
-(Redis 7), each reached over TLS; SeaweedFS is S3. In the standard shape the platform's OpenSearch
-2.x domain is made by default (`components.search` defaults to `opensearch`), but no pod is given its
-address yet, so it is unused. Caddy is not rendered: the platform's NGINX ingress is the front door,
+(Redis 7), each reached over TLS; SeaweedFS is S3. In every shape the platform's OpenSearch 2.x
+domain is made by default (`components.search` defaults to `opensearch`), and the pods that read the
+stores, the Conduit (`api`), the workers (`worker`) and the index's rebuild and drift check
+(`ospreyflow-search-rebuild`, `ospreyflow-search-drift`), are given its address (`OPENSEARCH_URL`).
+Caddy is not rendered: the platform's NGINX ingress is the front door,
 with ModSecurity on and the IP allow-list from `allow_from`. Local models and Whisper are not
 rendered, since the platform has no GPU. The model gateway (LiteLLM) is rendered always, with or
 without an engine (section 6a.3 says which identity it runs as; section 6a.9 is the model
@@ -1006,8 +1007,8 @@ group 0.
 
 **The shared folders** are one ReadWriteOnce volume, `ospreyflow-shared`, on the platform's class,
 and every pod that mounts it is placed on the same node. In the poc shape the Ingest root is on its
-own claim instead. Moving tiles, the settings files and, in the standard shape, uploads and staging
-off it, and the recipes repository off the shared disk, is *coming*.
+own claim instead. Moving tiles, the settings files and, in the standard shape, the Ingest root
+(`ingest`: uploads and the drop folder) off it, and the recipes repository off the shared disk, is *coming*.
 
 ### 6a.2 What the namespace asks for
 
@@ -1064,7 +1065,7 @@ leaves it unchanged and `tofu validate` accepts it.
 | `variables.tf` | What the platform gives the namespace: `namespace`, `vpc_id`, `subnet_ids`, `eks_oidc_provider_arn` and `eks_oidc_issuer`. The providers, the backend and the tags are the namespace folder's own |
 | `rds.tf` | RDS PostgreSQL 16, encrypted, reached over TLS, and the secret `rds-postgresql-instance-output` |
 | `elasticache.tf` | ElastiCache (Redis 7), TLS and a token, and the secret `elasticache-redis` |
-| `opensearch.tf` | The standard shape alone, when `components.search` is `opensearch`: the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
+| `opensearch.tf` | Every shape, when `components.search` is `opensearch` (the default): the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
 | `s3.tf` | The buckets, private and encrypted, named from a prefix, and the secret `s3-bucket-output` |
 | `irsa.tf` | The service account `ospreyflow` and its IAM role, given the buckets, so no S3 key exists anywhere |
 | `connector_sources.tf` | Only when S3 buckets or Athena workgroups are declared (section 6a.5): the reads on them, attached to `irsa.tf`'s role |
@@ -1558,8 +1559,13 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
 5. **The restore's Jobs**, rendered for the set by its own name (never `latest`, never by
    `helm upgrade`) and applied, then each waited on.
 6. **Everything started again**, ArcadeDB first, at the copy counts noted, each waited on until it
-   is ready (the door answers), and the CronJobs resumed. A healthy restore's logs end in plain
+   is ready (the door answers), and the backups' CronJobs (`ospreyflow-backup`,
+   `ospreyflow-backup-claims`) resumed. A healthy restore's logs end in plain
    words, with no stack trace: the runbook's *A healthy restore* quotes each step's last line.
+7. **The search index rebuilt**, where the deployment searches with OpenSearch: the index is not in a
+   set (it is rebuilt from the graph, ADR-150), so the restore ends with its rebuild, then the drift
+   check between the graph and the index, each a Job started from its CronJob, held suspended
+   (`ospreyflow-search-rebuild`, then `ospreyflow-search-drift`), and each waited on.
 
 **It refuses, touching nothing**, while anything that writes still runs, while it cannot see what
 runs, or while any part of the set is missing, changed or another set's. Each store is replaced only
