@@ -68,5 +68,35 @@ the one change from the list: every other path in the runner goes through `ROOT`
 run is otherwise as listed. Platform fixed the runner on this branch (9464862: `build_argv` gives docker
 `CORE / dockerfile`; red first, plant 14 in `plants_step4.py`, 14/14 red), so a later run starts from either.
 
+**Step 2's first full run is void, all but M5.** Run 20261114T142209Z-ac9b7665, 14:22–14:30Z, at 41f4835 from
+`OspreyFlow_Core`, ended "5 failed, 1 passed". The runner minted every token once, before the command, and the
+realm (the deployment's own rendered local-lite realm) set no `accessTokenLifespan`, so Keycloak's 300 s applied:
+every send from about five minutes in was refused with 401. M5 ran first (192 s, every send inside the life) and is
+a result: n=200, p50 860 ms, p95 939 ms, p99 997 ms, max 1,018 ms, against 1,000 ms and a fail of 2,000 ms, met. The
+rest is void and is not a measurement of search: M4 (33 of 200 refused), M3 and M1 (200 of 200 refused), M6 ("no
+board to draw on (HTTP Error 401)"), and M10 (all 500 cases reported as "does not name …", because `measure_leaks`
+hid a failed control's error behind the hidden ids it listed). The void files are kept by rules in
+`results-expired-20261114T142209Z` (M5.json, met, among them). Why the runner let it report as finished: a 401 was
+timed as one more error. Fixed at 69bde7c, a02ac54 and 8ba5ed6 (red first, `plants_tokens.py` 6/6 red): the realm
+grants four hours; the runner refuses to start (exit 2) when the IdP grants any token less than the run's hour,
+reading `exp - iat` from what was granted; a 401 ends the live gate's whole session saying its figures are void
+(`TokenRefused`, `pytest.exit`); M10 shows a failed control's own error.
+
+**The never-join pass's first run is masked, not a result.** Run 20261114T143128Z-b807546c, 14:31–14:32Z, fresh
+tokens, "1 failed", 500 of 500 cases: 475 (control m10-cleared-unit-fiu, partners cs-calls, cs-nominals,
+cs-companies) "the cleared principal's answer does not name [the hidden id]", and 25 (control
+m10-cleared-unit-covert, partner cs-covert) the control naming its record and m10-part's own search in the measured
+case answered "HTTP Error 404: Not Found". The first group's cause was hidden by the masking defect above: either the
+control's request erred, or the index's access filter refuses an OFFICIAL-SENSITIVE/C record of another unit that
+`principal_may_read` allows (rule 3: a product finding). A 404 on the route is never counted as "hidden, not seen":
+the request never reached the filtered search. Kept by rules in `results-never-join-masked-20261114T143128Z`;
+rerun on the fixed runner.
+
+**M9 is a result, not met.** Run 20261114T143515Z-d6be4f56, 14:35–14:37Z, fresh tokens. Rules agreed to it at
+14:34:41Z, with d rules' alone. With OpenSearch (`osprey-test-d-opensearch`) stopped, the five name searches answered
+from the fallback in 5,507, 5,543, 5,428, 5,301 and 5,404 ms, against the 5,000 ms fail: at client size the
+fallback is slower than the bar's figure. The five suggestions took 1,098–1,483 ms (within 2 s), and the index was
+back in 14.5 s (within 120 s), with 642,460 documents as before. Results in `results-m9`.
+
 (To be filled in from rules' results: each run's id, start and end, the server's state before it, the runner's lines,
 pytest's summary, M9's agreement with its time, and what each figure means for v0.5.2.)
