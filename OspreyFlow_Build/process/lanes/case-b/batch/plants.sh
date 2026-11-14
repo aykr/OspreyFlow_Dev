@@ -29,8 +29,10 @@ plant() { # name, file, perl substitution, the case that must go red
   fi
 }
 
+# Two guards hold this (the effect keyed on *Try again* alone, and the try's start kept in a ref for StrictMode);
+# the plant takes out both, the shape a second job would really take.
 plant "a new request or a renewed token starting another job" "$UI" \
-  's/  \}, \[attempt\]\);/  }, [attempt, request, bearerToken]);/' \
+  's/  \}, \[attempt\]\);/  }, [attempt, request, bearerToken]);/; s/if \(startedRef.current\?\.attempt !== attempt\) \{/if (true) {/' \
   "starts one job, whatever the panel is given later: a new request object, a renewed token"
 plant "the token read once, never renewed" "$UI" \
   's/asked.current = \{ \.\.\.asked.current, apiBaseUrl, bearerToken, investigationId, pollMs \};/asked.current = { ...asked.current, apiBaseUrl, investigationId, pollMs };/' \
