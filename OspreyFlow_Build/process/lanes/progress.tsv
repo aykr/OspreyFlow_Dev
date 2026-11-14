@@ -125,3 +125,4 @@ platform-b	v052-4c	M	building	The administrator fallback on Entra, poc alone (AD
 rules-b	v052-batch	M	building	v0.5.2: promote an expansion to a batch job at the cap (ADR-151, the owner's ruling)
 case-b	v052-batch-ui	S	building	v0.5.2: the batch job's choice, progress and result in the Glass (ADR-151)
 platform	v052-upgrade-index	S	building	v0.5.2: an upgrade or fresh install builds the search index (route step U)
+case	v052-cluster-on-entry	M	building	v0.5.2: a merged pair arrives as one cluster (route step 3h)

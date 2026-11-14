@@ -126,3 +126,4 @@ platform-b	v052-4c	Four places, the Glass and Admin	Client install
 rules-b	v052-batch	Cases and drawing boards	Client install
 case-b	v052-batch-ui	Cases and drawing boards	Client install
 platform	v052-upgrade-index	Housekeeping	Client install
+case	v052-cluster-on-entry	Cases and drawing boards	Client install
