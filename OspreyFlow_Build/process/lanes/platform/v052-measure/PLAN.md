@@ -99,6 +99,17 @@ end-to-end is measured separately, in a browser.
 - **M7 and M8:** they set the runbooks' and the CronJobs' bounds and memory, held by the render tests.
 - **M11:** changes the manifest and the profile together, as ADR-148 Amendment 12 decision 4 says.
 
+## On the day: the sequence (rehearsed offline by `tests/test_step4_dry_run.py`; its table is `DRY_RUN.md`)
+
+1. Under rules' lease on stack d, with the orchestrator's word: pin the lease's ports.
+2. Through `stack_lease.sh remote`, on d's host, the runner around the live gate, the results into one folder:
+   `step4_stack.py --case <Intelligence reports> -- env OSPREY_MEASURE_QUERIES=<B's query set> OSPREY_MEASURE_LEAKS=~/osprey-load/m10/leaks.jsonl OSPREY_MEASURE_RESULTS=<folder> pytest tests/perf/test_search_budget_live.py`
+   (then again for `never_join.jsonl`; and M9's case alone with `OSPREY_MEASURE_STOP_OPENSEARCH=<d's OpenSearch container>`,
+   rules agreeing at the time).
+3. `results_table.py --results <folder> --run <run id> --stack d --lease "<holder, since>" --commit <sha> > RESULTS.md`.
+4. M2, M7, M8 and M11 measured where their rows say, and their rows filled in by hand from their own records.
+5. A row past its failure figure is a finding for v0.5.2, said beside it; a row not measured stays "not measured".
+
 ## What the session produces
 
 - `process/lanes/platform/v052-measure/RESULTS.md`:
