@@ -83,3 +83,4 @@ d97dde2 5f2aec7 docs 6a8 (main's 6a8 red), admin guide PDF reprinted
 7a0cad7 c3f4600 docs 6a8-shared, admin guide PDF reprinted (1.96)
 6c35698 60eca34 case-b budget (timed unit cases run alone)
 beff3b6 b68a513 admin v052 (step 3b's identities)
+036a861 21f729d docs v052D-user (user guide §6, 1.52), PDF reprinted
