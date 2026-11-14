@@ -105,7 +105,10 @@ export async function freshWorkspaceUrl(
  * the whole test out where none was drawn yet (14 November 2026). Waits 30 seconds for it. */
 export async function workingSetCounts(page: Page): Promise<{ nodes: number; edges: number }> {
   const bar = page.getByRole("status").filter({ hasText: /\bnodes\b/ }).first();
-  await expect(bar, "the status bar's counts were not drawn").toBeVisible({ timeout: 30_000 });
+  const drawn = await bar.waitFor({ state: "visible", timeout: 30_000 }).then(() => true, () => false);
+  if (!drawn) {
+    throw new Error(`the status bar's counts were not drawn. The page: ${await page.locator("body").ariaSnapshot()}`);
+  }
   const text = (await bar.textContent()) ?? "";
   const read = (words: string) => Number((new RegExp(`([\\d,]+)\\s*${words}`).exec(text)?.[1] ?? "0").replace(/,/g, ""));
   return { nodes: read("nodes"), edges: read("edges") };
