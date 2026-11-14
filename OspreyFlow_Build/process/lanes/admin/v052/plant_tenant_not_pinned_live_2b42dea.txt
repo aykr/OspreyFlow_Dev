@@ -1,0 +1,18 @@
+# Superseded: made without a fresh PYTHONPYCACHEPREFIX (the orchestrator's rule of 13 Nov); re-run in live run 2.
+# plant: entra_people.EntraPeopleStore.dashboard answers for any tenant (its tid guard removed)
+head 16f3243, the plant uncommitted
+../OspreyFlow_Build/tests/services/api/test_entra_people_live.py:408: AssertionError
+---------------------- 2 unmarked test(s) reached a store ----------------------
+tests/services/api/test_entra_people_live.py::test_a_dashboard_identity_is_registered_read_listed_and_removed: Postgres on port 55434
+tests/services/api/test_entra_people_live.py::test_the_resolver_reads_a_registered_dashboard_with_a_real_token: Postgres on port 55434
+============================= slowest 30 durations =============================
+0.55s setup    tests/services/api/test_entra_people_live.py::test_a_dashboard_identity_is_registered_read_listed_and_removed
+0.55s teardown tests/services/api/test_entra_people_live.py::test_the_resolver_reads_a_registered_dashboard_with_a_real_token
+0.46s setup    tests/services/api/test_entra_people_live.py::test_the_resolver_reads_a_registered_dashboard_with_a_real_token
+0.13s call     tests/services/api/test_entra_people_live.py::test_the_resolver_reads_a_registered_dashboard_with_a_real_token
+0.11s teardown tests/services/api/test_entra_people_live.py::test_a_dashboard_identity_is_registered_read_listed_and_removed
+0.03s call     tests/services/api/test_entra_people_live.py::test_a_dashboard_identity_is_registered_read_listed_and_removed
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_dashboard_identity_is_registered_read_listed_and_removed
+1 failed, 1 passed, 19 deselected in 9.23s
+Wall time: 13 s, exit 1 (stack b, the lease admin took at 2026-11-13T22:17:02Z; set-up before it 27 s)
