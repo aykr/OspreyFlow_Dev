@@ -1,0 +1,8 @@
+# Guests words plants at 1b00778
+== the verb by the count alone, as first built (handling codes alone read 'is'): RED, exactly the tests it must fail
+   failed: ["says People's own words in the same order and number, whatever order the Conduit serves", 'with handling_codes set here']
+== the old token clause kept beside the new one: RED, exactly the tests it must fail
+   failed: ['with clearance set here', 'with clearance, handling_codes set here', 'with clearance, org_unit set here', 'with clearance, org_unit, handling_codes set here', 'with handling_codes set here', 'with org_unit set here', 'with org_unit, handling_codes set here']
+== the values listed in the order the Conduit serves (sorted): RED, exactly the tests it must fail
+   failed: ["says People's own words in the same order and number, whatever order the Conduit serves"]
+plants: 3, missed: 0

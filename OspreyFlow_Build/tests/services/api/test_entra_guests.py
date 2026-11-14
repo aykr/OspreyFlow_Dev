@@ -1,7 +1,8 @@
 """ADR-148 Amendment 17 (the ADR-148 audit's finding 5; the owner's ruling "4b: guests behind a setting"): a guest
 (B2B) account on Entra ID signs in only while the deployment admits guests, a setting off by default that an
 administrator of people switches in Admin › People. Admitted, a guest is any person: the same mapping, the same
-clearance, unit and codes from their token, never more. Not admitted, the refusal says so in true words, and nothing
+clearance, unit and codes from their token, or set in People where the deployment sets them
+(Amendment 15), never more. Not admitted, the refusal says so in true words, and nothing
 is recorded of them. Switched off again, a guest already recorded is refused everywhere a person is read without a
 token: an open socket's standing and a run acting as them.
 
@@ -29,6 +30,7 @@ from tests.services.api.test_auth_entra_claims import (
     _GOOD,
     BY_EXTENSION,
     BY_GROUPS,
+    EXT,
     G_CODE_R,
     G_OFFICIAL,
     G_UNIT_1,
@@ -196,3 +198,49 @@ def test_the_one_construction_path_refuses_a_guest_s_claims_unless_told_they_wer
     guest = principal_from_claims(entra_claims(**_GOOD, acct=1), BY_EXTENSION, stored, guest_admitted=True)
     member = principal_from_claims(entra_claims(**_GOOD), BY_EXTENSION, stored)
     assert guest.model_dump() == member.model_dump()
+
+
+
+#: What the token says and what People holds, different in each value, so each principal shows where its value came
+#: from. The mapping's field name, the principal's, the token's and People's (ADR-148 Amendment 15).
+_SET_HERE = [
+    ("clearance", "clearance", {f"{EXT}_clearance": "OFFICIAL-SENSITIVE"}, {"clearance": "OFFICIAL"}),
+    ("org_unit", "org_unit", {f"{EXT}_orgUnit": "unit-9"}, {"org_unit": "unit-2"}),
+    ("handling_codes", "receivable_handling_codes", {f"{EXT}_handlingCodes": ["R"]},
+     {"receivable_handling_codes": ("P",)}),
+]  # fmt: skip
+_WORDS = {"clearance": "clearance", "org_unit": "organisational unit", "handling_codes": "handling codes"}
+
+
+@pytest.mark.parametrize(("field", "attr", "token_says", "people_holds"), _SET_HERE, ids=[f for f, *_ in _SET_HERE])
+def test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token(
+    keypair, jwks_url, field, attr, token_says, people_holds
+) -> None:
+    """ADR-148 Amendment 17 point 3, with Amendment 15: admitted, a guest is any person, so where the mapping sources a
+    value from the administrator a guest's is the one set in People (their token's claim is not read), the rest come
+    from their token, and with it never set the guest is refused in a member's words. Through `resolve_principal`, the
+    path a sign-in takes, for each value the mapping can set here. The Guests form's words rest on this."""
+    from principal_auth import ClaimMapping, StoredPerson
+
+    mapping = ClaimMapping.model_validate(BY_EXTENSION.model_dump() | {field: {"administrator": True}})
+    claims = {**_GOOD, f"{EXT}_handlingCodes": ["S"], **token_says}
+    people = FakePeople()
+    people.admit_guests = True
+    others = {"clearance": None, "org_unit": None, "receivable_handling_codes": None}
+    people.rows[(TENANT, OID)] = StoredPerson(roles=("analyst",), disabled=False, **(others | people_holds))
+    guest = _resolve(_resolver(jwks_url, people, mapping), sign_token(_key(keypair), entra_claims(**claims, acct=1)))
+    held = people_holds[attr]
+    assert getattr(guest, attr) == (list(held) if isinstance(held, tuple) else held)
+    # The rest from the token: one of them, against what the token says.
+    assert (guest.org_unit if field == "clearance" else guest.clearance) == ("unit-1" if field == "clearance" else "OFFICIAL")
+    member = _resolve(_resolver(jwks_url, people, mapping), sign_token(_key(keypair), entra_claims(**claims)))
+    assert guest.model_dump() == member.model_dump()
+
+    people.rows[(TENANT, OID)] = StoredPerson(roles=("analyst",), disabled=False)
+    with pytest.raises(PrincipalResolutionError) as as_guest:
+        _resolve(_resolver(jwks_url, people, mapping), sign_token(_key(keypair), entra_claims(**claims, acct=1)))
+    people.rows[(TENANT, OID)] = StoredPerson(roles=("analyst",), disabled=False)
+    with pytest.raises(PrincipalResolutionError) as as_member:
+        _resolve(_resolver(jwks_url, people, mapping), sign_token(_key(keypair), entra_claims(**claims)))
+    assert str(as_guest.value) == str(as_member.value)
+    assert _WORDS[field] in str(as_guest.value)

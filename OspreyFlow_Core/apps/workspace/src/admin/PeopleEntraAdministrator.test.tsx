@@ -114,3 +114,44 @@ describe("Admin › People on Entra ID with the administrator fallback", () => {
     );
   });
 });
+
+// ADR-148 Amendment 17, as Amendment 15 bears on it: a guest admitted signs in as anyone does, so where this
+// deployment sets a value itself (`administrator_sets`, served sorted, as the Conduit sorts them), a guest's comes
+// from People too, never from their token. The Guests form says which, for every set the mapping can name, each
+// sentence written out whole here (the lane review: a part-match let a wrong verb or a longer list through).
+describe("Admin › People's Guests words, by what the deployment sets itself", () => {
+  const LEAD = "A guest account is homed outside your organisation's Entra ID (another organisation's, or another " +
+    "identity provider) and invited into yours. Admitted, a guest signs in as anyone does: "; // prettier-ignore
+  const SAID: [string[], string][] = [
+    [[], "the same clearance, unit and handling codes from their token, and the roles you give them here."],
+    [["clearance"], "their clearance set here with Access, as anyone's is, and they cannot sign in until it is set; " +
+      "their unit and handling codes from their token; and the roles you give them here."],
+    [["org_unit"], "their unit set here with Access, as anyone's is, and they cannot sign in until it is set; " +
+      "their clearance and handling codes from their token; and the roles you give them here."],
+    [["handling_codes"], "their handling codes set here with Access, as anyone's are, and they cannot sign in until " +
+      "those are set; their clearance and unit from their token; and the roles you give them here."],
+    [["clearance", "org_unit"], "their clearance and unit set here with Access, as anyone's are, and they cannot sign " +
+      "in until those are set; their handling codes from their token; and the roles you give them here."],
+    [["clearance", "handling_codes"], "their clearance and handling codes set here with Access, as anyone's are, and " +
+      "they cannot sign in until those are set; their unit from their token; and the roles you give them here."],
+    [["org_unit", "handling_codes"], "their unit and handling codes set here with Access, as anyone's are, and they " +
+      "cannot sign in until those are set; their clearance from their token; and the roles you give them here."],
+    [["clearance", "org_unit", "handling_codes"], "their clearance, unit and handling codes set here with Access, as " +
+      "anyone's are, and they cannot sign in until those are set; and the roles you give them here."],
+  ]; // prettier-ignore
+  for (const [sets, said] of SAID) {
+    it(`with ${sets.length ? sets.join(", ") : "nothing"} set here`, async () => {
+      serve([...sets].sort(), (path) => (path === "sign-in/guests" ? json(200, { admitted: false }) : null));
+      place();
+      const form = await screen.findByRole("form", { name: "Guests" });
+      // The whole sentence, waited for, so a render before the Conduit's sets arrive cannot pass.
+      await waitFor(() => expect(form.querySelector("p")!.textContent!.replace(/\s+/g, " ")).toBe(LEAD + said));
+    });
+  }
+  it("says People's own words in the same order and number, whatever order the Conduit serves", () => {
+    expect(entraPeopleWords(["handling_codes"])).toContain("Their handling codes are set here");
+    expect(entraPeopleWords(["org_unit", "clearance"])).toContain("Their clearance and unit are set here");
+    expect(entraPeopleWords(["handling_codes"])).toContain("until those are set");
+    expect(entraPeopleWords(["clearance"])).toContain("until it is set");
+  });
+});

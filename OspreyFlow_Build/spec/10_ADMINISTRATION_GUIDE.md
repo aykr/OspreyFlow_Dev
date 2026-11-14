@@ -1387,9 +1387,13 @@ stays `sub`.
 `manage_people` can change it, and each change is recorded in the audit log
 (`set_guest_sign_in`, with what it was and what it is now). While it is on, a guest signs in as
 any person does: through the same mapping, so with the clearance, unit and handling codes their own
-token gives (a guest's token from another directory often carries none of your extension attributes
+token gives, or those set here, as below (a guest's token from another directory often carries none of your extension attributes
 or groups, and is then refused as anyone missing a clearance or unit is), and the roles you give them
-in *People and roles*, which marks them as a guest. Nothing gives a guest more than a member with the
+in *People and roles*, which marks them as a guest. Where this deployment sets a value itself (the
+administrator fallback, `administrator: true`), a guest's is the one set with **Access**, as anyone's
+is, never their token's, and they cannot sign in until it is set (a guest missing one is refused in
+the same words as a member); the Guests form says which values
+come from where. Nothing gives a guest more than a member with the
 same token would have. Turning it off refuses every guest at their next request to OspreyFlow, an open
 live view included, and a run acting as a guest as its owner stops, counted as an owner who can no
 longer sign in (above); a guest stops counting as someone who can manage people, and is shown as
