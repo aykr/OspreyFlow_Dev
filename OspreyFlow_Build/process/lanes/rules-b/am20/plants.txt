@@ -1,0 +1,7 @@
+RED   | the far end not tested | -k 'far_end' | 1 failed, 6 deselected in 2.05s
+RED   | a chunk where nothing resolved not sent | -k 'absent_id' | 1 failed, 6 deselected in 2.30s
+RED   | every id in one query, no chunks | -k 'grows_with_its_chunk' | 1 failed, 6 deselected in 1.63s
+RED   | the link types not passed | -k 'link_types' | 1 failed, 6 deselected in 1.28s
+RED   | the start looked up by scanning the store | -k 'scanning' | 1 failed, 6 deselected in 1.59s
+RED   | a one-node set queried | -k 'one_node' | 1 failed, 6 deselected in 1.64s
+CONTROL (unplanted, fresh cache): 7 passed in 3.19s
