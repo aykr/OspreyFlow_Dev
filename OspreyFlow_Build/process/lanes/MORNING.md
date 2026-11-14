@@ -4,6 +4,23 @@ Kept by the orchestrator through the night. The owner's words for the night: mer
 merges, sol lanes to ayan without the 80% limit, load B on the test server; page A ruled (strict ranking, groups
 count records).
 
+**v0.5.1 is tagged but not released (01:35 UTC).** The tag `v0.5.1` is pushed to the product repository
+(213d2c2, from 477a500) and to this one. The release workflow (aykr/OspreyFlow run 43541237293) then failed:
+the Superset image's scan found **CVE-2026-128089 in dnspython 2.7.0** (HIGH, excessive memory and CPU use;
+fixed in 2.9.2), published after the last scan. The other images were cancelled with it, so no release and no
+images exist, and nobody can have updated to it. Superset 6.1.0's image runs Python 3.10, which dnspython 2.9
+needs a newer Python than; the earlier dnspython finding (CVE-2026-114605) is already accepted in `.trivyignore`
+on exactly that ground (Superset doesn't import it, and the deployment sends no mail from Superset). I prepared
+the same entry for the new CVE, and my permission check refused it as weakening a security check, so it is
+yours. Your options:
+- **(a)** Accept CVE-2026-128089 in `.trivyignore` on the same ground as CVE-2026-114605 (expiry 2026-12-14), on
+  release/v0.5.1 and on main. Then move the `v0.5.1` tag to that commit in both repositories and push it again;
+  the workflow then builds and signs every image. Nothing was released, so moving the tag misleads no one.
+- **(b)** Remove dnspython from the Superset image, if nothing Superset runs needs it. That needs a build and a
+  check that Superset still starts and signs in. It is new work.
+- **(c)** Leave Superset out of v0.5.1's release images. Superset only reaches deployments in v0.5.2.
+Main's own CI will meet the same finding at its next image scan.
+
 ## Waiting on you
 
 1. **ci.yml for the index feed's live file (rules, step 3c).** The diff is on rules' branch:
