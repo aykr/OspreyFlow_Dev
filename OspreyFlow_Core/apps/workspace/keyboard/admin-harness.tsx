@@ -221,6 +221,21 @@ if (serving === "policies" || serving === "connections") {
     return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
   };
 }
+// `?serve=packs` (the section headings step, 14 Nov): Demo packs with one synthetic pack loaded and one not, and
+// Dashboard identities with none registered, so each section's own headings are drawn. Synthetic (rule 9).
+if (serving === "packs") {
+  const PACK = { id: "fixture-a", title: "Fixture pack A (synthetic)", shows: "A small synthetic case.", delivery: "seed",
+                 licence: "CC0-1.0", case_name: "Fixture A", loaded_case_id: "case-a", command: "ospreyflow demo add fixture-a" };  // prettier-ignore
+  const served: Record<string, unknown> = {
+    "/v1/admin/demo-packs": [PACK, { ...PACK, id: "fixture-b", title: "Fixture pack B (synthetic)", loaded_case_id: null,
+                                    command: "ospreyflow demo add fixture-b" }],  // prettier-ignore
+    "/v1/admin/dashboards": [],
+  };
+  window.fetch = async (input: RequestInfo | URL) => {
+    const path = new URL(String(input)).pathname;
+    return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
+  };
+}
 createRoot(document.getElementById("root")!).render(
   <AdminPlace apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" rights={new Set(tab.split(","))} />,
 );

@@ -3,6 +3,7 @@
 // the places they open, their case levels (R3), access and state; the cases with no Author and
 // *Name an Author* (R1); *Disable…* with a transfer for everything they own (A4); inviting a person,
 // and refused organisation sign-ins. Behind `manage_people` (`admin/sections.json`).
+import { currentBrand } from "../../brand/brand";
 import { useEffect, useState } from "react";
 
 import type {
@@ -548,30 +549,30 @@ function PersonRow({
             <div className="admin-row-actions__more">
               <button
                 type="button"
-                className="admin-row-actions__link"
+                className={rowLinkClass()}
                 aria-label={`Super user preset for ${person.username}`}
                 onClick={() => setChosen(new Set([...[...chosen].filter((r) => !ROLE_IDS.has(r)), ...SUPER_USER]))}
               >
                 Super user
               </button>
               {(!entra || administratorSets.length > 0) && (
-                <button type="button" className="admin-row-actions__link" aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
+                <button type="button" className={rowLinkClass()} aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
                   Access
                 </button>
               )}
               {person.enabled ? (
-                <button type="button" className="admin-row-actions__link" aria-label={`Disable ${person.username}`} aria-expanded={confirming} onClick={() => setConfirming(!confirming)}>
+                <button type="button" className={rowLinkClass()} aria-label={`Disable ${person.username}`} aria-expanded={confirming} onClick={() => setConfirming(!confirming)}>
                   Disable…
                 </button>
               ) : (
-                <button type="button" className="admin-row-actions__link" aria-label={`Enable ${person.username}`} onClick={() => act(enablePerson(api, person.id))}>
+                <button type="button" className={rowLinkClass()} aria-label={`Enable ${person.username}`} onClick={() => act(enablePerson(api, person.id))}>
                   Enable
                 </button>
               )}
               {!entra && (
                 <button
                   type="button"
-                  className="admin-row-actions__link"
+                  className={rowLinkClass()}
                   aria-label={`Reset sign-in for ${person.username}`}
                   onClick={() =>
                     void resetSignIn(api, person.id)
@@ -586,7 +587,7 @@ function PersonRow({
                 </button>
               )}
               {!entra && !person.system_account && (
-                <button type="button" className="admin-row-actions__link" aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
+                <button type="button" className={rowLinkClass()} aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
                   Remove
                 </button>
               )}
@@ -759,6 +760,12 @@ function Arrivals({
       </table>
     </section>
   );
+}
+
+/** A person's row links: link-styled buttons, with GOV.UK's own link class (and so its focus) under that brand
+ * (ADR-145 Amendment 16). */
+function rowLinkClass(): string {
+  return currentBrand() === "govuk" ? "admin-row-actions__link govuk-link" : "admin-row-actions__link";
 }
 
 /** ADR-148 Amendment 8: Entra ID holds the accounts. */

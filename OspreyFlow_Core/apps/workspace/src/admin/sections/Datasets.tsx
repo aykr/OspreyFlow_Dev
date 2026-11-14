@@ -166,7 +166,7 @@ function DatasetDetails({
   }, [dataset.id]);
   return (
     <section aria-label={`Details of ${dataset.name}`} style={{ display: "grid", gap: "var(--sp-12)" }}>
-      <h4 style={{ margin: 0 }}>{dataset.name}</h4>
+      <h2 style={{ margin: 0 }}>{dataset.name}</h2>
       {problem && <p role="alert">{problem}</p>}
       {dataset.kind === "composite" ? (
         <p className="label" style={{ margin: 0 }}>
@@ -223,7 +223,7 @@ function PromotionPolicy({
   };
   return (
     <div style={{ display: "grid", gap: "var(--sp-6)" }}>
-      <h5 style={{ margin: 0 }}>Promotion of drawn items</h5>
+      <h3 style={{ margin: 0 }}>Promotion of drawn items</h3>
       <p className="label" style={{ margin: 0 }}>
         How an analyst&apos;s drawn item becomes part of this dataset. <strong>Author promotes</strong>: the analyst&apos;s own
         promotion is enough. <strong>Second person reviews</strong>: one of the dataset&apos;s Authors who holds Review
@@ -302,7 +302,7 @@ function Authors({
   };
   return (
     <div style={{ display: "grid", gap: "var(--sp-6)" }}>
-      <h5 style={{ margin: 0 }}>Authors</h5>
+      <h3 style={{ margin: 0 }}>Authors</h3>
       <p id={`${AUTHORS_TIP_ID}-${dataset.id}`} className="label" style={{ margin: 0 }}>
         {TIPS.authors}
       </p>
@@ -384,7 +384,7 @@ function LinkedCases({
   };
   return (
     <div style={{ display: "grid", gap: "var(--sp-6)" }}>
-      <h5 style={{ margin: 0 }}>Linked cases</h5>
+      <h3 style={{ margin: 0 }}>Linked cases</h3>
       <p className="label" style={{ margin: 0 }}>
         Every case reading this dataset, with its own layer as counts. You see the counts of cases you are not a member
         of, and never what their layers hold.

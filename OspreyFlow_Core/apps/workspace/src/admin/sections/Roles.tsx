@@ -78,7 +78,7 @@ function RoleForm({
         void onSave(name, [...chosen].sort()).catch((err: Error) => setProblem(err.message));
       }}
     >
-      <h3 style={{ margin: 0 }}>{title}</h3>
+      <h2 style={{ margin: 0 }}>{title}</h2>
       {problem && (
         <div role="alert" className="govuk-error-summary-like" style={{ border: "2px solid var(--danger)", padding: "var(--sp-8)" }}>
           <p style={{ margin: 0 }}>{`There is a problem: ${problem}`}</p>

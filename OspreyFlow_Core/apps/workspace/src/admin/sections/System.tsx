@@ -126,7 +126,7 @@ function OwnersMayBe({ api }: { api: AdminApi }) {
   };
   return (
     <section aria-label="Dataset owners" style={{ display: "grid", gap: "var(--sp-6)" }}>
-      <h4 style={{ margin: 0 }}>Dataset owners</h4>
+      <h2 style={{ margin: 0 }}>Dataset owners</h2>
       <p className="label" style={{ margin: 0 }}>
         Who may be named to answer for a dataset, at its first Make live and in Admin › Datasets&apos; Change owner. Choose
         teams only if no person&apos;s name should be shown as an owner. Teams arrive with teams themselves: until then a
