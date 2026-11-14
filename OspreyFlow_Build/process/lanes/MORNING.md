@@ -13,6 +13,11 @@ count records).
    loads from its branch head. Until it lands, main also fails `test_worker_isolation.py` and `test_write_store_marks.py`, which read the ignore
    lines and expect `test_feed_live.py` to exist. That red is the Makefile and ci.yml lines from last night,
    waiting for the file they name.
+   **Studio's step 3d needs the same kind of change, on top of rules' diff:**
+   `process/lanes/studio/v052-search/makefile_live_ignore.diff` (one `--ignore` in the Makefile for
+   `test_search_leak_live.py`) and `ci_yml_live_listing.diff` (the same file in the test job's ignores and the
+   live-service job's list). With all three applied, the coverage check reads "1060 test file(s), 0 allowlisted,
+   no new drift". One yes covers all three if you agree.
 
 2. **The POC seed path vs the poc's marking ceiling (platform, ADR-148 Am 14).** Spec 08's synthetic data holds
    SECRET items: HMP's network writes a SECRET conflict (`hmp_network.py:427`), and Fixture Corp writes a SECRET
