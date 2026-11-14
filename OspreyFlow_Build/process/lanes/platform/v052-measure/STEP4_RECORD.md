@@ -177,5 +177,47 @@ fallback's misspellings, which match nothing exactly), so the "same ids" lines s
 on the conformance suite's search and access cases, unchanged, and a live case on d of matching queries (a family
 name, an e164, an organisation, a gazetteer place by name and by identifier) comparing the new query with the old.
 
-(To be filled in from rules' results: each run's id, start and end, the server's state before it, the runner's lines,
-pytest's summary, M9's agreement with its time, and what each figure means for v0.5.2.)
+**M9 with ADR-124 Amendment 21: met.** Run 20261114T203513Z-a7331cae, 20:35–20:37Z, under rules' lease, the runner
+at the poc's limits ('2', '4g'), with Amendment 21 from `lane/rules-adr124-am21` (not yet on main). With OpenSearch
+stopped mid-session the five name searches answered from the fallback in 92–105 ms (5.3–5.5 s before), the
+suggestions within 1,490 ms and the index was back in 9.2 s; `results-m9-am21/`. Rules' equivalence run before it
+(20261114T180041Z-adaf17fe) compared the old query and the new on d: 1,200 of 1,200 the same (old p50 7,278 ms, new
+76 ms).
+
+**M10's second turn: met.** Rules regenerated the files (run 20261114T205357Z-b5d8989c, 20:53Z), dropping each hidden
+word the case's own query or a visible record holds (73,191 in the leaks file, 90 in never-join; every leak case still
+checks at least one word), as `rules-m10-query`, merged as 55a44d5. Then, with this branch's runner (the echo left
+out, the 90% floor):
+- never-join, run 20261114T204635Z-869d5050, 20:46–20:48Z: 500 cases, 450 controls reached (90%, the floor), 0
+  failures, 50 indeterminate; met. `results-m10-never-join-2/`.
+- leaks, run 20261114T205703Z-af53b1e6, 20:57–21:01Z: 500 cases, 500 reached, 0 failures; met.
+  `results-m10-leaks-3/`. The run before the regenerated files (20261114T204142Z-229690b0, `results-m10-leaks-2/`)
+  failed all 500 on whole document titles that the case's own query holds, and is set aside.
+- the words check's positive control, run 20261114T210353Z-80a82366: a planted hidden word in the answer found in 5
+  of 5. A caveat for the record: the hidden record's `sent_at` surfaces only at `.nodes[].properties`, which
+  `_answer_strings` reads (every string at any depth), so it is checked; a check reading only the results would miss
+  it.
+So no hidden id, count or word reached m10-part in 1,000 cases, with the check shown to fire. Step 4 closes with M1,
+M3 to M6, M9 (with Amendment 21) and M10 met; M2, M7, M8 and M11 measured elsewhere, as their rows say (`RESULTS.md`).
+
+**A search page's time (the owner's question).** Step 4's M3 to M5 took about 860 ms p50 against M1's 57 ms. Profiled
+by `profile_page.py` at a28f93e (run 20261114T210234Z-ea50964d, 21:02–21:03Z, run tree 496e714: main 8347d28 with
+this branch and rules-m10-query, Amendment 21 not in it): one query of each kind, 2 discarded and 10 timed, each
+sent alone and the same query repeated:
+
+| Over the wire | median ms |
+| --- | --- |
+| `/healthz` | 0.8 |
+| names ('Tomasz Kellly') | 93.9 |
+| full text ('in a dark blue estate') | 126.8 |
+| exact ('+447700000945') | 101.8 |
+| suggest ('Ashham') | 56.5 |
+
+In process, at the case's threshold (0.95): names 86 ms, full text 114 ms, exact 88 ms in all; `get_nodes` about 39 ms
+and the merge's `edges_among` about 38 ms, each 18 per-type SQL lookups overlapping (some 330 ms summed, 38 ms wall)
+and the store's list of types about 5 ms a read; OpenSearch 8–35 ms (its own `took` 6–33 ms); building the results,
+the body, the access filter and serialisation under 2 ms together. So a page measured now has no fixed 0.8 s. The
+step 4 run tree (8ba5ed6, on main e684ef1) predates ADR-124 Amendment 20 (3c96ba7), whose `edges_among` started
+from every vertex in the store (`g.V().has("id",within(…))`), and a search page with two or more hits calls it to
+merge them while a suggestion never does; that is the leading account of the gap, to be shown by measurement, not
+assumed (the orchestrator's ask: the same 200 exact sends, under the runner's limits and without them).
