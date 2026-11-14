@@ -1,0 +1,23 @@
+# at ae811a8 with tokens_css.diff and actionRegistry.diff applied, slot 3, 2026-11-13T23:53:25Z
+## typecheck
+typecheck exit 0
+0
+## vitest (whole)
+vitest exit 0
+ Test Files  379 passed (379)
+      Tests  3342 passed (3342)
+## keyboard: keyboard, selection, link-menu, matrix, node-drag, link-selection
+keyboard exit 0
+[72/132] keyboard/keyboard.spec.ts:1131:1 › a failed path search announces an error, distinguishable from 'No path found', and Escape dismisses it by keyboard alone
+[73/132] keyboard/keyboard.spec.ts:1158:1 › a failed manual link announces an error and does not silently leave the analyst believing it was recorded — the priority fix
+[74/132] keyboard/keyboard.spec.ts:1195:1 › a failed expand announces an error instead of leaving the analyst to wonder why nothing happened
+[75/132] keyboard/keyboard.spec.ts:1222:1 › a failed explain-cluster announces an error rather than leaving the analyst to wonder why nothing happened
+[128/132] keyboard/keyboard.spec.ts:3116:1 › a link type whose count failed is shown, never folded into the types with no links
+  132 passed (2.4m)
+## a11y (whole)
+a11y exit 0
+[528/1097] a11y/every-harness.spec.ts:392:7 › map-view-harness.html gazetteers=failed (dark) has no automated WCAG 2.2 A or AA violations
+[529/1097] a11y/every-harness.spec.ts:392:7 › map-view-harness.html gazetteers=failed (light) has no automated WCAG 2.2 A or AA violations
+[530/1097] a11y/every-harness.spec.ts:392:7 › map-view-harness.html gazetteers=failed (govuk) has no automated WCAG 2.2 A or AA violations
+[531/1097] a11y/every-harness.spec.ts:429:5 › map-view-harness.html gazetteers=failed: every labelled field's name contains its visible label (2.5.3)
+  1097 passed (15.4m)
