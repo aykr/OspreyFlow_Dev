@@ -1,0 +1,110 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/OspreyFlow_Build/), logged at osprey-runs/case.meta/runs/20261114T015955Z-81063d1c/log: sh -c uptime; cd ../OspreyFlow_Core/apps/workspace && npx vitest run src/App.chrome.test.tsx src/App.help.test.tsx src/App.search.test.tsx src/App.test.tsx src/matrix/MatrixView.test.tsx; uptime
+ 01:59:56 up 18 days, 10:38, 16 users,  load average: 52.78, 54.26, 47.65
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/root/osprey-runs/case/OspreyFlow_Core/apps/workspace[39m
+
+ [32m✓[39m src/matrix/MatrixView.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 4012[2mms[22m[39m
+   [32m✓[39m MatrixView — the tables [2m(8)[22m
+     [33m[2m✓[22m[39m is two real tables, each with a caption, column headers and a row header per row[33m 400[2mms[22m[39m
+     [33m[2m✓[22m[39m pages a long view and says plainly which rows are shown (rule 2)[33m 1617[2mms[22m[39m
+   [32m✓[39m MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) [2m(3)[22m
+     [33m[2m✓[22m[39m PageDown and PageUp turn the page[33m 782[2mms[22m[39m
+[90mstderr[2m | src/App.chrome.test.tsx[2m > [22m[2mthe scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4)[2m > [22m[2mthe scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+[22m[39mEach child in a list should have a unique "key" prop.
+
+Check the render method of `AlertQueue`. See https://react.dev/link/warning-keys for more information.
+
+ [32m✓[39m src/App.help.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 8979[2mms[22m[39m
+   [32m✓[39m the rail's Help over every view the rail reaches [2m(13)[22m
+     [33m[2m✓[22m[39m in the graph, Help opens the panel and a second press closes it[33m 449[2mms[22m[39m
+     [33m[2m✓[22m[39m in Ownership, Help opens the panel and a second press closes it[33m 339[2mms[22m[39m
+     [33m[2m✓[22m[39m in Connection strength, Help opens the panel and a second press closes it[33m 342[2mms[22m[39m
+     [33m[2m✓[22m[39m in Ownership, the ? key opens the panel and again closes it, and Esc closes it[33m 399[2mms[22m[39m
+     [33m[2m✓[22m[39m in Connection strength, the ? key opens the panel and again closes it, and Esc closes it[33m 334[2mms[22m[39m
+ [32m✓[39m src/App.search.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 13279[2mms[22m[39m
+   [32m✓[39m the search results page (ADR-145 Amendment 15 Part A) [2m(16)[22m
+     [33m[2m✓[22m[39m Enter in the search box opens the results in the main area, the heading focused, no view current[33m 917[2mms[22m[39m
+     [33m[2m✓[22m[39m Back to Graph returns to the graph as it was, and focus to the search box[33m 645[2mms[22m[39m
+     [33m[2m✓[22m[39m the back link names the view the person left[33m 306[2mms[22m[39m
+     [33m[2m✓[22m[39m choosing a view leaves the results, that view current[33m 347[2mms[22m[39m
+     [33m[2m✓[22m[39m a rail panel opens beside the results and leaves them showing[33m 419[2mms[22m[39m
+     [33m[2m✓[22m[39m the Ask line opens Ask & Chat with the words carried over, and nothing is asked of a model[33m 468[2mms[22m[39m
+     [33m[2m✓[22m[39m Show on graph seeds every record the result stands for and returns to the graph[33m 552[2mms[22m[39m
+     [33m[2m✓[22m[39m Help's keys panel opens over the results, in reach[33m 308[2mms[22m[39m
+     [33m[2m✓[22m[39m Open reads a document over the view, the results kept beneath and shown again when it closes[33m 473[2mms[22m[39m
+     [33m[2m✓[22m[39m someone not offered Ask & Chat (no ask_model) has no Ask line[33m 500[2mms[22m[39m
+     [33m[2m✓[22m[39m closing a document read from the results shows them again, focus in them, never on the view beneath[33m 654[2mms[22m[39m
+     [33m[2m✓[22m[39m another place leaves the results: back in the Glass they are gone[33m 431[2mms[22m[39m
+     [33m[2m✓[22m[39m a saved view opened from the Cases panel leaves the results, the graph current under the view[33m 535[2mms[22m[39m
+     [33m[2m✓[22m[39m the words carried to Ask & Chat are carried once: closed and opened again from the rail, its box is empty[33m 511[2mms[22m[39m
+     [33m[2m✓[22m[39m a suggestion moved to with the arrow keys is still chosen by Enter, as before[33m 548[2mms[22m[39m
+ [32m✓[39m src/App.test.tsx [2m([22m[2m48 tests[22m[2m)[22m[33m 15390[2mms[22m[39m
+   [32m✓[39m 06_DECISIONS.md ADR-050 — the sign-in gate [2m(7)[22m
+     [33m[2m✓[22m[39m an unauthenticated load shows the sign-in screen and issues no /v1 call[33m 326[2mms[22m[39m
+   [32m✓[39m the tab the launcher asked for is the tab the Glass opens on [2m(19)[22m
+     [33m[2m✓[22m[39m after a reload in the Studio, Back returns to the Glass's last view on the open case[33m 447[2mms[22m[39m
+     [33m[2m✓[22m[39m the switcher and the cross-link move between the places, and coming back returns to the view that was open[33m 436[2mms[22m[39m
+     [33m[2m✓[22m[39m Open the evidence, then Back to the alert, returns to the same alert, still open[33m 549[2mms[22m[39m
+     [33m[2m✓[22m[39m Open the evidence says so on the alert when the view cannot be opened[33m 463[2mms[22m[39m
+   [32m✓[39m windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) [2m(6)[22m
+     [33m[2m✓[22m[39m a token near expiry is renewed in the background, with no navigation, and the next call carries it[33m 777[2mms[22m[39m
+     [33m[2m✓[22m[39m an unattended window lets its token lapse: no renewal, and nothing asked[33m 2560[2mms[22m[39m
+ [32m✓[39m src/App.chrome.test.tsx [2m([22m[2m30 tests[22m[2m)[22m[33m 15977[2mms[22m[39m
+   [32m✓[39m the case screen's chrome, variant B (ADR-145 Amendment 2) [2m(3)[22m
+     [33m[2m✓[22m[39m 25 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15)[33m 689[2mms[22m[39m
+     [33m[2m✓[22m[39m the column opens with the Inspector only, the other panels folded in their order[33m 427[2mms[22m[39m
+   [32m✓[39m the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) [2m(2)[22m
+     [33m[2m✓[22m[39m the scope badge stays where the banner names no dataset: You are in the Ingest Studio[33m 305[2mms[22m[39m
+   [32m✓[39m the owner's navigation (ADR-145 Amendment 15) [2m(10)[22m
+     [33m[2m✓[22m[39m the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current[33m 376[2mms[22m[39m
+     [33m[2m✓[22m[39m Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it[33m 315[2mms[22m[39m
+     [33m[2m✓[22m[39m Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it[33m 354[2mms[22m[39m
+     [33m[2m✓[22m[39m the case switcher's last entry is All cases, which opens the Cases panel[33m 1243[2mms[22m[39m
+   [32m✓[39m Part B after review (ADR-145 Amendment 15) [2m(9)[22m
+     [33m[2m✓[22m[39m in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel[33m 1203[2mms[22m[39m
+     [33m[2m✓[22m[39m the Cases panel opened from All cases returns focus to the case menu's button when it closes[33m 1245[2mms[22m[39m
+     [33m[2m✓[22m[39m Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current[33m 427[2mms[22m[39m
+     [33m[2m✓[22m[39m exactly one view is current: one pressed in the switch, or none there and More views naming its own[33m 624[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[32m129 passed[39m[22m[90m (129)[39m
+[2m   Start at [22m 01:59:57
+[2m   Duration [22m 18.09s[2m (tests 86%, environment 9%, transform 3%, import 2%)[22m
+
+
+Slowest 30 of 129 tests:
+  2560 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > an unattended window lets its token lapse: no renewal, and nothing asked
+  1617 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > pages a long view and says plainly which rows are shown (rule 2)
+  1245 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > the Cases panel opened from All cases returns focus to the case menu's button when it closes
+  1243 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the case switcher's last entry is All cases, which opens the Cases panel
+  1203 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel
+   917 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > Enter in the search box opens the results in the main area, the heading focused, no view current
+   782 ms  src/matrix/MatrixView.test.tsx > MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) > PageDown and PageUp turn the page
+   777 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a token near expiry is renewed in the background, with no navigation, and the next call carries it
+   689 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > 25 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15)
+   654 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > closing a document read from the results shows them again, focus in them, never on the view beneath
+   645 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > Back to Graph returns to the graph as it was, and focus to the search box
+   624 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > exactly one view is current: one pressed in the switch, or none there and More views naming its own
+   552 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > Show on graph seeds every record the result stands for and returns to the graph
+   549 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence, then Back to the alert, returns to the same alert, still open
+   548 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > a suggestion moved to with the arrow keys is still chosen by Enter, as before
+   535 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > a saved view opened from the Cases panel leaves the results, the graph current under the view
+   511 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > the words carried to Ask & Chat are carried once: closed and opened again from the rail, its box is empty
+   500 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > someone not offered Ask & Chat (no ask_model) has no Ask line
+   473 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > Open reads a document over the view, the results kept beneath and shown again when it closes
+   468 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > the Ask line opens Ask & Chat with the words carried over, and nothing is asked of a model
+   463 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence says so on the alert when the view cannot be opened
+   449 ms  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in the graph, Help opens the panel and a second press closes it
+   447 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > after a reload in the Studio, Back returns to the Glass's last view on the open case
+   436 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > the switcher and the cross-link move between the places, and coming back returns to the view that was open
+   431 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > another place leaves the results: back in the Glass they are gone
+   427 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current
+   427 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the column opens with the Inspector only, the other panels folded in their order
+   419 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > a rail panel opens beside the results and leaves them showing
+   400 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > is two real tables, each with a caption, column headers and a row header per row
+   399 ms  src/App.help.test.tsx > the rail's Help over every view the rail reaches > in Ownership, the ? key opens the panel and again closes it, and Esc closes it
+ 02:00:15 up 18 days, 10:38, 18 users,  load average: 45.81, 52.57, 47.23
+Wall time: 21 s, exit 0 (no stack, no lease; set-up before it 11 s)
