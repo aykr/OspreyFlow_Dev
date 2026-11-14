@@ -127,3 +127,19 @@ rules-b	v052-batch	Cases and drawing boards	Client install
 case-b	v052-batch-ui	Cases and drawing boards	Client install
 platform	v052-upgrade-index	Housekeeping	Client install
 case	v052-cluster-on-entry	Cases and drawing boards	Client install
+rules-b	v052-am20	Cases and drawing boards	Client install
+orchestrator	v052-ci	Housekeeping	Housekeeping
+case	v052-topbar	Four places, the Glass and Admin	Client install
+case	v052-tidy	Four places, the Glass and Admin	Client install
+case-b	v052-batch-panel	Cases and drawing boards	Client install
+studio	v052-suggest	Four places, the Glass and Admin	Client install
+admin	v052-words	Four places, the Glass and Admin	Client install
+admin	v052-escalation	Rules and alerting	Client install
+platform-b	v052-signin-words	Four places, the Glass and Admin	Client install
+case-b	v052-suppress-words	Cases and drawing boards	Client install
+platform	v052-fallback-words	Four places, the Glass and Admin	Client install
+case-b	v052-group-counts	Four places, the Glass and Admin	Client install
+platform-b	v052-attribution	Models and maps	Client install
+platform-b	v052-version	Four places, the Glass and Admin	Client install
+studio	v052-pipeline-words	Ingest Studio	Client install
+case-b	v052-help-everywhere	Four places, the Glass and Admin	Client install
