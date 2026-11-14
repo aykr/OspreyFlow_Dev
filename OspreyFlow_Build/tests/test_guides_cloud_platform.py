@@ -192,6 +192,9 @@ def test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days() -> None
     else:
         stale = ["only a set finished in the last", "no database to pair with it", "is not to be restored"]
         assert [words for words in stale if words in text] == []
+    # The sets' retention is held inside RDS's window, so an organisation's own may be shorter, never longer.
+    bound = f"may be shorter but not longer: a set kept longer would outlive RDS's point-in-time window (below), {days} days"
+    assert (bound in text) is (int(sets) < int(days))
 
 
 def test_section_6a5_gives_one_s3_reads_cap_as_the_connector_holds_it() -> None:

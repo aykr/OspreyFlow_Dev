@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.98** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.99** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.99 | 2026-11-14 | §6a.8: the backup sets kept 34 days, a day inside RDS's 35-day point-in-time window, since RDS's earliest restorable point lags by up to about a day and the sets' expiry rounds up to midnight UTC (ADR-148 Amendment 13 point 5, amended 14 November); platform's diff, with the retention said to be no longer than that. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 1.98 | 2026-11-14 | Scheduled runs on Entra ID as built (ADR-148 Amendment 16, the audit's ruling 1, option A). §6a.7: a run acts as its owner as *Admin › People* holds them, roles and disabled read at each run, clearance, unit and codes as at their last sign-in; refused, in its own words, for a disabled owner, one not held, one not signed in within 24 hours (never counted toward pausing) and a store that cannot be read, never as "could not be reached", each followed by what happens next for its caller; the 24 hours run from the last recorded access (worked from a Friday to a Tuesday); a leaver to be disabled in *Admin › People* too; a stopped watch shows no reason yet. §8, §9.5, §9.11 and §6a.10 to match. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 1.97 | 2026-11-14 | §6a, v0.5.2's reporting on the cloud-platform profile (ADR-148 Amendments 9 to 11): Superset and the report sync rendered when switched on, one copy each in development; Superset signing in with Entra ID as its own registration, its role from the person's rights (a holder of `manage_dashboards` its builder, Alpha); the dashboard identities' app-only tokens (Viewer on a case at most; their grants removed with them); their egress, copies and secrets; the `superset` database beside `ospreyflow` and `litellm`; the line saying reporting is not available on Entra ID removed; Power BI reading the mart as an option. Appendix A: `cloud_platform.claims.superset_client_id`. PDF reprinted alone. |
 | 1.96 | 2026-11-13 | §6a.8: what a backup set holds, as ADR-148 Amendment 13 decision 4 and the render have it: the claims part holds, in every shape, the shared volume's published pipelines, model settings and map settings with the map key file, beside the poc shape's Ingest root, and `ospreyflow-backup-claims` runs in every shape; what is not in a set, the tiles and, in the standard shape, the Ingest root on the shared volume; "the shared volume is not backed up" struck. Held by `tests/test_guides_cloud_platform.py`, which reads the rendered values. PDF made by the orchestrator at merge. |
@@ -1680,8 +1681,9 @@ policy denies against accident (an administrator who rewrites the policy can lif
 decommission does once the retention ends).
 Two roles write a set, ClickHouse's own and the runner's, each to its own prefix, by IRSA, so no key
 is stored anywhere; neither can erase a set. The bucket is versioned (an object overwritten keeps
-its previous version for 7 days), and a set's objects expire 35 days after they were written: the
-retention is 35 days in all, a proposal until the organisation agrees its own.
+its previous version for 7 days), and a set's objects expire 34 days after they were written: the
+retention is 34 days in all, a proposal until the organisation agrees its own, which may be shorter
+but not longer: a set kept longer would outlive RDS's point-in-time window (below), 35 days at most.
 
 **Checking last night's backup.** A backup Job that completed wrote a finished set, and its log names
 it (`backup: set …`). **A failed run is a failed Job**, its log naming the store, the step and the
@@ -1710,8 +1712,9 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
    withdrawn or deleted since the set comes back under today's grants. The platform team restores RDS
    to the set's finish time by its own point-in-time procedure; the deployment is pointed at it only
    once nothing that writes runs (step 4). **RDS keeps its point-in-time restore for 35 days**, as the
-   Terraform renders it (`backup_retention_period`), against the sets' 35: every set still kept can
-   be restored with its database.
+   Terraform renders it (`backup_retention_period`), against the sets' 34: a day inside RDS's window,
+   since RDS's earliest restorable point lags by up to about a day and the sets' expiry rounds up to
+   midnight UTC, so every set still kept can be restored with its database.
 3. **No backup during the restore**: both CronJobs suspended, and any backup still running left to
    finish.
 4. **Everything that writes stopped**: the render's own list, `backups.writers` in `values.yaml`, each
