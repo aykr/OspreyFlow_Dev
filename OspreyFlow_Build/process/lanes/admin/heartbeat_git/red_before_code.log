@@ -1,20 +1,98 @@
-# the step's tests at 2b09914 against main 0276b39's scripts/lanes_heartbeat.sh: every new case red, every old one green
+# The step's tests at 36e7ef5 run against main 936b7e4's scripts/lanes_heartbeat.sh. Taken after the code was written (the tests and the code landed together, ad260a8); the plants (plants.log) show each case red against its own fault. Every line pytest printed, unfiltered.
+.........................FF.FFFF..FF.FF.F                                [100%]
+=================================== FAILURES ===================================
 E   AssertionError: assert (' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index')
-/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:451: AssertionError: assert (' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index')
+     +  where '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index' = _row('OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', '3c')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:472: AssertionError: assert (' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index')
+E   assert ' done' in "  3e    case         14–15 Nov [░░░░░░] not started · 1 day behind · The Glass's screen fixes"
+     +  where "  3e    case         14–15 Nov [░░░░░░] not started · 1 day behind · The Glass's screen fixes" = _row('OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', '3e')
+     +    where 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n' = <function gitroute.<locals>.view at 0x1197c4900>(16, "# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n")
+     +      where "# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n" = _branch("# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n", 'v052-fixes', 'lane/case-cluster')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:478: assert ' done' in "  3e    case         14–15 Nov [░░░░░░] not started · 1 day behind · The Glass's screen fixes"
+E   AssertionError: assert 'docs' not in 'OUTSIDE THI...platform: P8'
+      
+      'docs' is contained here:
+        min: D1
+          docs: sites
+      ?   ++++
+          platform: P8
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:493: AssertionError: assert 'docs' not in 'OUTSIDE THI...platform: P8'
+E   assert ' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index'
+     +  where '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index' = _row('OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', '3c')
+     +    where 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n' = <function gitroute.<locals>.view at 0x1197c5940>(16, "# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n")
+     +      where "# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n" = _branch("# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n", 'v052-index', 'lane/rules-b-v052batch')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:497: assert ' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index'
+E   assert ' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index'
+     +  where '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index' = _row('OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', '3c')
+     +    where 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n' = <function gitroute.<locals>.view at 0x1197c5080>(16, "# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n")
+     +      where "# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n" = _branch("# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n", 'v052-index', 'lane/studio-big')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:503: assert ' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index'
+E   AssertionError: OVERALL: [███████░░░░░░░░░░░░░░░░░] 3 of 11 steps done · 1 in review · 2 being built · 5 to do
+      Test stack a: free
+      Test stack b: free
+      Test stack c: free
+      Test stack d: free
+      Test stack e: free
+      Test stack f: free
+      Test stack g: free
+      Claude sessions running: 10
+      
+      PLATFORM: [████░░░░░░░░] 1 of 3 done · working · 2681m ago · account default
+        now v052-measure v0.5.2 step 4: the measurement session — platform at work
+      RULES: [░░░░░░░░░░░░] 0 of 2 done · working · 2681m ago · account default
+        now v052-index v0.5.2 step 3c: the index feed — rules at work
+      STUDIO: [██████░░░░░░] 1 of 2 done · working · 2681m ago · account default
+        now v052-search v0.5.2 step 3d: the search service — studio at work
+      CASE: [██████░░░░░░] 1 of 2 done · working · 2681m ago · account default
+        now v052-fixes v0.5.2 step 3e: the Glass's screen fixes — case at work
+      DOCS: [░░░░░░░░░░░░] 0 of 1 done · working · 2681m ago · account default
+        now sites The two new websites — docs at work
+      ADMIN: [░░░░░░░░░░░░] 0 of 1 done · working · 2681m ago · account default
+        now D1 The Conduit's pool sizes from settings — admin at work
+      
+      
+      Nothing needs you.
+      
+      FOR THE ORCHESTRATOR (it acts on these; nothing for you):
+        - platform has been quiet since 2026-11-14T15:18:39Z while working
+        - rules has been quiet since 2026-11-14T15:18:39Z while working
+        - studio has been quiet since 2026-11-14T15:18:39Z while working
+        - case has been quiet since 2026-11-14T15:18:39Z while working
+        - docs has been quiet since 2026-11-14T15:18:39Z while working
+        - admin has been quiet since 2026-11-14T15:18:40Z while working
+      
+    assert ('1 of 2 done' in 'RULES: [░░░░░░░░░░░░] 0 of 2 done · working · 2681m ago · account default')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:511: AssertionError: OVERALL: [███████░░░░░░░░░░░░░░░░░] 3 of 11 steps done · 1 in review · 2 being built · 5 to do
 E   AssertionError: assert 'platform: P5b rows' not in 'OUTSIDE THI...rm: P5b rows'
-/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:484: AssertionError: assert 'platform: P5b rows' not in 'OUTSIDE THI...rm: P5b rows'
+      
+      'platform: P5b rows' is contained here:
+        s: sites
+          platform: P5b rows
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:542: AssertionError: assert 'platform: P5b rows' not in 'OUTSIDE THI...rm: P5b rows'
 E   AssertionError: assert (' ready, 2 days ahead of its start' in '  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c · Client-size synthetic data loaded once')
-/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:498: AssertionError: assert (' ready, 2 days ahead of its start' in '  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c · Client-size synthetic data loaded once')
+     +  where '  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c · Client-size synthetic data loaded once' = _row('OSPREYFLOW · Sat 14 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 12 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', 'B')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:556: AssertionError: assert (' ready, 2 days ahead of its start' in '  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c · Client-size synthetic data loaded once')
 E   AssertionError: assert '5 of 11 steps merged' in 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n'
-/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:521: AssertionError: assert '5 of 11 steps merged' in 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n'
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:579: AssertionError: assert '5 of 11 steps merged' in 'OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n'
 E   AssertionError: assert ' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index'
-/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:533: AssertionError: assert ' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index'
+     +  where '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index' = _row('OSPREYFLOW · Mon 16 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 10 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', '3c')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:591: AssertionError: assert ' done' in '  3c  ★ rules        14–19 Nov [░░░░░░] running · The index feed: every change reaches the index'
+E   assert ' ready' in '  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c  · Client-size synthetic data loaded once'
+     +  where '  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c  · Client-size synthetic data loaded once' = _row('OSPREYFLOW · Sat 14 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 12 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n', 'B')
+     +    where 'OSPREYFLOW · Sat 14 Nov 2026, 12:00 UTC (12:00 UK time)\nROUTE TO V0.5.2 · Thu 26 Nov · 12 days left · on track\n  [█...[█████░░░░░░░░░░░░░░░] 3 of 11 steps merged\nOther views: lanes_heartbeat.sh --overview · --full · --lanes · summary\n' = <function gitroute.<locals>.view at 0x1197c6980>(14, "# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n")
+     +      where "# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n" = _branch("# lane, step, size, status, title\nplatform\tv052-manifest\tM\tdone\tv0.5.2 step 2: the poc manifest\nrules\tv052-ind...n\tD1\tM\ttodo\tThe Conduit's pool sizes from settings\nstudio\tL1\tS\tdone\tIngest one\ncase\tC1\tL\tdone\tCase one\n", 'v052-index', 'lane/rules-index')
+/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build/tests/test_lanes_heartbeat_route.py:603: assert ' ready' in '  B   ★ rules        16–18 Nov [░░░░░░] not started · after 3c  · Client-size synthetic data loaded once'
+=========================== short test summary info ============================
 FAILED tests/test_lanes_heartbeat_route.py::test_a_row_typed_building_whose_branch_is_on_main_by_a_merge_shows_done
 FAILED tests/test_lanes_heartbeat_route.py::test_a_merge_in_the_merger_brief_s_form_names_its_branch
+FAILED tests/test_lanes_heartbeat_route.py::test_a_branch_named_inside_another_s_name_is_not_merged
+FAILED tests/test_lanes_heartbeat_route.py::test_the_merger_s_name_is_read_with_its_hyphens_aside_and_outside_ascii
+FAILED tests/test_lanes_heartbeat_route.py::test_a_subject_past_the_environment_s_size_is_read
+FAILED tests/test_lanes_heartbeat_route.py::test_the_lanes_full_and_watch_views_read_git_too
 FAILED tests/test_lanes_heartbeat_route.py::test_a_landed_line_counts_only_when_it_says_the_step_is_done
 FAILED tests/test_lanes_heartbeat_route.py::test_a_step_whose_after_steps_are_all_done_shows_ready_with_the_days
 FAILED tests/test_lanes_heartbeat_route.py::test_every_view_reads_the_steps_git_says_are_done
 FAILED tests/test_lanes_heartbeat_route.py::test_a_branch_is_read_from_any_row_shape_the_table_takes
 FAILED tests/test_lanes_heartbeat_route.py::test_an_after_list_with_spaces_is_read_as_its_ids
-7 failed, 29 passed in 42.00s
-# 4 of the 11 new cases pass on main by design: they guard against a false done (not_on_main_by_a_merge, never_given_one_by_its_name, with_no_repository, ready_needs_every_after_step), and main's script never reads done from git. Each is shown red by its plant (plants.log).
+11 failed, 30 passed in 46.39s
+# 5 of the 16 new tests pass on main by design: they guard against a false done (test_a_bare_lane_branch_never_reads_done, test_a_branch_not_on_main_by_a_merge_keeps_the_row_s_word, test_a_row_naming_no_branch_is_never_given_one_by_its_name, test_ready_needs_every_after_step_done_and_a_route_step_to_name, test_with_no_repository_the_view_keeps_the_typed_words), and main's script never reads done from git. Each is shown red by its plant (plants.log). The other 11 fail here.
