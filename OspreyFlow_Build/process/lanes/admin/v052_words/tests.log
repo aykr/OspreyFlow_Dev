@@ -1,0 +1,21 @@
+# The affected directories offline on the closed ports (tests/services/api, the words test, the guide, doc-site and runbook tests), on the branch at 733995e and on its base 8d657f3, then the difference of their failure sets.
+branch: 200 failed, 7007 passed, 24 skipped, 105 warnings, 867 errors in 614.40s (0:10:14)
+main:   200 failed, 6994 passed, 24 skipped, 105 warnings, 867 errors in 514.19s (0:08:34)
+failing on the branch, not on main: 0
+failing on main, not on the branch: 0
+# The 200 failures and 867 errors on both are the live-store tests, which need stores the closed ports refuse.
+
+# Checks at 733995e:
+citation-check: ok
+schemas-check: ok
+decision-log-publication-check: ok
+test-file-coverage-check: ok
+product-tree-link-check: ok
+lanes-check: (run again on the closed ports below)
+  export ARCADEDB_HTTP_PORT=2491 POSTGRES_PORT=55433 POSTGRES_PASSWORD=throwaway VALKEY_PORT=6379 CLICKHOUSE_HTTP_PORT=18123
+(CI's own service containers use these ports on a fresh runner; CI=true allows it.)
+
+make: *** [lanes-check] Error 4
+lanes-check (closed ports): 191 passed, 14 skipped; adr-reservations-check clean
+Core: ruff check clean; ruff format 92 files to reformat, as on main; mypy clean (493 files); tsc and eslint clean; trivy not run (its database download refused here; CI's)
+vitest src/admin and src/help: 221 passed
