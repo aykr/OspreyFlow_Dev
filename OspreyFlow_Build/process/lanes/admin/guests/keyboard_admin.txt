@@ -1,0 +1,8 @@
+# keyboard/admin.spec.ts, local, OSPREY_PORTS_SLOT=1 (the orchestrator's slot, 14 Nov), registry-4b.diff applied in this copy only, at 1b90014
+[46/46] keyboard/admin.spec.ts:987:1 › every registered Admin action has its own proving test case above
+  46 passed (12.0s)
+
+# plant: the Guests form not rendered in People (People.tsx), -g 'guest accounts are admitted'
+    Error: expect(locator).toBeEnabled() failed
+    Error: element(s) not found
+  1 failed
