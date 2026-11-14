@@ -414,7 +414,8 @@ def test_the_fallback_offers_a_next_page_only_when_it_holds_records() -> None:
     """Rule 2 (docs' reviewer, 14 Nov): `more` offered Next on every page past today's search's
     depth, up to the 1,000-deep refusal, and each of those pages was empty. A further page is
     offered only when it has records."""
-    graph = _Graph(exact=[_typed(f"p{i}") for i in range(s.FALLBACK_DEPTH)])
+    # More matched than the depth, so today's search was cut: the case the defect was in.
+    graph = _Graph(exact=[_typed(f"p{i}") for i in range(s.FALLBACK_DEPTH + 50)])
     fourth = _ask(SearchPageRequest(query="x", page=4, page_size=20), graph, None)
     assert len(fourth.results) == 20 and fourth.more is True
     last = _ask(SearchPageRequest(query="x", page=5, page_size=20), graph, None)
@@ -428,7 +429,8 @@ def test_the_fallback_says_in_words_where_its_depth_stops_the_list() -> None:
     says that the list stops there because of the fallback, not because nothing else matches."""
     stopped = s.DEPTH_REACHED.format(depth=s.FALLBACK_DEPTH)
     assert str(s.FALLBACK_DEPTH) in stopped
-    graph = _Graph(exact=[_typed(f"p{i}") for i in range(s.FALLBACK_DEPTH)])
+    # More matched than the depth: today's search was asked one past it, so the cut is known.
+    graph = _Graph(exact=[_typed(f"p{i}") for i in range(s.FALLBACK_DEPTH + 50)])
     for page in (5, 6):
         out = _ask(SearchPageRequest(query="x", page=page, page_size=20), graph, None)
         assert out.limited_reason == s.LIMITED_REASONS["no_index"] + stopped, page
@@ -438,6 +440,32 @@ def test_the_fallback_says_in_words_where_its_depth_stops_the_list() -> None:
     few = _Graph(exact=[_typed(f"p{i}") for i in range(30)])
     end = _ask(SearchPageRequest(query="x", page=2, page_size=20), few, None)
     assert end.more is False and end.limited_reason == s.LIMITED_REASONS["no_index"]
+
+
+def test_exactly_the_depth_matched_and_nothing_was_cut() -> None:
+    """Docs' review, 14 Nov: with exactly 100 matches, today's search returned all of them, and the
+    line said "only the first 100" of a list that was whole. It is asked one past the depth, so a
+    cut is said only when there was one."""
+    graph = _Graph(exact=[_typed(f"p{i}") for i in range(s.FALLBACK_DEPTH)])
+    last = _ask(SearchPageRequest(query="x", page=5, page_size=20), graph, None)
+    assert len(last.results) == 20 and last.more is False
+    assert last.limited_reason == s.LIMITED_REASONS["no_index"]
+    assert last.total == s.FALLBACK_DEPTH
+
+
+def test_past_the_depth_the_list_holds_the_first_hundred_alone() -> None:
+    graph = _Graph(exact=[_typed(f"p{i}") for i in range(s.FALLBACK_DEPTH + 50)])
+    last = _ask(SearchPageRequest(query="x", page=5, page_size=20), graph, None)
+    assert [r.node_ids[0] for r in last.results] == [f"p{i}" for i in range(80, 100)]
+    assert last.total == s.FALLBACK_DEPTH and last.more is False
+
+
+def test_the_depths_words_never_send_the_reader_to_the_filters() -> None:
+    """Docs' review, 14 Nov: the page's dataset and group filters apply after the cut, so they
+    cannot reach a match past it. The line says so, and asks for nothing they cannot do."""
+    stopped = s.DEPTH_REACHED.format(depth=s.FALLBACK_DEPTH)
+    assert "narrow" not in stopped
+    assert "the filters apply to those alone" in stopped
 
 
 def test_the_fallback_pages_today_s_results() -> None:

@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.58** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.59** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.59 | 2026-11-14 | §5.5: the fallback's depth line as studio's fix words it, "Only the first 100 matches are listed, and the filters apply to those alone.", shown only where the search found more than 100: the fallback asks one past its depth, so exactly 100 matches is a whole list. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
 | 1.58 | 2026-11-14 | §5.5: the fallback's paging as studio's fix built it: *Next page* offered only while a further page holds records, and where the search reached the fallback's 100, the last page's line adds, even with a dataset or a group chosen, "Only the first 100 matches are listed: narrow the search to see others." in the Conduit's words. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
 | 1.57 | 2026-11-14 | §5.5: the search results page as v0.5.2's step 3e′ built it (ADR-145 Amendment 15 Part A, spec 02 §2.0c): Enter on the typed words opens it over the view, a suggestion moved to still chosen; the heading and the Conduit's count, a group's own once chosen; the groups, the datasets and dates, *Clear filters*; 20 a page; each result's *Show on graph* (the records it stands for, one that could not be read said) and, for a document, *Open* (the results set aside while it is read over the view); *Back to ‹view›*; the empty line; the Ask line; a search over 200 characters refused with its limit named, never cut, and the Conduit's other refusals in its words; the fallback's one line, its first 100 exact matches, counts always marked incomplete, datasets without counts and no dates. §12: Enter in the top bar's search box. Held by `tests/test_user_guide_search_results.py`. PDF made by the orchestrator at merge. |
 | 1.56 | 2026-11-14 | §7.5: a *Stopped* hotlist or watch says why beside the word, each reason in the Conduit's words (ADR-044 Amendment 1). PDF made by the orchestrator at merge. |
@@ -471,9 +472,9 @@ exact identifiers: this deployment has no search index.", and looks no further t
 exact matches. Its counts are of those, and always marked incomplete; the datasets are offered without
 counts, and there are no dates to filter by. A date filter already set is not applied, and the line
 then adds "The date filter is not applied." **Next page** is offered only while a further
-page holds records, and where the search reached its 100, the last page's line adds "Only the first
-100 matches are listed: narrow the search to see others.", even when a dataset or a group has
-narrowed the list.
+page holds records, and where the search found more than 100, the last page's line adds "Only the
+first 100 matches are listed, and the filters apply to those alone.", even when a dataset or a group
+has narrowed the list.
 
 **Add many from a list.** The list button beside the search box (**Add many from a list**), and the fold
 of that name in **Where to start**, take a list of identifiers and draw what is found. Adding needs
