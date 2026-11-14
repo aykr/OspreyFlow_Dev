@@ -17,7 +17,9 @@ count records).
    `process/lanes/studio/v052-search/makefile_live_ignore.diff` (one `--ignore` in the Makefile for
    `test_search_leak_live.py`) and `ci_yml_live_listing.diff` (the same file in the test job's ignores and the
    live-service job's list). With all three applied, the coverage check reads "1060 test file(s), 0 allowlisted,
-   no new drift". One yes covers all three if you agree.
+   no new drift". **Rules-b's Whole case (D(iii)) adds one more of the same kind:** `makefile-v052Diii.patch` and a
+   ci.yml patch on top of studio's, for `test_ask_whole_case_leak_live.py`. One yes covers all of them if you
+   agree.
 
 2. **The POC seed path vs the poc's marking ceiling (platform, ADR-148 Am 14).** Spec 08's synthetic data holds
    SECRET items: HMP's network writes a SECRET conflict (`hmp_network.py:427`), and Fixture Corp writes a SECRET
