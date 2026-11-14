@@ -1,0 +1,29 @@
+# The owner's ruling of 13 November 2026 (Q2): manage_dashboards is Superset's builder; the Glass told Superset's address. Red first, each pytest with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a). Mac, offline, on v052-gate.
+
+== (a) manage_dashboards without administer_system reads as a Reports Viewer (Gamma):
+FAILED test_superset_entra_sign_in.py::test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[builder]
+FAILED test_superset_entra_sign_in.py::test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[builder-without-reports]
+2 failed, 22 passed in 6.57s
+
+== (b) the builder's key mapped to Gamma, read-only:
+FAILED test_superset_entra_sign_in.py::test_a_builder_is_superset_s_alpha_and_a_reports_viewer_stays_read_only
+1 failed, 23 passed in 6.45s
+
+== (c) a Reports Viewer given the builder's role:
+FAILED test_superset_entra_sign_in.py::test_the_role_is_the_conduit_s_rights_and_the_account_its_principal[builder-without-reports]
+FAILED test_superset_entra_sign_in.py::test_a_builder_is_superset_s_alpha_and_a_reports_viewer_stays_read_only
+2 failed, 22 passed in 6.44s
+
+== (d) Superset's address told although Superset is not deployed:
+FAILED test_welcome_settings.py::test_superset_s_address_is_given_only_where_superset_is
+1 failed, 23 passed in 6.41s
+
+== (e) the Glass following any string as Superset's address:
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/auth/oidcConfig.test.ts > Superset's address, for Build a report > is none for not a web address, so the link is not offered
+ FAIL  src/auth/oidcConfig.test.ts > Superset's address, for Build a report > is none for a path, not an origin, so the link is not offered
+      Tests  2 failed | 20 passed (22)
+
+== green:
+24 passed in 6.47s
+      Tests  22 passed (22)

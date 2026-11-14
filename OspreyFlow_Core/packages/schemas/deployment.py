@@ -1107,6 +1107,13 @@ class EntraSignInConfig(BaseModel):
         pattern=_ENTRA_ID,
         description="This API's app registration (application id): the token's audience",
     )
+    superset_client_id: str | None = Field(
+        default=None,
+        pattern=_ENTRA_ID,
+        description="Superset's own app registration (application id), when reporting.superset is "
+        "on: people sign in to Superset with it, and its delegated token reads the Conduit's "
+        "GET /v1/me and /v1/me/rights alone (ADR-148 Amendment 9)",
+    )
     api_id_uri: str | None = Field(
         default=None,
         pattern=r"^api://\S+$",
@@ -1192,6 +1199,8 @@ class EntraSignInConfig(BaseModel):
             "org_unit": self.org_unit,
             "handling_codes": self.handling_codes,
             "groups_claim": self.groups_claim,
+            # ADR-148 Amendment 9: Superset's registration, admitted for its two reads alone.
+            **({"superset_client_id": self.superset_client_id} if self.superset_client_id else {}),
         }
 
 

@@ -8,7 +8,8 @@ profile.
 - `harness/oidc.py`'s `verify_id_token` (the launcher's and the Admin console's sign-in): an Entra
   ID token is refused (`entra_token`).
 - `deploy/superset/superset_config.py`: on Entra ID sign-in (`SUPERSET_SIGN_IN=entra`, rendered on
-  the cloud-platform profile) no token role is read; everyone is Gamma until Superset's own step.
+  the cloud-platform profile) no token role is read; the role is the Conduit's resolution of the
+  person (ADR-148 Amendment 9; its tests are `test_superset_entra_sign_in.py`).
 
 Each refusal's control is the same token without `tid` (or Superset on Keycloak), admitted as
 before. Synthetic values only (rule 9).
@@ -116,13 +117,12 @@ def _access_token(claims: dict[str, object]) -> str:
     return f"e30.{body}.sig"
 
 
-@pytest.mark.parametrize(
-    ("sign_in", "roles"), [("entra", []), (None, ["osprey-admin"])], ids=["entra", "keycloak"]
-)
-def test_superset_reads_no_token_role_on_entra(monkeypatch, sign_in, roles) -> None:
-    config = _superset(monkeypatch, sign_in)
-    token = _access_token({"preferred_username": "ana", "roles": ["osprey-admin"], "tid": TENANT})
+def test_superset_reads_the_realm_s_roles_on_keycloak(monkeypatch) -> None:
+    """The control. On Entra ID (`SUPERSET_SIGN_IN=entra`) no token role is read at all: the role is
+    the Conduit's resolution of the person (ADR-148 Amendment 9), `test_superset_entra_sign_in.py`."""
+    config = _superset(monkeypatch, None)
+    token = _access_token({"preferred_username": "ana", "roles": ["osprey-admin"]})
     info = config.OspreySecurityManager.oauth_user_info(None, "keycloak", {"access_token": token})
-    assert info["role_keys"] == roles
+    assert info["role_keys"] == ["osprey-admin"]
     # Gamma for everyone the mapping names nothing for (Flask-AppBuilder's registration role).
     assert config.AUTH_USER_REGISTRATION_ROLE == "Gamma"

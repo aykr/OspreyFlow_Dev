@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   deploymentAppearance,
   deploymentMarking,
+  deploymentReportsUrl,
   deploymentWelcome,
   loadDeploymentSettings,
   oidcAuthority,
@@ -160,6 +161,34 @@ describe("the deployment's appearance", () => {
   it("is the OspreyFlow brand where there is no deployment file", async () => {
     await loadDeploymentSettings(answering(404, "not found"));
     expect(deploymentAppearance()).toEqual({ brand: "ospreyflow", serviceName: null, organisation: null, phase: "none" });
+  });
+});
+
+// The owner's ruling of 13 November 2026 (Q2): "Build a report" opens Superset at the address the
+// deployment gives, and is offered only where there is one.
+describe("Superset's address, for Build a report", () => {
+  afterEach(() => resetDeploymentSettings());
+
+  it("is read with the identity provider", async () => {
+    await loadDeploymentSettings(
+      answering(200, JSON.stringify({ identity_provider: "http://id.osprey.test", reports_url: "https://bi.osprey.test" })),
+    );
+    expect(deploymentReportsUrl()).toBe("https://bi.osprey.test");
+  });
+
+  it.each([
+    ["no Superset", {}],
+    ["not a web address", { reports_url: "javascript:alert(1)" }],
+    ["a path, not an origin", { reports_url: "https://bi.osprey.test/login" }],
+    ["not a string", { reports_url: 7 }],
+  ])("is none for %s, so the link is not offered", async (_case, extra) => {
+    await loadDeploymentSettings(answering(200, JSON.stringify({ identity_provider: "http://id.osprey.test", ...extra })));
+    expect(deploymentReportsUrl()).toBeNull();
+  });
+
+  it("is none where there is no deployment file", async () => {
+    await loadDeploymentSettings(answering(404, "not found"));
+    expect(deploymentReportsUrl()).toBeNull();
   });
 });
 

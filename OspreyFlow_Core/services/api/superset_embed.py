@@ -2,7 +2,8 @@
 
 The Conduit decides who may see an embedded dashboard; Superset only draws it. A Superset
 dashboard is embeddable when its slug names a registered dashboard identity (`compliance-board` ↔
-`osprey-dashboard-compliance-board`), and a person may open it only if they could see everything
+`osprey-dashboard-compliance-board` on Keycloak; on Entra ID the name it was registered by, ADR-148
+Amendment 11), and a person may open it only if they could see everything
 that identity counts — its unit, a clearance at least its own, every handling code it receives,
 and a level on every case it has been given (`may_open`). The guest token Superset issues is
 read-only, short-lived and restricted to that identity's rows in the mart.
@@ -56,7 +57,21 @@ class EmbeddableDashboard:
 
 
 def identity_for(slug: str, identities: Sequence[DashboardIdentity]) -> DashboardIdentity | None:
-    return next((d for d in identities if d.client_id == f"{DASHBOARD_PREFIX}{slug}"), None)
+    """The identity a board's slug names: by its name where it has one (Entra ID, where the client
+    id is the registration's application id, ADR-148 Amendments 10 and 11), else by Keycloak's
+    client id (`osprey-dashboard-<slug>`). A named identity is matched by its name alone."""
+    return next(
+        (
+            d
+            for d in identities
+            if (
+                d.name == slug
+                if d.name is not None
+                else d.client_id == f"{DASHBOARD_PREFIX}{slug}"
+            )
+        ),
+        None,
+    )
 
 
 def identity_principal(identity: DashboardIdentity) -> Principal:

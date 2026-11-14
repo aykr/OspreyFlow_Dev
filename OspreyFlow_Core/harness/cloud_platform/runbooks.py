@@ -49,6 +49,72 @@ RENDER = '"$PY" -m harness.render --config "$CONFIG"'
 _FENCE = re.compile(r"^```bash( platform)?\n(.*?)^```\n", re.S | re.M)
 
 
+def _bi(values: dict[str, Any]) -> str | None:
+    return next((r["host"] for r in values["ingress"]["rules"] if r["service"] == "superset"), None)
+
+
+def _reporting_registrations(config: OspreyConfig, values: dict[str, Any]) -> str:
+    """ADR-148 Amendments 9 and 10: what the client's Entra administrator registers for Superset and
+    the report sync, before step 2 (whose Terraform asks for their secrets)."""
+    cp = config.cloud_platform
+    assert cp is not None and cp.claims is not None
+    claims, parts = cp.claims, []
+    if config.reporting.superset:
+        parts.append(
+            f"**For Superset, before step 2** (ADR-148 Amendment 9): a third app registration, Superset's own (application id\n"
+            f"`{claims.superset_client_id}`), a web application whose redirect URI is\n"
+            f"`https://{_bi(values)}/oauth-authorized/entra`, with a client secret, and granted this API's\n"
+            f"delegated scope `{claims.scope}` with admin consent. Its secret is step 2's\n"
+            f"`superset_oidc_client_secret`. Superset reads who signed in from the Conduit, so its roles are\n"
+            f"the person's rights here: `administer_system` is Superset's Admin, `manage_dashboards` its\n"
+            f"builder (Alpha), `read_reports` its read-only Gamma, and a person with none of them is not let in."
+        )
+    if config.reporting.sync:
+        parts.append(
+            "**For the report sync, before step 2** (ADR-148 Amendment 10): on this API's registration, an app role\n"
+            "`Dashboard.Read` (allowed member types: Applications). Each dashboard identity is an app\n"
+            "registration of its own with a client secret, granted `Dashboard.Read` with admin consent;\n"
+            "step 6a registers it here. Until there is one, step 2's `report_sync_dashboards` is `[]`."
+        )
+    return ("\n" + "\n\n".join(parts) + "\n") if parts else ""
+
+
+def _reporting_section(config: OspreyConfig, values: dict[str, Any]) -> str:
+    """ADR-148 Amendment 11: reports on this profile, after sign-in."""
+    if not (config.reporting.superset or config.reporting.sync):
+        return ""
+    lines = ["## 6a. Reports\n"]
+    if config.reporting.superset:
+        lines.append(
+            f"Superset answers at `https://{_bi(values)}`, signing people in with Entra ID as its own\n"
+            "registration; its settings live in its own database, `superset`, which it makes on the managed\n"
+            "PostgreSQL at its first start, beside `ospreyflow` and the gateway's `litellm`. The reports\n"
+            "themselves are the schema `osprey_reports` inside `ospreyflow`, as on Small.\n"
+        )
+    if config.reporting.sync:
+        lines.append(
+            "**A dashboard identity**, for each dashboard the report sync fills: once its app registration\n"
+            "exists and holds `Dashboard.Read` (*What it needs*), an administrator registers it in\n"
+            "Admin › Dashboards by its application id, with a name (the dashboard's, lower case letters,\n"
+            "digits and hyphens), its clearance, unit and handling codes: it reads no more than those allow.\n"
+            "Then add it to the Terraform's `report_sync_dashboards`, a JSON list, as\n"
+            "`{\"client_id\": \"<its application id>\", \"secret\": \"<its client secret>\"}`, apply, and restart\n"
+            "the report sync:\n\n"
+            "```bash later\n"
+            'kubectl -n "$NS" rollout restart deploy/report-sync\n'
+            'kubectl -n "$NS" rollout status deploy/report-sync --timeout 10m\n'
+            "```\n"
+        )
+    lines.append(
+        "**Power BI, if the client uses it** (an option, not a step): Power BI reads the schema\n"
+        "`osprey_reports` in `ospreyflow` through a read-only login of its own, made on the managed\n"
+        "PostgreSQL by the platform's team (`GRANT USAGE ON SCHEMA osprey_reports` and `SELECT ON ALL\n"
+        "TABLES IN SCHEMA osprey_reports`, nothing else), reached from wherever Power BI's gateway runs.\n"
+        "It reads every row of the mart: who may hold that login is the client's decision.\n"
+    )
+    return "\n".join(lines) + "\n"
+
+
 def _opensearch_needs(config: OspreyConfig, platform: PlatformSettings) -> str:
     """v0.5.2 step 3a: what the namespace's OpenSearch needs of the client, where the deployment
     searches with it."""
@@ -178,7 +244,7 @@ A block fenced `bash later` is not part of that order: the words before it say w
 two app registrations in tenant `{claims.tenant_id}`, the Glass (application id `{claims.client_id}`)
 and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the Glass is
 granted), with the claims `cloud_platform.claims` names.
-
+{_reporting_registrations(config, values)}
 **The managed PostgreSQL** allows a `max_connections` of {POSTGRES_MAX_CONNECTIONS}. The least it must allow in this
 shape is {least}: two Conduits side by side during an update, the worker, the gateway and a reserve (ADR-114
 Amendment 43's figures), with Superset and the report sync (from v0.5.2, as many copies as this shape renders)
@@ -276,7 +342,7 @@ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --t
 kubectl -n "$NS" rollout status deploy/api --timeout 10m
 ```
 
-## 7. Check
+{_reporting_section(config, values)}## 7. Check
 
 The doors answer through the platform's ingress ({", ".join(hosts)}): `/healthz` is the Conduit's,
 answered through the Glass. `OSPREY_CURL_OPTS` is curl's options for that door, if it needs any:

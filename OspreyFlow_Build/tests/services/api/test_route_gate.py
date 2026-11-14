@@ -21,11 +21,15 @@ import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
-from principal_auth import DASHBOARD_ROUTES
+from principal_auth import DASHBOARD_ROUTES, SUPERSET_ROUTES
 from schemas.domain import Principal
 
 #: (kind, the routes it is admitted to); Superset's delegated sign-in (ADR-148 Am 9) is a row.
-KINDS: list[tuple[str, frozenset[str]]] = [("dashboard identity", DASHBOARD_ROUTES)]
+KINDS: list[tuple[str, frozenset[str]]] = [
+    ("dashboard identity", DASHBOARD_ROUTES),
+    # ADR-148 Amendment 9: a person's token issued to Superset, reading who they are alone.
+    ("superset sign-in", SUPERSET_ROUTES),
+]
 
 
 class _Resolver:

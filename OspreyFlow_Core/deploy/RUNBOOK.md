@@ -272,7 +272,10 @@ restore refuses part-way for space.
 ClickHouse to a set while PostgreSQL stays as it is now would bring back, visible under today's grants,
 anything withdrawn or deleted since the set. So PostgreSQL (RDS) is restored point in time to the set's finish
 time (`sets` prints it), by the platform team's own RDS procedure. RDS keeps point in time for 35 days
-(`backup_retention_period`), the sets' own expiry, so every set kept in the bucket can be met by it. The new instance may be started at once,
+(`backup_retention_period`), the sets' own expiry, so every set kept in the bucket can be met by it. That brings
+back every database on the instance together: `ospreyflow` (with the report mart, the schema `osprey_reports`),
+the gateway's `litellm` and, with Superset on, Superset's `superset` (ADR-148 Amendment 11); Superset and the
+report sync are among the writers step 2 stops, so neither writes to the old instance meanwhile. The new instance may be started at once,
 since restoring it takes a while; **the deployment is pointed at it only after step 2**, once nothing that
 writes runs:
 

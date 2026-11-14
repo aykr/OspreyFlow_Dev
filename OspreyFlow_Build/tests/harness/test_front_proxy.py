@@ -173,6 +173,9 @@ def test_the_glass_learns_its_identity_provider_at_run_time() -> None:
             "phase": "none",
         },
         "version": site.deployment_version(),
+        # The owner's ruling of 13 November 2026 (Q2): this deployment runs Superset, so "Build a
+        # report" opens it at its `bi.` name.
+        "reports_url": "http://bi.a.test:8443",
     }
     volumes = _compose(artefacts)["workspace"]["volumes"]
     assert "./glass.json:/usr/share/nginx/html/deployment.json:ro" in volumes

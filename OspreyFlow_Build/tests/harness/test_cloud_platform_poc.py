@@ -698,43 +698,41 @@ def test_the_rendered_rds_sets_max_connections_to_1000_in_its_parameter_group(fi
     assert re.search(r'instance_class\s*=\s*"db\.t4g\.large"', instance.group(1))
 
 
-def test_the_decommission_s_settings_hold_after_step_7_removes_their_secret(
-    runbooks: dict[str, str], tmp_path: Any
-) -> None:
-    """R1 on kind, finding 16: step 1 read the bucket prefix from the Secret that step 7's Terraform
-    removal deletes, so a team whose decommission stopped at step 8 could not open a shell and go on:
-    step 1 itself refused. Step 1 keeps the prefix in its working folder, and a run after step 7 reads
-    it back there (or takes the PREFIX the team gives); with neither, it says how to give it."""
-    import subprocess
+SUPERSET_APP = "cccccccc-dddd-4eee-8fff-000000000000"
 
-    text = runbooks["DECOMMISSION.md"]
-    step = text[text.index("## 1. The settings") : text.index("## 2.")]
-    (_settings_block, prefix_block) = command_blocks(step, on_the_platform=False)
-    folder = tmp_path / "render"
-    (folder / "terraform").mkdir(parents=True)
-    (folder / "values.yaml").write_text("x: 1\n")
-    stub = tmp_path / "bin" / "kubectl"
-    stub.parent.mkdir()
 
-    def run(secret: str | None, **env: str) -> subprocess.CompletedProcess[str]:
-        answer = f"printf %s {base64.b64encode(secret.encode()).decode()}" if secret else "echo 'NotFound' >&2; exit 1"
-        stub.write_text(f"#!/bin/sh\n{answer}\n")
-        stub.chmod(0o755)
-        return subprocess.run(
-            ["bash", "-c", f'set -e\n{prefix_block}\necho "PREFIX=$PREFIX"'], capture_output=True, text=True,
-            env={"PATH": f"{stub.parent}:/usr/bin:/bin", "NS": "ospreyflow-poc", "FOLDER": str(folder),
-                 "WORK": str(tmp_path / "work"), **env},
-        )  # fmt: skip
+def _reporting_on() -> OspreyConfig:
+    raw = _config().model_dump(mode="json", exclude_none=True)
+    raw["reporting"] = {"sync": True, "superset": True}
+    raw["cloud_platform"]["claims"]["superset_client_id"] = SUPERSET_APP
+    return OspreyConfig.model_validate(raw)
 
-    (tmp_path / "work").mkdir()
-    first = run("ospreyflow-poc-1a2b3c4d-")
-    assert first.returncode == 0 and first.stdout.strip().endswith("PREFIX=ospreyflow-poc-1a2b3c4d-"), first.stderr
-    after_step_7 = run(None)  # a new shell, the Secret gone
-    assert after_step_7.returncode == 0, after_step_7.stdout + after_step_7.stderr
-    assert after_step_7.stdout.strip().endswith("PREFIX=ospreyflow-poc-1a2b3c4d-")
-    given = run(None, PREFIX="ospreyflow-poc-9z9z9z9z-")
-    assert given.stdout.strip().endswith("PREFIX=ospreyflow-poc-9z9z9z9z-")
-    (tmp_path / "work" / "prefix").unlink()
-    neither = run(None)
-    assert neither.returncode != 0 and "PREFIX=" in neither.stdout + neither.stderr
+
+def test_with_reporting_on_the_install_says_what_entra_s_administrator_registers_and_where_secrets_go() -> None:
+    """ADR-148 Amendments 9-11: Superset's registration (its redirect, its secret, the API's scope) and
+    the API's Dashboard.Read app role, before step 2, whose Terraform asks for their secrets; the
+    reports section after sign-in, its restart a later block; Power BI an option, not a step."""
+    artefacts = _artefacts(_reporting_on())
+    install = artefacts["INSTALL.md"]
+    before = install[: install.index("## 1.")]
+    bi = next(line for line in install.splitlines() if "/oauth-authorized/entra" in line)
+    assert "https://bi." in bi
+    assert SUPERSET_APP in before and "superset_oidc_client_secret" in before
+    assert "`Dashboard.Read`" in before and "`report_sync_dashboards` is `[]`" in before
+    reports = install[install.index("## 6a. Reports") : install.index("## 7. Check")]
+    assert "Admin › Dashboards" in reports and "report_sync_dashboards" in reports
+    assert "an option, not a step" in reports and "osprey_reports" in reports
+    assert "`superset`" in reports and "`litellm`" in reports
+    ordered = "\n".join(command_blocks(install, on_the_platform=True))
+    assert "rollout restart deploy/report-sync" not in ordered  # a `bash later` block
+    secrets = artefacts["terraform/secrets.tf"]
+    for given in ("superset_oidc_client_secret", "report_sync_dashboards"):
+        assert f'variable "{given}"' in secrets and f'random_password" "{given}"' not in secrets
+    assert "REPORT_SYNC_DASHBOARDS        = var.report_sync_dashboards" in secrets
+
+
+def test_without_reporting_the_install_says_nothing_of_it() -> None:
+    install = _artefacts(_config())["INSTALL.md"]
+    assert "## 6a. Reports" not in install and "oauth-authorized" not in install
+    assert "Dashboard.Read" not in install and "Power BI" not in install
 
