@@ -274,3 +274,21 @@ def test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do() -> 
     assert f"looks no further than the first {depth} exact matches" in text
     assert "Its counts are of those, and always marked incomplete; the datasets are offered without counts, and there are no dates to filter by." in text
     assert f'A date filter already set is not applied, and the line then adds "{dates_line.strip()}"' in text
+
+
+def test_section_5_5_says_the_fallback_pages_only_while_records_remain_and_where_its_depth_ends_the_list() -> None:
+    """Studio's paging fix: `more` only when a further page holds records, and the depth's line on the page that ends
+    a list the fallback's depth cut short; the page offers *Next page* only on `more`."""
+    depth, line = SERVICE_CONSTANTS["FALLBACK_DEPTH"], SERVICE_CONSTANTS["DEPTH_REACHED"]
+    fallback = _function(SERVICE, "_from_graph")
+    for code in (
+        "reached = len(found) >= FALLBACK_DEPTH",
+        "more = len(found) > start + size",
+        "if reached and not more: reason += DEPTH_REACHED.format(depth=FALLBACK_DEPTH)",
+        "more=more,",
+    ):
+        assert code in fallback, code
+    assert "{shown && (shown.page > 1 || shown.more) && (" in PAGE and "{more && (" in PAGE
+    text = results_text()
+    assert "**Next page** is offered only while a further page holds records" in text
+    assert f"where the {depth} end the list, its last page's line adds \"{line.format(depth=depth).strip()}\"" in text
