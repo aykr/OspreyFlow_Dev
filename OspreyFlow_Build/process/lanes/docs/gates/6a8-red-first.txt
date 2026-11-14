@@ -1,0 +1,57 @@
+# test_section_6a8_gives_rds_point_in_time_restore_its_rendered_days, red first
+Branch lane/docs-6a8, test as at the commit recording this file (parent c6726f1 plus the working tree's test change); offline, closed ports, on the Mac, no stack.
+Command: cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 POSTGRES_PASSWORD=throwaway VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/test_guides_cloud_platform.py -k 6a8
+Each plant is in the working tree only, restored from a copy after its run; the planted lines are shown.
+
+## 1. main's guide (7 days) against the render (35)
+(guide: main's administration-guide.md)
+E       AssertionError: assert 'point-in-time restore for 35 days' in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `helm upgrade
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:148: AssertionError
+1 failed, 8 deselected in 1.08s
+
+## 2. The corrected guide with main's old warning planted back
+-   Terraform renders it (`backup_retention_period`), against the sets' 35: every set still kept can
+-   be restored with its database.
++   Terraform renders it (`backup_retention_period`), against the sets' 35: only a set finished in
++   the last 35 days can be restored with its database.
+E           AssertionError: assert ['only a set ... in the last'] == []
+E             
+E             Left contains one more item: 'only a set finished in the last'
+E             Use -v to get more diff
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:158: AssertionError
+
+## 3. The old warning reworded ("has no database to pair with it"), the first phrase absent
+-   Terraform renders it (`backup_retention_period`), against the sets' 35: every set still kept can
+-   be restored with its database.
++   Terraform renders it (`backup_retention_period`), against the sets' 35: an older set has no database to pair with it.
+E           AssertionError: assert ['no database...pair with it'] == []
+E             
+E             Left contains one more item: 'no database to pair with it'
+E             Use -v to get more diff
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:158: AssertionError
+
+## 4. RDS's render planted at 7 at its call site; the guide left at 35
+-                    ("backup_retention_period", str(EXPIRE_DAYS)),
++                    ("backup_retention_period", "7"),
+E       AssertionError: assert 'point-in-time restore for 7 days' in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `helm upgrade`
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:148: AssertionError
+1 failed, 8 deselected in 0.97s
+
+## 5. RDS's render planted at 7 and the guide's days following it, no warning
+-   once nothing that writes runs (step 4). **RDS keeps its point-in-time restore for 35 days**, as the
++   once nothing that writes runs (step 4). **RDS keeps its point-in-time restore for 7 days**, as the
+-                    ("backup_retention_period", str(EXPIRE_DAYS)),
++                    ("backup_retention_period", "7"),
+E           AssertionError: assert 'only a set finished in the last 7 days' in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `hel
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:155: AssertionError
+1 failed, 8 deselected in 1.69s
+
+## 6. The sets' render alone planted at 3 at its call site (backups.tf), rds.tf left at 35: the sets' check, with its terminator (3 is a prefix of the guide's 35)
+-                    ("expiration", [("days", str(EXPIRE_DAYS))]),
++                    ("expiration", [("days", "3")]),
+E       assert "against the sets' 3:" in '### 6a.8 Backups and restore The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buck...lSet before the `helm upgrade`, since its new backups clai
+../OspreyFlow_Build/tests/test_guides_cloud_platform.py:150: AssertionError
+1 failed, 8 deselected in 1.79s
+
+## 7. Green: the corrected guide against the real render
+1 passed, 8 deselected in 1.75s
