@@ -67,6 +67,10 @@ LIMITED_REASONS: dict[FallbackWhy, str] = {
 PENDING_LIMIT = 10_000
 #: Added when the fallback cannot apply the date filter: today's search knows no dates.
 DATES_NOT_APPLIED = " The date filter is not applied."
+#: Added on the page where the fallback's list stops because today's search stopped at its depth,
+#: and on any page past it: the list ends there because of the fallback, not because nothing else
+#: matches (rule 2). `{depth}` is `FALLBACK_DEPTH`.
+DEPTH_REACHED = " Only the first {depth} matches are listed: narrow the search to see others."
 
 #: Today's search returns at most this many, so the fallback lists no deeper, and says when it
 #: reached it.
@@ -432,7 +436,8 @@ async def _from_graph(
 ) -> SearchPageResponse:
     """Today's exact search, at most `FALLBACK_DEPTH`, then narrowed by the dataset filter and the
     group, and paged. It cannot apply a date filter (today's search knows no dates) and says so;
-    its counts are never shown as exact; `more` is set whenever it reached its depth."""
+    its counts are never shown as exact. `more` is true only when a further page holds records;
+    where its depth stops the list, the line says so (`DEPTH_REACHED`)."""
     size = _page_size(request)
     start = (request.page - 1) * size
     found = (
@@ -448,9 +453,12 @@ async def _from_graph(
     if request.group is not None:
         found = [n for n in found if n.type == request.group]
     page = found[start : start + size]
+    more = len(found) > start + size
     reason = LIMITED_REASONS[why]
     if request.filters.date_from or request.filters.date_to:
         reason += DATES_NOT_APPLIED
+    if reached and not more:
+        reason += DEPTH_REACHED.format(depth=FALLBACK_DEPTH)
     return SearchPageResponse(
         query=request.query,
         source="fallback",
@@ -468,7 +476,7 @@ async def _from_graph(
         ),
         page=request.page,
         page_size=size,
-        more=len(found) > start + size or reached,
+        more=more,
         results=await _merged(
             graph,
             [
