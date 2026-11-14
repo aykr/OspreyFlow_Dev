@@ -175,6 +175,18 @@ def test_a_ceiling_below_the_seeds_is_refused_before_anything_is_written(
     )
 
 
+def test_the_ceiling_s_refusal_says_what_the_client_would_declare(
+    recorded, monkeypatch, capsys
+) -> None:  # type: ignore[no-untyped-def]
+    """The owner's ruling (MORNING item 2, (a)): a POC shown with spec 08's data declares SECRET;
+    the refusal names both values and the setting that would admit the seeds."""
+    monkeypatch.setenv("OSPREY_HIGHEST_MARKING", "OFFICIAL-SENSITIVE")
+    assert seed_poc.main(["--author", ADMIN]) == 1
+    said = capsys.readouterr().err
+    assert "OFFICIAL-SENSITIVE" in said and "deployment.highest_marking: SECRET" in said
+    assert recorded["cases"] == [] and recorded["seeds"] == []
+
+
 def test_the_seeds_markings_are_the_packs_declared_ones() -> None:
     from scripts.seed_internal import DATASETS
 

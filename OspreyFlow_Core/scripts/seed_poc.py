@@ -78,7 +78,9 @@ def _ceiling_refusal() -> str | None:
         return None
     return (
         f"this deployment's highest marking is {ceiling.marking}, and spec 08's seeds hold data "
-        f"above it: {', '.join(above)}; so nothing was seeded (INSTALL.md step 9)"
+        f"above it: {', '.join(above)}; so nothing was seeded. A POC shown with spec 08's data "
+        "declares `deployment.highest_marking: SECRET` in its osprey.yaml, the client's choice "
+        "(INSTALL.md step 9)"
     )
 
 

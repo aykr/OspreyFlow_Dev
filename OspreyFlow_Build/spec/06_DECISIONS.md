@@ -38310,9 +38310,14 @@ local path does not carry over:
    - **The ceiling.** A deployment whose highest marking (`OSPREY_HIGHEST_MARKING`) is below the seeds' data
      is refused, naming both. HMP's and Fixture Corp's data reach SECRET (`seed_internal.DATASETS`); the
      scenarios' is OFFICIAL. The cloud-platform profile's default ceiling is OFFICIAL-SENSITIVE, so a default
-     poc is refused. **Which way a POC is to hold spec 08's SECRET items is the owner's ruling, not yet given**
-     (MORNING item 2: declare SECRET, load what is at or below the ceiling, or re-marked POC packs). Until
-     then the refusal names the ceiling and what the seeds need, and nothing more.
+     poc is refused. **The owner ruled on 14 November 2026 (MORNING item 2, option (a))**: a POC shown with
+     spec 08's data declares `deployment.highest_marking: SECRET` in its `osprey.yaml`. That is the client's
+     choice, made for a POC holding synthetic data alone, and step 9 says so in those words. Otherwise the
+     seed is refused, naming both values and that setting. Nothing is loaded partly (option (b) was
+     declined: spec 08's rows resting on the SECRET items would be missing), and the packs are not re-marked
+     for a POC (option (c) was declined: the scenarios' access cases would then test handling codes, not
+     clearance). R1's kind deployment declares SECRET (`gates/r1_kind_osprey.yaml`), so its step 6 runs the
+     seed.
    - **The case's unit.** The case is made in the first administrator's own unit, as Entra gave it at their
      sign-in: the people store's record, this tenant's alone (`EntraPeopleStore.one`). Where the tenant's
      groups map several units, it is the unit of the first of `OSPREY_FIRST_ADMINISTRATORS`; a person's unit
@@ -38353,7 +38358,7 @@ local path does not carry over:
    in.
 
 **Consequences.** A POC can be shown with the acceptance scenarios on its own cluster, the events in the store
-its analytics read, once the owner rules on the ceiling. The seed's identity is not a person, so the case's
+its analytics read, where the client has declared SECRET as step 9 says. The seed's identity is not a person, so the case's
 access history names it as creator and the first administrator as the Author who shares it. The kind proof
 runs in v0.5.2's live R1 run, after rules' search index lands: the Job against R1's stand-ins, the case open
 to the first administrator, and B18's trail through the Glass's own sightings request.
@@ -38364,13 +38369,17 @@ to the first administrator, and B18's trail through the Glass's own sightings re
 - `tests/test_seed_scenarios.py`: B18 through each store, with a re-seed not doubling the track.
 - `tests/test_seed_hmp_rerun.py`: at `_run`, a rerun over a graph whose events were lost refused; a failure
   between the two writes failing the run.
-- `tests/test_seed_poc.py`: the ceiling and the unit refused before any write; the case, its Author, unit and
+- `tests/test_seed_poc.py`: the ceiling and the unit refused before any write, the ceiling's refusal naming
+  `deployment.highest_marking: SECRET`; the case, its Author, unit and
   packs; the seeds given the case's unit; the order, read from `harness/apply.py`'s own map; a failed,
   raising or exiting seed stopping the Job.
 - `tests/test_seed_poc_live.py`: the unit from the real people store, this tenant's alone.
 - `tests/harness/test_cloud_platform_seed.py`: the render, its keys, egress, shape and the restore's writers;
+  step 9 saying a POC shown with spec 08's data declares SECRET, the client's choice;
   step 9 run as written against a stub `kubectl` on success and on each failure (not started, overrun,
   failed, not created, copies at none, pods remaining, rebuild failed), each putting everything back.
+- `tests/test_r1_kind_standins.py`: R1's own render gives the Conduit's settings a ceiling the seed's check
+  admits.
 - `tests/cp_policy_check/test_cp_egress_order.py`: the gate on the seed's keys and token, and every CronJob
   held to the manifest both ways, with the seed's own suspended, bounded and tokenless.
 

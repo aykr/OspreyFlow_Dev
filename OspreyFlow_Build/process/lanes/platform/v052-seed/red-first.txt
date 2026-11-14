@@ -144,3 +144,18 @@ Running on ospreyflow-test (stack offline, osprey-runs/platform/), logged at osp
 Wall time: 15 s, exit 0 (no stack, no lease; set-up before it 29 s)
 
 make -k test at 81deb23 on the server, run 20261114T020226Z-ed0c4a01: exit 2. pytest 6 failed, 3 errors, 13462 passed. Main's own: 6a8 (docs'), test_worker_isolation, test_write_store_marks. Mine: the two ClickHouse cases and test_seed_poc_live's three (errors) ran in make test, whose ports are closed, and test_test_file_coverage_check named test_seed_poc_live.py as wired nowhere. Fixed: the ClickHouse cases moved to tests/test_seed_clickhouse_live.py (the same cases, ClickHouse's adapter); both live files' wiring sent as v052-seed/live_wiring.diff (ci.yml's ClickHouse and Postgres live jobs and the test job's ignores; the Makefile's test ignores and its ClickHouse target), never committed: they are the owner's files. It applies cleanly (git apply --check); the coverage check's green waits on it. vitest: case's MatrixView.budget under load.
+
+# The owner's ruling on MORNING item 2, (a) (2026-11-14T06:23:40Z): a POC shown with spec 08's data declares
+# deployment.highest_marking: SECRET, the client's choice. Offline on closed ports 59991-59994, a fresh
+# PYTHONPYCACHEPREFIX. Red first, before the wording, the refusal and R1's config changed:
+tests/harness/test_cloud_platform_seed.py::test_step_9_says_a_poc_shown_with_spec_08_s_data_declares_secret: RED
+  assert '`deployment.highest_marking: SECRET`' in "## 9. Optional: spec 08's acceptance data (a POC alone) ..."
+tests/test_seed_poc.py::test_the_ceiling_s_refusal_says_what_the_client_would_declare: RED
+  the refusal named OFFICIAL-SENSITIVE and SECRET but not deployment.highest_marking: SECRET
+tests/test_r1_kind_standins.py::test_r1_s_poc_declares_secret_so_step_6_can_seed: RED
+  R1's render gave the Conduit OFFICIAL-SENSITIVE, and seed_poc._ceiling_refusal() refused it
+  (the failure at the real call site: the rendered settings the seed Job is given, read by the seed's own check)
+3 failed in 1.83s
+Green after: the three, with tests/harness/test_cloud_platform*.py, tests/cp_policy_check (less its two docker
+files, which make test runs on the server), the R1 kind, seed and admin-guide tests:
+529 passed, 43 skipped (the live cases) in 28.70s

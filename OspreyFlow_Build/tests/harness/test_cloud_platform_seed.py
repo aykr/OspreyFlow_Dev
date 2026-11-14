@@ -141,6 +141,19 @@ def test_the_seed_block_is_the_pocs_alone_and_not_part_of_the_order() -> None:
     assert _seed_block("development") is None and _seed_block("production") is None
 
 
+def test_step_9_says_a_poc_shown_with_spec_08_s_data_declares_secret() -> None:
+    """The owner's ruling (MORNING item 2, (a)): spec 08's data holds SECRET items (HMP's conflict,
+    Fixture Corp's edge), above the profile's default ceiling, so step 9 says the client declares
+    `deployment.highest_marking: SECRET` in its osprey.yaml to be shown it: their choice, and the
+    seed refuses otherwise."""
+    text = _artefacts(_config("poc"))["INSTALL.md"]
+    section = text[text.index("## 9. Optional: spec 08's acceptance data") :]
+    words = " ".join(section[: section.index("```bash later")].split())
+    assert "`deployment.highest_marking: SECRET`" in words
+    assert "the client's choice" in words
+    assert "refused before it writes anything" in words
+
+
 def test_the_seed_runs_with_the_conduit_and_worker_at_none_then_puts_them_back(tmp_path) -> None:  # type: ignore[no-untyped-def]
     code, said, calls = _run_seed(tmp_path, "ok")
     assert code == 0, said

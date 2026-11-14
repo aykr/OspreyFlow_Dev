@@ -472,9 +472,12 @@ def _seed_section(values: dict[str, Any]) -> str:
 to be shown with spec 08's synthetic acceptance data: the HMP fixture, Fixture Corp and the acceptance
 scenarios, into one case named *Acceptance scenarios (spec 08)* whose first Author is the first
 administrator ({{first}}), in that administrator's own unit. Run it after step 7, once, after the first
-administrator has signed in (step 6): the seed is refused before it writes anything if they have not,
-or if this deployment's highest marking is below the seeds' data (HMP's and Fixture Corp's reach
-SECRET). It holds the daily backups and stops the Conduit and the worker for its length (a few
+administrator has signed in (step 6): the seed is refused before it writes anything if they have not.
+Spec 08's data holds SECRET items (HMP's and Fixture Corp's), above this profile's default ceiling of
+OFFICIAL-SENSITIVE. So a POC shown with it declares `deployment.highest_marking: SECRET` in its
+osprey.yaml, rendered and applied before this step. That is the client's choice, for a POC holding
+synthetic data alone; otherwise the seed is refused before it writes anything, naming both values.
+It holds the daily backups and stops the Conduit and the worker for its length (a few
 minutes; the door answers 503 meanwhile), puts them all back whether or not it succeeded, and ends by
 naming what failed, if anything. A seed Job that did not finish is deleted before the Conduit is back.
 
