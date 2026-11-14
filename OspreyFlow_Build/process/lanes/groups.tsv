@@ -149,3 +149,4 @@ case	v052-suppress-reload	Cases and drawing boards	Client install
 case	v052-suppress-reason	Cases and drawing boards	Client install
 platform	v052-startbuild-index	Four places, the Glass and Admin	Client install
 rules	v052-search-from-rids	Four places, the Glass and Admin	Client install
+orchestrator	v052-candidate	Housekeeping	Client install
