@@ -1,0 +1,6 @@
+faded alone: axe reports it as a violation in every look (not the undecided case)
+AS MAIN READ IT (violations only), the 1:1 line passes in every look: 3 passed (18.5s)
+AS IT MUST BE (red) through checkUndecidedContrast, in every look:
+    +   ".global-search__limited: 1.00:1 < 4.5:1 (axe: equalRatio) (\"Suggestions are limited just now: only t\")",
+unplanted: 14 passed (25.9s)
+the 1:1 line passes violations alone and fails the check; unplanted green
