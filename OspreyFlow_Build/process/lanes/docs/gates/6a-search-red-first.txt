@@ -159,3 +159,48 @@ The merge state: this branch with lane/docs-6a8-shared's two §6a.8 paragraphs (
 
 ## 26. The merge state again: green
 5 passed in 1.28s
+
+== The three carries after the rebase onto main (rules 3c, studio 3d), 14 Nov: offline, closed ports 59991-59994
+Green on the fix: tests/test_guides_cloud_platform_search.py 8 passed. Each plant below, then restored:
+== the render's size changed (../OspreyFlow_Core/harness/cloud_platform/__init__.py: '"resources": copy.deepcopy(api["resources"]),' -> '"resources": {"requests": {"cpu": "1", "memory": "4Gi"}, "limits": {"memory": "8Gi"}},')
+E           AssertionError: poc
+E           assert ['—', '—', '0...GiB', '4 GiB'] == ['—', '—', '1...GiB', '8 GiB']
+E             
+E             At index 2 diff: '0.5' != '1'
+== the guide's size row struck (../OspreyFlow_Core/docs/administration-guide.md: '| The search index's rebuild and drift check, when OpenSearch is used | — | — | 0.5 | 2 GiB | 4 GiB |
+' -> '')
+E       AssertionError: §6a.2's row for the index's Jobs
+E       assert False is True
+E        +  where False = bool([])
+E        +  and   True = any(<generator object test_section_6a2_sizes_the_index_jobs_as_rendered.<locals>.<genexpr> at 0x10813cb80>)
+== the poc CPU limit struck from the guide (../OspreyFlow_Core/docs/administration-guide.md: ', the search index's rebuild and drift check 2)' -> ')')
+E       assert ("the search index's rebuild and drift check 2)" in '### 6a.2 What the namespace asks for Each container asks for its CPU and memory and has a memory limit. **In the stan...st be larger, or pods are left unscheduled; in the standard shape one on `limits.cpu` refuses them whatever its size. ') is True
+E        +  where True = bool('2')
+1 failed, 7 deselected in 1.40s
+== profile.yaml gives the rebuild ClickHouse (../OspreyFlow_Core/harness/cloud_platform/profile.yaml: '    search-rebuild: [arcadedb]' -> '    search-rebuild: [arcadedb, clickhouse]')
+E               AssertionError: ('poc', {'name': 'ospreyflow-search-rebuild', 'label': 'search-rebuild', 'command': ['/app/.venv/bin/python', '-m', 'scripts.rebuild_search_index']})
+E               assert {'ArcadeDB', ...es' networks"} == {'ArcadeDB', ...es' networks"}
+E                 
+E                 Extra items in the left set:
+== the guide's way-out row loses S3 and STS (../OspreyFlow_Core/docs/administration-guide.md: '(OpenSearch on 443); S3 and STS |' -> '(OpenSearch on 443) |')
+E               AssertionError: ('poc', {'name': 'ospreyflow-search-rebuild', 'label': 'search-rebuild', 'command': ['/app/.venv/bin/python', '-m', 'scripts.rebuild_search_index']})
+E               assert {'ArcadeDB', ...es' networks"} == {'ArcadeDB', ...es' networks"}
+E                 
+E                 Extra items in the left set:
+== the restore never rebuilds (../OspreyFlow_Core/harness/restore.py: '    if not isinstance(services, dict) or "opensearch" not in services:
+        return' -> '    if True:
+        return')
+E       assert ("runs `python -m scripts.rebuild_search_index` in the Conduit's container" in '## 13. Backup and restore **Every install.** `ospreyflow backup` writes a set to `<backups folder>/<deployment>/<time....** The audit log is in the same PostgreSQL as everything else, so it is in the same backup and shares its retention. ') is False
+E        +  where False = <function test_section_13_says_a_local_restore_rebuilds_the_index_last_where_there_is_one.<locals>.rebuilds at 0x1076680e0>(<SearchBackend.OPENSEARCH: 'opensearch'>)
+E        +    where <SearchBackend.OPENSEARCH: 'opensearch'> = <enum 'SearchBackend'>.OPENSEARCH
+1 failed, 7 deselected in 0.32s
+== the guide's old §13 sentence (../OspreyFlow_Core/docs/administration-guide.md: 'sets and queues, and OpenSearch's search index, which is rebuilt from the graph instead: a restore's' -> 'sets and queues, and OpenSearch, which holds no index of OspreyFlow's yet; a restore's')
+E       assert "holds no in...eyFlow's yet" not in '## 13. Back... retention. '
+E         
+E         "holds no index of OspreyFlow's yet" is contained here:
+E           ch, which holds no index of OspreyFlow's yet; a restore's last step, once the graph and the texts are back, runs `python -m scripts.rebuild_search_index` in the Conduit's container, in a deployment that runs an OpenSearch (`components.search: opensearch`, the default). With `postgres-fulltext` there is no index to rebuild. **A backup that fails** removes the set it had started, and says so, so no half-written set is left beside the good ones. If it cannot remove all of it, it says what it could not remove, renames...
+== the rebuild moved before the maps step (restore.py's run_restore)
+E       assert ("a restore's last step" in '## 13. Backup and restore **Every install.** `ospreyflow backup` writes a set to `<backups folder>/<deployment>/<time....** The audit log is in the same PostgreSQL as everything else, so it is in the same backup and shares its retention. ') is ('restore_maps...e, maps_file)' == 'rebuild_sear...compose_file)'
+E         
+E         - rebuild_search_index(compose_file)
+E         + restore_maps_file(compose_file, maps_file))
