@@ -137,9 +137,21 @@ const { chromium } = require("@playwright/test");
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
+  // What the browser saw, said when the Glass does not draw: its console, page errors and failed or slow requests.
+  const t0 = Date.now();
+  const say = (m) => console.log(`[warm-up +${((Date.now() - t0) / 1000).toFixed(1)} s] ${m}`);
+  page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") say(`console ${m.type()}: ${m.text().slice(0, 300)}`); });
+  page.on("pageerror", (e) => say(`page error: ${String(e).slice(0, 300)}`));
+  page.on("requestfailed", (r) => say(`request failed: ${r.url().slice(0, 160)} ${r.failure()?.errorText ?? ""}`));
+  page.on("response", (r) => { if (r.status() >= 400) say(`response ${r.status()}: ${r.url().slice(0, 160)}`); });
   await page.goto(`http://localhost:5173/?investigation=${process.env.CASE}`);
+  say("loaded");
   const box = page.locator(".top-bar [role=\"combobox\"]");
-  await box.waitFor({ timeout: 600000 });
+  await box.waitFor({ timeout: 240000 }).catch(async (e) => {
+    say(`no search box; the body holds ${(await page.locator("body").innerText()).slice(0, 400).replace(/\s+/g, " ")}`);
+    throw e;
+  });
+  say("search box drawn");
   // Through the results page too, so every module it loads has been asked for once, then a reload: what Vite finds to
   // bundle only on a later request reloads the page, and a page opened during that rebuild draws nothing.
   await box.fill("warm-up");
@@ -150,7 +162,7 @@ const { chromium } = require("@playwright/test");
   await box.waitFor({ timeout: 600000 });
   await browser.close();
 })().catch((e) => { console.error(String(e)); process.exit(1); });
-' || { tail -20 "$W/vite.log" | mask; fail "the Glass did not draw its search box in 10 minutes"; }
+' || { tail -20 "$W/vite.log" | mask; fail "the Glass did not draw its search box in 4 minutes"; }
 echo "# warm-up: the Glass drew its search box after $(( $(date +%s) - started )) s"
 OSPREY_REUSE_SERVER=1 OSPREY_TEST_LIVE_GLASS=1 OSPREY_LIVE_API_BASE_URL="http://127.0.0.1:$CP" OSPREY_LIVE_BEARER_TOKEN="$TOKEN" \
   OSPREY_LIVE_INVESTIGATION_ID="$CASE" \
