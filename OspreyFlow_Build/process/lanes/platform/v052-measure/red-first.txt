@@ -228,3 +228,21 @@ plant 4: a figure typed in the renderer, not the amendment's
   tests/test_step4_dry_run.py -k 'figures_are_the_amendment_s': RED (1 failed, 2 deselected in 0.74s)
 4/4 red
 Green: with test_measure_search, tests/perf and the coverage check, 65 passed, 9 skipped.
+
+== M10's echo and floor, at 4a836d9 (2026-11-14T16:44:40Z), offline on 59991-59994, OSPREY_LANE unset, a fresh pycache prefix per run
+Before (cbb7ad9's measure_search.py, the new tests): 8 failed, 43 passed, 2 skipped. After: test_measure_search, test_step4_dry_run, test_step4_stack 80 passed, 2 skipped.
+plant 1: the echo read as the answer (main's behaviour)
+  ../OspreyFlow_Build/tests/test_measure_search.py -k 'own_echo': RED (1 failed, 53 deselected in 1.23s)
+plant 2: whatever is under `query` left out, sent or not
+  ../OspreyFlow_Build/tests/test_measure_search.py -k 'not_the_query_sent': RED (1 failed, 53 deselected in 1.20s)
+plant 3: an unreached control failed as before
+  ../OspreyFlow_Build/tests/test_measure_search.py -k 'indeterminate or 90_percent': RED (4 failed, 1 passed, 49 deselected in 3.28s)
+plant 4: no floor: indeterminate cases leave the file met
+  ../OspreyFlow_Build/tests/test_measure_search.py -k '90_percent': RED (2 failed, 2 passed, 50 deselected in 2.77s)
+plant 5: the floor at 80%
+  ../OspreyFlow_Build/tests/test_measure_search.py -k '90_percent': RED (1 failed, 3 passed, 50 deselected in 2.84s)
+plant 6: the floor read before the leaks
+  ../OspreyFlow_Build/tests/test_measure_search.py -k 'whatever_share': RED (1 failed, 53 deselected in 1.30s)
+plant 7: the live gate passing an unmeasured file
+  ../OspreyFlow_Build/tests/test_measure_search.py -k 'fails_an_unmeasured': RED (1 failed, 53 deselected in 2.37s)
+7/7 red

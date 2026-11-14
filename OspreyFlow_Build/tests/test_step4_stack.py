@@ -30,21 +30,27 @@ _MANIFEST = (
 
 
 def test_the_subjects_are_the_ones_rules_granted() -> None:
-    """Rules' grants on stack d (14 November 2026): a control per R-owning unit, SECRET with P, C
-    and R in its own unit; m10-part OFFICIAL-SENSITIVE without R in unit-records; m10-measure
+    """Rules' grants on stack d (14 November 2026, lane/rules-m10-subjects): a case is opened only
+    to its own unit (`investigations.py`), so a control per case unit, SECRET with P, C and R in its
+    own unit (the leak cases use unit-intel's; a never-join case its partner case's unit), ten in
+    all; m10-part OFFICIAL-SENSITIVE without R in unit-intel, the measured case's unit; m10-measure
     OFFICIAL-SENSITIVE in unit-intel; and a probe granted nothing."""
     by_name = {s["username"]: s for s in step4.SUBJECTS}
     controls = sorted(n for n, s in by_name.items() if s["use"] == "control")
     assert controls == [
-        "m10-cleared-unit-border", "m10-cleared-unit-covert",
-        "m10-cleared-unit-fiu", "m10-cleared-unit-intel-covert",
+        f"m10-cleared-{unit}"
+        for unit in (
+            "unit-border", "unit-comms", "unit-covert", "unit-custody", "unit-economic",
+            "unit-fiu", "unit-intel", "unit-intel-covert", "unit-investigations", "unit-records",
+        )
     ]  # fmt: skip
     for name in controls:
         s = by_name[name]
         assert (s["clearance"], s["codes"]) == ("SECRET", ["P", "C", "R"])
         assert s["org_unit"] == name.removeprefix("m10-cleared-")
     assert (by_name["m10-part"]["clearance"], by_name["m10-part"]["org_unit"]) == (
-        "OFFICIAL-SENSITIVE", "unit-records")  # fmt: skip
+        "OFFICIAL-SENSITIVE", "unit-intel")  # fmt: skip
+    assert by_name["m10-part"]["codes"] == ["P", "C"]
     assert "R" not in by_name["m10-part"]["codes"]
     assert by_name["m10-measure"]["org_unit"] == "unit-intel"
     assert step4.PROBE["username"] not in by_name
@@ -132,24 +138,27 @@ def conduit() -> Iterator[str]:
         server.shutdown()
 
 
-def test_the_preflight_passes_a_granted_measure_and_a_refused_probe(conduit: str) -> None:
-    _Case.allowed = {"measure": 200}
-    assert step4.preflight(conduit, "c", "measure", "probe") == ""
+def test_the_preflight_passes_a_granted_measure_and_part_and_a_refused_probe(conduit: str) -> None:
+    _Case.allowed = {"measure": 200, "part": 200}
+    assert step4.preflight(conduit, "c", "measure", "probe", part_token="part") == ""
 
 
 @pytest.mark.parametrize(
     ("allowed", "said"),
     [
         ({}, "m10-measure is not granted the case"),  # the red: no grant on the stack yet
-        ({"measure": 200, "probe": 200}, "a subject granted nothing read the case"),
-        ({"measure": 200, "probe": 500}, "not a refusal"),
+        ({"measure": 200, "part": 200, "probe": 200}, "a subject granted nothing read the case"),
+        ({"measure": 200, "part": 200, "probe": 500}, "not a refusal"),
+        # M10's first measured run on d (14 November): m10-part outside the case's unit got 404,
+        # and every leak case proved nothing. The run stops before it measures instead.
+        ({"measure": 200}, "m10-part cannot open the case (HTTP 404)"),
     ],
 )
 def test_the_preflight_stops_a_run_whose_grants_are_not_what_is_measured(
     conduit: str, allowed: dict[str, int], said: str
 ) -> None:
     _Case.allowed = allowed
-    assert said in step4.preflight(conduit, "c", "measure", "probe")
+    assert said in step4.preflight(conduit, "c", "measure", "probe", part_token="part")
 
 
 def test_the_realm_is_the_deployment_s_own_with_step_4_s_subjects_alone() -> None:
@@ -247,3 +256,53 @@ def test_each_workload_s_own_plain_settings_are_the_render_s_and_none_from_a_sec
         "the stack's, from the lease"
     )
     assert all(v for v in api.values()), "no empty setting given"
+
+
+@pytest.mark.parametrize("dockerfile", ["services/api/Dockerfile", "services/worker/Dockerfile"])
+def test_each_image_builds_from_core_whatever_directory_the_runner_starts_in(
+    dockerfile: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rules' first run on d started the runner at the repository root, where there is no
+    `services/`, and docker refused the build; `-f` is read from the process's directory."""
+    monkeypatch.chdir(tmp_path)
+    argv = step4.build_argv(dockerfile, "ospreyflow/api:step4-x")
+    given = Path(argv[argv.index("-f") + 1])
+    assert given.is_absolute() and given.is_file(), given
+    assert given == step4.CORE / dockerfile
+    assert argv[0] == "build" and argv[-1] == str(step4.CORE)
+
+
+# --- the tokens outlive the run (step 4's rerun on d, 14 November 2026) ---------------------------
+
+
+def _jwt(life: int, subject: str = "m10-measure") -> str:
+    """A token as Keycloak shapes it: header.payload.signature, base64url, `iat` and `exp`."""
+    import base64
+
+    def part(value: dict[str, Any]) -> str:
+        return base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip("=")
+
+    payload = {"sub": subject, "iat": 1_763_000_000, "exp": 1_763_000_000 + life}
+    return f"{part({'alg': 'RS256'})}.{part(payload)}.c2ln"
+
+
+def test_the_realm_grants_tokens_a_life_longer_than_the_run() -> None:
+    """The deployment's rendered realm sets no `accessTokenLifespan`, so Keycloak's 300 s applied
+    and every send after about five minutes was refused."""
+    realm = step4.realm_document()
+    assert realm.get("accessTokenLifespan", 300) >= step4.TOKEN_LIFE_NEEDED_S, realm.get(
+        "accessTokenLifespan"
+    )
+    for client in realm.get("clients", []):
+        own = (client.get("attributes") or {}).get("access.token.lifespan")
+        assert own is None or int(own) >= step4.TOKEN_LIFE_NEEDED_S, client["clientId"]
+
+
+def test_a_token_minted_shorter_than_the_run_stops_the_run_before_it_measures() -> None:
+    """The IdP's own answer is what counts, not the realm we asked for: a fake IdP's 300 s token
+    is refused by name, as the run would otherwise die mid-measure."""
+    tokens = {"m10-measure": _jwt(4 * 3600), "m10-part": _jwt(300, "m10-part")}
+    said = step4.short_lived(tokens)
+    assert said is not None and "m10-part" in said and "300" in said, said
+    assert "m10-measure" not in said
+    assert step4.short_lived({"m10-measure": _jwt(4 * 3600)}) is None

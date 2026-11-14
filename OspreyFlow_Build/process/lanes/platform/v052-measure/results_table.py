@@ -70,6 +70,13 @@ def row(measure: str, what: str, elsewhere: str, result: dict[str, Any] | None) 
         timing, n = "—", str(result.get("cases", ""))
     verdict = result.get("verdict", "not measured")
     why = result.get("why") or "; ".join(result.get("failures", [])[:3])
+    if "reached" in result:  # M10: the cases whose control reached its record, the rest apart
+        n = f"{result['cases']} ({result['reached']} reached)"
+        if verdict == "unmeasured":
+            why = why or (
+                f"only {result['reached']} of {result['cases']} controls reached their record on "
+                "page 1 (90% needed), so the rest are indeterminate, not a pass"
+            )
     said = f"**{verdict}**" + (f": {why}" if why else "")
     return f"| {measure} | {what} | {budget} | {fail} | {timing} | {n} | {result.get('class', '')} | {said} |"
 
