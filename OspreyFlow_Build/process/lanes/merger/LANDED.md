@@ -113,3 +113,5 @@ cc6d222 bebfc2f admin guests (audit 4b, Am 17), with registry-4b.diff; guide 2.0
 9ec898d 4140e9b case v052-results (step 3e′), with its shared diff
 2301841 0849a28 platform v052-m10 (the leak check at scale)
 cb1178f d27da5f case live-fresh-case
+a95a94d f1bd574 platform v052-expiry (decision 5: sets at 34 days)
+4695349 015ed4c docs v052-expiry (2.03), PDF reprinted
