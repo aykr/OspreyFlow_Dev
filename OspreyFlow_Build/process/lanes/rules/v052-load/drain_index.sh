@@ -14,6 +14,11 @@ export PYTHONPATH=.:packages OSPREY_ANALYTICS_ENGINE=clickhouse
 # here a placeholder on a closed port (the orchestrator's ruling, 14 November): test-environment
 # configuration, never fetched by the indexer. The product change is a CARRIES row.
 export OIDC_JWKS_URL="${OIDC_JWKS_URL:-http://127.0.0.1:9/jwks}"
+# The lease gives only OPENSEARCH_PORT, and the worker feeds the index only where an OpenSearch's
+# address is given (`services/search_index/run.configured`: OPENSEARCH_URL or OPENSEARCH_HOST), as a
+# rendered deployment gives it; the stack's OpenSearch is on this host (found in the first try, 14 Nov:
+# the worker started without the indexer and the outboxes held still).
+export OPENSEARCH_HOST="${OPENSEARCH_HOST:-localhost}"
 count() { .venv/bin/python "$HERE/outbox_count.py"; }
 echo "== before ($(date -u +%FT%TZ)): $(count)"
 .venv/bin/python -m services.api.worker_main > "$HOME/osprey-load/worker.log" 2>&1 &
