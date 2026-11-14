@@ -1,0 +1,23 @@
+branch head d4e3846 (the server copy's own commit below), the plant steps alone (PLANTS_ONLY=1)
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261114T035710Z-0079f0b5/log: env PLANTS_ONLY=1 bash process/lanes/case-b/lease-tests/plants.sh
+copy head 1cab5d2, on gpu-1, processes 519, at 2026-11-14T03:57:10Z
+AS IT MUST BE (red): plant: every run's table a large host's
+E           AssertionError: case's last remote run is still running on ospreyflow-test: follow it with remote-log case, or wait for it.
+E       AssertionError: case's last remote run is still running on ospreyflow-test: follow it with remote-log case, or wait for it.
+E       FileNotFoundError: [Errno 2] No such file or directory: 'exit'
+AS IT MUST BE (red): plant: test_a_run_reaps_a_server_that_left_its_process_group on the empty table
+E           AssertionError: the detached server 3007503 outlived its run
+AS IT MUST BE (red): plant: test_the_reaper_leaves_every_process_outside_the_run_alone on the empty table
+E           AssertionError: the run's own server 3011326 outlived it: the reaper read no table
+AS IT MUST BE (red): plant: test_a_runs_log_holds_no_error_of_the_reapers_own_reading on the empty table
+E           AssertionError: Error in sitecustomize; set PYTHONVERBOSE for traceback:
+AS IT MUST BE (red): plant: main's script
+E           AssertionError: an empty table ended a process: the scan read /proc (reaped 1Reaped 1 process(es) the run left behind (the-run).
+AS IT MUST BE (red): plant: the re-read before each signal reads the table
+E           AssertionError: a process without the tag was signalled: the re-read read the table (reaped 1Reaped 1 process(es) the run left behind (the-run).
+AS IT MUST BE (red): plant: cmd.sh exports the caller's OSPREY_PROC_ROOT
+E       AssertionError: ssh -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=8 ospreyflow-test for f in osprey-runs/case.meta/runs/last/pid osprey-runs/case/.runs/last/pid; do if [ -f $f ] && kill -0 $(c
+every plant red for its reason, unplanted green
+Wall time: 94 s, exit 0 (no stack, no lease; set-up before it 11 s)
+
+[exited with code 0]

@@ -435,9 +435,21 @@ def _lane_worktree(tmp_path: Path) -> Path:
     return wt
 
 
-def _remote(lease, tmp_path: Path, cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+# The process table a run's reaper reads (`OSPREY_PROC_ROOT`, stack_lease.sh's REAPER). A run here that is not about
+# reaping reads an empty one of its own: the reaper reads every process on the host, one grep each, so on a server a
+# run's exit waited on every other lane's run there (9.4 s at 2,586 processes, against the 5 s these tests wait;
+# case-b's lease-tests record, 14 November 2026). A test about reaping passes REAL_PROC, and is red without it.
+REAL_PROC = "/proc"
+
+
+def _remote(
+    lease, tmp_path: Path, cwd: Path, *args: str, proc: str | None = None
+) -> subprocess.CompletedProcess[str]:
     lease("status", docker="all-up")  # writes the fixture's docker stand-in onto PATH
-    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+    if proc is None:
+        (tmp_path / "proc").mkdir(exist_ok=True)
+        proc = str(tmp_path / "proc")
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"), "OSPREY_PROC_ROOT": proc,
            "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
     return subprocess.run(["bash", str(SCRIPT), "remote", *args], cwd=cwd, env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
 
@@ -475,6 +487,9 @@ def test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease(le
     assert text.count("nohup setsid") == 1, text
     mirrored = [l for l in log.read_text().splitlines() if "case.meta/lease/stack-b.lease/info" in l]
     assert mirrored, log.read_text()
+    # The tests' own process table (`_remote` sets OSPREY_PROC_ROOT here) never reaches the host: no call and no line
+    # sent sets it or names the folder, so a real run's reaper scans /proc.
+    assert "OSPREY_PROC_ROOT=" not in text and str(tmp_path / "proc") not in text, text
 
 
 def test_remote_is_refused_for_a_local_stack_and_for_a_lane_holding_none(lease, tmp_path: Path) -> None:
@@ -872,7 +887,8 @@ def _alive(pid: int) -> bool:
     return not (stat.exists() and stat.read_text().split(") ", 1)[1].startswith("Z"))
 
 
-def _gone_within(pid: int, seconds: float = 8.0) -> bool:
+def _gone_within(pid: int, seconds: float = 20.0) -> bool:
+    # 20 s: a server is signalled only once the scan of the host's whole table is done (14 November 2026).
     for _ in range(int(seconds / 0.1)):
         if not _alive(pid):
             return True
@@ -919,7 +935,8 @@ def _host(tmp_path: Path) -> Path:
 
 def _finished_run(home: Path) -> Path:
     runs = home / "osprey-runs" / "case.meta" / "runs"
-    for _ in range(200):
+    # 30 s: a reaping run's exit waits on the scan of the host's whole table, then the reaper's 2 s (14 November 2026).
+    for _ in range(600):
         done = [p for p in runs.iterdir() if p.name != "last" and (p / "exit").exists()] if runs.exists() else []
         if done:
             return done[0]
@@ -943,7 +960,7 @@ def test_a_run_reaps_a_server_that_left_its_process_group(lease, tmp_path: Path)
     pidfile = tmp_path / "server.pid"
     wt = _lane_worktree(tmp_path)
     ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--",
-                  "sh", "-c", f'python3 -c "$1" "{pidfile}"; exit 7', "sh", _DETACHED)  # fmt: skip
+                  "sh", "-c", f'python3 -c "$1" "{pidfile}"; exit 7', "sh", _DETACHED, proc=REAL_PROC)  # fmt: skip
     server = _pid_from(pidfile)
     try:
         assert ran.returncode == 0, ran.stderr
@@ -958,21 +975,31 @@ def test_a_run_reaps_a_server_that_left_its_process_group(lease, tmp_path: Path)
 
 @_REAPS
 def test_the_reaper_leaves_every_process_outside_the_run_alone(lease, tmp_path: Path) -> None:
-    """Another run's server (another tag) and an untagged process are never ended."""
+    """Another run's server (another tag) and an untagged process are never ended, while the run's own detached
+    server is: the reaper read the host's table, not an empty one, so sparing the other two was its choice."""
     lease("acquire", "studio", "a run")
     lease("acquire", "case", "a run")
     home = _host(tmp_path)
+    pidfile = tmp_path / "server.pid"
     other = subprocess.Popen(["sleep", "300"], env={**os.environ, "OSPREY_RUN_TAG": f"{home}/osprey-runs/x.meta/runs/1"})
     plain = subprocess.Popen(["sleep", "300"], env={k: v for k, v in os.environ.items() if k != "OSPREY_RUN_TAG"})
+    server = None
     try:
         wt = _lane_worktree(tmp_path)
-        assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true").returncode == 0
+        ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--",
+                      "sh", "-c", f'python3 -c "$1" "{pidfile}"', "sh", _DETACHED, proc=REAL_PROC)  # fmt: skip
+        assert ran.returncode == 0, ran.stderr
+        server = _pid_from(pidfile)
         _finished_run(home)
+        assert _gone_within(server), f"the run's own server {server} outlived it: the reaper read no table"
         time.sleep(1)
         assert other.poll() is None and plain.poll() is None
     finally:
         other.kill()
         plain.kill()
+        if server is not None:
+            _end(server)
+        _end_tagged(home)
 
 
 @_REAPS
@@ -1121,14 +1148,24 @@ def test_the_reaper_never_matches_a_tag_inside_another_value(tmp_path: Path) -> 
 def test_a_runs_log_holds_no_error_of_the_reapers_own_reading(lease, tmp_path: Path) -> None:
     """The reaper reads every process's environment; none of its reads may print an error into the run's log (a
     redirection that failed printed "Permission denied" or "No such file" before; should-fix 3). As root on the
-    server every environment is readable, so this guards the shape rather than proving the old one red there."""
+    server every environment is readable, so this guards the shape rather than proving the old one red there. The
+    run leaves a server behind and the log says it was reaped: the reaper read the host's table, not an empty one."""
     lease("acquire", "studio", "a run")
     lease("acquire", "case", "a run")
     home = _host(tmp_path)
+    pidfile = tmp_path / "server.pid"
     wt = _lane_worktree(tmp_path)
-    assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true").returncode == 0
-    log = (_finished_run(home) / "log").read_text()
-    assert "Permission denied" not in log and "No such file" not in log, log
+    ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--",
+                  "sh", "-c", f'python3 -c "$1" "{pidfile}"', "sh", _DETACHED, proc=REAL_PROC)  # fmt: skip
+    server = _pid_from(pidfile)
+    try:
+        assert ran.returncode == 0, ran.stderr
+        log = (_finished_run(home) / "log").read_text()
+        assert "Reaped 1 process" in log, log
+        assert "Permission denied" not in log and "No such file" not in log, log
+    finally:
+        _end(server)
+        _end_tagged(home)
 
 
 def test_two_runs_named_alike_are_refused_in_words_not_shared(lease, tmp_path: Path) -> None:
@@ -1596,3 +1633,45 @@ def test_up_fails_when_postgres_never_answers(lease, tmp_path: Path) -> None:
     up = _up_with(lease, tmp_path, script, OSPREY_PG_READY_PAUSE="0", OSPREY_PG_READY_TRIES="3")
     assert up.returncode == 1
     assert "osprey-test-pg" in up.stderr and "did not answer" in up.stderr, up.stderr
+
+
+
+@_REAPS
+def test_the_reaper_reads_the_process_table_it_is_given(tmp_path: Path) -> None:
+    """`OSPREY_PROC_ROOT` is the table the reaper's scan reads, so a run here that is not about reaping waits on no
+    other process of the host; the re-read before each signal reads /proc, so the table never gets a process
+    signalled that does not hold the tag. A sleep tagged in its real environment: an empty table ends nothing (red if
+    the scan reads /proc whatever it is given), and a table listing it ends it. An untagged sleep listed with the tag
+    in the table is spared (red if the re-read reads the table, which would signal whatever real process has the pid)."""
+    tag = str(tmp_path / "the-run")
+    tagged = subprocess.Popen(["sleep", "60"], env={**os.environ, "OSPREY_RUN_TAG": tag})
+    plain = subprocess.Popen(["sleep", "60"], env={k: v for k, v in os.environ.items() if k != "OSPREY_RUN_TAG"})
+    try:
+
+        def table(name: str, *pids: int) -> str:
+            folder = tmp_path / name
+            folder.mkdir()
+            for pid in pids:
+                (folder / str(pid)).mkdir()
+                (folder / str(pid) / "environ").write_bytes(f"PATH=/bin\0OSPREY_RUN_TAG={tag}\0".encode())
+            return str(folder)
+
+        def reap(root: str) -> str:
+            ran = subprocess.run(_reaper_shell(f'osprey_reap "{tag}"', 'echo "reaped $OSPREY_REAPED"'),
+                                 env={**os.environ, "OSPREY_PROC_ROOT": root}, capture_output=True, text=True,
+                                 timeout=60, check=False)
+            return ran.stdout.strip() + ran.stderr
+
+        said = reap(table("empty"))
+        assert said.startswith("reaped 0") and tagged.poll() is None, f"an empty table ended a process: the scan read /proc ({said})"
+        said = reap(table("listing-the-untagged", plain.pid))
+        assert said.startswith("reaped 0") and plain.poll() is None, (
+            f"a process without the tag was signalled: the re-read read the table ({said})"
+        )
+        said = reap(table("listing-the-tagged", tagged.pid))
+        assert said.startswith("reaped 1"), f"the table lists a tagged process and the reap ended none ({said})"
+        assert tagged.wait(timeout=20) is not None, "the tagged process the table lists outlived the reap"
+    finally:
+        for sleeper in (tagged, plain):
+            if sleeper.poll() is None:
+                sleeper.kill()

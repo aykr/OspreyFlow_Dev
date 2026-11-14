@@ -1,0 +1,98 @@
+branch head 096d4cd (the server copy's own commit below); load steps take all 16 cores and 2,000 more processes, windows in UTC
+The 'WRONG (something failed)' for the whole file under load is plants.sh's own check matching 'error' in a test's name in the durations list (no test failed; fixed in the next commit); the two table plants' red is 'assert False' on the reap's count line (worded in the next commit; plants-steps.txt has them).
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261114T034526Z-dc504cd5/log: bash process/lanes/case-b/lease-tests/plants.sh
+copy head 79ff369, on gpu-1, processes 662, at 2026-11-14T03:45:27Z
+load on at 03:45:29Z: processes 2665, burners 16 of 16 cores
+main, round 1: 4 failed, 83 deselected in 41.39s
+E           AssertionError: case's last remote run is still running on ospreyflow-test: follow it with remote-log case, or wait for it.
+E       AssertionError: case's last remote run is still running on ospreyflow-test: follow it with remote-log case, or wait for it.
+E       FileNotFoundError: [Errno 2] No such file or directory: 'exit'
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[as ps prints it]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[padded, as on the server]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_two_runs_named_alike_are_refused_in_words_not_shared
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_two_runs_of_one_lane_in_one_second_never_share_a_folder
+9.06s call     test_two_runs_named_alike_are_refused_in_words_not_shared
+8.87s call     test_two_runs_of_one_lane_in_one_second_never_share_a_folder
+7.36s call     test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[padded, as on the server]
+7.05s call     test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[as ps prints it]
+main, round 2: 4 failed, 83 deselected in 39.34s
+E           AssertionError: case's last remote run is still running on ospreyflow-test: follow it with remote-log case, or wait for it.
+E       AssertionError: case's last remote run is still running on ospreyflow-test: follow it with remote-log case, or wait for it.
+E       FileNotFoundError: [Errno 2] No such file or directory: 'exit'
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[as ps prints it]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[padded, as on the server]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_two_runs_named_alike_are_refused_in_words_not_shared
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_two_runs_of_one_lane_in_one_second_never_share_a_folder
+8.87s call     test_two_runs_named_alike_are_refused_in_words_not_shared
+8.78s call     test_two_runs_of_one_lane_in_one_second_never_share_a_folder
+7.36s call     test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[padded, as on the server]
+7.06s call     test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[as ps prints it]
+main, round 3: 4 failed, 83 deselected in 39.38s
+E           AssertionError: case's last remote run is still running on ospreyflow-test: follow it with remote-log case, or wait for it.
+E       AssertionError: case's last remote run is still running on ospreyflow-test: follow it with remote-log case, or wait for it.
+E       FileNotFoundError: [Errno 2] No such file or directory: 'exit'
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[as ps prints it]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[padded, as on the server]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_two_runs_named_alike_are_refused_in_words_not_shared
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_two_runs_of_one_lane_in_one_second_never_share_a_folder
+8.97s call     test_two_runs_of_one_lane_in_one_second_never_share_a_folder
+8.51s call     test_two_runs_named_alike_are_refused_in_words_not_shared
+7.37s call     test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[as ps prints it]
+7.13s call     test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[padded, as on the server]
+branch, round 1: 4 passed, 84 deselected in 19.08s
+2.98s call     test_two_runs_named_alike_are_refused_in_words_not_shared
+2.92s call     test_two_runs_of_one_lane_in_one_second_never_share_a_folder
+2.89s call     test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[padded, as on the server]
+branch, round 2: 4 passed, 84 deselected in 15.10s
+3.22s call     test_two_runs_of_one_lane_in_one_second_never_share_a_folder
+2.73s call     test_two_runs_named_alike_are_refused_in_words_not_shared
+2.42s call     test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[as ps prints it]
+branch, round 3: 4 passed, 84 deselected in 15.54s
+3.25s call     test_two_runs_of_one_lane_in_one_second_never_share_a_folder
+3.01s call     test_two_runs_named_alike_are_refused_in_words_not_shared
+2.78s call     test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[padded, as on the server]
+2.67s call     test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[as ps prints it]
+WRONG (something failed): branch under the same load: the whole file
+69.33s call     test_stop_ends_a_run_its_command_and_its_server_and_the_next_run_is_allowed
+43.07s call     test_reap_ends_what_a_run_whose_wrapper_was_killed_left_behind
+25.62s call     test_reap_refuses_while_a_process_of_the_runs_session_lives_on
+18.03s call     test_a_run_ended_by_a_signal_still_reaps_its_server
+17.88s call     test_a_runs_log_holds_no_error_of_the_reapers_own_reading
+17.81s call     test_a_run_reaps_a_server_that_left_its_process_group
+17.36s call     test_the_reaper_kills_what_survives_term
+16.76s call     test_the_reaper_leaves_every_process_outside_the_run_alone
+load off at 03:54:31Z
+AS IT MUST BE (red): plant: every run's table a large host's
+E           AssertionError: case's last remote run is still running on ospreyflow-test: follow it with remote-log case, or wait for it.
+E       AssertionError: case's last remote run is still running on ospreyflow-test: follow it with remote-log case, or wait for it.
+E       FileNotFoundError: [Errno 2] No such file or directory: 'exit'
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[as ps prints it]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[padded, as on the server]
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_two_runs_named_alike_are_refused_in_words_not_shared
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_two_runs_of_one_lane_in_one_second_never_share_a_folder
+AS IT MUST BE (red): plant: test_a_run_reaps_a_server_that_left_its_process_group on the empty table
+E           AssertionError: the detached server 2926786 outlived its run
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_a_run_reaps_a_server_that_left_its_process_group
+AS IT MUST BE (red): plant: test_the_reaper_leaves_every_process_outside_the_run_alone on the empty table
+E           AssertionError: the run's own server 2934803 outlived it: the reaper read no table
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_reaper_leaves_every_process_outside_the_run_alone
+AS IT MUST BE (red): plant: test_a_runs_log_holds_no_error_of_the_reapers_own_reading on the empty table
+E           AssertionError: Error in sitecustomize; set PYTHONVERBOSE for traceback:
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_a_runs_log_holds_no_error_of_the_reapers_own_reading
+WRONG (not red as it must be): plant: main's script
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_reaper_reads_the_process_table_it_is_given
+1 failed, 87 deselected in 3.80s
+E           AssertionError: assert False
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_reaper_reads_the_process_table_it_is_given
+WRONG (not red as it must be): plant: the re-read before each signal reads the table
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_reaper_reads_the_process_table_it_is_given
+1 failed, 87 deselected in 2.59s
+E           AssertionError: assert False
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_the_reaper_reads_the_process_table_it_is_given
+AS IT MUST BE (red): plant: cmd.sh exports the caller's OSPREY_PROC_ROOT
+E       AssertionError: ssh -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=8 ospreyflow-test for f in osprey-runs/case.meta/runs/last/pid osprey-runs/case/.runs/last/pid; do if [ -f $f ] && kill -0 $(cat $f) 2>/
+FAILED ../OspreyFlow_Build/tests/test_stack_lease.py::test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease
+A PLANT WENT THE WRONG WAY
+Wall time: 637 s, exit 1 (no stack, no lease; set-up before it 18 s)

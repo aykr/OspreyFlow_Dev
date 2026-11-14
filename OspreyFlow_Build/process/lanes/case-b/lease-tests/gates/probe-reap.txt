@@ -1,0 +1,7 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261114T031443Z-e7a1475b/log: bash process/lanes/case-b/lease-tests/probe_reap.sh busy
+processes 582, reap of an unused tag 1.38 s
+processes 585, reap of an unused tag 1.43 s
+processes 587, reap of an unused tag 1.4 s
+busy: processes 2586, reap of an unused tag 9.41 s
+busy: processes 2578, reap of an unused tag 9.39 s
+Wall time: 25 s, exit 0 (no stack, no lease; set-up before it 17 s)

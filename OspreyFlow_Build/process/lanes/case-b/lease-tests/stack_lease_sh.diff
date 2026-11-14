@@ -1,0 +1,32 @@
+diff --git a/OspreyFlow_Build/scripts/stack_lease.sh b/OspreyFlow_Build/scripts/stack_lease.sh
+index 3cddde7..61b094a 100755
+--- a/OspreyFlow_Build/scripts/stack_lease.sh
++++ b/OspreyFlow_Build/scripts/stack_lease.sh
+@@ -210,16 +210,22 @@ for d,ds,fs in os.walk(\".\"):
+ # Then the Docker objects the run left, by its label (`osprey.run=<tag>`, which tests/harness/run_owned.py gives the
+ # test-IdP containers and network; the orchestrator's ruling of 14 November 2026): containers first, then networks,
+ # which Docker refuses to remove while a container is on them. Another run's, and unlabelled ones, are never touched.
++# The scan reads $OSPREY_PROC_ROOT's pid folders when it is set, else /proc's; the re-read before each signal always
++# reads /proc, so a pid listed there is signalled only when the real process holds the tag. Nothing on a host sets
++# it, and neither cmd.sh's export line nor ssh carries it there (tests/test_stack_lease.py shows both), so a real run
++# scans /proc. The tests give a run that is not about reaping an empty table: the scan reads every process on the
++# host, one grep each, and a test waiting 5 s on a run's exit file waited on every other lane's run there too (case-b's
++# lease-tests record, 14 November 2026).
+ # shellcheck disable=SC2016
+ REAPER='osprey_reap() {
+-  local tag="$1" p pid hit="" n=0
++  local tag="$1" p pid hit="" n=0 root="${OSPREY_PROC_ROOT:-/proc}"
+   OSPREY_REAPED=0
+   [ -n "$tag" ] || { echo "No run tag to reap by: nothing reaped." >&2; return 2; }
+-  osprey_tagged() { grep -qzxF "OSPREY_RUN_TAG=$tag" "/proc/$1/environ" 2>/dev/null; }
+-  for p in /proc/[0-9]*; do
+-    pid="${p#/proc/}"
++  osprey_tagged() { grep -qzxF "OSPREY_RUN_TAG=$tag" "${2:-/proc}/$1/environ" 2>/dev/null; }
++  for p in "$root"/[0-9]*; do
++    pid="${p##*/}"
+     [ "$pid" = "$$" ] && continue
+-    if osprey_tagged "$pid"; then hit="$hit $pid"; fi
++    if osprey_tagged "$pid" "$root"; then hit="$hit $pid"; fi
+   done
+   for pid in $hit; do osprey_tagged "$pid" && kill "$pid" 2>/dev/null && n=$((n + 1)); done
+   if [ -n "$hit" ]; then sleep 2; for pid in $hit; do if osprey_tagged "$pid"; then kill -9 "$pid" 2>/dev/null; fi; done; fi
