@@ -1,0 +1,8 @@
+# plant: unknown_reason_served (OspreyFlow_Core/services/api/hotlists.py), at 9f13e78 uncommitted; stack e, the lease admin took at 2026-11-14T08:52Z; fresh PYTHONPYCACHEPREFIX
+# run: ../OspreyFlow_Build/tests/services/api/test_hotlists.py -k keeps_why
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for Hotlist
+E       status_detail
+E         Input should be 'revoked', 'out_of_date', 'not_held', 'refused', 'unreachable', 'unresolved' or 'pattern_gone' [type=literal_error, input_value='a-later-release-s', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.14/v/literal_error
+FAILED ../OspreyFlow_Build/tests/services/api/test_hotlists.py::test_a_stopped_hotlist_keeps_why_until_it_is_active_again
+1 failed, 10 deselected in 1.86s
