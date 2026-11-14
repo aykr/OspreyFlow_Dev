@@ -2429,7 +2429,7 @@ engineer attaches rules to pipelines (Checks on load) but does not write them.
 **So a dataset that asks for a second person needs at least two Authors of the case who hold
 `deploy_rules` and open Rules and Monitoring (Analysts)**; with one, a rule there can be tested but never made live.
 
-**Approving influencers.** In the Glass's **Connection strength** view (the top bar's view switch, under **More views**, or in
+**Approving influencers.** In the Glass's **Connection strength** view (the top bar's view switch, under **More**, or in
 the switch itself for someone offered no other view, as the built-in Administrator is), a version waiting for a second
 person shows what it would put in force, who proposed it and why. Another holder of the right chooses
 **Approve version N**, or **Send it back** with words; its proposer sees the approval withheld and may

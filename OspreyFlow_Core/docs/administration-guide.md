@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.16** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.17** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.17 | 2026-11-14 | §9.6: *Connection strength* is under the top bar's **More** (ADR-145 Amendment 17). Held by `tests/test_guide_navigation_words.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.16 | 2026-11-14 | §10: *How long a model is waited for*, a hosted engine 120 seconds and the deployment's own model 900, each set in `deployment.env` on Lite and Small; a call past its bound stopped, and a provider's refusal said, naming the engine, nothing recorded (ADR-135 Amendment 13, D2). On Enterprise and §6a.9's shared platform both are rendered at their defaults, with no `osprey.yaml` setting. Held by `tests/test_admin_guide_model_timeouts.py`. PDF made by the orchestrator at merge. |
 | 2.15 | 2026-11-14 | The refusals quoted in §6a.7 and §9 name *Admin › People and roles* as the side list names it ("is not held in Admin › People and roles", "the people store behind …"), and on Entra ID a value Entra sends is refused in words, saying which values are set here (ADR-148 Amendment 19). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.14 | 2026-11-14 | The Lite row: `ospreyflow start --build` rebuilds the search index from the graph as its last step (ADR-150 Amendment 2). |
@@ -2640,7 +2641,7 @@ engineer attaches rules to pipelines (Checks on load) but does not write them.
 **So a dataset that asks for a second person needs at least two Authors of the case who hold
 `deploy_rules` and open Rules and Monitoring (Analysts)**; with one, a rule there can be tested but never made live.
 
-**Approving influencers.** In the Glass's **Connection strength** view (the top bar's view switch, under **More views**, or in
+**Approving influencers.** In the Glass's **Connection strength** view (the top bar's view switch, under **More**, or in
 the switch itself for someone offered no other view, as the built-in Administrator is), a version waiting for a second
 person shows what it would put in force, who proposed it and why. Another holder of the right chooses
 **Approve version N**, or **Send it back** with words; its proposer sees the approval withheld and may
