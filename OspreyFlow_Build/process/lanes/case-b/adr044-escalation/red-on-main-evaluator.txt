@@ -1,0 +1,13 @@
+PASSED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_the_words_for_an_active_watch_with_misses_and_none_without
+FAILED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_one_unreachable_load_leaves_it_active_counted_once_and_matches_nothing[hotlist]
+FAILED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_one_unreachable_load_leaves_it_active_counted_once_and_matches_nothing[watch]
+FAILED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_two_in_a_row_leave_it_active_counted_twice[hotlist]
+FAILED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_two_in_a_row_leave_it_active_counted_twice[watch]
+FAILED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_the_third_in_a_row_stops_it_unreachable[hotlist]
+FAILED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_the_third_in_a_row_stops_it_unreachable[watch]
+FAILED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_a_reachable_load_between_puts_the_count_back[hotlist]
+FAILED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_a_reachable_load_between_puts_the_count_back[watch]
+FAILED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_any_other_reason_still_stops_it_at_once_and_puts_the_count_back[hotlist]
+FAILED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_any_other_reason_still_stops_it_at_once_and_puts_the_count_back[watch]
+FAILED ../OspreyFlow_Build/tests/services/api/test_unreachable_in_a_row.py::test_a_schedule_giving_its_slot_back_neither_counts_nor_resets
+11 failed, 1 passed in 2.48s

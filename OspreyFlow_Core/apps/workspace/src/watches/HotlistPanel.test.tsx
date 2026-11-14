@@ -68,4 +68,12 @@ describe("a stopped hotlist in the list", () => {
     render(<HotlistPanel apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" />);
     expect(await screen.findByText(why)).toBeTruthy();
   });
+  // ADR-044 Amendment 2: active, with loads in a row that could not check its owner's sign-in.
+  it("says, while active, how many loads could not check its owner's sign-in", async () => {
+    const note = "Its owner's sign-in could not be checked at the last two loads. It stops if the next is the third in a row.";
+    serve([row({ status: "active", unreachable_in_a_row: 2, status_note: note })]);
+    render(<HotlistPanel apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" />);
+    expect(await screen.findByText(note)).toBeTruthy();
+    expect(screen.getByText("Active")).toBeTruthy();
+  });
 });

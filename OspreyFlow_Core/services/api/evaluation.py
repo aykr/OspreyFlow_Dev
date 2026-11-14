@@ -51,7 +51,7 @@ import hashlib
 import logging
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from services.resolve.trigger import service_principal
 from valkey.asyncio import Valkey
@@ -71,7 +71,7 @@ from .hotlists import HotlistStore
 from .monitors import MonitorStore
 from .pattern_store import PatternNotFoundError, PatternStore
 from .watch_reach import DatasetReach
-from .watch_status import reason_of
+from .watch_status import UNREACHABLE_STOPS_AT, reason_of
 
 #: Bounds `services/resolve/trigger.py`'s own `LOCK_TTL_SECONDS`/`PAGE_SIZE` precedent —
 #: conservative and disclosed as a guess, not a measurement, for the identical reason that
@@ -184,6 +184,26 @@ async def _owner_or_why(
     return (recipient, None) if recipient is not None else (None, "unresolved")
 
 
+class _CountsUnreachable(Protocol):
+    async def count_unreachable(self, watch_id: str) -> int: ...
+
+
+async def _still_counting(
+    store: _CountsUnreachable, watch_id: str, why: StoppedReason | None, watch: str
+) -> bool:
+    """ADR-044 Amendment 2: whether a load whose owner's sign-in could not be checked leaves the watch as it is
+    (active, matching nothing) rather than stopping it: true for the first and second such load in a row, counted
+    by the store so the count is the watch's own and outlives a restart; false from the third, and for any other
+    reason, which stops it at once. `set_status`, any status, puts the count back to 0."""
+    if why != "unreachable":
+        return False
+    in_a_row = await store.count_unreachable(watch_id)
+    if in_a_row < UNREACHABLE_STOPS_AT:
+        _log.info("%s not matched: its owner's sign-in could not be checked (%d in a row)", watch, in_a_row)
+        return True
+    return False
+
+
 async def evaluate_hotlists_for_entry(
     entry: ChangeStreamEntry,
     *,
@@ -238,6 +258,8 @@ async def evaluate_hotlists_for_entry(
     for hotlist in await hotlist_store.list_all_active():
         recipient, why = await _owner_or_why(principal_for_owner, hotlist.owner_id)
         if recipient is None:
+            if await _still_counting(hotlist_store, hotlist.id, why, f"hotlist:{hotlist.id}"):
+                continue
             await hotlist_store.set_status(hotlist.id, "stopped", why)
             continue
         await hotlist_store.set_status(hotlist.id, "active")
@@ -317,6 +339,8 @@ async def evaluate_monitors_for_entry(
     for monitor in await monitor_store.list_all_active():
         recipient, why = await _owner_or_why(principal_for_owner, monitor.owner_id)
         if recipient is None:
+            if await _still_counting(monitor_store, monitor.id, why, f"watch:{monitor.id}"):
+                continue
             await monitor_store.set_status(monitor.id, "stopped", why)
             continue
         # Its owner can be acted as: not stopped, as a hotlist is set active here too, so a reason

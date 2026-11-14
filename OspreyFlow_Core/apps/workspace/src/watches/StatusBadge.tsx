@@ -15,9 +15,12 @@ export interface StatusBadgeProps {
   /** ADR-044 Amendment 1: why it is stopped, in the Conduit's words for its owner; shown beside the
    * label while stopped, never while active. */
   why?: string | null;
+  /** ADR-044 Amendment 2: while active, the Conduit's words for loads in a row that could not check its owner's
+   * sign-in (`status_note`); shown beside the label while active, never while stopped. */
+  note?: string | null;
 }
 
-export function StatusBadge({ status, why }: StatusBadgeProps) {
+export function StatusBadge({ status, why, note }: StatusBadgeProps) {
   const stopped = status === "stopped";
   const badge = (
     <span
@@ -32,11 +35,12 @@ export function StatusBadge({ status, why }: StatusBadgeProps) {
       {stopped ? "Stopped" : "Active"}
     </span>
   );
-  if (!stopped || !why) return badge;
+  const beside = stopped ? why : note;
+  if (!beside) return badge;
   return (
     <span style={{ display: "inline-flex", flexDirection: "column", gap: "var(--sp-2)" }}>
       {badge}
-      <span className="label">{why}</span>
+      <span className="label">{beside}</span>
     </span>
   );
 }

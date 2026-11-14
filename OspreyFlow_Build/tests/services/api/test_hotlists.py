@@ -226,3 +226,32 @@ async def test_a_stopped_hotlist_keeps_why_until_it_is_active_again(store) -> No
         await conn.close()
     unknown = await store.get_authorized(hotlist.id, OWNER)
     assert (unknown.status, unknown.status_detail, unknown.stopped_why) == ("stopped", None, None)
+
+
+# --- ADR-044 Amendment 2: three unreachable loads in a row, counted in the row ------------------
+
+
+async def test_the_unreachable_count_outlives_a_restart_and_any_status_puts_it_back(store) -> None:  # type: ignore[no-untyped-def]
+    """The real column: one statement adds one and answers the count; a new store over the same database (a
+    restarted Conduit) reads what the last left; the row is served the count and its words while active;
+    and `set_status`, any status, puts it back to 0 in the column itself."""
+    from services.api.watch_status import active_note
+
+    hotlist = await store.create(OWNER, identifier="07700900189", review_date=date(2027, 1, 1))
+    assert (await store.get_authorized(hotlist.id, OWNER)).unreachable_in_a_row == 0
+    assert await store.count_unreachable(hotlist.id) == 1
+    assert await store.count_unreachable(hotlist.id) == 2
+    restarted = await HotlistStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        read = await restarted.get_authorized(hotlist.id, OWNER)
+        assert (read.status, read.unreachable_in_a_row, read.status_note) == ("active", 2, active_note(2))
+        assert await restarted.count_unreachable(hotlist.id) == 3
+        await restarted.set_status(hotlist.id, "stopped", "unreachable")
+        stopped = await restarted.get_authorized(hotlist.id, OWNER)
+        assert (stopped.unreachable_in_a_row, stopped.status_note) == (0, None)  # stopped: its reason, no note
+        await restarted.count_unreachable(hotlist.id)
+        await restarted.set_status(hotlist.id, "active")
+        async with restarted._pool.acquire() as conn:
+            assert await conn.fetchval("SELECT unreachable_in_a_row FROM hotlists WHERE id = $1", hotlist.id) == 0
+    finally:
+        await restarted.close()

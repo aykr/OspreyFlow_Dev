@@ -1019,6 +1019,10 @@ class Hotlist(BaseModel):
     #: rule 7); both `None` while active.
     status_detail: StoppedReason | None = None
     stopped_why: str | None = None
+    #: ADR-044 Amendment 2: loads in a row whose owner's sign-in could not be checked (the third stops
+    #: it, a reachable one puts it back to 0), and the owner's words for it while it is active.
+    unreachable_in_a_row: int = Field(default=0, ge=0)
+    status_note: str | None = None
     created_at: datetime
     #: ADR-099 Amendment 3: the dataset of the case it was made in; read only in a case reading
     #: it. `None` for one made before, until `stamp_datasets` places it.
@@ -1061,6 +1065,10 @@ class Monitor(BaseModel):
     #: rule 7); both `None` while active.
     status_detail: StoppedReason | None = None
     stopped_why: str | None = None
+    #: ADR-044 Amendment 2: loads in a row whose owner's sign-in could not be checked (the third stops
+    #: it, a reachable one puts it back to 0), and the owner's words for it while it is active.
+    unreachable_in_a_row: int = Field(default=0, ge=0)
+    status_note: str | None = None
     created_at: datetime
     #: ADR-099 Amendment 3: the dataset of the case it was made in; read only in a case reading
     #: it. `None` for one made before, until `stamp_datasets` places it.

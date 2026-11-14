@@ -39085,6 +39085,46 @@ left unbuilt; its escalation (three consecutive unreachable evaluations) is not 
 
 Each rule is planted alone and red (`process/lanes/admin/stopped_why/`).
 
+### ADR-044, Amendment 2 (14 November 2026) — A watch stays active until three unreachable evaluations in a row
+
+Status: the owner's ruling (14 November 2026: fix in v0.5.2), with the orchestrator's ruling on a scheduled slot.
+Scoped by the admin lane, built by the case-b lane. Builds the escalation ADR-044 decided and Amendment 1 left as it
+was: until now one load that could not check the owner's sign-in (`unreachable`) stopped a hotlist or a watch at once.
+
+**Decisions.**
+
+1. **Three in a row stop it; fewer leave it active.** At a load, an owner the detailed resolver finds `unreachable`
+   (`PrincipalExchangeUnavailable`, `OwnerRecordUnavailable`) is counted, and the watch is left as it is, matching
+   nothing, while the count is below three (`watch_status.UNREACHABLE_STOPS_AT`). The third in a row stops it, its
+   reason `unreachable`. Nothing is matched for a watch its owner cannot be acted as, at any count.
+2. **The count is the watch's own, kept in its store.** `unreachable_in_a_row` (`INTEGER NOT NULL DEFAULT 0`) in
+   the `hotlists` and `monitors` tables; `count_unreachable(id)` adds one and answers the new count in one
+   statement (`UPDATE … RETURNING`), so two evaluators never both read the same count, and a restart keeps it.
+3. **Anything else puts it back to 0.** Every `set_status`, whatever the status, sets the count to 0 in the same
+   statement: a load that can act as the owner (active), and a stop for any other reason, which still stops at once.
+   A stopped watch is still evaluated at each load, so one stopped `unreachable` is active again at the first load
+   that can act as its owner.
+4. **A schedule that gives its slot back is not an evaluation** (the orchestrator's ruling). A watch's schedule
+   (`monitor_schedule.py`) that finds the owner unreachable gives the slot's claim back and tries the same slot at
+   the next tick, as before; it neither counts nor resets the count.
+5. **In true words, never an id** (rule 7). Stopped, `STOPPED_WHY["unreachable"]` is now "Its owner's sign-in could not
+   be checked at three loads in a row. It is tried again at the next." Active with one or two, the row is served
+   `status_note` (`watch_status.active_note`): "Its owner's sign-in could not be checked at the last load. It stops if
+   that happens at three loads in a row.", or "… at the last two loads. It stops if the next is the third in a row."
+   `Hotlist` and `Monitor` gain `unreachable_in_a_row` and `status_note`; the Glass's `StatusBadge` shows the note
+   beside *Active*, and the reason beside *Stopped*, never the one for the other.
+
+**Tests.**
+- `tests/services/api/test_unreachable_in_a_row.py` (offline, the evaluator's own shape, for hotlists and watches,
+  the stores doubles keeping the count as the real ones do): one unreachable load leaves it active, counted once,
+  nothing matched; two leave it active, counted twice; the third stops it `unreachable`; unreachable, reachable,
+  unreachable leaves it active at one; any other reason after two stops it at once with that reason and puts the
+  count back; a schedule giving its slot back neither counts nor resets; the words. Each red on main.
+- `test_hotlists.py` and `test_monitors.py` (live, Postgres): the count kept across a restart (a new store over the
+  same database reads it), put back to 0 by `set_status`, and served with the row's words while active.
+- `StatusBadge.test.tsx`, `HotlistPanel.test.tsx` and `MonitorPanel.test.tsx`: the note beside *Active*, never beside
+  *Stopped*.
+
 ### ADR-149, Amendment 3 (14 November 2026) — the fallback offers a further page only when it holds records, and says where its depth stops the list
 
 *Found by docs' reviewer and confirmed by the orchestrator, 14 November: decision 10's fallback offered Next on
